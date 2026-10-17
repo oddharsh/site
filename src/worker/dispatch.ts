@@ -29,6 +29,7 @@ import { countMiss, recoverNotFound } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
+import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
 import { countSpeculativeLoad } from "./speculation.ts";
@@ -233,7 +234,16 @@ export function createDispatch(handlers: DispatchHandlers) {
     // carries the service-desc Link (lib/api-contract.ts).
     // cal.aadhar.sh is its own host with its own handler, so it is left alone.
     const onApiHost = url.hostname !== CAL_HOST.host;
-    let response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
+    // A throw becomes a 500 in the caller's format (lib/server-error.ts). The
+    // console.error is what keeps Workers Issues counting it: Issues records a
+    // logged error and a 5xx as well as an uncaught throw.
+    let response: Response;
+    try {
+      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
+    } catch (error) {
+      console.error(`unhandled error on ${request.method} ${url.pathname}:`, error);
+      response = serverError(request);
+    }
     // A 404 gets one more look before it leaves (lib/not-found.ts): a redirect
     // where one URL is unambiguously meant, otherwise a 404 that names the
     // sitemap and the closest real pages. cal.aadhar.sh is skipped because its

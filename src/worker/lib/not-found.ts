@@ -19,8 +19,9 @@
 // asset layer's empty one, or the clamp's "not found") gains a body listing the
 // closest pages the sitemap knows, grouped by section. An agent that guessed
 // /garage/resampe learns /garage/resample and /garage in the same response.
-// That body is plain text by default, and Markdown or JSON when Accept asks for
-// one, by the same rule the pages negotiate with. The JSON shape is the one
+// That body is a Luna window when the caller names text/html (a browser), plain
+// text by default, and Markdown or JSON when Accept asks for one, by the same
+// rule the pages negotiate with. The JSON shape is the one
 // /openapi.json declares as Error, so a client of the API reads a miss the way
 // it reads any other failure.
 //
@@ -40,7 +41,9 @@
 //
 // Node-safe (gotcha 16): the contract suite imports it outside workerd.
 
-import { HASHED_ASSETS } from "./shell-assets.ts";
+import { lunaPage } from "./chrome.ts";
+import { html } from "./html.ts";
+import { HASHED_ASSETS, SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
@@ -82,7 +85,7 @@ export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
 // A path shaped like an API call. Its miss answers JSON unless the caller names
 // HTML, because whatever asked for /v1/users or /data.json is going to parse
 // the body, and a client that sends no Accept (or */*) still gets something it
-// can read. A browser names text/html and keeps the plain-text page.
+// can read. A browser names text/html and gets the HTML page.
 export const API_CALL_PATH = /\.json$|^\/api(?:\/|$)|^\/v\d+(?:\/|$)/i;
 
 // The terminal tools answer a text frame at /<tool>.txt, and agents guess .md.
@@ -232,6 +235,36 @@ export function missBody(path: string, near: { section: string | null, pages: st
   return `${lines.join("\n")}\n`;
 }
 
+/** The same answer for a browser: a Luna window whose suggestions are links.
+ *  A plain-text 404 left a visitor with paths to retype and no taskbar to leave
+ *  by, which the spec's error-page rule (a way forward, in plain language)
+ *  fails. noindex and no canonical, since the URL names nothing. */
+export function missPage(path: string, near: { section: string | null, pages: string[] }): Response {
+  const link = (p: string) => html`<li><a href="${p}">${p}</a></li>`;
+  const body = html`<h1>The page cannot be found</h1>
+<p><code>${path}</code> isn't a page on aadhar.sh. It may have moved, or the link has a typo.</p>${near.pages.length ? html`
+<h2>${near.section ? `Closest pages in ${near.section}` : "Closest pages"}</h2>
+<ul>${near.pages.map(link)}</ul>${near.section ? html`
+<p>Section index: <a href="${near.section}">${near.section}</a></p>` : ""}` : ""}
+<h2>Where the pages are</h2>
+<ul>
+<li><a href="/">The homepage</a></li>
+<li><a href="/sitemap.xml">/sitemap.xml</a>: every page on this site</li>
+<li><a href="/llms.txt">/llms.txt</a>: the same map, summarized for agents</li>
+</ul>`;
+  return lunaPage({
+    title: "The page cannot be found",
+    path,
+    robots: "noindex",
+    status: 404,
+    cache: "no-store",
+    headers: { vary: "accept", link: `${SHELL_PRELOAD_LINK}, ${MISS_LINKS}` },
+    // the section heading the trust pages use; lunaPage styles only the h1
+    css: "h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }",
+    body,
+  });
+}
+
 /** The same answer for a caller that asked for `text/markdown`: the pages as
  *  absolute links, so an agent can follow them without resolving anything. */
 export function missMarkdown(origin: string, path: string, near: { section: string | null, pages: string[] }): string {
@@ -299,9 +332,18 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
       const near = bucket === "probe" ? { section: null, pages: [] } : nearestPages(url.pathname, await sitemapPaths(env));
       // The body follows Accept the way the pages do (lib/http.ts): an agent
       // that asked for Markdown or JSON gets it, an API-shaped path gets JSON
-      // unless HTML was named, and everyone else plain text.
+      // unless HTML was named, a caller that named HTML gets the page, and
+      // everyone else plain text.
       const json = wantsJson(request) || (API_CALL_PATH.test(url.pathname) && !namesHtml(request));
-      const kind = wantsMarkdown(request) ? "md" : json ? "json" : "text";
+      const kind = wantsMarkdown(request) ? "md" : json ? "json" : namesHtml(request) ? "html" : "text";
+      if (kind === "html") {
+        const page = missPage(url.pathname, near);
+        return {
+          bucket,
+          outcome: near.pages.length ? "404:suggested" : "404",
+          response: request.method === "HEAD" ? new Response(null, page) : page,
+        };
+      }
       const text = kind === "md" ? missMarkdown(url.origin, url.pathname, near)
         : kind === "json" ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
         : missBody(url.pathname, near);
