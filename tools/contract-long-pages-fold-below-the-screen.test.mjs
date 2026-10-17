@@ -50,7 +50,7 @@ test("every fold opens past the first screen, on an h2, a .demo card or a contin
     const out = foldLongProse(html);
     const opens = [...out.matchAll(OPEN)];
     if (!opens.length) continue;
-    const before = visible(out.slice(out.indexOf('<div class="content prose"'), opens[0].index)).length;
+    const before = visible(out.slice(out.indexOf('<main id="main" class="content prose"'), opens[0].index)).length;
     assert.ok(before >= FOLD_AFTER_CHARS, `${rel}: the first fold opens after ${before} characters, inside the first screen`);
     for (const m of opens) {
       const next = out.slice(m.index + m[0].length).trimStart();

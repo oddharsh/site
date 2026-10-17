@@ -103,10 +103,19 @@ export function coverageProblems(owned: string[], covered: Set<string>, named: S
   });
 }
 
+/** Every program the root tsconfig.json references, in its order. */
+export function referencedPrograms(root = REPO) {
+  return (parseJsonc(readFileSync(join(root, "tsconfig.json"), "utf8")).references as { path: string }[]).map((r) => r.path);
+}
+
+/** What a run with no arguments checks: the references minus the ones with their own node_modules. */
+export function defaultPrograms(root = REPO) {
+  return referencedPrograms(root).filter((c) => !SEPARATE.includes(c));
+}
+
 function main() {
   if (!process.versions.bun) throw new Error("run this checker with bun tools/typecheck.ts");
-  const referenced = (parseJsonc(readFileSync(join(REPO, "tsconfig.json"), "utf8")).references as { path: string }[])
-    .map((r) => r.path);
+  const referenced = referencedPrograms();
   const unknown = referenced.filter((c) => !(c in OWNS));
   if (unknown.length) {
     console.error(`typecheck: tsconfig.json references ${unknown.join(", ")}, which tools/typecheck.ts has no owner for`);
@@ -116,7 +125,7 @@ function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   const update = process.argv.includes("--update");
   const full = args.length === 0;
-  const programs = full ? referenced.filter((c) => !SEPARATE.includes(c)) : args;
+  const programs = full ? defaultPrograms() : args;
 
   const counts = new Map<string, number>();
   const covered = new Set<string>();

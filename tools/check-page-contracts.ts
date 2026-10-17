@@ -149,7 +149,7 @@ assert.ok(garageCss, "Garage scaffold omitted inline CSS");
 // esbuild's CSS loader, which disagrees with Lightning in both directions.
 parseCss("garage scaffold inline <style>", garageCss);
 assert.equal((garageHtml.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, "Garage scaffold omitted the prose kit (/prose.css)");
-assert.match(garageHtml, /<div class="content prose">/, "Garage scaffold omitted the prose class on its content");
+assert.match(garageHtml, /<main id="main" class="content prose">/, "Garage scaffold omitted the prose class on its content");
 assert.doesNotMatch(garageCss, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, "Garage scaffold re-inlined page defaults that luna.css and prose.css own");
 
 // Every windowed Garage page shares the prose kit and the page defaults rather

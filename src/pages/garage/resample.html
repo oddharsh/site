@@ -39,13 +39,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/resample</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Half the light</h1>
 <p class="garage-intro">A one pixel black and white checkerboard is exactly half black and half white, so any honest downscale has to average it. The right answer is <a class="term" data-t="srgb" href="https://en.wikipedia.org/wiki/SRGB" title="The standard colour space for screens and the web. Its values are gamma-encoded, so code 128 holds about a fifth of the light of 255." rel="external">sRGB</a> <data value="187.5 (sRGB code)">188</data>, because the average is over light. Every resizer I measured returns about 128: <code>sips</code>, ffmpeg, the Rust <a href="https://github.com/image-rs/image">image</a> crate, <a href="https://github.com/cykooz/fast_image_resize">fast_image_resize</a>, <code>Bun.Image</code>, and the <a class="term" data-t="canvas-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API" title="The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size." rel="external">canvas</a> in whatever browser is rendering this sentence. Their kernels agree with each other to seven decimal places. All of them average in the wrong space, which <a href="http://www.ericbrasseur.org/gamma.html">Eric Brasseur wrote up in 2007</a> and the defaults have outlived.</p>
 
@@ -98,7 +98,7 @@
 <p>The other open edge is the transfer curve itself. This pipeline assumes sRGB except where a file declares Gray Gamma 2.2, which covers its two cameras and would be wrong for anything shot in <a class="term" data-t="display-p3" href="https://en.wikipedia.org/wiki/DCI-P3" title="Apple's wide-gamut colour space, which holds more saturated colours than sRGB. iPhones and Macs capture and display in it." rel="external">Display P3</a> or a <a class="term" data-t="log-profile" href="https://en.wikipedia.org/wiki/Log_profile" title="A camera recording curve that stores light on a logarithmic scale to keep shadow and highlight detail. Footage looks flat until it is graded." rel="external">log profile</a>. Reading the curve from the <a class="term" data-t="icc-profile" href="https://en.wikipedia.org/wiki/ICC_profile" title="A block of data in an image file that describes its colour space, so software knows how to turn the stored numbers into real colours." rel="external">ICC profile</a> rather than from a filename pattern is the fix, and it is not written yet.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-26</span></div>
 </div>
 

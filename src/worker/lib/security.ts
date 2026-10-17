@@ -127,7 +127,10 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   // still leak a duplicate image corpus and a set of redirect targets. Handle it
   // before the bails, and rebuild carrying encodeBody for the same reason the
   // main path does (a dropped flag is a double-encoded body).
-  if (noindex && !response.headers.has("x-robots-tag")) {
+  // A route's own directive survives only when it already forbids indexing:
+  // routeCensus sends `index` for production, and a bare has() check let that
+  // ship the preview copy of /lens/census indexable.
+  if (noindex && !/\b(?:noindex|none)\b/i.test(response.headers.get("x-robots-tag") ?? "")) {
     const h = new Headers(response.headers);
     h.set("x-robots-tag", PREVIEW_ROBOTS);
     const init: ResponseInit = { status: response.status, statusText: response.statusText, headers: h };

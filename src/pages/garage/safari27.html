@@ -90,13 +90,13 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/safari 27</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Safari 27, through this site&apos;s lens</h1>
     <p class="lede"><a class="term" data-t="wwdc" href="https://en.wikipedia.org/wiki/Worldwide_Developers_Conference" title="Apple's Worldwide Developers Conference, held each June, where it announces new operating systems and developer tools." rel="external">WWDC26</a> shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut covers only where the platform caught up. Source: the <a class="term" data-t="webkit" href="https://en.wikipedia.org/wiki/WebKit" title="The open-source browser engine that powers Safari." rel="external">WebKit</a> team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
 
@@ -195,7 +195,7 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
     <p style="font-size:9pt;color:oklch(45% 0 0)">I paraphrase the feature names and scope from the WebKit post up top; the chips run real <code>CSS.supports()</code> and interface probes in your browser. Drag this window by its title bar; ⌘K jumps anywhere.</p>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
   <div class="xp-statusbar" aria-hidden="true">
     <span>safari 27 / macOS 27</span>
     <span>WWDC26</span>
