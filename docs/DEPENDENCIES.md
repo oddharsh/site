@@ -561,6 +561,17 @@ does not make a failed write safe to ignore.
   Review Bun checker upgrades for new checks on unchanged source. The
   type-aware lint ships in the same binary as the checker, so there is no
   second version to pair with it the way tsgolint had to be.
+
+  Microsoft's tsc is not a dependency, and it's still the reference. Since
+  2026-10-17 the canary's bun leg downloads the native tsc at
+  `TSC_REFERENCE` (7.0.2, which the pinned checker matches byte for byte on
+  all 8 programs, measured 2026-10-17) by exact version
+  and registry sha512, then diffs every nightly canary's `bun check` against
+  it on each program `bun run typecheck` checks (`checkerAgreementGate` in
+  `tools/lib/bun-gates.ts`). A canary that drops or invents a diagnostic files
+  the leg's issue before that build can become a pin. The bumper doesn't run
+  this gate. When Bun moves its port to a newer TypeScript, the gate reads the
+  move as disagreement; bump `TSC_REFERENCE` to match.
 - @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
