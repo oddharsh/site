@@ -16,16 +16,16 @@ export async function handleWindowsUpdate(request, env, ctx) {
 
 // The deploy log, read ONCE and handed to the three renderers that project it.
 //
-// D1 stays the single source of truth. This function is the only thing that talks to
-// it, which is what keeps /updates, /updates.json and /restore from drifting apart —
-// previously each ran its own SELECT with its own LIMIT and its own error handling.
+// The one reader behind /updates, /updates.json and /restore, which is what keeps
+// them from drifting apart. Each used to run its own D1 SELECT with its own LIMIT
+// and its own error handling.
 //
 // It also makes the three renderers PURE, so build.ts can call them in Node against
 // the committed projection (src/worker/checkpoints.json, written by
 // bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
-// pages are the only dynamic surfaces whose data changes ONLY at deploy — the
-// checkpoint row is inserted moments before it — so baking them costs no freshness
-// at all, unlike /reading or /around whose feeds move on their own.
+// pages are the only dynamic surfaces whose data changes ONLY at deploy (an entry
+// enters the projection in the PR that ships with it), so baking them costs no
+// freshness at all, unlike /reading or /around whose feeds move on their own.
 export async function readCheckpoints(env) {
   // The BUNDLED projection, not a D1 read, and that is the point.
   //
@@ -37,20 +37,22 @@ export async function readCheckpoints(env) {
   // reading one committed file is the same guarantee, made stronger — all three
   // surfaces now serve literally the same bytes rather than the same query.
   //
-  // D1 remains the source of truth: bump-version.sh writes it and then derives this
-  // file from it, and `bun run checkpoints:check` fails on any drift between them.
+  // D1 is the record of what shipped. bump-version.sh stages an entry in this file
+  // inside the release PR, `bun run checkpoints:record` copies released entries
+  // into D1 from a workstation, and `bun run checkpoints:check` fails when the two
+  // disagree or production carries an entry D1 lacks (tools/lib/checkpoints.ts).
   // env is kept in the signature because the handlers pass it and a future caller
   // may want the live table; nothing here needs it today.
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
 }
 
 export async function renderWindowsUpdate(cp) {
-  // Single source of truth: the same D1 `checkpoints` table that backs /restore.
-  // One row per logged deploy (tools/photos/bump-version.sh, which now derives the
-  // next vnum from this table; the retired service worker used to carry it as
-  // CACHE_VERSION). The newest row is the running build and the recent rows ARE
-  // the changelog, so /updates and /restore cannot drift apart. Degrades
-  // gracefully when RESTORE_DB is unbound, mirroring /restore.
+  // The same projection that backs /restore, so the two cannot drift apart. One
+  // row per logged release (tools/photos/bump-version.sh mints the next vnum from
+  // the projection; the retired service worker used to carry it as CACHE_VERSION).
+  // The recent rows ARE the changelog. The newest row is the newest LOGGED release,
+  // which is the running build only when the release that serves carried an entry;
+  // /whoareyou.json reports the serving version itself.
   const state = cp.state;
   const pts = cp.points.slice(-18).reverse();          // newest first, same as the old DESC LIMIT 18
   let build = "aadhar.sh", log = [];
