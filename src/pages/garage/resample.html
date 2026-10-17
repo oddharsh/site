@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/resample: Half the light</title>
@@ -39,13 +39,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/resample</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Half the light</h1>
 <p class="garage-intro">A one pixel black and white checkerboard is exactly half black and half white, so any honest downscale has to average it. The right answer is <a class="term" data-t="srgb" href="https://en.wikipedia.org/wiki/SRGB" title="The standard colour space for screens and the web. Its values are gamma-encoded, so code 128 holds about a fifth of the light of 255." rel="external">sRGB</a> <data value="187.5 (sRGB code)">188</data>, because the average is over light. Every resizer I measured returns about 128: <code>sips</code>, ffmpeg, the Rust <a href="https://github.com/image-rs/image">image</a> crate, <a href="https://github.com/cykooz/fast_image_resize">fast_image_resize</a>, <code>Bun.Image</code>, and the <a class="term" data-t="canvas-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API" title="The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size." rel="external">canvas</a> in whatever browser is rendering this sentence. Their kernels agree with each other to seven decimal places. All of them average in the wrong space, which <a href="http://www.ericbrasseur.org/gamma.html">Eric Brasseur wrote up in 2007</a> and the defaults have outlived.</p>
 
@@ -98,7 +98,7 @@
 <p>The other open edge is the transfer curve itself. This pipeline assumes sRGB except where a file declares Gray Gamma 2.2, which covers its two cameras and would be wrong for anything shot in <a class="term" data-t="display-p3" href="https://en.wikipedia.org/wiki/DCI-P3" title="Apple's wide-gamut colour space, which holds more saturated colours than sRGB. iPhones and Macs capture and display in it." rel="external">Display P3</a> or a <a class="term" data-t="log-profile" href="https://en.wikipedia.org/wiki/Log_profile" title="A camera recording curve that stores light on a logarithmic scale to keep shadow and highlight detail. Footage looks flat until it is graded." rel="external">log profile</a>. Reading the curve from the <a class="term" data-t="icc-profile" href="https://en.wikipedia.org/wiki/ICC_profile" title="A block of data in an image file that describes its colour space, so software knows how to turn the stored numbers into real colours." rel="external">ICC profile</a> rather than from a filename pattern is the fix, and it is not written yet.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-26</span></div>
 </div>
 
@@ -172,16 +172,16 @@
       "q": "A one pixel black and white checkerboard is reduced 16 times. Why is sRGB 188 the correct answer rather than 128?",
       "options": [
         {
-          "t": "Half the pixels are black and half are white, so the result carries half the light, and half the light encodes to about 188 in sRGB.",
+          "t": "The output must carry half the light, and half the light encodes to about 188.",
           "ok": true,
-          "why": "Right. sRGB encodes perceived brightness rather than light, so the midpoint of the codes and the midpoint of the light are different greys."
+          "why": "Right. Half the pixels are black and half are white, so the result carries half the light. sRGB encodes perceived brightness rather than light, so the midpoint of the codes and the midpoint of the light are different greys."
         },
         {
           "t": "188 is the midpoint between 128 and 255, which is where a downscale lands.",
           "why": "The number comes from converting half the light back to sRGB."
         },
         {
-          "t": "The filter adds sharpening, which raises the mean above 128.",
+          "t": "The filter's lobes overshoot at every edge, which sharpens the checkerboard and raises the mean above 128.",
           "why": "Sharpening changes contrast around edges and leaves the mean where it was. The mean moves here because the averaging happens in a different space."
         }
       ]
@@ -190,16 +190,16 @@
       "q": "The page shows that this site's kernel and the image crate's kernel agree to within 6e-7 on identical linear input. What does that rule out?",
       "options": [
         {
-          "t": "That the visible quality difference came from the filter maths, since both compute the same weights and taps.",
+          "t": "That the visible quality gap came from the filter weights and taps.",
           "ok": true,
-          "why": "Right. Agreement in linear light localises the difference to the colour conversion at the 8 bit boundary."
+          "why": "Right. Both compute the same weights and taps, so agreement in linear light localises the difference to the colour conversion at the 8 bit boundary."
         },
         {
-          "t": "That either library has a bug at all.",
+          "t": "That either library has any bug left anywhere in its default resize path.",
           "why": "It rules out a difference between their kernels. Both still average encoded values by default, which is the defect the page is about."
         },
         {
-          "t": "That the reduction ratio matters.",
+          "t": "That the reduction ratio changes the result, since both widen the filter the same way.",
           "why": "Support widening with the ratio is a separate property, and both implementations do it. The comparison holds ratio fixed."
         }
       ]
@@ -208,16 +208,16 @@
       "q": "After the reference frame was made gamma correct, the Instagram export's quality target of 70 started producing visibly worse files. Why?",
       "options": [
         {
-          "t": "The score compares the encode against its own reference, and a clean reference is easier for JPEG to match, so the same number was reached at a much lower quality setting.",
+          "t": "A clean reference is easier for JPEG to match, so the search hit 70 at a much lower quality setting.",
           "ok": true,
-          "why": "Right. The threshold was calibrated against a noisy reference, so making the reference correct silently rescaled what the number bought."
+          "why": "Right. The score compares the encode against its own reference, and the threshold was calibrated against a noisy one, so making the reference correct silently rescaled what the number bought."
         },
         {
-          "t": "Gamma correct references are inherently harder to encode, so quality dropped.",
+          "t": "Gamma correct references are harder to encode, so every file at the same setting lost quality.",
           "why": "They are harder in bytes, which is why the corpus grew 1.5%. The delivered file got worse because the search stopped earlier."
         },
         {
-          "t": "The encoder was changed at the same time.",
+          "t": "The encoder changed at the same time, and its new quantisation tables scored lower at 70.",
           "why": "The encoder was unchanged and verified byte identical on colour inputs. Only the reference moved."
         }
       ]
@@ -226,16 +226,16 @@
       "q": "What would falsify the page's claim that the linear light geometry is worth its byte cost?",
       "options": [
         {
-          "t": "A matched bytes comparison where the gamma incorrect version scores higher, meaning the extra bytes buy less than spending them on the quality setting would.",
+          "t": "A matched bytes comparison in which the gamma incorrect version scores higher.",
           "ok": true,
-          "why": "Right, and that comparison has been run once at a smaller scale and went the other way, which is why the page states the corpus size as the limit."
+          "why": "Right. If the gamma incorrect version wins at equal bytes, spending the extra bytes on the quality setting would buy more. That comparison has been run once at a smaller scale and went the other way, which is why the page states the corpus size as the limit."
         },
         {
-          "t": "Finding another library that also averages encoded values.",
+          "t": "Finding another widely used library that also averages encoded values by default.",
           "why": "That is already true of every library measured here. Being common says nothing about being correct."
         },
         {
-          "t": "A photograph where the two versions look identical.",
+          "t": "A photograph where the two versions look identical at the delivered size.",
           "why": "Flat or low texture frames should look identical, since the defect lives where neighbouring pixels differ. That result is predicted."
         }
       ]

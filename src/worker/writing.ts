@@ -1,5 +1,6 @@
-// writing.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// writing.ts: /writing and /writing/<slug>, the posts in posts.json drawn as
+// Notepad windows.
+
 import { cachedRender } from "./lib/cache.ts";
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
@@ -7,7 +8,6 @@ import { shareMeta } from "./lib/chrome.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
 import { twinFor } from "./lib/twins.ts";
 
-// ── /writing — the Notepad view ───────────────────────────────────────────────
 // Written content lives in plain .txt files under /writing/ + a posts.json registry.
 // Each post renders as an XP Notepad window whose <textarea> is SSR-seeded with the
 // canonical text: editable by nature, ephemeral by nature (no save → reload restores
@@ -47,7 +47,7 @@ color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.5
 .np-edited{color:var(--ink-quiet)}
 /* a note opened as a popover — floats over the folder ("selecting menu"),
    clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
-.np-note[popover]{position:fixed;left:0;right:0;top:10px;margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px) !important}
+.np-note[popover]{position:fixed;left:0;right:0;top:calc(10px + var(--sa-t,0px));margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px - var(--sa-t,0px) - var(--sa-b,0px)) !important}
 .np-note[popover]::backdrop{background:transparent}
 /* CRITICAL: our .np-window{display:flex} would otherwise beat the UA
    [popover]:not(:popover-open){display:none}, leaking closed notes into flow.
@@ -86,7 +86,7 @@ export function writingShell(o) {
   // The Markdown twin, where the build wrote one: the lookup lunaPage makes.
   const twin = twinFor(o.path);
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">" +
     "<meta name=\"theme-color\" content=\"#2D78BD\">" +
     "<title>" + escHtml(o.title) + "</title>" +
     // The section tile, same as the taskbar pin. Notepad builds its own head
@@ -123,7 +123,7 @@ const permalink = (slug) => "https://aadhar.sh/writing/" + slug;
 // reachable and announced (the title bar itself is not aria-hidden).
 const MAX_BUTTON = "<button type=\"button\" class=\"max\" title=\"maximize\" aria-label=\"maximize\"></button>";
 
-// popId (optional): render the window as an inline popover (id + popover="auto")
+// popId (optional): render the window as an inline popover (id + popover="manual")
 // so it can composite over the folder index instead of being its own page.
 // entry (optional): mark the window up as an h-entry. Only the standalone note
 // page passes it. The folder's popovers repeat the same notes, and there the
@@ -176,9 +176,11 @@ export async function readPosts(env) {
   return [];
 }
 
-// both /writing views are shared-content renders (no per-visitor bytes), so they
-// ride the caches.default layer: edge TTL = each response's max-age (120s index /
-// 300s post). the 404 post path is excluded by cachedRender's 200-only put.
+// Production serves both /writing views as baked documents through
+// serveBuiltPage (index.ts); these handlers are its live arm. Both are
+// shared-content renders (no per-visitor bytes), so they ride the
+// caches.default layer: edge TTL = each response's max-age (120s index / 300s
+// post). the 404 post path is excluded by cachedRender's 200-only put.
 export function handleWritingPost(request, slug, env, ctx) {
   return cachedRender(request, ctx, () => renderWritingPost(slug, env), undefined, env);
 }
@@ -199,11 +201,11 @@ export async function renderWritingPost(slug, env) {
   const title = post.title || safe;
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
   const body = notepadWindow(title + ".txt", text, "/writing", post.date, undefined, { name: title, url: permalink(safe) });
+  // the webmention Link tells other sites where to say "I linked to you"; the
+  // garage/lwe statics carry the same header from _headers. A note qualifies
+  // because /writing is flagged webmention in site-manifest.json, which
+  // vouches for the posts in posts.json.
   return new Response(writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
-    // the webmention Link tells other sites where to say "I linked to you"; the
-    // garage/lwe statics carry the same header from _headers. A note qualifies
-    // because /writing is flagged webmention in site-manifest.json, which
-    // vouches for the posts in posts.json.
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "link": '</webmention>; rel="webmention"' } });
 }
 
@@ -247,9 +249,9 @@ export async function renderWritingIndex(env) {
         "<data class=\"u-url\" value=\"https://aadhar.sh/writing\"></data>" + AUTHOR_CARD + "</h1>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span>" + MAX_BUTTON +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
-    // The folder view is the one place on this site that was already a complete
-    // Explorer window bar the chrome: caption, listing, status bar. The counts
-    // below are the ones its own status bar states, so the two cannot disagree.
+    // The folder view is a complete Explorer window: caption, address bar, task
+    // pane, listing, status bar. The task pane's document count is the one the
+    // status bar states, so the two cannot disagree.
     String(addressBar({ path: "/writing", name: "My Writing" })) +
     String(taskPane({
         path: "/writing",
@@ -266,10 +268,10 @@ export async function renderWritingIndex(env) {
     "<div class=\"xp-statusbar panes np-status\"><span class=\"fill\">" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
+  // same webmention Link the individual notes carry. /writing is the surface
+  // flagged in site-manifest.json (the notes inherit it, by vouching), so the
+  // folder has to advertise the endpoint too, or a spec-compliant sender could
+  // not discover where to send a mention about it.
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),
-    // same webmention Link the individual notes carry. /writing is the surface
-    // actually flagged in site-manifest.json (the notes inherit it, by vouching),
-    // so the folder itself accepting a mention it never advertised was the one
-    // page on the site a spec-compliant sender could not discover.
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120", "link": '</webmention>; rel="webmention"' } });
 }

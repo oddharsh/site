@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list</title>
@@ -56,13 +56,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/hidden-flags</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Flags the docs don't list</h1>
 <p class="garage-intro"><a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> 4.125.0 carries nineteen flags marked hidden, so they appear in no help output and no documentation page. Reading them is easy. The hard part is that an option a tool silently ignores and an option it honours produce the same <a class="term" data-t="exit-code" href="https://en.wikipedia.org/wiki/Exit_status" title="The number a program reports when it finishes; 0 means success and anything else signals an error." rel="external">exit code</a>, the same output, and the same success. This page is about the control that separates those two, why it usually costs nothing, and four times the difference decided something real on this site.</p>
 
@@ -149,7 +149,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
 </div>
 
@@ -402,11 +402,11 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
           "why": "Right. Success is compatible with both outcomes, so it discriminates between nothing."
         },
         {
-          "t": "Success codes are unreliable and often wrong.",
+          "t": "Exit codes report only that the process started, before any option is parsed.",
           "why": "The exit code is accurate about whether the command worked. The gap is that the command works either way."
         },
         {
-          "t": "The option is applied asynchronously, after the process exits.",
+          "t": "Hidden options apply asynchronously, after the process has already exited 0.",
           "why": "Nothing here defers option handling past the run. The problem is what a success is evidence for."
         }
       ]
@@ -415,17 +415,17 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "What makes a closed payload schema useful rather than annoying?",
       "options": [
         {
-          "t": "It rejects an unknown key before doing any work, so acceptance can be probed for free.",
+          "t": "It refuses an unknown key before any render runs, so probing acceptance is free.",
           "ok": true,
           "why": "Right. Validation ahead of execution is what turns the schema into a cheap oracle."
         },
         {
-          "t": "It guarantees that any accepted key changes behaviour.",
+          "t": "It guarantees that any key the schema accepts also changes how the render behaves.",
           "why": "Acceptance and effect stay separate. A closed schema answers the first question only."
         },
         {
-          "t": "It documents every option it accepts.",
-          "why": "The schema rejects what it does not know. It publishes nothing about what it does know."
+          "t": "Its error lists every key it accepts, so it doubles as documentation.",
+          "why": "The error names the key it refused and nothing more. It publishes nothing about what it does know."
         }
       ]
     },
@@ -433,16 +433,16 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "The dictionary control runs three times: no option, the right value, a wrong value. Why does the wrong value earn its place?",
       "options": [
         {
-          "t": "It separates an engine reading the option from an engine that changed its output for some other reason.",
+          "t": "It ties the smaller output to the value you passed rather than to some other cause.",
           "ok": true,
           "why": "Right. Two runs can only show that something differed. The third says the difference tracks the value you supplied."
         },
         {
-          "t": "It confirms the tool rejects invalid input.",
+          "t": "It confirms the engine rejects an invalid dictionary instead of ignoring it.",
           "why": "This control expects the wrong value to be accepted. A rejection would be a different experiment."
         },
         {
-          "t": "It warms the cache so the timings are comparable.",
+          "t": "It warms zstd's cache so the other two runs are timed on equal footing.",
           "why": "The measurement is output size rather than time, so warming buys nothing here."
         }
       ]
@@ -451,17 +451,17 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "The --max-versions definition sets a default of 2 and carries a comment about a server-side limitation. What follows?",
       "options": [
         {
-          "t": "Raising the number locally cannot widen the split, because the constraint lives at the other end.",
+          "t": "The server holds the cap, so raising it locally buys an error.",
           "ok": true,
           "why": "Right. The flag mirrors a server limit, so the client is the wrong place to argue with it."
         },
         {
-          "t": "The flag is broken and should be reported.",
+          "t": "The flag is a leftover, and wrangler ignores whatever number it gets.",
           "why": "It works as designed. It exposes a client-side knob for a value the server also enforces."
         },
         {
-          "t": "Passing a higher number would succeed but be ignored.",
-          "why": "The comment points at the server refusing, which surfaces as an error rather than as silence."
+          "t": "Passing 3 would let the release script name three versions in one step.",
+          "why": "The comment points at the server refusing, so a higher number surfaces as an error and the split stays at two."
         }
       ]
     },
@@ -469,16 +469,16 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "--old-asset-ttl is described as keeping old assets alive rather than deleting them. Why did it turn out to be irrelevant here?",
       "options": [
         {
-          "t": "It is threaded only into the legacy Workers Sites sync, which this site does not use.",
+          "t": "Its one call site is the legacy Workers Sites sync, a layer this site doesn't run.",
           "ok": true,
           "why": "Right. The description was accurate about a subsystem that is not running, which a description cannot tell you."
         },
         {
-          "t": "The time-to-live is capped too low to matter.",
+          "t": "Wrangler caps the TTL at 60 seconds, too short to cover a gradual rollout.",
           "why": "No cap was involved. The flag never reaches the code path in question."
         },
         {
-          "t": "Assets are content-addressed, so nothing is ever deleted.",
+          "t": "Content-hashed assets are never deleted on a deploy, so a TTL has nothing to delay.",
           "why": "Content addressing changes the names rather than the deletion behaviour, and it is a separate mechanism from this flag."
         }
       ]
@@ -487,16 +487,16 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "A 200 comes back from an endpoint you sent an undocumented parameter to. What is the honest label for the result?",
       "options": [
         {
-          "t": "Name it after what was requested, and record separately that the effect is unverified.",
+          "t": "Label it with what was requested, and note the effect as unverified.",
           "ok": true,
           "why": "Right. The request is a fact and the effect is a hypothesis, so the label should carry only the first."
         },
         {
-          "t": "Name it after the feature, since the endpoint returned success.",
+          "t": "Label it with the engine, since a 200 means it was honoured.",
           "why": "That is the mislabel this page describes. An endpoint ignoring the parameter returns the same success."
         },
         {
-          "t": "Discard the result, because a 200 carries no information.",
+          "t": "Discard it, because a 200 from that endpoint carries no information at all.",
           "why": "It does tell you the request was well formed and that the endpoint served. It just fails to say which engine served it."
         }
       ]
@@ -505,16 +505,16 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       "q": "Which observation would undermine every cheap control on this page?",
       "options": [
         {
-          "t": "A tool exiting 0 on a flag name that was invented on the spot.",
+          "t": "A tool exiting 0 on a flag name invented on the spot.",
           "ok": true,
           "why": "Right. That would mean acceptance carries no information, and each conclusion would need a real run to re-earn."
         },
         {
-          "t": "A hidden flag becoming documented.",
+          "t": "A hidden flag like --max-versions moving into the documented help output.",
           "why": "That moves a row to an ordinary reference page, which is the good outcome."
         },
         {
-          "t": "A description turning out to be inaccurate.",
+          "t": "A hidden flag's description contradicting what its code does.",
           "why": "The page already assumes descriptions are unreliable, which is why the controls read behaviour instead."
         }
       ]

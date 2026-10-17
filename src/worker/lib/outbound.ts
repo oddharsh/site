@@ -22,9 +22,11 @@
 //             fetch, validateLensTarget on every hop BEFORE the request, then
 //             the identity's gate for that hop.
 //   injected  env.OUTBOUND_TRANSPORT replaces the global fetch on the network
-//             adapter and on the robots bootstrap (lib/botauth.ts). Nothing in
-//             the Worker sets it. Validation, robots and signing still run in
-//             front of it, so a fake network tests the policy, never around it.
+//             adapter and on the robots bootstrap (lib/botauth.ts). In the
+//             Worker only around.ts sets it, to a subrequest meter
+//             (lib/budget.ts) wrapped around the real fetch. Validation, robots
+//             and signing still run in front of it, so a fake network tests
+//             the policy, never around it.
 //
 // A REFUSAL IS A VALUE. A hop the URL policy rejects, a redirect chain past
 // `maxHops`, and a robots.txt that says no each come back as `{ ok: false,

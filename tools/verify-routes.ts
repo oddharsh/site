@@ -449,9 +449,10 @@ const ROUTES = [
   { path: "/.well-known/mcp", status: 301 },
   { path: "/garage/resampe", status: 404, ct: "text/plain", marker: "/garage/resample" },
   // An API-shaped miss (.json, /api/, /v1/) answers JSON to a client that does
-  // not name HTML (this sweep sends */*), and keeps the text page for a browser.
+  // not name HTML (this sweep sends */*), and gets the HTML page in a browser.
   { path: "/.well-known/ai-plugin.json", status: 404, ct: "application/json", marker: "/sitemap.xml" },
-  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
+  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/html", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
+  { path: "/garage/resampe", status: 404, ct: "text/html", headers: { accept: "text/html,*/*;q=0.8" }, marker: 'href="/garage/resample"' },
   { path: "/v1/nope", status: 404, ct: "application/json", marker: "\"code\": \"not_found\"" },
   // The API contract (lib/api-contract.ts): a wrong method is a JSON 405. There
   // is no version to pin (LEAVES_OUT in lib/public-api.ts), so a pin changes nothing.

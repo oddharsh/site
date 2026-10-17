@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate the authoring contract and the page wiring for both explanatory
 // families. This stays separate from build.ts so editors can run it without
-// staging the deploy tree. `validate` doesn't run it (gotcha 32).
+// staging the deploy tree. `validate` runs it as a background step (gotcha 32).
 
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
@@ -117,21 +117,21 @@ const garageFixture = {
       q: "What does this fixture prove?",
       options: [
         { t: "That the generator emits the shared page contract.", ok: true, why: "Right. The fixture checks the generated wiring." },
-        { t: "That every experiment is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
+        { t: "That every experiment on a generated page is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
         { t: "That a quiz can replace the page body.", why: "The body and the check serve different jobs." }
       ]
     }, {
       q: "What should a real Garage page add?",
       options: [
         { t: "A concrete mechanism, evidence, and a stated uncertainty.", ok: true, why: "Right. The scaffold carries the shell; the author carries the experiment." },
-        { t: "Only a longer title.", why: "A title cannot explain a mechanism." },
-        { t: "A score gate that blocks the page.", why: "The check diagnoses a second read and never blocks the page." }
+        { t: "A longer title and a status badge in the header.", why: "A title or a badge cannot explain a mechanism." },
+        { t: "A score gate that blocks the page until the reader passes.", why: "The check diagnoses a second read and never blocks the page." }
       ]
     }, {
       q: "What would falsify the scaffold contract?",
       options: [
         { t: "The generated page lacks its quiz payload or runtime.", ok: true, why: "Right. The generator promises both pieces." },
-        { t: "The reader misses a question.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
+        { t: "The reader misses a question on the generated page.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
         { t: "The page has custom experiment CSS.", why: "Custom CSS is an explicit part of the Garage boundary." }
       ]
     }]
@@ -150,7 +150,7 @@ assert.ok(garageCss, "Garage scaffold omitted inline CSS");
 // esbuild's CSS loader, which disagrees with Lightning in both directions.
 parseCss("garage scaffold inline <style>", garageCss);
 assert.equal((garageHtml.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, "Garage scaffold omitted the prose kit (/prose.css)");
-assert.match(garageHtml, /<div class="content prose">/, "Garage scaffold omitted the prose class on its content");
+assert.match(garageHtml, /<main id="main" class="content prose">/, "Garage scaffold omitted the prose class on its content");
 assert.doesNotMatch(garageCss, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, "Garage scaffold re-inlined page defaults that luna.css and prose.css own");
 
 // Every windowed Garage page shares the prose kit and the page defaults rather

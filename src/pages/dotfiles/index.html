@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/dotfiles</title>
@@ -64,13 +64,13 @@ dl{margin:0 0 12px}dt{font-weight:700;margin-top:6px}dd{margin:0 0 4px 0}
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon df-icon" aria-hidden="true"></span>aadhar.sh/dotfiles</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to the desktop" aria-label="back to the desktop"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <h1>macOS, the way i have it</h1>
     <p class="lede">Every setting below is one i changed on my own Macs, read back off the machines with <code>defaults read</code>. The System rows came off <code>pmset</code>, <code>nvram</code> and the firewall's own tool. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
 
@@ -116,7 +116,7 @@ bash macos.sh</pre>
       <dd>macOS 27.2 (Darwin 27.2), 2026-09-21 and 2026-10-09. Four rows are macOS 26 keys and say so, and the wallpaper-click and tiling rows came with Sonoma and Sequoia.</dd>
     </dl>
     <p class="fine">Made in the same spirit as <a href="https://github.com/mathiasbynens/dotfiles/blob/main/.macos" rel="noopener">mathiasbynens/dotfiles</a>, which is where most of the world learned these keys. The difference is the checklist: his is a script you edit, this is a list you tick.</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off two Macs, last on 2026-10-09</span></div>
 </div>
 <script type="application/json" id="dotfiles-data">

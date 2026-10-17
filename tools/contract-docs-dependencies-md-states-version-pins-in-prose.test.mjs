@@ -299,7 +299,7 @@ test("the dependency-doc scanner does not read prose as a version claim", () => 
   assert.deepEqual(findClaims(prose), [], "prose must yield no version claims");
 
   // and the real thing still matches, so the guard above is not just strictness
-  assert.equal(findClaims("- Oxlint 1.87.0 and esbuild are pins").length, 1);
+  assert.equal(findClaims("- Lightning CSS 1.33.0 and esbuild are pins").length, 1);
 });
 
 test("a flex item is its own box, and promoting one never eats an image", () => {

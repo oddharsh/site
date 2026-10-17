@@ -15,15 +15,13 @@ import { overBudget } from "./lib/ratelimit.ts";
 import { asRecord, asText } from "./lib/parse.ts";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
-// error codes, the header check) live in lib/mcp-protocol.js because
+// error codes, the header check) live in lib/mcp-protocol.ts because
 // /serendipity/mcp is a second MCP server on this same origin and the two must
 // not drift into different dialects. That file carries the full argument; what
 // matters here is that a request with modern `_meta` is served statelessly
-// under 2026-07-28 and an `initialize` request selects legacy semantics.
+// under 2026-07-28 and an `initialize` request selects legacy semantics. This
+// server was stateless from the start, which is what the new revision assumes.
 //
-// This server was unusually well placed for the change. The header above has
-// said "intentionally stateless" since it was written, and statelessness is
-// precisely what the new revision assumes. There was nothing to unwind.
 // Exported because the published server card is a PROJECTION of this server,
 // not a second hand-maintained description of it. tools/gen-mcp-cards.ts
 // imports these three, so the card cannot claim an identity the Worker does not
@@ -99,7 +97,7 @@ const HOSTED_TOOLS = [
     // read-only. Each call persists a fresh snapshot row keyed by a new id, so
     // neither is idempotent either: calling twice leaves two observations, which
     // is the point of a vault. Nothing is destroyed, hence destructiveHint stays
-    // false. Saying so here rather than in lib/mcp-tools.js keeps the claim
+    // false. Saying so here rather than in lib/mcp-tools.ts keeps the claim
     // beside the INSERT that decides it.
     //
     // The write is ALSO stated in the description, which reads as redundant and
@@ -175,7 +173,7 @@ const MCP_TOOL_DEFINITIONS = [
   {
     // The one tool here whose INPUT this server cannot produce. An agent with a
     // shell has an antenna; this origin does not. So the agent samples and this
-    // draws — see radar.js on why a hosted radar is otherwise dishonest.
+    // draws. radar.ts's header says why a hosted radar is otherwise dishonest.
     name: "radar",
     description: "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
     inputSchema: { type: "object", properties: {
@@ -276,7 +274,8 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 // one end of that range.
 //
 // `what` lives here so the 429 quotes a ceiling it cannot disagree with; `max`
-// is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test pins the pair.
+// is mirrored in cloudflare.config.ts's rate-limit bindings, and
+// contract-lens-per-ip-crawl-budgets pins the pair.
 export const MCP_BUDGETS = {
   imageInspect:   { binding: "MCP_RL_IMAGE_INSPECT",   max: 20, what: "Image inspections" },
   imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8,  what: "Image transforms" },
@@ -287,15 +286,8 @@ export const MCP_BUDGETS = {
 
 const budgetRefusal = (budget) => errorResult(`${budget.what} are rate-limited to ${budget.max}/min.`);
 
-// The crawl tools bill against the SAME per-IP buckets as their HTTP twins
-// (lens.js LENS_BUDGETS), not a private `mcp:lensrl:` one. A separate bucket let
-// a caller stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
-// lens_compare was metered at 8/min through JSON-RPC while /lens/compare allows
-// 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
-// whichever door you knock on.
-
-// The three underscore fields are the CONTRACT between this function and the
-// dispatcher above: _unknown means no such tool, _error means the tool ran and
+// The three underscore fields are the CONTRACT between callTool and the
+// dispatcher in handleSiteMcp: _unknown means no such tool, _error means the tool ran and
 // failed (a result with isError, never a JSON-RPC error), and _mcp means the
 // tool already shaped its own MCP content. Declared here because a tool that
 // returns a plain payload returns none of them, so inference sees only the
@@ -308,16 +300,13 @@ type ToolOutcome = Record<string, any> & {
 
 async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
   args = asRecord(args) || {};
-  // The seven data tools live in lib/tools.js, because /ask calls the
-  // same seven through the same function. Dispatching them here would mean two
-  // switch statements that have to agree.
   if (DATA_TOOL_NAMES.has(name)) return callDataTool(name, args, request, env, ctx);
 
-  // The three frame tools share one implementation, because the HTTP route and
-  // the tool are the same program read through different doors. terminal_lens does
-  // NOT get its own rate-limit check here: lensFrame runs the same LENS_INSPECT
-  // spec lens_inspect does, so the ceiling is shared whichever
-  // door you knock on — the rule the crawl-tool note above already states.
+  // The frame tools share one implementation (terminalToolFrame), because the
+  // HTTP route and the tool are the same program read through different doors.
+  // `lens` does NOT get its own rate-limit check here: its frame runs the same
+  // LENS_INSPECT spec lens_inspect does, so the ceiling is shared whichever
+  // door you knock on (the crawl-tool note in lib/tools.ts states the rule).
   if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);
   if (name === "lens") return terminalToolFrame("lens", args, request, env, ctx);
@@ -396,7 +385,7 @@ export async function handleSiteMcp(request, env, ctx) {
       if (msg.method === "tools/call") {
         const name = msg.params?.name;
         // A preview runs production bindings, and two tools here write D1. The
-        // transport guard admits /mcp as a whole (lib/preview.js says why), so
+        // transport guard admits /mcp as a whole (lib/preview.ts says why), so
         // the refusal has to happen where the tool is known.
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });

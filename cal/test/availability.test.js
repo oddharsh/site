@@ -1,4 +1,4 @@
-// generateSlots() (src/availability.js) — the core scheduling logic that turns
+// generateSlots() (src/availability.ts), the core scheduling logic that turns
 // "busy intervals + working-hours config" into bookable slots. generateSlots
 // takes env as a plain argument, so we pass purpose-built config objects rather
 // than the worker env; this keeps each invariant isolated and tz-explicit.

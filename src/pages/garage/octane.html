@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/octane: Octane, priced against no framework</title>
@@ -46,13 +46,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/octane</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Octane, priced against no framework</h1>
 <p class="garage-intro">A benchmark told me Nextane ships 60.9% less client JavaScript than <a class="term" data-t="nextjs" href="https://en.wikipedia.org/wiki/Next.js" title="A web framework built on React, with server rendering and routing built in." rel="external">Next.js</a> 16. That is a real number, honestly measured, and I checked it against the deployed demo. What the table cannot tell you is where zero sits, because every row in it is a framework. This site makes a useful zero: it ships no framework at all, so putting it on the same axis turns a ranking into a distance.</p>
 
@@ -121,7 +121,7 @@
 <p class="oct-falsify">What would change my mind: a tuned, non-alpha Octane build landing anywhere near <code>nav.js</code>'s 14.9 KiB. That would mean the runtime cost measured here is a property of an early build rather than of the architecture, and the crossover argument above would collapse with it. The beta is where that shows up.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
 </div>
 
@@ -191,7 +191,7 @@
       "q": "Why can the published benchmark table, on its own, not tell you whether 43.0 KiB is a lot?",
       "options": [
         {
-          "t": "Every row in it is a framework, so it fixes an order without fixing an origin to measure distance from.",
+          "t": "Every row is a framework, so it ranks without an origin to measure distance from.",
           "ok": true,
           "why": "Right. Ranking needs two points; measuring needs a zero. The table has no zero in it."
         },
@@ -200,7 +200,7 @@
           "why": "Brotli would shift every row by a similar factor and leave the ordering and the missing baseline exactly as they were."
         },
         {
-          "t": "It measures a single page rather than a whole application.",
+          "t": "It measures one small getServerSideProps page, which understates a full application.",
           "why": "One page is the right unit here, since it is what a visitor downloads. The absent baseline is what leaves the gap."
         }
       ]
@@ -209,7 +209,7 @@
       "q": "This site's JavaScript summed across all 43 pages is 49.0 KiB, above Nextane's 43.0 KiB per page. What follows?",
       "options": [
         {
-          "t": "The two figures answer different questions, and only the per-page one describes what any browser actually downloads.",
+          "t": "The sum answers a different question from what one browser downloads per page.",
           "ok": true,
           "why": "Right. No visitor fetches the site-wide sum. Per page load the homepage is 14.9 KiB against 43.0, which is the comparison that maps onto a real request."
         },
@@ -218,7 +218,7 @@
           "why": "That would only follow if a visitor downloaded every script at once. Each page loads the shell plus at most one page-specific module."
         },
         {
-          "t": "Gzip is the wrong metric, and brotli would reverse the total.",
+          "t": "Gzip inflates the site total, and brotli would put it back under 43.0 KiB.",
           "why": "Brotli lowers both sides. The totals stay in the same relation, which is why the page reports the reversal rather than compressing it away."
         }
       ]
@@ -227,7 +227,7 @@
       "q": "What did counting identifiers inside the shipped 125 KB chunk establish?",
       "options": [
         {
-          "t": "The weight is Octane's reactive runtime rather than Next.js compatibility glue, so a simpler app would not shed much of it.",
+          "t": "The weight is Octane's reactive runtime and scheduler, so a plain Octane app would keep most of it.",
           "ok": true,
           "why": "Right. 48 occurrences of effect against 1 of router says the chunk is the framework, despite the filename."
         },
@@ -245,16 +245,16 @@
       "q": "On the page's own reasoning, what would make Octane the right call for this site's nav.js?",
       "options": [
         {
-          "t": "nav.js growing several times its current weight, so the runtime stops dominating the code it replaces.",
+          "t": "nav.js growing several times over, past Octane's runtime weight.",
           "ok": true,
           "why": "Right. The runtime is roughly 3x nav.js today, so the ratio decides the trade, however mature the framework gets."
         },
         {
-          "t": "Octane reaching a stable 1.0 release.",
+          "t": "Octane shipping a stable 1.0 that drops the alpha caveats from its README.",
           "why": "Stability would remove a risk without changing the arithmetic. A stable runtime that still outweighs the module 3-to-1 loses the same way."
         },
         {
-          "t": "The site adding more pages that all load the shell.",
+          "t": "The site adding pages, so one runtime download spreads further.",
           "why": "More pages sharing one immutable, long-cached script strengthens the current arrangement."
         }
       ]
@@ -263,7 +263,7 @@
       "q": "Which result would falsify the page's model?",
       "options": [
         {
-          "t": "A tuned non-alpha Octane build landing near nav.js's 14.9 KiB, which would make the runtime cost a property of an early build.",
+          "t": "A tuned non-alpha Octane build landing near nav.js's 14.9 KiB.",
           "ok": true,
           "why": "Right. That would dissolve the crossover argument, since the runtime would no longer dominate what it replaces."
         },

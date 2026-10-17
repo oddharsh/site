@@ -1,4 +1,5 @@
-// email.js — outbound transactional mail via Resend (resend.com).
+// cal/src/email.ts: the booking flow's outbound mail via Resend (resend.com),
+// and the .ics invites it attaches.
 // free tier: 3,000/month, 100/day. more than enough for personal coffee
 // requests. switch to Postmark/SES later if volume changes.
 
@@ -12,8 +13,7 @@ const RESEND_API = "https://api.resend.com/emails";
 // so `list:coffee.aadhar.sh` returns every booking request and nothing else.
 //
 // It exists because the only query that worked before was `to:coffee@aadhar.sh`,
-// and that address is a poor filter for a reason nothing in this file says out
-// loud: it is ALSO the DMARC rua target (config/infra.json, `_dmarc.aadhar.sh`),
+// and that address is a poor filter: it is ALSO the DMARC rua target (config/infra.json, `_dmarc.aadhar.sh`),
 // so it collects a daily drift of gzipped XML reports from every provider that
 // saw the domain. Two booking requests sit in there among hundreds of those.
 //
@@ -91,8 +91,8 @@ export async function sendInvite(env, booking) {
 
 // Re-send the SAME event at a higher SEQUENCE. RFC 5545 says a calendar client
 // receiving a REQUEST whose UID it already holds must apply it as an update, so
-// this rewrites the guest's existing entry rather than adding a second one —
-// which is the whole reason this route exists. The host's own copy moves
+// this rewrites the guest's existing entry rather than adding a second one,
+// which /location and /reschedule both rely on. The host's own copy moves
 // through sendHostCopy below; the cc here is the audit trail of what the guest
 // was actually sent, and has never been a calendar entry.
 export async function sendUpdate(env, booking) {
@@ -122,24 +122,24 @@ export async function sendUpdate(env, booking) {
   });
 }
 
-// The host's own copy of a confirmed booking, sent as its own mail rather than
-// bolted onto the guest's. Two attachments on one message would hand the guest a
-// second .ics they have no use for, and the two files are genuinely different
-// events (see buildICS above).
-//
-// HOST-FACING, so it goes out from noreply@ and carries List-Id, which keeps
-// `from:coffee@aadhar.sh` meaning "what the guest was sent" the way the header
-// note at the top of this file describes.
-//
-// One click is the whole cost of ownership here, and the copy says so, because
-// a PUBLISH attachment renders as a plain add link rather than adding itself.
-// The signed host links, all optional: sendHostCopy is called from three places
-// and only two of them have a request to mint URLs from. An annotation rather
+// The signed host links, all optional: sendHostCopy has 4 callers in index.ts,
+// and the cancellation copy passes none. An annotation rather
 // than a bare `= {}`, which infers `{}` and makes every property access an error
 // under strictNullChecks (gotcha 42's lesson from the other side: a type that is
 // merely implied is a type nobody checked).
 type HostLinks = { location?: string, reschedule?: string, cancel?: string };
 
+// The host's own copy of a confirmed booking, sent as its own mail rather than
+// bolted onto the guest's. Two attachments on one message would hand the guest a
+// second .ics they have no use for, and the two files are genuinely different
+// events (see buildICS below).
+//
+// HOST-FACING, so it goes out from noreply@ and carries List-Id, which keeps
+// `from:coffee@aadhar.sh` meaning "what the guest was sent" the way the LIST_ID
+// note describes.
+//
+// One click is the whole cost of ownership here, and the copy says so, because
+// a PUBLISH attachment renders as a plain add link rather than adding itself.
 export async function sendHostCopy(
   env,
   booking,
@@ -316,7 +316,7 @@ function buildICS(env, booking, { audience = "guest", cancel = false } = {}) {
     location ? `LOCATION:${escICS(location)}` : null,
     // SEQUENCE is emitted UNCONDITIONALLY, including the 0 on a first invite.
     // A client that never saw a SEQUENCE has nothing to compare a later update
-    // against, so omitting it on the invite is what makes the first /update
+    // against, so omitting it on the invite is what makes the first sendUpdate
     // silently do nothing.
     `SEQUENCE:${booking.sequence ?? 0}`,
     cancel ? "STATUS:CANCELLED" : null,

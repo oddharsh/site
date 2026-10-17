@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/lwe/vigenere · the Vigenère cipher & Kryptos</title>
@@ -113,13 +113,13 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; Vigen&egrave;re</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <div class="msgr">
 
       <div class="msgr-head">
@@ -318,7 +318,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       <div class="scrollnote">end of conversation (first pass)</div>
       <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Crank the workbench and stats above.</div></div></div>
     </div>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -942,7 +942,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "First one. A frequency count cracks a Caesar cipher in seconds, yet reads nearly flat on Vigenère ciphertext. What makes the difference?",
       "options": [
         {
-          "t": "caesar reuses one fixed mapping everywhere, vigenère changes the mapping with position",
+          "t": "caesar keeps one fixed mapping, vigenère shifts each position differently",
           "ok": true,
           "why": "Monoalphabetic means one fixed mapping, so E stays the most common letter, just relabeled. A repeating key gives each position its own shift, and the frequency lumps smear flat."
         },
@@ -964,7 +964,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "K1 decrypts with the key PALIMPSEST, but only when the alphabet reads KRYPTOSABCDEFGHIJLMNQUVWXZ. What is the keyed alphabet doing in the cipher?",
       "options": [
         {
-          "t": "the cipher counts positions in that order, so scrambling the alphabet changes every mapping",
+          "t": "every shift counts along that order, so it changes every mapping",
           "ok": true,
           "why": "The tableau is built on the alphabet's order, so moving KRYPTOS to the front reshapes every shift. Swap in plain A to Z in the workbench, same key, and the ciphertext changes everywhere."
         },
@@ -986,12 +986,12 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "In the keystream workbench, flip the mode from repeating key to autokey and watch the key row. What changes, and why does an attacker care?",
       "options": [
         {
-          "t": "the keystream stops repeating, so there's no period for kasiski or friedman to find",
+          "t": "the keystream stops repeating, leaving kasiski and friedman no period to find",
           "ok": true,
           "why": "Autokey extends the key with the message itself, so the stream never cycles. Kasiski and Friedman work by finding the period and splitting the text into little Caesars; no repeat, no period, no split."
         },
         {
-          "t": "the keystream gets longer, so brute-forcing the key takes many more tries",
+          "t": "the keystream gets longer, so brute-forcing the key takes millions of extra tries",
           "why": "A repeating key of any length still has a period, and Kasiski spacing recovers it statistically, no brute force involved. Autokey wins by having no period at all, which the demo's key row shows directly."
         },
         {
@@ -1008,7 +1008,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "In the cranking workbench you stack a Vigenère stage with a transposition stage. Why does the order of the two stages matter?",
       "options": [
         {
-          "t": "they don't commute: each order feeds different letters to the shifts, so it's two different ciphers",
+          "t": "they don't commute: each order feeds different letters to the shifts, a different cipher",
           "ok": true,
           "why": "A Vigenère keys off position and a transposition rewrites every position, so each order shifts different letters by different amounts. That is why order sits inside the search space alongside alphabet and key."
         },
@@ -1030,7 +1030,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "You crank a candidate decrypt, paste it into the statistics demo, and the Index of Coincidence reads 0.038. What is that number telling you?",
       "options": [
         {
-          "t": "still noise, the letters are near-uniform: keep cranking, solved text sits near 0.067",
+          "t": "still noise, the letters are near-uniform; solved text sits near 0.067",
           "ok": true,
           "why": "IoC is the chance two random letters of the text match: lumpy English lands near 0.067, flat polyalphabetic noise near 0.038. It scores a candidate with zero knowledge of the key, which is what makes the crank loop work."
         },
@@ -1052,7 +1052,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       "q": "Last one. The cracker solves a 200-letter message under a 4-letter key and fails on the same 200 letters under a 20-letter key. What runs out?",
       "options": [
         {
-          "t": "letters per column: a key of length k splits the text into k separate caesars, each solved from its own slice alone",
+          "t": "letters per column: each column is its own caesar, solved from its own slice",
           "ok": true,
           "why": "200 under a 4-letter key is 50 letters per column; under a 20-letter key it is 10. Every column is solved from its own slice, so the key length is a divisor on your evidence. Measured on this solver: 20+ per column solved every test, 8 got 6 of 12."
         },

@@ -1,8 +1,8 @@
 // lib/api-limits.ts: the caps and defaults of the public JSON endpoints, once.
 //
 // Each number here is enforced by its handler AND published: in /openapi.json
-// (lib/public-api.ts, written at build), in the MCP tool schemas (lib/tools.ts),
-// and on /developers. They were five hand copies of the same literals until
+// (described in lib/public-api.ts, written at build by lib/openapi.ts), in the
+// MCP tool schemas (lib/tools.ts), and on /developers. They were five hand copies of the same literals until
 // 2026-10-13, and only the page prose had a drift check. Now the handler reads
 // the same constant the documents print, so the two cannot disagree.
 //
@@ -34,8 +34,6 @@ export const API_READ_BUDGET = { binding: "API_RL", max: 120 } as const;
 /** How long /lens/fetch waits on the target before answering 502. */
 export const LENS_FETCH_TIMEOUT_MS = 8000;
 
-/** `Math.min(max, Math.max(min, Number(raw) || fallback))`, the clamp every
- *  endpoint above applies to a numeric query parameter. */
 export function clampParam(raw: unknown, fallback: number, max: number, min = 1): number {
   return Math.min(max, Math.max(min, Number(raw) || fallback));
 }

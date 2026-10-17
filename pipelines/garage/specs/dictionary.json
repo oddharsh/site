@@ -26,17 +26,17 @@
         "q": "Why did workerd raise no error when it dropped the dictionary on compress?",
         "options": [
           {
-            "t": "A frame compressed without a dictionary is still valid and decodes fine with one, so size is the only symptom.",
+            "t": "A frame made without the dictionary is still valid, so nothing downstream fails.",
             "ok": true,
             "why": "Right. Nothing downstream can tell a plain frame from a failed delta, which is why the canary compares byte counts."
           },
           {
-            "t": "workerd logged a warning, and the log went unread.",
+            "t": "workerd logged a warning on each call, and nothing in the deploy pipeline read it.",
             "why": "It logged nothing. The option vanished at the language boundary before any code could notice it."
           },
           {
-            "t": "zstd refuses unknown dictionaries at compression time, so the error happened elsewhere.",
-            "why": "zstd never saw the dictionary at all, so there was nothing for it to refuse."
+            "t": "zstd rejected the dictionary at compression time, and workerd retried without it.",
+            "why": "zstd never saw the dictionary at all, so there was nothing for it to reject and nothing to retry."
           }
         ]
       },
@@ -44,17 +44,17 @@
         "q": "Why does the saving stay near 1.3 KB whether the page is 10 KB or 63 KB?",
         "options": [
           {
-            "t": "The dictionary matches the shell the pages share, and every page carries about the same amount of shell.",
+            "t": "The dictionary matches the shell, and every page carries about the same amount of it.",
             "ok": true,
             "why": "Right. The delta removes shared markup, so the bytes saved track the shell while the percentage tracks how much of the page is shell."
           },
           {
-            "t": "zstd caps what a dictionary can save at a fixed number of bytes.",
+            "t": "zstd caps what a 64 KB dictionary can save at about 1.3 KB per frame.",
             "why": "No such cap exists. A page that repeated the dictionary in full would shrink far more."
           },
           {
-            "t": "Larger pages compress worse in general.",
-            "why": "Larger pages usually compress better. The flat saving comes from what the dictionary contains."
+            "t": "Larger pages compress better on their own, which offsets the dictionary's extra matches.",
+            "why": "Both columns already compress each page on its own, so that cancels out. The flat saving comes from what the dictionary contains: the shell, which every page carries in about the same amount."
           }
         ]
       },
@@ -62,16 +62,16 @@
         "q": "Why is level 6 the right choice for a runtime delta here?",
         "options": [
           {
-            "t": "Level 19 saves 3.9 more points and can spend the whole 10 ms CPU allowance on one page.",
+            "t": "Level 19 adds 3.9 points and spends up to 9.9 ms, the whole allowance, on one page.",
             "ok": true,
             "why": "Right. Level 6 stays well under a millisecond, and on the slowest page the last few points cost 20 times the CPU."
           },
           {
-            "t": "Browsers can't decode frames made at level 19.",
+            "t": "Chromium rejects dcz frames made above level 9, so level 19 deltas would fail.",
             "why": "Every level produces standard frames, and decoding costs about the same at any level."
           },
           {
-            "t": "Level 6 produces smaller frames than level 19.",
+            "t": "Level 6 comes out smaller than level 19 on these pages, since the shell match dominates.",
             "why": "Level 19 is smaller, 25.8% off against 21.9%. It loses on CPU."
           }
         ]
@@ -80,16 +80,16 @@
         "q": "Why won't the fix help the photo grid the homepage fetches?",
         "options": [
           {
-            "t": "A fetch() has destination empty, the dictionary is offered only to documents, and the grid barely matched it even when forced.",
+            "t": "A fetch() has an empty destination, and the grid's own content barely matches the dictionary.",
             "ok": true,
             "why": "Right. The demo on this page shows the same rule, and the forced run came out 17 bytes larger than today's brotli."
           },
           {
-            "t": "The grid is served by a different Worker.",
+            "t": "The grid comes from a separate photo Worker that holds no copy of the dictionary.",
             "why": "The same Worker serves it. The request's destination and the fragment's content are what rule it out."
           },
           {
-            "t": "The grid is an image, and zstd can't compress images.",
+            "t": "The grid ships as already-compressed image bytes, which zstd can't shrink further.",
             "why": "The grid fragment is HTML that points at images. The images themselves are already compressed files."
           }
         ]
@@ -98,16 +98,16 @@
         "q": "Which canary result would show that the fix has reached the workerd this site runs?",
         "options": [
           {
-            "t": "The right dictionary prints a smaller number than no dictionary and the wrong one.",
+            "t": "The right dictionary alone prints a smaller number.",
             "ok": true,
             "why": "Right. Only a runtime that honours the option can make the right dictionary alone shrink the frame."
           },
           {
-            "t": "All three numbers get smaller together.",
+            "t": "All three numbers shrink together, below 73 B.",
             "why": "That would mean a better compressor, and it says nothing about the dictionary."
           },
           {
-            "t": "The wrong dictionary throws an error.",
+            "t": "The wrong dictionary throws instead of printing a size.",
             "why": "A wrong raw dictionary compresses without complaint. It just matches nothing, so the frame stays the size of no dictionary."
           }
         ]

@@ -106,7 +106,7 @@ export async function sortMention(env: ClefEnv, m: SortInput): Promise<MentionSo
 }
 
 /** A prefix for the email subject, empty for a genuine mention so the common
- *  case reads exactly as it did before. */
+ *  case carries no tag at all. */
 export function sortSubjectTag(sort: MentionSort): string {
   if ("error" in sort || sort.verdict === "genuine") return "";
   return sort.verdict === "spam" ? "[likely spam] " : "[listing] ";

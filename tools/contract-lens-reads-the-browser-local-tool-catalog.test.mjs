@@ -85,6 +85,8 @@ test("the engine label comes from CDP, never from the page's user agent", () => 
   // /lens/wire overrides navigator.userAgent to AadharshBot, so asking the page
   // which browser it is returns this site's own mask. It did, once: the reading
   // came back `engine: "AadharshBot/1.0 (+https://aadhar.sh/bot)"`.
+  // The presence half first, so the absence below is read off the real probe.
+  assert.ok(/getTools\(\)/.test(WEBMCP_PROBE), "WEBMCP_PROBE should be the script that reads getTools()");
   assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE),
     "the probe must not report navigator.userAgent; this route overrides it");
   assert.ok(/Browser\.getVersion/.test(WIRE),

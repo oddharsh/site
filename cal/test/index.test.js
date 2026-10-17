@@ -1,4 +1,4 @@
-// Integration tests for the worker's request flow (src/index.js). Rather than
+// Integration tests for the worker's request flow (src/index.ts). Rather than
 // dispatching into the harness's workerd, we import the worker and call
 // worker.fetch() directly in THIS process, so the globalThis.fetch stub
 // intercepts its outbound calls. The calendar feed and Resend are both stubbed
@@ -34,7 +34,7 @@ const EMPTY_ICS = [
 ].join("\r\n");
 
 let mailCalls;
-// Approval and /location each send TWO mails now: the guest's invitation and
+// Approval and /location each send TWO mails: the guest's invitation and
 // the host's own PUBLISH copy. ctx.waitUntil orders neither, so these pick by
 // attachment rather than by index.
 const guestMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee.ics");
@@ -42,10 +42,7 @@ const hostMail  = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename 
 let bookingWf;
 let restoreFetch = () => {};
 beforeEach(async () => {
-  // start every test with an empty booking pool: a stale pending booking from
-  // a prior test would hold a slot / trip generateSlots' daily+weekly limits,
-  // so an assertion like "the slot frees up again" would see a slot suppressed
-  // for an unrelated reason. clearing makes each test's preconditions explicit.
+  // An empty booking pool per test; clearBookings in harness.ts says why.
   await cal.clearBookings();
 
   // route_book spins up a real expiry-timer instance per booking. Left alone,
@@ -147,7 +144,7 @@ const firstSlot = async () => {
 };
 const statusOf = async (id) => (await getBooking(env, id))?.status;
 // the host's approval email carries the only handle to the booking id (t=<id>):
-// there's no pending-index to scan anymore, so tests read the id the same way
+// there's no pending index to scan, so tests read the id the same way
 // the host does — off the signed link in the mail we just captured.
 const lastBookingId = () => {
   // Both steps can miss, and both used to fail as a bare TypeError pointing at

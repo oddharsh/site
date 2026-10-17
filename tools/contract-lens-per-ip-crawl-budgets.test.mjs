@@ -21,6 +21,7 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
   const { WEBMENTION_BUDGET } = await import("../src/worker/webmention.ts");
   const { ASK_BUDGET } = await import("../src/worker/ask-rank.ts");
   const { API_READ_BUDGET } = await import("../src/worker/lib/api-limits.ts");
+  const { PIXEL_PEEPER_BUDGET } = await import("../src/worker/pixel-peeper-crowd.ts");
   const { parseJsonc } = await import("./lib/jsonc.ts");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
@@ -29,12 +30,12 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
   // declared and would catch the next one too. A budget that lives in a module
   // this list forgets reads as an orphan and fails here, which is the correct
   // and cheap way to find out.
-  const BUDGETS = { ...LENS_BUDGETS, ...MCP_BUDGETS, webmention: WEBMENTION_BUDGET, ask: ASK_BUDGET, read: API_READ_BUDGET };
+  const BUDGETS = { ...LENS_BUDGETS, ...MCP_BUDGETS, webmention: WEBMENTION_BUDGET, ask: ASK_BUDGET, read: API_READ_BUDGET, pixelPeeper: PIXEL_PEEPER_BUDGET };
   // Two budget tables plus a singleton is three chances to typo a key into
   // nothing, and a `{...a, ...b}` that silently loses one still passes every
   // assertion below. Count what went in.
   assert.equal(Object.keys(BUDGETS).length,
-    Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 3,
+    Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 4,
     "two budgets share a key, so one of them is not being checked");
 
   // And one binding per budget ACROSS the tables, not just inside Lens's. Two
@@ -318,6 +319,10 @@ test("a lens is refused at definition when its spec breaks a rule the order depe
 
 test("every lens 429 is derived from LENS_BUDGETS, never typed", async () => {
   const { LENS_BUDGETS, budgetMessage } = await import("../src/worker/lens.ts");
+  // One per-visitor budget and the shared one, word for word, since the two
+  // are worded differently on purpose.
+  assert.equal(budgetMessage("wire"), "Wire traces are rate-limited to 2/min. Hang on a moment.");
+  assert.equal(budgetMessage("browserAll"), "The shared browser budget (4/min across every visitor) is spent for this minute. Try again shortly.");
   for (const name of Object.keys(LENS_BUDGETS)) {
     assert.ok(budgetMessage(/** @type {any} */ (name)).includes(`${LENS_BUDGETS[name].max}/min`), `${name}: the message does not quote its own ceiling`);
   }

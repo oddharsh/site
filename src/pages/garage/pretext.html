@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/pretext: DOM-free text measurement</title>
@@ -56,13 +56,13 @@ li { margin: 3px 0; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/pretext: DOM-free text measurement</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>pretext: text measurement off the DOM <span class="badge idle">watching</span></h1>
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
@@ -227,7 +227,7 @@ li { margin: 3px 0; }
     </footer>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script type="module">
@@ -372,9 +372,9 @@ li { margin: 3px 0; }
       "q": "pretext splits the work into prepare() and layout(). What does that split buy?",
       "options": [
         {
-          "t": "prepare() measures once per text and font; layout() is pure arithmetic over cached widths, so a new width is nearly free",
+          "t": "prepare() measures once per text and font; layout() is pure arithmetic over the cached widths",
           "ok": true,
-          "why": "Right: that's why dragging the width slider re-runs layout() every tick without touching the DOM or measureText again."
+          "why": "Right: measuring happens once, so a new width costs only arithmetic. That's why dragging the width slider re-runs layout() every tick without touching the DOM or measureText again."
         },
         {
           "t": "prepare() draws the text to an offscreen bitmap, and layout() just crops that bitmap to the target width",
@@ -394,12 +394,12 @@ li { margin: 3px 0; }
       "q": "In the float demo, what does layoutNextLine() enable that a plain layout(prepared, width) call can't?",
       "options": [
         {
-          "t": "Laying out one line at a time, so the available width can change per line: narrow beside the float, full width below it",
+          "t": "It lays out one line at a time, so each line gets its own width: narrow beside the float, full below it",
           "ok": true,
           "why": "Exactly what section 3 shows: you feed each line its own width, and shaped wrapping around the box falls out of the loop."
         },
         {
-          "t": "It skips laying out the lines that fall off-screen, which is what keeps the demo fast while you drag",
+          "t": "It skips laying out the lines that fall off-screen, which is what keeps the demo fast while you drag the box",
           "why": "Skipping off-screen rows is virtualization, a different trick. Section 3's point is text whose available width changes per line."
         },
         {
@@ -438,20 +438,20 @@ li { margin: 3px 0; }
       "q": "Why is pretext filed under \"watching\" for this site instead of being put to work today?",
       "options": [
         {
-          "t": "Its win scales with measurement volume, and this site measures almost nothing; a virtualized list is when it earns its keep",
+          "t": "Its win scales with how often you measure, and this site measures almost nothing yet",
           "ok": true,
-          "why": "That's the verdict: a handful of one-off measurements is exactly the case where the DOM is fine. Volume changes the math, and serendipity is the likely trigger."
+          "why": "That's the verdict: a handful of one-off measurements is exactly the case where the DOM is fine. A virtualized list, most likely in serendipity, is when it earns its keep."
         },
         {
           "t": "The CSP would need loosening before the vendored library could be allowed to load on this page",
           "why": "The closing note covers this: it's vendored same-origin at /garage/pretext.lib.js, so the existing 'self' policy already allows it."
         },
         {
-          "t": "The site's system font stack makes canvas-based measurement too unreliable to trust here",
+          "t": "The site's system font stack makes canvas-based measurement too unreliable to trust against real layout",
           "why": "Backwards: system Tahoma/Verdana means no webfont swap to mis-measure against, which section 7 credits for how closely the demo agrees."
         },
         {
-          "t": "Canvas widths are too imprecise for line breaking to ever agree with the browser's layout",
+          "t": "Canvas widths are too imprecise for its line breaks to match the browser's",
           "why": "Section 7 calls them good enough for line breaking. The real hesitations are the CSS subset, drift risk from mirroring the browser's line-breaker in JS, and the tiny measurement volume."
         }
       ]

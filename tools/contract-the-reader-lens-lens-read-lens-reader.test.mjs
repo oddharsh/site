@@ -19,9 +19,10 @@ import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
 // the ROOT workspace's dependencies, and lens-reader/src/reader.ts imports
-// readability and linkedom, which live only in that sub-project. Importing
+// readability (and htmlparser2, through src/dom.ts), which live only in that
+// sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
-// that happens to have run `pnpm install` in lens-reader/ — which is exactly how
+// that happens to have run `bun install` in lens-reader/, which is exactly how
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file
 // imports has to resolve under bare node, forever.
 //
@@ -31,7 +32,7 @@ import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
   const src = readFileSync("./lens-reader/src/reader.ts", "utf8");
   const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
-  assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
+  assert.ok(constant, "reader.ts no longer exports READER_LIMIT_PER_MIN");
   const READER_LIMIT_PER_MIN = Number(constant[1]);
   // IMPORTED rather than matched, since lens-reader moved to cloudflare.config.ts
   // (`cf migrate`, 2026-09-28): the value asserted is the value wrangler reads.
@@ -104,7 +105,7 @@ test("the reader reports what it dropped, never only what it kept", async () => 
   assert.match(client, /What the extractor threw away/, "the pane must lead with the gap");
   // And it must never present itself as the served bytes.
   const note = reader.match(/export const READER_NOTE =([\s\S]*?);\n/);
-  assert.ok(note, "reader.js no longer exports READER_NOTE");
+  assert.ok(note, "reader.ts no longer exports READER_NOTE");
   assert.match(note[1], /OPINION/, "the note must name the output as an opinion");
   assert.match(note[1], /never what the server sent/);
 });
@@ -223,7 +224,8 @@ test("the reader never renders an unmeasurable phase as 0 ms", () => {
   // Rendering those zeros would tell a visitor that parsing a 645 KB page is
   // free, on the one panel whose job is saying what the read cost. This is the
   // same class of claim the rest of the lens is built to avoid, so it is pinned.
-  assert.match(client, /not measurable/,
+  // The formatter itself: "not measurable" also appears in the comment above it.
+  assert.match(client, /return value > 0 \? value \+ " ms" : "not measurable/,
     "a zero-valued timing phase must render as unmeasurable, never as 0 ms");
   assert.match(client, /never during synchronous execution/,
     "the panel must explain WHY those phases read zero");
@@ -275,8 +277,10 @@ test("the cracker reports a verdict rather than always answering", () => {
   // that solved the cipher, which is the whole reason step 4 exists. The three
   // outcomes and the sample-size shrinkage are the load-bearing parts.
   assert.match(page, /<b>failed\.<\/b>/, "a run that did not solve must say so");
-  assert.match(page, /confidence/, "the verdict must carry a confidence");
-  assert.match(page, /PSEUDO/, "confidence must be shrunk toward random on short text");
+  // The scorer and its shrinkage, since both words also appear in comments and
+  // in PERIOD_PSEUDO, which is a different estimate.
+  assert.match(page, /function confidence\(L\)/, "the verdict must carry a confidence");
+  assert.match(page, /\+ PSEUDO \* FLOOR\) \/ \(w \+ PSEUDO\)/, "confidence must be shrunk toward random on short text");
   assert.match(page, /margin over runner-up/, "the verdict must report the margin to the next candidate");
   // The gauge predicts failure BEFORE the run, from letters per column, which is
   // the number that actually governs it. These thresholds were measured.

@@ -26,13 +26,14 @@
 // program in config/tsconfig.cal-test.json includes that file, and its header
 // says why the union with bun's globals is the one this repo accepts.
 //
-// Oxlint's type-aware pass is a SECOND checker with its own program: tsgolint
-// discovers a tsconfig per file, finds none named tsconfig.json above this one,
-// and builds a default program with no includes, in which those three names
-// are error types. An error type acts as `any`, so `ExecutionContext & {...}`
-// tripped no-redundant-type-constituents there while tsc was happy. The
-// context type below is an interface EXTENDING the global rather than an
-// intersection with it for that reason alone; the two spell the same type.
+// The context type below is an interface EXTENDING the global rather than an
+// intersection with it. The two spell the same type; the interface is for the
+// type-aware lint, a SECOND checker with its own program. Until #1365
+// (2026-10-16) that was oxlint's tsgolint, which found no tsconfig.json above
+// this file and built a default program with no includes, where those three
+// names are error types. An error type acts as `any`, so `ExecutionContext &
+// {...}` tripped no-redundant-type-constituents there while tsc was happy.
+// `bun lint` runs that pass now.
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 
@@ -102,8 +103,8 @@ interface TestContext extends ExecutionContext { [TASKS]: Promise<unknown>[] }
 
 export function createExecutionContext(): TestContext {
   const tasks: Promise<unknown>[] = [];
-  // The two methods cal calls, and nothing else. workers-types' ExecutionContext
-  // also declares `exports`, `tracing` and `abort`, none of which any route in
+  // The two methods cal calls, and nothing else. The runtime declarations'
+  // ExecutionContext also declares `exports`, `tracing` and `abort`, none of which any route in
   // cal/src reaches for, so they are left off rather than stubbed to satisfy a
   // type: a partial stand-in installed as a whole one, said once here.
   const ctx = {

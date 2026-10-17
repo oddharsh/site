@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/thumbnail encoding study</title>
@@ -98,14 +98,14 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div id="loupe" popover="manual" class="loupe" aria-hidden="true"><div class="bar"><span>loupe</span><span class="z">3.2&times;</span></div><div class="glass" id="loupe-glass"></div></div>
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/thumbnail encoding study</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail ends a chain of choices: <em>format,
@@ -559,7 +559,7 @@
 
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -643,20 +643,20 @@
       "q": "AVIF wins the showdown outright, so why bother with a custom JPEG encoder (zenc/zenjpeg) at all?",
       "options": [
         {
-          "t": "A JPEG still backs every thumbnail as the universal fallback, and zenc roughly halves it versus the system encoder at the same shipped quality.",
+          "t": "A JPEG still backs every thumbnail as the fallback, and zenc roughly halves it versus the system encoder.",
           "ok": true,
-          "why": "15.9 KB (zenc q84) against the system encoder's 31.7 KB at the same visual quality. Shrinking the fallback tier pays even when most browsers take the AVIF."
+          "why": "15.9 KB (zenc q84) against the system encoder's 31.7 KB at the same visual quality. JPEG is the universal fallback, so shrinking that tier pays even when most browsers take the AVIF."
         },
         {
           "t": "Some detailed color frames come out smaller as JPEG than as AVIF, so the pipeline picks the winner per photo.",
           "why": "The grid shows AVIF ahead at every quality tried, and the resolution table shows the lead holding at every size. There is no per-photo horse race."
         },
         {
-          "t": "zenc also emits the AVIF tier, so one tool from one build covers the whole picture pair.",
+          "t": "zenc also emits the AVIF tier, so one tool from one Rust build covers both halves of the picture pair.",
           "why": "zenc (zenjpeg) outputs only JPEG. The AVIF primary comes from avifenc; they are separate encoders in the pipeline."
         },
         {
-          "t": "The system encoder strips the EXIF fields that the photo grid's hover tooltips still need.",
+          "t": "The system encoder strips the EXIF fields that the photo grid's hover tooltips still need to read.",
           "why": "The ships list says the squares are metadata-stripped on purpose, so EXIF bytes ride along in neither encoder's output. The zenc win is bytes, per the shipped-quality cards."
         }
       ]
@@ -665,9 +665,9 @@
       "q": "For black-and-white frames the pipeline encodes AVIF as 4:0:0, luma only. What's the main reason?",
       "options": [
         {
-          "t": "Correctness: with no chroma planes in the file, a faint color cast is impossible; the byte savings are nearly nothing.",
+          "t": "Correctness: with no chroma planes, a faint color cast is impossible.",
           "ok": true,
-          "why": "The grayscale cards prove it: 4:2:0 lands at 10.6 KB and 4:0:0 at 10.5 KB, because nothing lived in those planes to begin with."
+          "why": "The grayscale cards prove the bytes barely move: 4:2:0 lands at 10.6 KB and 4:0:0 at 10.5 KB, because nothing lived in those planes to begin with. Honest encoding is the reason."
         },
         {
           "t": "Dropping two of the image's three planes cuts the file size by roughly a third.",
@@ -687,16 +687,16 @@
       "q": "Per the resolution table, what happens to file size when the thumbnail's long edge doubles from 400 to 800?",
       "options": [
         {
-          "t": "Bytes roughly triple, and AVIF's 34 to 36% lead over the JPEG (zenc) holds steady at every size.",
+          "t": "Bytes roughly triple, and AVIF's ~35% lead over the JPEG holds steady at every size.",
           "ok": true,
-          "why": "10.4 KB grows to 33.3 KB for AVIF. Under 4x because bigger images compress a bit more efficiently, and the steady lead is why the grid stays AVIF-primary, small, and square."
+          "why": "10.4 KB grows to 33.3 KB for AVIF, with a 34 to 36% lead over zenc at all three sizes. Under 4x because bigger images compress a bit more efficiently, and the steady lead is why the grid stays AVIF-primary, small, and square."
         },
         {
-          "t": "Bytes roughly double, since compressed size tracks the length of the edge.",
+          "t": "Bytes roughly double, since compressed size tracks the length of the long edge.",
           "why": "Pixel count grows with the square of the edge, so size grows much faster than the edge does. The table shows about 3x, well past doubling."
         },
         {
-          "t": "Bytes exactly quadruple, matching the four times larger pixel count.",
+          "t": "Bytes exactly quadruple, in step with the four times larger pixel count.",
           "why": "Larger images hand the encoder more redundancy to exploit, so growth comes in under the raw pixel ratio: about 3x in the table, off from 4x."
         },
         {
@@ -709,20 +709,20 @@
       "q": "The camera records 4:2:2 color, yet the AVIF thumbnails ship at full 4:4:4. Why does keeping more chroma than the original had win?",
       "options": [
         {
-          "t": "A thumbnail is the frame reduced about 9x, so it carries full color at its own size; 4:2:0 would discard real detail, and 4:4:4 scores higher at the same bytes.",
+          "t": "A downscaled tile holds full color at its own size, and 4:4:4 scores higher at equal bytes.",
           "ok": true,
-          "why": "The chroma section scores every layout at the shipped tile's exact byte count: 4:4:4 comes out about 0.5 SSIMULACRA2 ahead on all three tile sizes, and 4:2:0 needs a median 2.2% more bytes to catch up."
+          "why": "A 600px tile is the frame reduced about 9x, so each tile pixel averages several color samples and 4:2:0 would discard real detail. Scored at the shipped tile's exact byte count, 4:4:4 comes out about 0.5 SSIMULACRA2 ahead on all three tile sizes, and 4:2:0 needs a median 2.2% more bytes to catch up."
         },
         {
-          "t": "It doesn't win per byte; the site simply chose to pay about 8% more for better color.",
+          "t": "It doesn't win per byte; the site simply chose to pay about 8% more for better color at q63.",
           "why": "It wins before any extra byte is spent: at equal bytes 4:4:4 scores 0.45 to 0.59 higher. The shipped tiles do run about 6% heavier at q63, and that buys more quality on top of the free part."
         },
         {
-          "t": "4:4:4 restores the color detail the camera's 4:2:2 threw away.",
+          "t": "4:4:4 restores the color detail the camera's 4:2:2 recording threw away at capture.",
           "why": "Nothing can restore what the sensor pipeline never kept. The gain comes from the downscale: averaging many source pixels into one tile pixel leaves full-resolution color at tile size, which 4:2:0 would then halve."
         },
         {
-          "t": "Browsers upsample 4:2:0 chroma badly, so any subsampled AVIF looks smeared.",
+          "t": "Browsers upsample 4:2:0 chroma badly, so any subsampled AVIF looks smeared on screen.",
           "why": "The scores come from the reference decoder, with no browser involved. Halving the color and restoring it with no compression at all already costs a tile 6.5 to 6.9 points, so the loss is in the halving itself."
         }
       ]
@@ -731,16 +731,16 @@
       "q": "The corpus win is only 1.6% to 4%, on a JPEG fallback AVIF already beats by ~40%. Why did the site ship zenjpeg anyway?",
       "options": [
         {
-          "t": "The site maintains a whole toolchain for marginally-superior output, so a real, measured marginal gain clears the bar here.",
+          "t": "The site maintains a whole toolchain for marginally-superior output, and a measured gain clears that bar.",
           "ok": true,
           "why": "Same doctrine as building jpegli from source and minifying the client scripts: on this site marginal-superior is the point. A measured 1.6% (hybrid) to 4% (scan search) at equal quality qualifies. AGPL is a paper cut for a build-time encoder, and the Rust wrapper is dependabot-tracked and builds anywhere."
         },
         {
-          "t": "Because zenjpeg is dramatically smaller than jpegli, an obvious no-brainer.",
+          "t": "Because zenjpeg is dramatically smaller than jpegli, which made the switch an obvious call.",
           "why": "The gap is ~1.6% to 4% fewer bytes at equal quality. It shipped because the site treats a real marginal gain as worth the toolchain."
         },
         {
-          "t": "Because hybrid trellis is free: it costs nothing extra to run.",
+          "t": "Because hybrid trellis is free: it costs nothing extra in encode time over cjpegli.",
           "why": "It spends 3x to 13x the encode time. That is only seconds for the 158-frame batch, so speed did not gate it, but the cost is real."
         },
         {
@@ -753,20 +753,20 @@
       "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why isn't the full-size archive at /images/full/ AVIF?",
       "options": [
         {
-          "t": "A ~20 MB file is served bare with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG (or its lossless JPEG XL copy) can.",
+          "t": "At 20 MB the loading order is the whole experience, and AVIF can't paint incrementally like JPEG.",
           "ok": true,
-          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
+          "why": "Both facts hold at once. The archive is one bare file with no picture element, so scan order IS the loading experience. AVIF wins every byte comparison here and still loses that property: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
         },
         {
-          "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
+          "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply the smaller file there.",
           "why": "The resolution table shows the opposite: AVIF holds a steady ~34-36% lead at every size tested. The archive skips AVIF even though AVIF would be smaller."
         },
         {
-          "t": "Browsers cannot decode AVIF above a certain resolution, so a fallback is required.",
+          "t": "Browsers cannot decode AVIF above a certain resolution, so a 40 MP frame would need a fallback anyway.",
           "why": "Every engine that decodes AVIF decodes it at full resolution. The real constraint is progressive rendering."
         },
         {
-          "t": "The archive keeps the camera original untouched, and cameras cannot write AVIF.",
+          "t": "The archive keeps the camera original untouched, and cameras write HEIF or JPEG, never AVIF.",
           "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 207 of the 258 archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 20 MB download paints progressively."
         }
       ]

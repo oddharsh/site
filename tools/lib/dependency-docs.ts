@@ -27,8 +27,6 @@ export const DOC_ALIASES = [
   // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
-  { prose: "Oxlint", pkg: "oxlint" },
-  { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
@@ -47,6 +45,7 @@ export const DOC_ALIASES = [
 export const VERSIONLESS = new Map<string, string>([
   // A package in neither list fails the reverse direction, so the next dependency
   // documented without a version needs an entry here and therefore a stated reason.
+  ["av2-tone", "a git dependency pinned to a full commit sha of github.com/oddharsh/av2-tone since 2026-10-14: the AV2 tooling that moved out of tools/photos (the pinned libavif + AVM build, the tuned encoder patches, the WebAssembly decoder, GDF on Metal), unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0 by design until the Rust decoder publishes to crates.io, and the prose names the shape rather than a number"],
   ["timbrado", "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number"],
   ["wrangler", "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves"],
 ]);
@@ -156,7 +155,8 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
 
 // A scanner that stops matching must not report a clean pass over no claims.
 // Each alias is also required individually; change the floor with the policy.
-export const FLOOR_CLAIMS = 13;
+// 13 until 2026-10-15, when Oxlint and oxlint-tsgolint left with their claims.
+export const FLOOR_CLAIMS = 11;
 
 // ONE manifest's worth of checking, in all four directions. Extracted from the
 // root path on 2026-08-14 so the four manifests outside package.json get the

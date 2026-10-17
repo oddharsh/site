@@ -1,14 +1,14 @@
 // lens-pipeline.ts: the one request pipeline every lens door runs through.
 //
-// Seventeen callers used to hand-copy the same steps: validate the target,
-// check a precondition, read the KV cache, charge a per-IP budget and then the
-// shared browser one, run, write the cache back. The copies drifted the way
-// copies do. /lens/fetch?mode=cloudflare charged its budget BEFORE reading its
+// Every lens door runs the same steps: validate the target, check a
+// precondition, read the KV cache, charge a per-IP budget and then the shared
+// browser one, run, write the cache back. Hand-copied per door, those steps
+// drifted: /lens/fetch?mode=cloudflare charged its budget BEFORE reading its
 // cache, five routes read KV with no guard (a throw there is Cloudflare's HTML
 // 1101 page, which the client then JSON.parses), the cache-hit flag was spelled
 // three ways, and nine 429 messages quoted numbers nothing checked.
 //
-// `defineLens(spec)` owns all of that now. A spec says WHAT differs per lens:
+// `defineLens(spec)` owns all of that. A spec says WHAT differs per lens:
 // its budget, whether it spends Browser Run, its cache key and TTL, and its own
 // `run`. The pipeline owns the ORDER, and the order is not configurable:
 //
@@ -23,8 +23,8 @@
 // The result is an OUTCOME, never a Response, because the callers answer in
 // different shapes: a JSON route, a PNG, an 80-column terminal frame, an MCP
 // tool result, and the SSR shell's status/payload pair. Each shape is an
-// encoder over the same outcome (`lensJson` and `lensPng` here, `asFrame` in
-// terminal.ts, `asToolResult` in lib/tools.ts), which is where the callers
+// encoder over the same outcome (`lensJson` and `lensPng` here, `refusalFrame`
+// in terminal.ts, `lensToolResult` in lib/tools.ts), which is where the callers
 // really differ and the only seam this module needed.
 //
 // What it deliberately does NOT wrap: KV and the rate limiter. Both are
@@ -39,8 +39,6 @@ import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { hasRenderEngine } from "./lens-render.ts";
 import type { Span } from "./lib/span-vocabulary.ts";
-
-// ── budgets ────────────────────────────────────────────────────────────────
 
 type LensBudgetDecl = {
   binding: string;
@@ -64,10 +62,8 @@ type LensBudgetDecl = {
 // account's minute and the next visitor got a failure that read like a bug.
 //
 // Every 429 the lens doors send is DERIVED from this table by budgetMessage().
-// It used to be hand-typed at nine call sites, and the numbers in those strings
-// were checked by nothing: the contract test pinned this table to the config,
-// and the strings were a third copy. A contract test now fails on a literal
-// "N/min" in a lens door.
+// tools/contract-lens-per-ip-crawl-budgets.test.mjs fails on a literal "N/min"
+// in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
   shot:    { binding: "LENS_RL_SHOT",    max: 3,  label: "Snapshots" },
@@ -109,8 +105,6 @@ export function budgetMessage(name: LensBudget): string {
   return `${b.label} are rate-limited to ${b.max}/min${why}${shares}. Hang on a moment.`;
 }
 
-// ── shared helpers the lens modules used to import from lens.ts ────────────
-
 export { sha256Hex as lensSha256Hex };
 
 export function lensPngHeaders(cached: boolean) {
@@ -124,8 +118,6 @@ const NO_ENGINE = "Browser Run is not configured on this deployment.";
 // waitUntil the throw lands where nobody is listening, so the only symptom was a
 // page that re-rendered from scratch on every visit.
 export const LENS_KV_MAX = 20_000_000;
-
-// ── the interface ──────────────────────────────────────────────────────────
 
 // The span names a cached lens owns. One name for a hit and a miss, differing
 // on `lens.cache`, so a hit rate is a group-by rather than a join.
@@ -212,8 +204,6 @@ export interface Lens<In, V> {
   // The JSON or PNG route, reading its input from the query string.
   handle(request: Request, env: any, ctx?: any): Promise<Response>;
 }
-
-// ── implementation ─────────────────────────────────────────────────────────
 
 const PREFIXES = new Set<string>();
 
@@ -379,8 +369,6 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     },
   };
 }
-
-// ── encoders ───────────────────────────────────────────────────────────────
 
 // A cached lens says where its answer came from on every response, `true` or
 // `false`, so a client never has to tell a missing field from a miss. An

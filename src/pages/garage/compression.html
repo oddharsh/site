@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/compression teardown</title>
@@ -42,13 +42,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/compression teardown</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Compression teardown <span class="badge shipped">shipped</span></h1>
 
     <p class="lede">
@@ -258,7 +258,7 @@
     </p>
 
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 <script type="application/json" id="luq-data">
 {
@@ -268,7 +268,7 @@
       "q": "A Worker reads request.headers.get(\"accept-encoding\") and gets \"gzip, br\". What does that value tell you?",
       "options": [
         {
-          "t": "It describes what the EDGE can handle: the runtime normalizes the header to a constant, whatever the client sent.",
+          "t": "It describes the EDGE: the runtime normalizes the header to one constant, whatever the client sent.",
           "ok": true,
           "why": "Four probes sending identity, br, gzip and br;q=0 all arrived as the same string. Any branch on it always takes the true arm."
         },
@@ -277,7 +277,7 @@
           "why": "The value is the same no matter what the client sent, including a client that sent identity only. It is not the client's header."
         },
         {
-          "t": "That the client refused zstd via q=0, so the edge stripped it from the list.",
+          "t": "That the client refused zstd with q=0, so the edge stripped zstd out of the list before the Worker saw it.",
           "why": "No stripping happened. A client offering zstd, br, gzip produces the identical value, because the runtime replaces the header rather than filtering it."
         }
       ]
@@ -286,16 +286,16 @@
       "q": "A Worker sets Content-Encoding: br with encodeBody: \"manual\", and the client still receives brotli-inside-brotli. What is the first thing to check?",
       "options": [
         {
-          "t": "Whether anything downstream rebuilt the Response, since encodeBody is write-only init and rebuilding drops it silently.",
+          "t": "Whether anything downstream rebuilt the Response, which silently drops the write-only encodeBody.",
           "ok": true,
-          "why": "That was the bug here: a security-header wrapper reconstructed every response, so manual never applied anywhere on the site."
+          "why": "That was the bug here: encodeBody is write-only Response init with no getter, and a security-header wrapper reconstructed every response, so manual never applied anywhere on the site."
         },
         {
-          "t": "Whether the static-assets layer re-compressed it on the way out.",
+          "t": "Whether the static-assets layer re-compressed the body on its way out of the asset store.",
           "why": "Worth suspecting, and wrong here. A body built in the Worker with no asset fetch at all still double-encoded, which exonerated that layer."
         },
         {
-          "t": "Whether the brotli_content_encoding compatibility flag is enabled.",
+          "t": "Whether the brotli_content_encoding compatibility flag is enabled in the Worker's config.",
           "why": "It has been on by default since 2024-04-29, so any recent compatibility_date already has it. Not the cause."
         }
       ]
@@ -304,16 +304,16 @@
       "q": "The deltas ship as dcz even though brotli measured smaller. Why?",
       "options": [
         {
-          "t": "Decode scales with the size of the rebuilt file, so brotli's smaller delta never shrinks zstd's 8.3x decode lead.",
+          "t": "Decode scales with the rebuilt file's size, so a smaller delta never closes zstd's decode lead.",
           "ok": true,
-          "why": "Re-measured against real dictionaries, dcb is 245 bytes (6.8%) ahead across all 12 pairs, and dcz still wins: rebuilding 47,615 bytes costs 0.0165 ms against 0.1368. Break-even at 9 Mbps needs ~135 bytes saved per asset and dcb saves 44."
+          "why": "Right, and the lead is 8.3x. Re-measured against real dictionaries, dcb is 245 bytes (6.8%) ahead across all 12 pairs, and dcz still wins: rebuilding 47,615 bytes costs 0.0165 ms against 0.1368. Break-even at 9 Mbps needs ~135 bytes saved per asset and dcb saves 44."
         },
         {
-          "t": "Cloudflare only passes dcz through; dcb is not supported at the edge.",
+          "t": "Cloudflare's edge passes dcz through to browsers, and dcb responses get stripped back to plain brotli.",
           "why": "Both are passed through identically, on all plans. That is exactly why the choice was free to make on engineering grounds."
         },
         {
-          "t": "Because brotli cannot use a custom dictionary, so dcb was never actually available.",
+          "t": "Brotli cannot take a custom dictionary, so the build had no way to produce a dcb delta.",
           "why": "Brotli does custom dictionaries fine. What it lacked was a dictionary option in Node's zlib, which was a tooling gap rather than a format limit, and node 26 closed even that."
         }
       ]
@@ -322,16 +322,16 @@
       "q": "Why did the wrong diagnosis survive three rounds of measurement?",
       "options": [
         {
-          "t": "Each round confirmed a real platform constraint, just never the one causing the damage.",
+          "t": "Each round confirmed a real platform constraint, never the one doing the damage.",
           "ok": true,
           "why": "Accept-Encoding normalization and the missing down-convert are both genuinely true. Collecting true facts feels like converging on a cause, which is the trap."
         },
         {
-          "t": "The measurements were unreliable, and local results disagreed with production.",
+          "t": "The measurements were unreliable, and local results kept disagreeing with production.",
           "why": "The opposite. Local matched production byte-for-byte on the failure, which is what made the wrong conclusion so credible."
         },
         {
-          "t": "The bug was intermittent, so tests passed about as often as they failed.",
+          "t": "The bug was intermittent, so each test round passed about as often as it failed.",
           "why": "It was perfectly deterministic: every affected response double-encoded, every time. Determinism did not help, because the reasoning was what was broken."
         }
       ]

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/typed-config: The config that types itself</title>
@@ -59,13 +59,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/typed-config</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>The config that types itself</h1>
 <p class="garage-intro">A Worker config is data, so every <a class="term" data-t="binding" href="https://developers.cloudflare.com/workers/runtime-apis/bindings/" title="A named handle in a Worker's environment that connects its code to a resource, such as a database, a storage bucket or another Worker." rel="external">binding</a> name in it is a string that nothing checks. <a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> can load a config that is a <a class="term" data-t="typescript" href="https://en.wikipedia.org/wiki/TypeScript" title="JavaScript with type annotations, checked by a compiler that catches mismatched types before the code runs." rel="external">TypeScript</a> program instead, behind a flag it still hides, and Cloudflare's new <code>cf</code> CLI loads the same file with no flag at all. Both infer the Worker's <code>Env</code> from it. This page measured that twice, in August and again on 2026-10-05. The upload still comes out byte-identical. The <a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Object</a> type still degrades for a Worker that binds its own class, and now carries the class through when the binding names a second Worker. And one August claim was wrong: <code>wrangler types</code> already wrote a plain-text variable's value into the type.</p>
 
@@ -181,7 +181,7 @@ Wrangler does not support the Bun runtime. Please try this command again using N
 <p>The third half-fired: the class type now threads through a binding to another Worker. What would finish it is a self-bound Durable Object that types as its class, which would remove the last column where <code>wrangler types</code> wins. The other result worth watching is the format leaving open beta, since several shapes on this page moved between the two runs: the import path, the default export, the Durable Object binding key and the build output file.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-08-24</span></div>
 </div>
 
@@ -380,16 +380,16 @@ Wrangler does not support the Bun runtime. Please try this command again using N
       "q": "Why can a JSON config never give env a checked type on its own?",
       "options": [
         {
-          "t": "A data file cannot export a type, so the binding names have to be copied into a type by something else.",
+          "t": "A data file cannot export a type for the compiler to read.",
           "ok": true,
-          "why": "Right. That copy is what wrangler types produces, and a copy is correct when it is made and silently stale afterwards."
+          "why": "Right. The binding names have to be copied into a type by something else. That copy is what wrangler types produces, and a copy is correct when it is made and silently stale afterwards."
         },
         {
-          "t": "JSON has no way to express a string, so the binding names are untyped.",
+          "t": "JSON has no way to express a string, so the binding names stay untyped.",
           "why": "JSON expresses strings fine. The gap is that a JSON file cannot participate in the type system at all."
         },
         {
-          "t": "The Workers runtime strips types before the config is read.",
+          "t": "The Workers runtime strips types before the config file is ever read.",
           "why": "Types are erased at build time in every TypeScript project. The runtime is not what decides whether a config can carry one."
         }
       ]
@@ -398,16 +398,16 @@ Wrangler does not support the Bun runtime. Please try this command again using N
       "q": "The demo shows bindings.text(\"default\") producing the type \"default\" rather than string. What does that buy?",
       "options": [
         {
-          "t": "A comparison against a value that was never configured fails at compile time instead of silently at runtime.",
+          "t": "Comparing it with a value that was never configured is a compile error.",
           "ok": true,
-          "why": "Right. The literal type carries the configured value, so the set of things the variable can equal is known to the compiler."
+          "why": "Right. The literal type carries the configured value, so the set of things the variable can equal is known to the compiler, and a wrong comparison fails at compile time instead of silently at runtime."
         },
         {
-          "t": "The variable becomes read-only at runtime.",
+          "t": "The variable becomes read-only at runtime, so a handler cannot overwrite it.",
           "why": "Types are erased before the Worker runs. Nothing about runtime mutability changes."
         },
         {
-          "t": "The value is encrypted the way a secret is.",
+          "t": "The value is stored encrypted, the way a secret binding's value is.",
           "why": "A text binding is plain configuration and is visible in the resolved config. Secrets are a separate binding kind that carries no value at all."
         }
       ]
@@ -416,16 +416,16 @@ Wrangler does not support the Bun runtime. Please try this command again using N
       "q": "A Durable Object binding infers as DurableObjectNamespace\u003cundefined>. What turned it into DurableObjectNamespace\u003cCounter> in the October run?",
       "options": [
         {
-          "t": "Binding a class that a second Worker exports, through that Worker's definition, whose entrypoint is imported with the cf-worker attribute.",
+          "t": "Binding a class a second Worker exports through that Worker's definition, with a cf-worker module entrypoint.",
           "ok": true,
           "why": "Right. The control matters: the same definition with a path-string entrypoint gave DurableObjectNamespace\u003cDurableObjectBranded>, so the module import is what carries the class."
         },
         {
-          "t": "Giving the entrypoint as a cf-worker module while naming the Worker by string.",
+          "t": "Giving the entrypoint as a cf-worker module import while still naming the Worker in the binding by string.",
           "why": "That was measured in August and again in October, and the type stayed undefined. A string name gives the compiler no module to read the class from."
         },
         {
-          "t": "Pointing the binding at the Worker's own definition.",
+          "t": "Pointing the binding at the Worker's own definition, so the class comes from the file it is bound in.",
           "why": "That reference is circular. tsc reports TS7022 and the binding collapses to never, which is why a self-bound Durable Object still types worse than wrangler types."
         }
       ]
@@ -434,16 +434,16 @@ Wrangler does not support the Bun runtime. Please try this command again using N
       "q": "A dry run of the converted Worker passes. What does that fail to tell you?",
       "options": [
         {
-          "t": "Whether the API accepts the export-based Durable Object form, because a dry run never computes a migration at all.",
+          "t": "Whether the API accepts the export-based Durable Object form for a class that already exists.",
           "ok": true,
-          "why": "Right. The migration is resolved against the live script, which a run that contacts no API cannot do. This site needed a real deploy, on 2026-09-21, to get the answer."
+          "why": "Right. A dry run never computes a migration, and the migration is resolved against the live script, which a run that contacts no API cannot do. This site needed a real deploy, on 2026-09-21, to get the answer."
         },
         {
           "t": "Whether the bindings are named correctly, since a dry run skips binding resolution.",
           "why": "The dry run prints the resolved binding table, which is exactly the part it does check."
         },
         {
-          "t": "Whether the bundle compiles, since a dry run skips the build.",
+          "t": "Whether the bundle compiles at all, since a dry run skips the build step and only validates the config.",
           "why": "A dry run builds the Worker and reports its upload size. Building is most of what it does."
         }
       ]
@@ -452,16 +452,16 @@ Wrangler does not support the Bun runtime. Please try this command again using N
       "q": "The loader refuses bun, yet bun x --no-install wrangler loads the config. Why?",
       "options": [
         {
-          "t": "That path resolves a shim whose node shebang hands the process to node before the config is read.",
+          "t": "The wrangler shim it resolves has a node shebang, so node runs the loader.",
           "ok": true,
-          "why": "Right. The refusal checks the process that ends up running wrangler, whichever package manager launched it."
+          "why": "Right. The shim's node shebang hands the process to node before the config is read. The refusal checks the process that ends up running wrangler, whichever package manager launched it."
         },
         {
-          "t": "The --no-install flag switches wrangler into a compatibility mode.",
+          "t": "The --no-install flag puts wrangler in a compatibility mode that skips that check.",
           "why": "That flag only stops bun fetching a package it cannot resolve locally. It changes nothing about the runtime."
         },
         {
-          "t": "bun detects the config extension and delegates automatically.",
+          "t": "bun detects the .config.ts extension and delegates loading to node automatically.",
           "why": "The shebang on the resolved binary picks the runtime, before any config is opened."
         }
       ]
@@ -475,11 +475,11 @@ Wrangler does not support the Bun runtime. Please try this command again using N
           "why": "Right. wrangler types takes a snapshot you have to retake; the inferred Env reads the config every time the compiler runs."
         },
         {
-          "t": "wrangler 4.147.0 added literal types to wrangler types since August.",
+          "t": "wrangler 4.147.0 added literal types to wrangler types, so newer JSON configs now carry the value.",
           "why": "The same wrangler.jsonc gave the same literal on 4.125.0, so nothing was added. The August claim was wrong on the day it was written."
         },
         {
-          "t": "The TypeScript config stopped narrowing text bindings to their value.",
+          "t": "The TypeScript config stopped narrowing text bindings to their value, so both formats now type it as string.",
           "why": "bindings.text(\"default\") still types as \"default\" on config 0.23.0. The correction is about the JSON side."
         }
       ]

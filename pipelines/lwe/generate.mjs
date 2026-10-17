@@ -98,7 +98,7 @@ function pageHtml(spec) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh${c.path} · ${titleSuffix}</title>
@@ -124,7 +124,7 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window -->${titleBar({ caption: unsafeHtml(`aadhar.sh/lwe &middot; ${titleSuffix}`), closeHref: "/lwe", closeTitle: "back to Learning With Errors" })}<!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <div class="msgr">
 
       <div class="msgr-head">
@@ -142,7 +142,7 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
       </div>
       <div class="compose"><div class="box"><div class="ta">${spec.composeNote || "This is a recorded conversation. Type into the demos above."}</div></div></div>
     </div>
-  </div>
+  </main>
 </div>
 
 ${demoJs}${understanding}${askScript}

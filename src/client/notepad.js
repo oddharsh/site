@@ -29,13 +29,6 @@
 
   /** @param {string} h */
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return /** @type {HTMLElement} */ (t.content.firstChild); }
-  // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
-  // top-level scripts, each minified on its own by Oxc in build.ts, so sharing
-  // these ~250 bytes would cost either an import (a
-  // second request on every /writing page) or a window global — and notepad.js is
-  // deferred BEFORE nav.js, so nav's global isn't there yet when this runs. Keep the
-  // two byte-identical instead: esc() escapes the double quote too, so it stays safe
-  // in an attribute even though today's callers only use it in text.
   /** @param {string} s */
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   // Notepad's F5 stamp. Intl does the formatting and the two formatters are
@@ -54,11 +47,6 @@
     ];
     return (f5Fmts[0].format(d) + " " + f5Fmts[1].format(d)).replace(/\s/g, " ");
   }
-  // Note popovers used to show and hide inside a same-document View Transition,
-  // each one given its own `axp-note-<id>` transition name. That came out with the
-  // rest of the View Transition machinery (2026-07-30): a popover is a top-layer
-  // element that is already composited, so the transition bought a cross-fade at
-  // the cost of a deferred callback and a frame of latency on every open and close.
 
   // Menu owns interaction; the caller owns actions and checkbox state. Keeping
   // it in this classic script costs no extra request or cross-script global.
@@ -397,10 +385,12 @@
     var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
     var step = 26;
     var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
-    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+    // the taskbar's real height (luna.css SAFE AREAS registers it as a <length>)
+    var bar = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--taskbar-h")) || 30;
+    var y = Math.max(8, Math.min(by + n * step, innerHeight - bar - 90));
     pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
     if (ta) ta.focus();
-    window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
+    window.dispatchEvent(new Event("resize"));
   }
 
   [].forEach.call(D.querySelectorAll(".np-window:not([popover])"), enhance);

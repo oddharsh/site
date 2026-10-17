@@ -58,7 +58,6 @@ export function lensRobotsVerdict(parsed: ReturnType<typeof lensParseRobots>, bo
   };
 }
 
-// robots path patterns: '*' is a wildcard, a trailing '$' anchors the end.
 function robotsOctets(value) {
   return value.replace(/%[0-9a-f]{2}|[^\p{ASCII}]/giu, (part) => {
     if (!part.startsWith("%")) return encodeURIComponent(part);

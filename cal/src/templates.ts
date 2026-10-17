@@ -14,7 +14,7 @@
 // the worst on the site, and production could not reproduce it.
 //
 // design vocab:
-//   - .xp-window           outer panel, blue title bar + chrome buttons
+//   - .window              outer panel, blue title bar + chrome buttons
 //   - .title-bar        title strip with glossy gel min/max/close controls
 //   - .content             inner workspace (white)
 //   - .xp-group            sunken group-box ("Available slots", "Your info")
@@ -370,14 +370,9 @@ form.book .actions {
 // On the cal.aadhar.sh fallback /nav.js 404s, so this is skipped and the page
 // stays a standalone centered window (degrades cleanly).
 //
-// The painted taskbar placeholder that used to sit here (a body::after strip
-// gradient, hand-kept "in sync with nav.js") is GONE: the page now ships the
-// real DESKTOP_CHROME, so there is nothing to stand in for and nothing left to
-// keep in sync by hand.
-//
 // It looks redundant, since luna.css carries every rule here (the 12px right
-// gutter included, since 2026-09-30) and this page links luna render-blocking. It still earns its place, measured
-// 2026-09-30: with only the gutter kept,
+// gutter included, since 2026-09-30) and this page links luna render-blocking.
+// It still earns its place, measured 2026-09-30: with only the gutter kept,
 // `bun run cls --paths /coffee --hold none --runs 5` saw the form jump (0.0704,
 // dy -554 dx -306) on 3 of 5 desktop loads, and with the block in place it saw
 // none. Keep it until that reads clean without it.
@@ -391,16 +386,12 @@ const STANDALONE_GUTTER = `/*min*/
 `;
 const SHELL_GEOMETRY = `/*min*/
 html { height: 100dvh; overflow: hidden; }
-body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+body { min-height: 0; height: calc(100vh - 30px - env(safe-area-inset-bottom, 0px)); height: calc(100dvh - 30px - env(safe-area-inset-bottom, 0px));
   overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
 .window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
 .window > .title-bar { flex: 0 0 auto; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; }
 `;
-
-// the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
-// app button, so the tab favicon is right on first paint (and on cal.aadhar.sh,
-// where nav.js never loads to set it). hex colors %23-encoded for the data URI.
 
 function shell(title, body, env, head = "") {
   const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
@@ -412,7 +403,7 @@ function shell(title, body, env, head = "") {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <link rel="stylesheet" href="/luna.css">
@@ -435,14 +426,14 @@ ${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--fo
       ><a class="close" href="${esc(home)}" title="close" aria-label="close, up to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
-  <div class="content">
+  <main id="main" class="content">
     ${body}
     <div class="xp-statusbar">
       <span>← <a href="${esc(home)}">${esc(home.replace(/^https?:\/\//, ""))}</a></span>
       <span>page idea borrowed (with thanks) from <a href="https://jry.io/bagel" rel="external noopener">Jacob Young</a></span>
       <span>cloudflare workers · ${esc(env.HOST_TIMEZONE || "UTC").replace(/_/g, " ")}</span>
     </div>
-  </div>
+  </main>
 </div>${onShell ? `${DESKTOP_CHROME}
 <script src="/nav.js" defer></script>` : ""}
 </body>
@@ -629,7 +620,27 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
     ${inline ? "" : islandScript().html}
   `;
 
-  return shell("Coffee or a bagel", body, env, inline ? "" : islandPreload(slotsUrl).html);
+  return shell("Coffee or a bagel", body, env, shareCard(env) + (inline ? "" : islandPreload(slotsUrl).html));
+}
+
+// The unfurl card. Absolute URLs on the canonical host, since a crawler reading
+// the cal.aadhar.sh fallback has no other way to find the image. The image is
+// captured by tools/photos/gen-og-cards.ts (OG_ONLY=coffee).
+function shareCard(env) {
+  const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
+  const img = `${home}/og/coffee.jpg`;
+  return `<meta property="og:type" content="website">
+<meta property="og:site_name" content="aadhar.sh">
+<meta property="og:title" content="Let's grab coffee or a bagel">
+<meta property="og:description" content="Pick an open slot to meet ${esc(env.HOST_NAME)} in NYC. Requests are reviewed by hand.">
+<meta property="og:url" content="${esc(home)}/coffee">
+<meta property="og:image" content="${esc(img)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Windows XP window titled Let's grab coffee or a bagel, listing open time slots as buttons, on the Bliss desktop.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${esc(img)}">
+`;
 }
 
 export function successPage(env) {

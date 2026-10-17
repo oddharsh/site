@@ -1,7 +1,7 @@
 // What the Worker does with a 404, and the counter that says whether it helped.
 //
 // Measured over three days of zone analytics before this existed (2026-09-28 to
-// 10-01, 34,272 requests, 3,237 of them 404): almost every miss had a
+// 2026-10-01, 34,272 requests, 3,237 of them 404): almost every miss had a
 // deterministic answer, and none of the answers needed a model.
 //
 //   57%  a superseded /a/<name>.<hash8> URL (one crawler asked 1,737 times for
@@ -19,42 +19,43 @@
 // asset layer's empty one, or the clamp's "not found") gains a body listing the
 // closest pages the sitemap knows, grouped by section. An agent that guessed
 // /garage/resampe learns /garage/resample and /garage in the same response.
-// That body is plain text by default, and Markdown or JSON when Accept asks for
-// one, by the same rule the pages negotiate with. The JSON shape is the one
+// That body is a Luna window when the caller names text/html (a browser), plain
+// text by default, and Markdown or JSON when Accept asks for one, by the same
+// rule the pages negotiate with. The JSON shape is the one
 // /openapi.json declares as Error, so a client of the API reads a miss the way
 // it reads any other failure.
 //
 // The sitemap is the authority for both halves. It is the list this site
-// already publishes of what is real, build.ts invariant #8 holds it to the
+// already publishes of what is real, build.ts's invariants hold it to the
 // surface registry, and its paths carry the site's structure (/garage/*, /lwe/*,
 // /writing/*), which is what "closest" is measured within.
 //
-// Every redirect is a 301 with a one-day cache, the same shape as the legacy
-// /images/ thumbnail redirects. One day rather than a year because the target
-// of a stale hash moves on the next release, and a cached chain is cheap to
-// re-resolve but wrong to pin. Nothing here is aliased to a resource this site
-// does not serve: ai-plugin.json and the rest stay 404, because answering them
-// would advertise a capability that is not here. /openapi.json is a real file
+// Every redirect is a 301 with a one-day cache. One day rather than a year
+// because the target of a stale hash moves on the next release, and a cached
+// chain is cheap to re-resolve but wrong to pin. Nothing here is aliased to a
+// resource this site does not serve: ai-plugin.json and the rest stay 404,
+// because answering them would advertise a capability that is not here. /openapi.json is a real file
 // since 2026-10-13 (it describes the keyless JSON endpoints), so the usual
 // guesses at an OpenAPI path now point at it.
 //
 // Node-safe (gotcha 16): the contract suite imports it outside workerd.
 
-import { HASHED_ASSETS } from "./shell-assets.ts";
+import { lunaPage } from "./chrome.ts";
+import { html } from "./html.ts";
+import { HASHED_ASSETS, SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
 import { namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
 
-// ── where to look, on every 404 ──────────────────────────────────────────────
 export const MISS_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
   '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
   '</.well-known/ard.json>; rel="ard"; type="application/json"',
 ].join(", ");
 
-// ── discovery guesses with an honest answer ──────────────────────────────────
-// Each target is a document this site serves in the format the guess implies.
+// Discovery guesses with an honest answer. Each target is a document this site
+// serves in the format the guess implies.
 // /.well-known/mcp, /.well-known/mcp.json and /mcp.json are MCP server-card
 // probes, and the site's card is /.well-known/mcp/server-card.json.
 // /.well-known/ai-catalog.json is ARD's predecessor path for ard.json.
@@ -82,7 +83,7 @@ export const DISCOVERY_ALIASES: Readonly<Record<string, string>> = {
 // A path shaped like an API call. Its miss answers JSON unless the caller names
 // HTML, because whatever asked for /v1/users or /data.json is going to parse
 // the body, and a client that sends no Accept (or */*) still gets something it
-// can read. A browser names text/html and keeps the plain-text page.
+// can read. A browser names text/html and gets the HTML page.
 export const API_CALL_PATH = /\.json$|^\/api(?:\/|$)|^\/v\d+(?:\/|$)/i;
 
 // The terminal tools answer a text frame at /<tool>.txt, and agents guess .md.
@@ -91,7 +92,6 @@ const TEXT_TOOLS = new Set(AGENT_SURFACES.filter((s) => s.mimeType === "text/pla
 
 const PROBE = /\.(?:php\d?|env|git|ya?ml|cgi|sql|bak|zip|tar|gz|ini|cfg|conf|pem|key|asp|aspx|jsp)\b|\/wp-|\/\.(?:aws|ssh|docker|config|s3cfg|zshrc|bash|anthropic)|%25|\/etc\/|credentials|composer\.json|appsettings|phpinfo|cgi-bin/i;
 
-/** Which kind of miss a path is, for the counter. */
 export function missBucket(path: string): string {
   if (path.startsWith("/a/")) return "stale-asset";
   if (path.startsWith("/i/")) return "stale-photo";
@@ -102,7 +102,6 @@ export function missBucket(path: string): string {
   return "page";
 }
 
-/** Who asked, coarsely: the counter's other dimension. */
 export function callerClass(ua: string | null): string {
   const s = String(ua || "");
   if (!s) return "empty";
@@ -113,7 +112,7 @@ export function callerClass(ua: string | null): string {
   return "other";
 }
 
-// ── the sitemap, read once per isolate ───────────────────────────────────────
+// The sitemap, read once per isolate.
 type AssetsEnv = { ASSETS?: { fetch: (r: Request | string) => Promise<Response> } };
 let _sitemap: string[] | undefined;
 
@@ -155,7 +154,6 @@ function editDistance(a: string, b: string): number {
   return row[b.length];
 }
 
-/** 0..1, one minus the edit distance over the longer string. */
 function likeness(a: string, b: string): number {
   const max = Math.max(a.length, b.length);
   return max ? 1 - editDistance(a.toLowerCase(), b.toLowerCase()) / max : 1;
@@ -179,9 +177,6 @@ export function nearestPages(path: string, pages: readonly string[], limit = 3):
   return { section, pages: scored.slice(0, limit).map((s) => s.p) };
 }
 
-// ── the deterministic redirects ──────────────────────────────────────────────
-
-/** Where a missing path unambiguously points, and by which rule, or null. */
 export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location: string, rule: string } | null> {
   const path = url.pathname;
 
@@ -217,7 +212,6 @@ export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location:
   return page ? { location: page, rule: "canonical-page" } : null;
 }
 
-/** The plain-text body an empty 404 gains. */
 export function missBody(path: string, near: { section: string | null, pages: string[] }): string {
   const lines = [`404 Not Found: ${path}`, ""];
   if (near.pages.length) {
@@ -230,6 +224,36 @@ export function missBody(path: string, near: { section: string | null, pages: st
     "/llms.txt, and its agent resources are described in /.well-known/ard.json.",
   );
   return `${lines.join("\n")}\n`;
+}
+
+/** The same answer for a browser: a Luna window whose suggestions are links.
+ *  A plain-text 404 left a visitor with paths to retype and no taskbar to leave
+ *  by, which the spec's error-page rule (a way forward, in plain language)
+ *  fails. noindex and no canonical, since the URL names nothing. */
+export function missPage(path: string, near: { section: string | null, pages: string[] }): Response {
+  const link = (p: string) => html`<li><a href="${p}">${p}</a></li>`;
+  const body = html`<h1>The page cannot be found</h1>
+<p><code>${path}</code> isn't a page on aadhar.sh. It may have moved, or the link has a typo.</p>${near.pages.length ? html`
+<h2>${near.section ? `Closest pages in ${near.section}` : "Closest pages"}</h2>
+<ul>${near.pages.map(link)}</ul>${near.section ? html`
+<p>Section index: <a href="${near.section}">${near.section}</a></p>` : ""}` : ""}
+<h2>Where the pages are</h2>
+<ul>
+<li><a href="/">The homepage</a></li>
+<li><a href="/sitemap.xml">/sitemap.xml</a>: every page on this site</li>
+<li><a href="/llms.txt">/llms.txt</a>: the same map, summarized for agents</li>
+</ul>`;
+  return lunaPage({
+    title: "The page cannot be found",
+    path,
+    robots: "noindex",
+    status: 404,
+    cache: "no-store",
+    headers: { vary: "accept", link: `${SHELL_PRELOAD_LINK}, ${MISS_LINKS}` },
+    // the section heading the trust pages use; lunaPage styles only the h1
+    css: "h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }",
+    body,
+  });
 }
 
 /** The same answer for a caller that asked for `text/markdown`: the pages as
@@ -269,7 +293,6 @@ export function missJson(origin: string, path: string, near: { section: string |
   return body;
 }
 
-// ── the hook ─────────────────────────────────────────────────────────────────
 export type MissOutcome = { response: Response, bucket: string, outcome: string };
 
 /** Turn a 404 into a redirect where one URL is meant, and otherwise into a 404
@@ -299,9 +322,18 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
       const near = bucket === "probe" ? { section: null, pages: [] } : nearestPages(url.pathname, await sitemapPaths(env));
       // The body follows Accept the way the pages do (lib/http.ts): an agent
       // that asked for Markdown or JSON gets it, an API-shaped path gets JSON
-      // unless HTML was named, and everyone else plain text.
+      // unless HTML was named, a caller that named HTML gets the page, and
+      // everyone else plain text.
       const json = wantsJson(request) || (API_CALL_PATH.test(url.pathname) && !namesHtml(request));
-      const kind = wantsMarkdown(request) ? "md" : json ? "json" : "text";
+      const kind = wantsMarkdown(request) ? "md" : json ? "json" : namesHtml(request) ? "html" : "text";
+      if (kind === "html") {
+        const page = missPage(url.pathname, near);
+        return {
+          bucket,
+          outcome: near.pages.length ? "404:suggested" : "404",
+          response: request.method === "HEAD" ? new Response(null, page) : page,
+        };
+      }
       const text = kind === "md" ? missMarkdown(url.origin, url.pathname, near)
         : kind === "json" ? `${JSON.stringify(missJson(url.origin, url.pathname, near), null, 2)}\n`
         : missBody(url.pathname, near);

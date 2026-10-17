@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/iroh</title>
@@ -44,13 +44,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/iroh</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Dial by key</h1>
     <p class="lede"><a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0. It is a networking library where you reach another machine by its <a class="term" data-t="public-key-cryptography" href="https://en.wikipedia.org/wiki/Public-key_cryptography" title="Cryptography with a key pair: a public key anyone can see and a private key kept secret. What one key signs or locks, the other checks or opens." rel="external">public key</a> rather than its IP address: a 32-byte <a class="term" data-t="ed25519" href="https://en.wikipedia.org/wiki/EdDSA" title="A widely used digital signature scheme built on an elliptic curve, with 32-byte public keys and 64-byte signatures that are fast to make and check." rel="external">ed25519</a> identity that stays put while the network under it changes, with <a class="term" data-t="quic" href="https://www.rfc-editor.org/rfc/rfc9000.html" title="A transport protocol that runs fast, encrypted connections over UDP, with many streams sharing one connection. HTTP/3 is built on it." rel="external">QUIC</a> <a class="term" data-t="hole-punching" href="https://en.wikipedia.org/wiki/Hole_punching_(networking)" title="A trick that lets two devices behind home routers or firewalls connect directly, by having both send packets toward each other at the same time." rel="external">hole-punching</a> for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
 
@@ -93,7 +93,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
 
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -151,7 +151,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
           "why": "Right. The key is the address: the machine under it can change networks and the identity stays put, while iroh handles path-finding, direct via QUIC hole-punching when it can, relay when it cannot."
         },
         {
-          "t": "A registry entry that maps the key to the machine's current fixed IP address",
+          "t": "A registry entry that maps the key to the machine's current fixed IP address on file",
           "why": "That would be DNS with extra steps, and a fixed IP is exactly what the lede drops. The identity carries no network location; iroh discovers a fresh path whenever the network underneath moves."
         },
         {
@@ -168,20 +168,20 @@ const nodeId = base32(pub);   // this string is the address</pre>
       "q": "The Mint a NodeId button on this page produces a real NodeId-shaped identity. How?",
       "options": [
         {
-          "t": "Native Web Crypto generates an ed25519 keypair and the page base32-encodes the public half",
+          "t": "Native Web Crypto makes an ed25519 keypair; the page base32-encodes the public half",
           "ok": true,
           "why": "That is the point of the demo: the identity layer needs zero library code. Where the browser lacks ed25519 in Web Crypto, it falls back to 32 random bytes, which shows the shape without being a signable key."
         },
         {
-          "t": "A lazy-loaded slice of iroh's wasm bundle runs on this one page only",
+          "t": "A lazy-loaded slice of iroh's wasm bundle runs on this one page and mints it",
           "why": "The page loads nothing iroh, and that is the verdict in miniature: minting the identity takes a few lines of native crypto, while the megabyte-class wasm blob is exactly the part that stayed off the site."
         },
         {
-          "t": "An iroh discovery server allocates a fresh identity and sends it back",
+          "t": "An iroh discovery server allocates a fresh identity and sends it back to the page",
           "why": "Nothing left your machine to make it, as the note under the hex output says. iroh identities are self-generated keypairs; no server hands them out, and that self-generation is what makes the key honest as an address."
         },
         {
-          "t": "The page derives a key from your IP address so peers can route to you",
+          "t": "The page derives a key from your IP address so peers can route straight to you",
           "why": "That runs backwards from the design goal. The identity deliberately contains no network address, which is what lets it stay valid while the machine roams; deriving it from an IP would pin it to one network."
         }
       ]
@@ -190,7 +190,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
       "q": "Why can't aadhar.sh act as its own iroh relay for browser peers?",
       "options": [
         {
-          "t": "Workers are request-and-response, with no long-lived QUIC socket for a relay to live on",
+          "t": "Workers are request-and-response, with no long-lived QUIC socket for a relay",
           "ok": true,
           "why": "Right. Browser endpoints cannot hole-punch on their own, so they lean on a relay, and a Worker cannot hold that socket open. The relay would be iroh's public one or a box running somewhere else."
         },
@@ -199,7 +199,7 @@ const nodeId = base32(pub);   // this string is the address</pre>
           "why": "Anyone can stand up a relay on a box that keeps sockets open; the page even mentions standing up your own elsewhere. The blocker in that bullet is the shape of the edge platform."
         },
         {
-          "t": "Browsers can hole-punch on their own, so hosting a relay would be pointless",
+          "t": "Browsers can hole-punch on their own, so hosting a relay for them would be pointless",
           "why": "The page states the opposite: browser endpoints cannot hole-punch on their own, which makes browsers lean on a relay harder than native peers do. That dependence is why relay hosting matters here at all."
         },
         {
@@ -212,16 +212,16 @@ const nodeId = base32(pub);   // this string is the address</pre>
       "q": "By this page's own verdict, what would make iroh the right tool for this site someday?",
       "options": [
         {
-          "t": "A genuinely two-device feature, like beaming a photo straight to a phone with no server between",
+          "t": "A genuinely two-device feature, like beaming a photo to a phone with no server between",
           "ok": true,
           "why": "That is the stated fit: P2P earns its megabyte when two specific devices need to talk directly. A private channel between two of my own machines qualifies for the same reason."
         },
         {
-          "t": "The photo gallery growing big enough that CDN bandwidth becomes the expensive part",
+          "t": "The photo gallery growing big enough that CDN bandwidth becomes the expensive part of hosting",
           "why": "A thousand readers fetching the same gallery is exactly what a CDN is for, per the no-second-peer bullet. Growth in that direction argues for the CDN even harder, since readers still outnumber peers."
         },
         {
-          "t": "The wasm blob shrinking until it fits the site's roughly 20KB page budget",
+          "t": "The wasm blob shrinking until it fits inside the site's roughly 20KB page budget",
           "why": "Size is one of four reasons, so shrinking fixes a quarter of the problem. A small blob still needs a build step the site refuses, relay infrastructure the edge cannot host, and a second peer that does not exist."
         },
         {

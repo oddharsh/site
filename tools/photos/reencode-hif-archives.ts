@@ -9,8 +9,8 @@
 // camera's own) repacked losslessly as JPEG XL. Ingest now encodes it from
 // the HIF (hif-archive.ts, which carries the measurements); this brings the
 // archives published before that onto the same footing. All 119 HIF photos'
-// sources are local, and the bucket only shrinks: the sweep put the result at
-// about -33% bytes, both metrics better on every photo.
+// sources are local, and the bucket only shrinks: against the browser-decoded
+// bar (2026-10-14), 99 of 118 shrink and the HIF archives come to -8.6%.
 //
 // Per photo, the order is the proof:
 //
@@ -115,6 +115,10 @@ async function one(stem: string) {
     const made = await hifArchive(hifs.get(stem)!, base, next);
     const was = fs.statSync(cur).size;
     if (made.mode !== "direct") { kept++; streak = 0; console.log(`  = ${stem}: kept as is (${made.reason})`); return; }
+    // hif-archive.ts weighs its encode against a fresh repack, whose metadata
+    // boxes are uncompressed; the archive in R2 compressed them, so it can be a
+    // few KB smaller still. The bucket only shrinks.
+    if (made.bytes >= was) { kept++; streak = 0; console.log(`  = ${stem}: kept as is (d${made.distance}, ${made.bytes} B, is no smaller than the ${was} B in R2)`); return; }
     if (!dryRun) {
       run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${next}`, "--content-type=image/jxl", "--remote"]);
       run([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${back}`, "--remote"]);

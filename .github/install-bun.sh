@@ -28,6 +28,8 @@
 # `1.4.3`, measured 2026-09-14): the registry's sha512 on the tarball, the
 # tarball's own package.json (which names a canary WITH its build sha, so it
 # equals the whole pin), and the binary's `--revision`, which carries the sha.
+# The last two can disagree: from 1.4.3-canary.20261014.1 npm's gitHead is not
+# the commit the binary was built from, and no pin satisfies both (gotcha 69).
 #
 # Needs node (for JSON) and openssl, both present on the GitHub runner and in
 # the Workers Builds image. `openssl base64 -A` rather than `base64 -w0`, so

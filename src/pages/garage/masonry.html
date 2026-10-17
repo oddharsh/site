@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/masonry</title>
@@ -81,13 +81,13 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/masonry</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>A masonry contact sheet</h1>
     <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a>-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no <a class="term" data-t="media-queries" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries" title="CSS rules that apply only when the screen matches a condition, such as a width range, so a page can rearrange itself." rel="external">media queries</a> fire.</p>
 
@@ -106,7 +106,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
     <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with <a class="term" data-t="exif" href="https://en.wikipedia.org/wiki/Exif" title="Metadata a camera writes into a photo: exposure settings, date, lens, and an Orientation tag saying which way up to show it." rel="external">EXIF</a> pinning each photo's <code>aspect-ratio</code> so nothing <a class="term" data-t="reflow" href="https://developer.mozilla.org/en-US/docs/Glossary/Reflow" title="The browser recomputing the size and position of elements on a page, which makes content jump when something like an image finishes loading." rel="external">reflows</a> as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
   <div class="xp-statusbar" aria-hidden="true">
     <span>display: grid-lanes</span>
     <span>fallback: 1:1 grid</span>
@@ -177,7 +177,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "The masonry sheet and the homepage grid share the same markup. What does display: grid-lanes actually change about the layout?",
       "options": [
         {
-          "t": "It keeps the columns on their fixed grid tracks and stacks the rows masonry-style, so each tile keeps its photo's true aspect ratio.",
+          "t": "Columns stay on fixed grid tracks while rows stack masonry-style at each photo's true height.",
           "ok": true,
           "why": "Right. Grid Lanes leaves grid-template-columns in charge of the lanes and lets the masonry algorithm pack the rows, which is why a portrait and a landscape sit side by side uncropped."
         },
@@ -186,7 +186,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
           "why": "That's the old columns-property masonry hack, and it scrambles left-to-right reading order. The lede says the opposite: columns stay on a grid, the rows are what stack masonry-style."
         },
         {
-          "t": "It measures every image with JavaScript and absolutely positions each tile in the sheet.",
+          "t": "It measures every image with JavaScript, then absolutely positions each tile in the sheet by hand.",
           "why": "That's the Masonry.js approach this prototype exists to retire. The lede is explicit: no JavaScript lays anything out and no media queries fire, the browser does the packing."
         },
         {
@@ -199,16 +199,16 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "The photos load lazily into the sheet, yet nothing shifts around as they arrive. What prevents the reflow?",
       "options": [
         {
-          "t": "Each tile's aspect-ratio is pinned up front from the EXIF width and height in the photo metadata, so the box has its final shape before any pixels arrive.",
+          "t": "Each tile's aspect-ratio is pinned from the EXIF width and height before any pixels load.",
           "ok": true,
           "why": "Right. The script sets --ar from metadata.json before a single image decodes, so layout settles at parse time and the images just fill boxes that already exist."
         },
         {
-          "t": "The browser holds off on laying out the sheet until every image has finished downloading.",
+          "t": "The browser holds off on laying out the sheet until every last image has finished downloading.",
           "why": "Browsers lay out immediately and reflow as intrinsic sizes trickle in; that jank is exactly what this page avoids. The footer note names the real fix: EXIF pinning each photo's aspect-ratio."
         },
         {
-          "t": "The loading=lazy attribute defers the images until the layout has already finished.",
+          "t": "The loading=lazy attribute defers the images until the sheet's layout has already finished.",
           "why": "Lazy loading changes when bytes get fetched, never whether an unsized image reflows the page once it decodes. Without a pinned ratio, every late arrival would still shove the sheet around."
         },
         {
@@ -221,7 +221,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "Both modes keep object-fit: cover on the img. Why does the masonry view still show each photo's whole frame?",
       "options": [
         {
-          "t": "The tile box takes the photo's true aspect ratio, so cover has nothing left to crop.",
+          "t": "The tile box takes the photo's true aspect ratio, so cover has nothing to crop.",
           "ok": true,
           "why": "Right. cover only crops when the box and the image disagree about shape. A 1:1 box disagrees with almost every photo; a correctly-proportioned box makes cover a no-op, as the comment in the masonry CSS says."
         },
@@ -243,12 +243,12 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
       "q": "You open this page in a browser without Grid Lanes. What does the demo do?",
       "options": [
         {
-          "t": "The chip reports no support, the Masonry button is disabled, and both layouts render the fixed-square grid the homepage ships.",
+          "t": "The Masonry button is disabled, and both layouts render the fixed-square fallback grid.",
           "ok": true,
-          "why": "Right. The masonry rule sits behind @supports (display: grid-lanes), so an unsupported engine never applies it, and the toggle would change nothing, which is why the script disables the button."
+          "why": "Right. The chip reports no support, and the masonry rule sits behind @supports (display: grid-lanes), so an unsupported engine never applies it. The toggle would change nothing, which is why the script disables the button, and you see the same squares the homepage ships."
         },
         {
-          "t": "A JavaScript polyfill steps in and lays out the ragged sheet anyway.",
+          "t": "A small JavaScript polyfill steps in and lays out the ragged sheet anyway.",
           "why": "There's no polyfill on purpose; the bet is one CSS line behind @supports. Unsupported browsers get the square fallback, exactly what the note under the toggle tells you."
         },
         {
@@ -256,7 +256,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
           "why": "An engine without Grid Lanes ignores display: grid-lanes entirely and keeps the regular 1:1 grid, so there's nothing ragged or stretched for that button to show. It gets disabled instead."
         },
         {
-          "t": "The server detects the browser and sends the square markup in place of the masonry one.",
+          "t": "The server sniffs the user agent and sends the square markup in place of the masonry one.",
           "why": "The same markup ships to everyone; the capability check runs in your browser via CSS.supports and only updates the chip and buttons. The fallback lives in the CSS cascade, the server never branches."
         }
       ]

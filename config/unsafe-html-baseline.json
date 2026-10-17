@@ -9,7 +9,7 @@
     "src/worker/inbox.ts": 2,
     "src/worker/ledger.ts": 2,
     "src/worker/lens.ts": 4,
-    "src/worker/lib/chrome.ts": 6,
+    "src/worker/lib/chrome.ts": 5,
     "src/worker/photos.ts": 2,
     "src/worker/reading.ts": 2,
     "src/worker/rn.ts": 2,
@@ -20,5 +20,5 @@
     "src/worker/updates.ts": 3,
     "src/worker/whoareyou.ts": 2
   },
-  "total": 49
+  "total": 48
 }

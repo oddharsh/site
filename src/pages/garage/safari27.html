@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/safari 27</title>
@@ -90,13 +90,13 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/safari 27</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Safari 27, through this site&apos;s lens</h1>
     <p class="lede"><a class="term" data-t="wwdc" href="https://en.wikipedia.org/wiki/Worldwide_Developers_Conference" title="Apple's Worldwide Developers Conference, held each June, where it announces new operating systems and developer tools." rel="external">WWDC26</a> shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut covers only where the platform caught up. Source: the <a class="term" data-t="webkit" href="https://en.wikipedia.org/wiki/WebKit" title="The open-source browser engine that powers Safari." rel="external">WebKit</a> team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
 
@@ -195,7 +195,7 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
     <p style="font-size:9pt;color:oklch(45% 0 0)">I paraphrase the feature names and scope from the WebKit post up top; the chips run real <code>CSS.supports()</code> and interface probes in your browser. Drag this window by its title bar; ⌘K jumps anywhere.</p>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
   <div class="xp-statusbar" aria-hidden="true">
     <span>safari 27 / macOS 27</span>
     <span>WWDC26</span>
@@ -245,11 +245,11 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
           "why": "Right: the chips run real CSS.supports() and interface probes against your browser, and the site's whole bet is octane plus fallback. When the engine has a feature it burns it; otherwise it degrades cleanly."
         },
         {
-          "t": "That part of the site is broken for you until your browser catches up.",
+          "t": "That part of the site is broken for you until your browser catches up with Safari 27.",
           "why": "The lede states the opposite rule: a feature missing from your browser never means broken. Every feature carded here has a fallback path sitting behind it."
         },
         {
-          "t": "The site loads a JS polyfill so you still see the exact same rendering.",
+          "t": "The site loads a JS polyfill for that feature so you still see the exact same rendering.",
           "why": "There's no polyfill layer on this site. Some visitors see the native dropdown or a small scroll jump instead; the trade is zero shipped shims in exchange for slightly different renderings."
         },
         {
@@ -262,16 +262,16 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       "q": "The first card demos appearance: base-select on a film-simulation dropdown. What problem does base-select actually solve?",
       "options": [
         {
-          "t": "Styling a real select, dropdown included, in CSS while keeping native behavior and accessibility.",
+          "t": "Styling a real select, open dropdown included, in CSS without losing native behavior.",
           "ok": true,
-          "why": "That's the point: before this, the open dropdown was OS-rendered and unreachable from CSS. Safari 27 takes it stable and adds the ::picker-icon and ::checkmark pseudo-elements on top."
+          "why": "That's the point: before this, the open dropdown was OS-rendered and unreachable from CSS, and rebuilding it in JS cost accessibility. Safari 27 takes it stable and adds the ::picker-icon and ::checkmark pseudo-elements on top."
         },
         {
           "t": "It swaps the select for a new custom element that you populate and wire up yourself.",
           "why": "It's one appearance value on the same old element. The demo markup is a plain select with plain options; only the CSS opts in, which is why the fallback costs nothing."
         },
         {
-          "t": "It lets you restyle the closed box of a select, which was locked down before.",
+          "t": "It lets you restyle the closed box of a select, which browsers locked down before this.",
           "why": "The closed box already took basic styling for years. The dropdown itself was the untouchable part, and that gap is what pushed people into div-and-JS rebuilds that lose accessibility."
         },
         {
@@ -284,7 +284,7 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       "q": "Safari 27 makes anchored elements follow transformed positions. Why does that upgrade matter on this site in particular?",
       "options": [
         {
-          "t": "Windows here move via CSS transform when you drag them, so an anchored popover can stay glued to a window mid-drag.",
+          "t": "Windows here move by CSS transform when dragged, so a popover can stay glued to one mid-drag.",
           "ok": true,
           "why": "That's the exact case: anchor() previously resolved against the untransformed box, so a dragged window would leave its popover behind. Tracking transforms closes that gap with no JS measuring."
         },
@@ -306,20 +306,20 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       "q": "Scroll anchoring arrives native in Safari 27. Which jump does it kill on this site?",
       "options": [
         {
-          "t": "Late content landing above your viewport, like a lazy image or the injected tracklist, shoving what you're reading out of view.",
+          "t": "A lazy image or the injected tracklist landing above the viewport and shoving your place down.",
           "ok": true,
           "why": "That's the mechanism: when content loads above the visible area, the browser offsets your scroll position to keep your place, controlled by overflow-anchor, with no hand-written JS scroll restoration."
         },
         {
-          "t": "Losing your scroll position when you hit back and return to a previously read page.",
+          "t": "Losing your scroll position when you hit back and return to a page you had already been reading.",
           "why": "That's scroll restoration across navigations, a separate feature browsers have had for years. Scroll anchoring works inside one loaded page while content is still arriving."
         },
         {
-          "t": "The view snapping from section to section as you scroll, like scroll-snap points do.",
+          "t": "The view snapping from section to section as you scroll, the way scroll-snap points do.",
           "why": "scroll-snap is snapping you opt into on purpose. Scroll anchoring is the opposite instinct: hold the view exactly still while layout changes around it."
         },
         {
-          "t": "Content loading below the fold pushing the footer further down while you read.",
+          "t": "Content loading below the fold pushing the footer further down while you're still reading.",
           "why": "Growth below your viewport never moves what you're looking at, which is why the card specifies content that loads above. Only insertions above the visible area shift your reading position."
         }
       ]
@@ -328,16 +328,16 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       "q": "Grid Lanes is one of the two WWDC26 talks I flagged as landing squarely on this site. What would it change about the photo grid?",
       "options": [
         {
-          "t": "The contact sheet could go ragged-height masonry in pure CSS, dropping the fixed square crop, with no JavaScript layout.",
+          "t": "The contact sheet could go ragged-height masonry in pure CSS, dropping the square crop.",
           "ok": true,
-          "why": "That's the fit: the horizon page flagged CSS masonry as not shipped in mid-2026, and Grid Lanes is it shipping. Each photo keeps its own aspect ratio and still packs tightly."
+          "why": "That's the fit: the horizon page flagged CSS masonry as not shipped in mid-2026, and Grid Lanes is it shipping. Each photo keeps its own aspect ratio and still packs tightly, with no JavaScript layout."
         },
         {
-          "t": "Photos could lazy-load per column instead of per row, cutting the initial payload.",
+          "t": "Photos could lazy-load per column instead of per row, cutting the initial payload of the grid.",
           "why": "Lazy loading is per image and already ships on every grid photo; it has nothing to do with layout mode. Grid Lanes is about packing different-height items into lanes, in CSS."
         },
         {
-          "t": "Nothing new, since CSS grid with dense auto-flow already gives you masonry.",
+          "t": "Nothing new, since CSS grid with dense auto-flow already packs mixed heights into masonry.",
           "why": "grid-auto-flow: dense backfills gaps, but every item still sits in fixed row tracks, so heights get cropped to fit. Real masonry packs each lane independently, which is the new part."
         },
         {

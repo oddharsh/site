@@ -1,4 +1,4 @@
-// email.js — Resend payloads + .ics invite generation. These functions call
+// cal/src/email.ts: Resend payloads + .ics invite generation. These functions call
 // the global fetch (Resend's REST API), so we stub globalThis.fetch and inspect
 // what would have been sent. The module is imported straight into this process,
 // so the stub applies: no harness, no network.
@@ -222,8 +222,8 @@ describe("sendInvite → .ics attachment", () => {
     expect(ics).toContain("SUMMARY:coffee with aadharsh");
     expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
     expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=TRUE:mailto:jordan@example.com");
-    // The guest copy is unchanged by the host-copy work: one attendee, and the
-    // only address on it is the public booking address already on ORGANIZER.
+    // The guest copy carries one attendee, and the only other address on it is
+    // the public booking address on ORGANIZER.
     expect(ics.match(/^ATTENDEE/gm)).toHaveLength(1);
     expect(ics).toContain("METHOD:REQUEST");
     expect(ics).toContain("\r\n");                          // CRLF line endings
@@ -265,10 +265,14 @@ describe("sendDecline + error handling", () => {
   it("keeps List-Id off the guest's copies", async () => {
     await sendDecline(env, booking);
     await sendInvite(env, booking);
+    expect(calls.map(({ body }) => body.to)).toEqual([["jordan@example.com"], ["jordan@example.com"]]);
     for (const { body } of calls) {
       expect(body.headers["List-Id"]).toBeUndefined();
       expect(body.headers["X-Coffee-Booking"]).toBe("abc123def456");
     }
+    // The host's copy of the same booking is the one that carries it.
+    await sendHostCopy(env, booking);
+    expect(calls[2].body.headers["List-Id"]).toBe("coffee bookings <coffee.aadhar.sh>");
   });
 
   it("throws when Resend returns a non-2xx (so callers/log see the failure)", async () => {

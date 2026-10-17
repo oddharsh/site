@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/round-trip: There and back</title>
@@ -43,13 +43,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/round-trip</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <div id="rt-doc" class="rt-pending"><noscript>
 <h1>There and back</h1>
 <p>This page is written in <a href="/garage/round-trip.md">Markdown</a>, and your browser renders it with <a href="/garage/md-to-html.src.js"><code>md-to-html.js</code></a> when the page opens. With JavaScript off, read the Markdown itself.</p>
@@ -68,7 +68,7 @@
 <p id="rt-proof" class="rt-proof" hidden></p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-10-13</span></div>
 </div>
 
@@ -164,16 +164,16 @@
       "q": "Why does pressing the rebuilt HTML down again test the converter at all?",
       "options": [
         {
-          "t": "If the parser reads the twin language exactly, a second pass has to return the same twin, so any difference is a bug in one direction.",
+          "t": "An exact parser makes the twin a fixed point, so a second pass must return the same bytes.",
           "ok": true,
-          "why": "Right. The fixed point gives the trip a pass condition that both converters can fail."
+          "why": "Right. If the parser reads the twin language exactly, pressing its output down again has to hand back the same twin, so any difference is a bug in one direction. The fixed point gives the trip a pass condition that both converters can fail."
         },
         {
-          "t": "Because the rebuilt HTML matches the original page byte for byte.",
+          "t": "The rebuilt HTML has to match the original page byte for byte, so any difference is a converter bug.",
           "why": "It cannot. The trip drops every script, button and style block on purpose, so the HTML is always smaller."
         },
         {
-          "t": "Because a Markdown file that renders without errors is correct.",
+          "t": "Rendering the twin without a parse error proves it kept everything the page said.",
           "why": "Every twin rendered fine, including the ones with bugs. Rendering cannot see a dropped caption."
         }
       ]
@@ -182,16 +182,16 @@
       "q": "Which twin failure would point at the inverse parser instead of the forward converter?",
       "options": [
         {
-          "t": "A construct the generator writes that the parser reads back as something else.",
+          "t": "A construct the generator writes that the parser reads as something else.",
           "ok": true,
           "why": "Right. That breaks the fixed point on the parser's side, which is what the dl and line-break fixes during this build were."
         },
         {
-          "t": "A table caption missing from the twin before the trip starts.",
+          "t": "A table caption that is already missing from the twin before the trip starts.",
           "why": "The caption was already gone from the twin, so the forward converter lost it."
         },
         {
-          "t": "A hand-written twin whose autolinks come back as bracketed links.",
+          "t": "A hand-written twin whose autolinks come back from the trip as bracketed links.",
           "why": "That is a change of form with no change of meaning, and the trip settles after it."
         }
       ]
@@ -205,11 +205,11 @@
           "why": "Right. The converter keeps the prose around a demo and drops the demo, so the twin holds only the words."
         },
         {
-          "t": "A twin that describes each button so an agent can press it.",
+          "t": "A twin that describes each button and canvas so an agent knows what it can press.",
           "why": "The converter drops controls on purpose, because a label without its behavior would read as a claim."
         },
         {
-          "t": "A failed trip, because the parser cannot rebuild a canvas.",
+          "t": "A failed trip, because the parser has no Markdown construct to rebuild a canvas from.",
           "why": "The canvas never reaches the twin, so the parser never sees it. The trip can still close."
         }
       ]

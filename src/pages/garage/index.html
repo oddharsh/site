@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage</title>
@@ -120,7 +120,7 @@ p { margin: 0 0 12px; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <div class="window">
 
@@ -129,7 +129,7 @@ p { margin: 0 0 12px; }
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div><!-- /axp:window -->
 
-  <div class="content prose">
+  <main id="main" class="content prose">
 
     <h1>Garage</h1>
     <p class="lede">
@@ -227,10 +227,10 @@ p { margin: 0 0 12px; }
         <div class="desc">
           AV2&apos;s reference encoder <a href="https://github.com/AOMediaCodec/avm" rel="external">shipped 1.0.0 in May</a>,
           and no browser decodes it yet. Built locally and scored against the AVIF this site ships,
-          at matched bytes, it wins 23 of 24 thumbnails under half a bit per pixel, the sparsest
-          third of what this site ships, loses above that, and loses all 32 calls on dense detail
-          crops. Bits per pixel decides which. Per-segment quantization
-          matrices, which AV1 has no syntax for, widen the win.
+          at matched bytes, it comes out about even across the thumbnails this site ships at its
+          default speed, and wins on about 148 of 162 once two of its own tools that speed switches
+          off are back on. Dense detail crops still go to AV1, and bits per pixel decides where the
+          line falls. Per-segment quantization matrices, which AV1 has no syntax for, widen the win.
           <a href="https://arxiv.org/abs/2605.15800" rel="external">AOM&apos;s own report</a> puts it
           18 to 24% ahead with video metrics, and the page shows where each number comes from. It also
           catches a trap: behind a <code style="font-family: var(--font-mono);font-size:9pt">&lt;picture&gt;</code>
@@ -608,16 +608,16 @@ p { margin: 0 0 12px; }
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/garage/cloudflare">Three free Cloudflare features, live</a></span>
+          <span class="name"><a href="/garage/cloudflare">Four free Cloudflare features, live</a></span>
           <span class="badge shipped">shipped</span>
         </div>
         <div class="desc">
           Durable Objects (an atomic counter), Workers AI (it captions a real grid
-          photo), and Workers Logs (structured observability): one <em>live</em> demo
-          each, behind a tiny worker at
+          photo), Workers Logs (structured observability) and custom trace spans: one
+          <em>live</em> demo each, behind a tiny worker at
           <code style="font-family: var(--font-mono);font-size:9pt">/garage/cf/*</code>. The
-          free Workers plan quietly bundles them; all three work the moment you click. A fourth,
-          Browser Rendering, is wired but parked on the free tier&apos;s 10-min/day cap.
+          free Workers plan quietly bundles them; all four run live on the page. A fifth,
+          Browser Run, is wired but parked on the free tier&apos;s 10-min/day cap.
         </div>
         <div class="meta">
           shape: platform-feature demos · added 2026-06-06
@@ -795,7 +795,7 @@ p { margin: 0 0 12px; }
       </p>
     </footer>
 
-  </div>
+  </main>
 </div>
 
 <!-- prerender every internal page eagerly (McMaster-style); same exclusions

@@ -65,12 +65,11 @@ export function privateHostBlocked(host) {
 // literals + non-standard ports. (Workers can't egress to the internal network
 // anyway, but blocking the obvious literals is cheap hygiene.)
 //
-// This lived in lens.js until the Reader lens shipped. It moved HERE, next to
-// the host floor it wraps, because `lens-reader/` is a SEPARATE Worker that
-// aims the same visitor-supplied URL at the same public internet, and a second
-// copy of an SSRF allowlist is the kind of duplicate that passes review on the
-// day it is written and diverges quietly afterwards. lens.js re-exports it, so
-// every existing caller and the contract tests that name it are untouched.
+// It lives HERE, next to the host floor it wraps, because `lens-reader/` is a
+// SEPARATE Worker that aims the same visitor-supplied URL at the same public
+// internet, and a second copy of an SSRF allowlist is the kind of duplicate that
+// passes review on the day it is written and diverges quietly afterwards.
+// lens.ts re-exports it for its callers and the contract tests that name it.
 export function validateLensTarget(raw) {
   const s0 = String(raw || "").trim();
   if (!s0) return { ok: false, error: "Type a URL to inspect." };
@@ -92,12 +91,9 @@ export function validateLensTarget(raw) {
 }
 
 // Follow redirects one hop at a time so every hop is checked, rather than asking
-// fetch to follow them and inspecting only where it landed.
-//
-// The post-hoc check this replaces guarded the DISCOVERY probes, so a public URL
-// that 302s to a blocked host still had its body fetched and returned; only the
-// origin-level fan-out was skipped. Validating per hop means the request to the
-// blocked host is never made at all.
+// fetch to follow them and inspecting only where it landed. A check after the
+// fact still fetches and returns the body of a public URL that 302s to a blocked
+// host; validating per hop means the request to the blocked host is never made.
 //
 // `check` is the caller's full allowlist (scheme, port, host), not just this
 // module's host floor, because a redirect can change the scheme and port too.

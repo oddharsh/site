@@ -1,9 +1,10 @@
-// av2-decode.js: an AV2 still decoder for /garage/av2, run as a module Worker.
+// av2-decode.js: an AV2 still decoder for /garage/av2 and /pixel-peeper's AV2
+// tiles, run as a module Worker.
 //
 // No browser decodes AV2, so the page hands this worker an AVIF file whose
 // image item is av02 and gets RGBA back. The decoder is AOM's own reference,
-// AVM 1.0.0, compiled to WebAssembly by tools/photos/av2-wasm/build.sh, which
-// also says how it was checked: decoded planes are bit-exact against native
+// AVM 1.0.0, compiled to WebAssembly by av2-tone's wasm/build.sh
+// (github.com/oddharsh/av2-tone), which also says how it was checked: decoded planes are bit-exact against native
 // avifdec, and RGBA matches avifdec's full-depth decode to within 1.
 //
 // This file does two jobs the WebAssembly can't: it reads the container
@@ -91,7 +92,7 @@ function parseAvif(buf) {
 }
 
 /**
- * The module's exports, by name (the C surface is tools/photos/av2-wasm/av2dec.c).
+ * The module's exports, by name (the C surface is av2-tone's wasm/av2dec.c).
  * @typedef {{ memory: WebAssembly.Memory, _initialize(): void, malloc(n: number): number, free(p: number): void,
  *   av2_decode(p: number, n: number): number, av2_rgba(mc: number, full: number): number,
  *   av2_plane(i: number): number, av2_stride(i: number): number } & Record<"av2_width" | "av2_height" | "av2_depth"

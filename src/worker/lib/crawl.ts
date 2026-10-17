@@ -1,6 +1,7 @@
-// lib/crawl.js — bounded, identified document reads shared by AadharshBot
+// lib/crawl.ts — bounded, identified document reads shared by AadharshBot
 // utilities. This module never stores a response body; callers receive only the
 // bounded text needed to extract evidence plus a digest of the bytes observed.
+
 import { signedFetch } from "./botauth.ts";
 import type { BotRequestOptions } from "./botauth.ts";
 import { DEFAULT_CRAWL_BODY_CAP, readResponseCapped } from "./public-fetch.ts";

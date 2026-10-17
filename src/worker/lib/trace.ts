@@ -1,19 +1,18 @@
-// trace.js — one wrapper over Workers Traces so every span in this worker has a
-import { isCallable } from "./parse.ts";
-import type { Span, SpanAttrs, SpanAttrValue, SpanName } from "./span-vocabulary.ts";
+// trace.ts — one wrapper over Workers Traces so every span in this worker has a
 // single import site and a single failure story. Bundled by wrangler at deploy;
 // not served.
 //
 // WHY THE TRACER IS INJECTED RATHER THAN IMPORTED HERE. This module does NOT
 // `import { tracing } from "cloudflare:workers"`, and that is load-bearing:
-// contract-tests.mjs imports around.js, webmention-send.js, photos.js, and a
-// dozen other worker modules directly under PLAIN NODE, whose ESM loader rejects
-// the `cloudflare:` scheme at link time with ERR_UNSUPPORTED_ESM_URL_SCHEME. A
-// static import here would take the whole suite down at import, before a single
-// assertion ran — which is exactly why counter.js hand-rolls its Durable Object
-// instead of importing the base class. So the runtime's tracer is handed in by
-// _worker.js/index.js (the one module only workerd ever loads) at module-scope
-// init, which happens before any handler can run. Under node it is never
+// the contract suite imports around.ts, webmention-send.ts, census.ts, and a
+// dozen other worker modules directly, and `test:node` runs it under PLAIN NODE,
+// whose ESM loader rejects the `cloudflare:` scheme at link time with
+// ERR_UNSUPPORTED_ESM_URL_SCHEME. A static import here would take the whole
+// suite down at import, before a single assertion ran — which is exactly why
+// counter/src/counter.ts hand-rolls its Durable Object instead of importing the
+// base class (gotcha 16). So the runtime's tracer is handed in by index.ts (the
+// one module only workerd ever loads) at module-scope init, which happens
+// before any handler can run. Under node it is never
 // installed, `tracing` stays null, and every span degrades to a direct call.
 //
 // The wrapper also earns its keep on:
@@ -39,6 +38,9 @@ import type { Span, SpanAttrs, SpanAttrValue, SpanName } from "./span-vocabulary
 // dimension is honest; one that says 0 or "unknown" is a lie you later read as
 // data.
 
+import { isCallable } from "./parse.ts";
+import type { Span, SpanAttrs, SpanAttrValue, SpanName } from "./span-vocabulary.ts";
+
 // The runtime's tracer, or null until index.ts installs it. ANNOTATED, because
 // `let tracing = null` infers the type `null` and every read of `.enterSpan`
 // below then fails on `never`. The shape is the sliver of `cloudflare:workers`
@@ -50,7 +52,7 @@ type Tracing = {
 
 let tracing: Tracing | null = null;
 
-// Called once from _worker.js/index.js with the `tracing` export of
+// Called once from index.ts with the `tracing` export of
 // cloudflare:workers. Anything without a usable enterSpan is rejected, so a
 // runtime that drops or renames the export leaves spans inert rather than
 // throwing on every request.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/useragent: What a crawler name is worth</title>
@@ -45,7 +45,7 @@
 .ua-matrix td.site{font-family:var(--font-ui);max-width:15em;white-space:normal}
 .ua-matrix td.site b{color:#20406e}
 .ua-matrix td.site span{display:block;color:#69758a;font-size:var(--text-2xs)}
-.ua-matrix tr.unmeasurable td{background:#f2f2f2;color:var(--slate-67)}
+.ua-matrix tr.unmeasurable td{background:#f2f2f2;color:var(--slate-55)}
 .ua-matrix tr.unmeasurable td.site b{color:#69758a}
 .ua-matrix .ok{color:#1d6b1d}
 .ua-matrix .no{color:#a32b13}
@@ -98,13 +98,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/useragent</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>What a crawler name is worth</h1>
 <p class="garage-intro">A <a class="term" data-t="user-agent" href="https://www.rfc-editor.org/rfc/rfc9110.html#field.user-agent" title="The request header where a browser or bot names itself on every web request. It is plain text, so any client can claim any name." rel="external">user-agent string</a> costs nothing to type and nothing verifies it. So this asked sixteen identities to fetch the same eleven pages, three times each, and recorded what came back. Sites answer a name in four different ways, three of which any name absent from a list walks straight through. One site catches the lie. And on one of them the <a class="term" data-t="web-crawler" href="https://en.wikipedia.org/wiki/Web_crawler" title="A program that fetches web pages automatically, for a search engine, an AI company or an archive." rel="external">crawler</a> is handed 1,640 words where a browser gets one.</p>
 
@@ -172,7 +172,7 @@
 
 <h2>The program that already runs this, and the part still waiting</h2>
 <p>All of that already ships. <a href="https://developers.cloudflare.com/bots/concepts/bot/verified-bots/" target="_blank" rel="noopener">Cloudflare's Verified Bots</a> program accepts exactly three proofs of identity, and they map onto this page's answers one for one: a <a class="term" data-t="web-bot-auth" href="https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/" title="A proposed standard where a bot signs each HTTP request with its private key and publishes the public key, so websites can check which bot sent it." rel="external">Web Bot Auth</a> signature, a published IP list paired with a stable user-agent, or reverse DNS validation. Verification carries behavioural terms too, since a verified bot has to respect <code>robots.txt</code>, hold a reasonable request rate, and avoid working around a site owner's stated preferences. Breaking any of them removes the service from the global allowlist. The signature route is the one that widens the field, because the other two proofs are facts about the address a request comes from and a signature is not.</p>
-<p>Two labels sit close together here and are worth keeping apart. A valid Web Bot Auth signature classifies traffic as a <b>signed agent</b>, and Verified Bot status is a further step judging behaviour rather than cryptography. Cloudflare's own <a href="https://blog.cloudflare.com/signed-agents/" target="_blank" rel="noopener">announcement</a> uses itself as the example: Browser Rendering sends signed Web Bot Auth headers and does not qualify as a verified bot, while Radar's URL Scanner does. Signing proves who is asking. Verification judges whether that identity has earned an allowlist entry.</p>
+<p>Two labels sit close together here and are worth keeping apart. A valid Web Bot Auth signature classifies traffic as a <b>signed agent</b>, and Verified Bot status is a further step judging behaviour rather than cryptography. Cloudflare's own <a href="https://blog.cloudflare.com/signed-agents/" target="_blank" rel="noopener">announcement</a> uses itself as the example: Browser Run (Browser Rendering when the post ran) sends signed Web Bot Auth headers and does not qualify as a verified bot, while Radar's URL Scanner does. Signing proves who is asking. Verification judges whether that identity has earned an allowlist entry.</p>
 <p>So the fix for everything above is deployed, at one of the largest <a class="term" data-t="reverse-proxy" href="https://en.wikipedia.org/wiki/Reverse_proxy" title="A server that sits in front of websites and receives their incoming requests, often adding caching and security on the way." rel="external">reverse proxies</a> on the web, and a site gets it by turning it on rather than by building it. Whether anything in this sample looks for it is a separate question, and the survey carries one small piece of evidence.</p>
 <div class="ua-wba" id="ua-wba"></div>
 <p>That row sends the pointer and signs nothing. It sets <code>Signature-Agent</code> to a directory that genuinely exists and omits <code>Signature</code> and <code>Signature-Input</code> entirely, so an origin actually verifying has everything it needs to reject the request. Read it against the plain <b>ua-survey (ours)</b> row in the matrix, which is the same user-agent carrying no header at all.</p>
@@ -189,7 +189,7 @@
 </div>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-21</span></div>
 </div>
 
@@ -316,7 +316,7 @@
           "why": "Right. A denylist has to enumerate what it stops, which leaves every unlisted string on the allowed side."
         },
         {
-          "t": "The Times trusts OpenAI more than it trusts Anthropic.",
+          "t": "The Times trusts OpenAI's tools more than Anthropic's, so OpenAI names get through.",
           "why": "Both invented strings passed, and one of them names xAI, so the rule is matching text."
         },
         {
@@ -329,16 +329,16 @@
       "q": "Wikimedia served curl and refused a fake Googlebot. What is it actually filtering?",
       "options": [
         {
-          "t": "Claims it can check, which this request failed.",
+          "t": "Identity claims it can check, which this request failed.",
           "ok": true,
           "why": "Right. Google publishes the addresses Googlebot uses, so the claim is verifiable and ours did not match. Claiming nothing is unfalsifiable and passes."
         },
         {
-          "t": "Crawlers, which curl is not.",
+          "t": "Crawlers in general, a category that curl does not fall into.",
           "why": "An invented token and our own survey string both passed too, and neither is a browser. Being a crawler is not what got refused."
         },
         {
-          "t": "High request volume from one address.",
+          "t": "High request volume arriving from one address in a short window.",
           "why": "The same address sent every identity in the same window, and eight of the eleven were served the full article."
         }
       ]
@@ -347,16 +347,16 @@
       "q": "Every identity gets 403 from medium.com, Chrome included. What can you conclude about how Medium treats AI crawlers?",
       "options": [
         {
-          "t": "Nothing. The instrument never got in, so no row is evidence about user-agent policy.",
+          "t": "Nothing, because the Chrome control was refused with the same 403.",
           "ok": true,
-          "why": "Right. That is what the control rows are for, and it is why the target is reported unmeasurable rather than as a site that blocks crawlers."
+          "why": "Right. The instrument never got in, so no row is evidence about user-agent policy. That is what the control rows are for, and it is why the target is reported unmeasurable rather than as a site that blocks crawlers."
         },
         {
-          "t": "It blocks AI crawlers aggressively.",
+          "t": "It blocks AI crawlers aggressively, by name, before any page is served.",
           "why": "It refused a browser with the same status. The refusal is aimed at this address or this client, so the crawler rows add no information."
         },
         {
-          "t": "Its robots.txt disallows everything.",
+          "t": "Its robots.txt disallows every crawler, and the server enforces it.",
           "why": "Robots is a published request. This survey records what the server actually returned, and the two are deliberately separate."
         }
       ]
@@ -370,11 +370,11 @@
           "why": "Right. A link preview has to work without a JS engine, so the crawler gets server-rendered HTML while the browser gets a frame and a script tag."
         },
         {
-          "t": "Reddit gives AI crawlers privileged access under its content deals.",
+          "t": "Reddit gives AI crawlers privileged access to full pages under its data licensing deals.",
           "why": "facebookexternalhit is a link-preview fetcher rather than an AI crawler, and the AI crawlers in the same run were refused or rate-limited."
         },
         {
-          "t": "The browser request was blocked and the crawler request was not.",
+          "t": "The browser request was rate-limited and served a stub, while the crawler request went through.",
           "why": "Both returned 200. The browser response is a shell rather than a refusal, which is why the survey scores those as separate states."
         }
       ]
@@ -388,11 +388,11 @@
           "why": "Right. Charging is a real change in what the site wants, and it inherits the denylist's hole because the bill is addressed to a string."
         },
         {
-          "t": "Nothing, since 402 and 403 both deny access.",
+          "t": "Nothing, since 402 and 403 both withhold the page from the crawler.",
           "why": "402 invites a transaction where 403 ends the conversation, which is a different offer even though both withhold the page."
         },
         {
-          "t": "It proves The Atlantic verifies the crawlers it charges.",
+          "t": "It shows The Atlantic verifies the crawlers it charges, since a bill needs a known payer.",
           "why": "It charged four names and served two strings invented for this survey. Nothing was verified."
         }
       ]
@@ -401,16 +401,16 @@
       "q": "Cloudflare's Verified Bots program accepts a Web Bot Auth signature, a published IP list, or reverse DNS. Why does the signature option change who can hold a checkable identity?",
       "options": [
         {
-          "t": "It removes the requirement to own address space, so a crawler with no network blocks can still prove who it is.",
+          "t": "It drops the requirement to own address space, so a crawler with no network blocks can prove who it is.",
           "ok": true,
           "why": "Right. The other two proofs are properties of the address a request arrives from, which is why the checkable identities have been a handful of large companies. Note the signature earns the signed-agent classification, and Verified status is a further judgement about behaviour."
         },
         {
-          "t": "It is harder to forge than an IP range, which can be spoofed at the packet level.",
+          "t": "It is harder to forge than an IP range, since a source address can be spoofed at the packet level.",
           "why": "Source addresses on a completed TCP connection are already hard to forge. The constraint the signature lifts is who is able to own one."
         },
         {
-          "t": "It lets a bot skip robots.txt, since it has proven its identity.",
+          "t": "It lets a verified bot skip robots.txt, since it has already proven who it is to the site.",
           "why": "Verification adds obligations. Respecting robots is one of the program's stated requirements, and breaking it removes the bot from the allowlist."
         }
       ]
@@ -424,11 +424,11 @@
           "why": "Right. That would mean the list is maintained faster than a survey can exploit it, which is a different claim about the same mechanism."
         },
         {
-          "t": "GPTBot gets 403 again.",
+          "t": "GPTBot gets 403 again, along with the other three documented tokens.",
           "why": "That is the predicted result, so it supports the reading rather than testing it."
         },
         {
-          "t": "Chrome gets a different word count than last time.",
+          "t": "Chrome is served a different word count from the Times than it was on the last run.",
           "why": "The word counts moved by 13 across trials already. The finding rests on the 403 boundary, which held identically every time."
         }
       ]

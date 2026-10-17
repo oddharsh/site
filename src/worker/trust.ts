@@ -33,7 +33,7 @@ function years(seconds: number): string {
   return words[n];
 }
 
-// The /bot page's document style, shared by all four. Tokens only.
+// The /bot page's document style, shared by all four.
 const CSS = `/*min*/
   h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: var(--rule); margin-top: 8px; }
@@ -77,7 +77,6 @@ function page({ route, title, description, body }: { route: string; title: strin
   });
 }
 
-// ── /about ───────────────────────────────────────────────────────────────────
 export function renderAboutPage() {
   return page({
     route: "/about",
@@ -138,7 +137,6 @@ export function renderAboutPage() {
   });
 }
 
-// ── /contact ─────────────────────────────────────────────────────────────────
 export function renderContactPage() {
   return page({
     route: "/contact",
@@ -199,8 +197,9 @@ export function renderContactPage() {
 // speculation.ts (Analytics Engine), serendipity/serendipity.ts (the one
 // cookie, contributor cookies, attendees), cal/src/booking.ts (90-day
 // bookings), webmention.ts, ask-rank.ts and lwe-ask (AI Gateway),
-// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts.
-export const PRIVACY_REVIEWED = "2026-10-13";
+// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts,
+// pixel-peeper-crowd.ts.
+export const PRIVACY_REVIEWED = "2026-10-15";
 
 export function renderPrivacyPage() {
   return page({
@@ -261,6 +260,10 @@ export function renderPrivacyPage() {
       <li><strong>A webmention</strong>: the source and target URLs, the author's name and
         URL, the title and an excerpt. Cloudflare Workers AI checks it for spam, and it is
         emailed to me. It is deleted when I decline it or the source stops linking here.</li>
+      <li><strong>A finished <a href="/pixel-peeper">/pixel-peeper</a> run</strong>: which
+        tile you picked on each call, the tiles it showed, your score and the date. Nothing
+        about who played is stored with it. It joins the pooled counts every result screen
+        draws, and it can't be removed afterward because nothing ties it to you.</li>
       <li><strong>A question</strong> to <a href="/ask">/ask</a> or an
         <a href="/lwe">/lwe</a> explainer: it goes to Cloudflare Workers AI through
         Cloudflare AI Gateway, which logs requests. Answers to explainer questions are
@@ -296,8 +299,7 @@ export function renderPrivacyPage() {
   });
 }
 
-// ── /developers ──────────────────────────────────────────────────────────────
-// Generated from the code it documents: the endpoint list and the curl lines
+// /developers is generated from the code it documents: the endpoint list and the curl lines
 // from lib/public-api.ts (the same descriptions /openapi.json is written from),
 // the limits from LENS_BUDGETS and ASK_BUDGET (the budgets the handlers spend),
 // and the error example from missJson, the function that writes a real 404.

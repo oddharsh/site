@@ -422,7 +422,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
   const twin = twinFor(currentPath);
   const twinLink = twin ? `\n<link rel="alternate" type="text/markdown" title="markdown source" href="${esc(twin)}">` : "";
   return `<!doctype html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#2D78BD">
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
 <meta name="description" content="${esc(description)}">
@@ -444,7 +444,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
         A public pool of events + who&apos;s going.<br>Search by <a href="https://exa.ai" rel="noopener">Exa</a>.<br>Built by <a href="https://x.com/oddhash" rel="noopener">@oddhash</a>.
       </div>
     </nav>
-    <main class="content">${bodyHtml}</main>
+    <main id="main" class="content">${bodyHtml}</main>
   </div>
 </div>${DESKTOP_CHROME}
   <script src="/nav.js" defer></script>
@@ -476,7 +476,7 @@ function eventCard(e, isPast) {
     <div class="meta">${eventTime(d)}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
       ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
-      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--grey-60)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
+      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--ink-faint)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>

@@ -68,11 +68,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 export const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const;
 
 // A scanner that has quietly stopped matching must not report a clean pass over
-// nothing. 16 pins are checked today (11 root devDependencies plus the `sharp`
-// override, 3 lens-reader dependencies plus the `htmlparser2` override); the
-// floor sits far enough below that a deliberate removal does not trip it and a
+// nothing. 10 pins are checked on 2026-10-15, after oxlint and oxlint-tsgolint
+// left the root devDependencies (16 when this was written);
+// the floor sits below that so a deliberate removal does not trip it and a
 // broken walk does.
-export const FLOOR_PINS = 12;
+export const FLOOR_PINS = 8;
 
 export type LockfileManifest = { manifest: string; wsKey: string; pkg: Record<string, unknown> };
 export type LockfileInput = { lock: string; parsed: Record<string, unknown>; manifests: LockfileManifest[] };

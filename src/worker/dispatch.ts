@@ -29,15 +29,15 @@ import { countMiss, recoverNotFound } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
+import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
 import { countSpeculativeLoad } from "./speculation.ts";
 import { CACHEABLE_PATHS, CAL_HOST, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS, type ExactPath, type PrefixLabel } from "./routes.ts";
 
-// A worker-owned route handler, as dispatchTraced() calls one. This was a
-// `@typedef` a .ts file ignores, so the route table it typed fell back to the
-// `Function` its annotation named — a precise signature documented and an
-// imprecise one enforced. index.ts's handler maps are typed with it.
+// A worker-owned route handler, as dispatchTraced() calls one. A real type
+// because a `@typedef` in a .ts file is inert (gotcha 42). index.ts's handler
+// maps are typed with it.
 export type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
 
 // What index.ts hands over. The two tables are Records over routes.ts's id
@@ -46,7 +46,6 @@ export type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContex
 export type DispatchHandlers = {
   exact: Record<ExactPath, RouteHandler>;
   prefix: Record<PrefixLabel, RouteHandler>;
-  // one generated page per album (albums.ts); the slashed twin's 301 is built here
   album: (album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) => Response | Promise<Response>;
   // everything arriving on cal.aadhar.sh, before any table is consulted
   calHost: RouteHandler;
@@ -77,28 +76,19 @@ export type DispatchHandlers = {
 // revalidates and therefore always reaches the worker. That is correct (a 304 needs
 // the validator compared) and it bounds what this buys to first-contact requests.
 //
-// A SECOND axis the cache key cannot see, learned in production the same day `/`
-// joined this set: a route here may answer more than one media type at one URL.
-// `Accept: text/markdown` on `/` came back as HTML off a cache HIT, because the
-// stored HTML says `vary: accept-encoding, available-dictionary` and nothing about
-// `accept`. The predicate now bails on a negotiated request; the reasoning and the
-// production evidence are in lib/cache.js, next to the code.
-//
-// A THIRD axis, and the same shape a third time: the HOST. Three hostnames reach
-// this Worker and only one is the site, but a hit answers before the dispatcher,
-// so cal.aadhar.sh's 404 and a preview's noindex were both being skipped.
-// Measured on production 2026-08-08: cal.aadhar.sh/reading served the canonical
-// 91,980-byte page at the same cache `age` as aadhar.sh/reading, on a host whose
-// origin 404s it. The predicate bails off the canonical host now.
+// A SECOND and THIRD axis the cache key cannot see: the media type (an
+// `Accept: text/markdown` request on `/` came back as HTML off a HIT on
+// 2026-07-31) and the host (cal.aadhar.sh served the canonical /reading on
+// 2026-08-08). The predicate bails on both; the evidence is in lib/cache.ts,
+// next to the code.
 //
 // Worth stating as a rule rather than three fixes: THIS CACHE ANSWERS BEFORE
 // EVERY DECISION MADE BELOW IT. Anything the dispatcher varies on that the key
 // cannot see needs a bail here — and the key sees the path and nothing else.
 //
-// The predicate itself moved to lib/cache.js so it can be unit-tested. That is the
-// actual lesson here: it was a private function in index.ts, which cannot
-// be imported under plain node (see gotcha 16), and so nothing in the 78-test suite
-// could reach it. The bug shipped through a green CI.
+// The predicate lives in lib/cache.ts so it can be unit-tested: as a private
+// function in index.ts it could not be imported under plain node (gotcha 16), so
+// no test could reach it, and the Markdown bug shipped through a green CI.
 // Derived from routes.ts's `cacheable` flags since 2026-10-02.
 export const isEdgeCacheable = (request: Request): boolean => shouldUseWorkersCache(request, CACHEABLE_PATHS);
 
@@ -141,7 +131,7 @@ export function createDispatch(handlers: DispatchHandlers) {
   // The self-dispatcher itself, factored out because the CRON needs it too and a
   // second copy is how the two drift. `scheduled()` has no request to build one
   // from, and webmention-send's outbound half reads this site's own pages: a plain
-  // fetch() there is the error-1042 recursion perf-probe.js already documents.
+  // fetch() to our own hostname there is refused as recursion (error 1042).
   function withSelfFetch(env: Env, ctx: ExecutionContext) {
     return {
       ...env,
@@ -154,7 +144,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     env = withBotPolicyCache(env);
     const url = new URL(request.url);
 
-    // Workers preview URLs (see lib/preview.js). A preview serves the real site
+    // Workers preview URLs (see lib/preview.ts). A preview serves the real site
     // from a *.workers.dev host on PRODUCTION bindings and secrets, so writes are
     // refused and every response is marked noindex. Reads pass straight through,
     // which is what the URL is for. Deliberately ABOVE the .pages.dev arm and
@@ -215,10 +205,10 @@ export function createDispatch(handlers: DispatchHandlers) {
     // to a constant, so branching on it is dead code). A flag on the child env is
     // also the safer seam, because env is not caller-controllable and no external
     // request can ask production to stop serving its precompressed bodies.
+    //
     // Workers Logs: one structured line per worker-owned request (path, method,
-    // status, ms, version, country, bot, protocol), filterable in the dashboard. Edge-direct
-    // traffic never reaches this code, so it never logs. Strippable: delete the
-    // wrapper, keep `return withSecurityHeaders(await route(...))`.
+    // status, ms, version, country, bot, protocol, MCP era), filterable in the
+    // dashboard. Edge-direct traffic never reaches this code, so it never logs.
     //
     // `v` is the deployed version's id, truncated to the 8-char prefix Cloudflare
     // itself displays and puts in a preview URL. It exists for GRADUAL DEPLOYMENTS:
@@ -233,7 +223,16 @@ export function createDispatch(handlers: DispatchHandlers) {
     // carries the service-desc Link (lib/api-contract.ts).
     // cal.aadhar.sh is its own host with its own handler, so it is left alone.
     const onApiHost = url.hostname !== CAL_HOST.host;
-    let response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
+    // A throw becomes a 500 in the caller's format (lib/server-error.ts). The
+    // console.error is what keeps Workers Issues counting it: Issues records a
+    // logged error and a 5xx as well as an uncaught throw.
+    let response: Response;
+    try {
+      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
+    } catch (error) {
+      console.error(`unhandled error on ${request.method} ${url.pathname}:`, error);
+      response = serverError(request);
+    }
     // A 404 gets one more look before it leaves (lib/not-found.ts): a redirect
     // where one URL is unambiguously meant, otherwise a 404 that names the
     // sitemap and the closest real pages. cal.aadhar.sh is skipped because its
@@ -301,7 +300,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // Templates are what make a trace groupable — raw paths would mint a new span
     // name per photo stem and per post, and the interesting question is always
     // "how does this ROUTE behave", never "how did this one URL behave once".
-    // Exact routes are already templates (a fixed ~60-entry table), so they use
+    // Exact routes are already templates (a fixed table), so they use
     // their pathname as-is.
     //
     // This also gives every auto-instrumented child (KV get, R2 get, outbound
@@ -342,18 +341,12 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
       // spelling of one fact is what lib/span-vocabulary.ts exists to prevent.
       //
       // THE TYPE SAYS `signal: AbortSignal` AND THAT IS A GUARANTEE ABOUT ONE
-      // RUNTIME, which is why this widens rather than trusting workers-types.
-      // The contract suite imports this module under bun, outside workerd, and a
-      // future runtime may rename the property. `isCallable` is the same guard
-      // lib/trace.ts puts on its injected tracer, for the same reason:
+      // RUNTIME, which is why this checks `instanceof EventTarget` rather than
+      // trusting workers-types. The contract suite imports this module under
+      // bun, outside workerd, and a future runtime may rename the property;
       // instrumentation must never be why a request fails.
       const signal: AbortSignal | undefined = request.signal;
-      // unbound-method guards against `const f = obj.m; f()`, and `isCallable`
-      // only reads `typeof value === "function"` and never calls what it is
-      // handed. lib/trace.ts writes the same probe and escapes the rule only
-      // because its parameter is untyped, which is luck rather than a pattern.
-      // oxlint-disable-next-line typescript/unbound-method
-      const listening = isCallable(signal?.addEventListener);
+      const listening = signal instanceof EventTarget;
       let hungUp = false;
       const onAbort = () => { hungUp = true; };
       // `once` so one signal cannot double-fire, and the removal below so the

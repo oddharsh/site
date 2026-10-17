@@ -33,13 +33,19 @@ import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalP
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+const PIN_WRITE = /\b(?:writeFile|appendFile|Bun\.write)\w*\([^;]*(?:bun-pin\.json|package\.json)/;
 
 test("no canary leg can write the pin, and none knows the bumper's write flag", async () => {
   for (const file of LEGS) {
     const code = strip(await readFile(new URL(file, ROOT), "utf8"));
     assert.doesNotMatch(code, /writePin|--write/, `${file} reaches for the pin writer`);
     assert.doesNotMatch(code, /package\.json"\)\s*,\s*[^)]*\)\s*;?\s*$/m, `${file} looks like it writes package.json`);
+    // The bun pin lives in config/bun-pin.json now, so a write is any writer
+    // naming either file, whatever the call looks like.
+    assert.doesNotMatch(code, PIN_WRITE, `${file} looks like it writes the pin`);
   }
+  assert.match(`writeFileSync(join(ROOT, "config/bun-pin.json"), next);`, PIN_WRITE, "the pin-write pattern must catch a direct write");
+  assert.match(`await Bun.write("package.json", s)`, PIN_WRITE, "the pin-write pattern must catch Bun.write");
   const bumper = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
   assert.match(bumper, /writePin\(/, "the bumper is the one writer, which is what makes the assertion above mean something");
 });

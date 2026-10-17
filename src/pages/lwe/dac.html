@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/lwe/dac · DACs</title>
@@ -28,13 +28,13 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; DACs</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div><!-- /axp:window -->
-  <div class="content">
+  <main id="main" class="content">
     <div class="msgr">
 
       <div class="msgr-head">
@@ -179,7 +179,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       </div>
       <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. The demos above run live: drag, toggle, and click to hear.</div></div></div>
     </div>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -620,7 +620,7 @@ var DACAudio = (function(){
       "q": "The noise shaping demo runs the same 3-bit quantizer whether shaping is ON or OFF. What does the feedback loop actually change?",
       "options": [
         {
-          "t": "where the error sits: the same total hash, tilted up and out of the band you can hear",
+          "t": "where the error sits: the same total hash, tilted up above the audible band",
           "ok": true,
           "why": "That's the whole move. The loop high-passes the quantization error, so the floor tilts away from the shaded audible band and piles up in the ultrasonics, where a cheap analog filter wipes it."
         },
@@ -642,7 +642,7 @@ var DACAudio = (function(){
       "q": "In the filter demo, dragging sharpness up steepens the frequency wall on the right. What happens on the left, and why is it unavoidable?",
       "options": [
         {
-          "t": "the impulse rings longer, since sharpness in frequency is paid for with length in time",
+          "t": "the impulse rings longer, since a sharper wall in frequency costs length in time",
           "ok": true,
           "why": "That's the Fourier tradeoff the whole section rides on. A perfect brick wall at 20 kHz is a sinc that ripples forever in time, and NOS, oversampling, and Moffat's closed-form filter are each a different answer to it."
         },
@@ -664,7 +664,7 @@ var DACAudio = (function(){
       "q": "The contested ground demo feeds one quiet tone to both architectures. What two different imperfections do the spectra show?",
       "options": [
         {
-          "t": "multibit sprouts spikes at the tone's multiples, delta-sigma keeps one clean spike over a raised floor",
+          "t": "multibit sprouts harmonic spikes, delta-sigma keeps one clean spike over a raised floor",
           "ok": true,
           "why": "That's the honest core of the debate. Rounding to exact levels bends a quiet wave into harmonic distortion; shaping trades that for a noise floor. Slide to 16-bit and both sink below hearing, which is why the argument never settles."
         },
@@ -686,7 +686,7 @@ var DACAudio = (function(){
       "q": "Last one, on warmth. Why does the tube curve read as full while the hard clip reads as buzz, when both are just distortion?",
       "options": [
         {
-          "t": "the tube's lopsided curve grows mostly the 2nd harmonic, the symmetric clip cancels evens and stacks the odds",
+          "t": "the tube's lopsided curve favors the 2nd harmonic, the symmetric clip cancels evens and stacks odds",
           "ok": true,
           "why": "That's the tell. The 2nd harmonic IS the octave, the most consonant interval there is, so the ear reads fuller. Symmetry cancels the evens, and the odd stack (3rd, 5th, 7th) climbs toward the square-wave buzz of a signal slammed into its rails."
         },

@@ -1,6 +1,6 @@
 // terminal.ts — the terminal apps at /finger, /photos, /lens, /radar, /dict, /cache,
 // /agent-ready and /encode, and the key-driven session model behind
-// them. lib/tui.js draws the frames; this file decides what goes in them.
+// them. lib/tui.ts draws the frames; this file decides what goes in them.
 //
 // ── what this is for ──────────────────────────────────────────────────────
 // Every other agent surface on this site hands back a document or a JSON blob:
@@ -9,10 +9,9 @@
 // the next frame — which is how a person learns an unfamiliar program, and it
 // needs no schema shipped ahead of time. The frame IS the documentation.
 //
-// ── where the state lives, and why it is split ────────────────────────────
-// The PROGRAMS keep their state in the URL: ?pane=writing&cursor=3&open=lattice
+// ── where the state lives ─────────────────────────────────────────────────
+// The programs keep their state in the URL: ?pane=writing&cursor=3&open=lattice
 // is the whole thing. No Durable Object, no KV entry, no token, no TTL.
-// /ask is the ONE exception and it has its own DO — see below.
 //
 // Four things fall out of the URL model:
 //
@@ -23,33 +22,14 @@
 //      sees" should not hand an agent an opaque blob and ask for it back.
 //   4. Any isolate can serve any frame. No affinity, nothing to fail over.
 //
-// ── this is the argument MCP's 2026-07-28 revision made ───────────────────
-// That revision dropped server-side sessions: no Mcp-Session-Id to mint, no
-// session table, and — the part that actually decides deployments — no need to
-// route a session back to the same backend. This origin already speaks it;
-// lib/mcp-protocol.js serves it, and its "DUAL-ERA" note is that cutover.
+// This is MCP's 2026-07-28 stateless revision (lib/mcp-protocol.ts serves both
+// eras) applied one layer up: MCP made a single tool call stateless, and this
+// makes a whole session over those tools stateless too.
 //
-// These tools apply the principle ONE LAYER UP. MCP made a single tool CALL
-// stateless; this makes a whole session over those tools stateless too, which is
-// the harder half, because a session is the thing that looks like it obviously
-// needs a server to hold it. The npx/uvx analogy is the useful one: fetch, run,
-// discard, reconstruct from the address next time. (Simon Willison on the
-// revision, 2026-07-31: https://simonwillison.net/2026/Jul/31/stateless-mcp/)
-//
-// ── the exception, and the rule that decides it ───────────────────────────
-// SMALL AND ADDRESSABLE STAYS IN THE URL. GROWING AND OPAQUE GETS A DO.
-//
-// A pane and a cursor fit a query string forever. A transcript does not — the
-// practical ceiling is ~2KB, which holds a cursor and never holds a three-turn
-// exchange. `ask` was single-shot for precisely that reason: there was nowhere
-// for "what about the other one?" to live. So ask-session.js gives that ONE
-// program a Durable Object, and the other three are untouched.
-//
-// One correction worth recording, because it was used to argue the wrong thing:
-// counter.js's measured 185-630ms DO hop is a SINGLE GLOBAL INSTANCE hit from
-// everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
-// once per ask, next to a model call. Latency was never the reason the programs
-// stay on URLs. Forking, bookmarking, and testability were.
+// The rule if a program ever needs more: small and addressable stays in the URL,
+// growing and opaque gets a Durable Object. A pane and a cursor fit a query
+// string forever; a transcript outgrows the ~2KB practical ceiling.
+
 import { agentReadyFrame } from "./agent-ready.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
@@ -89,7 +69,7 @@ const NAMED = { cr: "\r", enter: "\r", esc: "\x1b", tab: "\t", sp: " ", up: "k",
 
 // 32 keys per request. Enough to drive anywhere in these apps from cold, and
 // small enough that no single request can make the pane loader run away — the
-// loader is memoized per pane, so the real ceiling is 9 loads, but a bound that
+// loader is memoized per pane, so the real ceiling is one load per pane, but a bound that
 // does not depend on reading the memo table is the one worth stating.
 const MAX_KEYS = 32;
 
@@ -257,8 +237,8 @@ function listBody(list, state, { empty = "nothing here yet.", metaWidth = 16 } =
   if (!list.length) return [[s(empty, "dim")]];
   const cursor = Math.min(state.cursor, list.length - 1);
   // A frame is 24 rows on a classic terminal and the chrome eats 8, so the
-  // window scrolls to keep the cursor inside 14 rows rather than emitting all
-  // 158 and trusting the caller to scroll. An agent pays for every row.
+  // window scrolls to keep the cursor inside 14 rows rather than emitting every
+  // row and trusting the caller to scroll. An agent pays for every row.
   const view = 14;
   const start = Math.max(0, Math.min(cursor - Math.floor(view / 2), list.length - view));
   const slice = list.slice(Math.max(0, start), Math.max(0, start) + view);
@@ -750,9 +730,8 @@ export async function lensFrame(env, request, state, ctx) {
   const target = { url: obs.url };
   // ── walking through the doors lens just knocked on ──────────────────────
   // lens reports that an origin HAS an llms.txt, a markdown twin, an MCP
-  // endpoint. &doors=1 reads what is actually behind them. This lived in `ask`
-  // until ask was cut; it belongs here, because knocking and walking through are
-  // the same job at two depths.
+  // endpoint. &doors=1 reads what is actually behind them. It belongs here,
+  // because knocking and walking through are the same job at two depths.
   let doorsBody = blank();
   if (state.doors) {
     const doors = await readDoors(target.url, env).catch(() => null);
@@ -1080,10 +1059,8 @@ export function frameText(frame) {
 
 
 // ── a tool asked for HTML ─────────────────────────────────────────────────
-// The frame, in a <pre>, in the ordinary site window. There used to be a
-// PowerShell console here that you could type into; it lived in wire.js's place
-// and is described there. What a browser needs from a TOOL route is the same
-// text curl gets, legible — not an emulator.
+// The frame, in a <pre>, in the ordinary site window. What a browser needs from
+// a TOOL route is the same text curl gets, made legible.
 function toolPage(frame, path) {
   return lunaPage({
     title: `aadhar.sh${path}`,
@@ -1100,11 +1077,10 @@ function toolPage(frame, path) {
 
 // ── routing: a tool is a SERVICE, the frame is a REPRESENTATION ───────────
 // Tools live at the ROOT, next to /lens and /photos and /coffee, because that is
-// where this site has always put utilities — site-manifest.json has twelve of
-// them and eleven are top-level, while all twenty-nine content pages nest. They
-// were briefly filed under /terminal/*, which organised them by how they RENDER
-// rather than by what they are, and taught exactly the wrong lesson for a site
-// whose argument is "here is how you expose services to agents".
+// where this site puts utilities, while content pages nest. Filing them under
+// /terminal/* would organise them by how they RENDER rather than by what they
+// are, which is the wrong lesson for a site whose argument is "here is how you
+// expose services to agents".
 //
 // So the frame joins .md as a REPRESENTATION rather than a location, and every
 // tool answers three ways from one URL:
@@ -1113,9 +1089,7 @@ function toolPage(frame, path) {
 //   /dict                       anything else      -> the frame (curl, agents)
 //   /dict.txt                                      -> the frame, explicitly
 //
-// Exactly the markdown-twin contract this site already runs on. The /terminal
-// console that used to sit beside them (a page rendering one /mcp exchange)
-// retired on 2026-09-16; the tools were never under it and did not move.
+// Exactly the markdown-twin contract this site already runs on.
 export const TOOL_NAMES = TERMINAL_APPS;
 
 /** Shared by every tool route. */
@@ -1155,7 +1129,7 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
       "content-type": "text/plain; charset=utf-8",
       // Frames are per-query and several are live (playlist, calendar, lens), so
       // no shared cache should hold one. The route also negotiates on Accept,
-      // which a URL-keyed edge cache cannot represent — the trap lib/cache.js
+      // which a URL-keyed edge cache cannot represent — the trap lib/cache.ts
       // documents for the markdown twins.
       "cache-control": "no-store",
       "x-robots-tag": "noindex",
@@ -1164,7 +1138,7 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
   });
 }
 
-/** /finger, /ask, /radar, /dict, /cache — and their .txt representations. */
+/** Every tool in TOOL_NAMES, and its .txt representation. */
 export async function handleTool(request, env, ctx) {
   const url = new URL(request.url);
   const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
@@ -1172,7 +1146,7 @@ export async function handleTool(request, env, ctx) {
   const name = raw.replace(/\.txt$/, "");
   if (!TOOL_NAMES.has(name)) {
     // The index frame IS the 404 body: a wrong name gets every right one, with a
-    // sentence each. It was the console's landing frame until the console retired.
+    // sentence each.
     return new Response(`no such tool: ${name}\n\n${frameText(indexFrame())}\n`, {
       status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });

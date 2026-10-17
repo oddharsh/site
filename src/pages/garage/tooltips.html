@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/tooltip experiments</title>
@@ -236,13 +236,13 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   gap: 4px;
   font-size: 9px;
 }
-.lcd-tip .cell .label { color: var(--grey-60); letter-spacing: 0.04em; }
+.lcd-tip .cell .label { color: var(--ink-faint); letter-spacing: 0.04em; }
 .lcd-tip .cell .val   { color: oklch(98% 0 0); font-weight: bold; }
 .lcd-tip .footer-row {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
-  color: var(--grey-60);
+  color: var(--ink-faint);
   border-top: 1px solid oklch(25% 0 0);
   padding-top: 4px;
   margin-top: 2px;
@@ -580,7 +580,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 
 <!-- two shared popovers, populated on hover -->
 <div id="photo-tip" popover="manual" class="lcd-tip" aria-hidden="true"></div>
@@ -593,7 +593,7 @@ h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/tooltip experiments</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
@@ -849,7 +849,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
     <hr>
     <section id="luq" aria-label="understanding check"></section>
 
-  </div>
+  </main>
 </div>
 
 <script>
@@ -1107,7 +1107,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       "q": "On pointermove, what work does the JS do to keep a tooltip at the cursor?",
       "options": [
         {
-          "t": "It writes two CSS custom properties, --x and --y, on the tooltip; a CSS transform reads them and a clamp() handles the viewport edges.",
+          "t": "It writes two custom properties, --x and --y, that a CSS transform reads; clamp() handles the viewport edges.",
           "ok": true,
           "why": "That's the whole per-move cost: two style writes, zero layout reads. The browser batches the custom-property-driven transform to its own frame cadence, and edge pinning lives entirely in the clamp() bounds."
         },
@@ -1129,9 +1129,9 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       "q": "The tooltips fade in on entry but track the cursor with zero lag. How is that split built?",
       "options": [
         {
-          "t": "Opacity transitions, with @starting-style covering the entry frame; the translate that follows the cursor is deliberately left untransitioned.",
+          "t": "Opacity transitions, with @starting-style for the entry; the cursor-following translate isn't transitioned.",
           "ok": true,
-          "why": "A 55ms ease on position got tried and dropped because the hard snap reads better. The fade is each tip's own opacity transition plus display allow-discrete for the exit."
+          "why": "Leaving the translate untransitioned is deliberate: a 55ms ease on position got tried and dropped because the hard snap reads better. The fade is each tip's own opacity transition, @starting-style for the first frame, plus display allow-discrete for the exit."
         },
         {
           "t": "Both opacity and position ease together, so the tooltip trails slightly behind the cursor as it moves.",
@@ -1142,7 +1142,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
           "why": "No script touches the fade. The popover-open state plus @starting-style produces the entry fade in pure CSS; JS only populates content and calls showPopover()."
         },
         {
-          "t": "Registering --x and --y as typed @property lengths is what produces the zero-lag snap.",
+          "t": "Registering --x and --y as typed @property lengths is what produces the zero-lag snap to the cursor.",
           "why": "Typed registration buys the opposite: it makes those properties transitionable, plus a sane 0px initial value before the first pointer event lands. The snap comes from simply not transitioning them."
         }
       ]
@@ -1151,16 +1151,16 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       "q": "The polaroid flip was rejected, and the same fault had already killed the first Fuji LCD overlay (v1). What was the fault?",
       "options": [
         {
-          "t": "Both replaced the photo with its metadata, so you could see one or the other but never both at once.",
+          "t": "Both replaced the photo with its metadata, so you saw one or the other, never both.",
           "ok": true,
           "why": "The grid exists to show the photos, so a tooltip has to add to what you can already see. The floating panels keep the slot untouched for exactly this reason."
         },
         {
-          "t": "The 3D flip transform was too expensive to composite smoothly on low-power displays.",
+          "t": "The 3D flip transform was too expensive to composite smoothly on low-power laptop displays.",
           "why": "Performance never appears in the rejection callout. The stated fault is occlusion: flipping the slot hides the photo, the one thing the grid is for."
         },
         {
-          "t": "The handwritten serif back of the polaroid clashed with the XP visual vocabulary.",
+          "t": "The handwritten serif back of the polaroid clashed with the XP visual vocabulary around it.",
           "why": "Skin consistency is a different verdict on this page: the Fuji LCD lost to the XP camera readout for arguing with the Luna shell. The polaroid died on occlusion, before styling even came up."
         },
         {
@@ -1173,9 +1173,9 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       "q": "What does a visitor on a phone, a touch screen with no hover, get from these tooltips?",
       "options": [
         {
-          "t": "No tooltips at all: the module returns early when (hover: none) or (pointer: coarse) matches, and taps just follow the links.",
+          "t": "Nothing: the module returns early on (hover: none) or (pointer: coarse), and taps follow links.",
           "ok": true,
-          "why": "That early exit is the factory's first line. Touch browsers synthesize hover events around taps, so an ungated tooltip would pop up over the grid mid-scroll; opting the module out entirely beats shipping that jank."
+          "why": "That early exit is the factory's first line, so no tooltip ever appears and taps just follow the links. Touch browsers synthesize hover events around taps, so an ungated tooltip would pop up over the grid mid-scroll; opting the module out entirely beats shipping that jank."
         },
         {
           "t": "A long-press stands in for hover and opens the same cursor-following tooltip at the touch point.",
@@ -1186,7 +1186,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
           "why": "Element anchoring is the keyboard path, wired to :focus-visible, and it never targets touch. Coarse pointers are excluded before any wiring happens."
         },
         {
-          "t": "The same metadata renders inline beneath the grid so touch visitors lose nothing.",
+          "t": "The same metadata renders inline beneath the grid, so touch visitors lose nothing at all.",
           "why": "No inline rendering exists on this page. The tooltips are progressive enhancement: on touch they vanish completely while the photos and links keep working."
         }
       ]
@@ -1195,16 +1195,16 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
       "q": "On the live homepage, what job does CSS anchor positioning actually do?",
       "options": [
         {
-          "t": "It's the keyboard path: on :focus-visible, JS sets anchor-name on the focused slot and the popover tethers to that element instead of a cursor.",
+          "t": "The keyboard path: on :focus-visible, the popover tethers to the focused slot instead of a cursor.",
           "ok": true,
-          "why": "A keyboard user has no cursor to track, so the tooltip anchors to the focused element via position-anchor and position-area, gated on CSS.supports so unsupporting browsers cleanly no-op."
+          "why": "A keyboard user has no cursor to track, so JS sets anchor-name on the focused slot and the tooltip anchors to it via position-anchor and position-area, gated on CSS.supports so unsupporting browsers cleanly no-op."
         },
         {
-          "t": "It's the no-JS fallback, keeping tooltips working even when scripts are disabled.",
+          "t": "It's the no-JS fallback, so the tooltips keep working for any visitor who has JavaScript turned off.",
           "why": "The note is emphatic that this is a keyboard fallback only. With JS off the popover is never populated and never opens: no tooltip at all, though the photos and links still work."
         },
         {
-          "t": "It replaced cursor-following outright, so mouse users get element-anchored tooltips too.",
+          "t": "It replaced cursor-following outright, so mouse users get element-anchored tooltips as well.",
           "why": "Mouse users keep the cursor-follower. Anchoring only kicks in on :focus-visible, when there is no cursor position worth following."
         },
         {

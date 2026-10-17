@@ -163,12 +163,12 @@ skips it.
     rule it targets does nothing.
     Checked by: nothing (judgment).
 
-32. **`bun run pages:check` lints page text, and `validate` doesn't run it.**
-    It bans em dashes, AI filler and "X, not Y" negations, but only in the
-    quiz and editorial fields; lint your own diff for the rest. It was a CI
-    step until #1001 folded CI into one job and left it out, so run it before
-    pushing page copy.
-    Checked by: `tools/check-page-contracts.ts`.
+32. **`bun run pages:check` lints page text and is required.** It bans em
+    dashes, AI filler and "X, not Y" negations, but only in the quiz and
+    editorial fields; lint your own diff for the rest. #1001 folded CI into
+    one job on 2026-09-28 and left it out until 2026-10-14; `contract-ci-required-gate` now fails
+    if `validate` stops running it.
+    Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.mjs`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
     backgrounded tab.** Count at the origin (`Sec-Purpose`) with
@@ -482,3 +482,158 @@ skips it.
     (`workersInvocationsAdaptive`), which needs no observability scope;
     exactly 50 subrequests beside it means the Workers Free cap (gotcha 36).
     Checked by: nothing (judgment).
+
+66. **The right answer was the longest option, so the quiz graded length.**
+    On 2026-10-14 the right answer was the longest option on 191 of 202
+    understanding-check questions, at a median 1.40x the wrong ones. Authors
+    wrote it with its justification attached and the distractors as bare
+    claims, so "pick the longest" scored 95% on pages the reader never
+    opened. Option shuffling hid position and did nothing for length. The
+    justification belongs in the option's `why`; each misconception gets
+    the truth's level of detail. `validateUnderstanding` refuses a page
+    where the right answer is the longest, or the shortest, on more than
+    half its questions, and the contract test holds both guessers near
+    chance site-wide with the median length ratio in 0.85 to 1.15.
+    Checked by: `tools/contract-quiz-answers-carry-no-length-tell.test.mjs`.
+
+67. **A package.json script named `lint` shadows `bun lint`.** Bun runs the
+    script for `bun lint`, `bun lint .` and every flag but `--doctor`, so
+    `bun lint` in a terminal still ran oxlint after the canary carried the
+    built-in. Bun takes the built-in only when the script body itself says
+    `bun lint`, a prefix like `bun tools/gen-runtime-types.ts &&` included;
+    under 1.4.3, which has no linter, that same body recurses into the
+    script. `bun lint --doctor` reads the config either way, so it can say
+    "117 rules run natively" while the lint step runs something else.
+    Measured 2026-10-15 on 408c9374b.
+    Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.mjs`.
+
+68. **The byte-identical build gate read the build's stopwatch.** From
+    2026-10-13 `tools/build.ts` writes its phase timings to
+    `.build/phases.json`, and the gate hashed all of `.build/`, so every
+    candidate bun failed on that file alone and the canary tripwire went red
+    on 408c9374b with "1 differing: phases.json". The file sits beside
+    `.build/public`, so it never ships. `builtBytes` in `lib/bun-gates.ts`
+    drops exactly that path, and a changed byte anywhere else, a served
+    `public/phases.json` included, still fails. Anything else that records
+    how long a build took belongs outside `.build/` or in `BUILD_TIMINGS`.
+    Checked by: `tools/contract-the-build-gate-ignores-only-the-stopwatch.test.mjs`.
+
+69. **A dated canary's npm sha can name a different commit from its
+    binary.** Through 1.4.3-canary.20261013.1 the tarball's `package.json`
+    version (`+9bcbf1e`) and `bun --revision` (`+9bcbf1ecb`) agreed. From
+    20261014.1 they don't: npm says `+e40a58a` (its `gitHead`) and the binary
+    says `+408c9374b`, and 20261015.1 repeats the split. Pinning the binary's
+    sha failed every CI job in the installer's second witness; pinning npm's
+    would fail its third. Check both before choosing a dated canary:
+    `npm view @oven/bun-linux-x64@<version> gitHead` against
+    `bun --revision` on the unpacked binary. Measured 2026-10-15.
+    Checked by: `.github/install-bun.sh`.
+
+70. **Safari reads a fixed box's background-color, never its gradient.**
+    Safari 26 dropped theme-color in tabs and tints its status bar and
+    toolbars from the frontmost fixed box just inside each edge, using that
+    box's computed `background-color` (`LocalFrameView::fixedContainerEdges`).
+    The taskbar was drawn with the `background:` shorthand, which leaves the
+    color transparent, so Safari had nothing solid to extend under it. The box
+    must span 90% of the edge and stand taller than 10px, or WebKit samples
+    pixels instead, and `backdrop-filter` disqualifies it (WebKit 319479). The
+    wallpaper has no solid color either, so `html::before` is a 12px top
+    sampler clipped to text it doesn't have: it paints nothing and still reads
+    as opaque. On iPhone the top edge only counts under `viewport-fit=cover`
+    (319479 again), so every page asks for it, and cover runs the page under
+    the status bar, the notch and the home indicator: whatever the shell draws
+    at an edge steps in by luna.css's SAFE AREAS insets (`--sa-*`,
+    `--taskbar-h`). Measured 2026-10-16 in Chromium: with no insets the pages
+    matched main pixel for pixel, and under `Emulation.setSafeAreaInsetsOverride`
+    (59/34px portrait, 59px sides landscape) nothing tappable sat in an inset.
+    This is undocumented WebKit behavior. If it moves, the old look comes back.
+    (This was 67 in #1366; #1365's merge took the number and dropped the entry.)
+    Checked by: `tools/contract-safari-reads-a-solid-colour-at-each-edge.test.mjs`.
+
+71. **bun fmt reformats the HTML inside `html` tagged templates.** Prettier's
+    default `embeddedLanguageFormatting = "auto"` treats a template tagged
+    `html` as markup and reflows it, so `titleBar()` in
+    `src/worker/lib/window.ts` emitted different HTML and the build's desktop
+    freshness check refused to deploy. Templates the build doesn't compare
+    would just ship the new markup. `bun fmt --debug-check` reported no change
+    in meaning across 720 files while this happened, because the string is
+    data to it. bunfig.toml's `[fmt]` sets it `"off"`. Measured 2026-10-16 on
+    1.4.3-canary.20261013.1 by formatting the whole tree and building.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+72. **bun fmt renumbers ordered lists in Markdown.** This file numbers its
+    entries 1, 2, 3, then skips the retired ones, and the printer rewrote them
+    to run consecutively: every gotcha after the first gap took a new number,
+    and the 290 "gotcha N" references in 170 files pointed at the
+    wrong entry. Markdown stays out of `[fmt]` entirely, since the docs here
+    also hold version pins and tables that other checks read. Measured
+    2026-10-16.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+73. **bun fmt unquotes object keys, and lint rules read the result.** With
+    Prettier's default `quoteProps = "as-needed"`, `{ "shape": ... }` in
+    `src/client/lens.js` became `{ shape: ... }`. The key means the same thing,
+    and anti-slop's `no-shape-in-symbol-names` now saw an identifier and failed
+    `bun run lint` in three files nobody had edited. `[fmt]` sets
+    `"preserve"`. The formatter also drops parentheses it thinks are
+    redundant (`(a || b) ? x : y` loses them), which broke a contract test's
+    regex the same way. Measured 2026-10-16.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+74. **Whatever reads a file's exact text breaks when bun fmt rewraps it.**
+    Formatting everything on 2026-10-16 broke, in turn: the build's regex for
+    THE CLIENT EDGE in `luna.css`; the design tokens `luna.css` must carry
+    verbatim; `lwe/encoding.html`, which inlines its spec from
+    `pipelines/lwe/specs/`; the generated files (`lib/desktop.*`,
+    `lib/site-manifest.*`) and generated blocks (`nav-run.js`, `lwe/ask.js`)
+    their checks compare byte for byte; two derivation digests; and 7
+    contract-test regexes that spell out one-line source. JSON is out because
+    tools write it with `JSON.stringify(v, null, 2)` and the printer packs
+    short arrays onto one line, so every `derive --lock` would fail
+    `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
+    files that remain format with no `/a/` or `pd/` change: the served diff is
+    the 46 `.src` twins and `sw.js`. The Worker bundle still changes bytes at
+    the same size, because esbuild picks minified names by character
+    frequency. A new reader of exact source text belongs in the ignore list.
+    Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.mjs`.
+
+75. **A playwright-core bump strands the canary's browser image.** The
+    browsers leg in `canary.yml` runs in `mcr.microsoft.com/playwright`,
+    pinned by tag and digest, and its pull step refuses an image whose
+    version differs from the installed playwright-core. Dependabot moves the
+    npm pin and never the image. #1364 moved playwright-core to 1.64.1 with
+    the image left on 1.63.0, and the leg failed at the pull step, before any
+    probe, on every nightly from 2026-10-15 to 2026-10-17. Move the tag and
+    its digest in the same PR; `curl -sI -H 'Accept:
+    application/vnd.oci.image.index.v1+json'
+    https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble`
+    prints the index digest as `docker-content-digest`.
+    Checked by: `tools/contract-the-browser-image-matches-playwright-core.test.mjs`.
+
+76. **`avifdec -d 8` truncates a 10-bit image before converting it.** libavif
+    hands a 10-bit 4:4:4 file to libyuv, which drops the YUV to 8 bits and then
+    converts, so the 8-bit PNG lands up to 3 levels under the file's true
+    pixels, 0.4 to 0.5 under on average, wrong on about 55% of samples.
+    Measured 2026-10-17 against an exact conversion of each file's own YUV
+    planes, for the shipped AV1 and the AV2 build alike: `-d 8` cost 0 to 1.8
+    ssimulacra2 on the 11 /garage/av2 samples (nothing on the 8-bit gray
+    Monochroms). `-d 16`, rounded once by `zenc frame`, has zero samples off,
+    and so does /garage/av2's WebAssembly decoder. djxl's 8-bit output rounds,
+    so until then every AVIF and AV2 score on the /pixel-peeper format axis
+    was handicapped against JPEG XL's by the decode, not the codec.
+    Checked by: `tools/contract-avif-scores-decode-exactly.test.mjs`.
+
+77. **WebKit blurs a window dragged to a fractional offset.** A dragged Luna
+    window keeps its `translate()` after the drag, and WebKit's
+    `PointerEvent.clientX` is a double, so a trackpad drag ended at offsets
+    like `translate(127.297px, 176.617px)`. Measured 2026-10-17 in Search, a
+    WKWebView browser, at 2x: on screen the whole window was resampled, and the
+    Laplacian sharpness of its body text fell from 23.3 to 16.3 (title bar 24.7
+    to 16.7). Whole and half-pixel offsets lost nothing, and dropping the
+    wallpaper's `translateZ(0)` changed nothing. WebKit's own snapshots
+    (`takeSnapshot`, Bun.WebView's `screenshot()`) paint the page crisp at the
+    same offset, so only a capture of the real window (`screencapture -l`)
+    shows it. `initDrag` in nav.js lands the window's corner on a device pixel
+    through `onGrid`. The icon and accessory drags commit `left`/`top` on
+    release, which WebKit snaps itself.
+    Checked by: `tools/contract-a-dragged-window-lands-on-a-device-pixel.test.mjs`.
