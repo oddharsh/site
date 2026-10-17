@@ -250,8 +250,9 @@ export async function imageCompare(args: ImageToolArgs, env) {
   }
   // Each format is a complete, independent Images pipeline. Keep the caller's
   // order through Promise.all, but pay one binding latency window rather than a
-  // three-encode waterfall. The combined-output cap is checked below exactly as
-  // before; parallelism does not increase its 3 x 4 MiB worst-case residency.
+  // three-encode waterfall. The combined-output cap is checked below, after
+  // every encode settles; parallelism does not increase its 3 x 4 MiB
+  // worst-case residency.
   const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(jobs.map(async ({ format, spec }) => {
     const output = await transformBytes(env, input.bytes, spec);
     if ("error" in output) return error(output.error);
@@ -329,19 +330,19 @@ export async function photoRecipe(args, env) {
     inputSha256 = await sha256Hex(encoded.bytes);
     const fingerprints = await loadJson(env, "images/fingerprints.json");
     // fingerprints.json is keyed BY DIGEST, so the parsed object IS the index and
-    // this is the whole lookup. It used to be a nested scan over all 474 entries
-    // with an Object.entries() allocation per call, which is the wrong shape for
-    // a question that only ever runs digest -> photo.
+    // this is the whole lookup, the right shape for a question that only ever
+    // runs digest -> photo.
     //
     // Object.hasOwn keeps a caller-derived key off the prototype chain. A digest
     // is our own sha256 output and so can never spell `constructor`, but leaning
     // on that would put the safety three lines from the lookup.
     //
     // Deliberately a plain object rather than a Map parsed at the loadJson
-    // boundary: building a 474-entry Map costs ~0.072 ms, which is MORE than the
-    // 0.0205 ms scan this replaces, so the boundary parse would spend the whole
-    // win. JSON.parse already returns the index; the values are our own build
-    // artifact, and check-photo-pipeline.mjs is what proves their shape.
+    // boundary: at 474 entries, building the Map cost ~0.072 ms, which is MORE
+    // than the 0.0205 ms nested scan it replaced, so the boundary parse would
+    // spend the whole win. JSON.parse already returns the index; the values are
+    // our own build artifact, and tools/photos/check-photo-pipeline.ts is what
+    // proves their shape.
     const hit = Object.hasOwn(fingerprints, inputSha256) ? String(fingerprints[inputSha256]) : "";
     const cut = hit.lastIndexOf(":");
     const hitStem = cut > 0 ? hit.slice(0, cut) : "";

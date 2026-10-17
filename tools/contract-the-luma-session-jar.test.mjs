@@ -272,6 +272,20 @@ test("the cron enrich dispatch skips cleanly when it is not configured", async (
   assert.equal(called, false, "an unconfigured dispatch must not spend a subrequest");
 });
 
+test("the cron self-dispatches skip without a loopback instead of fetching their own route", async () => {
+  // Gotcha 64: /serendipity* is a route, and a same-zone fetch() to a route goes to the
+  // origin, which this zone lacks: production logged 522 for every tag POST
+  // until the cron was handed ctx.exports.default. No loopback must mean no
+  // request, so a caller that forgets it reads as a named skip, not a 522.
+  const { dispatchTag } = await import("../serendipity/serendipity.ts");
+  const configured = { SYNC_SECRET: "s", EXA_API_KEY: "k", AI: {} };
+  assert.deepEqual(await dispatchEnrich(configured, null), { skipped: "no loopback binding" });
+  assert.deepEqual(await dispatchTag(configured, null), { skipped: "no loopback binding" });
+  // The callee can skip too, and that has to survive the trip back to the log line.
+  const skipped = await dispatchTag(configured, async () => ({ ok: true, json: async () => ({ ok: false, skipped: "no AI binding" }) }));
+  assert.deepEqual(skipped, { skipped: "no AI binding" });
+});
+
 test("the cron enrich dispatch reports outcomes and swallows its own failures", async () => {
   const env = { SYNC_SECRET: "s", EXA_API_KEY: "k" };
   const ok = await dispatchEnrich(env, async () => ({

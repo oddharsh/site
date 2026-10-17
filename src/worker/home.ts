@@ -6,7 +6,7 @@ import { span } from "./lib/trace.ts";
 import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
-// `/` itself is now a DETERMINISTIC static document: build.ts bakes a fixed
+// `/` itself is a DETERMINISTIC static document: build.ts bakes a fixed
 // twelve tiles and the newest-photo date into it, so it carries a q11 twin, a
 // dcz delta, and a real ETag like every other page here. What used to be four
 // HTMLRewriter injections (tracks, photo grid, visit counter, last-modified)
@@ -18,29 +18,19 @@ import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 //   visit counter   → /hit?peek=1, which already read without bumping.
 //   last-modified   → BAKED. It derives from the bundled photo index, so it
 //                     changes only on deploy; a build is the honest place for
-//                     it. The old comment here claimed "there's no build step",
-//                     which stopped being true when build.ts arrived.
+//                     it.
 //
 // no-store, because the whole point of this response is that it differs every
 // time. It is small (twelve <a> blocks, ~4KB br) and it is fetched after the
 // document has already painted its text.
-// Traced in two phases. What the spans buy is the SPLIT and the attributes, NOT
-// visibility into compute — see the correction below.
 //
-// MEASURED 2026-07-29, in production, and it killed the original idea here: a
-// span does NOT see pure compute. Workers spans inherit exactly the frozen-clock
-// semantics of `Date.now()` (the clock advances across I/O, not during
-// synchronous execution), so `home.grid.render` reports ~0 for the same reason
-// perf-probe.js's `time()` helper does. Proven on `/lens/fetch` against a 752KB
-// Wikipedia page: `lens.inspect` 685ms = `lens.discovery` 656ms +
-// `lens.inspect.fetch` 29ms + `lens.inspect.parse` 0ms, where that parse had just
-// run an HTMLRewriter pass over 752KB and emitted 81KB of markdown. For CPU, read
-// `cpuTime` off the tail/log event (193ms on that request); spans are for I/O
-// structure and attributes. `home.grid.render` is kept anyway, because its
-// ATTRIBUTES (served, pool_size, alt_known) are the point.
-//
-// The manifest span now reads the bundled pool synchronously. Only captions and
-// histograms need ASSETS reads, each cached per isolate and traced separately.
+// Traced in phases for the SPLIT and the attributes. A span does not see pure
+// compute (measured in production 2026-07-29): Workers spans inherit the
+// frozen-clock semantics of `Date.now()`, which advances across I/O and not
+// during synchronous execution, so `home.grid.render` reports ~0. Read
+// `cpuTime` off the tail/log event for CPU. `home.grid.render` stays because
+// its ATTRIBUTES (served, pool_size, alt_known, hist_known) are the point.
+
 // The document always arrives before the fragment, in the same isolate: `/` is
 // Worker-served (dcz), and the fragment is a preload the document itself names.
 // So the two ASSETS reads the fragment's FIRST request per isolate pays (alt.json
@@ -50,7 +40,7 @@ import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 // images cannot be discovered until it lands. Runs under ctx.waitUntil, so it
 // costs the document response nothing and a failed read is the same {} the
 // getters already fall back to. Bundling the two files was the other repair and
-// was declined once already (photos.ts, "22.9 KiB gzip of headroom").
+// was declined once already (photos.ts, "22.9 KiB gzip").
 export function warmGridData(env) {
   return Promise.all([getAltMap(env).catch(() => {}), getHistogramMap(env).catch(() => {})]);
 }
@@ -62,7 +52,7 @@ export async function handlePhotoGrid(request, env) {
     // Module-cached like the alt map, so this is one ASSETS read per isolate
     // rather than per request, and free on every warm one. An empty map is a
     // legal answer: the tiles simply carry no data-hist and tooltip.js falls
-    // back to the per-photo fetch it used to always make.
+    // back to the per-photo fetch.
     span("home.grid.hist", () => getHistogramMap(env).catch(() => ({}))),
   ]);
   // 503 is the honest answer when the bundled pool is empty: the fragment has
@@ -97,20 +87,9 @@ export function pickRandom(arr, n) {
   return a.slice(0, n);
 }
 
-// per-artist nav targets that open spotify's artist page. emitted as
-// spans (not <a>) because the wrapping row is an <a> and nested anchors
-// are invalid HTML — the inline script on index.html intercepts clicks
-// on .np-artist-link, stopPropagation, and opens the data-href. role+
-// tabindex keep them keyboard- and screen-reader-accessible.
-//
-// each span also carries data-artist-name and (when known) data-artist-image
-// so the XP hover-tooltip can show a profile pic + name on hover. when we
 export async function serveMarkdown(request, env) {
-  // Delegates rather than restating the header set. This function and
-  // serveMarkdownTwin were building the same response — same content-type, same
-  // token estimate, same no-store, same vary — from two places, which is how the
-  // homepage ended up the one negotiated route whose HEAD behaved differently.
-  // The link header is the only thing genuinely its own.
+  // Delegates to serveMarkdownTwin so the homepage negotiates exactly like every
+  // other page, HEAD included. The link header is the only thing genuinely its own.
   const md = await serveMarkdownTwin(request, env, "/index.md", { link: HOMEPAGE_DISCOVERY_LINK });
   // No twin means a half-built deploy, and a navigation is worth more than a
   // representation: fall back to HTML rather than 404 the front door.

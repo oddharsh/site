@@ -1,4 +1,4 @@
-// The per-booking expiry timer (src/workflow.js), driven through wrangler's
+// The per-booking expiry timer (src/workflow.ts), driven through wrangler's
 // Workflow introspector. The workflow waits for a "host-decision" event and, if
 // none arrives within PENDING_TTL_DAYS, reclaims an abandoned pending booking.
 // It touches KV only (never sends mail), which is exactly why the
@@ -78,7 +78,7 @@ describe("BookingWorkflow expiry timer", () => {
 
   it("timeout fires but the booking was already resolved → guard leaves it alone", async () => {
     const b = await heldPending();
-    await setStatus(env, b.id, "confirmed");   // resolved, but pretend the cancel event was lost
+    await setStatus(env, b.id, "confirmed");   // resolved, but pretend the host-decision event was lost
     await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => { await m.forceEventTimeout(WAIT_STEP); });
 

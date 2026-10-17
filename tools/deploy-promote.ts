@@ -65,6 +65,7 @@ import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
 import { cf, d1Rows, D1 } from "./lib/cf.ts";
+import { checkpointInsert } from "./lib/checkpoints.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
 
@@ -576,7 +577,15 @@ console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 // The changelog entry was authored in the PR (bump-version.sh writes only the
 // committed projection), so /updates and /restore have been serving it since
 // this version started answering. What was still missing is D1's record that it
-// SHIPPED, and this is the only place that knows traffic actually moved.
+// SHIPPED, and a ramp that reaches 100% knows traffic moved.
+//
+// This block is NOT on the normal release path. Since 2026-09-28 (#1002)
+// production ships through promote-production.yml and Workers Builds'
+// `wrangler deploy` at 100%, which write no D1 row (CI's token is read-only).
+// `bun run checkpoints:record` is that path's writer, run from a workstation
+// after the release; this block covers only a manual ramp. Both send
+// tools/lib/checkpoints.ts's INSERT, and `checkpoints:check` fails while
+// production carries an entry D1 lacks.
 //
 // Deliberately after the last step and never before: a row here means the
 // version reached 100%, not that someone intended it to. A ramp that aborts at
@@ -605,8 +614,7 @@ if (steps[steps.length - 1] === 100) {
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);
     try {
-      await d1Rows(D1["aadhar-restore"],
-        `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`);
+      await d1Rows(D1["aadhar-restore"], checkpointInsert(row, ts));
       console.log(`logged: v${row.vnum} ${row.version}`);
     } catch (e) {
       // Not fatal. Traffic already moved, and a missing log row is a changelog

@@ -451,7 +451,7 @@ async function checkInvariants() {
   // sitemap.xml, the garage gallery) must agree with the registry's flags. This is
   // the check that would have caught the 10-vs-12-vs-15 garage drift these three
   // surfaces had accumulated before the manifest existed.
-  let manifestChecked = 0;
+  let manifestChecked = 0, pagesWalked = 0;
   try {
     const { surfaces } = readManifest();
     const nav = await read("src/client/nav-run.js");
@@ -510,15 +510,25 @@ async function checkInvariants() {
 
     // 8c — every garage/lwe page on disk is registered (or an explicit exclusion),
     // so adding a page forces a registry entry rather than a silent omission.
+    //
+    // The pages live in src/pages/. #457 (2026-08-18) rewrote this walk from
+    // www/ to public/, which still exists (it holds garage/av2/ and lwe/lean/
+    // assets) but holds no .html, so readdir succeeded and the check inspected
+    // 0 files until 2026-10-17 while 39 pages sat in src/pages. The floor is the
+    // control: an empty or wrong root reads 0 and fails here. 39 pages walk
+    // today, so 30 leaves room to retire a few before the floor needs moving
+    // (gotcha 79).
     const BARE = new Set(["index.html", "vt-b.html", "vt-check.html"]);
     const known = new Set(surfaces.map((s) => s.path));
     for (const dir of ["garage", "lwe"]) {
-      for (const f of await readdir(`public/${dir}`)) {
+      for (const f of await readdir(`src/pages/${dir}`)) {
         if (!f.endsWith(".html") || BARE.has(f)) continue;
+        pagesWalked++;
         const p = `/${dir}/${f.slice(0, -5)}`;
         if (!known.has(p)) hard.push(`${p} exists on disk but is not registered in site-manifest.json`);
       }
     }
+    if (pagesWalked < 30) hard.push(`registry invariant 8c walked only ${pagesWalked} garage/lwe pages (39 in src/pages on 2026-10-17); point the walk at the tree the pages live in`);
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
 
@@ -661,8 +671,14 @@ async function checkInvariants() {
       ...await shellFiles(),
       ...await collect("src/worker", /\.ts$/),
       ...await flat("cal/src", /\.ts$/),
-      ...await flat("serendipity", /\.js$/),
+      // .ts since #523 (2026-08-23). It matched /\.js$/ until 2026-10-17 and
+      // scanned 0 of serendipity's 3 files, so each root now has to yield one
+      // (gotcha 79).
+      ...await flat("serendipity", /\.ts$/),
     ];
+    for (const root of ["src/pages/", "src/worker/", "cal/src/", "serendipity/"]) {
+      if (!files.some((f) => f.startsWith(root))) hard.push(`conflict-marker check found no files under ${root}: its walk no longer matches what that root holds`);
+    }
     const MARKER = /^(<{7} |={7}$|>{7} )/;
     const conflictTexts = await readAll(files);
     for (const [i0, f] of files.entries()) {
@@ -682,7 +698,7 @@ async function checkInvariants() {
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
   if (!servedPlan) throw new Error("build: the served tree was never planned");
-  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered (${pagesWalked} pages walked), ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
   return servedPlan;
 }
 
@@ -1328,16 +1344,16 @@ phase("1e photos + bot");
 phase("1f updates + restore");
 // 1f) /updates and /restore as deploy-time documents.
 //
-// The only two dynamic pages whose data changes solely WITH A RELEASE:
-// tools/photos/bump-version.sh stages the next entry in
-// src/worker/checkpoints.json in the release PR, and deploy:promote inserts
-// that row into D1 once traffic reaches 100%. So baking them WHOLE costs no
-// freshness at all — unlike /reading (6h Curius refresh) or /around (daily
-// crawl), whose feeds move on their own, so only their shells are baked and the
-// feed arrives as an island (step 5b, lib/island.ts).
+// The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
+// stages each entry in the release PR, so it ships in the same build. So baking
+// them WHOLE costs no freshness at all, unlike
+// /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
+// their own, so only their shells are baked and the feed arrives as an island
+// (step 5b, lib/island.ts).
 //
-// D1 remains the source of truth. checkpoints.json is its committed projection,
-// and `bun run checkpoints:check` re-reads D1 and fails on drift.
+// D1 is the record of what shipped; checkpoints.json is what this build serves.
+// `bun run checkpoints:record` copies released entries into D1 from a workstation,
+// and `bun run checkpoints:check` fails on drift (tools/check-checkpoints.ts).
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);

@@ -18,9 +18,10 @@ import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
 // the ROOT workspace's dependencies, and lens-reader/src/reader.ts imports
-// readability and linkedom, which live only in that sub-project. Importing
+// readability (and htmlparser2, through src/dom.ts), which live only in that
+// sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
-// that happens to have run `pnpm install` in lens-reader/ — which is exactly how
+// that happens to have run `bun install` in lens-reader/, which is exactly how
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file
 // imports has to resolve under bare node, forever.
 //
@@ -30,7 +31,7 @@ import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
   const src = readFileSync("./lens-reader/src/reader.ts", "utf8");
   const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
-  assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
+  assert.ok(constant, "reader.ts no longer exports READER_LIMIT_PER_MIN");
   const READER_LIMIT_PER_MIN = Number(constant[1]);
   // IMPORTED rather than matched, since lens-reader moved to cloudflare.config.ts
   // (`cf migrate`, 2026-09-28): the value asserted is the value wrangler reads.
@@ -103,7 +104,7 @@ test("the reader reports what it dropped, never only what it kept", async () => 
   assert.match(client, /What the extractor threw away/, "the pane must lead with the gap");
   // And it must never present itself as the served bytes.
   const note = reader.match(/export const READER_NOTE =([\s\S]*?);\n/);
-  assert.ok(note, "reader.js no longer exports READER_NOTE");
+  assert.ok(note, "reader.ts no longer exports READER_NOTE");
   assert.match(note[1], /OPINION/, "the note must name the output as an opinion");
   assert.match(note[1], /never what the server sent/);
 });

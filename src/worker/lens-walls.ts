@@ -67,7 +67,6 @@ export function wallDedupeKey(sample: string): string {
 
 type View = { status?: number | null, blocked?: boolean, challenge?: boolean, error?: string, wall?: unknown, [VIEW_SAMPLE]?: string };
 
-/** The views worth asking about: answered 2xx, not already flagged, with a body. */
 export function wallCandidates<V extends View>(views: readonly V[]): V[] {
   return views.filter((v) => {
     if (v.error || v.challenge || v.blocked) return false;

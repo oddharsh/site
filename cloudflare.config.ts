@@ -198,9 +198,13 @@ const worker = defineWorker({
   assets: {
     // Canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical
     // tags, llms.txt and nav.js's own normalization all say so).
-    // drop-trailing-slash makes the asset layer agree: /garage + /lwe serve
-    // directly, /garage/ + /lwe/ 301 to the slashless form. Local dev inherits
-    // it (config/dev/ spreads this config), so the two cannot diverge.
+    // drop-trailing-slash makes the asset layer agree on the direction, but it
+    // redirects with a 307, not a 301 (measured 2026-10-17). So the slashed
+    // roots the Worker claims (/garage/, /lwe/, /coffee/, /serendipity/) are
+    // exact routes that 301 through routeDropSlash in src/worker/index.ts.
+    // Every other slashed page (/about/, /garage/horizon/) still gets this
+    // setting's 307. Local dev inherits it (config/dev/ spreads this config),
+    // so the two cannot diverge.
     htmlHandling: "drop-trailing-slash",
     // Worker-owned routes only: static is the default, and a path earns a
     // Worker invocation by being claimed here. DERIVED since 2026-10-02 from

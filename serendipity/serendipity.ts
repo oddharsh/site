@@ -499,7 +499,7 @@ const DASHBOARD_LEDE = `<h1 class="page">Events</h1>
 // The toolbar hides itself over an empty pool, on the built page (where the
 // island may say the pool is empty) as on the live one.
 const DASHBOARD_TOOLBAR = `<div class="toolbar">
-        <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
+        <input class="xp-field search" id="ev-search" type="search" aria-label="Search events" placeholder="Search events, places, contributors…" autocomplete="off">
         <div class="chips" id="ev-chips">
           <button type="button" class="chip on" data-when="all" aria-pressed="true">All</button>
           <button type="button" class="chip" data-when="week" aria-pressed="false">This week</button>
@@ -620,7 +620,8 @@ async function renderEvent(d, id, path) {
   return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
-async function renderContribute(d, path, uid, msg) {
+// exported for contract-form-fields-have-names.test.mjs
+export async function renderContribute(d, path, uid, msg) {
   // One summary row owns all three numbers this page needs. These used to be
   // three D1 calls (two overlapped, then the connected browser's event count),
   // so the common connected path still paid two binding-latency windows. The
@@ -642,7 +643,7 @@ async function renderContribute(d, path, uid, msg) {
     <div class="grp">Add events by link</div>
     <p class="note" style="margin:0 0 8px">Paste public Luma links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed. A single <b>event</b> comes in whole; a <b>calendar</b> (e.g. <code>luma.com/newinterfaces</code>) or a <b>discovery page</b> (<code>luma.com/crypto</code>, <code>/ai</code>, <code>/nyc</code>) expands into its events, up to ${LIST_CAP} per link. Added events show as &ldquo;browsed&rdquo; until someone going syncs their feed and fills the guest list.</p>
     <form method="POST" action="${PREFIX}/add-event">
-      <textarea class="xp-field" name="links" rows="3" placeholder="https://lu.ma/your-event&#10;https://luma.com/crypto&#10;https://luma.com/newinterfaces" autocomplete="off" spellcheck="false"></textarea>
+      <textarea class="xp-field" name="links" rows="3" aria-label="Luma links, one per line" placeholder="https://lu.ma/your-event&#10;https://luma.com/crypto&#10;https://luma.com/newinterfaces" autocomplete="off" spellcheck="false"></textarea>
       <button class="xp-button" type="submit">Add to the pool</button>
     </form>
 
@@ -655,8 +656,8 @@ async function renderContribute(d, path, uid, msg) {
       <li>Paste it below and save &mdash; your events sync into the pool immediately.</li>
     </ol>
     <form method="POST" action="${PREFIX}/cookies">
-      <input class="xp-field" name="label" maxlength="40" placeholder="Label (e.g. 'aadharsh/personal')" value="${esc(own?.label || "")}" autocomplete="off">
-      <textarea class="xp-field" name="cookies" rows="5" placeholder='[{"name":"luma.auth-session-key","value":"usr-XXX.YYY"}, ...]' autocomplete="off" spellcheck="false"></textarea>
+      <input class="xp-field" name="label" maxlength="40" aria-label="Label for your feed" placeholder="Label (e.g. 'aadharsh/personal')" value="${esc(own?.label || "")}" autocomplete="off">
+      <textarea class="xp-field" name="cookies" rows="5" aria-label="Luma cookies, as exported JSON" placeholder='[{"name":"luma.auth-session-key","value":"usr-XXX.YYY"}, ...]' autocomplete="off" spellcheck="false"></textarea>
       <p class="note" style="margin:0 0 8px">Stored privately, used only to sync your Luma events into the shared pool. Must contain <code>luma.auth-session-key</code>.</p>
       <button class="xp-button primary" type="submit">${own ? "Refresh my events" : "Save &amp; sync"}</button>
     </form>`;
@@ -1641,16 +1642,26 @@ export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
 // self-scan, and it costs no cron trigger, which matters because Workers Free
 // caps an account at five and all five are spent (since 2026-10-14).
 //
+// The dispatch MUST go through the loopback binding (ctx.exports.default, which
+// index.ts hands in), never the global fetch. /serendipity* is a ROUTE, and
+// Cloudflare's docs say a route cannot be the target of a same-zone fetch(): the
+// request skips the Worker and goes to the zone's origin, which this zone does
+// not have. Production measured it: from 2026-10-02 to 10-14 all 55 tag POSTs
+// answered 522 (zone analytics, requestSource edgeWorkerFetch), so no tick ever
+// tagged anything. A loopback call is still one subrequest here and a fresh
+// invocation there. With no loopback the dispatch skips rather than send a
+// request that cannot arrive.
+//
 // The secret rides a header rather than the query string so it stays out of
 // request logs. Failure is reported and never thrown: enrichment is the
 // lower-priority half and must not redden a tick whose sweep succeeded.
 // Declaring what this actually READS rather than `typeof fetch`: the full type
 // drags in `preconnect`, which no caller here implements and no test should
 // have to stub. The narrow shape is also the honest contract.
-type EnrichFetch = (url: string, init?: any) =>
+export type EnrichFetch = (url: string, init?: any) =>
   Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>;
 
-export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
+export async function dispatchEnrich(env, fetchImpl: EnrichFetch | null) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
   // DORMANT ON PURPOSE, owner call 2026-09-30. Production has never had
   // EXA_API_KEY, so every tick lands here and enrichment has produced nothing.
@@ -1660,6 +1671,7 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   // on, set the secret (`bun run wrangler:site versions secret put
   // EXA_API_KEY`), declare it in cloudflare.config.ts, and deploy.
   if (!env.EXA_API_KEY) return { skipped: "EXA_API_KEY not set" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   const limit = enrichBatchLimit(env.ENRICH_CRON_BATCH);
   try {
@@ -1684,9 +1696,10 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
 // own invocation they fit with room to spare. One subrequest here, covered by
 // CRON_BUDGET_HEADROOM. Reported, never thrown, like enrichment: a tick whose
 // sweep succeeded must not go red because tagging could not run.
-export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
+export async function dispatchTag(env, fetchImpl: EnrichFetch | null) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
   if (!env.AI) return { skipped: "no AI binding" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   try {
     const res = await fetchImpl(`${base}/serendipity/tag`, {
@@ -1694,6 +1707,10 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
     });
     if (!res.ok) return { error: `tag ${res.status}` };
     const body = await res.json();
+    // The handler can skip too (tagEvents with no AI binding in ITS env), and a
+    // skip read as four nulls looks like a pass that found nothing to tag.
+    const skipped = asText(body?.skipped);
+    if (skipped) return { skipped };
     // Counts only, for the cron log line. `failed` is keyed by cause, so a
     // missing gateway or a spent allocation reads by its code rather than as zero tags.
     return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
@@ -1956,7 +1973,7 @@ export function syncHealthLine(h: { attempt: SyncRecord | null, lastOk: SyncReco
 // The whole tick runs inside `serendipity.sync` and returns its record. Every
 // early exit sets `halt` instead of returning, so the record and the span are
 // written on each path, and a throw is caught only to be recorded and rethrown.
-export async function cronSerendipity(env) {
+export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null) {
   return span("serendipity.sync", async (s) => {
     const d = db(env);
     const at = new Date().toISOString();
@@ -1998,10 +2015,10 @@ export async function cronSerendipity(env) {
           }
           out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
           // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
-          out.enrich = await dispatchEnrich(env);
+          out.enrich = await dispatchEnrich(env, selfFetch);
           // after descriptions on purpose: an event is only owed a tag once its
           // description has been attempted, so this tick's backfill is taggable now.
-          out.tag = await dispatchTag(env);
+          out.tag = await dispatchTag(env, selfFetch);
           // fetches + budget_exhausted are the two numbers that were missing while the
           // sweep was silently overspending. An exhausted budget is normal on a tick
           // holding a large roster; it is a problem only when it never clears.

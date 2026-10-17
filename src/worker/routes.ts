@@ -69,8 +69,7 @@ type PrefixRoute = {
 };
 
 // ── exact routes ─────────────────────────────────────────────────────────────
-// Order is irrelevant here (a Map lookup), and is kept as the table read before
-// the move so the diff of index.ts stays legible.
+// Order is irrelevant here (a Map lookup).
 export const EXACT_ROUTES = [
   { path: "/favicon.ico", cacheable: true },
 
@@ -107,6 +106,15 @@ export const EXACT_ROUTES = [
   { path: "/garage/dyno", claim: ["/garage/*"] },
   { path: DYNO_PULLS_URL, claim: ["/garage/*"] },
   { path: "/garage/dyno.json", claim: ["/garage/*"] },
+  // The slashed section and module roots, 301 to the slashless canonical. Exact
+  // routes beat the prefix routes below, which would otherwise answer these:
+  // /garage/ and /lwe/ got the asset layer's drop-trailing-slash, which
+  // redirects with a 307 (measured 2026-10-17), and /coffee/ and /serendipity/
+  // got their module's own root as a duplicate 200.
+  { path: "/garage/", claim: ["/garage/*"] },
+  { path: "/lwe/", claim: ["/lwe/*"] },
+  { path: "/coffee/", claim: ["/coffee/*"] },
+  { path: "/serendipity/", claim: ["/serendipity/*"] },
   { path: "/perf", claim: ["/perf*"] },
   { path: "/perf.json", claim: ["/perf*"] },
 
@@ -284,7 +292,7 @@ export const PREFIX_ROUTES = [
     claim: ["/writing/*"],
   },
   {
-    // the section favicons, loaded on 12 pages
+    // the section favicons
     label: "/section-icons/<name>.svg",
     match: (pathname: string) => /^\/section-icons\/[^/]+\.svg$/i.test(pathname),
     probe: "/section-icons/garage.svg",
@@ -328,9 +336,7 @@ export const PREFIX_ROUTES = [
   {
     // A readable twin at ANY depth: /nav.src.js, and /garage/horizon.src.html
     // too, since the pattern spans directories and this row precedes the
-    // sections. Before 2026-10-02 the comment here said the section-level ones
-    // went through serveStaticPage; the regex has always said otherwise, and
-    // both serve the same twin.
+    // sections.
     label: "/<path>.src.<ext>",
     match: (pathname: string) => /^\/(?:[^/]+\/)*[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
     probe: "/nav.src.js",

@@ -106,7 +106,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AV2_BUILD, AV2_BUILD_COMMAND } from "./av2-tone.ts";
 import {
-  AVIF_ARGS, bestCrop, butter, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
+  AVIF_ARGS, avifToPng8, bestCrop, butter, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
 } from "./gen-pixel-peeper.ts";
 
 // The baseline is whatever the format axis ships, so a variant's delta is the
@@ -257,11 +257,8 @@ const AVM: AvifCodec = {
     if (r.status !== 0 || !fs.existsSync(out)) throw new Error(`avifenc-avm qp=${255 - knob} failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
     return fs.statSync(out).size;
   },
-  dec: (file, png) => {
-    const r = spawnSync(AVIFDEC_AVM, ["-d", "8", file, png], { encoding: "utf8" });
-    if (r.status !== 0 || !fs.existsSync(png)) throw new Error(`avifdec (AV2 build) failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
-    return png;
-  },
+  // the exact decode, never `-d 8` (gen-pixel-peeper.ts avifToPng8 says why)
+  dec: (file, png) => avifToPng8(AVIFDEC_AVM, file, png),
 };
 
 /** A named AV2 variant, or an inline one: "a:key=val+key2=val2" appends each

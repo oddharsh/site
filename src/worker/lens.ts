@@ -200,7 +200,6 @@ export const LENS_GLOSSARY = {
     more: "The one piece of the semantic web nearly everybody shipped, because the payoff showed up the same afternoon.",
   },
 
-  // ── the doors ───────────────────────────────────────────────────────────
   openapi: {
     label: "OpenAPI",
     plain: "A written description of a web API: every operation it offers, what each one takes, and what it gives back.",
@@ -232,7 +231,6 @@ export const LENS_GLOSSARY = {
     plain: "A published index of every API a site offers, at a fixed address, so software can find them without being told where to look.",
   },
 
-  // ── identity, permission, cost ──────────────────────────────────────────
   oauth: {
     label: "OAuth",
     plain: "The sign-in handoff where you approve one app to do specific things on your behalf, and can withdraw that later.",
@@ -258,7 +256,6 @@ export const LENS_GLOSSARY = {
     more: "On a typical commercial page that is most of the weight and none of the words.",
   },
 
-  // ── how the page is actually read ───────────────────────────────────────
   "reader-mode": {
     label: "reader mode",
     alt: ["Readability", "extractor"],
@@ -351,25 +348,8 @@ export function glossify(escaped, only?) {
   return out + src.slice(pos);
 }
 
-// Per-IP crawl budgets, one place. These used to be inlined at each call site,
-// which was fine until /mcp grew tools that call the same crawler: sharing one
-// counter is the whole point, because a second unmetered door (30 via
-// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit.
-//
-// `max` is duplicated from cloudflare.config.ts's rate-limit bindings on purpose: it is the
-// number the 429 message quotes, and a message that disagrees with the ceiling
-// is worse than no message. A contract test pins the two together so they cannot
-// drift, which is the only reason duplicating it is safe.
-//
-// A rate limit counts INVOCATIONS; the subrequest cap counts what one invocation
-// spends, and on Workers Free that is 50, KV and Cache API included (gotcha 36).
-// Measured with counting stubs (contract-lens-compare-stays-under-the-
-// subrequest-cap): a cold single scan is 46 (robots gate 3, page 1, doors cache
-// 2, fan-out 29, Markdown negotiation 1, bot views 10), so four redirect hops
-// are all the slack it has. A cold compare was 72 until discoveryBoard let one
-// side run live per invocation; it is 41 now, and 42 when one side is cached.
 // How many bytes of a document lens will PARSE, as distinct from how many it
-// will fetch (2MB, above). See the measured table at the parse phase: the
+// will fetch (2MB, in lensInspectInner). See the measured table at the parse phase: the
 // regex chains run ~32ms/MB, so this constant is the single knob that decides
 // whether a scan fits a CPU ceiling.
 //
@@ -391,22 +371,27 @@ export function lensParseCap(env: { LENS_PARSE_KB?: unknown } | undefined): numb
 // Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
 // (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
 // Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
-// 429. The per-IP ceilings below were written against no such limit — `shot`
-// alone allowed 8/min to a SINGLE visitor, so one person could spend the whole
-// account's minute and the next visitor got a failure that read like a bug.
+// 429. lens-pipeline.ts sizes the per-IP ceilings against it.
 export const BROWSER_FREE_PLAN = { perMinute: 6, perDayMinutes: 10, concurrent: 3 };
 
 // The budgets, the cache helpers and the request pipeline live in
 // lens-pipeline.ts since 2026-10-02, where every lens door runs through one
 // ordered sequence of validate, cache, budget and run. Re-exported here because
 // the contract suite and the auxiliary modules have always read them from this
-// file. `overLensBudget` is gone: its twenty call sites were the copies the
-// pipeline replaced, and the limiter itself is lib/ratelimit.ts's overBudget.
+// file.
+//
+// A rate limit counts INVOCATIONS; the subrequest cap counts what one invocation
+// spends, and on Workers Free that is 50, KV and Cache API included (gotcha 36).
+// Measured with counting stubs (contract-lens-compare-stays-under-the-
+// subrequest-cap): a cold single scan is 46 (robots gate 3, page 1, doors cache
+// 2, fan-out 29, Markdown negotiation 1, bot views 10), so four redirect hops
+// are all the slack it has. A cold compare was 72 until discoveryBoard let one
+// side run live per invocation; it is 41 now, and 42 when one side is cached.
 export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./lens-pipeline.ts";
 
 // ── /lens — "the other web" -----------------------------------------------
-// A URL goes in; what a MACHINE sees comes out, across five lenses: page
-// anatomy (raw HTML, headers, headings, stripped text), structured/semantic
+// A URL goes in; what a MACHINE sees comes out, one lens per question
+// (LENS_TAB_ORDER lists them), among them page anatomy (raw HTML, headers, headings, stripped text), structured/semantic
 // data (JSON-LD, microdata, RDFa, microformats, OG/Twitter), the LLM/AI view
 // (a markdown rendering + crawler directives), the TERMS the site sets for
 // machines (per-bot robots verdicts, Content-Signal, price + enforcement,
@@ -416,7 +401,7 @@ export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./le
 // made honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
 
 // /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
-// six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
+// lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
 // the /lens shell is static when it has no target. A shareable ?url= request is
@@ -731,8 +716,8 @@ async function inspectLensRequest(request, env, ctx) {
 
 // A dated, source-linked exhibit of where the machine web actually stands, so a
 // cold visitor reads every per-URL verdict as a claim about the web, not one
-// site's laziness. Hand-maintained; each fact carries a "checked" date and a
-// source. Update the dates when you refresh the numbers.
+// site's laziness. Hand-maintained; each fact carries a source, and
+// LENS_SOW_MONTH dates the whole set. Update it when you refresh the numbers.
 //
 // One array, two surfaces. `rail` is the always-visible one-liner under the lede
 // (lensStateOfWebRail); the full sourced cards live in the dialog behind its "?"
@@ -916,7 +901,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     route: "/lens",
     width: 980,
     description: lensDescription,
-    // Link unfurls. The card is pre-baked by gen-og-cards.mjs (OG_ONLY=lens):
+    // Link unfurls. The card is pre-baked by tools/photos/gen-og-cards.ts (OG_ONLY=lens):
     // a live scan of stripe.com with the dollar verdict and the 29pt readiness
     // score visible, floated on Bliss like every other card on the site. The
     // scanned ?url= variants share the shell card — a per-scan card would need
@@ -1879,8 +1864,6 @@ export function handleLensShot(request, env, ctx) {
 // and because an image past this size is not being LOOKED at — it is a 40,000px
 // strip of an infinite-scroll page that no pane can usefully render.
 const LENS_BROWSER_SHOT_MAX = 6_000_000;
-// The KV write cap that sat here (20 MB, under KV's own 25) is lens-pipeline.ts's
-// LENS_KV_MAX now, and guards every lens rather than this one.
 
 // The "before" side of an interaction delta, read out of the plain snapshot the
 // Browser pane's auto-run already cached. Deliberately a READ and never a
@@ -2120,8 +2103,8 @@ export function lensFramable(headers) {
   return { framable: true, reason: null };
 }
 
-// The target allowlist moved to lib/crawl.js, beside the host floor it wraps,
-// when `lens-reader/` (a separate Worker) needed the same guard. Re-exported
+// The target allowlist lives in lib/public-fetch.ts, beside the host floor it
+// wraps, so `lens-reader/` (a separate Worker) shares the same guard. Re-exported
 // here because every existing caller and contract test names it on this module.
 export { validateLensTarget };
 
@@ -2291,7 +2274,7 @@ export async function handleLensCompare(request, env, ctx) {
 // below is computed the moment the main fetch and body read finish, and it is a
 // PUBLIC field of /lens/fetch's JSON, so it keeps meaning exactly that. It has
 // never covered the discovery fan-out further down: 28 parallel probes, one of
-// which (`botViews`) is itself 6 fetches. So on an HTML target, `elapsedMs`
+// which (`botViews`) is itself 10 fetches. So on an HTML target, `elapsedMs`
 // routinely describes a fraction of the work the scan actually did, and nothing
 // measured the rest.
 //
@@ -2332,7 +2315,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // runtime has no brotli decoder, so reading those bytes as UTF-8 yields
     // mojibake that renders as a real page full of garbage.
     //
-    // index.js's IDENTITY_BODY is the actual fix and this should never fire. It
+    // dispatch.ts's IDENTITY_BODY is the actual fix and this should never fire. It
     // is here because the failure it guards is SILENT — the bug it was written
     // for shipped mojibake on this site's own front page while every third-party
     // URL looked perfect. Refusing to parse says so; decoding anyway does not.
@@ -2418,25 +2401,17 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // the worst case without changing the common one: the median page is far
     // under this and is unaffected.
     // Overridable per deployment through lensParseCap, so moving lens onto the
-    // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in cloudflare.config.ts.
+    // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in
+    // cloudflare.config.ts.
     //
-    // THE DEFAULT ARM HAS TO BE A REAL BRANCH, and writing it as a `||` fallback
-    // silently pinned every scan to 8 KB from the day this was written. The old
-    // line read `Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`:
-    // with the var unset that is `Math.max(8, 0) * 1024`, or 8192, which is
-    // TRUTHY, so the `|| LENS_PARSE_CAP` arm was unreachable and the 256 KB
-    // constant was dead code. The floor meant to protect a misconfigured override
-    // became the cap for everybody.
-    //
-    // It read as a text bug rather than a truncation bug, which is why it lasted.
-    // 8 KB rarely reaches a page's <body>, so `lensText`'s narrowing match fails
-    // and it falls back to the whole document; the same cut lands mid-<style> or
-    // mid-<script>, so the strip regexes find no closing tag and leave the block
-    // in. The reader then showed CSS and feature-flag JSON as the page's "text":
-    // github.com came out as `{"locale":"en","featureFlags":[...` and this site's
-    // own homepage as its `:root{--font-caption:...` block. Measured against
-    // production 2026-08-09: every target reported parsedBytes 8192, including a
-    // 1.3 MB cloudflare.com and a 572 KB github.com.
+    // THE DEFAULT ARM HAS TO BE A REAL BRANCH. Written as a `||` fallback
+    // (`Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`),
+    // the unset var gives 8192, which is truthy, so the floor meant for a
+    // misconfigured override became the cap for everybody. It read as a text
+    // bug: 8 KB rarely reaches <body> and cuts mid-<style>, so the reader showed
+    // CSS and feature-flag JSON as the page's "text". Measured against production
+    // 2026-08-09: every target reported parsedBytes 8192, including a 1.3 MB
+    // cloudflare.com and a 572 KB github.com.
     const cap = lensParseCap(env);
     const parseable = body.length > cap ? body.slice(0, cap) : body;
     const parseTruncated = parseable.length < body.length;
@@ -2480,7 +2455,6 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
     });
   } else if (isTextual && body) {
-    // non-HTML text (xml/json/txt/markdown): show it raw, no parsing.
     out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
     out.cost = lensCost({ raw: body.length });
@@ -2499,7 +2473,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   // whole reason this is a phase flag and not a filter: a readiness score
   // computed without discovery is not a partial score, it is a WRONG one, and
   // `doors: 0` would read as "this site has no agent doors" when it means
-  // "nobody looked". Same rule as lib/doors.js's shut-versus-unread.
+  // "nobody looked". Same rule as lib/doors.ts's shut-versus-unread.
   out.phases = { page: true, discovery: false, botViews: false };
   if (opts.phases && !opts.phases.includes("discovery")) return out;
 
@@ -2525,8 +2499,8 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
       } catch { return false; }
     })();
-    // THE fan-out: 28 concurrent probes, and `botViews` is 6 fetches on its own,
-    // so a full scan of an HTML target makes on the order of 33 outbound requests
+    // THE fan-out: 28 concurrent probes, and `botViews` is 10 fetches on its own,
+    // so a full scan of an HTML target makes on the order of 37 outbound requests
     // after the one the visitor asked for. None of it was measured before —
     // `out.elapsedMs` was already fixed above. Each probe shows up as an
     // auto-instrumented child fetch under this span, named by its URL, so "which
@@ -2627,8 +2601,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
     });
     out.botViews = botViews;
-    // finalUrl, status and body used to be passed here and were never read:
-    // readiness is judged from the probe RESULTS, each of which carries its own
+    // Readiness is judged from the probe RESULTS, each of which carries its own
     // status and body, rather than from the page that prompted the fan-out.
     out.readiness = lensReadiness({
       headers, robots, sitemap, sitemapDeclared, terms: out.terms,
@@ -2810,7 +2783,7 @@ const discoveryKey = (origin, scope) =>
  *
  * A FOREIGN origin's answers have nothing to do with which version of this
  * Worker is running, so the origin alone is the key and a deploy must not throw
- * that entry away: refilling it means re-asking a stranger 23 questions, which
+ * that entry away: refilling it means re-asking a stranger 26 questions, which
  * is both slow and rude.
  *
  * OUR OWN origin is the opposite case, because every probe against it
@@ -2960,7 +2933,7 @@ export async function originDiscovery(
   // fan-out, which is exactly the previous behaviour.
   // `caches` is a bare global that may be undeclared; referencing it to hand it
   // to a parser would throw ReferenceError, so typeof is the only operator that
-  // can ask. The one class lib/parse.js cannot cover.
+  // can ask. The one class lib/parse.ts cannot cover.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const { scope, cacheable } = discoveryScope(origin, env);
@@ -3207,7 +3180,7 @@ export const FAN_OUT = { postQuantum: false } as const;
 
 // small, forgiving probe for a single site-level file.
 // `accept` is optional and forwards to lensFetch, which has always taken one.
-// lib/doors.js needs it to ask a page for its Markdown twin at the page's own
+// lib/doors.ts needs it to ask a page for its Markdown twin at the page's own
 // URL; every existing caller omits it and gets the previous default.
 export async function lensProbe(url, env, accept?) {
   try {
@@ -3220,7 +3193,7 @@ export async function lensProbe(url, env, accept?) {
       return { ok: false, status: res.status, url, headers };
     }
     const cap = await lensReadCapped(res, 256 * 1024);
-    // `headers` is additive and exists for dict.js, whose whole subject is the
+    // `headers` is additive and exists for dict.ts, whose whole subject is the
     // response headers rather than the body. Flattened to a plain object so the
     // audit can be a pure function of it and therefore testable without a fetch.
     const headers = {};
@@ -3350,7 +3323,7 @@ export function lensText(html) {
 // best-effort, dependency-free HTML→Markdown, roughly what a basic LLM scraper
 // ingests. The high-fidelity read is a deliberate SEPARATE surface rather than a
 // v2 of this one: /lens/read runs Readability in the lens-reader Worker, because
-// a real extractor needs a DOM and linkedom alone is 94.6 KB gzip. This stays
+// a real extractor needs a DOM, ~46 KiB gzip there (lens-reader/src/index.ts). This stays
 // crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
@@ -3419,11 +3392,8 @@ const LENS_BOTS = [
   { ua: "AadharshBot",        owner: "aadhar.sh",    kind: "answers", note: "the bot that fetched this page" },
 ];
 
-// robots.txt → { groups: [{agents, rules, signal}], sitemaps }. Groups follow
-// RFC 9309: consecutive User-agent lines share one group; Content-Signal
-// (contentsignals.org) rides along as a group-level directive.
-// robots.txt parsing + RFC 9309 evaluation moved to lib/robots.js (a second caller,
-// /around, now OBEYS these on the crawl). Imported above for local use here and
+// robots.txt parsing + RFC 9309 evaluation live in lib/robots.ts (a second caller,
+// /around, OBEYS these on the crawl). Imported above for local use here and
 // re-exported so every lens caller and the public export surface stay identical.
 export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
@@ -3946,7 +3916,7 @@ export function lensKeylessDeclaration(openapi): string | null {
 
 // What LENS itself observed on the wire. This is intentionally orthogonal to
 // the standards checklist below: it asks whether an identified machine got a
-// usable answer, whether six named crawler identities got one too, and whether
+// usable answer, whether eight named crawler identities got one too, and whether
 // the site offered a machine door. Cloudflare supplies the standards opinion in
 // the composite; counting this local mirror again would double-weight it.
 // Every field optional, for the same reason lensReadiness's are: each is read

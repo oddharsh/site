@@ -79,8 +79,8 @@
 .exprs .xp-button { font-family: var(--font-mono); }
 .pipes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
 .pipe { border: 1px solid var(--slate-84); border-radius: 4px; background: var(--paper-cool); overflow: hidden; }
-.pipe > h4 { margin: 0; font-family: var(--font-caption); font-size: var(--text-micro); padding: 4px 8px; background: var(--surface-desktop); border-bottom: 1px solid var(--slate-84); color: var(--slate-26); }
-.pipe.bad > h4 { background: var(--red-95); border-color: #e8b4b4; color: #8f2020; }
+.pipe > h2 { margin: 0; font-family: var(--font-caption); font-size: var(--text-micro); padding: 4px 8px; background: var(--surface-desktop); border-bottom: 1px solid var(--slate-84); color: var(--slate-26); }
+.pipe.bad > h2 { background: var(--red-95); border-color: #e8b4b4; color: #8f2020; }
 .pipe .body { padding: 7px 9px; }
 .asm { font-family: var(--font-mono); font-size: var(--text-2xs); color: #37347e; line-height: 1.55; white-space: pre-wrap; }
 .pipe .res { margin-top: 6px; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: bold; }
@@ -98,7 +98,7 @@
 .surf-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
 .surf-stats .card { border: 1px solid var(--slate-84); border-radius: 4px; background: var(--paper-cool); padding: 7px 9px; }
 .surf-stats .card.mine { border-color: #d9a300; background: #fffbea; }
-.surf-stats h5 { margin: 0 0 3px; font-family: var(--font-caption); font-size: var(--text-micro); color: var(--slate-26); }
+.surf-stats h2 { margin: 0 0 3px; font-family: var(--font-caption); font-size: var(--text-micro); color: var(--slate-26); }
 .surf-stats .n { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: bold; color: var(--slate-26); display: block; }
 .surf-stats .sub { font-size: var(--text-3xs); color: var(--slate-54); display: block; margin-top: 3px; }
 .surf-scale { border: 1px solid var(--slate-84); border-radius: 4px; background: #fff; padding: 8px 9px; }
@@ -274,9 +274,9 @@ where
                 <button class="xp-button compact" id="cc-swap" aria-pressed="false">emit cheaper side first</button>
               </div>
               <div class="pipes">
-                <div class="pipe" id="cc-p1"><h4>source meaning &middot; <span class="mono">eval</span></h4>
+                <div class="pipe" id="cc-p1"><h2>source meaning &middot; <span class="mono">eval</span></h2>
                   <div class="body"><div class="asm" id="cc-src"></div><div class="res ok" id="cc-src-r"></div></div></div>
-                <div class="pipe" id="cc-p2"><h4 id="cc-h2">compiled &middot; <span class="mono">run</span></h4>
+                <div class="pipe" id="cc-p2"><h2 id="cc-h2">compiled &middot; <span class="mono">run</span></h2>
                   <div class="body"><div class="asm" id="cc-asm"></div><div class="res" id="cc-asm-r"></div></div></div>
               </div>
               <div class="thm" id="cc-thm"></div>
@@ -378,8 +378,8 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
               <p class="lead">The ten results, as published 1&nbsp;August 2026. Left is what the kernel reads. Right is the <span class="mono">ComparatorChallenges</span> file, which is the statement alone and the only part written for a human. Pick one:</p>
               <div class="surf-pick" id="su-pick"></div>
               <div class="surf-stats">
-                <div class="card"><h5>proof &middot; the kernel's problem</h5><span class="n" id="su-pl"></span><span class="sub" id="su-ps"></span></div>
-                <div class="card mine"><h5>statement &middot; your problem</h5><span class="n" id="su-cl"></span><span class="sub" id="su-cs"></span></div>
+                <div class="card"><h2>proof &middot; the kernel's problem</h2><span class="n" id="su-pl"></span><span class="sub" id="su-ps"></span></div>
+                <div class="card mine"><h2>statement &middot; your problem</h2><span class="n" id="su-cl"></span><span class="sub" id="su-cs"></span></div>
               </div>
               <div class="surf-scale">
                 <div class="surf-row"><span class="lab">proof</span><span class="surf-track"><span class="surf-fill" id="su-bp"></span></span><span class="amt" id="su-ap"></span></div>

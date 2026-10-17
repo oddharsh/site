@@ -1,4 +1,5 @@
-// The gate that lets linkedom be deleted.
+// The parity gate that let src/dom.ts replace linkedom in the shipped Worker.
+// linkedom stays installed as a dev dependency because it is this gate's oracle.
 //
 // src/dom.ts is a DOM fitted to this Worker's workload. "Fitted" is only ever a
 // claim until something holds it to the general implementation it replaces, so
@@ -23,8 +24,8 @@ import { toMarkdown, collectControlLabels } from "../src/reader.ts";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Captured pages are stored Brotli'd, the same trade `src/dict/p-dict` already
- *  makes in this repository: 3.13 MiB of real-world HTML is 384 KiB compressed,
- *  and node:zlib decompresses it with no dependency. Authored repo documents are
+ *  makes in this repository: the 10 captures are 3.69 MiB of real-world HTML
+ *  and 435 KiB compressed (2026-10-17), and node:zlib decompresses it with no dependency. Authored repo documents are
  *  read as-is. */
 const readDoc = (file) => file.endsWith(".br")
   ? brotliDecompressSync(readFileSync(file)).toString("utf8")
@@ -196,7 +197,7 @@ test("the cached element-child view invalidates on every mutation path", () => {
 // Two of the three below are invisible to every gate above, and finding that out
 // is why this test exists. `tagName` is never serialized (serialization reads
 // localName), and Readability only ever compares tagName against HTML names, so
-// a wrong SVG tagName passes 48 documents and two byte-for-byte gates. It was
+// a wrong SVG tagName passes the whole corpus and two byte-for-byte gates. It was
 // wrong: the first version of src/dom.ts kept SVG tagName lowercase on the
 // reasonable guess that SVG is case-sensitive. Reverting the fix still passes
 // the corpus, which makes the corpus decoration for this property.
@@ -217,10 +218,9 @@ test("SVG semantics match the oracle where the corpus is blind", () => {
       svgTagName: svg.tagName,
       pathTagName: path.tagName,
       pathLocalName: path.localName,
-      // Quote-only escaping, which is the branch a stale comment in dom.ts
-      // called an untested gap. It is unreachable: linkedom selects the fuller
-      // XML escape on ownerDocument[MIME].ignoreCase, and an HTML document
-      // answers true for its SVG children too.
+      // Quote-only escaping, because linkedom's fuller XML escape is
+      // unreachable: it selects on ownerDocument[MIME].ignoreCase, and an HTML
+      // document answers true for its SVG children too.
       attr: path.getAttribute("data-q"),
       serialized: svg.outerHTML,
     };

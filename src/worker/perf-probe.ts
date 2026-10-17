@@ -1,6 +1,7 @@
 // Sample the homepage fragment handlers at :07/:37 for a per-version latency
 // series in Analytics Engine. The measurement sees the cron's colo and the
 // handlers' I/O; it does not measure browser load time or synchronous CPU.
+
 import { handlePhotoGrid } from "./home.ts";
 import { rnTracksHtml } from "./rn.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
