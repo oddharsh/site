@@ -808,6 +808,13 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .axp-histnav button:active:not([disabled]) { filter: brightness(.9); }
 .axp-histnav button:focus-visible { outline: 1px dotted #fff; outline-offset: -4px; }
 .axp-histnav button[disabled] { opacity: .45; cursor: default; filter: none; }
+/* The skip link, first in <body> (gen-desktop-partial.ts). Off-screen until Tab
+   reaches it, then an XP infotip in the window's top-left corner. Moved rather
+   than display:none or visibility:hidden, either of which drops it from the tab
+   order. index.html carries a copy in its critical CSS, since luna.css arrives
+   after first paint there. */
+.axp-skip { position: fixed; top: 4px; left: 4px; z-index: 10001; padding: 4px 8px; background: var(--row-hover); color: var(--ink); border: 1px solid var(--ink); box-shadow: var(--shadow-tip); font: 11px/1.45 var(--font-ui); text-decoration: none; transform: translateY(-200%); }
+.axp-skip:focus { transform: none; }
 /* Two cases draw no pair. Without script the buttons would do nothing. And under
    720px, the width at which windows stop resizing (below), a phone's own back
    gesture already does the job while the pair costs 50px of a ~370px caption:

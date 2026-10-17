@@ -444,7 +444,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
         A public pool of events + who&apos;s going.<br>Search by <a href="https://exa.ai" rel="noopener">Exa</a>.<br>Built by <a href="https://x.com/oddhash" rel="noopener">@oddhash</a>.
       </div>
     </nav>
-    <main class="content">${bodyHtml}</main>
+    <main id="main" class="content">${bodyHtml}</main>
   </div>
 </div>${DESKTOP_CHROME}
   <script src="/nav.js" defer></script>

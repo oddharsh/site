@@ -230,9 +230,9 @@ ${unsafeHtml(css || "")}
 ${unsafeHtml(DESKTOP_TOP)}
 <div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
   ${titleBar({ caption: windowTitle, titleClass, histnav, closeHref, closeTitle, closeLabel })}${addressHtml}
-  ${paneHtml}<div class="content${contentClass ? " " + contentClass : ""}">
+  ${paneHtml}<main id="main" class="content${contentClass ? " " + contentClass : ""}">
 ${body}
-  </div>
+  </main>
 </div>
 ${unsafeHtml(DESKTOP_CHROME)}
 ${scriptHtml}
