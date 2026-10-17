@@ -357,8 +357,9 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const { alg: _alg, ...jwk } = await crypto.subtle.exportKey("jwk", pair.privateKey);
 
   const server = createTestHarness({
-    // aadhar-counter boots beside the site: COUNTER binds it since step 3 of
-    // "Moving Counter out", and workerd refuses a binding to an undefined service.
+    // aadhar-counter boots beside the site: COUNTER binds it since the
+    // 2026-09-29 transfer (counter/wrangler.jsonc), and workerd refuses a binding
+    // to an undefined service.
     workers: [
       // SYNC_SECRET gates the serendipity self-dispatches on both ends: the
       // cron only sends one with it set, and the handler checks the header.
