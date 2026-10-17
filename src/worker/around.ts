@@ -540,7 +540,7 @@ export function renderAroundSnapshot(report) {
         <td class="status">${status}</td>
         <td class="title">${titleCol}${desc}</td>
         <td class="latency">${r.elapsedMs}ms</td>
-        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a></td>
+        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${new URL(r.url).host}, in a new tab`)}">↗</a></td>
       </tr>`;
   }).join("");
 
@@ -552,7 +552,7 @@ export function renderAroundSnapshot(report) {
     </div>
     <table class="scout">
       <thead>
-        <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th>↗</th></tr>
+        <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th aria-label="Link">↗</th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`);
