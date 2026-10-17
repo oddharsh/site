@@ -1641,16 +1641,26 @@ export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
 // self-scan, and it costs no cron trigger, which matters because Workers Free
 // caps an account at five and all five are spent (since 2026-10-14).
 //
+// The dispatch MUST go through the loopback binding (ctx.exports.default, which
+// index.ts hands in), never the global fetch. /serendipity* is a ROUTE, and
+// Cloudflare's docs say a route cannot be the target of a same-zone fetch(): the
+// request skips the Worker and goes to the zone's origin, which this zone does
+// not have. Production measured it: from 2026-10-02 to 10-14 all 55 tag POSTs
+// answered 522 (zone analytics, requestSource edgeWorkerFetch), so no tick ever
+// tagged anything. A loopback call is still one subrequest here and a fresh
+// invocation there. With no loopback the dispatch skips rather than send a
+// request that cannot arrive.
+//
 // The secret rides a header rather than the query string so it stays out of
 // request logs. Failure is reported and never thrown: enrichment is the
 // lower-priority half and must not redden a tick whose sweep succeeded.
 // Declaring what this actually READS rather than `typeof fetch`: the full type
 // drags in `preconnect`, which no caller here implements and no test should
 // have to stub. The narrow shape is also the honest contract.
-type EnrichFetch = (url: string, init?: any) =>
+export type EnrichFetch = (url: string, init?: any) =>
   Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>;
 
-export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
+export async function dispatchEnrich(env, fetchImpl: EnrichFetch | null) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
   // DORMANT ON PURPOSE, owner call 2026-09-30. Production has never had
   // EXA_API_KEY, so every tick lands here and enrichment has produced nothing.
@@ -1660,6 +1670,7 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   // on, set the secret (`bun run wrangler:site versions secret put
   // EXA_API_KEY`), declare it in cloudflare.config.ts, and deploy.
   if (!env.EXA_API_KEY) return { skipped: "EXA_API_KEY not set" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   const limit = enrichBatchLimit(env.ENRICH_CRON_BATCH);
   try {
@@ -1684,9 +1695,10 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
 // own invocation they fit with room to spare. One subrequest here, covered by
 // CRON_BUDGET_HEADROOM. Reported, never thrown, like enrichment: a tick whose
 // sweep succeeded must not go red because tagging could not run.
-export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
+export async function dispatchTag(env, fetchImpl: EnrichFetch | null) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
   if (!env.AI) return { skipped: "no AI binding" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   try {
     const res = await fetchImpl(`${base}/serendipity/tag`, {
@@ -1694,6 +1706,10 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
     });
     if (!res.ok) return { error: `tag ${res.status}` };
     const body = await res.json();
+    // The handler can skip too (tagEvents with no AI binding in ITS env), and a
+    // skip read as four nulls looks like a pass that found nothing to tag.
+    const skipped = asText(body?.skipped);
+    if (skipped) return { skipped };
     // Counts only, for the cron log line. `failed` is keyed by cause, so a
     // missing gateway or a spent allocation reads by its code rather than as zero tags.
     return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
@@ -1956,7 +1972,7 @@ export function syncHealthLine(h: { attempt: SyncRecord | null, lastOk: SyncReco
 // The whole tick runs inside `serendipity.sync` and returns its record. Every
 // early exit sets `halt` instead of returning, so the record and the span are
 // written on each path, and a throw is caught only to be recorded and rethrown.
-export async function cronSerendipity(env) {
+export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null) {
   return span("serendipity.sync", async (s) => {
     const d = db(env);
     const at = new Date().toISOString();
@@ -1998,10 +2014,10 @@ export async function cronSerendipity(env) {
           }
           out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
           // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
-          out.enrich = await dispatchEnrich(env);
+          out.enrich = await dispatchEnrich(env, selfFetch);
           // after descriptions on purpose: an event is only owed a tag once its
           // description has been attempted, so this tick's backfill is taggable now.
-          out.tag = await dispatchTag(env);
+          out.tag = await dispatchTag(env, selfFetch);
           // fetches + budget_exhausted are the two numbers that were missing while the
           // sweep was silently overspending. An exhausted budget is normal on a tick
           // holding a large roster; it is a problem only when it never clears.

@@ -186,7 +186,8 @@ export default {
       // descriptions. Four times daily keeps the pool honest AND the stored Luma
       // session warm; without this tick the pool only refreshes on a cookie
       // re-paste. Odd minute, same collision-avoidance as the others.
-      await cron("cron.serendipity", () => cronSerendipity(env));
+      const self = ctx.exports?.default;
+      await cron("cron.serendipity", () => cronSerendipity(env, self ? (url, init) => self.fetch(new Request(url, init)) : null));
     } else {
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
