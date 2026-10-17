@@ -4314,7 +4314,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         string and watch both paths:
       </p>
       <p>
-        <input class="xp-input san-in" id="san-in" type="text"
+        <input class="xp-input san-in" id="san-in" type="text" aria-label="markup to parse"
                value="&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;bold&lt;/b&gt;&lt;script&gt;bad()&lt;/script&gt;">
         <button class="xp-button" id="san-go">Parse both ways</button>
       </p>
@@ -4492,7 +4492,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <button class="xp-button" id="fv-on">Focus target, ring on</button>
         <button class="xp-button" id="fv-off">Focus target, ring off</button>
       </p>
-      <p><input class="xp-input" id="fv-target" type="text" value="focus target"></p>
+      <p><input class="xp-input" id="fv-target" type="text" value="focus target" aria-label="focus target"></p>
       <p class="replaces">
         On the site: <code>nav.js</code> moves focus in two places where this is
         the exact missing control. Opening the Run palette with

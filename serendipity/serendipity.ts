@@ -499,7 +499,7 @@ const DASHBOARD_LEDE = `<h1 class="page">Events</h1>
 // The toolbar hides itself over an empty pool, on the built page (where the
 // island may say the pool is empty) as on the live one.
 const DASHBOARD_TOOLBAR = `<div class="toolbar">
-        <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
+        <input class="xp-field search" id="ev-search" type="search" aria-label="Search events" placeholder="Search events, places, contributors…" autocomplete="off">
         <div class="chips" id="ev-chips">
           <button type="button" class="chip on" data-when="all" aria-pressed="true">All</button>
           <button type="button" class="chip" data-when="week" aria-pressed="false">This week</button>
@@ -620,7 +620,8 @@ async function renderEvent(d, id, path) {
   return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
-async function renderContribute(d, path, uid, msg) {
+// exported for contract-form-fields-have-names.test.mjs
+export async function renderContribute(d, path, uid, msg) {
   // One summary row owns all three numbers this page needs. These used to be
   // three D1 calls (two overlapped, then the connected browser's event count),
   // so the common connected path still paid two binding-latency windows. The
@@ -642,7 +643,7 @@ async function renderContribute(d, path, uid, msg) {
     <div class="grp">Add events by link</div>
     <p class="note" style="margin:0 0 8px">Paste public Luma links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed. A single <b>event</b> comes in whole; a <b>calendar</b> (e.g. <code>luma.com/newinterfaces</code>) or a <b>discovery page</b> (<code>luma.com/crypto</code>, <code>/ai</code>, <code>/nyc</code>) expands into its events, up to ${LIST_CAP} per link. Added events show as &ldquo;browsed&rdquo; until someone going syncs their feed and fills the guest list.</p>
     <form method="POST" action="${PREFIX}/add-event">
-      <textarea class="xp-field" name="links" rows="3" placeholder="https://lu.ma/your-event&#10;https://luma.com/crypto&#10;https://luma.com/newinterfaces" autocomplete="off" spellcheck="false"></textarea>
+      <textarea class="xp-field" name="links" rows="3" aria-label="Luma links, one per line" placeholder="https://lu.ma/your-event&#10;https://luma.com/crypto&#10;https://luma.com/newinterfaces" autocomplete="off" spellcheck="false"></textarea>
       <button class="xp-button" type="submit">Add to the pool</button>
     </form>
 
@@ -655,8 +656,8 @@ async function renderContribute(d, path, uid, msg) {
       <li>Paste it below and save &mdash; your events sync into the pool immediately.</li>
     </ol>
     <form method="POST" action="${PREFIX}/cookies">
-      <input class="xp-field" name="label" maxlength="40" placeholder="Label (e.g. 'aadharsh/personal')" value="${esc(own?.label || "")}" autocomplete="off">
-      <textarea class="xp-field" name="cookies" rows="5" placeholder='[{"name":"luma.auth-session-key","value":"usr-XXX.YYY"}, ...]' autocomplete="off" spellcheck="false"></textarea>
+      <input class="xp-field" name="label" maxlength="40" aria-label="Label for your feed" placeholder="Label (e.g. 'aadharsh/personal')" value="${esc(own?.label || "")}" autocomplete="off">
+      <textarea class="xp-field" name="cookies" rows="5" aria-label="Luma cookies, as exported JSON" placeholder='[{"name":"luma.auth-session-key","value":"usr-XXX.YYY"}, ...]' autocomplete="off" spellcheck="false"></textarea>
       <p class="note" style="margin:0 0 8px">Stored privately, used only to sync your Luma events into the shared pool. Must contain <code>luma.auth-session-key</code>.</p>
       <button class="xp-button primary" type="submit">${own ? "Refresh my events" : "Save &amp; sync"}</button>
     </form>`;
