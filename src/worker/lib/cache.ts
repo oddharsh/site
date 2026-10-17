@@ -2,7 +2,7 @@ import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
 import { CACHEABLE_PREFIXES } from "../routes.ts";
 
-// lib/cache.js: the worker's caching kit, one primitive surface where four
+// lib/cache.ts: the worker's caching kit, one primitive surface where four
 // hand-rolled dialects used to drift apart.
 //
 //   swrKV: a persistent KV value carrying its own freshness stamp in KV
@@ -11,10 +11,10 @@ import { CACHEABLE_PREFIXES } from "../routes.ts";
 //   transient empty rebuild must never wipe a good stale value; two of the four
 //   old copies allowed exactly that.
 //
-//   The stamp rode a second ":fresh" key until 2026-08-27. Metadata travels with
-//   the value on the read that was already happening, so folding it in costs one
-//   KV read per lookup instead of two and one write per rebuild instead of two,
-//   for a number that occupies about 20 of metadata's 1024 bytes.
+//   The stamp lives in metadata (since 2026-08-27; it was a second ":fresh" key
+//   before) because metadata travels with the value on the read that was already
+//   happening: one KV read per lookup instead of two and one write per rebuild
+//   instead of two, for a number that occupies about 20 of metadata's 1024 bytes.
 //
 //   cachedRender: a local caches.default fallback for rendered shells whose bytes
 //   are static-shaped. Production's named CachedPages entrypoint now sits in
@@ -30,12 +30,11 @@ type SwrOptions<T> = {
   cacheTtl?: number;
 };
 
-// A legacy entry carries no metadata, and that reads as STALE on purpose: it
-// serves instantly and rebuilds once behind the response, which is what writes
-// the first stamp. Reading absence as fresh would be the unsafe half of the same
-// guess, since "written seconds ago" and "written before this code shipped" are
-// the same observation from here. The cost is bounded at one background rebuild
-// per key on the first read after the deploy.
+// An entry with no metadata reads as STALE on purpose: it serves instantly and
+// rebuilds once behind the response, which is what writes the first stamp.
+// Reading absence as fresh would be the unsafe half of the same guess, since
+// "written seconds ago" and "written by something that never stamps" are the
+// same observation from here. The cost is one background rebuild per such key.
 function isStampFresh(metadata, ttl) {
   const written = Number(metadata && metadata.t);
   return Number.isFinite(written) && Date.now() - written < ttl * 1000;
@@ -53,11 +52,9 @@ function isStampFresh(metadata, ttl) {
 //     cacheTtl, so a manual `wrangler kv key delete` bust lands late. Callers
 //     that document a bust step keep this short.
 //   - the stamp is part of the value's own entry, so the two cannot be cached
-//     independently and cannot disagree. That retires the ttl + cacheTtl
-//     freshness window this bullet used to describe, where a separately cached
-//     sentinel could outlive or predate the value it spoke for. The stamp is an
-//     absolute time describing exactly the bytes it arrived with, so no colo
-//     reads a value as fresher than ttl. What is left is plain cacheTtl cost: a
+//     independently and cannot disagree. The stamp is an absolute time
+//     describing exactly the bytes it arrived with, so no colo reads a value
+//     as fresher than ttl. What is left is plain cacheTtl cost: a
 //     colo serves a value up to cacheTtl older than central's newest and can
 //     fire an extra background rebuild or two until its own copy refreshes.
 //     Bounded, and it never touches the response.
@@ -138,11 +135,7 @@ export function deadline(promise, ms, fallback, onTimeout) {
 }
 
 // One key to drop, since the freshness stamp is metadata on the value and dies
-// with it. The ":fresh" sentinels this used to delete alongside were every one of
-// them written with `expirationTtl: ttl`, so KV reaps the last of them within one
-// ttl of the deploy that stops writing them (6h, the longest any caller sets),
-// and nothing reads one in the meantime. There is no cleanup pass to run, and a
-// second delete here would only be a write against a key that is already gone.
+// with it.
 export async function deleteSWRKV(env, key) {
   if (!env || !env.RN_KV) return;
   await env.RN_KV.delete(key);
@@ -259,24 +252,19 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 // Which requests the default export may hand to the CachedPages entrypoint, where
 // a hit answers WITHOUT running the dispatcher at all.
 //
-// It lives here, and is exported, because it shipped a production bug on
-// 2026-07-31 that no test could have caught while it was a private function in
-// index.js: `/` joined the set, and `Accept: text/markdown` on the homepage
-// started coming back as HTML. Route logic was never involved. Workers Cache
-// keyed the URL, the HTML response carries `vary: accept-encoding,
-// available-dictionary` and says nothing about `accept`, so the stored HTML
-// answered a request that negotiates a different representation.
+// It lives here, and is exported, so a test can reach it: on 2026-07-31 `/`
+// joined the set and `Accept: text/markdown` on the homepage started coming back
+// as HTML. Workers Cache keyed the URL, the HTML response carries `vary:
+// accept-encoding, available-dictionary` and says nothing about `accept`, so the
+// stored HTML answered a request that negotiates a different representation.
 //
-// The one axis a cache key here cannot see is the one this predicate has to
-// close: a route may answer more than one media type at one URL. Bailing is the
-// right shape rather than adding `accept` to Vary, because browser Accept strings
-// are high-cardinality and varying on them would shard the cache into near-unique
-// entries and cost the hit rate the cache exists for. Markdown requests come from
-// agents, they are rare, and sending them straight to the dispatcher is free.
+// ACCEPT is the first axis a cache key here cannot see: a route may answer more
+// than one media type at one URL. Bailing is the right shape rather than adding
+// `accept` to Vary, because browser Accept strings are high-cardinality and
+// varying on them would shard the cache into near-unique entries and cost the hit
+// rate the cache exists for. Markdown requests come from agents, they are rare,
+// and sending them straight to the dispatcher is free.
 //
-// Verified on production before the fix: `/` returned text/html on a cache HIT and
-// text/markdown with `?cb=` appended, which is the same route bypassing this
-// predicate through the query-string bail below.
 // The HOST is the second axis this key cannot see, and it cost the same bug on a
 // different dimension. Three hostnames reach this Worker and only one of them is
 // the site: `cal.aadhar.sh` 404s every path but /coffee*, and a `*.workers.dev`

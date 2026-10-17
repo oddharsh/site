@@ -1,15 +1,11 @@
-// lib/text.js — the one tokenizer, and the scoring primitives built on it.
+// lib/text.ts — the one tokenizer, and the scoring primitives built on it.
 //
-// Extracted from search.js when queryPhotos needed the same treatment. The site
+// Extracted from search.ts when queryPhotos needed the same treatment. The site
 // search had tokenized and field-weighted since it was written; the photo query
 // never did, and matched `q` as ONE contiguous substring against a haystack of
 // five joined fields. So "classic chrome bridge" could not match a Classic
-// Chrome photo of a bridge — not because the words were missing, but because
-// they were not ADJACENT in the order the join happened to produce.
-//
-// photos.js deliberately imports this rather than search.js: search.js pulls in
-// lib/chrome.js and lib/cache.js to render its page, and the photo query has no
-// business dragging a page renderer into its module graph.
+// Chrome photo of a bridge: the words were all there, just not ADJACENT in the
+// order the join happened to produce.
 
 // No ICU on a request path. Measured in node on 2026-10-07, a cold
 // /ledger/lines.html took 10.8ms against 2.0ms once ICU was warm, and that
@@ -69,8 +65,8 @@ export const STOPWORDS = new Set([
 
 // A deliberately shallow stem: strip a trailing plural "s" and nothing else.
 // Real stemming (Porter, Snowball) would fold "lighting" into "light" and
-// "buildings" into "build", which is right for a large corpus and wrong for 158
-// captions where precision beats recall — an over-eager stem here silently
+// "buildings" into "build", which is right for a large corpus and wrong for a
+// few hundred captions where precision beats recall — an over-eager stem here silently
 // merges distinct subjects and there is no ranking depth to recover from it.
 export function normalize(term) {
   const value = String(term || "").toLowerCase();
@@ -95,7 +91,7 @@ export function queryTerms(query, max = 12) {
 // to match on.
 //
 // A plain substring test looks right and fails on real metadata, in both
-// directions. Measured against this archive's 158 records:
+// directions. Measured when the archive held 158 records:
 //
 //   FALSE HITS — "Color Chrome Effect" is in EVERY Fuji recipe card, so a
 //   substring query for "chrome" touched all 158. Boundary matching keeps that
@@ -212,10 +208,10 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
 // Which (term, field) pairs carry no information, because that field matches
 // the term in most of the corpus.
 //
-// The case that forced this: every Fuji recipe card contains "Exposure
-// Compensation", so a query for "long exposure" matched "exposure" in 151 of
-// 158 recipe cards. Nothing is a long exposure in this archive — the longest
-// shutter is well under a second — yet the query returned the whole archive,
+// The case that forced this, when the archive held 158 photos: every Fuji
+// recipe card contains "Exposure Compensation", so a query for "long exposure"
+// matched "exposure" in 151 of 158 recipe cards. Nothing was a long exposure
+// then (the longest shutter was well under a second), yet the query returned the whole archive,
 // ranked by a term that told you nothing.
 //
 // Deliberately per FIELD rather than per term. Dropping "chrome" outright
@@ -234,7 +230,7 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
 // the archive, so it was ignored" survives being explained. A logarithm does not.
 // Returns BOTH the suppression set and the per-term verdict, because the caller
 // needs the second and must not have to reconstruct it. An earlier version
-// returned only the set and left photos.js to work out which terms had been
+// returned only the set and left photos.ts to work out which terms had been
 // suppressed by re-deriving the key format — which it got wrong (a space where
 // this file writes a NUL), so the ranking silently reported nothing suppressed
 // while suppression was working fine. The encoding is now private to this file.

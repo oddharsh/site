@@ -33,7 +33,7 @@ function years(seconds: number): string {
   return words[n];
 }
 
-// The /bot page's document style, shared by all four. Tokens only.
+// The /bot page's document style, shared by all four.
 const CSS = `/*min*/
   h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: var(--rule); margin-top: 8px; }
@@ -77,7 +77,6 @@ function page({ route, title, description, body }: { route: string; title: strin
   });
 }
 
-// ── /about ───────────────────────────────────────────────────────────────────
 export function renderAboutPage() {
   return page({
     route: "/about",
@@ -138,7 +137,6 @@ export function renderAboutPage() {
   });
 }
 
-// ── /contact ─────────────────────────────────────────────────────────────────
 export function renderContactPage() {
   return page({
     route: "/contact",
@@ -301,8 +299,7 @@ export function renderPrivacyPage() {
   });
 }
 
-// ── /developers ──────────────────────────────────────────────────────────────
-// Generated from the code it documents: the endpoint list and the curl lines
+// /developers is generated from the code it documents: the endpoint list and the curl lines
 // from lib/public-api.ts (the same descriptions /openapi.json is written from),
 // the limits from LENS_BUDGETS and ASK_BUDGET (the budgets the handlers spend),
 // and the error example from missJson, the function that writes a real 404.

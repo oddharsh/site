@@ -69,8 +69,7 @@ type PrefixRoute = {
 };
 
 // ── exact routes ─────────────────────────────────────────────────────────────
-// Order is irrelevant here (a Map lookup), and is kept as the table read before
-// the move so the diff of index.ts stays legible.
+// Order is irrelevant here (a Map lookup).
 export const EXACT_ROUTES = [
   { path: "/favicon.ico", cacheable: true },
 
@@ -284,7 +283,7 @@ export const PREFIX_ROUTES = [
     claim: ["/writing/*"],
   },
   {
-    // the section favicons, loaded on 12 pages
+    // the section favicons
     label: "/section-icons/<name>.svg",
     match: (pathname: string) => /^\/section-icons\/[^/]+\.svg$/i.test(pathname),
     probe: "/section-icons/garage.svg",
@@ -328,9 +327,7 @@ export const PREFIX_ROUTES = [
   {
     // A readable twin at ANY depth: /nav.src.js, and /garage/horizon.src.html
     // too, since the pattern spans directories and this row precedes the
-    // sections. Before 2026-10-02 the comment here said the section-level ones
-    // went through serveStaticPage; the regex has always said otherwise, and
-    // both serve the same twin.
+    // sections.
     label: "/<path>.src.<ext>",
     match: (pathname: string) => /^\/(?:[^/]+\/)*[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
     probe: "/nav.src.js",

@@ -1,19 +1,17 @@
-// shell-assets.js — the URLs of the two critical shell assets (luna.css,
+// shell-assets.ts — the URLs of the two critical shell assets (luna.css,
 // nav.js), emitted as an HTTP `Link: rel=preload` header so Cloudflare Early
 // Hints can replay them as a 103 ahead of the HTML body. A 103 is worth exactly
 // the width of the think-time window it lands in, so it pays on the routes that
 // still compute before their 200 (/lens, the fragment endpoints, any cold isolate).
 //
-// This used to name the HOMEPAGE as where a 103 buys the most, "because it does KV
-// reads before the 200". That stopped being true when build.ts step 1d baked the
-// homepage into a deterministic document and moved every one of those reads onto
-// separate fragments. Measured against production 2026-07-31, `/`'s 103-to-200
-// window is 8.5-18.8 ms, and windows under ~100 ms were already measured not to
-// complete the preload (the CDP note in CLAUDE.md). So the header stays and the
-// homepage-specific claim does not.
+// The homepage is the route where it pays least. build.ts step 1d bakes `/` into
+// a deterministic document with every KV read moved onto separate fragments, and
+// measured against production 2026-07-31, `/`'s 103-to-200 window is 8.5-18.8 ms.
+// Windows under ~100 ms were measured not to complete the preload (how to measure
+// an Early Hint: gotcha 15). The header stays for the routes above.
 //
-// Safe as a cross-request Early Hint, unlike the random homepage photo (which
-// home.js deliberately keeps OFF the Link header): these URLs are identical
+// Safe as a cross-request Early Hint, unlike the random homepage photos (home.ts
+// picks them per request, in a fragment): these URLs are identical
 // for every visitor within a build, so a harvested 103 is never stale — a
 // deploy changes the content hash and CF re-harvests from the first fresh 200.
 //
@@ -26,11 +24,11 @@ export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shel
 // Empty in readable local development: the page dictionary is derived from the
 // final staged HTML, so it does not exist until build.ts runs. The build
 // replaces this marker with its immutable content-addressed URL.
-// The ANNOTATION is load-bearing now that this file is TypeScript. Build step
-// rewrites this line, so at runtime it is a URL; in source it is "", and tsc
-// infers the literal type from that. Every `if (PAGE_DICTIONARY)` then narrows
-// to never, which reads as an unreachable branch and made oxlint reject the
-// interpolation in security.ts. Declaring it `string` says what the build does.
+// The `string` ANNOTATION is load-bearing. The build rewrites this line, so at
+// runtime it is a URL; in source it is "", and tsc infers the literal type from
+// that. Every `if (PAGE_DICTIONARY)` then narrows to never, which reads as an
+// unreachable branch and made the linter reject the interpolation in
+// lib/security.ts. Declaring it `string` says what the build does.
 export const PAGE_DICTIONARY: string = ""; // build:page-dictionary
 
 // The speculation ruleset, as a content-hashed /a/speculation.<hash8>.json that

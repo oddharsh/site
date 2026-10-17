@@ -31,26 +31,26 @@
 // the wrong one. `fault()` is the whole point of the file; the counting is
 // bookkeeping around it.
 //
-// WHY A LIBRARY RATHER THAN THE THIRD LOCAL FIX. Each surface solved its own
-// half and none of them could see the others: serendipity hand-rolled a
-// `{ left, spent }` ledger and a `/too many subrequests/i` regex, rn.ts capped a
-// batch with a constant, and `50` is currently typed out in two files that do
-// not know about each other. What none of them has is the reconciliation below,
+// WHY A LIBRARY RATHER THAN A LOCAL FIX PER SURFACE. Each surface had solved
+// its own half without seeing the others: serendipity hand-rolled a
+// `{ left, spent }` ledger and a `/too many subrequests/i` regex, and rn.ts
+// capped a batch with a constant. None of them had the reconciliation below,
 // which is the only thing here that finds a bug nobody already knew about.
 //
 // WHAT IT CANNOT DO, stated up front because it bounds every number this
 // reports. A WORKER CANNOT READ ITS OWN SUBREQUEST COUNT. The runtime exposes
 // no counter, so this ledger knows only what callers route through it, and an
-// unmetered `fetch()` elsewhere in the invocation is invisible to it. That is
-// not a flaw to fix later; it is the reason `overrun` exists.
+// unmetered `fetch()` elsewhere in the invocation is invisible to it. That limit
+// is permanent, and it is the reason `overrun` exists.
 
+import { asText } from "./parse.ts";
 import type { PublicTransport } from "./public-fetch.ts";
 import type { Span } from "./span-vocabulary.ts";
 
 /**
  * Subrequests allowed per invocation on Workers Free. This account is on Free,
  * measured rather than assumed: the 2026-08-15 covers outage was a 21-track
- * scrape spending ~67 (37 fetches, 15 KV reads, 15 KV writes) against it.
+ * scrape that crossed it.
  *
  * Paid raises this to 1000. The number is deliberately NOT read from a binding
  * or a var, because a Worker cannot ask which plan it is on and a wrong guess
@@ -86,16 +86,7 @@ const SUBREQUEST_LIMIT_PATTERN = /too many subrequests/i;
  * is admitted only because a catch really does receive them.
  */
 export function isSubrequestLimit(error: unknown): boolean {
-  // A `catch` binding is the I/O boundary the no-runtime-typeof rule points at,
-  // and THIS FUNCTION IS THE PARSE it asks for: it takes `unknown` off that
-  // boundary and returns a domain answer every caller branches on instead of
-  // re-testing the shape. There is no earlier place to do it, because the
-  // language hands a catch an untyped value and nothing upstream can promise
-  // what a third-party library threw. Kept narrow deliberately: two known
-  // representations in, boolean out, and anything else is an item fault.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  const thrownString = typeof error === "string" ? error : "";
-  const message = error instanceof Error ? error.message : thrownString;
+  const message = error instanceof Error ? error.message : asText(error) ?? "";
   return SUBREQUEST_LIMIT_PATTERN.test(message);
 }
 
@@ -179,7 +170,8 @@ export interface Budget {
  * `reserve` is held back from the cap and is not optional in spirit: an
  * invocation that spends its last subrequest has none left to write its own
  * result, and both real outages here ended with the write that would have
- * recorded what happened being the call that failed. serendipity reserves 6.
+ * recorded what happened being the call that failed. serendipity reserves 8
+ * (CRON_BUDGET_HEADROOM).
  */
 export function createBudget(
   cap: number,

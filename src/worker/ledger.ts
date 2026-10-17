@@ -1,19 +1,19 @@
-// ledger.js — /ledger, the AI crawl ledger ("accounts receivable"). Every
+// ledger.ts — /ledger, the AI crawl ledger ("accounts receivable"). Every
 // month AI crawlers read this site; nobody pays. This page does the
 // arithmetic anyway: every worker-served crawler hit, counted into Workers
 // Analytics Engine and priced at the same one cent /llms-full.txt charges,
 // rendered as an XP-era invoice that is issued monthly and collected never.
 //
-// Two halves:
-//   COUNTING — matchCrawler() is called from index.js's fetch wrapper; a UA
-//   match writes one data point (bot, owner, kind, path) to the BOT_LEDGER
-//   Analytics Engine dataset. Free tier, non-blocking, guarded — no binding,
-//   no counting. Only worker-owned routes are visible (edge-direct static
-//   assets never wake the worker); the page says so honestly.
-//   READING — through the Analytics SQL binding (ANALYTICS) first, and the SQL
+// Three parts:
+//   COUNTING: countCrawlerHit() is called from dispatch.ts; a UA match
+//   (matchCrawler) writes one data point (bot, owner, kind, path) to the
+//   BOT_LEDGER Analytics Engine dataset. Free tier, non-blocking, guarded: no
+//   binding, no counting. Only worker-owned routes are visible (edge-direct
+//   static assets never wake the worker); the page says so honestly.
+//   READING: through the Analytics SQL binding (ANALYTICS) first, and the SQL
 //   API over HTTPS with ANALYTICS_READ_TOKEN (Account Analytics : Read) when
 //   the binding cannot answer. Neither → "meter not readable yet".
-//   COSTING — one line under the total, read from Cloudflare's Billable Usage
+//   COSTING: one line under the total, read from Cloudflare's Billable Usage
 //   API with BILLING_READ_TOKEN (Billing : Read). It is the only figure on the
 //   page that was ever actually paid, and it is account-level by necessity;
 //   see queryBillableUsage() for why there is no per-bot cost column.
@@ -74,8 +74,6 @@ export function countCrawlerHit(env: Env, request, response, pathname) {
   } catch (_e) { /* the ledger is best-effort; never break a response over it */ }
 }
 
-// ── reading the meter ───────────────────────────────────────────────
-//
 // BOTH READS DECLARE THEIR RETURN UNION RATHER THAN LETTING IT BE INFERRED, and
 // that is a correctness fix rather than documentation. An inferred union built
 // from object literals of different shapes does NOT discriminate: TypeScript
@@ -91,10 +89,7 @@ export function countCrawlerHit(env: Env, request, response, pathname) {
 //   if (r.ok) r.services.length;   // TS18048: 'r.services' is possibly 'undefined'
 //
 // The `if (cost.ok)` branch below reads four fields that only exist on the
-// success arm, and every one of them was unchecked until these types existed.
-// The reads happen to be safe, because the runtime shapes really are disjoint,
-// so nothing here was broken; what was broken is that the compiler could not
-// tell, which is the whole reason a `?` on a degrading secret means anything.
+// success arm, and these types are what let the compiler check them.
 type LedgerRow = { bot: string; owner: string; kind: string; hits: number };
 type LedgerRead =
   | { ok: false; reason: string; binding_fallback?: string }
@@ -168,8 +163,8 @@ async function viaToken(env: Env, dataset: string, build: AnalyticsQuery): Promi
     const j = await r.json<{ data?: AnalyticsRow[] }>().catch(() => null);
     return { ok: true, data: j && Array.isArray(j.data) ? j.data : [], via: "token" };
   } catch (e) {
-    // The reason is served publicly (/ledger.json, /speculation.json), so an
-    // exception's text goes to Workers Logs and the reply says only that it threw.
+    // The reason is served publicly (/ledger.json, /ledger/speculation.json), so
+    // an exception's text goes to Workers Logs and the reply says only that it threw.
     console.error("ledger: analytics read threw", e);
     return { ok: false, reason: "request failed" };
   }
@@ -256,8 +251,7 @@ async function queryBillableUsage(env: Env): Promise<BillableRead> {
       services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), from: ymd(start), to: ymd(end),
     };
   } catch (e) {
-    // The reason is served publicly (/ledger.json, /speculation.json), so an
-    // exception's text goes to Workers Logs and the reply says only that it threw.
+    // Served publicly in /ledger.json's cost block, so the same rule as viaToken.
     console.error("ledger: analytics read threw", e);
     return { ok: false, reason: "request failed" };
   }
@@ -270,7 +264,6 @@ function priced(rows) {
   return { items, totalHits, totalUsd };
 }
 
-// ── /ledger.json — the machine twin ─────────────────────────────────
 /** How a JSON endpoint reports an Analytics Engine read that did not happen.
  *  An unconfigured deployment (a preview, or local dev, with no read token) was
  *  a 200 until 2026-10-13, which a client reading the status took for data;
@@ -304,12 +297,12 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
   }, 200, publicJsonHeaders(200), { pretty: false });
 }
 
-// ── /ledger — the invoice ───────────────────────────────────────────
-// /ledger is a BUILT document since 2026-09-25: build.ts step 5b bakes
-// renderLedgerPage() once, so the invoice paper, the terms and 4 KB of CSS ship
-// as a q11 twin with a dcz delta and an ETag. The part the bookkeeper reads
-// (the line items, the total and the cost line) is the island at LINES_URL,
-// edge-cached behind cachedRender for the five minutes the page used to take.
+// /ledger is a BUILT document since 2026-09-25: build step 5b
+// (tools/bake-worker-pages.ts) bakes renderLedgerPage() once, so the invoice
+// paper, the terms and the CSS ship as a q11 twin with a dcz delta and an ETag.
+// The part the bookkeeper reads (the line items, the total and the cost line)
+// is the island at LINES_URL, edge-cached behind cachedRender for 5 minutes
+// (s-maxage=300).
 export const LINES_URL = LEDGER_LINES_URL;
 
 export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
@@ -359,9 +352,6 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
     tableRows = `<tr><td colspan="5" class="empty">The bookkeeper is unreachable right now (${esc(q.reason)}). The meter keeps counting regardless.</td></tr>`;
   }
 
-  // The counterweight to the total above: one account-level figure, never a
-  // per-bot column, because the billing feed cannot attribute a cent to a
-  // crawler and a modelled split would read as measured next to the real hits.
   let costLine;
   if ("pending" in cost) {
     costLine = `<div class="lg-cost"><span class="lg-cost-sub">${dots}</span></div>`;
@@ -384,7 +374,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
       ${costLine}`);
 }
 
-/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+/** The shell build step 5b bakes. It takes no arguments, so every build agrees. */
 export function renderLedgerPage() {
   const css = `/*min*/
 h1 { font-size:var(--text-lg); margin:0 0 2px; }

@@ -1,7 +1,7 @@
 // What the Worker does with a 404, and the counter that says whether it helped.
 //
 // Measured over three days of zone analytics before this existed (2026-09-28 to
-// 10-01, 34,272 requests, 3,237 of them 404): almost every miss had a
+// 2026-10-01, 34,272 requests, 3,237 of them 404): almost every miss had a
 // deterministic answer, and none of the answers needed a model.
 //
 //   57%  a superseded /a/<name>.<hash8> URL (one crawler asked 1,737 times for
@@ -26,16 +26,15 @@
 // it reads any other failure.
 //
 // The sitemap is the authority for both halves. It is the list this site
-// already publishes of what is real, build.ts invariant #8 holds it to the
+// already publishes of what is real, build.ts's invariants hold it to the
 // surface registry, and its paths carry the site's structure (/garage/*, /lwe/*,
 // /writing/*), which is what "closest" is measured within.
 //
-// Every redirect is a 301 with a one-day cache, the same shape as the legacy
-// /images/ thumbnail redirects. One day rather than a year because the target
-// of a stale hash moves on the next release, and a cached chain is cheap to
-// re-resolve but wrong to pin. Nothing here is aliased to a resource this site
-// does not serve: ai-plugin.json and the rest stay 404, because answering them
-// would advertise a capability that is not here. /openapi.json is a real file
+// Every redirect is a 301 with a one-day cache. One day rather than a year
+// because the target of a stale hash moves on the next release, and a cached
+// chain is cheap to re-resolve but wrong to pin. Nothing here is aliased to a
+// resource this site does not serve: ai-plugin.json and the rest stay 404,
+// because answering them would advertise a capability that is not here. /openapi.json is a real file
 // since 2026-10-13 (it describes the keyless JSON endpoints), so the usual
 // guesses at an OpenAPI path now point at it.
 //
@@ -49,15 +48,14 @@ import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
 import { namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
 
-// ── where to look, on every 404 ──────────────────────────────────────────────
 export const MISS_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
   '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
   '</.well-known/ard.json>; rel="ard"; type="application/json"',
 ].join(", ");
 
-// ── discovery guesses with an honest answer ──────────────────────────────────
-// Each target is a document this site serves in the format the guess implies.
+// Discovery guesses with an honest answer. Each target is a document this site
+// serves in the format the guess implies.
 // /.well-known/mcp, /.well-known/mcp.json and /mcp.json are MCP server-card
 // probes, and the site's card is /.well-known/mcp/server-card.json.
 // /.well-known/ai-catalog.json is ARD's predecessor path for ard.json.
@@ -94,7 +92,6 @@ const TEXT_TOOLS = new Set(AGENT_SURFACES.filter((s) => s.mimeType === "text/pla
 
 const PROBE = /\.(?:php\d?|env|git|ya?ml|cgi|sql|bak|zip|tar|gz|ini|cfg|conf|pem|key|asp|aspx|jsp)\b|\/wp-|\/\.(?:aws|ssh|docker|config|s3cfg|zshrc|bash|anthropic)|%25|\/etc\/|credentials|composer\.json|appsettings|phpinfo|cgi-bin/i;
 
-/** Which kind of miss a path is, for the counter. */
 export function missBucket(path: string): string {
   if (path.startsWith("/a/")) return "stale-asset";
   if (path.startsWith("/i/")) return "stale-photo";
@@ -105,7 +102,6 @@ export function missBucket(path: string): string {
   return "page";
 }
 
-/** Who asked, coarsely: the counter's other dimension. */
 export function callerClass(ua: string | null): string {
   const s = String(ua || "");
   if (!s) return "empty";
@@ -116,7 +112,7 @@ export function callerClass(ua: string | null): string {
   return "other";
 }
 
-// ── the sitemap, read once per isolate ───────────────────────────────────────
+// The sitemap, read once per isolate.
 type AssetsEnv = { ASSETS?: { fetch: (r: Request | string) => Promise<Response> } };
 let _sitemap: string[] | undefined;
 
@@ -158,7 +154,6 @@ function editDistance(a: string, b: string): number {
   return row[b.length];
 }
 
-/** 0..1, one minus the edit distance over the longer string. */
 function likeness(a: string, b: string): number {
   const max = Math.max(a.length, b.length);
   return max ? 1 - editDistance(a.toLowerCase(), b.toLowerCase()) / max : 1;
@@ -182,9 +177,6 @@ export function nearestPages(path: string, pages: readonly string[], limit = 3):
   return { section, pages: scored.slice(0, limit).map((s) => s.p) };
 }
 
-// ── the deterministic redirects ──────────────────────────────────────────────
-
-/** Where a missing path unambiguously points, and by which rule, or null. */
 export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location: string, rule: string } | null> {
   const path = url.pathname;
 
@@ -220,7 +212,6 @@ export async function resolveMiss(url: URL, env: AssetsEnv): Promise<{ location:
   return page ? { location: page, rule: "canonical-page" } : null;
 }
 
-/** The plain-text body an empty 404 gains. */
 export function missBody(path: string, near: { section: string | null, pages: string[] }): string {
   const lines = [`404 Not Found: ${path}`, ""];
   if (near.pages.length) {
@@ -302,7 +293,6 @@ export function missJson(origin: string, path: string, near: { section: string |
   return body;
 }
 
-// ── the hook ─────────────────────────────────────────────────────────────────
 export type MissOutcome = { response: Response, bucket: string, outcome: string };
 
 /** Turn a 404 into a redirect where one URL is meant, and otherwise into a 404

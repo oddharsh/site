@@ -56,14 +56,14 @@ import { handleLlmsFull } from "./x402.ts";
 import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
 import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
-// Hand the runtime's tracer to the one span helper (cal and serendipity use it too). THIS is the only module that
-// may import it: the rest of the worker is also imported by contract-tests.mjs
-// under plain node, which cannot resolve the `cloudflare:` scheme (see
-// lib/trace.js's header). Module-scope, so it completes at isolate init before
-// any handler runs; without it every span is a harmless direct call, which is
-// exactly the behavior the tests and `wrangler dev` get.
+// Hand the runtime's tracer to the one span helper (cal and serendipity use it
+// too). THIS is the only module that may import it: the rest of the worker is
+// also imported by the contract suite outside workerd, which cannot resolve the
+// `cloudflare:` scheme (gotcha 16, and lib/trace.ts's header). Module-scope, so
+// it completes at isolate init before any handler runs; without it every span
+// is a harmless direct call, which is exactly the behavior the tests and
+// `wrangler dev` get.
 installTracing(tracing);
-
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
@@ -90,9 +90,6 @@ export default {
     return serveWorkerRequest(request, env, ctx);
   },
 
-  // cron (cloudflare.config.ts "triggers"): the /around crawl runs on the frequent
-  // schedule so the request path stays a pure KV read and the page is safe to
-  // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
     env = withBotPolicyCache(env);
     // Each arm runs inside a named span. This is the single highest-value place
@@ -100,8 +97,8 @@ export default {
     // Server-Timing header to read, no status code, no visitor to complain. Every
     // one of these jobs is also written to swallow its own failures on purpose
     // (a crawl that cannot reach a neighbor skips it and retries next tick), so
-    // until now a job that had been silently degrading for weeks looked exactly
-    // like a job that was fine. The span is the difference.
+    // without the span a job silently degrading for weeks looks exactly like a
+    // job that is fine.
     //
     // The job is AWAITED, not just waitUntil'd: a scheduled event's generous
     // budget applies to work the handler is still awaiting, while a handler
@@ -133,7 +130,7 @@ export default {
       ctx.waitUntil(p);
       return p;
     };
-    // Dispatch via cronJob() (lib/cron.js): minute+hour signatures, immune to
+    // Dispatch via cronJob() (lib/cron.ts): minute+hour signatures, immune to
     // Cloudflare's cron-expression normalization ("* * 1" can come back
     // "* * MON", and the old exact match sent three straight weekly censuses
     // into the else-branch). Unknown expressions get their own traced event
@@ -143,7 +140,7 @@ export default {
       await cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
       // Same tick, because Workers Free caps an account at five triggers and
       // this needs no schedule of its own: it fills a bounded batch of album
-      // covers per run and converges in a few ticks (rn.js cronEnrichTracks).
+      // covers per run and converges in a few ticks (rn.ts cronEnrichTracks).
       // Caught, so a Spotify wobble cannot cost the probe its measurement, and
       // ordered second for the same reason.
       await cron("cron.rn_enrich", () => cronEnrichTracks(env, ctx)).catch(() => {});
@@ -177,25 +174,22 @@ export default {
       // 05:53 UTC daily: tell the sources this site cites that they were cited.
       // withSelfFetch, not the bare env: this job reads this site's OWN pages, and
       // a plain fetch() to our own hostname from inside the worker is blocked as
-      // recursion (error 1042 — perf-probe.js documents the same limit). It failed
+      // recursion (error 1042 — perf-probe.ts documents the same limit). It failed
       // by returning "", so every page was skipped and the run wrote nothing at
       // all. Measured 2026-08-28: both webmention tables empty since the feature
       // shipped, while /around had run that morning.
       await cron("cron.webmention_send", () => cronSendWebmentions(withSelfFetch(env, ctx)));
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
-      // serendipity pool (serendipity.js cronSerendipity): events, then the
+      // serendipity pool (serendipity.ts cronSerendipity): events, then the
       // next few guest lists plus a bounded historical-roster backfill, then
-      // descriptions. Four times daily
-      // keeps the pool honest AND the stored Luma session warm; without this
-      // tick the pool only refreshed on a cookie re-paste. Odd minute, same
-      // collision-avoidance as the others.
+      // descriptions. Four times daily keeps the pool honest AND the stored Luma
+      // session warm; without this tick the pool only refreshes on a cookie
+      // re-paste. Odd minute, same collision-avoidance as the others.
       await cron("cron.serendipity", () => cronSerendipity(env));
     } else {
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
-    // NOTE: the weekly coffee-booking sweep (0 4 * * 7) is gone — each pending
-    // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.ts).
   },
 };
 
@@ -256,10 +250,9 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
 
   "/mcp": handleSiteMcp,
 
-  // ── the tools ──────────────────────────────────────────────────────────
-  // Top-level, because that is where this site puts utilities: /lens, /photos,
-  // /coffee and /reading all live here, while every content page nests. Each
-  // tool answers HTML to a browser and a frame to everything else, with an
+  // The tools. Top-level, because that is where this site puts utilities: /lens,
+  // /photos, /coffee and /reading all live here, while every content page nests.
+  // Each tool answers HTML to a browser and a frame to everything else, with an
   // explicit .txt representation alongside — the same contract as the .md twins.
   //
   // /terminal, the console page that showed one /mcp exchange, retired on
@@ -286,7 +279,7 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/search.json": handleSearchJson,
 
   // /ask — NLWeb's REST convention, over the same corpus /search reads. It sits
-  // beside search rather than under /terminal because NLWeb specifies the path:
+  // at the top level beside search because NLWeb specifies the path:
   // a client knocks on <origin>/ask and nothing else, so this is one of the few
   // routes here whose SPELLING is load-bearing.
   "/ask": handleAsk,
@@ -301,11 +294,11 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   [LEDGER_LINES_URL]: handleLedgerLines,
   "/ledger.json": handleLedgerJson,
 
-  // the prefetch activation beacon's receiver (speculation.js). A credentialless
+  // the prefetch activation beacon's receiver (speculation.ts). A credentialless
   // HEAD from the browser when a speculated document is actually navigated to.
   "/ledger/prefetch": handlePrefetchActivation,
   // the ledger read back per path: speculations against activations, so the
-  // eager candidates are chosen from what got navigated to (speculation.js).
+  // eager candidates are chosen from what got navigated to (speculation.ts).
   "/ledger/speculation.json": handleSpeculationJson,
 
   "/writing": routeWritingIndex,
@@ -359,9 +352,9 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/images/full/": routePhotosRedirect,
   "/images/manifest.json": routeImagesManifest,
   "/images/metadata.json": routeImagesMetadata,
-  // Three root-level text assets that were edge-compressed at ~q4 until
-  // 2026-08-31, now served from their build-time q11 twin. search-index.json is
-  // the one /search fetches on every query, and the largest of the three.
+  // Root-level text assets, served from their build-time q11 twin. The first
+  // three were edge-compressed at ~q4 until 2026-08-31; search-index.json is the
+  // one /search fetches on every query, and the largest of them.
   "/search-index.json": routeTextTwin,
   "/llms.txt": routeTextTwin,
   "/sitemap.xml": routeTextTwin,
@@ -412,9 +405,10 @@ const { serveWorkerRequest, withSelfFetch } = createDispatch({
   calHost: routeCalHost,
 });
 
-// These two applications remain separate source modules, but the public route
-// boundary is now owned by this Worker. Keeping the delegation here means the
-// app-specific cache, auth, and persistence policies stay local to each module.
+// These two applications (cal and serendipity) remain separate source modules,
+// but the public route boundary is owned by this Worker. Keeping the delegation
+// here means the app-specific cache, auth, and persistence policies stay local
+// to each module.
 //
 // The one exception is the booking page itself. GET /coffee is a BUILT document
 // since 2026-09-30 (build.ts step 5b bakes cal's bookingPage), served here with
@@ -629,9 +623,9 @@ function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
-// /terminal retired 2026-09-16 (the ROUTES comment says why). 410 rather than 404
-// so a bookmark or an old link reads as "removed on purpose" and is told where
-// the thing it wanted now lives. Cached a day: the answer will not change.
+// /terminal retired 2026-09-16 (the comment on its EXACT_HANDLERS rows says
+// why). 410 rather than 404 so a bookmark or an old link reads as "removed on
+// purpose" and is told where the thing it wanted now lives. Cached a day: the answer will not change.
 function routeTerminalGone() {
   return new Response(
     "410 Gone: the /terminal console page retired on 2026-09-16.\n\n"
@@ -661,7 +655,7 @@ function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext,
 // `/lwe/*` rules in _headers and for the same reason: it is the difference between a
 // page that can be its own compression dictionary and one whose offer every browser
 // throws away. The window is also the dictionary's lifetime. See the long note there,
-// and the measured policy table in lib/assets.js.
+// and the measured policy table in lib/assets.ts.
 const GENERATED_PAGE_HEADERS = {
   "cache-control": PAGE_CACHE_CONTROL,
   "link": SHELL_PRELOAD_LINK,
@@ -722,9 +716,6 @@ function routeDyno(request: SiteRequest, env: Env) {
   return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderDynoPage() });
 }
 
-// /ledger and /around are built documents since 2026-09-25, each with its live
-// half as an island (ledger.ts and around.ts say why). The dev fallback is the
-// same as routeDyno's.
 // /lens/census is a built document since 2026-09-25 (census.ts says why). The
 // owner's ?refresh=KEY view renders live and whole, because its banner belongs
 // to the request that asked for the sweep. /inbox is the same shape, and its
@@ -737,6 +728,9 @@ function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   });
 }
 
+// /ledger and /around are built documents since 2026-09-25, each with its live
+// half as an island (ledger.ts and around.ts say why). The dev fallback is the
+// same as routeDyno's.
 function routeLedger(request: SiteRequest, env: Env) {
   return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderLedgerPage() });
 }
@@ -773,16 +767,12 @@ function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext
   });
 }
 
-// /photos and /bot join the generated-page tier, same shape as /writing above: the
-// build emits their HTML (build.ts step 1e), so they earn the q11 twin and the dcz
-// delta tiers that 40 authored pages already had, and the dynamic handler stays as
-// the fallback for a build that somehow shipped without them.
-//
-// Both were build-renderable all along and nothing had noticed: /photos renders from
-// the bundled pool (module memory since the pool moved into the Worker) plus the
-// committed alt.json, and /bot's renderBotPage() takes no arguments at all. At 60KB
-// /photos was the largest page on the site and the largest one still taking
-// Cloudflare's on-the-fly zstd-3 with no twin and no delta.
+// /photos and /bot are in the generated-page tier, same shape as /writing above:
+// the build emits their HTML (build.ts step 1e), so they earn the q11 twin and
+// the dcz delta tiers, and the dynamic handler stays as the fallback for a build
+// that somehow shipped without them. Both are build-renderable because /photos
+// renders from the bundled pool plus the committed alt.json, and /bot's
+// renderBotPage() takes no arguments at all.
 //
 // /photos gets a SHORTER stale window than the rest. The generated policy's 7 days is
 // free for a garage page, which changes when something is written; /photos changes
@@ -873,10 +863,6 @@ function routeImagesMeta(request: SiteRequest, env: Env) {
   });
 }
 
-// legacy thumbnail URLs (/images/<stem>.<ext>[?v=N]) 301 into their content-
-// addressed /i/ twins, so every old link, bookmark, and cached page keeps
-// resolving for at least a year after the hash cutover. Unknown names fall
-// through to the asset layer with the 404 cache-clamp, same as before.
 function routeStaticPage(request: SiteRequest, env: Env) {
   return serveStaticPage(request, env);
 }
@@ -892,6 +878,10 @@ function routeTextTwin(request: SiteRequest, env: Env) {
   return servePrecompressedText(request, env);
 }
 
+// legacy thumbnail URLs (/images/<stem>.<ext>[?v=N]) 301 into their content-
+// addressed /i/ twins, so every old link, bookmark, and cached page keeps
+// resolving for at least a year after the hash cutover. Unknown names fall
+// through to the asset layer with the 404 cache-clamp.
 async function routeImageThumb(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
   const m = url.pathname.match(/^\/images\/([^/]+?)(-400)?\.(avif|jpe?g)$/i);
   if (m) {
@@ -918,19 +908,19 @@ function routeIndexHtml(_request, _env, _ctx, url) {
   return Response.redirect(url.toString(), 301);
 }
 
-// `/` is a static document again. Everything that varied per request left it
-// (see home.js's handlePhotoGrid header for where each piece went), so it takes
-// the same path as /garage and /lwe: a q11 twin, a dcz delta against the page
-// dictionary, and a real validator that answers 304.
+// `/` is a static document. Everything that varied per request left it (home.ts's
+// header says where each piece went), so it takes the same path as /garage and
+// /lwe: a q11 twin, a dcz delta against the page dictionary, and a real validator
+// that answers 304.
 //
-// The policy is now the ordinary generated-page one, and the whole point is that
-// `/` stops being special. It held `private, no-cache, must-revalidate` from the
-// era when the document was SSR'd per request; step 1d bakes that variance out, so
-// the reason the exception existed is gone while the exception's two costs stayed.
+// The policy is the ordinary generated-page one, and the whole point is that `/`
+// is not special. It held `private, no-cache, must-revalidate` until 2026-07-31,
+// from the era when the document was SSR'd per request, and that exception had
+// two costs:
 //
 // COST ONE: no-cache bars reuse without revalidation, which is exactly the
 // permission RFC 9842 requires, so Chromium refuses to keep a dictionary offered
-// under it (measured across eight policies — the table lives in lib/assets.js and
+// under it (measured across eight policies — the table lives in lib/assets.ts and
 // tools/check-dictionary-support.ts). That left `/` as the ONE page outside the
 // per-page dictionary tier, taking the family corpus's 6.3% where every other page
 // gets 93-97%. Measured against production 2026-07-31: 8,780 B plain q11 versus
@@ -942,19 +932,19 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // Small, but paid on every visit including the cold external arrival that is the
 // one navigation nothing can prerender.
 //
-// What the exception was buying, per the note it replaces, was a front door that
-// revalidates every time. `max-age=0` keeps that for the BROWSER: it still
-// revalidates on every navigation and still answers 304 off the ETag. What changes
-// is that a shared cache may now serve the document, and may serve it stale inside
-// the swr window. Priced deliberately: the document is identical for everyone, the
-// per-visit parts (tracks, the random twelve, the visit count) are separate no-store
-// fragments, and a deploy purges the edge, so the stale window in practice is
-// bounded by the next deploy rather than by the header. swr is 604800 because
-// Chromium sizes a registered dictionary's LIFETIME from that window, so shortening
-// it would quietly re-break cost one.
+// What the exception was buying was a front door that revalidates every time.
+// `max-age=0` keeps that for the BROWSER: it still revalidates on every navigation
+// and still answers 304 off the ETag. What changes is that a shared cache may
+// serve the document, and may serve it stale inside the swr window. Priced
+// deliberately: the document is identical for everyone, the per-visit parts
+// (tracks, the random twelve, the visit count) are separate no-store fragments,
+// and a deploy purges the edge, so the stale window in practice is bounded by the
+// next deploy rather than by the header. swr is 604800 because Chromium sizes a
+// registered dictionary's LIFETIME from that window, so shortening it would
+// quietly re-break cost one.
 //
-// The /hit beacon is unaffected — it was already a separate request, and counter.js
-// already declines to count a speculative load.
+// The /hit beacon is unaffected: it is a separate request, and the homepage's
+// inline beacon defers to prerenderingchange on a speculative load.
 // SHELL_PRELOAD_LINK first, then discovery. Cloudflare Early Hints harvests only
 // the rel=preload entries out of this header and replays them as a 103, and
 // without them here `/` was the ONE page on the site not getting that 103.
@@ -963,41 +953,24 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 //   link: </a/luna.*.css>; as=style; rel=preload, </a/nav.*.js>; as=script; rel=preload
 // and `/` answered with the ten discovery links and no preload at all.
 //
-// That is backwards from shell-assets.js's own reasoning, though that reasoning
-// has since expired and the header stays for a different one. The file argues the
-// homepage is where a 103 buys the most, because it "does KV reads before the 200."
-// It no longer does; step 1d moved every one of them off the document. Measured
-// against production 2026-07-31, the 103-to-200 window on `/` is 8.5-18.8 ms, and
-// an earlier measurement (see the CDP note in CLAUDE.md) found windows under ~100 ms
-// do not complete the preload. So the 103 is close to inert HERE and the honest
-// reason to keep emitting the pair is the cold-isolate tail plus the fact that
-// Cloudflare harvests these preloads for the 103 it replays on the routes that DO
-// think. Do not re-derive a homepage win from it.
-//
-// Lost to a refactor rather than to a decision: lib/security.js still exported
-// withHomepageDiscoveryHeaders, which sets precisely this pair, and nothing had
-// imported it since `/` moved to serveStaticPage + these headers. The behaviour
-// was still written down, just disconnected from the route, which is why nothing
-// read as broken. That function is deleted in this commit rather than left as a
-// second place to describe the same header.
+// The 103 is close to inert on `/` itself: its 103-to-200 window is 8.5-18.8 ms,
+// too short to complete the preload (shell-assets.ts has the measurement). The
+// reasons to keep emitting the pair are the cold-isolate tail and that Cloudflare
+// harvests these preloads for the 103 it replays on the routes that DO think. Do
+// not re-derive a homepage win from it.
 const HOMEPAGE_HEADERS = {
   ...GENERATED_PAGE_HEADERS,
   "link": `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`,
 };
 
-// HEAD no longer forks here. It used to answer from homepageHeadResponse, a
-// hand-written header set in home.js, and that duplicate had drifted in the way a
-// duplicate only reached by an unwatched path always does: its markdown branch
-// omitted x-markdown-tokens, which the GET has always sent.
-//
-// The drift also hid, and it is worth knowing why. `/` is in
+// HEAD does not fork here: both methods take the GET's own code, which decides
+// the header set once. A hand-written HEAD header set (the retired
+// homepageHeadResponse) drifted the way a duplicate on an unwatched path does:
+// its markdown branch omitted x-markdown-tokens, which the GET sends. It hid
+// because `/` is in
 // CACHEABLE_PATHS (routes.ts) and the predicate admits HEAD, so a plain HEAD is
-// satisfied from the stored GET entry, carrying the GET's own headers and ETag
-// (verified against production: both returned W/"c4717f10…-br"). Only the
-// MARKDOWN head reached the duplicate, because wantsMarkdown bails the cache —
-// so the one path that ran it was the one nothing else could check.
-//
-// Both branches now take the GET's own code, which decides the header set once.
+// answered from the stored GET entry; only the MARKDOWN head, which bails the
+// cache, ever reached the duplicate.
 function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
   // warm the grid fragment's two memoised maps behind the document (home.ts says why)

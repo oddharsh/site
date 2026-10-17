@@ -1,4 +1,4 @@
-// cache-lint.js — does your cache validator actually work? A BEHAVIORAL probe,
+// cache-lint.ts — does your cache validator actually work? A BEHAVIORAL probe,
 // not a header read.
 //
 // ── the silent failure this catches ───────────────────────────────────────
@@ -16,8 +16,8 @@
 //   fetch #2 (unconditional) -> did the validator CHANGE between identical requests?
 //   fetch #3 (If-None-Match) -> did a 304 actually come back?
 //
-// Three subrequests, near-zero CPU: this runs comfortably inside the free
-// plan's 10ms, which dict.js and lens's parse cap made the house standard.
+// Three subrequests, near-zero CPU: this runs comfortably inside Workers Free's
+// 10ms CPU limit.
 //
 // ── the second trap: negotiation without Vary ─────────────────────────────
 // Hit in production on THIS site (#195): a route answered `Accept: text/markdown`
@@ -44,8 +44,8 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
       ...extraHeaders,
     };
     // This origin dispatches in-process, unsigned. Anything else is signed and
-    // robots-gated per hop, with native fetch's 20-redirect allowance, which
-    // is what signedFetch gave this probe before lib/outbound.ts owned both arms.
+    // robots-gated per hop, with native fetch's 20-redirect allowance
+    // (lib/outbound.ts owns both arms).
     const read = await outboundRead(url, env, {
       method: "GET",
       headers: base,
@@ -66,9 +66,8 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
 
 /**
  * The verdict, as a pure function of the three observations (plus the optional
- * negotiation pair). Pure so the rules are testable without a network — the
- * same argument dict.js and doors.js already made, and the same reason: every
- * external fetch here dies at signing under plain node.
+ * negotiation pair). Pure so the rules are testable without a network
+ * (tools/contract-cache-the-behavioral-revalidation-lint.test.mjs).
  */
 // negotiated is OPTIONAL: it marks a response that varied on Accept, which most
 // callers have no opinion about. The body reads it behind a guard, and the lint's
@@ -84,14 +83,12 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
   const lastMod = first.headers?.["last-modified"];
   const cc = parseCacheControl(first.headers?.["cache-control"]);
 
-  // Is there a validator at all?
   if (!etag1 && !lastMod) {
     add("validator", "veto", "no ETag and no Last-Modified — nothing to revalidate against; every expiry is a full re-download");
   } else {
     add("validator", "ok", etag1 ? `ETag ${etag1.slice(0, 40)}` : `Last-Modified only (${lastMod})`);
   }
 
-  // Does the validator survive two identical requests? THE big one.
   if (etag1 && etag2) {
     if (etag1 === etag2) add("stability", "ok", "identical across two unconditional fetches");
     else add("stability", "veto", `CHANGED between identical requests (${etag1.slice(0, 24)} → ${etag2.slice(0, 24)}) — this ETag can never match, so revalidation is theater`);
@@ -99,7 +96,6 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
     add("stability", "warn", "ETag present on one response and absent on the next — intermittent validators cannot be relied on");
   }
 
-  // Did the conditional request actually 304?
   if (conditional) {
     if (conditional.status === 304) add("revalidation", "ok", "If-None-Match answered 304 — the round trip costs headers, not the body");
     else if (conditional.status === 200 && etag1 === etag2 && etag1) {
@@ -111,7 +107,6 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
     }
   }
 
-  // Weak validators are fine for bytes, fatal for ranges; say which kind this is.
   if (etag1?.startsWith("W/")) add("weak", "warn", "weak ETag — legal for revalidation, but disables If-Range resumption");
 
   // The #195 trap: a second representation from one URL with a Vary that
@@ -119,8 +114,7 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
   if (negotiated) {
     // TOKENS, not substring. "accept-encoding".includes("accept") is true, so a
     // substring test waves through the exact header combination #195 shipped
-    // with. This bug existed in this very function for one commit; the contract
-    // test caught it before it lied to anyone.
+    // with. The contract test above pins that case.
     const varyTokens = (first.headers?.vary || "").toLowerCase().split(",").map((t) => t.trim());
     const variesOnAccept = varyTokens.includes("accept") || varyTokens.includes("*");
     const differs = negotiated.headers?.["content-type"] !== first.headers?.["content-type"];
@@ -133,7 +127,6 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: {
     }
   }
 
-  // Freshness context, so the verdict reads in terms of what actually happens.
   const maxAge = Number(cc.get("max-age"));
   if (cc.has("immutable") && Number.isFinite(maxAge) && maxAge >= 2592000) {
     add("freshness", "ok", "immutable + long max-age — revalidation rarely happens at all, which is the best outcome");
@@ -163,7 +156,6 @@ export async function probeRevalidation(url, env) {
   if (lastMod) conditionalHeaders["if-modified-since"] = lastMod;
   const conditional = (etag || lastMod) ? await probeHeaders(url, env, conditionalHeaders) : null;
 
-  // The negotiation probe only makes sense for HTML documents.
   const isHtml = (first.headers["content-type"] || "").includes("text/html");
   const negotiated = isHtml ? await probeHeaders(url, env, { accept: "text/markdown, text/plain;q=0.9" }) : null;
 

@@ -1,4 +1,4 @@
-// lib/photo-grid.js — the homepage photo grid's markup, in ONE place.
+// lib/photo-grid.ts — the homepage photo grid's markup, in ONE place.
 //
 // Two callers render this, and they must not drift:
 //   - build.ts bakes a DETERMINISTIC twelve into the staged index.html, which
@@ -25,15 +25,6 @@ import { asNumber } from "./parse.ts";
 // again and again as the cursor crossed the grid (13 JPEG image loads for one
 // tile, most from memory cache). Every browser this site targets decodes AVIF,
 // so the canonical browser path is AVIF with no second format behind it.
-//
-// That paragraph used to end "one 400px AVIF URL", and the sentence before it
-// read "the 400px tier is already more than 2x the 184px tile". Both were the
-// format argument doing double duty as a SIZE argument, and the size half was
-// wrong in both directions: 2x the tile is right for a DPR-2 display and 2.3x
-// oversupply for DPR-1, while DPR-3 asks for 552px and was handed 400. The tile
-// now names three SIZES of the one format through srcset, which is a different
-// mechanism from <picture>'s type selection and measurably does not reproduce
-// the re-instantiation above (see the control at the srcset construction below).
 //
 //   deferred: true  — the BAKED twelve. These are a fallback the hydrator is
 //     about to replace, so a real `src` here fetches a thumbnail that is
@@ -175,20 +166,14 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // same day: it is SAFE in inert markup (nothing can instantiate a fallback,
     // and a no-JS AVIF browser would still pick the AVIF source), but it costs
     // 195 bytes a tile against 130 to serve a client that has to be no-JS AND
-    // no-AVIF at once. Kitesurf runs JavaScript, so the engine this whole repair
-    // exists for takes the onerror path in index.html and never reads this
-    // block. Paying every visitor for a hypothetical one is the trade this file
-    // already refuses everywhere else.
-    // 184x184 rather than 600x600. The attributes exist to reserve layout, and
-    // the ratio is what does that, so the old value was harmless and also
-    // described a file that has not been served since the grid moved to the
-    // 400px tier. With srcset it would be actively misleading: the intrinsic
-    // size now depends on which candidate wins, and the tile is always 184.
+    // no-AVIF at once. Kitesurf, the engine that cannot decode AVIF, runs
+    // JavaScript, so it takes index.html's AVIF decode repair and never reads
+    // this block. Paying every visitor for a hypothetical one is the trade this
+    // file already refuses everywhere else.
     //
-    // The noscript twin deliberately keeps ONE url and no srcset. It is inert
-    // text in a scripting browser, and the note above already priced a second
-    // representation there at 195 bytes a tile against 130 to serve a client
-    // that must be no-JS AND no-AVIF at once.
+    // width/height are 184x184 because the attributes exist to reserve layout
+    // and the tile is always 184. With srcset the intrinsic size depends on
+    // which candidate wins, so a file's own dimensions would mislead.
     const noScript = deferred
       ? html`<noscript><img alt="${alt}" width="184" height="184" src="${thumb}" loading="lazy"${pri} decoding="async"></noscript>`
       : EMPTY;

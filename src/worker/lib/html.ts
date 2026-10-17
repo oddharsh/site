@@ -3,13 +3,9 @@
 //
 // THE PROBLEM. Every Worker-rendered page is a template literal, and every
 // interpolation into one is a decision to escape or not that nothing checks.
-// `escHtml` and `escAttr` are correct functions applied by discipline: 84 call
-// sites, and the failure mode of forgetting one is an injection rather than a
-// broken build. Three naive scanners have already been caught by this
-// repository's own minified output (the unquoted-attribute trap, the CSP
-// attribute scanner, the link-integrity quote-awareness bug), which is the same
-// lesson from the reading side: HTML is not a string, and treating it as one is
-// where the bugs live.
+// `escHtml` and `escAttr` are correct functions applied by discipline (104 call
+// sites in src/worker on 2026-10-16), and the failure mode of forgetting one is
+// an injection rather than a broken build.
 //
 // THE SHAPE. `html` is a tagged template that escapes what it interpolates and
 // returns an `Html`. An `Html` may be interpolated into another `html` without
@@ -37,8 +33,7 @@
 // was ONE page: `/garage/hidden-flags`, whose title is "Flags the docs don't
 // list", now renders that apostrophe as `&#39;` in its address bar and Details
 // row. It renders identically in a browser, and these pages are not
-// content-addressed, so nothing downstream keys on the bytes. Every other
-// staged page came out identical, including the injection cases.
+// content-addressed, so nothing downstream keys on the bytes.
 //
 // `'` is in the set even though every attribute in this repository is
 // double-quoted, so it buys nothing today. It is there so that the rule is
@@ -61,7 +56,7 @@ export class Html {
   }
 }
 
-/** What may be interpolated. Arrays flatten, so `)${rows}` works on a list of
+/** What may be interpolated. Arrays flatten, so `${rows}` works on a list of
  *  fragments without a `.join("")` that would stringify each one first. */
 export type Interpolable =
   | Html
@@ -114,22 +109,6 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
   return new Html(out);
 }
 
-/** Mark markup as already-safe, WITHOUT escaping it. Two call forms, one name.
- *
- *      unsafeHtml(someString)      a computed string the caller vouches for
- *      unsafeHtml(`<p>${x}</p>`)     a literal that predates `html`
- *
- *  The TAG form exists for the migration and is the honest description of what
- *  the pre-`html` templates are: literals this repository wrote, whose
- *  interpolations are escaped BY HAND with escHtml/escAttr. Retagging one is a
- *  one-token edit that changes no bytes, which is what makes converting 20
- *  callers a reviewable diff instead of a rewrite of every page at once. It
- *  does NOT escape its interpolations — that is the point, and the reason each
- *  one still owes a real migration to `html`.
- *
- *  ONE NAME ON PURPOSE, so the ratchet in
- *  contract-html-escapes-by-construction counts one thing and cannot be routed
- *  around by adding a second door. */
 /** Mark markup as already-safe, WITHOUT escaping it.
  *
  *  Every use is a claim that the string is either a literal this repository
@@ -154,7 +133,8 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
  *  thing.
  *
  *  The count is the ledger: config/unsafe-html-baseline.json, checked by
- *  contract-html-escapes-by-construction, may only go down. */
+ *  contract-html-escapes-by-construction, may only go down. One name on purpose,
+ *  so the ratchet counts one thing and cannot be routed around by a second door. */
 export function unsafeHtml(value: string): Html {
   return new Html(value);
 }

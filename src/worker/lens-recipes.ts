@@ -1,4 +1,4 @@
-// lens-recipes.js — the fixed, published set of things /lens will do to a page
+// lens-recipes.ts — the fixed, published set of things /lens will do to a page
 // before it looks at it, and the plumbing that keeps the page from lying about
 // what happened.
 //
@@ -62,7 +62,7 @@
 //   <script type="application/lens-receipt" id="lens-recipe-receipt">{…}</script>
 //
 // A <script> with a non-JS type never executes and never renders. More usefully,
-// `documentTally()`'s `stripped()` in lens-render.js already deletes <script>
+// `documentTally()`'s `stripped()` in lens-render.ts already deletes <script>
 // bodies before it counts words, so the receipt CANNOT inflate the word delta
 // by construction rather than by convention. That property is the reason to
 // pick this node over a <div> or a data- attribute on <html>.

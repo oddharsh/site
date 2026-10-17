@@ -1,9 +1,7 @@
-// lib/security.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-// security headers applied to every worker-generated response. mirrors
-// what's set on static assets via _headers — without this wrapper, the
-// worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
-// would skip _headers entirely and ship without CSP / Permissions-Policy.
+// lib/security.ts — security headers applied to every worker-generated
+// response. mirrors what's set on static assets via _headers: without this
+// wrapper, the worker-rendered pages (/whoareyou, /around, /bot, /rn/admin,
+// etc.) would skip _headers entirely and ship without CSP / Permissions-Policy.
 import { PAGE_DICTIONARY, SPECULATION_RULES } from "./shell-assets.ts";
 import { scriptHashesFor } from "./csp-hashes.ts";
 import { CSP_LOOSE, cspHashed } from "./csp-policy.ts";
@@ -21,7 +19,7 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // exactly one host. An allowance nothing uses is a standing permission to
 // hotlink again by accident, so it leaves with the last request that needed it.
 //
-// This is enforced, not just asserted: rn.js emits NO image attribute for art it
+// The renderer enforces it: rn.ts emits NO image attribute for art it
 // cannot re-host, precisely so a cover this policy would block renders as the
 // tooltip's text card instead of a broken frame. The two changes are one change.
 //
@@ -37,7 +35,7 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // precompresses every staged document into brotli q11 twins plus dcz deltas, served
 // `encodeBody: "manual"`, and the runtime ships no brotli encoder to recompress with
 // (docs/GOTCHAS.md gotcha 14). You cannot write a per-request nonce into bytes you already
-// compressed at build time, so for these 43 documents a nonce would mean giving up
+// compressed at build time, so for these documents a nonce would mean giving up
 // precompression on the render-blocking path to buy a marginally tidier policy.
 // Hashes are computed from those same final bytes and cost nothing at request time.
 //
@@ -58,9 +56,9 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // lunaPage hashes its own inline scripts at render time (lib/inline-csp.ts) and
 // sends that policy with the bytes, which withSecurityHeaders below keeps because
 // it is not the loose stamp. What still reaches this fallback is a page that does
-// not come through lunaPage, one that fell open, and readable local dev. An EMPTY hash list is not that, and is the best case: a
-// document with no inline script at all earns a bare `script-src 'self'`, the
-// strictest this policy can be.
+// not come through lunaPage, one that fell open, and readable local dev. An EMPTY
+// hash list is not that, and is the best case: a document with no inline script
+// at all earns a bare `script-src 'self'`, the strictest this policy can be.
 export function cspHeadersFor(pathname) {
   const hashes = scriptHashesFor(pathname);
   return { "content-security-policy": hashes ? cspHashed(hashes) : CSP_LOOSE };
@@ -99,25 +97,15 @@ const HOMEPAGE_DISCOVERY_LINKS = [
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 
-// (HOMEPAGE_LINK and withHomepageDiscoveryHeaders lived here and composed
-// SHELL_PRELOAD_LINK ahead of the discovery links. Nothing imported them once
-// `/` moved to serveStaticPage + HOMEPAGE_HEADERS, and the homepage quietly
-// stopped emitting any rel=preload — so it stopped getting an Early Hints 103,
-// on the one page shell-assets.js says a 103 buys the most. index.js composes
-// that header at the route now, where the route can be seen using it.)
-
-// `pathname` is optional and only used to name this document in the prefetch
-// activation beacon. Callers that don't have one (the /lens self-fetch, which is
-// an internal scan and not a navigable document) simply omit it and get no
-// beacon header, which is the correct answer for a response no browser navigates to.
-// `opts.noindex` marks the whole response as unindexable. Set by the dispatcher
-// for Workers preview URLs, which serve a byte-identical copy of the site from a
-// *.workers.dev host (lib/preview.js explains why that must never be indexed).
-// pathname and opts are OPTIONAL, which describes what the body already did
-// rather than loosening anything: opts is read as `opts && opts.noindex`, and an
-// absent pathname falls through cspHeadersFor to CSP_LOOSE and skips the
-// prefetch-activation header. index.ts's self-fetch wrapper has always called it
-// with the response alone.
+// `pathname` is optional and only used to pick this document's hashed CSP and
+// name it in the prefetch activation beacon. Callers that don't have one (the
+// /lens self-fetch, which is an internal scan and not a navigable document)
+// simply omit it and get CSP_LOOSE and no beacon header, which is the correct
+// answer for a response no browser navigates to.
+// `opts.noindex` marks the whole response as unindexable. The dispatcher sets it
+// on every hostname that is not the canonical site, Workers preview URLs among
+// them: those serve a byte-identical copy of the site from a *.workers.dev host
+// (lib/preview.ts explains why that must never be indexed).
 export function withSecurityHeaders(response, pathname?, opts?) {
   const noindex = !!(opts && opts.noindex);
 
@@ -150,28 +138,22 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   }
   // Per-document script-src, for the staged documents the build could hash. Only
   // HTML gets it: a CSP on a JSON or text response is inert, and spending header
-  // bytes there would be pure waste on a site that counts them. Anything already
-  // carrying its own policy (lens.js sets one for the framed view) is left alone.
+  // bytes there would be pure waste on a site that counts them.
   if (ct.startsWith("text/html")) {
-    // A route that composed its OWN policy keeps it (lens.js does, for the framed
-    // view). The generic stamp is not that. Every staged document arrives from the
-    // ASSETS binding with `_headers`' copy of CSP_LOOSE already on it, so a bare
-    // `.has()` bail treats the asset layer's default as a deliberate choice and
-    // skips the hashed policy for exactly the 48 documents the hashes were built
-    // for. That is invisible: the loose policy still ships, the page still works,
-    // and nothing reports. It hid here through the whole report-only era because
-    // the twin lands on a DIFFERENT header name, so the reporting half looked
-    // perfect while the enforcing half was never applied at all. Compare against
-    // the known stamp instead, which distinguishes "no opinion" from "an opinion".
-    // A plain set rather than a loop over the returned entries. That loop existed
-    // to carry a second header (the report-only twin) past this bail, and
-    // cspHeadersFor has returned exactly one header since the rollout flag went.
+    // A route that composed its OWN policy keeps it (lens.ts does, for the framed
+    // view; so does lunaPage). The generic stamp is not that. Every staged document
+    // arrives from the ASSETS binding with `_headers`' copy of CSP_LOOSE already on
+    // it, so a bare `.has()` bail treats the asset layer's default as a deliberate
+    // choice and skips the hashed policy for exactly the documents the hashes were
+    // built for. That is invisible: the loose policy still ships, the page still
+    // works, and nothing reports. Compare against the known stamp instead, which
+    // distinguishes "no opinion" from "an opinion".
     const stamped = headers.get("content-security-policy");
     const bespoke = stamped !== null && stamped !== CSP_LOOSE;
     if (!bespoke) headers.set("content-security-policy", cspHeadersFor(pathname)["content-security-policy"]);
   }
   // Tell the browser where to report that a speculated copy of THIS document
-  // was actually used for a navigation. See speculation.js for why the server
+  // was actually used for a navigation. See speculation.ts for why the server
   // has to be the one counting, and for the origin-trial caveat that keeps this
   // header inert (and harmless: an unknown response header is ignored) until
   // Chrome enables the feature for this origin.

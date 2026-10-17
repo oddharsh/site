@@ -1,5 +1,6 @@
-// reading.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// reading.ts: /reading, the links I save on Curius, fetched as AadharshBot,
+// cached in KV, and listed with their Hacker News threads.
+
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/cache.ts";
@@ -12,21 +13,14 @@ import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
 
-// ── /reading — a native, Luna-styled mirror of my Curius reading list ──
-// Curius (the social reading-list app) exposes a clean JSON API per user. We
-// pull it through AadharshBot (the same signed, identified crawler the rest of
-// the site uses), normalize it down to what we render, and KV-cache the result
-// so a page load costs zero Curius hits. The canonical list still lives at
-// curius.app; this is the on-site, view-source-able copy.
 export const CURIUS_USER_ID = 5766;
 
 export const CURIUS_HANDLE   = "aadharsh-pannirselvam";
 
 export const CURIUS_CACHE_KEY = "curius:links";
 
-export const CURIUS_TTL = 21600;
+export const CURIUS_TTL = 21600; // 6h: the list moves a few times a day at most
 
-   // 6h — the list moves a few times a day at most
 export async function fetchCuriusLinks(env) {
   const out = [];
   const PER = 30, MAX_PAGES = 8;   // 30/page; cap the crawl so a runaway can't loop
@@ -91,11 +85,10 @@ export async function getCuriusCached(request, env, ctx) {
   // no cached value at all — true first run or right after a bust — builds inline.
   // non-empty guard: a transient Curius failure must not blank a good stale list.
   //
-  // cacheTtl 900: this was the one swrKV caller passing none, while both siblings
-  // (rn 1800, dyno 300) pass one, and no argument was recorded for the difference.
-  // 900 adds 15 minutes to a list that already refreshes every 6 hours, so 4% on
-  // its own window. It has to clear 300 to do anything, because handleReading sits
-  // behind cachedRender at max-age=300 and this read only runs on an edge miss. The
+  // cacheTtl 900, beside rn's 1800 and dyno's 300: it adds 15 minutes to a list
+  // that already refreshes every 6 hours, so 4% on its own window. It has to
+  // clear 300 to do anything, because handleReadingList sits behind cachedRender
+  // at max-age=300 and this read only runs on an edge miss. The
   // bust is unaffected for whoever runs it: ?bust= deletes both keys and rebuilds
   // inline in the same request, and evicts that colo's edge entry too.
   return swrKV(env, ctx, CURIUS_CACHE_KEY, CURIUS_TTL, () => buildCuriusPayload(env), {
@@ -122,8 +115,8 @@ export const LIST_URL = READING_LIST_URL;
 const LIST_CACHE = "public, max-age=300";
 
 // A screenful of rows for the placeholder, and the placeholder model the SAME
-// renderer draws them from (lib/island.ts, rule 1). The live list is ~150 rows
-// and does not need to match: nothing visible follows the island.
+// renderer draws them from (lib/island.ts, rule 1). The live list runs far
+// longer and does not need to match: nothing visible follows the island.
 const PENDING_ROWS = 6;
 const PENDING_MODEL = {
   pending: true,
@@ -140,7 +133,7 @@ async function readReadingList(request, env, ctx): Promise<{ response: Response;
   const [payload, hn] = await Promise.all([
     getCuriusCached(request, env, ctx).catch(() => ({ items: [], fetchedAt: new Date().toISOString() })),
     // Promise.resolve, because with no store bound the ternary is a bare null
-    // and `.then` on it threw; the per-request page carried the same bug.
+    // and `.then` on it threw.
     Promise.resolve(env?.RN_KV ? env.RN_KV.get(HN_MAP_KEY, { type: "json", cacheTtl: 900 }) : null).then(readHnMap, () => ({})),
   ]);
   const ok = Array.isArray(payload?.items) && payload.items.length > 0;
