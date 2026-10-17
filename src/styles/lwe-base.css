@@ -44,11 +44,13 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
 .compose .box { display: flex; gap: 7px; }
 
 /* ── per-concept chrome ─────────────────────────────────────────────────────
- * Every page sets --glyph, --accent, --pic-g0/--pic-g1, --pic-border and
- * --name-color on :root. The rest have defaults, which are the generator's
- * cream Messenger look (pipelines/lwe/generate.mjs), so a generated page sets
- * only what its concept owns and a hand-written page overrides the handful of
- * colors it chose differently. */
+ * Every conversation page sets --glyph, --accent, --pic-g0/--pic-g1,
+ * --pic-border and --name-color on :root; the /lwe/ index draws only the
+ * title-bar icon, so it sets just the glyph and the icon colors. The rest have
+ * defaults, which are the generator's cream Messenger look
+ * (pipelines/lwe/generate.mjs), so a generated page sets only what its concept
+ * owns and a hand-written page overrides the handful of colors it chose
+ * differently. */
 .title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: var(--icon-bg, #fff); border: 1px solid var(--icon-border, var(--pic-border)); }
 .title-bar .icon::before { content: var(--glyph); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--icon-glyph-size, 10px); color: var(--icon-ink, var(--accent)); font-weight: bold; text-shadow: none; }
 .msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, var(--head-g0, #fffdf6), var(--head-g1, #f6edd6)); border-bottom: 1px solid var(--head-rule, #e0cf9e); }
