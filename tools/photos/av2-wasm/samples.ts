@@ -21,7 +21,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AV2_BUILD } from "../av2-tone.ts";
+import { AV2_TUNED_BUILD } from "../av2-tone.ts";
 
 const HERE = import.meta.dir;
 const REPO = path.resolve(HERE, "../../..");
@@ -30,13 +30,18 @@ const arg = (name: string): string | undefined => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
 };
-const BUILD = path.resolve(arg("build") ?? AV2_BUILD);
+const BUILD = path.resolve(arg("build") ?? AV2_TUNED_BUILD);
 const ZENC = path.resolve(arg("zenc") ?? path.join(HERE, "../zenc/target/release/zenc"));
 const OUT = path.join(REPO, "public/garage/av2");
 const WORK = fs.mkdtempSync(path.join(os.tmpdir(), "av2-samples-"));
-// av2-tile-probe.ts's base AV2 arm, with zenc's ignore flags so neither codec
-// reads metadata the other doesn't
+// av2-tile-probe.ts's tcqtxqm arm: speed 6, per-segment QM at level 12, and
+// tool-unlock=6, which turns back on TCQ and the IST/CCTX transform search that
+// speed 6 switches off (+0.99 s2 over plain speed 6, tier-weighted, on 20
+// held-out tiles, 2026-10-16). qmseg and tool-unlock are av2-tone encoder
+// patches, so this runs the tuned build. zenc's ignore flags keep either codec
+// from reading metadata the other doesn't.
 const AVM = ["-c", "avm", "-d", "10", "--speed", "6", "-a", "sb-size=128", "--jobs", "4",
+  "-a", "enable-qm=1", "-a", "qm-curve=1", "-a", "qmseg=1", "-a", "qmseg-level=12", "-a", "tool-unlock=6",
   "--ignore-icc", "--ignore-exif", "--ignore-xmp"];
 const SOURCES = [".HIF", ".JPG", ".jpg"];
 
