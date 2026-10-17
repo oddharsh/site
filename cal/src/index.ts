@@ -45,7 +45,7 @@ import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
          locationPage, locationSavedPage,
          reschedulePage, rescheduledPage,
          cancelPage, cancelledPage,
-         errorPage }                       from "./templates.ts";
+         errorPage, type BookingAnswers }   from "./templates.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
 import { ISLAND_CSP, ISLAND_MARKER }    from "../../src/worker/lib/island.ts";
 
@@ -193,13 +193,21 @@ async function route_book(req, env, ctx) {
   const area  = (payload.area  || "").toString().trim().slice(0, 120);
   const start = parseInt(payload.start, 10);
 
-  if (!name || !email || !topic || !Number.isFinite(start)) {
-    return new Response(errorPage("missing one of: name / email / topic / slot.", env),
-                        { status: 400, headers: htmlHeaders() });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return new Response(errorPage("that email doesn't look right.", env),
-                        { status: 400, headers: htmlHeaders() });
+  // A refusal re-renders the booking page with everything typed still in it
+  // and a message on each field at fault, rather than an error page whose
+  // retry link reloaded an empty form. The slots render inline, as on /pick,
+  // so the posted one can come back checked and the page works without script.
+  const values = { name, email, area, topic, start: Number.isFinite(start) ? start : undefined };
+  const refuse = (status, errors, slots) =>
+    new Response(bookingPage(env, { slots, answers: { values, errors } }), { status, headers: htmlHeaders() });
+  const errors: BookingAnswers["errors"] = {};
+  if (!Number.isFinite(start)) errors.start = "pick one of the open slots above.";
+  if (!name) errors.name = "add the name that should go on the invite.";
+  if (!email) errors.email = "add an email, so the invite has somewhere to land.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "that email doesn't look right. it needs a name, an @ and a domain.";
+  if (!topic) errors.topic = "add a sentence or two. this is what i read before saying yes.";
+  if (Object.keys(errors).length) {
+    return refuse(400, errors, (await listOpenSlots(env, ctx, null, { allowStale: true })).slots);
   }
 
   // verify the slot is still open RIGHT NOW (race window) against a calendar we
@@ -212,8 +220,7 @@ async function route_book(req, env, ctx) {
   }
   const slot = slots.find(s => s.start === start);
   if (!slot) {
-    return new Response(errorPage("that slot was taken or expired. pick another.", env),
-                        { status: 409, headers: htmlHeaders() });
+    return refuse(409, { start: "that slot was taken or expired. pick another one." }, slots);
   }
 
   // honeypot: if the hidden 'website' field is filled, silently accept-and-drop.

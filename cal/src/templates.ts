@@ -313,6 +313,12 @@ form.book textarea:focus {
     inset -1px -1px 0 oklch(100% 0 0),
     0 0 0 1px var(--blue-95);
 }
+/* A refused field: the sunken box keeps its bevel and takes a red edge, and
+   its message sits under it in the input's column (the last one, so it also
+   lands right when the row collapses to one column on a phone). */
+form.book [aria-invalid="true"] { border-color: var(--red-50); }
+.field-error { grid-column: -2 / -1; margin: 0; font-size: var(--text-ui); color: var(--red-50); }
+.xp-group > .field-error { margin-top: 6px; }
 form.book .honeypot {
   position: absolute; left: -9999px; visibility: hidden;
 }
@@ -511,7 +517,7 @@ export function slotLabels(tz: string | undefined) {
   return l;
 }
 
-type SlotModel = { pending: true } | { slots: { start: number, end: number }[] };
+type SlotModel = { pending: true } | { slots: { start: number, end: number }[], picked?: number, invalid?: boolean };
 
 /** The slot listing, live or placeholder. The island body, and the inline list
  *  on the no-script page. */
@@ -532,13 +538,19 @@ export function renderSlotList(model: SlotModel, env) {
   if (Object.keys(groups).length === 0) {
     return `<p class="empty">no open slots in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. try again next week, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
   }
+  // A refused slot puts focus on the first radio, the way autofocus lands on
+  // the first refused field in the form.
+  let focus = "invalid" in model && model.invalid;
   return Object.entries(groups).map(([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
         <ul class="slots">${list.map(s => {
           const t = labels.time.format(s.start);
           // `required` on the group is what the browser checks on submit; the
           // aria-label names the day too, since the visible label is only the time.
-          return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"><span>${esc(t)}</span></label></li>`;
+          const picked = "picked" in model && model.picked === s.start ? " checked" : "";
+          const invalid = "invalid" in model && model.invalid ? ` aria-invalid="true" aria-describedby="start-error"${focus ? " autofocus" : ""}` : "";
+          focus = false;
+          return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"${picked}${invalid}><span>${esc(t)}</span></label></li>`;
         }).join("")}</ul>`).join("");
 }
 
@@ -549,15 +561,35 @@ export function slotsFragment(slots, env) {
 
 /** The booking page. With no slots it is the shell build.ts bakes, the slot
  *  list an island; with slots (the no-script page) they render inline. */
-export function bookingPage(env, opts: { slots?: { start: number, end: number }[] } = {}) {
+/** What a refused POST /book sends back: the fields as typed, and a message
+ *  for each one that stopped it. `start` is the slot. */
+export type BookingAnswers = {
+  values: { name?: string, email?: string, area?: string, topic?: string, start?: number },
+  errors: Partial<Record<"name" | "email" | "topic" | "start", string>>,
+};
+const FIELD_ORDER = ["start", "name", "email", "topic"] as const;
+
+export function bookingPage(env, opts: { slots?: { start: number, end: number }[], answers?: BookingAnswers } = {}) {
   const base = env.BASE_PATH || "";
   const slotsUrl = `${base}${SLOTS_PATH}`;
   const pickUrl = `${base}${PICK_PATH}`;
   const slots = Array.isArray(opts.slots) ? opts.slots : null;
   const inline = slots !== null;
+  // A refused request comes back as this same page with what was typed still
+  // in it, and each field at fault marked invalid and pointed at its message.
+  // It used to be a separate error page whose "try again" link reloaded an
+  // empty form, so a slip in the email cost the whole topic paragraph.
+  const values = opts.answers?.values ?? {};
+  const errors = opts.answers?.errors ?? {};
+  const first = FIELD_ORDER.find((k) => errors[k]);
+  const invalid = (key: keyof BookingAnswers["errors"]) =>
+    errors[key] ? ` aria-invalid="true" aria-describedby="${key}-error"${first === key ? " autofocus" : ""}` : "";
+  const message = (key: keyof BookingAnswers["errors"]) =>
+    errors[key] ? `<p class="field-error" id="${key}-error">${esc(errors[key])}</p>` : "";
+  const problems = FIELD_ORDER.filter((k) => errors[k]).length;
 
   const slotMarkup = slots
-    ? `<div id="coffee-slots">${renderSlotList({ slots }, env)}</div>`
+    ? `<div id="coffee-slots">${renderSlotList({ slots, picked: values.start, invalid: !!errors.start }, env)}</div>${message("start")}`
     : `${islandMount("coffee-slots", slotsUrl, unsafeHtml(renderSlotList({ pending: true }, env)),
         unsafeHtml(`<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`)).html}
       <p class="slot-failed">couldn't load the open slots just now. <a href="${esc(pickUrl)}">see them on a plain page</a>, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
@@ -565,6 +597,7 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
   const body = `
     <h1>Let's grab coffee or a bagel</h1>
     <p class="lead">if you're in NYC and working on something interesting, pick a slot below. i confirm every request by hand, so nothing lands on your calendar until you see the confirmation email.</p>
+    ${problems ? `<div class="banner error"><div>${problems === 1 ? "one thing" : `${problems} things`} to fix before this can send. each is marked below, and everything you typed is still here.</div></div>` : ""}
 
     <div class="xp-group">
       <span class="legend">Available slots</span>
@@ -586,19 +619,21 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
         <div class="row">
           <label for="name">Name</label>
           <input type="text" id="name" name="name" required maxlength="100" autocomplete="name"
-                 title="The name that goes on the invite.">
+                 title="The name that goes on the invite." value="${esc(values.name ?? "")}"${invalid("name")}>
+          ${message("name")}
         </div>
         <div class="row">
           <label for="email">Email</label>
           <input type="email" id="email" name="email" required maxlength="200" autocomplete="email"
-                 title="Where the invite lands. Nothing else is sent here.">
+                 title="Where the invite lands. Nothing else is sent here." value="${esc(values.email ?? "")}"${invalid("email")}>
+          ${message("email")}
         </div>
         <div class="row">
           <label for="area">Where in NYC?</label>
           <input type="text" id="area" name="area" maxlength="120" autocomplete="off"
                  list="nyc-areas"
                  title="Roughly where you'll be coming from, so I can pick somewhere near you."
-                 placeholder="west village, bushwick, midtown…">
+                 placeholder="west village, bushwick, midtown…" value="${esc(values.area ?? "")}">
           <!-- A datalist, not a select. The suggestions cover the common answers
                without refusing the ones a five-borough dropdown would have to
                drop; the field stays free text either way. -->
@@ -614,7 +649,8 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
           <label for="topic">What would you like to talk about?</label>
           <textarea id="topic" name="topic" required maxlength="1000"
                     title="This is what I read before saying yes, so specific beats generic."
-                    placeholder="A sentence or two — specific beats generic."></textarea>
+                    placeholder="A sentence or two — specific beats generic."${invalid("topic")}>${esc(values.topic ?? "")}</textarea>
+          ${message("topic")}
         </div>
 
         <input type="text" name="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
