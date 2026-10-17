@@ -299,7 +299,7 @@
     {
       "name": "aadhar.sh",
       "type": "CAA",
-      "match": "exact",
+      "match": "contains",
       "expect": [
         "0 issue \"letsencrypt.org\"",
         "0 issue \"pki.goog; cansignhttpexchanges=yes\"",
@@ -311,8 +311,8 @@
         "0 issuewild \"ssl.com\"",
         "0 iodef \"mailto:security@aadhar.sh\""
       ],
-      "why": "Names the only CAs that may issue for this zone, and where a CA reports a refused request. Absent until 2026-10-17 (the specification.website audit), which let any public CA issue for aadhar.sh. The eight issue/issuewild values are the four CAs Cloudflare's Universal SSL and backup certificates use, in the exact strings its certificate-authorities reference publishes. Google Trust Services issues today: WE1 for the ECDSA certificate and WR1 for the RSA one, both seen on the wire 2026-10-17. Sectigo is listed although it only signs backup certificates, because a CAA set that refuses it fails the day Cloudflare swaps a backup in.",
-      "gotcha": "Cloudflare adds these same eight CA records itself, hidden from the dashboard and the DNS API, the moment a zone on Universal SSL holds any CAA record. They are declared and authored here anyway, so the API (which infra:apply plans from) and public DNS (which this check reads) answer the same nine values. Declare only iodef and the two views disagree by eight records: apply would re-plan creating them on every run while DoH already shows them.",
+      "why": "Names the CAs that may issue for this zone, and where a CA reports a refused request. Absent until 2026-10-17 (the specification.website audit), which let any public CA issue for aadhar.sh. The owner created these nine that day: issue and issuewild for the four CAs Cloudflare's certificate-authorities reference lists for Universal SSL and backup certificates, in its exact strings, plus iodef. Google Trust Services issues today (WE1 for the ECDSA certificate, WR1 for the RSA one, both seen on the wire 2026-10-17). Sectigo only signs backup certificates, and a set that refuses it fails the day Cloudflare swaps one in.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns part of this RRset. Once the zone held any CAA it added four records nobody wrote, hidden from the dashboard and the DNS API: issue and issuewild for comodoca.com and for \"digicert.com; cansignhttpexchanges=yes\". Both authoritative nameservers served all 13 on 2026-10-17, and that is not the set Cloudflare's CAA page says it adds. Exact-matching the 9 fails against 13; exact-matching all 13 would have infra:apply POST Cloudflare's own records. So this asserts ours are present and leaves Cloudflare's to Cloudflare, and infra:apply leaves CAA alone, as it does every `contains` record.",
       "pairs_with": "public/.well-known/security.txt, whose Contact is the same mailbox the iodef reports to."
     }
   ],
