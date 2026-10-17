@@ -1381,7 +1381,7 @@ phase("1f updates + restore");
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
 // stages each entry in the release PR, so it ships in the same build. So baking
-// them WHOLE costs no freshness at all — unlike
+// them WHOLE costs no freshness at all, unlike
 // /reading (6h Curius refresh) or /around (daily crawl), whose feeds move on
 // their own, so only their shells are baked and the feed arrives as an island
 // (step 5b, lib/island.ts).
