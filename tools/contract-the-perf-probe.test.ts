@@ -1,5 +1,4 @@
 // ── the perf probe ──────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -127,11 +126,9 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   // The rule now matches minute+hour signatures, which normalization leaves
   // alone, so EVERY spelling must land on the census.
   //
-  // "17 8 * * 1" IS SUNDAY, and this test used to assert MON as its alias,
-  // which is what a reader would reach for when checking the pairing. Both are
-  // asserted now, because the property is that the matcher ignores the weekday
-  // field entirely; pinning one "correct" alias is what let the wrong one sit
-  // here unquestioned.
+  // "17 8 * * 1" IS SUNDAY. SUN and MON are both asserted, because the property
+  // is that the matcher ignores the weekday field entirely; pinning one
+  // "correct" alias is what once let the wrong one sit here unquestioned.
   assert.equal(cronJob("17 8 * * 1"), "census");
   assert.equal(cronJob("17 8 * * SUN"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
@@ -152,10 +149,9 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   assert.equal(cronJob(null), null);
 });
 
-// The SSRF host floor is shared by /lens, webmention verification, and
-// serendipity's cover proxy. It used to be two byte-identical copies
-// (lensHostBlocked + coverHostBlocked); this pins the set so the one that is
-// left cannot quietly narrow, which is the failure the duplication invited.
+// The SSRF host floor is shared by /lens, webmention verification and sending,
+// lib/public-fetch.ts, and serendipity's cover proxy. This pins the set so the
+// one shared copy cannot quietly narrow.
 test("the shared SSRF host floor blocks every non-public shape", () => {
   const blocked = [
     "localhost", "app.localhost", "printer.local", "db.internal", "x.onion",
@@ -291,15 +287,14 @@ test("production binds the Durable Object the slot claim needs", async () => {
   const counter = bindings.find((b) => b.name === "COUNTER");
   assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
   assert.equal(counter.class_name, "Counter");
-  // Since step 3 of "Moving Counter out" the class lives in aadhar-counter,
-  // and a binding without script_name would name a class this Worker no
-  // longer implements.
+  // The class lives in aadhar-counter since 2026-09-29, and a binding without
+  // script_name would name a class this Worker no longer implements.
   assert.equal(counter.script_name, "aadhar-counter",
     `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
-  // THE SITE IMPLEMENTS NO DURABLE OBJECT, which is the invariant the whole
-  // "Moving Counter out" sequence (CLAUDE.md) bought: a Worker that implements
-  // one gets no preview URLs. Counter lives in aadhar-counter since 2026-09-29.
+  // THE SITE IMPLEMENTS NO DURABLE OBJECT, an invariant in CLAUDE.md: a Worker
+  // that implements one gets no preview URLs (docs/MAINTENANCE.md has the
+  // story).
   // A class reappearing here, in exports or through a migrations array, takes
   // the previews away again without a single other symptom.
   assert.equal(parsed.migrations, undefined,

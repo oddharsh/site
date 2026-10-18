@@ -141,8 +141,8 @@ export type Recorded = {
 /**
  * Per-input hashes, machine-owned, so a stale result can NAME what moved rather
  * than only that something did. FLAT and deduped across derivations on purpose:
- * three of them declare public/i, and keying by derivation id would store 660
- * hashes three times to say the same thing.
+ * images/hashes and images/histograms both declare public/i by path, and keying
+ * by derivation id would store its 660 hashes twice to say the same thing.
  */
 export type Lock = Record<string, string>;
 
@@ -151,10 +151,6 @@ const HASH = "sha256";
 export const hashBytes = (bytes: Buffer | string): string =>
   createHash(HASH).update(bytes).digest("hex");
 
-/**
- * Every file a spec resolves to, repo-relative and sorted, so the digest is a
- * function of the bytes rather than of readdir order or of the machine.
- */
 export const keeps = (spec: InputSpec, rel: string): boolean => {
   if (spec.include?.length && !spec.include.some((ext) => rel.endsWith(ext))) return false;
   if (spec.exclude?.some((seg) => rel.split(path.sep).includes(seg))) return false;
@@ -166,6 +162,10 @@ export const claims = (spec: InputSpec, rel: string): boolean =>
   keeps(spec, rel) &&
   spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
 
+/**
+ * Every file a spec resolves to, repo-relative and sorted, so the digest is a
+ * function of the bytes rather than of readdir order or of the machine.
+ */
 export async function resolveInputs(root: string, spec: InputSpec): Promise<string[]> {
   const found: string[] = [];
   const keep = (rel: string) => keeps(spec, rel);
@@ -404,18 +404,17 @@ export async function record(
  * with nothing behind it. Measured on the commit that added this: 1493 rows
  * describing 660 files, 498 of them naming a path no checkout can open, 495 of
  * those minted by one full-library re-encode (#660). Every future re-encode adds
- * another ~495. It reports nothing wrong, because verify() hashes the inputs on
- * disk rather than reading the lock, so a dead row cannot produce a wrong
- * verdict; what it costs is a machine-owned file whose own $comment says it
- * exists "so a stale result can name what moved" filling with rows that can never
- * be what moved.
+ * another ~495. A dead row cannot produce a wrong verdict, because verify()
+ * hashes the inputs on disk rather than reading the lock; it only fills the lock
+ * with rows that can never be what moved.
  *
  * SCOPED TO `owns`, because --only re-records one derivation at a time and must
  * leave every other derivation's rows exactly as it found them. A key is dropped
  * for one reason: this derivation would have collected it and did not, which for
  * a path spec means the file is gone and for a set spec means the key left the
- * set. Two derivations declaring the same tree (fingerprints and hashes both
- * declare public/i) project the same entries, so either one prunes the same rows.
+ * set. Two derivations declaring the same tree (images/hashes and
+ * images/histograms both declare public/i) project the same entries, so either
+ * one prunes the same rows.
  *
  * The trade that buys: under --only, a row this derivation owns and prunes may
  * also be owned by a derivation NOT being recorded, which then loses the ability

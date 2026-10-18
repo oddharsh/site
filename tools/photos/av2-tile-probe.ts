@@ -9,16 +9,14 @@
 // tier's budget, this probe's 38 tiles 0.46. AV2's standing against AV1 turns
 // on exactly that. Measured 2026-09-28 on 38 tiles, pooling both: under 0.3 bpp
 // AV2 won 12 of 12, and over 1.2 bpp it won 0 of 5. A verdict read off the crops
-// alone described the dense end and was reported as the whole answer on
-// /garage/av2 for a day.
+// alone describes only the dense end.
 //
 // THE 38 ARE NOT THE TIER. The shipped 600px tier itself (255 XT*.avif in
 // public/i, 2026-10-07) has a median of 0.67 and a mean of 0.70, and buckets
 // 30 / 52 / 71 / 86 / 16 across the five bands main() prints. 82 of 255 sit
 // under 0.5, where AV2 won 23 of 24 pooled calls; 173 sit above it, where it
 // won 6 of 30. The budgets are right (the control below matched 38 of 38); the
-// SAMPLE is thin. See WHICH PHOTOS. /garage/av2 then said the tier was a win
-// for nine days, until the 2026-10-07 correction.
+// SAMPLE is thin. See WHICH PHOTOS.
 //
 // THE TIER, MEASURED 2026-10-07: `--hif --stratify 8`, 40 tiles cut from HIF
 // originals, 8 per band, control 40 of 40, same tuned build:

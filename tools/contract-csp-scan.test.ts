@@ -1,5 +1,4 @@
 // ── the CSP hash scanner ────────────────────────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import {
   assert,
   test,
@@ -28,9 +27,9 @@ test("only the scripts a browser would EXECUTE are hashed", needsParser, async (
   </body></html>`);
 
   // Three executable blocks: bare, module, speculationrules. The two data blocks
-  // are parsed as data and never reach script-src, and 31 of this site's inline
-  // blocks are data, so a scanner that is wrong here is wrong 31 times. The
-  // external one is covered by 'self'.
+  // are parsed as data and never reach script-src, and src/pages alone carries
+  // 41 inline JSON blocks (2026-10-16), so a scanner that is wrong here is
+  // wrong 41 times. The external one is covered by 'self'.
   assert.equal(hashes.length, 3, `expected 3 executable blocks, got ${hashes.length}`);
   assert.ok(hashes.every((h) => /^[A-Za-z0-9+/]+=*$/.test(h)), "hashes are base64");
   assert.equal(new Set(hashes).size, 3, "three different bodies hash three different ways");

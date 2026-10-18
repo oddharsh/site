@@ -4,7 +4,7 @@
 // The wire contract (names, tags, the frame layout, the level) is
 // src/worker/lib/dictionary-names.ts, which the Worker reads too. This file is
 // the half that needs node:zlib, so it stays in tools. build.ts, perf-budget.ts
-// and family-holdout.ts each carried their own copy of the zstd call until
+// and family-holdout.ts (since removed) each carried their own copy of the zstd call until
 // 2026-10-02; the code below is build.ts's, moved with its level named and its
 // output byte-identical (every .dcz in .build/public, measured on the move).
 

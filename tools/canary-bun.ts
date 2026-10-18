@@ -24,13 +24,13 @@
 // diffs its diagnostics against Microsoft's tsc 7 on every program
 // `bun run typecheck` checks. The bumper runs the same gate as its 4b.
 //
-// THE WATCHES are the other half, since 2026-09-15. This repo has seven fixes
-// of its own sitting in bun's review queue, and lib/upstream-watches.ts turns
-// each one's reproduction into a probe that reads false on the pinned bun
-// today. Every run answers each watch under the pin AND under the canary; a
-// row that differs is a `changed` verdict naming the fix that arrived and the
-// build it arrived in, which is the day this becomes a bun worth pinning. A
-// row landed in both is the reader's cue to retire it.
+// THE WATCHES are the other half, since 2026-09-15. lib/upstream-watches.ts
+// turns each bun fix this repo is waiting on (BUN_WATCHES) into a probe that
+// reads false on the pinned bun today. Every run answers each watch under the
+// pin AND under the canary; a row that differs is a `changed` verdict naming
+// the fix that arrived and the build it arrived in, which is the day this
+// becomes a bun worth pinning. A row landed in both is the reader's cue to
+// retire it.
 //
 // WHAT IT NEVER DOES. Write the pin, roll a dictionary, touch a credential.
 // It is an instrument. `.github/workflows/canary.yml` runs it nightly and
@@ -152,7 +152,7 @@ if (!process.versions.bun) {
 // installed package (lib/upstream-watches.ts says why a missing one has to
 // throw). Asked for HERE, before the download and the two builds, so a runner
 // without cargo is an instrument failure that costs seconds rather than one
-// that surfaces after minutes of work as eight unmeasured rows.
+// that surfaces after minutes of work as a column of unmeasured rows.
 try {
   ensureTimbradoEngine();
 } catch (err) {

@@ -1,7 +1,7 @@
-// html-markers.mjs — the load-bearing structures the minified homepage must still
+// html-markers.ts — the load-bearing structures the minified homepage must still
 // carry, as one list both halves of the gate read.
 //
-// build.ts throws if the minifier drops one, and perf-budget.mjs fails the deploy
+// build.ts throws if the minifier drops one, and perf-budget.ts fails the deploy
 // if the shipped file is missing one. Those are the same claim checked at two
 // moments, so they were the same array written out twice, byte-identical. A marker
 // added to one copy and not the other silently narrows the gate to whatever the
@@ -28,7 +28,7 @@ export const HTML_MARKERS: Array<[label: string, marker: RegExp]> = [
 // required in the output only when the page carried it on the way in.
 //
 // That difference matters, and it is not a softening. A fixed per-family list would
-// have to know which of the 43 pages is a garage explainer, which is an LWE chat,
+// have to know which served page is a garage explainer, which is an LWE chat,
 // and which is a Worker-rendered document with no quiz at all, and it would have to
 // be edited every time a family gains a member. Asking "did minification LOSE this"
 // is the claim the tripwire actually wants, it holds for every page without a

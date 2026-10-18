@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// gen-remote-config.mjs — derive a remote-bindings twin of a wrangler config.
+// gen-remote-config.ts — derive a remote-bindings twin of a wrangler config.
 //
-//   node tools/gen-remote-config.ts .wrangler.dev.jsonc           # local dev (bun run dev:remote)
-//   node tools/gen-remote-config.ts .wrangler.site.jsonc --out x.jsonc  # oracle twin (a JSONC config; not the .ts)
-//   node tools/gen-remote-config.ts .wrangler.dev.jsonc --d1      # opt into D1
+//   bun tools/gen-remote-config.ts .wrangler.dev.jsonc           # local dev (bun run dev:remote)
+//   bun tools/gen-remote-config.ts .wrangler.site.jsonc --out x.jsonc  # oracle twin (a JSONC config; not the .ts)
+//   bun tools/gen-remote-config.ts .wrangler.dev.jsonc --d1      # opt into D1
 //
 // WHAT A REMOTE BINDING IS. Your Worker code still runs locally in workerd; the
 // BINDING calls hop to the real Cloudflare resource instead of a local simulation.
@@ -37,10 +37,10 @@
 // should cost a deliberate keystroke every time.
 //
 // WHY THIS IS WORKSTATION-ONLY. Remote bindings stand up a proxy Worker in the
-// account, which needs a token that can WRITE. CI holds a read-only token and
-// must keep holding only that (CLAUDE.md, "GitHub must never hold a Cloudflare
-// token that can write"), so this script refuses to run in CI rather than
-// tempting anyone to widen the scope. Same posture as infra:apply.
+// account, which needs a token that can WRITE. CI's Cloudflare token is
+// read-only and must stay that way (CLAUDE.md, "Release path"), so this script
+// refuses to run in CI rather than tempting anyone to widen the scope. Same
+// posture as infra:apply.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";

@@ -31,23 +31,19 @@
 // Strippable: delete alt.json plus the worker/template lookups to revert to
 // empty alt.
 //
-// ── why this is TypeScript, since 2026-09-15 ──────────────────────────────
-// It was gen-alt-text.py, and it was the last thing in the pipeline that ran
-// under python3. The pipeline already ran node four times in the same script
-// (photo-inputs, build-histogram-index, gen-photo-semantics, check-photo-
-// pipeline), so the interpreter bought nothing, and it cost two things worth
-// naming. It was the one file the shell path sweep of gotcha 40 could not see,
-// which is how a repointed ROOT captioned nothing for five days. And its
-// caller was `python3 … || echo "captions incomplete"`, so a traceback read as
-// a warning. As TS it is held by the tools program, typecheck, the writer
-// census and the same scanners as its four siblings.
+// TypeScript since 2026-09-15; it was gen-alt-text.py, the last python3 step
+// in the pipeline. As Python it was the one file gotcha 40's shell path sweep
+// could not see (a repointed ROOT captioned nothing for five days), and its
+// caller's `|| echo` turned a traceback into a warning. As TS it is held by
+// typecheck, the writer census and the same scanners as its siblings.
 //
 // The FILE FORMAT is the old script's, byte for byte, because alt.json is
-// committed and a serializer change would diff 165 lines on a run that
+// committed and a serializer change would diff every line on a run that
 // captioned nothing: Python's json.dump(indent=0, sort_keys=True,
 // ensure_ascii=False) is one key per line, no indentation, keys in code-point
-// order, and no trailing newline. writeAlt below reproduces that and a
-// contract test round-trips the committed file through it.
+// order, and no trailing newline. serializeAlt below reproduces that, and
+// contract-the-photo-pipeline-runs-no-python round-trips the committed file
+// through it.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

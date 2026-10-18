@@ -8,9 +8,10 @@
 // Worker through wrangler's createTestHarness, fires each configured cron once
 // through `worker.scheduled()`, and asks each job to show its work.
 //
-// THE CRON LIST IS READ FROM cloudflare.config.ts, never copied here, so a fifth cron
-// is fired by existing. A cron that reaches a job with no entry in JOB_EVIDENCE
-// fails by name, which is how the fifth one gets an observable written for it.
+// THE CRON LIST IS READ FROM cloudflare.config.ts, never copied here, so a new
+// cron is fired by existing. A cron that reaches a job with no entry in
+// JOB_EVIDENCE fails by name, which is how a new one gets an observable written
+// for it.
 // The floor of 4 stops a config reader that stops matching from passing over
 // zero crons.
 //
@@ -344,8 +345,9 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   };
   delete config.build;
   delete config.secrets;
-  // CI holds no Cloudflare credential, and a Workers AI binding cannot boot
-  // without one (REMOTE_ONLY_KEYS in tools/lib/site-config.ts has the measurement).
+  // CI holds no Cloudflare credential, and the Workers AI and Analytics SQL
+  // bindings cannot boot without one (REMOTE_ONLY_KEYS in
+  // tools/lib/site-config.ts has the measurements).
   for (const key of REMOTE_ONLY_KEYS) delete config[key];
   writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify(config));
 
@@ -357,8 +359,9 @@ test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
   const { alg: _alg, ...jwk } = await crypto.subtle.exportKey("jwk", pair.privateKey);
 
   const server = createTestHarness({
-    // aadhar-counter boots beside the site: COUNTER binds it since step 3 of
-    // "Moving Counter out", and workerd refuses a binding to an undefined service.
+    // aadhar-counter boots beside the site: COUNTER binds it since the
+    // 2026-09-29 transfer (counter/wrangler.jsonc), and workerd refuses a binding
+    // to an undefined service.
     workers: [
       // SYNC_SECRET gates the serendipity self-dispatches on both ends: the
       // cron only sends one with it set, and the handler checks the header.

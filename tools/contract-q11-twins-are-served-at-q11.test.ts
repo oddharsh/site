@@ -1,5 +1,4 @@
 // ── q11 twins are served at q11 ─────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 //
 // `bun run q11:check` sweeps every twin the build writes and asks whether the
 // bytes on the wire ARE the twin, by re-encoding what arrived at the build's

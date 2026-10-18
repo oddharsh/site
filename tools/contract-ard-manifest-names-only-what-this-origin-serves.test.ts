@@ -1,5 +1,4 @@
 // ── the ARD manifest names only what this origin serves ─────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, existsSync, readFile, test } from "./contract-shared.ts";
 
 // /.well-known/ard.json is the ARD (Agentic Resource Discovery) manifest: one
@@ -22,8 +21,7 @@ const MEDIA_TYPE = /^(?:application|text)\/[a-z0-9][a-z0-9.+-]*$/;
 
 // The Worker's exact routes, so a url with no file behind it (/ask) still has
 // to be something the Worker answers. Imported from routes.ts, the data-only
-// route list, which keeps this file free of the Worker's module graph; it read
-// index.ts's source text until 2026-10-02.
+// route list, which keeps this file free of the Worker's module graph.
 async function workerRoutes() {
   const { EXACT_PATHS } = await import("../src/worker/routes.ts");
   // /openapi.json is written by build.ts from lib/openapi.ts: neither a file
@@ -77,8 +75,8 @@ test("every ARD entry is well-formed and points at something this origin serves"
   const ctx = { routes: await workerRoutes(), publicDir: "public" };
   const ids = validate(manifest, ctx);
 
-  // The floor: the two MCP servers, the agent card, the skill and NLWeb are the
-  // resources the whole discovery story here rests on. Dropping one is a
+  // The floor: the two MCP servers, the agent card, the skill, NLWeb and the
+  // OpenAPI description are the resources the whole discovery story here rests on. Dropping one is a
   // deliberate act, and it should fail here first.
   for (const must of [
     "urn:air:aadhar.sh:mcp:site",

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// perf-snapshot.mjs — record the built tree's wire sizes, and diff two recordings.
+// perf-snapshot.ts — record the built tree's wire sizes, and diff two recordings.
 //
-// This is the DIFFERENTIAL half of the performance story. perf-budget.mjs asks
+// This is the DIFFERENTIAL half of the performance story. perf-budget.ts asks
 // "is this number over a line somebody drew?"; this asks "did this change move
 // it, and by how much?" The two answer different questions and neither replaces
 // the other, but the diff is the one that cannot go stale.
 //
-// The reason it exists is written into perf-budget.mjs's own baseline history:
+// The reason it exists is written into perf-budget.ts's own baseline history:
 // WORKER_BASELINE_GZIP_KIB sat at 129.23 while the real number was 204.24, so
 // the advisory fired on EVERY run for months and CI printed "hard checks green"
 // over it. A hand-maintained constant rots by construction — it records the
@@ -98,7 +98,7 @@ async function walk(dir, filter) {
 async function record(outPath, label) {
   // One dry-run gives three things at once: the built tree (via build.command),
   // the bundle's gzip total, and per-module attribution from esbuild's metafile.
-  // perf-budget.mjs runs the same command; they are separate processes because
+  // perf-budget.ts runs the same command; they are separate processes because
   // one gates the deploy and the other reports on it, and coupling them would
   // mean a snapshot failure could redden a PR.
   // WRANGLER'S ENTRY DIRECTLY, through whatever node is running this file, so
@@ -178,8 +178,8 @@ async function record(outPath, label) {
     let br = null;
     try { br = (await readFile(`${BUILD}/a/${name}.br`)).length; } catch {}
     const raw = (await readFile(`${BUILD}/a/${name}`)).length;
-    // The understanding-check payloads (build.ts step 5d) are one file per page,
-    // 38 of them. They fold into ONE row, because the nightly series keeps every
+    // The understanding-check payloads (build.ts step 5d) are one file per page.
+    // They fold into ONE row, because the nightly series keeps every
     // asset key forever and a key per page would triple its width for a number a
     // reader wants as a total: what a visitor who reaches the quiz pays.
     if (/^quiz-[\w-]+\.[0-9a-f]{8}\.json$/.test(name)) {
@@ -234,10 +234,6 @@ async function record(outPath, label) {
   await writeFile(outPath, `${JSON.stringify(snapshot, null, 2)}\n`);
   console.log(`perf-snapshot: recorded ${snapshot.label} — ${n} files, ${mods} modules -> ${outPath}`);
 }
-
-// ---------------------------------------------------------------------------
-// compare
-// ---------------------------------------------------------------------------
 
 const kib = (b) => `${(b / 1024).toFixed(2)} KiB`;
 const signed = (b) => `${b > 0 ? "+" : ""}${(b / 1024).toFixed(2)} KiB`;
@@ -410,10 +406,6 @@ async function compare(basePath, headPath, outPath) {
   else console.log(md);
 }
 
-// ---------------------------------------------------------------------------
-// row — reduce a snapshot to one JSONL line for the trend series
-// ---------------------------------------------------------------------------
-
 // Keys are short because this file is appended to forever and read by a Worker
 // that bundles nothing to parse it. One row is ~400 bytes, so a year of dailies
 // is ~146 KB — small enough to fetch whole, which is what lets /perf render the
@@ -452,7 +444,6 @@ async function row(snapshotPath, date) {
   console.log(JSON.stringify(line));
 }
 
-// ---------------------------------------------------------------------------
 
 const [mode, ...rest] = process.argv.slice(2);
 const flag = (name) => {

@@ -1,4 +1,4 @@
-// lens-chips.mjs — the seeded "Try:" URLs on /lens, read out of the page that
+// lens-chips.ts — the seeded "Try:" URLs on /lens, read out of the page that
 // renders them.
 //
 // Both warming scripts target this list, and it used to be pasted into each of
@@ -8,7 +8,7 @@
 //
 // The FLOOR is the load-bearing part. A scanner whose pattern stops matching
 // returns an empty array and every caller reports a clean run over nothing, so
-// this throws instead. Same reasoning as the guard scanners in check-tools.mjs.
+// this throws instead. Same reasoning as the guard scanners in check-tools.ts.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

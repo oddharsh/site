@@ -1,5 +1,4 @@
 // ── retired dependencies stay retired ────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { BAN_KINDS, binaryViolations, cargoLockViolations, cargoManifestViolations, inTree, npmViolations, sourceViolations } from "./lib/retired.ts";
@@ -17,7 +16,7 @@ const root = fileURLToPath(ROOT);
 // The reader test KEEPS its own narrower turndown assertion on purpose. It is
 // making a claim about that Worker's traversal count rather than about the
 // dependency graph, and it reads `lens-reader/src/reader.ts` to make it. What
-// the ledger adds is the same ban across all six committed manifests.
+// the ledger adds is the same ban across every committed manifest.
 
 const ledger = JSON.parse(await readFile(new URL("config/retired.json", ROOT), "utf8"));
 
@@ -34,7 +33,7 @@ function committed(...pathspec: any[]) {
 }
 
 test("every retirement is recorded with a replacement, a date and a measurement", () => {
-  // A FLOOR, not an inventory. Ten entries today. The number is here because a
+  // A FLOOR, not an inventory. 12 entries on 2026-10-16. The number is here because a
   // parser that stops matching this file reads zero entries, runs zero bans and
   // prints a clean pass, which is how every naive scanner in this repository
   // has failed. Deleting one entry deliberately costs nothing; losing the file
@@ -65,7 +64,7 @@ test("every retirement is recorded with a replacement, a date and a measurement"
 
 test("no committed manifest asks for a retired package", async () => {
   const manifests = committed("package.json", "*/package.json", "*/*/package.json");
-  // Six today. The floor catches a pathspec that stops matching, which would
+  // 7 on 2026-10-16. The floor catches a pathspec that stops matching, which would
   // otherwise scan nothing and pass.
   assert.ok(manifests.length >= 5, `found ${manifests.length} committed package.json files, expected at least 5`);
 
@@ -133,10 +132,9 @@ test("no source tree imports a retired package", async () => {
 });
 
 test("a named exception is a real file, and it still uses what it is excused for", async () => {
-  // Pillow is retired from the photo pipeline and still serves one page
-  // generator. The ledger records that as a scope rather than rounding it to a
-  // clean kill, and the exception has to stay honest in both directions: a
-  // stale path would silently widen the ban's blind spot, and an exception for
+  // A partial retirement is recorded as an exception (a scope) rather than
+  // rounded to a clean kill, and the exception has to stay honest in both
+  // directions: a stale path would silently widen the ban's blind spot, and an exception for
   // a file that no longer imports the thing means the retirement is complete
   // and the entry should say so.
   //

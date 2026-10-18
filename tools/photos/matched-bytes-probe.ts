@@ -48,14 +48,12 @@ const LIMIT = Number(flag("--limit", "8"));
 const SQ = 600;
 fs.mkdirSync(WORK, { recursive: true });
 
-/** Exit status only, output discarded, like the Python `run`. */
 const run = (...a: string[]) => spawnSync(a[0], a.slice(1), { stdio: "ignore" }).status ?? 1;
 
 function sipsGeom(work: string, out: string, sq: number): number {
   const d = execFileSync("sips", ["-g", "pixelWidth", "-g", "pixelHeight", work], { encoding: "utf8" });
   const dim = (key: string) => Number(d.split("\n").find((l) => l.includes(key))!.trim().split(/\s+/).at(-1));
   const W = dim("pixelWidth"), H = dim("pixelHeight");
-  // Python's -(-a // b) is ceiling division.
   const tl = W <= H ? Math.ceil((sq * H) / W) : Math.ceil((sq * W) / H);
   const t = `${out}.t.tif`, s = `${out}.s.tif`;
   run("sips", "-s", "format", "tiff", work, "--out", t);

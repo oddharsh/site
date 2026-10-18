@@ -3,12 +3,12 @@
 // A page advertises its twin two ways: a `<link rel="alternate"
 // type="text/markdown">` in <head>, and a "Read this as Markdown" task in the
 // explorer pane where the page carries one. lunaPage writes both from
-// `lib/twins.ts`, and build step 1g2 writes both into the pages that already
-// exist by then. Neither path can see a twin it was never told about, and until
-// 2026-09-30 the pages baked at step 5b were told about none: they rendered
-// against a copy of `lib/twins.ts` the build had loaded before 1g2 filled it in.
-// Nothing failed, because a page with no link still serves, and negotiation and
-// the `.md` URL still answer.
+// `src/worker/lib/twins.ts`, and build step 1g2 writes both into the pages
+// that already exist by then. Neither path can see a twin it was never told
+// about, and until 2026-09-30 the pages baked at step 5b were told about none:
+// they rendered against a copy of `twins.ts` the build had loaded before 1g2
+// filled it in. Nothing failed, because a page with no link still serves, and
+// negotiation and the `.md` URL still answer.
 //
 // So the TWIN SET here comes from the Markdown files the build actually wrote,
 // never from `TWIN_PATHS`. A renderer holding a stale or empty list then shows
@@ -20,7 +20,7 @@ export function routeOf(rel: string): string {
   return route === "/" ? "/" : route.replace(/\/+$/, "");
 }
 
-/** The twin URL for a canonical path, the same mapping lib/twins.ts uses. */
+/** The twin URL for a canonical path, the same mapping src/worker/lib/twins.ts uses. */
 export function twinHref(route: string): string {
   return route === "/" ? "/index.md" : `${route}.md`;
 }

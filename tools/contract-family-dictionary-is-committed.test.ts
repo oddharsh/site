@@ -1,5 +1,4 @@
 // ── the family dictionary is committed, and stable until it drifts ────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,

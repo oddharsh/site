@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # build.sh — build avifenc from PINNED SOURCE, with sharpyuv.
 #
-# THE FALLBACK, NOT THE DEFAULT, since 2026-09-12. add-photos.sh and
-# reencode-thumbnails.sh select the INSTALLED avifenc first and reach for this
-# build only when PATH has none; photo-pipeline.yml no longer builds it. Owner
-# call: track the installed encoder rather than build an older one to match a
-# pin. The drift protection this build used to provide lives in
-# config/tools.json's recorded version now. Everything below is the argument as
+# OUT OF THE PIPELINE since 2026-09-12. Owner call: track the installed encoder
+# rather than build an older one to match a pin. The grid tiers now encode
+# through zenc, which links the installed libavif (require-zenc.sh), and
+# photo-pipeline.yml does not build this. The drift protection this build used
+# to provide lives in config/tools.json's recorded version now. Everything below is the argument as
 # it stood when this build was first in line, kept because the sharpyuv half of
 # it is still the only reason to build this.
 #

@@ -4,7 +4,7 @@
 // "Windows cannot find 'garage/av2'". Now a name resolves against the site
 // manifest too, by path or by a last segment only one page has, and a miss keeps
 // XP's error with a filled-in site search inside it (XP's own error points to
-// Search). From the build-off's simple entry (buildoff/simple, worker.js run()).
+// Search).
 import { handleRun } from "../src/worker/run.ts";
 import { AGENT_SURFACES } from "../src/worker/lib/site-manifest.ts";
 import { assert, test } from "./contract-shared.ts";

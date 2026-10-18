@@ -1,5 +1,4 @@
 // ── the census sweep leaves a record of itself, and its Workflow exists ─────
-// Split-file suite; shared imports live in contract-shared.ts.
 //
 // THE BUG THIS PINS. /lens/census.json said `lastYmd: "2026-08-23"` for five
 // Sundays. #952 removed a dot from the Workflow instance ids and the first
@@ -81,7 +80,6 @@ test("a sweep whose every create is refused records each host and the refusal", 
     assert.ok(String(r.detail).includes("workflow.not_found"), `${r.host}'s record lost the refusal: ${r.detail}`);
   }
 
-  // And what /lens/census.json would publish from those rows.
   const last = census.summarizeCensusRuns(rows);
   assert.ok(last, "rows in, a summary out");
   assert.equal(last.ymd, sweep.ymd);

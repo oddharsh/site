@@ -444,7 +444,8 @@ export function triage(base: string, head: string, label: string, opts: { mergeB
         owes.push(`${d.regenerate}  (input to ${d.id})`);
       }
     }
-    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");    // A merged input moves a recorded digest, so `validate` runs derive:check
+    if (path === "config/derivations.json") owes.push("bun run derive:check -- --lock, after reading what it vouches for");
+    // A merged input moves a recorded digest, so `validate` runs derive:check
     // against a hash neither side recorded. The web editor commits and stops;
     // it cannot run the command that clears that, so the owed step is the
     // reason to take the file local even when every hunk is small.

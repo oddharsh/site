@@ -1,4 +1,4 @@
-// check-agent.mjs — is this site agent-accessible IN PRACTICE?
+// check-agent.ts — is this site agent-accessible IN PRACTICE?
 //
 // Every other agent check here reads a declaration: the route oracle sweeps
 // routes, gen-mcp-cards diffs a card against tools/list, build.ts counts the
@@ -26,7 +26,7 @@
 // browser lenses for the rest of the day on its first run.
 //
 // ── the control, and why it is not optional in spirit ─────────────────────
-// gotcha 15 and gotcha 33 in CLAUDE.md are both the same lesson learned the
+// gotcha 15 and gotcha 33 (docs/GOTCHAS.md) are both the same lesson learned the
 // expensive way: an instrument that reports a browser feature as missing is
 // usually broken itself. A Playwright harness reported Cloudflare's own origin
 // as ignoring Early Hints, and an agent-driven tab reported a working
@@ -38,8 +38,7 @@
 // ── what it does NOT do ───────────────────────────────────────────────────
 // It does not gate CI. This reaches a third-party playground over the network
 // on every run, so as a required check it would redden PRs on somebody else's
-// outage. It is a workstation control in the same idiom as kitesurf:check and
-// bun:pin. Run it when touching client JavaScript, the photo pipeline, or
+// outage. It is a workstation control in the same idiom as bun:pin. Run it when touching client JavaScript, the photo pipeline, or
 // anything the shell projects into every document.
 
 import { readFile } from "node:fs/promises";
@@ -211,7 +210,7 @@ async function main() {
     const c = cpage ? await renderOnce(cpage, url) : null;
 
     // The Markdown twin is the one discovery surface that is PER ROUTE, so it
-    // is probed here rather than with the site-wide four. `/` publishes its
+    // is probed here rather than with the site-wide probes. `/` publishes its
     // hand-written twin at /index.md; everything else appends .md.
     const twinUrl = route === "/" ? `${ORIGIN}/index.md` : `${ORIGIN}${route.replace(/\/$/, "")}.md`;
     const twin = await head(twinUrl);

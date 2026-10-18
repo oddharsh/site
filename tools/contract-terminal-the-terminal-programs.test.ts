@@ -1,5 +1,4 @@
 // ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
   TERMINAL_ASSETS,
@@ -18,7 +17,6 @@ import {
 } from "./contract-shared.ts";
 import { _resetPhotoCaches } from "../src/worker/photos.ts";
 
-// ── the terminal programs ──────────────────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
 // being a frame without.
@@ -52,8 +50,7 @@ test("no frame line runs past 80 columns, and none of them draws a box", async (
     assert.equal(res.status, 200, path);
     const text = await res.text();
     const lines = text.split("\n").filter((line) => line.length);
-    // Was `> 3`, which only held because five of those lines were border. A
-    // rejected target legitimately answers in two lines now.
+    // A rejected target legitimately answers in two lines.
     assert.ok(lines.length >= 2, `${path} produced no output`);
     for (const line of lines) {
       assert.ok(Array.from(line).length <= 80, `${path} drew a ${Array.from(line).length}-column row: ${line}`);
@@ -127,7 +124,7 @@ test(".plan is a real hidden finger pane: reachable, undocumented, falls back li
 test("the tui routes refuse to be cached or indexed", async () => {
   // A frame is per-query and several are live (playlist, calendar, lens). The
   // route also negotiates on Accept, which a URL-keyed edge cache cannot
-  // represent — the same trap lib/cache.js documents for the markdown twins.
+  // represent — the same trap lib/cache.ts documents for the markdown twins.
   for (const path of ["/finger", "/photos"]) {
     const res = await terminalGet(path);
     assert.equal(res.headers.get("cache-control"), "no-store", path);
@@ -136,18 +133,11 @@ test("the tui routes refuse to be cached or indexed", async () => {
   }
 });
 
-// The /terminal console page (wire.ts) retired on 2026-09-16 and its test went
-// with it. What it pinned, that the catalogue comes from the real tools/list
-// rather than a hand-written copy, is the MCP suite's job and stays there.
-
 test("a browser gets the same text a terminal does, not a second layout", async () => {
-  // The claim survived the console's deletion, in a simpler form. A tool route
-  // asked for HTML wraps the SAME frameText a .txt request gets in a <pre>; if
-  // the HTML arm ever grew its own layout, what a person sees and what an agent
-  // reads would start to differ and the page would be claiming something untrue.
-  //
-  // This used to compare console scrollback rows and assert on <span class="c-*">
-  // colouring. Both are gone: there is no console, and no colour to lose.
+  // A tool route asked for HTML wraps the SAME frameText a .txt request gets in
+  // a <pre>; if the HTML arm ever grew its own layout, what a person sees and
+  // what an agent reads would start to differ and the page would be claiming
+  // something untrue.
   const htmlReq = new Request("https://aadhar.sh/finger", { headers: { accept: "text/html" } });
   const html = await (await handleTool(htmlReq, terminalEnv(), context())).text();
   const text = await (await terminalGet("/finger")).text();
@@ -183,8 +173,8 @@ test("every frame tool the MCP server lists is one the server can actually call"
   const env = terminalEnv();
   const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
     .result.tools.map((tool) => tool.name);
-  // The MCP tool name IS the route name. One vocabulary: what you type in the
-  // console, what you curl, and what an agent calls are the same word.
+  // The MCP tool name IS the route name. One vocabulary: what you curl and
+  // what an agent calls are the same word.
   const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens", "agent_ready"];
   for (const name of FRAME_TOOLS) assert.ok(listed.includes(name), `${name} has a route but is not an MCP tool`);
   assert.ok(!listed.some((n) => n.startsWith("terminal_")), "tool names must match their routes, not the console");
@@ -198,12 +188,11 @@ test("every frame tool the MCP server lists is one the server can actually call"
   // The failure this avoids is the TIMEOUT rather than a bad answer, which is
   // worth stating because the obvious guess is wrong. Every probe here is
   // individually caught, so a dead network degrades to `unreadable` and the
-  // suite still passes: measured by running all 47 files with `fetch` throwing,
-  // 338 pass on this commit AND on the one before it. What a slow production
-  // costs is wall clock against bun's 5000ms per-test default, which is a hard
-  // fail. Cold, on a healthy workstation, the sibling agent-ready body spent
-  // 3328ms of that 5000 on connection setup alone. A CI runner has no warm
-  // route to aadhar.sh either.
+  // suite still passes. What a slow production costs is wall clock against
+  // bun's 5000ms per-test default, which is a hard fail. Cold, on a healthy
+  // workstation, the sibling agent-ready body spent 3328ms of that 5000 on
+  // connection setup alone. A CI runner has no warm route to
+  // aadhar.sh either.
   //
   // `lens` is inside the stub for symmetry alone. It fails at signing before it
   // reaches a fetch, measured at 0 escapes with the stub and without it.
@@ -219,11 +208,9 @@ test("every frame tool the MCP server lists is one the server can actually call"
       }), env, context());
       const { result, error } = await res.json();
       assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
-      // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
-      // come back as a rendered failure — what it may NOT do is come back unknown.
+      // lens cannot complete its read here, so it is allowed to come back as a
+      // rendered failure; what it may NOT do is come back unknown.
       const frame = result.structuredContent?.frame ?? "";
-      // Was `frame.includes("╔")`. The box is gone; what still has to be true is
-      // that a frame came back at all and that it names the tool that drew it.
       assert.ok(frame.length > 20, `${name} returned no frame`);
       assert.ok(frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
         `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`);
@@ -235,7 +222,7 @@ test("every frame tool the MCP server lists is one the server can actually call"
 });
 
 test("the tui frame never renders a photo field the public projection withholds", async () => {
-  // photos.js keeps GPS and unlisted EXIF behind PHOTO_PUBLIC_FIELDS. The frame
+  // photos.ts keeps GPS and unlisted EXIF behind PHOTO_PUBLIC_FIELDS. The frame
   // renders `photo.metadata`, so it inherits that projection — but it renders
   // the RECIPE card by iterating keys, and an iteration is exactly the shape
   // that picks up a field somebody adds later without meaning to publish it.

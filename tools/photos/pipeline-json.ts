@@ -15,9 +15,8 @@
 // second JSON engine bought nothing, and it had cost something twice: jq's
 // recursive-merge `*` pinned the extractor to one engine until exif-sooc grew
 // --merge-into, and the swap to jaq misfiled a `-s` incompatibility as an
-// operator bug because nobody ran the control (CLAUDE.md, the exif-sooc note).
-// Two jq dialects that disagree in the corners is a class of bug; one
-// JSON.parse is not.
+// operator bug because nobody ran the control. Two jq dialects that disagree in
+// the corners is a class of bug; one JSON.parse is not.
 //
 //   pipeline-json.ts length <file.json>
 //       jaq 'length'
@@ -44,9 +43,7 @@
 //       jaq -nr '$key | @uri'
 //   pipeline-json.ts hash-tiers <images-dir> --out-dir <i-dir> --map <hashes.json>
 //       NOT a jaq filter: the Python heredoc hash-thumbnails.sh ran until
-//       2026-09-22, which the 2026-09-15 sweep missed because the no-python
-//       contract test read a hand-kept list of three files and this script was
-//       not on it. hashes.json is committed and carries Python's json.dump
+//       2026-09-22. hashes.json is committed and carries Python's json.dump
 //       bytes (sort_keys, no spaces, ensure_ascii, no trailing newline), and
 //       /i/ is content-addressed, so the port was diffed byte for byte against
 //       the heredoc on the real library before it replaced it.
@@ -57,8 +54,7 @@
 //       djxl cannot answer this: asked for a .jpg it rebuilds a jbrd file and
 //       silently ENCODES a fresh JPEG from anything else. Reads box headers only.
 //   pipeline-json.ts checkpoint-add <checkpoints.json> --slug <s> --title <t> --ymd <date>
-//       the other heredoc, bump-version.sh's, found the same day by the widened
-//       test rather than by anyone looking: json.dumps(rows, indent=2,
+//       the other Python heredoc, bump-version.sh's: json.dumps(rows, indent=2,
 //       sort_keys=True) + "\n" into src/worker/checkpoints.json, committed.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -119,7 +115,6 @@ export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uplo
     const [stem, full, sizeText, album, heif] = fields.slice(i, i + 5);
     const size = Number(sizeText);
     if (!stem || !full || !Number.isInteger(size) || size < 0) throw new Error(`bad spool record for ${JSON.stringify(stem)}: full=${JSON.stringify(full)} size=${JSON.stringify(sizeText)}`);
-    // `album` and `heif` are written only when set, never as an empty string.
     const entry: Omit<IndexEntry, "uploaded"> = { full, size };
     if (album) entry.album = album;
     if (heif) entry.heif = heif;
@@ -380,7 +375,7 @@ export function main(argv: string[]): number {
     }
     case "manifest-keys": {
       // `.photos[]?.full` with -r. The manifest is this site's own
-      // (buildImagesManifest), where `full` is the R2 object key, a string.
+      // (imagesManifestJson in src/worker/photos.ts), where `full` is the R2 object key, a string.
       const manifest = readJson(positional[0]) as { photos?: { full?: string | null }[] };
       for (const p of manifest.photos ?? []) {
         const full = p?.full;

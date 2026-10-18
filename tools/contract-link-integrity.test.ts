@@ -1,11 +1,9 @@
 // ── link integrity ──────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
 
-// ── link integrity ──────────────────────────────────────────────────────────
 // The resolver behind build.ts's link-integrity invariant. Tested for TEETH
 // rather than for agreement: the invariant runs over a tree that currently has
 // zero dangling refs, so a test that only asserted "the real site passes" would
@@ -36,7 +34,7 @@ test("the link resolver rejects a page that moved", async () => {
     // Both sections need a registered surface for the registry to GOVERN them.
     // Leaving /lwe out of this set is not a smaller fixture, it is a different
     // one: an ungoverned /lwe correctly falls through to the run_worker_first
-    // glob, which is what the first draft of this test asserted against and lost.
+    // glob, and the assertions below would be testing that glob instead.
     surfaces: new Set(["/garage/horizon", "/garage/wire", "/lwe/fhe"]),
   });
 
@@ -44,8 +42,8 @@ test("the link resolver rejects a page that moved", async () => {
   assert.ok(!resolves("/whoami"), "a renamed top-level route must not resolve");
   assert.ok(!resolves("/terminal-moved"), "an invented top-level path must not resolve");
 
-  // The case prototype 2 silently passed, and the reason `governed` exists.
-  // /garage/* is in run_worker_first, so a glob-only resolver called this fine.
+  // The reason `governed` exists: /garage/* is in run_worker_first, so a
+  // glob-only resolver called this fine.
   assert.ok(!resolves("/garage/renamed-page"),
     "a dangling path inside a registry-governed namespace must not be excused by a run_worker_first glob");
   assert.ok(!resolves("/lwe/deleted-chat"), "same, for the other governed section");

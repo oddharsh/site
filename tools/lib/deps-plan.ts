@@ -79,7 +79,7 @@ export const GROUPS: Group[] = [
   // wrangler-pin.yml and skipped here as a non-exact pin; the pattern stays for
   // the day it returns to a release number.
   { name: "cloudflare-toolchain", patterns: ["wrangler", "@cloudflare/*"] },
-  // The three packages that REWRITE BUILT BYTES, in their own lane so a
+  // The packages that REWRITE BUILT BYTES, in their own lane so a
   // content-hash re-mint is always one identifiable PR. Measured 2026-08-19 on
   // oxc-minify 0.144.0 -> 0.145.0: 10 hashed /a/ assets re-minted for 22 B of
   // brotli, and a new hash costs returning visitors the shell dictionary tier

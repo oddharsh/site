@@ -171,8 +171,8 @@ if (!has("--write")) {
 // ---------------------------------------------------------------------------
 // 3. write the pin, and relock with the runtime that owns the lockfile
 // ---------------------------------------------------------------------------
-// A surgical replace of one line rather than a JSON round trip, for the reason
-// lib/bun-pin.ts gives: package.json carries paragraphs in its comment fields.
+// A surgical replace of one line rather than a JSON round trip, because
+// package.json carries paragraphs in its comment fields.
 const url = `${PKG_PR_NEW}/wrangler@${target}`;
 const text = readFileSync(join(ROOT, "package.json"), "utf8");
 const next = text.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);

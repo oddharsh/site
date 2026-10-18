@@ -1,5 +1,4 @@
 // ── the zone's Shared Dictionaries setting is declared and checked ───────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,

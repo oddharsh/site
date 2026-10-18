@@ -1,16 +1,13 @@
-// shell-data.mjs — authored facts for the shared XP desktop.
+// shell-data.ts — authored facts for the shared XP desktop.
 //
-// This module is build-time only. gen-desktop-partial.mjs projects it into the
+// This module is build-time only. gen-desktop-partial.ts projects it into the
 // static HTML partial, the icon sprite, and the small runtime tables that need
 // to stay in nav.js/nav-run.js. Keeping the facts here means the browser
 // runtime is no longer the build system's database.
 
 // The shell's Speculation Rules, and the one authored copy of them. Until
 // 2026-08-11 this block was hand-written into 26 documents plus a runtime
-// injector in nav.js, and the 27 copies had forked: garage pages excluded
-// /whoareyou alone, lwe pages carried a dead prefetch rule, lwe/encoding.html
-// carried two exclusions that two earlier commits had deliberately deleted
-// site-wide, and only the homepage and nav.js held the full list. See #338.
+// injector in nav.js, and the 27 copies had forked (#338), so keep it here.
 //
 // "moderate" prerenders on hover or pointerdown rather than on load, so a
 // visitor who never opens /garage pays nothing for it and a visitor who does

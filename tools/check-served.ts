@@ -23,7 +23,7 @@
 // COST. 716 of the 1850 URLs reach the Worker (2026-10-01); the rest are served
 // by the asset layer and cost nothing on the 200K/day observability quota. A full
 // run is therefore about 716 Worker invocations, which is why the per-release
-// check passes --since and the full one runs nightly.
+// check in promote-production.yml passes --since and a full sweep runs by hand.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";

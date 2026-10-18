@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
+// perf-budget.ts — deterministic build/deploy invariants + advisory wire-size
 // reporting for aadhar.sh.
 //
 // User experience is measured in a controlled browser lab; this site deliberately
@@ -15,26 +15,24 @@
 // derive a user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
-//   node tools/perf-budget.ts        (or: bun run perf-budget)
+//   bun run perf-budget
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is
 // the repeatable pre-merge signal; no field-RUM outcome source is currently wired.
 //
-// ALSO NOT MEASURED HERE, and this is the newer and more important boundary:
-// whether THIS CHANGE moved anything. Every threshold below is an absolute line
-// against a constant somebody typed, and the baseline history at
-// WORKER_BASELINE_GZIP_KIB is the record of what that costs — a number that sat
-// 58% stale for months while CI printed "hard checks green" over it every run.
-// The differential half now lives in `tools/perf-snapshot.ts`, run by
+// Also not measured here: whether THIS CHANGE moved anything. Every threshold
+// below is an absolute line against a constant somebody typed, and the baseline
+// history at WORKER_BASELINE_GZIP_KIB is the record of what that costs: a number
+// that sat 58% stale for months while CI printed "hard checks green" over it.
+// The differential half lives in `tools/perf-snapshot.ts`, run by
 // .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
 // posts the delta as a PR comment. It has no constants, so it cannot go stale.
 //
-// Read the two together and the division of labour is clean: THIS script is the
-// gate (structural invariants that must never ship broken, plus a coarse alarm
-// for a change large enough that nobody could have meant it), and the diff is
-// the signal (what moved, by how much, in this PR). A slow 500-bytes-per-PR
-// drift is invisible to everything here and obvious there.
+// THIS script is the gate (structural invariants that must never ship broken,
+// plus a coarse alarm for a change large enough that nobody could have meant
+// it), and the diff is the signal (what moved, by how much, in this PR). A slow
+// 500-bytes-per-PR drift is invisible to everything here and obvious there.
 
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -142,10 +140,10 @@ const WORKER_ALERT_GROWTH = 0.25;
 // all, which is worth knowing before splitting this by vendor again).
 //
 // It answers a question the gzip figure stopped being able to answer the moment
-// production started minifying: how much code is in here. Both numbers are worth
-// having and they measure different things. Gzip is what the deploy uploads and
-// what a cold start parses; source bytes are what the repository wrote, and only
-// the second one is invariant under a change to how the first is produced.
+// production started minifying: how much code is in here. Gzip is what the
+// deploy uploads and what a cold start parses; source bytes are what the
+// repository wrote, and only the second one is invariant under a change to how
+// the first is produced.
 //
 // Shares WORKER_ALERT_GROWTH on purpose, so there is one headroom knob rather
 // than two that can drift apart. Advisory, like everything else here.
@@ -153,40 +151,26 @@ const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 
 // `wrangler check startup` advisory ceiling, in ms of ACTIVE startup CPU.
 //
-// The baseline note above measured startup cost BY HAND on 2026-08-04 and
-// concluded bundle bytes are two orders of magnitude away from being a latency
-// problem. This runs that same measurement on every CI run, so the conclusion
-// stops being a point-in-time finding somebody has to remember to re-take.
+// The baseline note above measured startup cost by hand on 2026-08-04; this
+// re-takes that measurement on every CI run. `check startup` ranks frames and
+// does not cost them, and it profiles a local machine whose CPU is not
+// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production
+// startup, and a breach here means "go re-measure", never "cold start regressed".
 //
-// Read it for what it is. That note's caveat holds: `check startup` ranks frames
-// and does not cost them, and this profiles a local machine whose CPU is not
-// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production startup,
-// and a breach here means "go re-measure", never "cold start regressed".
-//
-// It was called a "regression tripwire" until the merge-base diff existed, and
-// that was the wrong job for it. A sampled profile whose window lands ~5 samples
-// cannot detect a regression; three consecutive runs of identical bytes read 9.6,
-// 7.6 and 6.4 ms, a 50% spread on no change at all, and a fourth on 2026-08-08
-// read 16.4 ms — 2.6x the low, still on bytes nobody had touched. The tripwire is the bundle
+// It cannot catch a regression either. The profile window is ~20ms and lands
+// about 5 samples: three consecutive runs of identical bytes read 9.6, 7.6 and
+// 6.4 ms, and a fourth on 2026-08-08 read 16.4 ms. The tripwires are the bundle
 // gzip above and the per-module attribution below, both deterministic, and the
 // per-PR movement in those is what tools/perf-snapshot.ts reports.
 //
 // That is also why the snapshot deliberately does NOT record this number.
 // Diffing two draws from a noisy distribution manufactures findings: a run that
-// happened to sample 9.6 against one that sampled 6.4 would read as a 50%
-// startup regression, in a comment whose whole credibility rests on every row
-// being real. Astral's answer to benchmark noise is to remove the noise source
-// (CodSpeed counts simulated instructions; ty's memory job pins
-// TY_MAX_PARALLELISM=1) rather than to widen a threshold around it. Here the
-// cheaper version of that answer is available: measure the deterministic thing,
-// and keep the sampled one as the flamegraph you open once it fires.
+// sampled 9.6 against one that sampled 6.4 would read as a 50% startup
+// regression. Measure the deterministic thing, and keep the sampled one as the
+// flamegraph you open once it fires.
 //
 // 50ms is ~6x the observed 6.4-9.6ms and still an order of magnitude under the
-// 400ms platform limit: room for the reading to wander, none for a real
-// regression to hide. It wanders more than you would expect, because the profile
-// window is ~20ms and lands about 5 samples — three consecutive runs here read
-// 9.6, 7.6 and 6.4ms with nothing changed. Advisory, never fatal; a sampled
-// profile at that resolution has no business failing a PR.
+// 400ms platform limit. Advisory, never fatal.
 const WORKER_STARTUP_ALERT_MS = 50;
 // Every minified asset's readable twin, from the same registry.
 const TWINS = readableTwins();
@@ -265,12 +249,11 @@ if (gz) {
 // size costs at cold start, which is the constraint the size was ever a proxy
 // for. Available since 2026-07-30 and it needs no credential.
 //
-// This settles an open question rather than opening one. The repo's standing
-// conclusion is that cold start here is not eval-bound (measured 2026-07-28,
-// when lazy route imports were tried and bought nothing but +27KB of wrappers).
-// That was reasoned from bundle structure; this measures it directly, and it
-// agrees: ~8ms of active startup CPU against a 400ms platform limit, on a
-// Worker whose bundle grew 57% in the interim.
+// The repo's standing conclusion is that cold start here is not eval-bound
+// (measured 2026-07-28, when lazy route imports were tried and bought nothing
+// but +27KB of wrappers). That was reasoned from bundle structure; this
+// measures it directly, and it agrees: ~8ms of active startup CPU against a
+// 400ms platform limit, on a Worker whose bundle grew 57% in the interim.
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
@@ -318,8 +301,8 @@ try {
   // 2026-08-16 minify drop and any future compression change leave it alone.
   //
   // A collapsed count is the failure mode worth guarding: an empty or tiny
-  // metafile would otherwise report a huge improvement. Floor it at the module
-  // count the bundle is known to carry.
+  // metafile would otherwise report a huge improvement. Floor it at 40 modules,
+  // under half the 83 the bundle carried on 2026-08-16.
   const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[])
     .reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
@@ -480,7 +463,7 @@ if (homepage) {
   // the same two-moment arrangement HTML_MARKERS already uses.
   //
   // The twin is checked for EXISTENCE and readability rather than byte-equality with
-  // a source file, because ten of these pages are generated into the staged tree and
+  // a source file, because some of these pages are generated into the staged tree and
   // have no authored file to compare against. Readability is the claim that matters:
   // a twin that came back minified would make View Source a dead link.
   try {
@@ -499,7 +482,7 @@ if (homepage) {
       // The claim is that the twin is the PRE-minification document, so the exact
       // test is that it does not itself carry the banner the minifier stamps on.
       //
-      // A line-count comparison was the obvious heuristic and it was wrong: the five
+      // A line-count comparison was the obvious heuristic and it was wrong: the
       // /writing Notepad pages hold their text inside a <textarea>, whose newlines
       // the minifier must preserve, so twin and page have the same line count and the
       // banner tipped it the wrong way. Minification is non-expanding, so the size

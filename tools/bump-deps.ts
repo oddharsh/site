@@ -12,9 +12,9 @@
 // CURRENT tree, which is what the workflow wants (a fresh checkout per group);
 // locally, run it on a clean branch.
 //
-// --ignore-scripts ON EVERY INSTALL, for the reason the old relock tool gave.
-// The packages being bumped ARE the toolchain (oxc-minify, lightningcss, wrangler's
-// neighbours), and the workflow later holds a token that can push. bun runs
+// --ignore-scripts ON EVERY INSTALL. The packages being bumped ARE the
+// toolchain (oxc-minify, lightningcss, wrangler's neighbours), and the workflow
+// later holds a token that can push. bun runs
 // lifecycle scripts only for `trustedDependencies` (esbuild, sharp, workerd),
 // and this flag shuts that last door, so no newly published code executes in
 // the job. Resolution does not depend on scripts, so the lockfile is

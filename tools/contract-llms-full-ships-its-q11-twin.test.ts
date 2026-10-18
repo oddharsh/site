@@ -1,5 +1,4 @@
 // ── /llms-full.txt ships through its q11 twin ────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliDecompressSync } from "node:zlib";
@@ -35,8 +34,8 @@ test("the build writes a twin that decodes to the staged corpus", { skip: needsB
 const PLAIN = Buffer.from("# aadhar.sh\n\nthe corpus, in full.\n");
 const TWIN = Buffer.from("fake-brotli-bytes");
 const MAP = Buffer.from("# aadhar.sh\n\nthe map.\n");
-// `any` because the route's Env declares 57 bindings and this fake owes the
-// two asset paths it reads; the same shape contract-native-byte-decoders uses.
+// `any` because the route's Env (src/worker/lib/env.ts) declares every binding
+// and this fake owes the two asset paths it reads; the same shape contract-native-byte-decoders uses.
 function fakeEnv({ noTwin = false, nothingStaged = false }: Record<string, any> = {}) {
   return ({
     ASSETS: {

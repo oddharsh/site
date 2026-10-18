@@ -1,5 +1,4 @@
-// ── around.js ────────────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// ── around.ts ────────────────────────────────────────────────────────────────
 import {
   NEIGHBORS,
   assert,
@@ -10,7 +9,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── around.js ────────────────────────────────────────────────────────────────
 // Every degradation in the neighbourhood crawler is designed to be QUIET: a
 // disallowing robots.txt is a legitimate skip, and a neighbour that has gone
 // dark simply stops contributing rows. That is correct behaviour and it is also
@@ -128,7 +126,7 @@ test("each row's ↗ link names where it goes", () => {
 });
 
 test("around renders an honest empty panel rather than a fabricated table", async () => {
-  // The failure-honesty rule this file states at renderAroundSnapshot: no
+  // The failure-honesty rule src/worker/around.ts states at renderAroundSnapshot: no
   // snapshot means a visibly pending panel, never invented rows. Only ever seen
   // before the first cron run, which is exactly when nobody is looking. The
   // panel is the island's body now; the shell around it is noindex either way.

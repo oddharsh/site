@@ -1,12 +1,10 @@
 // ── Explorer chrome ──────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
   test,
 } from "./contract-shared.ts";
 
-// ── Explorer chrome ──────────────────────────────────────────────────────────
 // The address bar and task pane are markup, so the things worth pinning are the
 // claims they make: that the pane's "Other places" is the site's own first-level
 // list, and that nothing invents a row.
@@ -34,7 +32,7 @@ test("the pane states only what it was given", async () => {
   const bar = String(addressBar({ path: "/garage/wire", name: "On the wire" }));
   assert.match(bar, /<span aria-current="page" class="axp-here">On the wire<\/span>|<span class="axp-here" aria-current="page">On the wire<\/span>/);
   assert.match(bar, /<a href="\/garage">Garage<\/a>/);
-  // Untrusted text is escaped, not interpolated.
+  // Untrusted text is escaped.
   assert.match(String(taskPane({ path: "/garage/x", name: '<img src=x onerror=alert(1)>' })), /&lt;img src=x/);
 });
 

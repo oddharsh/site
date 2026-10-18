@@ -1,12 +1,9 @@
 // ── lens phases: pay for what you asked for ──────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
   test,
 } from "./contract-shared.ts";
-
-// ── lens phases: pay for what you asked for ──────────────────────────────
 
 test("a page-only scan omits the discovery-derived fields rather than zeroing them", async () => {
   // The honesty rule of the split. A readiness score computed without discovery

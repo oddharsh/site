@@ -15,9 +15,9 @@
 //                (gen-feeds.ts), so the feed and the markup cannot disagree
 //
 // Built rather than authored because the inputs already exist in two registries
-// and 39 pages, and a pasted block would be a third copy of each. The block is a
-// data script, so CSP never sees it (lib/csp-scan.ts) and step 7b minifies it
-// with the page's other JSON (lib/json-script.ts).
+// and 40 pages (2026-10-16), and a pasted block would be a third copy of each.
+// The block is a data script, so CSP never sees it (lib/csp-scan.ts) and step
+// 7b minifies it with the page's other JSON (lib/json-script.ts).
 
 export const SITE = "https://aadhar.sh";
 export const PERSON = {

@@ -16,9 +16,8 @@
 // function as an invariant; this is the copy `bun run test` reaches without a
 // build. sw.ts is the one exception, and clientScriptProblems says why.
 //
-// Until 2026-10-02 this file regex-sliced a SHELLS array out of build.ts. It
-// imports the registry now, so it reads the rows the build reads rather than
-// a parse of their source text.
+// It imports the registry rather than regex-slicing build.ts's source (the
+// approach until 2026-10-02), so it reads the rows the build reads.
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { CLIENT_ASSETS, clientSourceFile, clientScriptProblems, minifiedScripts } from "./lib/client-assets.ts";
 

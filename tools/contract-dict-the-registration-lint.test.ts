@@ -1,12 +1,10 @@
 // ── /dict — the registration lint ───────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   terminalGet,
   test,
 } from "./contract-shared.ts";
 
-// ── /dict — the registration lint ───────────────────────────────
 // The rules ARE the product, and they are asserted as pure functions because
 // every external fetch in this repo dies at signing in a test environment.
 

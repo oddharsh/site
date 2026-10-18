@@ -1,5 +1,4 @@
 // ── committed JSON declares each key once ────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // JSON.parse KEEPS THE LAST duplicate key and reports nothing, so a second
@@ -44,7 +43,6 @@ function duplicateKeys(text) {
     if (ch === "}" || ch === "]") { stack.pop(); continue; }
     if (ch !== '"') continue;
 
-    // Read the whole string, honouring backslash escapes.
     let j = i + 1;
     let raw = "";
     for (; j < text.length; j++) {

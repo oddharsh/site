@@ -80,11 +80,10 @@ const TARGETS = [
 
 const TIMEOUT_MS = 20000;
 const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
-// stripRawText moved to tools/lib/html-raw-text.ts on 2026-08-24, when CodeQL
-// flagged a THIRD file for the same missed end-tag shapes. The long argument for
-// the scan lives there now; it is re-exported here because this module's own
-// contract test imports through `words`, and because /garage/useragent's numbers
-// are the reason the shapes have to be right.
+// stripRawText lives in tools/lib/html-raw-text.ts since 2026-08-24, when CodeQL
+// flagged a THIRD file for the same missed end-tag shapes, and the argument for
+// the scan lives there. /garage/useragent's word counts are why the shapes have
+// to be right; contract-ua-survey-raw-text-stripping tests them through `words`.
 import { stripRawText } from "./lib/html-raw-text.ts";
 export { stripRawText };
 

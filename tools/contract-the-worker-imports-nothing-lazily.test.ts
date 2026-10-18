@@ -1,5 +1,4 @@
 // ── no Worker module imports another lazily ──────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 

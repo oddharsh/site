@@ -3,7 +3,7 @@
 // model bump, a different floor, a longer option text) is scored the same way.
 //
 //   bun run build            # the corpus is build output (.build/public/search-index.json)
-//   bun run ask:eval         # 30 questions, lexical vs Clef, MRR and hit@1
+//   bun run ask:eval         # 29 questions, lexical vs Clef, MRR and hit@1
 //
 // Each question names the page that should answer it. The questions were
 // written by the person who built the ranking, after reading the corpus, so a
@@ -11,7 +11,8 @@
 // the mix: easy keyword questions the ranking must not break, paraphrases, and
 // four whose page shares no word with the question at all.
 //
-// Measured 2026-10-01: lexical MRR 0.777, hit@1 22/30; Clef over the whole
+// Measured 2026-10-01, on the 30 questions it had then (one left with the
+// cota-wec album in #1222): lexical MRR 0.777, hit@1 22/30; Clef over the whole
 // corpus MRR 0.983, hit@1 29/30, one call per question, median 1.26 s. The
 // lexical columns are this script's own run of the real searchSiteRanked.
 //

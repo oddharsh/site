@@ -1,5 +1,4 @@
 // ── /agent-ready — the scorecard that grades its author too ──────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   context,
@@ -9,8 +8,6 @@ import {
   test,
   testGlobals,
 } from "./contract-shared.ts";
-
-// ── /agent-ready — the scorecard that grades its author too ──────────────
 
 test("the lift table is internally consistent and names its baseline", async () => {
   // The bill is hand-maintained with a checked date, the same contract lens's

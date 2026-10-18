@@ -205,9 +205,9 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
  *  day it is committed; the manifest set comes from each lockfile's own
  *  `workspaces` keys, so a new workspace is covered by the lockfile that
  *  already had to record it. A hand-kept list (SUB_MANIFEST_POLICY is one) goes
- *  stale without failing anything: it names four manifests while the root
- *  lockfile governs five workspaces, so `lwe-ask` and `serendipity` sit outside
- *  it today and inside this.
+ *  stale without failing anything: it names four package.json manifests while
+ *  the root lockfile governs five workspaces, so `lwe-ask` and `serendipity`
+ *  sit outside it today and inside this.
  */
 export function readLockfilePins(root: string = REPO_ROOT): LockfileInput[] {
   const listed = execFileSync("git", ["ls-files", "-z", "bun.lock", "*/bun.lock"], { cwd: root, encoding: "utf8" });
