@@ -8,9 +8,10 @@
 // Reads securitypolicyviolation events rather than the console, because that is
 // the authoritative signal and it carries the directive and the blocked sample.
 //
-// Run it against a LOCALLY BUILT worker (`bun run wrangler:site dev`, the production config through its generated legacy twin), never
-// the readable dev tree: the committed hash map is empty by design, so `bun run
-// dev` serves every page loose and this would sweep 48 documents that cannot fail.
+// Run it against a LOCALLY BUILT worker (`bun run wrangler:site dev`, the
+// production config through its generated legacy twin), never the readable dev
+// tree: the committed hash map is empty by design, so `bun run dev` serves every
+// page loose and this would sweep documents that cannot fail.
 //
 // PROVE THE INSTRUMENT BEFORE BELIEVING A GREEN RUN. Two ways this reports a clean
 // sweep while measuring nothing, both hit for real while it was being written:

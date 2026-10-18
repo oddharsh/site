@@ -1,5 +1,4 @@
 // ── @custom-media resolves at build, for every stylesheet, and fails by name ─
-// Split-file convention: shared imports live in contract-shared.ts.
 import { readFileSync } from "node:fs";
 import {
   assert,

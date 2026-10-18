@@ -1,5 +1,4 @@
 // ── RSS feeds ────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   existsSync,
@@ -7,7 +6,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── RSS feeds ────────────────────────────────────────────────────────
 // Feeds are BUILD OUTPUT (tools/gen-feeds.ts), like the Markdown twins and
 // the dcz deltas: a pure function of site-manifest.json, the sitemap's lastmod
 // dates, and posts.json, so no committed copy can fall behind. These tests pin

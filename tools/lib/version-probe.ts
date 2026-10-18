@@ -4,19 +4,8 @@
 // credential, no filesystem. That is the whole reason it is a separate file:
 // `deploy-promote.ts` performs `currentDeployment()` at module scope, so
 // importing it runs a ramp's worth of authenticated setup and refuses outright
-// without a token. These four functions were trapped inside it, which meant the
-// two checks that decide whether a release is healthy had never been reachable
-// from a test or from any second caller.
-//
-// The second caller is `tools/soak-canary.ts`, which watches a 10% canary for
-// twenty minutes and then resolves it. It needs exactly these questions
-// answered and none of the credentialed ones.
-//
-// Moved verbatim on 2026-09-22, comments included, with two changes and no
-// third: `sample` is `sampleSplit` because the bare name says nothing at an
-// import site, and its per-request affinity key takes the run id as an argument
-// rather than reading a module global. The ramp passes the same value it always
-// generated, so the bytes on the wire are unchanged.
+// without a token. Here, the two checks that decide whether a release is
+// healthy are reachable from a test.
 
 // Every probe reads this one route because it is the only one that reports WHICH
 // version answered. Both site versions read the same D1 changelog, so
@@ -44,8 +33,7 @@ export const PINNED_PROBES = 12;
 // purpose: gradual deployments have no per-request affinity by default, but
 // connection reuse can pin a burst of parallel requests to one version and make
 // a working ramp look like a dead one.
-// ERRORS AND STALLS ARE DIFFERENT THINGS and this used to conflate them, which
-// is why adding a timeout needed this rewrite rather than one option.
+// ERRORS AND STALLS ARE DIFFERENT THINGS.
 //
 // An error is the ORIGIN answering badly: a non-2xx from the version being
 // ramped. It is conclusive, it is what the ramp exists to catch, and the right
@@ -57,12 +45,6 @@ export const PINNED_PROBES = 12;
 // connection could roll back a perfectly healthy release, so the ramp reports
 // them separately and only treats a total blackout (nothing answered at all) as
 // disqualifying.
-// `count` exists for the soak, which repeats this read every few minutes for
-// twenty minutes and does not need 40 requests to answer its question. The ramp
-// needs 40 because it is looking for a 10% signal in noise. The soak is asking
-// whether the target holds EVERYTHING, and 12 requests separate 10% from 100%
-// by a factor no sample size makes ambiguous: at a true 10%, twelve consecutive
-// hits on the target is a 1-in-10^12 event.
 export async function sampleSplit(target, previous, runId, count = SAMPLES) {
   const seen = new Map();
   let errors = 0, stalls = 0;
@@ -86,7 +68,7 @@ export async function sampleSplit(target, previous, runId, count = SAMPLES) {
           // healthy ramp would read as dead. The rule skips requests that
           // already carry a key, which is what makes this line survive it;
           // infra.json's zone.version_affinity declares that exemption and
-          // check-infra.ts asserts it.
+          // tools/check-infra.ts asserts it.
           "cloudflare-workers-version-key": `ramp-${runId}-${i}`,
         },
         cache: "no-store",
@@ -124,9 +106,9 @@ export async function sampleSplit(target, previous, runId, count = SAMPLES) {
 
 // Ask ONE version directly, with `Cloudflare-Workers-Version-Overrides`.
 //
-// WHY THIS EXISTS ALONGSIDE sample(). The two answer different questions, and
-// until 2026-08-14 only one of them was being asked. sample() fires into the
-// live split and sorts the results, so at a 10% step roughly 4 of its 40
+// WHY THIS EXISTS ALONGSIDE sampleSplit(). The two answer different questions,
+// and until 2026-08-14 only one of them was being asked. sampleSplit() fires
+// into the live split and sorts the results, so at a 10% step roughly 4 of its 40
 // requests exercise the new code and the other 36 re-prove that the version
 // already serving production still works. The whole reason to ramp is to catch a
 // fault in the NEW version while it is small, and the check aimed at it had four
@@ -134,14 +116,14 @@ export async function sampleSplit(target, previous, runId, count = SAMPLES) {
 //
 // The override header removes the sampling entirely: every request here is
 // handled by the target, so 12 of 12 exercise the code about to take the site.
-// An error found this way is conclusive in the way sample()'s errors were only
-// probabilistically conclusive.
+// An error found this way is conclusive in the way sampleSplit()'s errors were
+// only probabilistically conclusive.
 //
 // TWO CONSTRAINTS, both from Cloudflare's docs and both load-bearing. The
 // override only applies if the named version is IN the current deployment, so
 // this can only run after the step that puts it there, never before. And it
 // bypasses the split by construction, so it says nothing about whether traffic
-// actually moved, which stays sample()'s job, and is why both still run.
+// actually moved, which stays sampleSplit()'s job, and is why both still run.
 export async function probePinned(versionId, worker) {
   const override = `${worker}="${versionId}"`;
   let onTarget = 0, offTarget = 0, errors = 0, stalls = 0;

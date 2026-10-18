@@ -10,9 +10,7 @@
 // directions: a binding added to cloudflare.config.ts and never typed is `undefined`
 // at the first read with no diagnostic, and a binding removed from the config
 // while its type survives lets code read a thing wrangler no longer carries.
-// env.ts's header promised a `bun run env:check` that diffs the two. This is
-// it; it did not exist until 2026-09-02, and the header had described it for
-// three weeks.
+// This is the `bun run env:check` env.ts's header names, and it diffs the two.
 //
 // WHAT IS COMPARED. Tiers 1 to 3 (bindings, vars, required secrets) must equal
 // the config's declared set exactly. Tier 4 (degrading secrets) must be absent

@@ -1,5 +1,4 @@
 // ── the speculation ledger ────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,
@@ -296,7 +295,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
     "the homepage Link header must still carry the discovery links");
 
   // Dead code is how this hid the first time: the behaviour stayed described in
-  // lib/security.js while nothing called it, so reading that file suggested the
+  // lib/security.ts while nothing called it, so reading that file suggested the
   // homepage was fine. One home for the header, and it is the route's.
   // Matched on the DEFINITIONS, not on mentions: the comment left behind in that
   // file explains what used to live there and why it went, which is worth
@@ -500,8 +499,8 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
     // 'strict-dynamic' would make 'self' inert for scripts and break /a/nav.js,
     // /tooltip.js, /hoist.js and the homepage's dynamic import()s.
     assert.ok(!hashed.includes("strict-dynamic"));
-    // 'unsafe-hashes' would re-permit event-handler attributes, which is the
-    // thing the two refactors in this change exist to avoid.
+    // 'unsafe-hashes' would re-permit event-handler attributes, which the
+    // hashed policy exists to refuse.
     assert.ok(!hashed.includes("unsafe-hashes"));
     assert.ok(!/script-src[^;]*'unsafe-inline'/.test(hashed));
 
@@ -534,11 +533,9 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
 });
 
 // Where build.ts step 7c writes the map: the Worker stages to a path that
-// mirrors its source. This read .build/public/_worker.js/lib/csp-hashes.js until
-// 2026-10-01, a path nothing has written since the Worker moved out of the
-// served tree, and an early `return` on the missing file made the test pass
-// without checking anything. #827 fixed csp:sweep for the same move and missed
-// this reader. A missing build is a SKIP now, so it says so in the report.
+// mirrors its source. A missing build is a SKIP, so it says so in the report:
+// until 2026-10-01 this read a path nothing wrote any more, and an early
+// `return` on the missing file made the test pass without checking anything.
 const STAGED_CSP_HASHES = "./.build/src/worker/lib/csp-hashes.ts";
 const needsStagedHashes = !existsSync(STAGED_CSP_HASHES) && "needs a built tree: bun run build";
 

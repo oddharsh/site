@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// deploy-promote.ts — ramp an uploaded version onto production traffic.
+// deploy-promote.ts: ramp an uploaded version onto production traffic, or roll
+// production back.
 //
 //   bun run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
 //   bun run deploy:promote --to 25       # one step, park it at 25%
@@ -9,23 +10,19 @@
 //   bun run deploy:promote --rollback    # 100% back to the previously active version
 //   bun run deploy:promote --status      # what is serving right now, and nothing else
 //
-// WHY THIS EXISTS. Merging used to publish: Workers Builds ran `wrangler deploy`
-// off the `production` branch and 100% of traffic moved in one step. That is a
-// fine model right up to the moment a change is wrong, and then the only signal
-// is a visitor noticing. This site had no way to serve a change to some traffic
-// and read the result, because it had no way to serve a change at all without
-// serving it to everyone.
-//
-// Workers Builds now runs `wrangler versions upload` instead (infra.json's
-// release block). A merge produces a VERSION: fully built, fully uploaded,
-// reachable at its own preview URL, serving nobody. This script is the second
-// half — the part that decides how much of the world sees it.
+// WHERE IT SITS. Since 2026-09-28 (#1002) the production deploy_command is
+// `wrangler deploy`, which moves 100% of traffic at once (config/infra.json,
+// release.traffic_moved_by). Branch pushes still run `wrangler versions upload`,
+// so a VERSION exists for each one: built, uploaded, reachable at its own
+// preview URL, serving nobody. This script is the workstation tool for moving
+// traffic between those versions by hand: --rollback and --status above all,
+// and a stepped ramp when one is wanted.
 //
 // WHAT IT ACTUALLY CHECKS BETWEEN STEPS. It polls /whoareyou.json, which reports
-// the serving version per request (whoareyou.js explains why that route and not
-// /updates.json — both versions read the same D1 changelog, so the changelog
-// cannot tell them apart). TWO PROBES run per step and they answer different
-// questions, which is why neither replaces the other:
+// the serving version per request (src/worker/whoareyou.ts explains why that
+// route and not /updates.json: both versions read the same D1 changelog, so
+// the changelog cannot tell them apart). TWO PROBES run per step and they
+// answer different questions, which is why neither replaces the other:
 //
 //   1. THE PINNED PROBE (probePinned). 12 requests carrying
 //      `Cloudflare-Workers-Version-Overrides`, so every one of them is handled
@@ -57,15 +54,11 @@
 // visitor would notice that still returns 200. Workers Logs is the surface for
 // that (the structured line carries `v`, the version prefix, for exactly this),
 // and the honest workflow is to hold a step, read the logs, then continue.
-// Actions pauses for approval after the canary. On a workstation, use --to for
-// that pause: the default multi-step invocation continues automatically.
+// Use --to for that pause: the default multi-step invocation continues
+// automatically.
 //
-// lib/release-guard.ts requires authentication. Actions uses an environment
-// secret for both ramp jobs; production-full requires reviewer approval after
-// the automatic canary. config/infra.json declares that token's scope.
-//
-// infra:apply is NOT covered by that change and still refuses to run in CI. It
-// can create and destroy zone-level DNS, which no pipeline here needs to do.
+// lib/release-guard.ts refuses to run in CI without CLOUDFLARE_API_TOKEN and
+// CLOUDFLARE_ACCOUNT_ID, since CI has no interactive cf login.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -74,9 +67,6 @@ import { promisify } from "node:util";
 import { cf, d1Rows, D1 } from "./lib/cf.ts";
 import { checkpointInsert } from "./lib/checkpoints.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
-// The four version-reading probes, lifted out on 2026-09-22 so soak-canary.ts
-// can ask the same questions without this module's credentialed module-scope
-// setup. Their comments moved with them; see that file's header.
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
 
 const exec = promisify(execFile);
@@ -91,12 +81,7 @@ const SAMPLE_ATTEMPTS = 3;
 // One affinity key per request, namespaced per run so a re-ramp does not inherit
 // the previous run's version assignments.
 const RUN_ID = Math.random().toString(36).slice(2, 8);
-// Bind the run id once so the two call sites below read exactly as they did
-// before the extraction. The wire bytes are identical; the id is the same value
-// the module already generated, now passed rather than closed over.
 const sample = (target, previous) => sampleSplit(target, previous, RUN_ID);
-
-// ---------------------------------------------------------------- args ----
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -107,8 +92,6 @@ const has = (name) => argv.includes(`--${name}`);
 
 const credentialError = releaseCredentialError();
 if (credentialError) die(credentialError);
-
-// ------------------------------------------------------------------- cf ----
 
 // Every Cloudflare call goes through the `cf` CLI (tools/lib/cf.ts) since
 // 2026-10-06. Those commands are thin API wrappers, so what comes back is the
@@ -270,8 +253,6 @@ async function workerName() {
 }
 
 
-// ------------------------------------------------------- target freshness ----
-
 // WHY. Workers Builds takes a couple of minutes to upload after a merge, and a
 // ramp inside that window silently targets the PREVIOUS release. Nothing
 // downstream can catch it: the version it picks is a legitimate production
@@ -352,8 +333,6 @@ async function reportTargetFreshness(targetId) {
     `\n    re-ramping the serving version to write a missed changelog row).\n`,
   );
 }
-
-// ------------------------------------------------------------------ run ----
 
 // `: never` is load-bearing rather than documentation. Every caller uses this as
 // control flow ("bail unless X"), and without the annotation TypeScript keeps the
@@ -595,7 +574,6 @@ for (const pct of steps) {
 
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 
-// ── record the release ────────────────────────────────────────────────────
 // The changelog entry was authored in the PR (bump-version.sh writes only the
 // committed projection), so /updates and /restore have been serving it since
 // this version started answering. What was still missing is D1's record that it

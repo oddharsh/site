@@ -7,10 +7,7 @@
 
 // The shell's Speculation Rules, and the one authored copy of them. Until
 // 2026-08-11 this block was hand-written into 26 documents plus a runtime
-// injector in nav.js, and the 27 copies had forked: garage pages excluded
-// /whoareyou alone, lwe pages carried a dead prefetch rule, lwe/encoding.html
-// carried two exclusions that two earlier commits had deliberately deleted
-// site-wide, and only the homepage and nav.js held the full list. See #338.
+// injector in nav.js, and the 27 copies had forked (#338), so keep it here.
 //
 // "moderate" prerenders on hover or pointerdown rather than on load, so a
 // visitor who never opens /garage pays nothing for it and a visitor who does

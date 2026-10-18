@@ -4,7 +4,9 @@
 #
 #   ./add-car-photo.sh <stem> <input-image>
 #
-# stem is one of: singer | tuthill | hwa-evo | f355  (matches data-car-* in index.html)
+# stem names the pair under public/cars/ that a page links to: singer, tuthill,
+# hwa-evo and f355 back data-car-* in src/pages/index.html, and saab-paddan and
+# t50-mule are linked from src/pages/garage/index.html.
 # input can be any format sips reads (JPG/PNG/HEIC/WEBP/AVIF...).
 #
 # Output: public/cars/<stem>.{avif,jpg}, long edge capped at 480px (2x the
@@ -79,8 +81,7 @@ if [ "$srcw" -ge "$srch" ]; then axis=--width; else axis=--height; fi
 # avifenc call site here passes, worth another 0.5-1.4% off.
 #
 # `--speed 2` tracks the photo pipeline, which moved off 4 on 2026-08-28 for
-# -1.65% bytes AND +0.162 mean ssimulacra2 (the measurement lives at
-# avif_encode() in add-photos.sh). It was taken on the 600/400/200 photo tiers
+# -1.65% bytes AND +0.162 mean ssimulacra2. It was taken on the 600/400/200 photo tiers
 # rather than on this 480px one, and this call site inherits it because it is
 # the same encoder at the same -q 63 -d 10 on a tier of the same order. The
 # cost here is invisible either way: one image per invocation, sub-second.

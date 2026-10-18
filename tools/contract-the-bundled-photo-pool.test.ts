@@ -1,5 +1,4 @@
 // ── the bundled photo pool ──────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   configText,
   testGlobals,
@@ -19,8 +18,7 @@ import {
   withWeakEtag,
 } from "./contract-shared.ts";
 
-// ── the bundled photo pool ──────────────────────────────────────────
-// The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
+// The pool is BUILD DATA: photos.ts imports photo-index.json + hashes.json and
 // derives the render-ready rows at module scope. These tests run the real
 // derivation over the real committed files, so a half-run pipeline (an index
 // entry without hashes, a hash without an index entry, a malformed /i/ URL)
@@ -419,7 +417,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "the retired RUM proxy module must not remain reachable for a future import");
 
   // The CSP must not permit the retired collector. _headers is matched as TEXT
-  // (it is a literal header line). security.js is matched on the
+  // (it is a literal header line). lib/security.ts is matched on the
   // policy it ASSEMBLES, because the per-document script-src work split the string
   // into pieces and a source scrape would now be checking punctuation instead of
   // the thing that reaches the browser. `/unmapped` deliberately misses the hash
@@ -434,7 +432,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
     // Same rule, one directive over: album art is re-hosted behind /rn/art/, so
     // the two Spotify hosts that used to sit in img-src have nothing left to
-    // serve. rn.js's artAttrs is what makes this safe (it emits no attribute for
+    // serve. rn.ts's artAttrs is what makes this safe (it emits no attribute for
     // art it cannot re-host) and the rn test asserts that end.
     assert.match(policy, /img-src 'self' data:;/, `${name}: img-src should be this origin only`);
     assert.doesNotMatch(policy, /scdn\.co|spotifycdn\.com/, `${name}: album art is first-party now`);
@@ -567,14 +565,3 @@ test("cached renders stream the first miss while tagging the background copy", a
     else testGlobals.caches = priorCaches;
   }
 });
-
-// The twin converter reads each page's own inline CSS to find elements the page
-// takes out of the inline flow, because otherwise their text welds together. It
-// looked only at the element's OWN display, which a flex or grid ITEM never
-// declares: its box comes from the parent. /updates converted
-// `<span class=wu-tag>hit-route</span><span class=wu-desc>counter tick …</span>`
-// into "hit-routecounter tick …", a string that appears nowhere on the page.
-//
-// buildTwins and friends were imported here and never called, so this file
-// asserted nothing about any of it. Same shape as the quiz test CLAUDE.md
-// describes, which read the wrong field names and passed while checking nothing.

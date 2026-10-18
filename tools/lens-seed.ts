@@ -46,6 +46,7 @@ import { chromium } from "playwright-core";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { cf } from "./lib/cf.ts";
 import { lensChipTargets } from "./lib/lens-chips.ts";
+import { asText } from "../src/worker/lib/parse.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 import { documentTally } from "../src/worker/lens-render.ts";
 import { WIRE_TIMING, summariseWire } from "../src/worker/lens-wire.ts";
@@ -77,7 +78,7 @@ const GOTO_MS = 18_000;
 const CONTENT_MAX = 120_000;
 const MARKDOWN_MAX = 60_000;
 const SHOT_MAX = 6_000_000;      // base64 chars, LENS_BROWSER_SHOT_MAX
-const KV_MAX = 20_000_000;       // LENS_BROWSER_KV_MAX
+const KV_MAX = 20_000_000;       // LENS_KV_MAX, src/worker/lens-pipeline.ts
 // Not a server limit. CDP hands back every node in the tree and a news homepage
 // runs to tens of thousands, which serves nobody inside a <pre>.
 const AX_NODE_MAX = 4_000;
@@ -173,10 +174,8 @@ async function captureWire(browser, url) {
     let execution = null;
     try {
       const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false });
-  // CDP frame off the wire; this script is a one-shot seeder outside the Worker
-  // bundle, so it carries the check inline rather than importing the parse layer.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-      const raw = r?.result && typeof r.result.value === "string" ? JSON.parse(r.result.value) : null;
+      const value = asText(r?.result?.value);
+      const raw = value === null ? null : JSON.parse(value);
       if (raw && !raw.probeError) {
         const thrown = events.filter((e) => e.method === "Runtime.exceptionThrown");
         const logged = events.filter((e) => e.method === "Log.entryAdded" && e.params?.entry?.level === "error");
@@ -292,10 +291,9 @@ async function keyUrl(url) {
 
 async function kvPut(key, file, label) {
   // Through cf (tools/lib/cf.ts) since 2026-10-06, which takes the account from
-  // its own default rather than the site config wrangler needed `-c` for. This
-  // spawned "pnpm" until 2026-08-23, three days after main became a bun tree,
-  // so every seed run died on "This project is configured to use bun"; the
-  // guard that catches that (contract-the-typescript-quarantine) still applies.
+  // its own default rather than the site config wrangler needed `-c` for. A
+  // hardcoded package manager here once killed every seed run;
+  // contract-the-typescript-quarantine guards against that coming back.
   await cf(["kv", "keys", "put", key, "--namespace-id", NAMESPACE,
     "--expiration-ttl", String(TTL), "--file", file]);
   process.stdout.write(`      wrote ${label} -> ${key}\n`);

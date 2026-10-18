@@ -1,5 +1,4 @@
 // ── every committed shell script aborts instead of continuing ────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
@@ -69,8 +68,8 @@ test("every committed shell script sets -e, -u and pipefail", async () => {
   const scripts = shellScripts();
 
   // FLOOR. A scanner that matches nothing reports a pass, which is the failure
-  // this repository has shipped three times. Eleven scripts exist today: ten
-  // under tools/photos plus .github/deploy-wrangler.sh.
+  // this repository has shipped three times. The floor is the 11 scripts that
+  // existed when it was set; `git ls-files '*.sh'` listed 16 on 2026-10-16.
   assert.ok(
     scripts.length >= 11,
     `found only ${scripts.length} shell scripts; the scanner is broken`,

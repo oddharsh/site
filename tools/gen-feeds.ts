@@ -84,10 +84,6 @@ export const FEEDS = [
   { path: "/lwe", section: "lwe", title: "aadhar.sh — learning with errors", description: "Chat-style explainers with live demos." },
 ];
 
-/**
- * Build every feed from the committed sources.
- *
- */
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));
   const dates = sitemapDates(readFileSync(`${root}/public/sitemap.xml`, "utf8"));

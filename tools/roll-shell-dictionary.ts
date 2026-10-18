@@ -3,11 +3,9 @@
 //
 //   bun run shell:roll
 //
-// This is all that remains of the old gen-shell-deltas.mjs. The deltas themselves moved
-// into build.ts once it turned out node:zlib's zstd takes a `dictionary` option (the
-// "unreachable from Node" limit was BROTLI's at the time, I had over-generalized it, and
-// node 26 has since given brotli one as well), so they are
-// build output now: no zstd CLI, no committed artifacts, nothing to forget.
+// The deltas themselves are build output (build.ts, since node:zlib's zstd and brotli
+// both take a `dictionary` option): no zstd CLI, no committed artifacts, nothing to
+// forget. This script only adopts the dictionaries they are made against.
 //
 // Rolling stays a deliberate human step for one reason: it WRITES INTO THE SOURCE TREE, and
 // build.ts must never do that. Its output has to be committed, because a dictionary must be
@@ -24,8 +22,6 @@ import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, h
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 import { dictionaryTag } from "./lib/dcz.ts";
 import { pageSlug, pageSnapshotName, parseFamilyDictionary, parsePageSnapshot, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
-
-// ------------------------------------------------------- adoption order ----
 
 // **How old is a committed dictionary?** mtime cannot answer that, because
 // `git checkout` stamps every file it writes with the checkout time — so in a
@@ -125,8 +121,9 @@ if (!live && !existsSync(BUILT)) {
 // The live shell, read the way the page half reads pages. No single document references
 // every dictionary-carrying asset, so this walks a few: the homepage pulls nav + luna +
 // hoist + tooltip, /lens pulls lens-boot, an LWE page pulls lwe-base.css, quiz.js and
-// ask.js, and /dotfiles and /garage/pretext each pull the one page-scoped script only
-// they load (SHELL_DISCOVERY_ROOTS, shared with dcz:check).
+// ask.js, /writing pulls notepad.js, and /dotfiles and /garage/pretext each pull the
+// one page-scoped script only they load (SHELL_DISCOVERY_ROOTS in lib/shell-roots.ts,
+// shared with dcz:check).
 //
 // Walking DOCUMENTS alone is not enough, and the gap was silent for as long as --live has
 // been the nightly path. An asset loaded lazily from JavaScript appears in no document, so

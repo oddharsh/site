@@ -1,13 +1,8 @@
 // ── reading somebody else's site ─────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
-
-// ── reading somebody else's site ─────────────────────────────────────────
-
-
 
 test("a door that could not be read is never reported as a door that is shut", async () => {
   // The honesty invariant, asserted on the classifier directly. Locally every

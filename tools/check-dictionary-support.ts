@@ -362,11 +362,11 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 //
 // The separation is not ours to implement. Cloudflare's shared-dictionaries support
 // (RFC 9842, open beta 2026-04-30) is what extends the edge cache key to
-// `Available-Dictionary` + `Accept-Encoding`; assets.js:182 sets the Vary that asks
-// for it. A zone-side regression, or that setting being flipped, would land here as
-// two dictionaries collapsing onto one cached body. Verified separating 2026-07-29
-// (1072 B / 651 B / 13490 B, all three cf-cache-status: HIT), so this asserts a
-// property production HAS rather than one we hope for.
+// `Available-Dictionary` + `Accept-Encoding`; src/worker/lib/assets.ts sets the Vary
+// that asks for it. A zone-side regression, or that setting being flipped, would land
+// here as two dictionaries collapsing onto one cached body. Verified separating
+// 2026-07-29 (1072 B / 651 B / 13490 B, all three cf-cache-status: HIT), so this
+// asserts a property production HAS rather than one we hope for.
 //
 // Needs two distinct dictionaries that BOTH earn a delta against the live nav hash,
 // so it discovers them instead of hardcoding: a dictionary roll changes which

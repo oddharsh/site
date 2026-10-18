@@ -13,7 +13,8 @@
 // skip set and merge), and a contract test held two of the copies together by
 // regexing cp() calls out of build.ts. The copies had already drifted: the
 // build's collision walk skipped one derived path where its copy skipped
-// three, and dev's skip set never applied at all (see linkServedTree).
+// three, and dev's skip set missed single-owner directories (linkServedTree
+// now handles that case).
 import { copyFile, readFile, writeFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { browserJavaScripts } from "./browser-source.ts";
@@ -58,7 +59,7 @@ export const AUTHORED_ROOTS: readonly string[] = rootsHolding("bytes", "document
 // import, so a contract test holds that file to this projection.
 export const BROWSER_IMPORT_ROOTS: readonly string[] = rootsHolding("client", "styles", "bytes");
 
-// Source paths the build DERIVES rather than stages (build.ts steps 1a, 1a2).
+// Source paths the build DERIVES rather than stages (build.ts phase 1a).
 // Nothing writes them into the source tree any more, so a file at one of them
 // can only be a leftover from an older checkout, and staging it would make the
 // served tree depend on whatever a given machine happens to still hold.
@@ -157,7 +158,7 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
 
 type AdapterOptions = { cwd?: string };
 
-// The first root (public/, about 900 of the 1,000 staged files) cloned whole
+// The first root (public/, 994 of the 1,102 staged files on 2026-10-16) cloned whole
 // with one clonefile(2) where the platform allows (tools/lib/clone-tree.ts),
 // then held to the plan: the derived paths the plan skips are deleted from the
 // clone, and the clone must hold exactly the plan's files from that root and no
@@ -221,12 +222,10 @@ export async function copyServedTree(plan: ServedTreePlan, dest: string, options
 //     because a symlink can only point at one of them
 //
 // One more case makes a real directory: a single-owner directory that holds a
-// skipped (derived) path. A whole-directory symlink would expose the leftover,
-// which is what dev-stage.ts did until this module: its skip set only ran
-// inside merged directories, and public/images is not one, so a leftover
-// public/images/meta was served in dev while the comment above it said it
-// could not be. On a checkout with no leftovers the farm is link-for-link what
-// it was.
+// skipped (derived) path. A whole-directory symlink would expose the leftover:
+// public/images has one owner, so a symlinked public/images would serve a
+// leftover public/images/meta in dev. On a checkout with no leftovers every
+// single-owner directory is still one link.
 //
 // Links are relative, so `ls -l .dev-assets` names the directory a file
 // authors in.

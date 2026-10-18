@@ -1,5 +1,4 @@
 // ── /encode — read the container, decode nothing ─────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,
@@ -8,9 +7,9 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /encode — read the container, decode nothing ─────────────────────────
 // These parse the repo's OWN committed encodes, which is the strongest test
-// available: 474 files this site's pipeline produced, with known properties.
+// available: the files under public/i this site's pipeline produced, with
+// known properties.
 
 test("the JPEG parser agrees with the pipeline that made the files", async () => {
   const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.ts");
@@ -74,7 +73,7 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
     assert.ok(info, `${f} should parse`);
     assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
     if (info.monochrome) mono += 1; else colour += 1;
-    // Colour AVIF tiers are 4:4:4 since 2026-09-26 (zenc/src/avif.c has the why).
+    // Colour AVIF tiers are 4:4:4 since 2026-09-26 (tools/photos/zenc/src/avif.c has the why).
     assert.ok(["4:4:4", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
   }
   // A parser that always answered "monochrome" would still pass every assertion
@@ -157,7 +156,8 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // a missed changelog row (gotcha 24). A die() there would block that repair.
   // The warning has to be there for its absence of die() to mean anything.
   assert.match(src, /STALE TARGET/, "the ramp lost its stale-target warning");
-  assert.equal(/STALE TARGET[\s\S]{0,700}?\bdie\(/.test(src), false,
+  const staleBranch = src.slice(src.indexOf("STALE TARGET")).split("\n}\n")[0];
+  assert.equal(/\bdie\(/.test(staleBranch), false,
     "a stale target must warn, never die — that would block the gotcha-24 repair path");
 
   // And the diagnostic must not name a cause. It covers a file read, a spawn and
@@ -178,8 +178,8 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   // spawning wrangler against production from the suite.
   //
   // The pair, since 2026-09-22: the sampler and the pinned probe moved to
-  // lib/version-probe.ts so `tools/soak-canary.ts` could reuse them without
-  // deploy-promote's credentialed module-scope setup. Every fetch on the ramp
+  // lib/version-probe.ts, out of deploy-promote's credentialed module-scope
+  // setup. Every fetch on the ramp
   // path is in the second file now, so reading only the first would count zero
   // of each and pass by measuring nothing.
   const src = [

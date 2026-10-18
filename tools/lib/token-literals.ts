@@ -157,15 +157,6 @@ function inDeclaration(css: string, index: number): boolean {
 /** oklch(), and the sRGB spellings the site also writes: hex and rgb()/rgba(). */
 const COLOR = /oklch\([^()]*\)|(?<![\w&#-])#[0-9a-fA-F]{3,8}(?![\w-])|rgba?\([^()]*\)/g;
 
-/**
- * Every colour literal in `css` that is one token's value, with where it sits.
- * Three spellings count: the token's resolved text, the same with an alpha
- * (`--frame / .3`, written as `oklch(from var(--frame) l c h / .3)`), and a
- * literal within COPY_DE of exactly one token. A literal that close to two
- * tokens names neither, for the same reason an ambiguous value never does.
- * Hex and rgb() are compared by distance alone, since they never share text
- * with an oklch() token; that is how 87 of them hid until 2026-10-06.
- */
 export interface ColorLiteral {
   literal: string;
   index: number;
@@ -195,6 +186,15 @@ export function colorLiteralsIn(css: string): ColorLiteral[] {
   return out;
 }
 
+/**
+ * Every colour literal in `css` that is one token's value, with where it sits.
+ * Three spellings count: the token's resolved text, the same with an alpha
+ * (`--frame / .3`, written as `oklch(from var(--frame) l c h / .3)`), and a
+ * literal within COPY_DE of exactly one token. A literal that close to two
+ * tokens names neither, for the same reason an ambiguous value never does.
+ * Hex and rgb() are compared by distance alone, since they never share text
+ * with an oklch() token; that is how 87 of them hid until 2026-10-06.
+ */
 export function tokenCopiesIn(css: string, map: Map<string, string>): TokenCopy[] {
   const labs: [string, Lab][] = [];
   for (const [value, token] of map) {

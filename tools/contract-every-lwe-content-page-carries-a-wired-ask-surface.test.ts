@@ -1,5 +1,4 @@
 // ── the LWE ask surface ─────────────────────────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import {
   ROOT,
   assert,
@@ -15,10 +14,7 @@ test("every LWE content page carries a wired ask surface", async () => {
   // missing from its generated CONCEPTS map and lean had never reached concepts.json.
   //
   // The failure is an ABSENCE (a decorative compose bar that never becomes an ask box),
-  // so nothing errored and no other check looked. Four registries had been hand-patched
-  // around it: the sitemap, the buddy list, its stale "Online · 10" count, and nav-run.
-  // Root cause was generate.ts resolving three of its four wire targets against
-  // src/pages/ after the 2026-08-18 layout split moved them, then failing SOFT.
+  // so nothing errored and no other check looked.
   //
   // This asserts the whole chain per page, derived from the directory, so a new page
   // that forgets any link in it fails here instead of shipping a dead widget.

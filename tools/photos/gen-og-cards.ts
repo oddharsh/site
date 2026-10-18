@@ -3,16 +3,10 @@
 //
 // Each card is a 1200x630 JPEG (PNG until 2026-09-16; see writeCard): the page's live interactive demo screenshotted
 // and floated on the Bliss desktop, with the page's own favicon as a brand stamp
-// bottom-left. There is NO route label on the card, and this comment claimed one
-// from the first commit (#55) while `cardHtml` below has always said the opposite
-// in the same file. `git log -S 'class="dock"'` over this path returns zero
-// commits, so the dock was designed, dropped for the favicon stamp, and only the
-// header kept describing it. What makes the drift expensive is that `route` IS
-// still computed, at the "route label" comment further down, and it feeds the
-// per-card console line, so a run prints `aadhar.sh/<page>` beside every card and
-// reads exactly like a label that got applied. Cropping the same 90x520 region
-// out of four unrelated committed cards is the control: all four are favicon and
-// wallpaper, no text. Measured 2026-08-15.
+// bottom-left. There is NO route label on the card. `route` is still computed in
+// capture(), but only for the per-card console line, so a run prints
+// `aadhar.sh/<page>` beside every card without that text being on it (checked
+// 2026-08-15 by cropping four committed cards: favicon and wallpaper, no text).
 // The demo panels already carry their own `.bar` title strip, so on the wallpaper
 // they read as a little open XP app — which is exactly the "grabby, unmistakably
 // this site" look we want in a link unfurl.
@@ -21,8 +15,8 @@
 // cold on-the-fly render would risk a timeout + a blank card. We pre-bake, commit,
 // and serve immutable. Regenerate when a demo's look changes:
 //
-//     bun run og-cards                                  # captures the LIVE site (aadhar.sh)
-//     OG_BASE=http://localhost:8787 node tools/photos/gen-og-cards.ts   # local static server instead
+//     bun run og-cards                                                 # captures the LIVE site (aadhar.sh)
+//     OG_BASE=http://localhost:8787 bun tools/photos/gen-og-cards.ts   # local static server instead
 //
 // Captures production by default so data-driven demos (the photo grid, the live
 // counters, the routing prober) render populated, not empty — which is exactly
@@ -84,10 +78,8 @@ const HERO = {
   "garage-octane":    { hero: [".oct-demo"] },
   "garage-pqc":       { hero: [".pqc-demo"] },
   "garage-encoding":  { hero: [".demo", ".sample-grid"] },
-  // Three more that name their own demo wrapper, for the reason above. All three
-  // shipped while the card pipeline was pointing at a deleted www/, so they had
-  // no card at all until 2026-08-24 and the fallback had never been exercised on
-  // them. hidden-flags has two .hf-demo blocks and the first is the inventory,
+  // Three more that name their own demo wrapper, for the reason above.
+  // hidden-flags has two .hf-demo blocks and the first is the inventory,
   // which is the one worth unfurling.
   "garage-hidden-flags": { hero: [".hf-demo"] },
   "garage-typed-config": { hero: [".tc-demo"] },
@@ -103,8 +95,6 @@ const HERO = {
   "garage-tooltips":  { hero: [".vinyl-demo", ".recipe-grid"] },
   "garage-wire":      { hero: [".knob-panel", ".knob-grid"] },
   "garage-workers":   { hero: [".cf-feat:has(#probe-btn)"], preset: "#probe-btn" },
-  // Five pages that shipped with their og:image meta already pointing at a card
-  // nobody had generated, so every unfurl was a 404 until 2026-09-29.
   // av2 spans into the verdict line because the broken third tile only reads as
   // the finding once the sentence under it says the fallback never loaded.
   "garage-av2":        { span: [".av2-demo", "#av2-verdict"], hero: [".av2-demo"] },
@@ -135,7 +125,7 @@ const HERO = {
   "lwe-tee":      { hero: ["#demo-tee", ".demo"] },
   "lwe-utf8":     { hero: ["#demo-enc", "#demo-anat", ".demo"] },
   "lwe-vigenere": { hero: ["#demo-crank", ".demo"], preset: ".preset[data-crank='trans']" },
-  // ── page dirs (og-pages.ts) ────────────────────────────────────────────
+  // ── page dirs (og-pages.ts) ─────────────────────────────────────────────
   // The whole MMC console in one element: menu bar, toolbar, the device tree,
   // the graph, and the status bar with its live per-state counts. That last row
   // is why this beats cropping to the canvas alone — "39 devices · 15 installed
@@ -178,7 +168,7 @@ const HERO = {
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
 const FALLBACK = [".demo", ".workbench", "canvas", ".map", ".content > figure"];
 
-// Worker-rendered pages have no public/<section>/*.html file for listPages()
+// Worker-rendered pages have no src/pages/<section>/*.html file for listPages()
 // to find, so they're listed by hand. `path` is the exact route to capture —
 // including query state, so a card can show the page mid-task rather than
 // empty. `span` crops from the top of the first selector to the bottom of the
@@ -223,7 +213,7 @@ const WORKER_PAGES = [
 
 // Regenerate a subset without dirtying every committed card: the capture is a
 // screenshot of the LIVE site, so re-running untouched pages rewrites their
-// PNGs with fresh-but-equal pixels and git sees 25 modified files for a
+// cards with fresh-but-equal pixels and git sees every card modified for a
 // one-card change. OG_ONLY=lens (comma-separated ids) scopes the run.
 const ONLY = process.env.OG_ONLY ? new Set(process.env.OG_ONLY.split(",").map((s) => s.trim())) : null;
 
@@ -325,7 +315,8 @@ async function capture(page, cardPage, p, bliss) {
     if (await btn.count()) { await btn.click().catch(() => {}); await page.waitForTimeout(cfg.presetWait || 1600); }
   }
 
-  // route label: reuse the page's own title-bar text (already "aadhar.sh/…").
+  // route, for the per-card console line (never drawn on the card): the page's
+  // own title-bar text, already "aadhar.sh/…".
   const route = (await page.locator(".window .title-bar .title-text").first().textContent().catch(() => null))
     ?.replace(/\s+/g, " ").trim() || (p.section ? `aadhar.sh/${p.section}/${p.name}` : `aadhar.sh${p.url.replace(BASE, "")}`);
   // The generated pages (pipelines/garage, pipelines/lwe) ship no `rel="icon"`,
@@ -437,8 +428,8 @@ async function writeCard(id, pngBuf) {
   }
 }
 
-// Boot a throwaway static server over public/ so the generator is one command.
-// Skipped when OG_BASE is set (reuse a dev server you already have running).
+// Boot a throwaway static server over .build/public so the generator is one
+// command. Skipped when OG_BASE names a remote origin.
 function waitForPort(port, ms = 8000) {
   const deadline = Date.now() + ms;
   return new Promise((resolve, reject) => {
@@ -472,14 +463,14 @@ async function main() {
   const pages = await listPages();
   const browser = await chromium.launch({ channel: chromeChannel(), headless: true, args: ["--hide-scrollbars"] });
   // NEITHER context sets `reducedMotion: "reduce"`, and it is the obvious
-  // companion to the `animations: "disabled"` capture below, so here is why not.
-  // That option emulates `prefers-reduced-motion` and 13 of the pages these cards
+  // companion to the `animations: "disabled"` capture, so here is why not.
+  // That option emulates `prefers-reduced-motion`, and pages these cards
   // capture answer it with real rules: `/garage/scroll` pins `.xp-progress-fill`
-  // at `width: 60% !important` and forces `transform: none` on the zoom demo, and
-  // `/garage/horizon` carries four such blocks. So it would not stabilise the
-  // card, it would photograph a DIFFERENT card, which is the fallback state
-  // rather than the demo the unfurl is meant to show. `animations: "disabled"`
-  // settles the same motion under the page's normal media conditions.
+  // at `width: 60% !important` and forces `transform: none` on the zoom demo.
+  // So it would not stabilise the card, it would photograph a DIFFERENT card,
+  // which is the fallback state rather than the demo the unfurl is meant to
+  // show. `animations: "disabled"` settles the same motion under the page's
+  // normal media conditions.
   const ctxHi = await browser.newContext({ deviceScaleFactor: 2 }); // demo capture (supersampled)
   const ctxLo = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: CARD_W, height: CARD_H } }); // 1200x630 card
   const cardPage = await ctxLo.newPage();

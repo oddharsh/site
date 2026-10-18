@@ -1,6 +1,6 @@
 // html-to-md.ts — the downleveled-render half of the Markdown twin.
 //
-// Hand-rolled on purpose. The input is a CLOSED set: the 31 static pages this
+// Hand-rolled on purpose. The input is a CLOSED set: the static pages this
 // repo authors itself, all of them well-formed and all of them checked by
 // `bun run pages:check`. A general-purpose parser would buy robustness against
 // markup we never write, at the cost of a dependency the DEPENDENCIES.md policy
@@ -238,8 +238,8 @@ export function decodeEntities(s) {
 // ── tokenizer ───────────────────────────────────────────────────────────────
 // Attribute values are read with quote awareness so a ">" inside an attribute
 // (common in our inline SVG data: URIs and CSP-ish strings) cannot end the tag
-// early. That single case is why the naive /<[^>]*>/ used by the search index
-// is fine for flattening text and wrong for building a tree.
+// early. That single case is why a naive /<[^>]*>/ is wrong for building a
+// tree.
 
 type Attrs = Record<string, string>;
 

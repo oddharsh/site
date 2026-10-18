@@ -18,6 +18,7 @@
 //
 // usage: bun tools/photos/av2-wasm/samples.ts --src <originals> --stems a,b,c
 //          [--build <av2-tone encoder build dir>] [--zenc <zenc binary>]
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

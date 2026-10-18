@@ -2,9 +2,8 @@
 // verify-routes.ts — the route oracle for aadhar.sh.
 //
 // Curls every known route and asserts status + content-type (+ a body marker
-// where it's cheap and stable). This is the regression tripwire for the repo
-// reorg: capture a golden baseline against production, then re-run after every
-// phase. If a route's status or content-type drifts, the reorg broke something.
+// where it's cheap and stable). If a route's status or content-type drifts,
+// something broke routing.
 //
 //   node tools/verify-routes.ts [baseUrl]      # default https://aadhar.sh
 //   node tools/verify-routes.ts http://localhost:8788
@@ -24,15 +23,14 @@ import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-
 import { twinOracleRows } from "./lib/client-assets.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
-// Naming it means moving this script again costs one line instead of 57.
 const ROOT = new URL("../", import.meta.url);
 
 
 const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 
-// No request may hang the sweep. probe() has always been unbounded, which is
-// survivable against the edge but not against a local Worker holding a socket
-// open on a binding it cannot reach (the BROWSER one does exactly that).
+// No request may hang the sweep. An unbounded probe is survivable against the
+// edge but not against a local Worker holding a socket open on a binding it
+// cannot reach (the BROWSER one does exactly that).
 const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 
 // Build-output assertions (minified shells + luna.css + the .src twins) only hold
@@ -68,7 +66,8 @@ const MINIFIED_MAX_RATIO = 0.8;
 // bindings need a token that can write and CI holds a read-only one.
 const remoteRows = isProd || process.env.VERIFY_REMOTE === "1";
 
-// Real identifiers that exist in the repo today (see writing/posts.json + images/).
+// Real identifiers that exist in the repo (see src/content/writing/posts.json +
+// public/images/).
 const SLUG = "in-flux";
 const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
 const META = "L1000069_3";             // /images/meta/<stem>.json
@@ -204,7 +203,7 @@ const ROUTES = [
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/updates.json", status: 200, ct: "application/json" },
-  // /perf renders from a series fetched off the machine-owned `perf-history`
+  // /garage/dyno renders from a series fetched off the machine-owned `perf-history`
   // branch. The local harness has no KV and GitHub is unreachable from it, so
   // these rows assert the DEGRADED path on purpose: the seeded baseline history
   // is bundled, so the page must still render a chart with the fetch failing.
@@ -216,8 +215,9 @@ const ROUTES = [
   { path: "/garage/dyno", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "on the rollers" },
   { path: "/garage/dyno.json", status: 200, ct: "application/json" },
   // The old names, kept because `agents: true` published them and the well-known
-  // cards carrying that projection are cached 30 days. An exact ROUTES entry beats
-  // the /garage/<page> PREFIX, so these must not fall through to the asset layer.
+  // cards carrying that projection are cached 30 days. Each is an exact route in
+  // routes.ts that 301s to its /garage/dyno name, so neither may fall through to
+  // the asset layer.
   { path: "/perf", status: 301 },
   { path: "/perf.json", status: 301 },
   { path: "/restore", status: 200, ct: "text/html" },
@@ -248,19 +248,16 @@ const ROUTES = [
     { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/tooltip.ts" },
     // Every client script's readable twin serves and still carries the marker the
     // build holds its minified copy to: one row per script in the client asset
-    // registry. 11 of these 23 were hand-written here until 2026-10-02.
-    // /lwe/ask.src.js has its own row further down, which also asserts its twin.
+    // registry. /lwe/ask.src.js has its own row further down, which also
+    // asserts its twin.
     ...twinOracleRows().filter((row) => row.path !== "/lwe/ask.src.js").map((row) => ({ ...row })),
-    // /terminal.js and /terminal.src.js used to be asserted here — the console
-    // was the one client script whose absence was invisible on its own page.
-    // Both are gone, and so is /terminal itself (410 since 2026-09-16).
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
-  // Representation contracts: the machine paths stay fixed even if a caller
-  // sends a browser Accept header; the HTML paths are explicit fragments.
-  // both reach a third party as AadharshBot, so both need RN_SIGNING_KEY_JWK.
-  // Locally that secret is absent and /lens/fetch answers its own 502 with
-  // "AadharshBot signing key is unavailable" — honest, but not this assertion.
+  // Representation contracts: a machine path keeps its type even when a caller
+  // sends a browser Accept header. /lens/fetch and /lens/shot both reach a third
+  // party as AadharshBot, so both need RN_SIGNING_KEY_JWK. Locally that secret is
+  // absent and /lens/fetch answers its own 502 with "AadharshBot signing key is
+  // unavailable": honest, but not this assertion.
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" }, remote: true },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true, remote: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
@@ -292,7 +289,6 @@ const ROUTES = [
   { path: "/mcp", method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, marker: "# Right now",
     body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
-  // An empty batch is invalid, not an all-notification batch to accept silently.
   // A built document since 2026-09-25 (lib/island.ts): the marker is the island
   // mount. The fragment row only pins the shape, because the harness's local D1
   // carries no serendipity schema, so the pool read fails and the fragment
@@ -302,14 +298,11 @@ const ROUTES = [
   { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
   // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
   { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
+  // An empty batch is invalid, not an all-notification batch to accept silently.
   ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
 
   // ── the terminal programs ──────────────────────────────────────────────
-  // The first marker is a BOX-DRAWING character rather than prose, and that is
-  // deliberate: the failure these rows exist to catch is width math breaking,
-  // and a bottom-left corner only reaches the body if a complete frame was
-  // drawn. A row asserting a word would pass on a frame with no border at all.
   // `plain=1` keeps every assertion off the ANSI escapes.
   // The console page retired 2026-09-16. 410, and the body names the exchange it
   // used to show, so an old link is told where to go rather than shrugged at.
@@ -387,7 +380,7 @@ const ROUTES = [
   // go red the day the farm learned to build them.
   { path: "/lens/markdown?url=https://aadhar.sh/bot", status: 200, ct: "application/json", marker: "claude-code" },
   // The SSRF guard on this route specifically, same reasoning as the nlweb row:
-  // a blocked host is refused before any of the ten fetches leave.
+  // a blocked host is refused before any fetch leaves.
   { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set.
   // NO `encoding` pin here, deliberately, and the reason generalises to the
@@ -509,7 +502,7 @@ const ROUTES = [
   { path: "/images/manifest.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
-  // the SOOC original: ~5GB of R2 that is deliberately not in the repo.
+  // the original archive (a lossless JPEG XL in R2), deliberately not in the repo.
   { path: `/images/full/${FULL}`, status: 200, ct: "image/jxl", remote: true },
   // its retired JPEG URL redirects from the bundled index, before R2 is asked
   { path: `/images/full/${FULL_JPEG}`, status: 301 },
@@ -525,7 +518,7 @@ const ROUTES = [
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
-  { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads (was z-jl90 until zenjpeg replaced jpegli in the ladder)
+  { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads
   { path: "/lwe", status: 200, ct: "text/html" },
   { path: "/lwe/", status: 301, location: "/lwe" },   // routeDropSlash, as /garage/
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
@@ -676,10 +669,7 @@ async function probe(r) {
     const maxBytes = r.readable ? Math.floor(statSync(new URL(r.readable, ROOT)).size * MINIFIED_MAX_RATIO) : null;
     const okBytes = maxBytes === null || (bytes !== null && bytes <= maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
-    // pointing at the readable .src.html twin ahead of it. That banner reached
-    // /lens on 2026-07-31, when minification stopped being homepage-only; the
-    // homepage had carried it for a while without tripping this, because only
-    // /lens and /search assert fullPage and /search is rendered per request.
+    // pointing at the readable .src.html twin ahead of it.
     //
     // Allowing a leading comment is safe rather than a loosened contract. Per the
     // HTML5 "initial" insertion mode a comment before DOCTYPE is legal and does
@@ -759,9 +749,8 @@ async function main() {
   // Deleted 2026-08-23 along with the committed aadhar.sh copy, on this evidence:
   //
   //   - the ROUTES table is the expectation and it is strictly richer. Every row
-  //     asserts a status, the only four without a content-type are 301s where it
-  //     is meaningless, and rows carry things a recording cannot (status UNIONS
-  //     like [200, 503], `flaky`, body markers, byte caps).
+  //     asserts a status, and rows carry things a recording cannot (status
+  //     UNIONS like [200, 503], `flaky`, body markers, byte caps).
   //   - regenerating it against production after eight months found 52 new rows,
   //     0 removed, and exactly ONE differing row: /coffee/availability.json at
   //     503 rather than 200, which is the calendar fail-closed path the table

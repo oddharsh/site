@@ -46,10 +46,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL, TOKEN, runVision, visionBody } from "./lib/workers-ai.ts";
 
-// ROOT is the REPO root, matching every sibling in this directory. It used to be
-// dirname(dirname(here)), which resolved to public/ only because this script lived
-// at public/scripts — the one script here that did not use "../..", and therefore
-// the one the move to tools/photos would have silently repointed at tools/.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const META = path.join(ROOT, "public", "images", "metadata.json");
 const HASHES = path.join(ROOT, "public", "images", "hashes.json");

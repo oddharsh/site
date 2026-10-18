@@ -1,12 +1,12 @@
-// contract-shared.ts — the suite's imports and its cross-section helpers.
-//
-// Split out of the single 8720-line contract-tests.test.ts on 2026-08-20.
+// contract-shared.ts: the suite's imports and its cross-section helpers.
 //
 // The test files sit in tools/ rather than a tools/test/ subdirectory ON
-// PURPOSE. The suite carries 111 dynamic relative imports plus 6
-// `new URL("../…", import.meta.url)` reads, and every one keeps working
-// untouched at this depth. A tidier subdirectory would have meant rewriting all
-// 117 on a refactor whose whole point is making a lost test harder to miss.
+// PURPOSE. When the suite was split out of one 8720-line
+// contract-tests.test.mjs on 2026-08-20, it carried 111 dynamic relative
+// imports plus 6 `new URL("../…", import.meta.url)` reads, and every one kept
+// working untouched at this depth. A tidier subdirectory would have meant
+// rewriting all 117 on a refactor whose whole point was making a lost test
+// harder to miss.
 //
 // Only helpers used by MORE THAN ONE section live here, plus whatever those
 // helpers themselves reference. That transitive step is not optional: the first
@@ -346,8 +346,7 @@ const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
 const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), context());
 
 
-// The globals, typed loosely for TEST DOUBLES, and this is the only cast in the
-// suite that exists for typing rather than for behaviour.
+// The globals, typed loosely for TEST DOUBLES.
 //
 // bun types `globalThis.fetch` as `typeof fetch`, which carries a `preconnect`
 // method. A double that answers three URLs has no business implementing it, and

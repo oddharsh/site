@@ -42,8 +42,8 @@ const RECORD = process.argv.includes("--record");
 
 function fail(msg: string): never { console.error(`checkpoints: ${msg}`); process.exit(1); }
 
-// The exact query bump-version.sh writes from, so a column or order change here
-// fails loudly instead of producing a diff nobody can read.
+// The fields a checkpoints.json row carries, in vnum order: --sync writes these
+// rows out as the file.
 const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;";
 
 if (RECORD && process.env.CI) {

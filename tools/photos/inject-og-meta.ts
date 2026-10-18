@@ -6,8 +6,8 @@
 // that already has twitter:card, and re-points og:image if the card path changed.
 // Anchored after the page's existing og:url line (every page has one).
 //
-//     node tools/photos/inject-og-meta.ts          # write
-//     node tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
+//     bun tools/photos/inject-og-meta.ts          # write
+//     bun tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
 
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";

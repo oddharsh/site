@@ -69,7 +69,7 @@ test("/serendipity/events.html is a cookie-free, edge-cached island", async () =
     assert.ok(body.includes("Future &lt;script&gt;") && !body.includes("Future <script>"), "event names are escaped");
     await settle();
     assert.equal(c.store.size, 1, "the fragment is stored for the next visitor in this colo");
-    // A mutation evicts the island, as it used to evict the cached dashboard.
+    // A mutation evicts the island.
     await handleSerendipity(new Request("https://aadhar.sh/serendipity/add-event", { method: "POST", body: new FormData() }), env, ctx);
     await settle();
     assert.ok(c.deleted.includes("https://aadhar.sh" + EVENTS_URL));
@@ -106,8 +106,8 @@ test("serendipity's policy keeps its img-src whichever script-src it carries", (
 });
 
 test("the agents page is a deterministic bake, and the live arm still renders it", async () => {
-  // Baked by build.ts step 5b since 2026-09-25 with no island, because nothing
-  // on it is read per request. The live arm stays for local dev's missing bake.
+  // Baked by tools/bake-worker-pages.ts (build.ts step 5b) since 2026-09-25
+  // with no island, because nothing on it is read per request. The live arm stays for local dev's missing bake.
   const a = await renderMcpInfoPage().text();
   assert.equal(a, await renderMcpInfoPage().text(), "two renders differ, so the build would bake whichever it got");
   assert.match(a, /list_events/);

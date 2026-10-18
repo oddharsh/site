@@ -1,5 +1,4 @@
 // ── webmention link verification ────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   documentContent,
@@ -7,7 +6,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── webmention link verification ────────────────────────────────────
 // The verify step is the ONLY thing standing between "someone sent a POST" and
 // "someone's page appears on my site", so what counts as a link is the whole
 // anti-forgery property. Every row below was measured against the previous

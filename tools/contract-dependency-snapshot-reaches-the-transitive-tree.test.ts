@@ -1,5 +1,4 @@
 // ── the dependency snapshot reaches the transitive tree ──────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { buildSnapshot, keySegments, npmPurl, resolveKey, snapshotResolved } from "./lib/dependency-snapshot.ts";

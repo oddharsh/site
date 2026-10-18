@@ -17,7 +17,6 @@ const PAINT_DEF = /<(filter|linearGradient|radialGradient|clipPath|mask|pattern)
 test("compactSvg folds a whole-value hex colour and nothing else", () => {
   assert.equal(compactSvg('<stop stop-color="#FFFFFF"/>'), '<stop stop-color="#fff"/>');
   assert.equal(compactSvg('<rect fill="#aabbcc"/>'), '<rect fill="#abc"/>');
-  // Pairs that do not repeat have no short form.
   assert.equal(compactSvg('<rect fill="#abcdef"/>'), '<rect fill="#abcdef"/>');
   // A fragment reference is not a colour, even when it looks like one.
   assert.equal(compactSvg('<rect fill="url(#aabbcc)"/>'), '<rect fill="url(#aabbcc)"/>');

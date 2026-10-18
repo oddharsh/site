@@ -141,7 +141,6 @@ DRY=0
 
 LADDER="60 70 75 80 85 88 90 92 95"
 
-# ── arguments ─────────────────────────────────────────────────────────
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -176,7 +175,6 @@ whole() {  # whole <flag> <value>
 whole --width "$WIDTH"; whole --qmax "$QMAX"; whole --qmin "$QMIN"
 [ "$QMIN" -le "$QMAX" ] || { echo "error: --qmin ($QMIN) is above --qmax ($QMAX)" >&2; exit 1; }
 
-# ── preconditions ─────────────────────────────────────────────────────
 for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not found in PATH" >&2; exit 1; }
 done
@@ -194,7 +192,6 @@ fi
 TMP="$(mktemp -d "/tmp/ig-export-$$-XXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
-# ── helpers ───────────────────────────────────────────────────────────
 # float comparison, since the shell only does integers
 ge() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a>=b)}'; }
 le() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a<=b)}'; }
@@ -250,10 +247,8 @@ orient_ops() {
 # ssimulacra2 point out of an encode, and it was feeding that search a reference
 # that had already lost more than the search could ever win back.
 #
-# GAMMA IS NOT THE ONLY DEFECT, and the first draft of this comment claimed it
-# was. It said box is what sips was approximating so the swap is gamma alone.
-# Measured against five encoded-sRGB kernels on the same frame, sips matches
-# NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
+# GAMMA IS NOT THE ONLY DEFECT. Measured against five encoded-sRGB kernels on
+# the same frame, sips matches NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
 # lanczos 58.72. A real kernel family difference puts one of those near 90, and
 # a flat low cluster means the thing being compared is not a clean filter.
 #
@@ -284,8 +279,8 @@ orient_ops() {
 # Which AXIS to cap is the subtle half, and it survives the rewrite unchanged
 # because zenc reads the same stored pixels sips wrote: a frame the camera
 # tagged Orientation 5-8 is stored on its side, so capping its stored width
-# would cap the delivered HEIGHT. Same swap rule as metadata.json's (CLAUDE.md
-# gotcha 6), applied before the rotation rather than after.
+# would cap the delivered HEIGHT. Same swap rule as metadata.json's (gotcha 6,
+# docs/GOTCHAS.md), applied before the rotation rather than after.
 #
 # ROTATION STAYS ON sips. `-r` and `-f` move samples without inventing any, so
 # there is no averaging to get wrong, and they run on the 1080px output rather
@@ -294,7 +289,6 @@ prepare_reference() {  # prepare_reference <src> <out.png>
   local src="$1" ref="$2" o ops axis w h
   o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
-  # One spawn for both, the same shape dims() below already used.
   srcdims=$(sips -g pixelWidth -g pixelHeight "$src" 2>/dev/null)
   w=$(printf '%s\n' "$srcdims" | awk '/pixelWidth/{print $2}')
   h=$(printf '%s\n' "$srcdims" | awk '/pixelHeight/{print $2}')
@@ -307,8 +301,7 @@ prepare_reference() {  # prepare_reference <src> <out.png>
     *)       axis="--width"  ;;
   esac
   # `--width N` is a CAP rather than a target, so a source already inside it
-  # passes through untouched and there is no branch to keep in step. That is why
-  # the old if/else is gone rather than translated.
+  # passes through untouched and there is no branch to keep in step.
   local mid="$TMP/$(basename "$ref" .png)-mid.tiff"
   sips -s format tiff "$src" --out "$mid" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
   "$ZENC" resize "$mid" "$axis" "$WIDTH" --filter box --out "$ref" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
@@ -326,7 +319,6 @@ prepare_reference() {  # prepare_reference <src> <out.png>
 
 dims() { sips -g pixelWidth -g pixelHeight "$1" 2>/dev/null | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w"x"h}'; }
 
-# does this encode clear every gate it was given?
 clears() {  # clears <s2> <ba>
   ge "$1" "$TARGET" || return 1
   [ -z "$BA_MAX" ] || le "$2" "$BA_MAX" || return 1
@@ -351,7 +343,6 @@ finish() {  # finish <candidate.jpg> <stem> <source> — place it, metadata hand
   mkdir -p "$OUT" && cp "$cand" "$dest" && stat -f%z "$dest"
 }
 
-# ── enumerate inputs ──────────────────────────────────────────────────
 SOURCES="$TMP/sources.txt"; : > "$SOURCES"
 for arg in "${ARGS[@]}"; do
   if [ -d "$arg" ]; then
@@ -368,7 +359,6 @@ sort -u "$SOURCES" -o "$SOURCES"
 TOTAL=$(wc -l < "$SOURCES" | tr -d ' ')
 [ "$TOTAL" -gt 0 ] || { echo "no eligible photos found in input(s)" >&2; exit 1; }
 
-# ── report the run before it starts ───────────────────────────────────
 case "$MODE" in
   search)    echo "searching $TOTAL file(s) for the lowest q clearing ssimulacra2 >= $TARGET${BA_MAX:+ and butteraugli <= $BA_MAX}" ;;
   max)       echo "encoding $TOTAL file(s) flat at q$QMAX — the mode for handing Instagram a source it will re-encode" ;;
@@ -387,7 +377,6 @@ while IFS= read -r f; do
   fi
   size=$(dims "$ref")
 
-  # ---- calibrate: every rung as a real file, next to the reference ----
   if [ "$MODE" = calibrate ]; then
     dir="$OUT/$stem-ladder"
     [ "$DRY" -eq 0 ] && { mkdir -p "$dir"; cp "$ref" "$dir/original.png"; }
@@ -405,12 +394,11 @@ while IFS= read -r f; do
     OK=$((OK+1)); continue
   fi
 
-  # ---- the q95 baseline, so the search can report what it saved ----
+  # The q95 baseline, so the search can report what it saved.
   top="$TMP/$stem-top.jpg"
   "$ZENC" "$ref" "$top" -q "$QMAX" --yuv "$YUV" >/dev/null 2>&1 || { echo "  $stem — encode failed"; FAIL=$((FAIL+1)); continue; }
   top_bytes=$(stat -f%z "$top")
 
-  # ---- max: no search, hand over the cleanest source ----
   if [ "$MODE" = max ]; then
     sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
@@ -418,8 +406,7 @@ while IFS= read -r f; do
     OK=$((OK+1)); continue
   fi
 
-  # ---- search: smallest q clearing every gate ----
-  # both gates move monotonically with q, so bisection is sound: every q above a
+  # Search for the smallest q clearing every gate. Both gates move monotonically with q, so bisection is sound: every q above a
   # passing one also passes, every q below a failing one also fails.
   lo=$QMIN; hi=$QMAX; best=""; best_s2=""; best_ba=""; best_file=""
   while [ "$lo" -le "$hi" ]; do

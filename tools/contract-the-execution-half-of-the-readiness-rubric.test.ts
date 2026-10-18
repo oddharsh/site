@@ -1,5 +1,4 @@
 // ── the execution half of the readiness rubric ──────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   EXECUTION_META,
   EXECUTION_PROBE,
@@ -14,11 +13,9 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── the execution half of the readiness rubric ──────────────────────────────
-// /lens has scored agent readiness since it was built and every one of those
-// twenty checks is a declaration audit, which is why they were all green on
-// 2026-08-12 while this site's homepage rendered twelve blank squares in an
-// agent browser. These pin the two checks that close that gap, and the rule
+// On 2026-08-12 every one of /lens's twenty readiness checks was a declaration
+// audit, which is why they were all green that day while this site's homepage
+// rendered twelve blank squares in an agent browser. These pin the two checks that close that gap, and the rule
 // that keeps them fair to a stranger's site.
 
 test("execution checks stay NEUTRAL until an agent browser has actually rendered", () => {
@@ -270,6 +267,5 @@ test("the agent check's word count strips a script closed any legal way", () => 
   ]) {
     assert.equal(httpWords(html), 2, `style body leaked into the count: ${html}`);
   }
-  // And the ordinary path still counts what it should.
   assert.equal(httpWords("<h1>one two</h1><p>three</p>"), 3, "prose must survive the strip");
 });

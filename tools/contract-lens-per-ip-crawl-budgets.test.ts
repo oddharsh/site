@@ -1,5 +1,4 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   configText,
   context,
@@ -9,7 +8,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /lens per-IP crawl budgets ──────────────────────────────────────
 // These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.
 // The route they guard is the one that fetches third parties and spends Browser
 // Run, so "fails open when the binding is missing" and "the 429 quotes the real

@@ -28,7 +28,7 @@ export const HTML_MARKERS: Array<[label: string, marker: RegExp]> = [
 // required in the output only when the page carried it on the way in.
 //
 // That difference matters, and it is not a softening. A fixed per-family list would
-// have to know which of the 43 pages is a garage explainer, which is an LWE chat,
+// have to know which served page is a garage explainer, which is an LWE chat,
 // and which is a Worker-rendered document with no quiz at all, and it would have to
 // be edited every time a family gains a member. Asking "did minification LOSE this"
 // is the claim the tripwire actually wants, it holds for every page without a

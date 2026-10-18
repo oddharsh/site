@@ -1,11 +1,9 @@
 // ── /cache — the behavioral revalidation lint ───────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
 
-// ── /cache — the behavioral revalidation lint ───────────────────
 // judgeRevalidation is pure: the whole product is the rules, and the network
 // half dies at signing under plain node anyway.
 

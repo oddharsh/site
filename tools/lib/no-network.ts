@@ -33,7 +33,7 @@
 // machine: the checks that genuinely read the wire (`infra:check`, `dcz:check`,
 // `routes:check:remote`) are their own scripts and never run under `bun test`.
 //
-// To stub one test, follow the convention already in ~10 files here:
+// To stub one test, follow the convention the contract tests already use:
 //
 //   const realFetch = globalThis.fetch;
 //   try { testGlobals.fetch = async () => new Response("...", { status: 200 }); ... }
@@ -88,7 +88,6 @@ const arm = () => {
   process.on("exit", () => {
     if (escaped.length === 0) return;
 
-    // counts by host, filled as refusals arrive
     const counts = new Map<string, number>();
     for (const url of escaped) {
       let host = "(unparseable)";

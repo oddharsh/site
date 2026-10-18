@@ -1,6 +1,5 @@
 import { Script } from "node:vm";
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   MODERN_META,
@@ -36,7 +35,6 @@ import { fieldMatches } from "../src/worker/lib/text.ts";
 import { buildImageFingerprints } from "./lib/photo-indexes.ts";
 import { createHash } from "node:crypto";
 
-// ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test
 // below is about the blast radius of that rather than the feature working.
 

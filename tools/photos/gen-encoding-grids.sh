@@ -43,12 +43,12 @@ fi
 # axis this page teaches. add-photos.sh already resolves jpegtran this way.
 #
 # READ THIS BEFORE REGENERATING. The committed grids were produced by the bare
-# (libjpeg-turbo) cjpeg, so the first run after this fix SHRINKS the mozjpeg
-# cell from 1371 to 940 bytes, and that breaks the page's narrative rather than
-# just its label: /lwe/encoding walks four encoders "in the order the site
-# adopted them" and says each "squeezes a little harder than the last", which
-# stops being true when mozjpeg (940 B) lands under zenjpeg (980 B) on this
-# crop. Sizes on that page are measured live from these files, so the images
+# (libjpeg-turbo) cjpeg, so the first run with mozjpeg's cjpeg SHRINKS the
+# mozjpeg cell from 1371 to 940 bytes, and that breaks the page's narrative
+# rather than just its label: /lwe/encoding walks four encoders "in the order the
+# site adopted them" and says each "squeezes a little harder than the last",
+# which stops being true when mozjpeg (940 B) lands under zenc (972 B committed
+# on 2026-10-16) on this crop. Sizes on that page are measured live from these files, so the images
 # and the copy disagree the moment you regenerate. Update the copy in the same
 # commit, or do not regenerate.
 MOZ_CJPEG="$(brew --prefix mozjpeg)/bin/cjpeg"

@@ -27,9 +27,7 @@
 #   5. writes the stem's entry into src/worker/photo-index.json — the
 #      committed photo index the worker BUNDLES (which photos exist: R2 key,
 #      size, upload date). This is what makes a photo appear in the grid, and
-#      it ships at deploy like every other committed artifact. (It replaced the
-#      manifest:images KV cache over a runtime R2 list(); there is no cache to
-#      bust anymore.)
+#      it ships at deploy like every other committed artifact.
 #   6. captions anything still missing alt text (gen-alt-text.ts), rebuilds the
 #      retrieval terms queryPhotos ranks on (gen-photo-semantics.ts, which reads
 #      those captions and so must follow them), then validates the whole artifact
@@ -111,8 +109,9 @@ TMP="/tmp/aadhar-add-photos-$$"
 # SLOWEST SINGLE PHOTO (a HIF full-res export, ~28s here), so on a sample this
 # size there is no parallelism left to extract at any width. 8 reaches the
 # plateau at half the cores, which leaves headroom for the two things that scale
-# with N and are invisible in the table above. avifenc already spends `--jobs 4`
-# per photo, so N photos in flight ask for up to 4N threads. And each worker
+# with N and are invisible in the table above. avifenc spent `--jobs 4` per
+# photo when this was measured, so N photos in flight asked for up to 4N
+# threads. And each worker
 # holds a full-resolution frame: a 40MP linear-light f32 frame is ~480MB, on top
 # of the ~311MB TIFF phase 1 writes and the bigger PNG phase 2 writes, all of
 # which live in $TMP at once.
@@ -125,11 +124,9 @@ TMP="/tmp/aadhar-add-photos-$$"
 # it is the normal case in this repo (see the collaboration rule in CLAUDE.md),
 # so lower this rather than raise it when in doubt.
 #
-# The general trap is worth more than the number: a first pass took the loaded
-# figures at face value and read them as a verdict on the change. Both sweeps
-# were real measurements of different machines. Capture load and swap either side
-# of each arm, which tools/photos is now in the habit of doing, or a busy box
-# will quietly answer a question you did not ask.
+# When re-measuring, capture load and swap either side of each arm, or a busy
+# box will quietly answer a question you did not ask: a first pass read the
+# loaded figures above as a verdict on the change.
 #
 # JOBS=1 costs 1% against the serial original, which is the control that says the
 # restructuring below is free: the win is concurrency and not a quiet change to
@@ -192,17 +189,19 @@ run_parallel() {  # run_parallel <worker-fn> [limit]
 }
 
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
-# so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
-# in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
+# so no off-square bytes ship. MUST match reencode-thumbnails.sh and the
+# -400/-200 .avif suffixes src/worker/photos.ts builds /i/ URLs with. override
+# per run with SQ=/SQ_SM=.
 SQ="${SQ:-600}"        # desktop square edge (the 184px tile at DPR-3)
 SQ_SM="${SQ_SM:-400}"  # DPR-2 square edge
 SQ_XS="${SQ_XS:-200}"  # DPR-1 square edge
 
-# The three edges are the srcset candidates lib/photo-grid.js emits against a
-# fixed 184px tile: 184, 368 and 552 device pixels at DPR 1, 2 and 3. Before the
-# 200px tier existed every visitor got the 400px file, which is 2.3x what a 1x
-# display can show (measured over a 12-photo draw: 113.3 KiB served against 42.5
-# KiB displayable) while a DPR-3 phone got a 400px file for a 552px need.
+# The three edges are the srcset candidates src/worker/lib/photo-grid.ts emits
+# against a fixed 184px tile: 184, 368 and 552 device pixels at DPR 1, 2 and 3.
+# Before the 200px tier existed every visitor got the 400px file, which is 2.3x
+# what a 1x display can show (measured over a 12-photo draw: 113.3 KiB served
+# against 42.5 KiB displayable) while a DPR-3 phone got a 400px file for a 552px
+# need.
 
 # preconditions
 if [ $# -eq 0 ]; then
@@ -506,21 +505,18 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 
 # ── the committed photo index (src/worker/photo-index.json) ──
 # One entry per published stem: the R2 key, its byte size, and when it was
-# uploaded. The worker BUNDLES this file (photos.js imports it), so the pool
-# read costs module memory instead of a KV round trip — and this write step is
-# what replaced the retired manifest:images KV bust: a photo goes live at
-# deploy, which was already the real gate because its /i/ tiles, hashes.json
-# entry, and caption are committed files too.
+# uploaded. The worker BUNDLES this file (src/worker/photos.ts imports it), so
+# the pool read costs module memory instead of a KV round trip, and a photo goes
+# live at deploy, which is the real gate anyway because its /i/ tiles,
+# hashes.json entry, and caption are committed files too.
 #
 # Size comes from the same prepared-file receipt the uploader used. Object
 # keys come from input selection, including exact remote key casing. Existing
 # upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-# Entries spool as NUL-separated fields, five per photo, and one node call at
-# the end merges them all. It was one jaq call per photo building a JSON
-# object, then a second jaq merging that object in; the JSON engine left the
-# pipeline on 2026-09-15 (pipeline-json.ts names the filters it replaced).
+# Entries spool as NUL-separated fields, five per photo, and one
+# pipeline-json.ts call at the end merges them all.
 NEW_ENTRIES="$TMP/index-entries.spool"
 : > "$NEW_ENTRIES"
 [ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
@@ -548,31 +544,14 @@ echo "  photo index: $(bun "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") 
 # The standalone extractor still offers a full replacement with its own guard.
 "$SCRIPT_DIR/extract-photo-metadata.sh" --merge "${META_SOURCES[@]}" | tail -1
 
-# A SECOND `zenc histogram --root` stood here until 2026-08-29, and the comment
-# that justified it rested on a premise that expired in 2026-08. It claimed
-# extract-photo-metadata.sh "does NOT emit hist", so this "MUST run after it".
-# That script bakes at its own line 266 and then builds BOTH indexes from the
-# result, so the outer call ran after the artifacts it was supposed to feed and
-# nothing rebuilt from what it wrote.
-#
-# Verified equivalent before removal rather than assumed. The two --root values
-# spell the same path ($SCRIPT_DIR/../.. plus /public), neither passed a STEM, so
-# zenc took every key in hashes.json both times: 165 photos baked twice. Measured
-# 2026-08-29, one library: 0.954s cold, 0.332s and 0.316s warm, and the second
-# bake is always the warm one because the first left every file correct.
-#
-# Idempotence is why this was invisible and is not a reason to keep it. The one
-# thing left reading meta/ down here is check-photo-pipeline.ts, which COMPARES
-# the two indexes against it and rebuilds nothing, so a second bake that ever
-# disagreed could only turn a good run red. Keeping the bake beside the index
-# builds makes the last bake to run always the one they read.
-#
-# At removal, metadata regen was guarded on exif-sooc and jaq, so on a
-# machine missing either, this call had been the ONLY bake
-# and it wrote a meta/ carrying `hi` and no EXIF. check-photo-pipeline.ts then
-# rebuilt exif.json from that and failed 165 of 165 photos pointing at
-# build-exif-index.ts, which is not where the fault was. With no meta/ at all
-# it skips the drift tier by design and reports the real gap instead.
+# No second `zenc histogram --root` here (one stood here until 2026-08-29).
+# extract-photo-metadata.sh bakes the histograms and then builds BOTH indexes
+# from the result, so a bake down here would run after the artifacts it feeds
+# and nothing would rebuild from what it wrote. The one thing left reading
+# meta/ below is check-photo-pipeline.ts, which COMPARES the two indexes
+# against it and rebuilds nothing, so a second bake that ever disagreed could
+# only turn a good run red. Keeping the bake beside the index builds makes the
+# last bake to run always the one they read.
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed public/i/ square via hashes.json and posts those exact

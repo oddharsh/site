@@ -1,5 +1,4 @@
 // ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   brotliCompressSync,
@@ -26,8 +25,8 @@ import { hashOrder, minifiedScripts } from "./lib/client-assets.ts";
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file
 // imports has to resolve under bare node, forever.
 //
-// The behavioural half lives in lens-reader/test/reader.test.ts, run by the CI
-// step that installs those dependencies.
+// The behavioural half lives in lens-reader/test/reader.test.ts, run with
+// `bun run test` inside lens-reader/, where those dependencies are installed.
 
 test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
   const src = readFileSync("./lens-reader/src/reader.ts", "utf8");
@@ -254,8 +253,8 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
   assert.equal(table.slice(0, 4), "THAT", "the table must stay in frequency order; TOP is calibrated to the first entry");
 
   // TOP is log10 of the most common quadgram's corpus share and FLOOR is an
-  // unseen one. gen-quadgram-table.ts prints both; the page hardcodes them,
-  // and a table rebuilt from a different corpus moves them.
+  // unseen one. tools/photos/gen-quadgram-table.ts prints both; the page
+  // hardcodes them, and a table rebuilt from a different corpus moves them.
   const top = Number(page.match(/var TOP = (-[\d.]+)/)[1]);
   const floor = Number(page.match(/FLOOR = (-[\d.]+)/)[1]);
   assert.ok(top > floor, "an observed quadgram must outscore an unseen one");

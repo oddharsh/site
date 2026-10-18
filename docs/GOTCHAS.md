@@ -504,7 +504,13 @@ skips it.
     under 1.4.3, which has no linter, that same body recurses into the
     script. `bun lint --doctor` reads the config either way, so it can say
     "117 rules run natively" while the lint step runs something else.
-    Measured 2026-10-15 on 408c9374b.
+    Measured 2026-10-15 on 408c9374b. The recursion ends in dozens of
+    "exited with code 126" lines that never name the cause, and a canary
+    can lack the linter while printing the same `1.4.4` as one that has it
+    (+6c1eb067e against the pin's +9bcbf1ecb, 2026-10-17). So the script
+    opens with `tools/check-bun-lint.ts`, which probes `bun lint --help` in
+    an empty directory and stops the run with one message naming the
+    installer; the contract's last two tests hold the guard and its control.
     Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.ts`.
 
 68. **The byte-identical build gate read the build's stopwatch.** From
@@ -664,3 +670,17 @@ skips it.
     count, and break the path once to watch the floor fire. Gotcha 55 is the
     same split reaching `servedFiles()`.
     Checked by: `tools/build.ts`.
+
+80. **A check that warns when it finds nothing compares nothing.** Build
+    step 5 holds the taskbar floor in `luna.css`, the homepage and cal's
+    templates to one value, because a copy that disagrees paints a different
+    window height before luna lands. Its regex wanted `calc(100dvh - 30px)`.
+    #1369 (2026-10-16) spelled two of the copies through a `--taskbar-h`
+    token, so the regex matched none of the three, and every build printed
+    "no taskbar-floor calc found" three times above "invariants ok". Nobody
+    reads a warning on a green build. `tools/lib/taskbar-floor.ts` now
+    resolves `var()` through each document's own custom properties and
+    compares the flattened sums, a missing floor is a hard failure, and the
+    summary line prints how many floors agreed. Gotcha 79 is the same blind
+    instrument on a directory walk.
+    Checked by: `tools/build.ts`, `tools/contract-the-taskbar-floor-agrees-across-copies.test.ts`.

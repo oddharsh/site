@@ -1,5 +1,4 @@
 // ── /ask — the natural-language door ────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   DATA_TOOLS,
   MODERN_META,
@@ -12,20 +11,14 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /ask — the natural-language door ────────────────────────────
 // Every test here runs the ROUTER path (no AI binding), which is the mode CI
 // and local dev get. That is deliberate rather than a limitation: the router is
 // the fallback the whole route rests on when the model is unavailable, and it
 // is the only half that can be asserted deterministically.
 
-
-
-
-
-
 test("the ask loop and the MCP server call ONE tool registry", async () => {
-  // lib/tools.js exists so a tool description cannot be reworded in one door and
-  // not the other. If either side grows a private list, this fails.
+  // src/worker/lib/tools.ts exists so a tool description cannot be reworded in
+  // one door and not the other. If either side grows a private list, this fails.
   const env = terminalEnv();
   const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
     .result.tools.map((t) => t.name);

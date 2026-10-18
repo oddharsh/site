@@ -1,5 +1,4 @@
 // ── the bun pin is declared once ─────────────────────────────────────────────
-// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
@@ -13,8 +12,8 @@ const root = fileURLToPath(ROOT);
 
 // config/bun-pin.json is the one dependency version here that no updater owns, and
 // the one that compiles the site: wrangler.config.ts builds with `bun
-// tools/build.ts`, so it decides every content-addressed /a/ and /i/ URL. Three
-// readers share it and none may carry a copy.
+// tools/build.ts`, so it decides every content-addressed /a/ and /i/ URL. Every
+// reader shares this one file, and none may carry a copy.
 
 test("the pin lib reads the same string config/bun-pin.json holds, and package.json declares none", async () => {
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));

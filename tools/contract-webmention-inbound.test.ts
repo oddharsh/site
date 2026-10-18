@@ -1,5 +1,4 @@
 // ── webmention (inbound) ────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   absoluteHttpUrl,
@@ -22,15 +21,6 @@ import {
   wmEnv,
   wmPost,
 } from "./contract-shared.ts";
-
-// ── webmention (inbound) ────────────────────────────────────────────────────
-// A tiny in-memory D1 stand-in: enough SQL surface for the handful of statements
-// webmention.js issues, so the verify → store → approve → display path runs end
-// to end without a real database.
-
-// the shared context() discards waitUntil promises; webmention does its real
-// work there (verification is deliberately off the request path), so the test
-// needs a context it can await.
 
 test("webmention rejects targets that do not accept mentions", async () => {
   const env = wmEnv(fakeD1());

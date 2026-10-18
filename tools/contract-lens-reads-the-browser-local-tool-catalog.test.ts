@@ -5,7 +5,7 @@
 // JavaScript, which nothing you can fetch will ever reveal. Reading them means
 // running the page, so the probe rides the CDP session /lens/wire already opens.
 //
-// Two invariants, and the first is a security boundary rather than a preference.
+// Reading and never calling is a security boundary: the first test holds it.
 import {
   assert,
   readFileSync,
@@ -23,7 +23,8 @@ test("the probe reads the catalog and can never call anything in it", () => {
   // Comments are stripped first: this module's own header EXPLAINS the rule by
   // naming the method, and a scanner that cannot tell prose from code would
   // either fail on that sentence or have to be silenced into uselessness. Same
-  // shape as the modelContext ownership check next door.
+  // shape as the modelContext ownership check in
+  // contract-webmcp-one-door-onto-the-browser-catalog.test.ts.
   const code = SOURCE.split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join("\n");
   assert.ok(!/executeTool/.test(code),
     "agent-webmcp.ts CALLS executeTool; the probe must only ever read getTools()");

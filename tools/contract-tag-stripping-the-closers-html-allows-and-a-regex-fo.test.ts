@@ -1,11 +1,8 @@
 // ── tag stripping: the closers HTML allows and a regex forgets ───────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
-
-// ── tag stripping: the closers HTML allows and a regex forgets ───────────
 
 // `</script >` is a legal end tag and `--!>` legally closes a comment, so a stripper
 // spelled `</script>` or `-->` hands the body straight through. Neither one is an

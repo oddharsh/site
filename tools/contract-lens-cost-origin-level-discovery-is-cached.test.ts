@@ -1,5 +1,4 @@
 // ── lens cost: origin-level discovery is cached ──────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   testGlobals,
   assert,
@@ -7,18 +6,16 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── lens cost: origin-level discovery is cached ──────────────────────────
-
 // The fan-out reaches the real internet, and both tests below were latent
-// flakes because of it. 24 of the 26 probes go through lensProbe, which needs
-// the AadharshBot signing key and so fails instantly under plain node
+// flakes because of it. The probes that go through lensProbe need the
+// AadharshBot signing key and so fail instantly under plain node
 // ("AadharshBot signing key is unavailable") without a packet leaving. The
-// other two are lensProbeDnsAid and lensProbeEch, which query
-// cloudflare-dns.com over DNS-over-HTTPS: 4 requests per fan-out, each guarded
-// by a 4.5s AbortController — a ceiling that sits just under the 5s test
-// timeout, so ONE slow DoH round fails the whole file.
+// exceptions are lensProbeDnsAid and lensProbeEch, which query
+// cloudflare-dns.com over DNS-over-HTTPS, each request guarded by a 4.5s
+// AbortSignal.timeout: a ceiling that sits just under the 5s test timeout, so
+// ONE slow DoH round fails the whole file.
 //
-// Measured 2026-08-21 in this worktree, three fan-outs (the exact sequence the
+// Measured 2026-08-21, three fan-outs (the exact sequence the
 // first test runs): 206ms live on a good network, 1ms with fetch stubbed, and
 // 4503ms for a SINGLE fan-out when the DoH endpoint never answers. That last
 // number is the flake: the reported failure was 5004.15ms against a 5s budget
@@ -39,9 +36,9 @@ const countedDoh = () => { dohCalls++; return doh(); };
 
 test("a second scan of the same origin reuses discovery instead of re-probing", async () => {
   // This is where lens's cost lived: a production trace put lens.discovery at
-  // 656ms of a 685ms scan, re-asking one host the same 26 questions it had
+  // 656ms of a 685ms scan, re-asking one host the same questions it had
   // already answered. The cache is keyed by ORIGIN, not URL, because not one of
-  // those 26 depends on which page was scanned.
+  // those probes depends on which page was scanned.
   const { originDiscovery } = await import("../src/worker/lens.ts");
   const store = new Map();
   const realCaches = globalThis.caches;
@@ -106,8 +103,8 @@ test("discovery still works with no cache at all", async () => {
 });
 
 test("readDoors reads lens's discovery rather than re-probing the same files", async () => {
-  // doors.js originally fetched llms.txt, the agent card and the api-catalog
-  // itself, duplicating four of lens's twenty-six probes. Worse than wasteful:
+  // readDoors once fetched llms.txt, the agent card and the api-catalog
+  // itself, duplicating four of lens's probes. Worse than wasteful:
   // two surfaces on one site could disagree about the same origin.
   const src = readFileSync("src/worker/lib/doors.ts", "utf8");
   // The call, inside readDoors itself. A bare /originDiscovery/ also matched the

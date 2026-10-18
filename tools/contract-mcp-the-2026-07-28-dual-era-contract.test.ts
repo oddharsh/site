@@ -1,5 +1,4 @@
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.ts.
 import {
   MODERN_META,
   assert,
@@ -10,15 +9,10 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
 // 2026-07-28 deleted the initialize handshake and moved version, identity and
 // capabilities into per-request `_meta`. This server answers BOTH eras on one
 // endpoint, which the spec sanctions, so the tests have to pin both — and pin
 // that neither one leaks into the other.
-
-// A well-formed modern request. BOTH keys are required by 2026-07-28, and the
-// server enforces the second one, so a fixture carrying only the version would
-// now be testing the refusal path in every test that used it.
 
 test("server/discover answers identity, versions and capabilities in one round trip", async () => {
   const res = await handleSiteMcp(mcpPost({

@@ -1,12 +1,10 @@
 // ── The playlist id has one reader ───────────────────────────────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { assert, test } from "./contract-shared.ts";
 
-// Five request-path and cron reads of KV "playlist-id" each re-validated the
-// 22-character Spotify id, and three of them re-derived the fallback from
-// RN_FALLBACK. rn.ts's readPlaylistId and currentPlaylistId own both now. The
-// /rn/admin read-back stays raw on purpose: it shows whatever was written,
-// malformed or not.
+// rn.ts's readPlaylistId and currentPlaylistId own the 22-character Spotify id
+// check and the RN_FALLBACK fallback for every request-path and cron read of KV
+// "playlist-id". The /rn/admin read-back stays raw on purpose: it shows
+// whatever was written, malformed or not.
 
 const GOOD = "0raTdu2MZH4dNvfG5keVAL";
 const FALLBACK = "4IRq9W1N2tOWHhH0O3vXiF";

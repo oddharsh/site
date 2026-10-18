@@ -39,7 +39,7 @@ export const quizBase = (rel: string): string => {
 };
 
 // The staged path the served document references. `name` is the file under
-// public/a/, `hash8` the content hash that names it.
+// public/a/, named by the content hash of `bytes`.
 export type QuizFile = { url: string; name: string; bytes: Buffer };
 
 // Pull one page's payload out. Returns null for a page with no quiz, throws for a

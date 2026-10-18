@@ -27,7 +27,7 @@ export type { SearchRecord } from "../src/worker/search.ts";
 // is no error either failure could have raised. Nothing but a diff would do.
 //
 // So build.ts step 1i calls buildSearchIndex() and writes the result into the
-// staged tree, on the argument CLAUDE.md already makes for the Markdown twins:
+// staged tree, on the argument the Markdown twins already rest on:
 // a pure function of committed source bytes should be BUILT rather than
 // committed, because then there is no second copy that can fall behind. The
 // third failure of this kind is now impossible rather than merely watched for.
@@ -140,7 +140,7 @@ async function walk(dir: string): Promise<string[]> {
 /**
  * The whole corpus, as the payload /search-index.json carries. A pure function
  * of committed bytes (the three ROOTS plus site-manifest.json), which is why
- * step 1h of the build calls this instead of a checked-in file existing at all.
+ * step 1i of the build calls this instead of a checked-in file existing at all.
  */
 export async function buildSearchIndex(root = "."): Promise<{ version: number; generatedAt: string; records: SearchRecord[] }> {
   const records: SearchRecord[] = [];

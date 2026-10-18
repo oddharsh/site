@@ -1,5 +1,4 @@
 // ── the infra check cannot print a credential ────────────────────────────────
-// Split-file suite; shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CREDENTIAL_NAME, credentialValues, redactCredentials } from "./lib/redact.ts";
 import { createReport } from "./lib/infra-report.ts";
@@ -13,7 +12,7 @@ import { createReport } from "./lib/infra-report.ts";
 //
 // They are not false positives on the SHAPE. An alert is anchored at its sink,
 // so dismissing one leaves the dismissal sitting on the line that a real token
-// would print from, and the funnel underneath it is ~90 call sites wide in a
+// would print from, and the funnel underneath it is dozens of call sites wide in a
 // script holding CLOUDFLARE_API_TOKEN and GITHUB_TOKEN against a public repo's
 // Actions logs. These assertions are what make the dismissal safe.
 
@@ -85,8 +84,9 @@ test("check-infra routes every message through the barrier", async () => {
   const src = await readFile(new URL("tools/check-infra.ts", ROOT), "utf8");
 
   // What is left to pin in the source is that check-infra.ts has no second
-  // store and no second printer. Its four message doors come off the report,
-  // and the only console calls drain what the report rendered.
+  // store and no second printer. Its three message doors (fail, warn, pass) and
+  // the hard list come off the report, and the only console calls drain what
+  // the report rendered.
   assert.equal(/const \{ hard, fail, warn, pass \} = report;/.test(src), true,
     "check-infra.ts must take fail/warn/pass from the redacting report");
   assert.equal(/\b(hard|advisory|ok)\.push\(/.test(src), false,
