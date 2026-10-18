@@ -1,7 +1,6 @@
 {
   "files": {
     "pipelines/lwe/specs/encoding-demo.ts": 5,
-    "src/client/garage/pretext.lib.js": 30,
     "src/client/hoist.ts": 6,
     "src/client/infotip.ts": 1,
     "src/client/lens-tools.ts": 1,

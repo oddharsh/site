@@ -157,8 +157,8 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
     load: [IMPORT], loadedBy: ["public/nav.js"] },
   // Page-scoped since 2026-09-30: each was a plain URL every visit revalidated.
   //
-  // The vendored @chenglou/pretext 0.0.7. /garage/pretext imports it RELATIVELY,
-  // so the pattern takes both spellings; the page's prose names the path in
+  // The vendored @chenglou/pretext (tools/vendor-pretext.ts). /garage/pretext
+  // imports it RELATIVELY, so the pattern takes both spellings; the page's prose names the path in
   // <code> twice, and call syntax is what keeps those mentions out of reach.
   // The marker is an export NAME, which survives minification by construction.
   { file: "garage/pretext.lib.js", kind: "module", marker: "prepareWithSegments", base: "pretext-lib", scope: "page",

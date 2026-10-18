@@ -6,8 +6,6 @@
   "compilerOptions": {
     "noEmit": true,
     "erasableSyntaxOnly": true,
-    "allowJs": true,
-    "checkJs": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -24,12 +22,12 @@
     "strict": false
   },
   // Browser programs and injected page demos use DOM globals. The service
-  // worker has its own program. Vendored pretext remains JavaScript and is
-  // still checked; its published bytes are not ours to migrate.
+  // worker has its own program. Vendored pretext is not in it: its minified
+  // bytes are not ours to check, and pretext.lib.d.ts beside it carries
+  // upstream's declaration for any TypeScript that imports it.
   "exclude": ["../src/client/sw.ts"],
   "include": [
     "../src/client/**/*.ts",
-    "../src/client/garage/pretext.lib.js",
     "../pipelines/**/specs/**/*.ts"
   ]
 }
