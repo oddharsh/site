@@ -206,7 +206,7 @@ li { margin: 3px 0; }
         the real engine that has to keep up with it.</li>
       <li><strong>Bytes.</strong> Those ports carry each browser&apos;s
         line-break and grapheme tables, so 1.0 weighs about 35&nbsp;KB brotli
-        where 0.0.7 weighed 12. It loads on this page only, by dynamic import.</li>
+        where 0.0.7 weighed 12. It loads on this page only, after the page itself has loaded.</li>
       <li><strong>Deps:</strong> Canvas 2D and Unicode property escapes, plus
         <code>Intl.Segmenter</code> for Thai, Lao, Khmer and Myanmar text (all
         broadly shipped now, incl. Safari).</li>
@@ -226,7 +226,7 @@ li { margin: 3px 0; }
       bundled to a single 35&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
       at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
       <code>'self'</code>, the existing <a class="term" data-t="csp" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP" title="A header that tells the browser which sources a page may load scripts, styles and other resources from, to block injected code." rel="external">CSP</a> needs <em>no change</em>, so
-      pretext&apos;s bytes load only when you open this page and never touch the
+      pretext&apos;s bytes load only after this page has loaded and never touch the
       homepage or any other page. The only other demo here that&apos;s mine is the
       naïve <code>split(/\\s+/)</code> wrapper in section 4, kept deliberately bad
       to show the gap.
@@ -244,13 +244,38 @@ li { margin: 3px 0; }
 <script type="module">
 // The real @chenglou/pretext (v1.0.0), vendored same-origin at ./pretext.lib.js
 // (dynamic import in a try/catch so a load failure degrades gracefully, and so
-// its bytes never touch any other page). Needs Canvas 2D; since 1.0 it wants
-// Intl.Segmenter only for Thai, Lao, Khmer and Myanmar, which nothing here uses.
+// its bytes never touch any other page, or this page's load). Needs Canvas 2D;
+// since 1.0 it wants Intl.Segmenter only for Thai, Lao, Khmer and Myanmar,
+// which nothing here uses.
 (async () => {
   const FONT = '15px Tahoma, Verdana, Geneva, sans-serif';
   const LINE_H = 22;
   const setNote = (id, msg) => { const e = document.getElementById(id); if (e) e.textContent = msg; };
   const esc = (s) => s.replace(/[&<]/g, c => c === "&" ? "&amp;" : "&lt;");
+
+  // The 35 KB import waits for the load event, then for the demos to come
+  // within one scrollport of view, or for a touch on a demo control, whichever
+  // is first. One promise, so both triggers fire the import once. The observer
+  // roots at the nearest scroll container: a rootMargin on the viewport doesn't
+  // reach into a scrolling <main>, which is what holds this page's content.
+  let racePending = false;
+  await new Promise((go) => {
+    const touch = (e) => { if (e.type === "click" && e.currentTarget.id === "race") racePending = true; go(); };
+    for (const id of ["width", "fwidth", "race"]) {
+      const el = document.getElementById(id);
+      for (const type of ["pointerdown", "focusin", "click"]) el.addEventListener(type, touch, { once: true });
+    }
+    const watch = () => {
+      const demos = document.querySelector(".measure-wrap");
+      let root = demos.parentElement;
+      while (root && root !== document.body && !/auto|scroll/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+      const io = new IntersectionObserver((seen) => {
+        if (seen.some((s) => s.isIntersecting)) { io.disconnect(); go(); }
+      }, { root: root === document.body ? null : root, rootMargin: "100% 0px" });
+      io.observe(demos);
+    };
+    if (document.readyState === "complete") watch(); else addEventListener("load", watch, { once: true });
+  });
 
   let PT;
   try { PT = await import("./pretext.lib.js"); }
@@ -285,7 +310,7 @@ li { margin: 3px 0; }
   slider.addEventListener("input", render1); render1();
 
   // ── demo 2: race, re-layout many times (resize / virtualization pattern) ──
-  document.getElementById("race").addEventListener("click", () => {
+  const race = () => {
     const out = document.getElementById("race-out"), N = 2000; let i, sink = 0;
     let t0 = performance.now();
     for (i = 0; i < N; i++) { domFlow.style.width = (220 + (i * 7) % 360) + "px"; sink += domFlow.offsetHeight; }
@@ -296,7 +321,9 @@ li { margin: 3px 0; }
     render1();
     out.innerHTML = "DOM reflow: " + domMs.toFixed(1) + " ms &nbsp;·&nbsp; pretext layout(): " + ptMs.toFixed(1) +
       " ms &nbsp;·&nbsp; <b>" + (ptMs > 0 ? (domMs / ptMs).toFixed(0) : "∞") + "× faster</b> &nbsp;(" + N + " re-layouts)";
-  });
+  };
+  document.getElementById("race").addEventListener("click", race);
+  if (racePending) race();          // a click that arrived while pretext loaded
 
   // ── demo 3: dynamic wrap, flow around a floated box (variable width per line) ──
   const FSAMPLE = "Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below: shaped wrapping with no DOM, recomputed live as you resize the float.";
