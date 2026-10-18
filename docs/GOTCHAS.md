@@ -504,7 +504,13 @@ skips it.
     under 1.4.3, which has no linter, that same body recurses into the
     script. `bun lint --doctor` reads the config either way, so it can say
     "117 rules run natively" while the lint step runs something else.
-    Measured 2026-10-15 on 408c9374b.
+    Measured 2026-10-15 on 408c9374b. The recursion ends in dozens of
+    "exited with code 126" lines that never name the cause, and a canary
+    can lack the linter while printing the same `1.4.4` as one that has it
+    (+6c1eb067e against the pin's +9bcbf1ecb, 2026-10-17). So the script
+    opens with `tools/check-bun-lint.ts`, which probes `bun lint --help` in
+    an empty directory and stops the run with one message naming the
+    installer; the contract's last two tests hold the guard and its control.
     Checked by: `tools/contract-the-lint-script-reaches-bun-lint.test.ts`.
 
 68. **The byte-identical build gate read the build's stopwatch.** From
