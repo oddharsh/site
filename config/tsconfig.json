@@ -7,10 +7,11 @@
   // contract-tests now executes `tsc --listFilesOnly` and compares the program
   // with the directory, making the scope part of the contract rather than a
   // comment. The completed migration permits no @ts-nocheck opt-outs.
+  //
+  // No allowJs/checkJs: this program holds 0 JavaScript files, and the error
+  // count was 178 with and without them (bun check, 2026-10-17).
   "compilerOptions": {
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
     "target": "esnext",
     "module": "esnext",
     // A .ts specifier is the only one that resolves in BOTH trees: node strips

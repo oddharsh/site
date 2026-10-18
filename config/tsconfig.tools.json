@@ -16,6 +16,11 @@
     "strictNullChecks": true,
     "strict": false,
     "noEmit": true,
+    // Node type-strips tools/ directly (routes:check, cpu-sweep, test:node), and
+    // strip mode rejects enums, namespaces and parameter properties that Bun
+    // would accept. +0 diagnostics when forced on, measured 2026-10-17; control:
+    // a planted `export enum` fails TS1294 with the flag and passes without.
+    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     // Imports name actual .ts files: Node strips types and Bun loads them;
