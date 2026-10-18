@@ -26,7 +26,6 @@ const SKIP = /(^|\/)(bun\.lock|package-lock\.json)$|^src\/dict\/|\.(br|dcz|dict|
 // entry that stops matching fails below, so the list cannot outlive its lines.
 const HISTORY = [
   ["tools/contract-the-typescript-quarantine.test.ts", "deploy-promote.mjs", "five tools broke on the 2026-08-20 bun merge"],
-  ["tools/contract-the-typescript-quarantine.test.ts", "lens-seed.mjs", "the exception list removed on 2026-08-23"],
   ["tools/build.ts", "radar-sample.mjs", "what /terminal/radar printed after the rename"],
   ["package.json", "deploy-promote.mjs", "comment:exec quotes what the comment USED TO SAY"],
   ["package.json", "perf-budget.mjs", "comment:exec quotes what the comment USED TO SAY"],
