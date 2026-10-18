@@ -843,3 +843,41 @@ match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 The plugin array in `.oxlintrc.json` preserves the default plugins because an
 explicit array replaces them. Its comments record the planted control that
 caught a rule disappearing when only `vitest` was listed.
+
+## Vendored bundle: @chenglou/pretext
+
+`src/client/garage/pretext.lib.js` is @chenglou/pretext 1.0.0 (published
+2026-10-14), the one third-party JavaScript the site ships. `/garage/pretext`
+imports it on that page only, and the build serves it as a page-scoped `/a/`
+asset. It is a bundle rather than a `package.json` dependency, so neither
+`deps-pin.yml` nor `minimumReleaseAge` sees it: a new release reaches it only
+through a person.
+
+`bun tools/vendor-pretext.ts`, run under the pinned bun, is the recipe. It
+fetches the registry tarball, refuses it unless its sha512 matches the one
+pinned in the script, and runs
+`bun build dist/layout.js --format=esm --minify` with a license banner. It
+also writes `pretext.lib.d.ts`, upstream's `dist/layout.d.ts` with its one
+import inlined, which is why `config/tsconfig.browser.json` no longer has to
+type-check the minified bundle. Two runs on 2026-10-17 under
+1.4.3-canary.20261013.1 wrote the same bytes.
+
+0.0.7, vendored 2026-06-02 in 978f1f7a, recorded no recipe, and none of the three `bun build` flag sets tried on
+2026-10-17 reproduces its 47,832 bytes (`--minify` came closest, at 48,358). That is the gap this section and the script close.
+
+To update:
+
+1. Set `VERSION` and `INTEGRITY` in the script from the registry's `dist`
+   record, wait out the same 24 hours `minimumReleaseAge` would, and run it.
+2. Read that version's `CHANGELOG.md` for anything the page calls. 1.0.0 moved
+   `layoutNextLine()`'s width before its cursor, and it throws a `RangeError`
+   for a font string Canvas ignores.
+3. Check the three demos on `/garage/pretext` in a browser, and the page's
+   prose about versions and sizes.
+4. Label the PR `hashed-asset`: the bundle's `/a/` URL re-mints (gotcha 35),
+   and the dictionary roll after release adds the new bytes to `src/dict/a-dict`.
+
+Sizes on the wire, brotli q11 as served: 12,635 B at 0.0.7, 34,710 B at 1.0.0.
+Upstream's changelog puts about 23 KB gzipped of the 1.0 bundle in each
+browser's line-break and grapheme data and the code that reads it, which
+replaced pretext's own break rules.

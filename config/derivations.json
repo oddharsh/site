@@ -277,6 +277,17 @@
       "regenerate": "bash tools/photos/add-car-photo.sh <stem> <image>"
     },
     {
+      "id": "garage/pretext-lib",
+      "tier": "unverifiable",
+      "why": "The vendored @chenglou/pretext bundle /garage/pretext imports, and the declaration beside it. 0.0.7 was vendored with no recipe and could not be reproduced, so the 1.0.0 update started from a guess; this entry and the script are what make the next one a command.",
+      "outputs": [
+        "src/client/garage/pretext.lib.js",
+        "src/client/garage/pretext.lib.d.ts"
+      ],
+      "unverifiable": "The input is the npm tarball @chenglou/pretext@1.0.0, sha512-BxKiDMxWJhyzL8asvcgg3T9YnUU7OUFsKO8oRaR2SYAPX4Sh2wM9gqTBjrBaZ4fnl84cEQ8czC0Q1M83z3chsA==, which is not in this repository because derive:check reads no network. The regenerate command fetches it, refuses it unless the sha512 matches, and bundles it with the bun running the script, so the output also depends on the bun pin. Run twice on 2026-10-17 under 1.4.3-canary.20261013.1, it wrote the committed bytes both times. docs/DEPENDENCIES.md has the update steps.",
+      "regenerate": "bun tools/vendor-pretext.ts"
+    },
+    {
       "id": "garage/encoding-samples",
       "tier": "unverifiable",
       "why": "The sample set the /garage/encoding study compares, one file per encoder and quality point, plus the byte counts the page quotes.",

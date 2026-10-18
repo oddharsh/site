@@ -96,7 +96,7 @@ li { margin: 3px 0; }
     <h2>2 · The technique, live</h2>
     <p class="note">
       This runs <strong>the real <a href="https://github.com/chenglou/pretext" rel="external">pretext</a></strong>
-      (v0.0.7, vendored locally; see the closing note on keeping its bytes
+      (v1.0.0, vendored locally; see the closing note on keeping its bytes
       off every other page). Left: the browser laying the text out and reporting
       <code>offsetHeight</code> (a reflow). Right: pretext&apos;s <code>layout()</code>
       over a one-time <code>prepare()</code>, same line count, zero DOM. Drag
@@ -126,7 +126,7 @@ li { margin: 3px 0; }
     <p class="note">
       The thing a width-only measure can&apos;t do: text whose available width
       <em>changes per line</em>. pretext&apos;s <code>layoutNextLine(prepared,
-      cursor, width)</code> lays out one line at a time, so you feed it a narrow
+      width, cursor)</code> lays out one line at a time, so you feed it a narrow
       width while the line sits beside the floated box and the full width once the
       text clears it. The result is real shaped wrapping, drawn to a canvas, no DOM. Drag
       the box bigger and watch the text reflow around it:
@@ -145,8 +145,9 @@ li { margin: 3px 0; }
       Here&apos;s the gap a 30-line re-creation falls into. A naïve
       <code>split(/\s+/)</code> assumes spaces separate words, so CJK (which
       has none) becomes one giant token that overflows, and scripts it can&apos;t
-      segment get mangled. pretext segments by grapheme via
-      <code>Intl.Segmenter</code> and breaks the same string correctly:
+      segment get mangled. pretext finds graphemes with the browser&apos;s own
+      character rules and, since 1.0, breaks lines with a port of that
+      browser&apos;s line breaker, so it breaks the same string where the browser does:
     </p>
     <div class="grid2" style="border:1px solid oklch(80% 0.02 250);border-radius:4px;overflow:hidden">
       <div class="col"><h3>naïve <code>split(/\\s+/)</code></h3><div class="flow i18n-out naive" id="i18n-naive"></div></div>
@@ -189,15 +190,25 @@ li { margin: 3px 0; }
         system Tahoma/Verdana, no webfont, which is also why the demo above
         agrees so closely.)</li>
       <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line breaking; font rendering is out of scope. <code>system-ui</code> is
-        explicitly unsafe for accuracy on macOS.</li>
+        explicitly unsafe for accuracy on macOS, and the README asks for a named
+        font per script, since a fallback font can measure differently. Tahoma has
+        no Chinese glyphs, so section 4 leans on fallback.</li>
       <li><strong>CSS subset.</strong> Only <code>white-space: normal/pre-wrap</code>,
         a few break modes, pixel <code>letter-spacing</code>; no
         <code>font-feature-settings</code> / optical sizing.</li>
       <li><strong>It&apos;s a JS layout path</strong> that must mirror the
-        browser&apos;s CSS line-breaker. That cuts against this site&apos;s whole
-        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model
-        that can drift from the real engine.</li>
-      <li><strong>Deps:</strong> <code>Intl.Segmenter</code> + Canvas 2D (both
+        browser&apos;s CSS line-breaker. Since 1.0 it ships a port of each
+        engine&apos;s own breaker and its data (Chrome, Safari, Firefox), so lines
+        break where the browser breaks them in many more cases, and each port is
+        pinned to a release: its Safari rules follow Safari 27, and Safari 26 breaks
+        differently around curly quotes. That still cuts against this site&apos;s
+        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model of
+        the real engine that has to keep up with it.</li>
+      <li><strong>Bytes.</strong> Those ports carry each browser&apos;s
+        line-break and grapheme tables, so 1.0 weighs about 35&nbsp;KB brotli
+        where 0.0.7 weighed 12. It loads on this page only, by dynamic import.</li>
+      <li><strong>Deps:</strong> Canvas 2D and Unicode property escapes, plus
+        <code>Intl.Segmenter</code> for Thai, Lao, Khmer and Myanmar text (all
         broadly shipped now, incl. Safari).</li>
     </ul>
 
@@ -212,7 +223,7 @@ li { margin: 3px 0; }
     <p class="replaces">
       <strong>On the dependency:</strong> this page runs the real
       <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>,
-      bundled to a single 12&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
+      bundled to a single 35&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
       at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
       <code>'self'</code>, the existing <a class="term" data-t="csp" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP" title="A header that tells the browser which sources a page may load scripts, styles and other resources from, to block injected code." rel="external">CSP</a> needs <em>no change</em>, so
       pretext&apos;s bytes load only when you open this page and never touch the
@@ -231,16 +242,16 @@ li { margin: 3px 0; }
 </div>
 
 <script type="module">
-// The real @chenglou/pretext (v0.0.7), vendored same-origin at ./pretext.lib.js
+// The real @chenglou/pretext (v1.0.0), vendored same-origin at ./pretext.lib.js
 // (dynamic import in a try/catch so a load failure degrades gracefully, and so
-// its bytes never touch any other page). Needs Intl.Segmenter + Canvas 2D.
+// its bytes never touch any other page). Needs Canvas 2D; since 1.0 it wants
+// Intl.Segmenter only for Thai, Lao, Khmer and Myanmar, which nothing here uses.
 (async () => {
   const FONT = '15px Tahoma, Verdana, Geneva, sans-serif';
   const LINE_H = 22;
   const setNote = (id, msg) => { const e = document.getElementById(id); if (e) e.textContent = msg; };
   const esc = (s) => s.replace(/[&<]/g, c => c === "&" ? "&amp;" : "&lt;");
 
-  if (!("Segmenter" in Intl)) { setNote("agree", "Intl.Segmenter isn't available in this browser, so pretext can't run here."); return; }
   let PT;
   try { PT = await import("./pretext.lib.js"); }
   catch (e) { setNote("agree", "pretext failed to load (" + e + ")."); return; }
@@ -303,13 +314,13 @@ li { margin: 3px 0; }
     fctx.font = FONT; fctx.fillStyle = "#1a1a1a"; fctx.textBaseline = "alphabetic";
     fbox.style.width = imgPx + "px"; fbox.style.height = imgPx + "px";
     const floatBottom = PAD + imgPx, innerW = stageW - PAD * 2;
-    let cursor = { segmentIndex: 0, graphemeIndex: 0 }, y = PAD, guard = 0;
+    let cursor, y = PAD, guard = 0;   // no cursor yet: layoutNextLine starts at the top
     while (y < STAGE_H - 4 && guard++ < 100) {
       const beside = y < floatBottom;
       const x = beside ? PAD + imgPx + GAP : PAD;
       const w = beside ? innerW - imgPx - GAP : innerW;
       if (w < 24) { y += FLH; continue; }
-      const line = layoutNextLine(fprep, cursor, w);
+      const line = layoutNextLine(fprep, w, cursor);
       if (!line) break;
       fctx.fillText(line.text, x, y + 15);
       cursor = line.end; y += FLH;
@@ -431,7 +442,7 @@ li { margin: 3px 0; }
         {
           "t": "It assumes spaces separate words, so CJK text with no spaces becomes one giant token that overflows the line",
           "ok": true,
-          "why": "That's the gap a 30-line toy falls into. pretext segments graphemes with Intl.Segmenter, so it finds break points the regex never sees."
+          "why": "That's the gap a 30-line toy falls into. pretext breaks lines with a port of the browser's own line breaker, so it finds the breaks between CJK characters that the regex never sees."
         },
         {
           "t": "Canvas measureText can't return widths for CJK glyphs, so the naive version has nothing to work with",
@@ -443,7 +454,7 @@ li { margin: 3px 0; }
         },
         {
           "t": "pretext handles it by breaking non-Latin text after every character, a fallback the naive version skips",
-          "why": "It segments by grapheme via Intl.Segmenter, which also keeps emoji and ZWJ clusters intact. A blind per-character break would mangle those."
+          "why": "It breaks only where the browser's line breaker allows, between graphemes found by the browser's own rules, which keep emoji and ZWJ clusters intact. A blind per-character break would mangle those."
         }
       ]
     },

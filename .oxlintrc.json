@@ -4,9 +4,10 @@
 
   // Two directories hold committed JavaScript that nobody here authored.
   // `a-dict` is the shell dictionary snapshots, which are minified BUILD INPUT
-  // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
-  // vendored same-origin so /garage/pretext can load it under `script-src
-  // 'self'`. Linting either one reports on somebody else's minifier.
+  // captured off the wire, and `pretext.lib.js` is @chenglou/pretext, bundled
+  // by tools/vendor-pretext.ts and vendored same-origin so /garage/pretext can
+  // load it under `script-src 'self'`. Linting either one reports on somebody
+  // else's minifier.
   "ignorePatterns": ["src/dict/a-dict/**", "src/client/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the

@@ -155,7 +155,9 @@ function main() {
   const problems = baselineProblems(actual, declared, inScope);
 
   if (full) {
-    const NOT_SOURCE = ["src/dict/", "tools/fixtures/"];
+    // The vendored pretext bundle is minified upstream code with its own
+    // declaration beside it (tools/vendor-pretext.ts), so no program checks it.
+    const NOT_SOURCE = ["src/dict/", "tools/fixtures/", "src/client/garage/pretext.lib.js"];
     const owned = execFileSync("git", ["ls-files"], { encoding: "utf8", cwd: REPO })
       .split("\n")
       .filter((f) => /\.(?:js|mjs|cjs|ts)$/.test(f) && !NOT_SOURCE.some((prefix) => f.startsWith(prefix)));
