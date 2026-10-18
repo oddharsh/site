@@ -664,3 +664,17 @@ skips it.
     count, and break the path once to watch the floor fire. Gotcha 55 is the
     same split reaching `servedFiles()`.
     Checked by: `tools/build.ts`.
+
+80. **A check that warns when it finds nothing compares nothing.** Build
+    step 5 holds the taskbar floor in `luna.css`, the homepage and cal's
+    templates to one value, because a copy that disagrees paints a different
+    window height before luna lands. Its regex wanted `calc(100dvh - 30px)`.
+    #1369 (2026-10-16) spelled two of the copies through a `--taskbar-h`
+    token, so the regex matched none of the three, and every build printed
+    "no taskbar-floor calc found" three times above "invariants ok". Nobody
+    reads a warning on a green build. `tools/lib/taskbar-floor.ts` now
+    resolves `var()` through each document's own custom properties and
+    compares the flattened sums, a missing floor is a hard failure, and the
+    summary line prints how many floors agreed. Gotcha 79 is the same blind
+    instrument on a directory walk.
+    Checked by: `tools/build.ts`, `tools/contract-the-taskbar-floor-agrees-across-copies.test.ts`.

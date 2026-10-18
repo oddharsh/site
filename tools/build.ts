@@ -55,6 +55,7 @@ import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
+import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
@@ -362,22 +363,26 @@ async function checkInvariants() {
     }
   } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
 
-  // 5 (warn) — the taskbar floor. luna.css owns it, and every page that links
+  // 5 (hard) — the taskbar floor. luna.css owns it, and every page that links
   // luna render-blocking gets it at first paint with nothing inline. Two
   // documents still carry their own copy of the geometry: the homepage, which
   // loads luna non-blocking (the media=print flip), and cal's templates. A copy
   // whose floor disagrees with luna.css lands a different window height at
-  // first paint than after luna applies, so every copy must match. A listed
-  // file with NO floor warns too, so this cannot pass by matching nothing.
-  const floors = new Map();
+  // first paint than after luna applies, so every copy must match.
+  //
+  // The copies spell it differently (a --taskbar-h token in two, the arithmetic
+  // written out in cal), so lib/taskbar-floor.ts resolves each to a canonical
+  // sum before comparing. A listed file with NO floor fails rather than warns:
+  // this check matched nothing from #1369 (2026-10-16) to 2026-10-17 while
+  // every build printed the warning (gotcha 80).
+  const floors = new Map<string, string[]>();
   for (const f of ["src/styles/luna.css", "src/pages/index.html", "cal/src/templates.ts"]) {
-    let s; try { s = await read(f); } catch { continue; }
-    // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
-    for (const m of s.matchAll(/(?<!max-)height:\s*calc\(100dvh\s*-\s*(\d+)px\)/g)) floors.set(f, m[1]);
-    if (!floors.has(f)) warn.push(`${f}: no taskbar-floor calc found; the geometry check has nothing to compare against luna.css`);
+    const found = taskbarFloors(await read(f));
+    if (!found.length) hard.push(`${f}: no taskbar-floor calc found (a body height:calc(100dvh - …)), so the geometry check has nothing to compare against luna.css`);
+    floors.set(f, found);
   }
-  const floorVals = new Set(floors.values());
-  if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
+  const floorVals = new Set([...floors.values()].flat());
+  if (floorVals.size > 1) hard.push(`taskbar-floor disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}: ${v.join(" | ")}`).join("; ")}) — luna.css and the inline copies must match`);
 
   // 5b (hard) — the client edge (luna.css, search "THE CLIENT EDGE") is authored
   // exactly once and injected into the staged pages by clientEdgeMirror() below.
@@ -698,7 +703,7 @@ async function checkInvariants() {
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
   if (!servedPlan) throw new Error("build: the served tree was never planned");
-  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered (${pagesWalked} pages walked), ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${servedPlan.files.size} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry (${[...floors.values()].flat().length} taskbar floors agree), ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered (${pagesWalked} pages walked), ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
   return servedPlan;
 }
 
