@@ -30,9 +30,12 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
       <!-- /axp:shell -->
     </body>`;
   const found = citationsIn(page, origin);
+  // Set membership is exact. CodeQL reads Array.includes(<url literal>) as a
+  // substring host check (js/incomplete-url-substring-sanitization).
+  const sent = new Set(found);
 
-  assert.ok(found.includes("https://github.com/officialunofficial/mkit"), "a real citation is sent");
-  assert.ok(found.includes("https://mkit.makechain.net/streaming"), "a second real citation is sent");
+  assert.ok(sent.has("https://github.com/officialunofficial/mkit"), "a real citation is sent");
+  assert.ok(sent.has("https://mkit.makechain.net/streaming"), "a second real citation is sent");
   assert.ok(found.some((u) => u.startsWith("https://docs.makechain.net/")), "anchors are normalized, not dropped");
   assert.equal(found.filter((u) => u.includes("officialunofficial")).length, 1, "deduped");
 

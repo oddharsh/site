@@ -100,7 +100,7 @@ test("webmention verifies the source really links back, then moderates before pu
     inbox = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), env, context());
     html = await inbox.text();
     assert.ok(html.includes("Resto-mod web"), "an approved mention renders");
-    assert.ok(html.includes(source), "the row links out to the source");
+    assert.ok(html.includes(`href="${source}"`), "the row links out to the source");
     assert.ok(html.includes("/writing/in-flux"), "filed under the page it mentions");
 
     // 6. re-sending a live mention refreshes its content without resetting moderation.
