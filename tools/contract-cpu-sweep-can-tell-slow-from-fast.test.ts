@@ -5,7 +5,8 @@
 // mode lists it as over 8 ms and still exits 0, --gate fails on it, and the
 // allowlist and this CPU model's factor in the budget file each change that
 // verdict. With no factor for the CPU model, --gate judges nothing, and on a
-// runner whose control reads off its model it judges nothing either.
+// runner whose control reads off its model it judges nothing either. A ceiling
+// re-fitted from CI runs has to clear the highest of them (gotcha 81).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -93,6 +94,24 @@ test("the committed budget names a control reference, so the drift check can't g
   const { control } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
   assert.ok(control?.ms > 0, "config/cpu-budget.json needs control.ms");
   assert.ok(control.drift > 0 && control.drift < 1, `control.drift is ${control?.drift}`);
+});
+
+// A ceiling inside its route's own spread fails PRs that changed no Worker
+// byte: after #1386 the 404 read up to 11.30 ms against a ceiling of 10, and 16
+// of 54 runs failed (gotcha 81). A row re-fit from CI runs records them in
+// `measured`, and its ceiling stays 20% over the highest, rounded up to the
+// half millisecond, which is the rule every other ceiling was set by.
+test("a re-fitted ceiling stays 20% over the highest CI run it was fit on", () => {
+  const { routes } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
+  assert.ok(routes["/this-page-does-not-exist"]?.measured, "the 404's row lost the runs its ceiling was fit on");
+  for (const [route, { ceilingMs, measured }] of Object.entries<any>(routes)) {
+    if (!measured) continue;
+    assert.match(measured.on, /^\d{4}-\d{2}-\d{2}$/, `${route}: measured.on`);
+    assert.ok(measured.runs >= 30, `${route}: fit on ${measured.runs} runs, and a route spreads about 11% between runs`);
+    assert.ok(measured.p50Ms <= measured.p99Ms && measured.p99Ms <= measured.highestMs, `${route}: measured is ${JSON.stringify(measured)}`);
+    const needs = Math.ceil(measured.highestMs * 1.2 * 2) / 2;
+    assert.ok(ceilingMs >= needs, `${route}: a ${ceilingMs} ms ceiling is inside 20% of its highest run, ${measured.highestMs} ms; it needs ${needs}`);
+  }
 });
 
 // The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,

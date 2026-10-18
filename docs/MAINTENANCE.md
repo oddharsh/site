@@ -907,6 +907,17 @@ under 4 ms, half the gate. Delete the entry.
 **When a route gets dearer on purpose:** raise its `ceilingMs` in the same PR and
 say why in `why`. Each ceiling is the highest of 14 scaled CI runs plus 20%.
 
+**When a route fails on a PR that didn't touch the Worker:** a step smaller than
+the route's spread passed its own PR and is failing the ones after it (gotcha
+81). Pull the route's reading and the control's from 30 or more CPU jobs:
+`gh run list --workflow ci.yml`, then the `CPU per route` job's id from
+`gh api repos/oddharsh/site/actions/runs/<run>/jobs`, then
+`gh run view --job <id> --log`. The logs API refuses those logs because they
+hold escape sequences, and some runs' logs label the step `UNKNOWN STEP`, so
+grep for the table's rows. Sort the readings by time to find the
+merge where the step landed, then re-fit `ceilingMs` from the conclusive runs
+after it and record them in the row's `measured`.
+
 **When the warning names a CPU model with no factor:** collect two runs on it
 (rerun the job until it lands there twice; the units line names the model) and
 two or more on an EPYC 7763. Take each route confirmed in all of them (5
