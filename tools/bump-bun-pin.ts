@@ -3,18 +3,13 @@
 //
 // Keeps config/bun-pin.json current, because NOTHING ELSE DOES.
 //
-// Dependabot owns five ecosystems here and none of them owns this string. The
-// npm updater bumps `@types/bun` and never the runtime; the `bun` ecosystem
-// would not help either, since it reads bun.lock rather than the field. So the
-// one version with no updater is the one that compiles the site: cloudflare.config.ts
+// No updater owns this string. `deps:pin` bumps `@types/bun` and never the
+// runtime, and Dependabot's `bun` ecosystem would not help either, since it
+// reads bun.lock rather than the field (docs/DEPENDENCIES.md). So the one
+// version with no updater is the one that compiles the site: wrangler.config.ts
 // builds with `bun tools/build.ts`, and `/a/` and `/i/` URLs are content
 // addressed, so the pinned bun decides what every returning visitor's cached
 // dictionary is keyed against.
-//
-// THE ANCESTOR of this script is `.github/workflows/bun-release-watch.yml` on
-// the unmerged `ci/bun-release-watch` branch, which asked one question ("has bun
-// 1.4 shipped, so the migration can resume") and answered it on 2026-08-20. This
-// asks the general form and, unlike that one, does not stop at noticing.
 //
 // FIVE GATES, ordered so the cheapest disqualifier runs first. Gate 3 is the
 // only one that can be true and invisible at the same time, which is why it
@@ -450,7 +445,6 @@ if (results.some((r) => !r.ok)) {
 gate(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
 gate(contractSuiteGate(candidate, ROOT));
 
-// ---------------------------------------------------------------------------
 if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
 
 const failed = results.filter((r) => !r.ok);
@@ -461,8 +455,8 @@ if (failed.length) {
   process.exit(1);
 }
 
-// `@types/bun` is DEPENDABOT'S, and the two are allowed to disagree for a day.
-// DEPENDENCIES.md already worked this through: the release-age policy delayed
+// `@types/bun` is `deps:pin`'s, and the two are allowed to disagree for a day.
+// docs/DEPENDENCIES.md already worked this through: the release-age policy delayed
 // the types pin behind the runtime once and it caught up on its own, which is a
 // wait rather than a fork. Say it, never enforce it.
 const types = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies?.["@types/bun"];

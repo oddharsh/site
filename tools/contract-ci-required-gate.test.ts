@@ -15,8 +15,8 @@ test("CI is one required job named validate that cannot be skipped or softened",
   // not a check anybody requires, it needs validate, and it cannot fail the run;
   // contract-production-serves-what-ci-built holds its shape. `cpu-sweep`
   // checks CPU per route: inside validate it pushed the required check from
-  // about 55 s to 116 s (tools/route-cpu.ts, 2026-10-08) and to 83-86 s (this
-  // sweep, 2026-10-09), so it gets its own runner. From 2026-10-09 it runs with
+  // about 55 s to 116 s (route-cpu.ts, since folded into cpu-sweep.ts,
+  // 2026-10-08) and to 83-86 s (cpu-sweep.ts, 2026-10-09), so it gets its own runner. From 2026-10-09 it runs with
   // --gate, so a route over its ceiling fails the JOB; continue-on-error keeps
   // the RUN's conclusion success, because promote-production releases only a
   // successful run and a CPU regression must never hold up a release.

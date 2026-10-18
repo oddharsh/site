@@ -1,5 +1,4 @@
 // ── a reader who skipped the page can't pass the quiz on option length ──────
-// Split-file convention: shared imports live in contract-shared.ts.
 //
 // On 2026-10-14 the right answer was the longest option on 191 of the site's
 // 202 questions, and ran a median 1.40x the length of the wrong ones. Authors

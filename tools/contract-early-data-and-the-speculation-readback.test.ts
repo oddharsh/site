@@ -1,5 +1,4 @@
 // ── 0-RTT early data, and the speculation ledger read back ───────────────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import {
   configText,
   assert,

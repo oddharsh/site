@@ -1,5 +1,4 @@
 // ── the SSR deadline ────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
   assert,
@@ -8,7 +7,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── the SSR deadline ────────────────────────────────────────────────
 // deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
 // homepage TTFB. Two properties are load-bearing: a fast read never marks
 // itself deadlined (the timer is cleared on settle), and a slow read's

@@ -97,7 +97,7 @@ test("the replay plan dedupes by Accept string and admits a browser control", ()
   const accepts = probes.map((p) => p.accept);
 
   assert.equal(new Set(accepts).size, accepts.length, "no Accept string is fetched twice");
-  // Three agents share one header, so seven rows must cost six requests. Two
+  // Three agents share one header, so seven agent rows cost five requests. Two
   // identical requests could not honestly return different answers.
   assert.equal(probes.length, 10, "ten distinct requests: five checks plus five distinct agent headers");
   assert.equal(agentProbe.size, AGENT_ACCEPTS.length, "every agent maps to a probe");

@@ -1,12 +1,12 @@
 // build.ts: the site's one build step, and it runs only at deploy.
 //
-// Authoring stays buildless: everything in public/, cal/, and serendipity/ is
-// committed readable and is the source of truth. This script stages the static
-// www tree plus the two embedded application modules under .build/ and
-// minifies the selected client scripts (the assets pages load) plus the homepage
-// HTML; images and _headers ship byte-identical to git. Each transformed asset
-// gets a readable twin deployed alongside it, because View Source is part of the
-// product and minification must not cost it.
+// Authoring stays buildless: everything in src/, public/, cal/ and serendipity/
+// is committed readable and is the source of truth. This script stages the
+// served tree (tools/lib/served-tree.ts) plus the Worker and its two embedded
+// application modules under .build/, and minifies the client scripts, the
+// stylesheets and the HTML pages; images and _headers ship byte-identical to
+// git. Each transformed asset gets a readable twin deployed alongside it,
+// because View Source is part of the product and minification must not cost it.
 //
 // Step 1b also injects the client-edge CSS mirror, derived from luna.css, into
 // the staged pages that still carry their own window geometry: the homepage,
@@ -14,18 +14,15 @@
 // commented line, and the line says where it came from.
 //
 //   bun run build                                         # stage .build/
-//   bun run deploy:direct                                   # build + wrangler deploy -c .build/cloudflare.config.ts
+//   bun run deploy:direct                                 # wrangler deploy, which runs this build first
 //
 // THIS BUILD REQUIRES BUN. `lib/link-integrity.ts` parses each document with
 // HTMLRewriter, which bun and workerd have and node does not, so `node
 // tools/build.ts` dies with `ReferenceError: HTMLRewriter is not defined`
 // before anything is written. That line read `node tools/build.ts` until
 // 2026-08-24 and had been wrong since 2026-08-20; copying it took the nightly
-// dictionary roll down for three nights. wrangler.jsonc's build command is
+// dictionary roll down for three nights. wrangler.config.ts's build command is
 // `bun tools/build.ts`, so the pinned bun is what compiles production too.
-//
-// wrangler resolves `main` and `assets.directory` relative to the config file, so the
-// root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -161,8 +158,8 @@ function containsRetiredRumHost(source) {
   return false;
 }
 
-// The served tree has THREE authored roots now, so anything that used to walk
-// www/ walks all of them. Keeping this in one place is the point: a check that
+// What used to be www/ is THREE authored roots now, so anything that used to
+// walk www/ walks all of them. Keeping this in one place is the point: a check that
 // walks only some of the roots reports a clean tree it never fully read, which
 // is the quietest way for one of these tripwires to stop meaning anything.
 // The list is a projection of tools/lib/served-tree.ts's one declaration: the
@@ -194,19 +191,13 @@ const shellFiles = async (): Promise<string[]> => [
 //
 // GENERIC because each hand-rolled copy of this regex is one more place to be
 // subtly different from the others. Two readers share it now: invariant #1 and
-// the link resolver in step 7b. (Invariant #6 read it too, to diff a hand-kept
-// dev config that drifted anyway; config/dev/ replaced that file on
-// 2026-10-01, so there is nothing left to diff.)
+// the link resolver in step 7b.
 //
-// These are JSONC files and the // COMMENTS INSIDE THESE BLOCKS QUOTE VALUES, so
-// a bare scan for quoted strings reads prose as data. cloudflare.config.ts's fold note
-// names all eight retired exact /lens rows that way, and the first version of the
-// dev-twin diff duly reported seven of them as drift — a false positive on the
-// one check whose job is telling real drift from none. That was harmless in
-// invariant #1 (a phantom rule only ever makes `covered()` more permissive) and
-// wrong in 7b, where a link to a path some comment happens to mention would
-// resolve. One `//`-to-end-of-line strip fixes every reader; no value in either
-// array can contain "//", since they are paths and cron expressions.
+// The `//`-to-end-of-line strip dates from when the input was hand-written
+// JSONC whose comments QUOTED VALUES (a note naming retired /lens rows read as
+// live rows). siteConfigText below is formatted JSON with no comments, so the
+// strip is a guard now; it is safe because no run_worker_first row is a path
+// that can contain "//".
 //
 // Returns [] when the key is absent, which is why every caller floors on the
 // length rather than trusting a clean-looking comparison of two empty lists.
@@ -223,17 +214,17 @@ const runWorkerFirst = (configSrc: string): string[] => jsoncStringArray(configS
 // The site config as TEXT, for the readers above. cloudflare.config.ts replaced
 // wrangler.jsonc on 2026-09-28, and this is its legacy-shape projection
 // (tools/lib/site-config.ts) pretty-printed: formatted JSON is valid JSONC, so
-// jsoncStringArray and the binding-name scan read it exactly as they read the
-// hand-written file, with no second parser for the TypeScript.
+// jsoncStringArray reads it exactly as it read the hand-written file, with no
+// second parser for the TypeScript.
 const siteConfigText = async (): Promise<string> => JSON.stringify(await siteConfig(), null, 2);
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
-// hitting. They live here because build.ts runs on every `bun run deploy:direct`, the
-// one reliable path (Workers Builds CI has silently skipped pushes). The three
-// deterministic checks HARD-BLOCK the deploy; the two that compare derived or
-// duplicated text only WARN (exit 0), because a false positive on the one
-// deploy path would get the whole guard commented out.
+// hitting. They live here because build.ts runs before every upload and deploy
+// (wrangler.config.ts), so no release path can skip them. The deterministic
+// checks HARD-BLOCK the build; the ones that compare derived or duplicated text
+// or make a taste call only WARN (exit 0), because a false positive on the
+// release path would get the whole guard commented out.
 async function checkInvariants() {
   // Every check here only reads, so a file is read once however many checks
   // look at it: #3, #9 and #10 all walk the served pages, and #9 and #10 the
@@ -246,9 +237,8 @@ async function checkInvariants() {
   };
   // A loop's files read concurrently, in its own order; null where a read fails.
   const readAll = (files: string[]): Promise<(string | null)[]> => Promise.all(files.map((f) => read(f).catch(() => null)));
-  // Annotated because a bare `[]` infers never[], which made EVERY `.push(msg)`
-  // in this function a TS2345 — 87 of the file's 91 baseline diagnostics, all of
-  // them noise sitting on top of the one check that blocks the deploy.
+  // Annotated because a bare `[]` infers never[], which makes EVERY `.push(msg)`
+  // in this function a TS2345.
   const hard: string[] = [], warn: string[] = [];
 
   // 0 (hard) — the authored roots merged into .build/public have no file-path
@@ -325,7 +315,7 @@ async function checkInvariants() {
     // explaining why the rule is gone — a guard that fires on its own
     // documentation gets muted, the same reasoning as the font-law scan below.
     // For HTML that means <style> bodies; elsewhere the file minus its comments
-    // (chrome.js / templates.js / generate.mjs carry CSS in template literals).
+    // (templates.ts / serendipity.ts / generate.ts carry CSS in template literals).
     const css = f.endsWith(".html")
       ? [...s.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
       : s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -396,11 +386,9 @@ async function checkInvariants() {
   // warns: a missing rule here is a rename or a bad edit, not a taste call.
   if (!clientEdgeDecl(await read("src/styles/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.ts injects it into every windowed page and has nothing to inject");
 
-  // 6 — RETIRED 2026-10-01. It diffed the hand-kept local-dev twin
-  // (wrangler.dev.jsonc) against this config: bindings, run_worker_first, crons
-  // and compatibility flags, as warnings. That twin no longer exists. Local dev
-  // is config/dev/, which SPREADS cloudflare.config.ts and overrides only what
-  // dev means to change, so there is no second copy left to drift, and
+  // 6 — RETIRED 2026-10-01. It diffed a hand-kept local-dev config against this
+  // one. Local dev is config/dev/ now, which SPREADS cloudflare.config.ts, so
+  // there is no second copy to drift, and
   // contract-the-dev-config-only-overrides-the-overlay holds the overlay to
   // that. The number stays retired rather than reused, so older notes that cite
   // "invariant #6" still point at something that explains itself.
@@ -477,7 +465,6 @@ async function checkInvariants() {
     }
     if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.ts — run bun run gen:manifest");
 
-    // parse the live surfaces out of each hand-authored consumer.
     const navPagesBlock = (nav.match(/var PAGES(?:\s*:\s*RunItem\[\])? = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
     const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
     const navTaskbar = new Set([...desktop.matchAll(/class=\\"axp-pin\\"[^>]*href=\\"([^"]+)\\"/g)].map((m) => m[1]));
@@ -545,8 +532,8 @@ async function checkInvariants() {
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
 
-  // 9 — the taste tripwires GREENFIELD.md asked for, calibrated against what the
-  // site actually ships. Its list (ban cubic-bezier, any easing beyond linear,
+  // 9 — the taste tripwires GREENFIELD.md (a design brief, removed in #737)
+  // asked for, calibrated against what the site actually ships. Its list (ban cubic-bezier, any easing beyond linear,
   // any radius over 3px, any blurred shadow) would block this deploy today: the
   // window minimize/restore morph IS a cubic-bezier, luna.css runs 60ms ease-out
   // everywhere, canon defines --radius-window: 8px, and XP menus really did drop
@@ -558,12 +545,10 @@ async function checkInvariants() {
   let tasteScanned = 0, tasteOk = [];
   try {
     // Taste rules can execute only from text a browser parses or from a program
-    // that emits that text. The old walk decoded EVERY served byte as UTF-8,
-    // including all content-addressed AVIF/JPEG tiers and every OG PNG, while
-    // missing most of src/worker even though that is where generated-page CSS
-    // lives. Keep active textual assets, the client and stylesheet roots (where
-    // luna.css lives), and the complete three Worker program trees: less work,
-    // and coverage now follows the actual authors.
+    // that emits that text. So the walk keeps active textual assets, the client
+    // and stylesheet roots (where luna.css lives), and the complete three Worker
+    // program trees (generated-page CSS lives in src/worker), and never decodes
+    // the AVIF/JPEG tiers or OG PNGs as UTF-8.
     const activeText = (rel: string): boolean =>
       rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
     const programFiles = async (root: string): Promise<string[]> => (await readdir(root, { recursive: true }))
@@ -576,10 +561,9 @@ async function checkInvariants() {
       ...await programFiles("cal/src"),
       ...await programFiles("serendipity"),
     ];
-    // Anchored on the SERVED_SOURCES roots, not on a tree name. This read
-    // /^www\/(garage|lwe)\// until 2026-08-23, and www/ stopped existing on
-    // 2026-08-18, so the exemption had been silently false for every file and
-    // the build printed 14 taste warnings on demo pages on every single run.
+    // Anchored on the roots that hold demo pages, never on a retired tree name:
+    // an exemption pinned to /^www\// went silently false when www/ stopped
+    // existing on 2026-08-18, and printed 14 taste warnings on every build.
     const isDemo = (p) => /^(?:public|src\/pages|src\/client)\/(?:garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
@@ -737,9 +721,8 @@ phase("invariants");
 // document that loads luna non-blocking should still carry. cal's templates
 // carry one too and get the edge the same way.
 //
-// This is the ONLY generated CSS in the build. It adds no new rule and changes
-// no cascade: the injected declaration is byte-identical to luna's, so when luna
-// applies, nothing moves.
+// It adds no new rule and changes no cascade: the injected declaration is
+// byte-identical to luna's, so when luna applies, nothing moves.
 
 // pull the declaration body out of luna.css so there is one definition of it.
 // The border names var(--face) WITH its #ece9d8 fallback: the homepage copy
@@ -775,8 +758,8 @@ const clientEdgeMirror = (source, decl) => {
 //
 // EVERY client script is a registry row, or is sw.js: a ~15-line unregister
 // stub since v136, shipped readable and verbatim. clientScriptProblems has the
-// reason a missing row matters. It reads the directory recursively, because two
-// rows (lwe/ask.js, garage/pretext.lib.js) live in a subdirectory.
+// reason a missing row matters. It reads the directory recursively, because
+// rows such as lwe/ask.js and garage/pretext.lib.js live in subdirectories.
 {
   const problems = clientScriptProblems(await readdir("src/client", { recursive: true }));
   if (problems.length) throw new Error(`client assets: ${problems.join("; ")}`);
@@ -821,28 +804,12 @@ if (existsSync(OUT)) {
 await mkdir(OUT, { recursive: true });
 
 phase("1 stage");
-// 1) stage: public/ verbatim (.assetsignore rides along). No wrangler config is
-// copied into .build anymore — the deploy config (cloudflare.config.ts) points its entrypoint +
-// assets at .build/public and runs THIS script via its build.command, so the
+// 1) stage the served tree (.assetsignore rides along). No wrangler config is
+// copied into .build: cloudflare.config.ts points its entrypoint and assets at
+// .build, and wrangler.config.ts runs THIS script as its build command, so the
 // build output never needs its own config. (Local dev uses config/dev/.)
 //
-// public/scripts USED TO BE the one exception here, and it was 89% of the tree's
-// bytes: the zenc cargo target/ and the uv venv put it at ~232 MB across 767
-// files, against ~27 MB for everything that actually ships, so the build copied
-// a quarter of a gigabyte per run for .assetsignore to then refuse to upload.
-//
-// The pipeline lives at tools/photos now, outside public/ entirely, so there is
-// nothing to skip and no exception to keep correct. That is the point of moving
-// it: an exception that existed only because dev tooling sat in the served tree
-// disappears when the tooling leaves, rather than being maintained forever.
-//
-// What still catches a page that starts referencing it is LINK-INTEGRITY, which
-// resolves every same-origin href/src against the staged tree and finds no
-// /scripts/ there. Verified rather than assumed, with a link to
-// /scripts/shell-data.ts injected into a page's prose: link-integrity reported
-// 1 internal reference pointing at nothing this site serves.
-//
-// The served tree is COMPOSED from four source directories now, and its shape
+// The served tree is COMPOSED from five source directories, and its shape
 // under .build/public is unchanged, so every public URL is where it was. What
 // moved is where each file is AUTHORED: public/ is byte-for-byte assets,
 // src/pages/ is every HTML document, src/content/ is authored prose, and
@@ -876,16 +843,6 @@ await Promise.all([
 // downstream is therefore untouched by the move.
   // a whole tree, so one clonefile(2) where it can (tools/lib/clone-tree.ts)
   cloneTree(resolve("src/worker"), resolve(`${OUT}/src/worker`)).then(async (cloned) => { if (!cloned) await cp("src/worker", `${OUT}/src/worker`, { recursive: true }); }),
-// The client islands and stylesheets author in src/ beside the Worker, and stage
-// back to the ROOT of the served tree because their public URLs are /nav.js and
-// /luna.css. Source layout and URL layout are different questions; only the first
-// one moved, so every served byte and every /a/ content hash is untouched.
-// Authored PROSE and the registries beside it: the writing posts and their
-// posts.json, the hand-written Markdown twins for the Worker-rendered pages, and
-// the four root .md documents. They stage back into the served tree at the SAME
-// paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
-// did. Source layout and URL layout are different questions, and only the first
-// one moved.
   cloneTree(resolve("cal/src"), resolve(`${OUT}/cal/src`)).then(async (cloned) => { if (!cloned) await cp("cal/src", `${OUT}/cal/src`, { recursive: true }); }),
 // Every module in serendipity/, rather than serendipity.ts by name. It was one
 // file until jev.ts (event-tags.ts since 2026-10-01) arrived beside it, and the
@@ -964,17 +921,14 @@ phase("1a photo indexes");
 // are read at RUNTIME: image-tools.ts pulls fingerprints.json through the ASSETS
 // binding on a byte match, and tooltip.js warms exif.json on idle.
 //
-// Note this deletes a hop rather than relocating one. exif.json used to be
-// rolled up out of images/meta/, which is itself derived from exif.json by 1a2
-// below, so the pipeline read metadata.json, projected it into 165 files, and
-// rolled those back into one. It is one projection now, and the two floors are
-// what stand in for the drift check that round trip used to justify.
+// It is one projection of metadata.json, and the two floors below stand in for
+// a drift check.
 {
   const exif = await buildExifIndex(".");
   const stems = Object.keys(exif);
   // The floor guards an ABSENCE, which is the only failure this artifact has:
   // tooltip.js treats an unreadable index as "no EXIF for this photo" and draws
-  // the frame anyway. 165 stems today, and a library that has only ever grown
+  // the frame anyway. 165 stems on 2026-10-16, and a library that has only ever grown
   // (111, then 158, then 165), so 100 is a third of the way down and catches a
   // collapse without turning a deliberate cull into a build failure.
   if (stems.length < 100) {
@@ -994,7 +948,7 @@ phase("1a photo indexes");
   // about this map that is not a restatement of its own inputs, and it throws on
   // a tier file it cannot read. Both are build failures on purpose.
   const { index, photos, tiers } = await buildImageFingerprints(".");
-  // 660 tiers today (165 photos x 4). Same third-of-the-way-down reasoning as
+  // 660 tiers on 2026-10-16 (165 photos x 4). Same third-of-the-way-down reasoning as
   // above; the failure it catches is a truncated or unreadable hashes.json,
   // which would otherwise ship a map that recognises a fraction of the library.
   if (tiers < 400) {
@@ -1085,9 +1039,6 @@ phase("1b client edge");
 }
 
 phase("1c minifier setup");
-// 1c) the Markdown twins used to run HERE, before any page was generated, which
-// is exactly why /updates and /restore never got one. Moved below 1f, after the
-// deploy-time documents exist. See the block there.
 
 const minifyJavaScript = (filename, sourceText, options: MinifyOptions = OXC_MINIFY_OPTIONS) => {
   const result = minifySync(filename, sourceText, options);
@@ -1098,7 +1049,7 @@ const minifyJavaScript = (filename, sourceText, options: MinifyOptions = OXC_MIN
 };
 
 // The tolerated-warning family and the pass-through re-proof live in
-// tools/lib/css-parse.ts, shared with check-page-contracts.mjs so a stylesheet
+// tools/lib/css-parse.ts, shared with check-page-contracts.ts so a stylesheet
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
@@ -1127,9 +1078,8 @@ const RAW_HTML_TAGS = new Set(["pre", "script", "style", "textarea"]);
 // the input: the installed version, the options, and the repo code around the
 // call (css-parse.ts and the custom media it inlines, the wrappers here). The
 // document minifier is this repo's own code with no imports, so its key is its
-// source. Within
-// one build, a block that repeats across pages minifies once, cache on or off:
-// 211 inline scripts are 67 distinct blocks.
+// source. Within one build, a block that repeats across pages minifies once,
+// cache on or off: 211 inline scripts were 67 distinct blocks on 2026-10-08.
 const toolVersion = (pkg: string): string => `${pkg}@${JSON.parse(readFileSync(Bun.resolveSync(`${pkg}/package.json`, import.meta.dir), "utf8")).version}`;
 const digestFile = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex");
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
@@ -1161,10 +1111,9 @@ const isJavaScriptScript = (openTag) => {
   return !type || ["text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"].includes(type);
 };
 
-// `label` names the document in any error the inline minifiers raise. It used to
-// be hardcoded to src/pages/index.html, which was true while the homepage was the
-// only caller and became a lie the moment step 7b started feeding 43 pages
-// through here: /garage/horizon's CSS failure reported itself as index.html.
+// `label` names the document in any error the inline minifiers raise. Step 7b
+// passes each page's own path; with the homepage's path as the only name, a CSS
+// failure on /garage/horizon once reported itself as index.html.
 const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   let out = "";
   let cursor = 0;
@@ -1312,7 +1261,7 @@ phase("1e photos + bot");
 // Same import-from-the-built-tree shape as step 1d: the Worker's own renderer runs
 // in Node against the committed artifacts, so there is ONE renderer rather than a
 // Node copy that can drift from the served one. The route keeps the dynamic handler
-// as a 404 fallback, so a failure here degrades to today's behaviour instead of a
+// as a 404 fallback, so a failure here degrades to per-request rendering instead of a
 // missing page — but these throws exist because a SILENTLY empty contact sheet is
 // worse than a failed deploy.
 {
@@ -1425,7 +1374,7 @@ phase("1f updates + restore");
 
 phase("1g markdown twins");
 // 1g) the Markdown twins + per-section llms.txt indexes. Generated from the
-// READABLE source in public/ wherever a page has one, never from the staged
+// READABLE source in src/pages wherever a page has one, never from the staged
 // copy: the staged pages are about to be rewritten (client edge, hashed asset
 // refs) and index.html is about to be minified, none of which belongs in a twin.
 // Because a twin is a pure function of source bytes, generating it here makes
@@ -1495,7 +1444,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 // Runs immediately after 1g because it needs the twin set that step just wrote:
 // a page may only advertise `rel=alternate` where the build actually produced
 // the file. Twins are build output, so no committed list could be right — the
-// same argument that keeps lib/csp-hashes.js empty in the source tree.
+// same argument that keeps src/worker/lib/csp-hashes.ts empty in the source tree.
 //
 // Injection is deliberately two string splices per page and no wrapper element:
 // the address bar goes before `.content`, the pane goes just inside it, and
@@ -1523,13 +1472,12 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     throw new Error(`explorer: lib/explorer.js PLACES disagrees with site-manifest.json taskbar surfaces\n  manifest: ${pinned.join(" ")}\n  explorer: ${declared.join(" ")}`);
   }
 
-  // The twin set, as canonical request paths, for both consumers below.
   const twinPaths = [...twinFiles.keys()]
     .filter((rel) => rel.endsWith(".md"))
     .map((rel) => (rel === "/index.md" ? "/" : rel.slice(0, -3)))
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-  // Generated-module convention (shell-assets.js, csp-hashes.js): rewrite the
+  // Generated-module convention (shell-assets.ts, csp-hashes.ts): rewrite the
   // marked line in the STAGED copy so the Worker-rendered pages advertise the
   // same twins from the same source.
   {
@@ -1741,7 +1689,7 @@ phase("5 worker css");
   // It is PER ROOT since the walk became three roots, because a total cannot see
   // one tree falling out: cal and Serendipity carry 3 and 1 of the 23, so losing
   // either leaves a sum that still clears any floor set below it. Each root's
-  // number is what it carries today.
+  // number is what it carried when the walk became three roots (2026-09-30).
   const FLOORS = { [`${OUT}/src/worker`]: 19, [`${OUT}/cal/src`]: 3, [`${OUT}/serendipity`]: 1 };
   for (const [root, floor] of Object.entries(FLOORS)) {
     const found = perRoot.get(root) ?? 0;
@@ -1811,14 +1759,14 @@ phase("1i search index");
 // The walk reads SOURCE, never the staged tree, so this may sit anywhere in
 // step 1. That is deliberate and is NOT the ordering bug 1g records: a page
 // rendered at 1e/1f has no prose file to index, and the surface registry's
-// `searchIndex` flag is the declared way in for exactly those (all 11 of them
-// today), which is what MANUAL injects. A generated page is missing from search
+// `searchIndex` flag is the declared way in for exactly those (15 on
+// 2026-10-16), which is what MANUAL injects. A generated page is missing from search
 // because nobody set its flag, never because this step ran too early.
 {
   const { buildSearchIndex } = await import("./generate-search-index.ts");
   const index = await buildSearchIndex(".");
   // Both floors guard a SILENT failure, which is the only kind this artifact
-  // has. getSearchIndex() in search.ts falls back to `{ records: [] }` on a
+  // has. getSearchIndex() in search.ts falls back to an empty list on a
   // missing or unreadable file, so a collapsed index renders /search perfectly
   // and finds nothing, and /ask answers with an empty result set rather than an
   // error. Neither reaches a log. A number that must not fall is the only
@@ -1827,12 +1775,9 @@ phase("1i search index");
     throw new Error(`search index: only ${index.records.length} records (expected 50+) — did a ROOTS directory move, or site-manifest.json change shape?`);
   }
   // The registry is a SECOND input and gets its own floor, because a corpus can
-  // be the right size and still have lost every worker-rendered surface. Note
-  // what the controls actually showed: emptying the registry today trips the
-  // count floor first (46 walked records, so 46 < 50), which makes this line
-  // unreachable at the moment. Keep it anyway — the walk is 4 pages off that
-  // floor and grows every time somebody adds a page, and on the day it passes
-  // 50 this is the only thing left watching the registry half.
+  // be the right size and still have lost every worker-rendered surface. On
+  // 2026-10-16 the walk alone yields 52 records, which clears the count floor
+  // above, so this line is the only thing watching the registry half.
   const manual = index.records.filter((r) => r.kind === "utility").length;
   if (!manual) throw new Error("search index: no manifest-injected records — is site-manifest.json readable and are any surfaces still flagged searchIndex?");
   const searchIndex = JSON.stringify(index);
@@ -1875,7 +1820,7 @@ phase("2 homepage");
 {
   // TWO sources on purpose, and the split is the whole point of the twin:
   //   - `authored` is src/pages/index.html untouched. It is what /index.src.html
-  //     ships, and perf-budget.mjs asserts the twin is byte-identical to it.
+  //     ships, and perf-budget.ts asserts the twin is byte-identical to it.
   //     "Readable source" means the file a human wrote, not a build artifact.
   //   - `staged` is that file plus step 1b's injected client edge, and it is what
   //     gets minified and served. Reading `authored` here instead would drop the
@@ -1932,11 +1877,12 @@ phase("4 luna.css");
 // render-blocking sheet every worker-rendered + garage/lwe page loads, almost
 // all of it the heavy View-Source comments (which live on in luna.src.css).
 // Owner-approved 2026-07 as the ONE non-shell file the build is allowed to
-// minify. The three first-interaction sheets below are explicit exceptions: each
-// was extracted byte-for-byte from luna.css and loads only with its matching JS.
+// minify. The first-interaction sheets the registry lists (nav-run.css,
+// nav-tray.css and the rest) are explicit exceptions: each was extracted from
+// luna.css and loads only with its matching JS.
 //
 // 4b) the LWE conversation pages share their byte-identical structural CSS
-// (lwe-base.css) instead of embedding it eleven times, under the same
+// (lwe-base.css) instead of embedding it in every page, under the same
 // readable-twin contract: author the source directly, ship a small minified
 // render-blocker. Which sheets these are is the registry's call.
 for (const file of minifiedStyles()) {
@@ -1952,8 +1898,8 @@ for (const file of minifiedStyles()) {
 phase("5b rendered pages");
 // 5b) render deterministic Worker pages into the staged static tree, in a
 // FRESH PROCESS (tools/bake-worker-pages.ts). Importing them here handed the
-// renderers whatever this process had already loaded: lib/twins.ts from before
-// 1g2 filled in TWIN_PATHS, and lib/chrome.ts from before step 5 minified its CSS
+// renderers whatever this process had already loaded: src/worker/lib/twins.ts from
+// before 1g2 filled in TWIN_PATHS, and lib/chrome.ts from before step 5 minified its CSS
 // literal, because an import's query busts the entry module and none of its
 // dependencies. That file has the long form; the twin-link check after the
 // ratchet is what fails if a bake ever reads a stale list again.
@@ -2120,7 +2066,7 @@ phase("5d quiz data");
 // (DICTIONARY_TYPES in lib/assets.ts): the name is per page, so there is no
 // earlier version of the same URL family for a delta to start from.
 //
-// The Markdown twins are untouched: step 1c/1g read the SOURCE, and html-to-md
+// The Markdown twins are untouched: step 1g reads the SOURCE, and html-to-md
 // never emits a script body either way.
 {
   const { extractQuizData, quizReference } = await import("./lib/quiz-data.ts");
@@ -2155,7 +2101,7 @@ phase("5d quiz data");
   }
   const missing = [...authored].filter((rel) => !extracted.has(rel));
   if (missing.length) throw new Error(`quiz data: ${missing.length} page(s) carry a quiz in src/pages but none was extracted from the staged copy: ${missing.join(", ")}`);
-  // The floor: 38 today. A matcher that stops matching reads as "no page has a
+  // The floor: 39 quiz pages on 2026-10-16. A matcher that stops matching reads as "no page has a
   // quiz", which the check above would also pass if the source scan broke the
   // same way.
   if (files < 30) throw new Error(`quiz data: only ${files} payloads extracted (expected 30+); did the luq-data shape change?`);
@@ -2180,8 +2126,8 @@ phase("5e build info");
 let freshFamily: Buffer | null = null;
 
 phase("6 hash shell assets");
-// 6) content-hash the critical-path shell assets (nav.js + luna.css + lens-boot.js) into
-// immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
+// 6) content-hash the shell assets the client asset registry names (nav.js,
+// luna.css, lens-boot.js and the rest) into immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
 // href> that loads them. /a/<name>.<hash8> names exact bytes (same content-
 // addressed contract as /i/ thumbnails, and edge-direct for the same reason: not
 // in run_worker_first), so it earns the year + immutable cache Lighthouse's
@@ -2191,8 +2137,7 @@ phase("6 hash shell assets");
 // only), so the garage pages' documentary /nav.js mentions (path:"/nav.js",
 // wrangler "!/nav.js") are untouched, and it skips the shell scripts themselves
 // (nav.js carries its own /luna.css fallback string, which must stay plain and must
-// not desync the hash we just computed). Owner-approved 2026-07-21 — the one place
-// the build is allowed past the six shells + luna.css (hard rule 3).
+// not desync the hash we just computed). Owner-approved 2026-07-21.
 {
   const hash8 = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
   // Which assets, in which order, rewritten by which patterns and witnessed by
@@ -2217,14 +2162,11 @@ phase("6 hash shell assets");
   // they contribute nothing while the leading pages are long enough, and they keep a
   // content edit from becoming a release incident.
   //
-  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. From 2026-08-11 this block
-  // laid the tails of four outlier pages (horizon, vt-b, vt-check, access/index)
-  // over the start of the corpus, which evicted lwe/drivers from the window, and
-  // tuned their budgets (16 KiB, then 12, then 11/4/4/12) against the staged pages.
-  // Every one of those measurements was IN SAMPLE: the pages the tails were cut
-  // from were among the pages scored, and a page whose bytes sit in the dictionary
-  // compresses to almost nothing. The tails were kept for "a margin" on those four
-  // pages, which was their own tails being found in the dictionary.
+  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. Tails of four outlier
+  // pages (horizon, vt-b, vt-check, access/index) sat at the start of the corpus
+  // from 2026-08-11, tuned against IN-SAMPLE measurements: the pages the tails
+  // were cut from were among the pages scored, and a page whose bytes sit in the
+  // dictionary compresses to almost nothing.
   //
   // tools/family-holdout.ts (in git history) asked the production question: rebuild
   // this dictionary from the pages served at each dictionary roll, and score it
@@ -2232,12 +2174,10 @@ phase("6 hash shell assets");
   // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12
   // set in every window: +1.80 points of plain q11 at k=1 (33 of 33), +1.78 at k=3
   // (31 of 31), +1.64 at k=8 (26 of 26). The gain is the LWE shell drivers brings
-  // back, worth 300-740 B on each /lwe page. The margin also protected nothing: a
-  // delta that fails to beat q11 is skipped in step 8, so a losing page costs its
-  // q11 twin and not a byte more. The same tool found the budget RANKING did hold
-  // out of sample, so the tuning pointed the right way inside a choice that was
-  // wrong. Re-run it before re-adding a tail, and read it with the corpus pages
-  // excluded, since that column is the only one no config was cut from.
+  // back, worth 300-740 B on each /lwe page. A delta that fails to beat q11 is
+  // skipped in step 8, so a losing page costs nothing past its q11 twin. Re-run
+  // the holdout before re-adding a tail, and read it with the corpus pages
+  // excluded.
   {
     const BASE_CORPUS = [
       "lwe/drivers.html",           // the LWE shell every /lwe page shares
@@ -2256,10 +2196,6 @@ phase("6 hash shell assets");
     // pages, family deltas against plain q11: 510,803 B from the readable corpus,
     // 480,187 B from this one, 55/55 pages still beating brotli either way. 30,616
     // B for reading the right bytes.
-    //
-    // The proof it was the readable source: the shipped dictionary carried a
-    // distinctive indented line from garage/compression.src.html, and 370 of its
-    // 552 newlines were followed by four or more spaces.
     for (const rel of BASE_CORPUS) {
       const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
       const bytes = Buffer.from(minifiedPage(staged, rel));
@@ -2383,20 +2319,16 @@ phase("7 shell q11 + deltas");
 // a measured ~19% off the wire for the two render-path assets, and it is free at
 // decode: brotli decode time is independent of encode QUALITY, because the decoder
 // makes one pass over a stream that is now smaller (0.070ms at q4 vs 0.081ms at q11
-// on a 47KB document, in-process, 300 iterations). GREENFIELD.md asked for exactly
-// this in July 2026 ("static documents precompress offline at brotli q11") and
-// measured the same ~19% tax; wrangler.jsonc deferred it as migration scope rather
-// than rejecting it.
+// on a 47KB document, in-process, 300 iterations).
 //
 // This block precompresses /a/ alone: content-addressed, immutable, on the render
-// path. It read "only /a/ is precompressed" until 2026-08-31, which had been false
-// since the pages got their twins in July and became doubly so that day, when the
-// static TEXT assets (the Markdown twins, the photo data indexes, llms.txt, the
-// sitemap, the feeds) got theirs too; see the text-twins block near the end of
-// this file, and servePrecompressedText for why those headers come from the plain
-// asset rather than the twin. Three tiers, three blocks, one brotliQ11.
+// path. The pages get their twins at step 8, and the static TEXT assets (the
+// Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds) at
+// the text-twins block near the end of this file; servePrecompressedText says
+// why those headers come from the plain asset rather than the twin. Three tiers,
+// three blocks, one brotliQ11.
 //
-// This is safe to add because it degrades to exactly today's behavior: the worker
+// This is safe because it degrades to the no-twin behavior: the worker
 // serves a .br twin only when the request actually offers `br` AND the twin exists.
 // A skipped build step, or a client without brotli, gets the identity bytes.
 {
@@ -2541,8 +2473,8 @@ phase("7b minify pages");
 // a minified served copy plus a readable `.src.html` twin. Owner call, 2026-07-31,
 // replacing the long-standing rule that garage and LWE HTML is never minified.
 //
-// Measured before shipping, over the 32 garage + LWE pages: 376,665 B brotli today
-// against 341,296 minified, so 9.4% and about 1.1KB per page. Small, and smaller
+// Measured before shipping, over the 32 garage + LWE pages: 376,665 B brotli
+// unminified against 341,296 minified, so 9.4% and about 1.1KB per page. Small, and smaller
 // still in practice, because a returning visitor is answered with a per-page dcz
 // delta at 93-97% off and never sees these bytes. The readable twin is what makes
 // the trade payable: View Source stops being the served page and becomes one click
@@ -2553,11 +2485,10 @@ phase("7b minify pages");
 // true of final bytes), for exactly the reason 7c's own header gives.
 //
 // The twin is the readable source where one exists, matching step 2's rule that
-// "readable source" means the file a human wrote. Ten of these 43 pages are
-// generated into the staged tree with no authored file behind them (/bot, /lens,
-// /photos, /updates, /restore, and the five /writing documents), so for those the
-// twin is the pre-minification staged copy, which is the most readable thing that
-// ever exists for that URL.
+// "readable source" means the file a human wrote. Pages generated into the
+// staged tree with no authored file behind them (/bot, /lens, /photos, /updates,
+// /restore, the /writing documents and the rest) get the pre-minification
+// staged copy, which is the most readable thing that ever exists for that URL.
 {
   const { PAGE_MARKERS } = await import("./lib/html-markers.ts");
   const pages = (await readdir(`${OUT}/public`, { recursive: true }))
@@ -2604,8 +2535,8 @@ phase("7b minify pages");
       // staged copy instead is silent: the catch below just counts the page as
       // "no authored source" and ships the staged bytes, which by this point
       // carry rewritten /a/ hashes. The twin then stops being the readable
-      // original that View Source is supposed to show. The counter in the log
-      // line is the tell, 12 from staged against 47.
+      // original that View Source is supposed to show. The "from staged" counter
+      // in the log line is the tell.
       twin = await readFile(`src/pages/${rel}`, "utf8");
       // The authored file is the readable source, but it predates the Explorer
       // chrome the build injects at 1g2, and a twin missing markup the page
@@ -2643,16 +2574,14 @@ phase("7b links");
 {
   const { makeResolver, internalRefs } = await import("./lib/link-integrity.ts");
 
-  // every served path in the staged tree, each carrying a leading slash
   const served = new Set<string>();
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
   const wranglerSrc = await siteConfigText();
-  // The exact routes, from src/worker/routes.ts by import (2026-10-02). This
-  // regex-scraped index.ts until then, and the form it matched stopped existing
-  // on 2026-08-19, so for five weeks the set was EMPTY and every Worker route
-  // resolved only by luck: through a run_worker_first glob, or not at all under a
-  // governed prefix. /garage/dyno.json was the first ref to land in the gap.
+  // The exact routes, from src/worker/routes.ts by import (2026-10-02). A regex
+  // over index.ts read an EMPTY set from 2026-08-19 to then, after the form it
+  // matched moved, and Worker routes resolved only through a run_worker_first
+  // glob; the floor below catches a list that comes back short.
   const { EXACT_PATHS } = await import(pathToFileURL(resolve("src/worker/routes.ts")).href);
   const linkRouteKeys = new Set<string>(EXACT_PATHS);
   if (linkRouteKeys.size < 60) throw new Error(`link-integrity read only ${linkRouteKeys.size} exact routes from routes.ts — the list has lost its routes`);
@@ -2699,7 +2628,7 @@ phase("7b paths");
 // whether a path in the prose resolves to something this repository HAS, which is
 // the failure a rename actually produces here.
 //
-// Two shapes, and the branch that wrote this scan produced both.
+// Two shapes, and both have happened here.
 //
 // STALE: a page describing the architecture keeps naming a directory after it
 // moves. Byte-identity discipline makes this MORE likely rather than less, since
@@ -2768,7 +2697,7 @@ phase("7b paths");
   }
 
   // Counted, because a scanner that stops matching asserts nothing and still
-  // reports a pass. This build has caught three naive scanners on its own output.
+  // reports a pass.
   if (scanned < 300) throw new Error(`repo-paths: scanned only ${scanned} staged files, expected 300+ — did a walk stop reaching the staged tree?`);
 
   if (cited.size) {
@@ -2790,7 +2719,7 @@ phase("7c csp");
 // homepage's inline blocks, step 6 rewrites shell refs into /a/ URLs, and either
 // would invalidate a hash taken earlier.
 //
-// Why hashes and not a nonce: see the long note in _worker.js/lib/security.js. The
+// Why hashes and not a nonce: see the long note in src/worker/lib/security.ts. The
 // short version is that these documents are precompressed, so nothing can be
 // injected into them per request.
 {
@@ -2826,8 +2755,8 @@ phase("7c csp");
     // Record EVERY staged document, including the ones with no inline script at
     // all. An empty list is a real and stronger answer than an absent key: absent
     // falls back to 'unsafe-inline', while empty means this document is known to
-    // need no inline execution and gets a bare `script-src 'self'`. 10 of the 43
-    // are in that happy state, and they should be allowed to say so.
+    // need no inline execution and gets a bare `script-src 'self'`, and such a
+    // document should be allowed to say so.
     map[pathOf(page)] = [...new Set(found.hashes)];
     blocks += found.hashes.length;
   }
@@ -2844,9 +2773,9 @@ phase("7c csp");
 
   // Coverage floor, same shape as the md-twin and precompression guards. An empty
   // or collapsed map is SILENT in production: every page just falls back to the
-  // loose policy and looks fine. 40 is a floor under the 43 documents that exist,
-  // loose enough to survive deleting a page and tight enough to catch a pass that
-  // stopped emitting.
+  // loose policy and looks fine. 40 was set under the 43 documents staged when
+  // it was written (74 on 2026-10-16), loose enough to survive deleting a page
+  // and tight enough to catch a pass that stopped emitting.
   const covered = Object.keys(map).length;
   if (covered < 40) {
     throw new Error(`csp-hash: only ${covered} of ${pages.length} documents got hashes (floor is 40) — did an earlier HTML pass change shape?`);

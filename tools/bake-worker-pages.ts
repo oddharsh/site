@@ -23,8 +23,7 @@
 // pages-dir, which defaults to that same public/. build.ts passes a private
 // directory so it can start this process early and run it beside steps 1h to
 // 4: none of those steps can then see a page before step 5b moves it into
-// public/, where it would land anyway. (Step 1g4 skips a page that is not
-// staged yet, /garage/dyno among them, so an early page would change bytes.)
+// public/, where it would land anyway.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -38,9 +37,7 @@ await mkdir(`${PAGES}/garage`, { recursive: true });
 const root = resolve(OUT, "public");
 const assets = {
   async fetch(input) {
-    // A deliberate two-shape signature (string | Request), not a wire value.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
-    const url = new URL(typeof input === "string" ? input : input.url);
+    const url = new URL(new Request(input).url);
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
     if (!rel || rel.includes("..")) return new Response("not found", { status: 404 });
     try {

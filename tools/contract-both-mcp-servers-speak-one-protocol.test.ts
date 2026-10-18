@@ -1,5 +1,4 @@
 // ── both MCP servers speak one protocol ─────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   MCP_SUPPORTED_VERSIONS,
   MODERN_META,
@@ -140,7 +139,6 @@ for (const server of ["site", "serendipity"]) {
   });
 }
 
-// ── both MCP servers speak one protocol ─────────────────────────────
 // This origin publishes TWO MCP servers, /mcp and /serendipity/mcp. They share
 // no data and no tools; they DO share the wire rules, via
 // src/worker/lib/mcp-protocol.ts. Two servers on one origin speaking
@@ -214,7 +212,7 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
 });
 
 test("neither MCP server keeps a private copy of the protocol constants", async () => {
-  // The whole point of lib/mcp-protocol.js is that there is ONE answer to "what
+  // The whole point of lib/mcp-protocol.ts is that there is ONE answer to "what
   // does this origin speak". A server that re-declares MCP_SUPPORTED locally
   // would pass every test above on the day it was written and drift later.
   for (const file of ["src/worker/mcp.ts", "serendipity/serendipity.ts"]) {
@@ -262,7 +260,7 @@ test("Serendipity social reads overlap independent D1 queries", async () => {
 });
 
 test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
-  // build.ts decides what reaches a visitor; check-page-contracts.mjs is a
+  // build.ts decides what reaches a visitor; check-page-contracts.ts is a
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
   // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
   // a scaffold could pass the gate and fail the build. One parser, one family.

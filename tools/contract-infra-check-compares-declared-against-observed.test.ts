@@ -1,11 +1,10 @@
 // ── infra:check compares a declaration against a RECORDED observation ───────
-// Split-file suite; shared imports live in contract-shared.ts.
 //
-// tools/check-infra.ts used to fuse fetching, comparing and printing, and ran
-// on import, so the tests that covered it read its SOURCE. A regex over source
-// can say "a comparison is written here". It cannot say "a bypass actor fails
-// by name", because that needs a response to compare. The comparers are a
-// module now (tools/lib/infra-compare.ts) and the adapters take a `fetch`
+// These tests drive responses through the comparers instead of reading
+// tools/check-infra.ts's SOURCE. A regex over source can say "a comparison is
+// written here". It cannot say "a bypass actor fails by name", because that
+// needs a response to compare. The comparers are a module
+// (tools/lib/infra-compare.ts) and the adapters take a `fetch`
 // (tools/lib/infra-ports.ts), so every drift case below is a fixture.
 //
 // Each drift test carries its control in the same test: the unmodified fixture
@@ -41,8 +40,6 @@ const passes = (findings) => findings.filter((f) => f.level === "pass").map((f) 
  * */
 const ok = <T>(value: T): { ok: true, value: T } => ({ ok: true, value });
 const clone = (value) => structuredClone(value);
-
-// ---------------------------------------------------------------- fixtures ----
 
 /** A ruleset detail as GitHub returns one, built to match its declaration. */
 function rulesetDetail(want) {
@@ -127,8 +124,6 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), { status
  * */
 const edgeServed = (res: Response) => { res.headers.set("cf-ray", "8f1e2d3c4b5a6978-SJC"); return res; };
 
-// ------------------------------------------------------------- repository ----
-
 test("the matching repository fixture is clean, so every drift below is the mutation's", () => {
   const findings = compareRepository(repo, matchingRepository(), anonymous);
   assert.deepEqual(fails(findings), []);
@@ -208,8 +203,6 @@ test("CodeQL default setup switched on beside the committed workflow fails", () 
   assert.match(failed[0], /^CodeQL default setup is "configured", declared "not-configured"/);
 });
 
-// ------------------------------------------------- Workers Builds commands ----
-
 const siteConfigFor = (release) => ({ name: release.worker, build: { command: "bun tools/build.ts" }, preview_urls: release.preview_urls });
 
 test("tree tier: a declared deploy command that lost a provisioning pin fails, for either command and either flag", () => {
@@ -263,8 +256,6 @@ test("API tier: a triggers payload of an unknown shape is an advisory, and no pr
   assert.match(fails(none)[0], /^Workers Builds has no trigger matching the production branch/);
 });
 
-// -------------------------------------------------------------------- DNS ----
-
 test("a DNS record that drifted fails, naming declared and live", () => {
   assert.deepEqual(fails(compareDns(infra, matchingDns())), [], "control: matching answers are clean");
   assert.deepEqual(warns(compareDns(infra, matchingDns())), []);
@@ -307,8 +298,6 @@ test("the DNS port asks for every lookup the comparer reads", () => {
   const keys = new Set(dnsQueries(infra).map((q) => dnsKey(q.name, q.type)));
   for (const key of matchingDns().keys()) assert.ok(keys.has(key), `${key} is compared but never queried`);
 });
-
-// ------------------------------------------------------------------- edge ----
 
 const edgeCheck = (id) => infra.edge.checks.find((c) => c.id === id);
 
@@ -390,8 +379,6 @@ test("edge: an observation of the wrong kind, a missing body and a missing check
   const partial = compareEdgeCheck(compression, { kind: "compression", got: { zstd: "zstd" } }, { hostedRunner: false });
   assert.equal(partial[0].level, "warn", "an encoding nobody asked for cannot be reported as served");
 });
-
-// ------------------------------------------------ agent markdown surface ----
 
 // The registry these tests judge is the real one, so a surface added tomorrow
 // is covered by them without an edit.
@@ -516,8 +503,6 @@ test("agent port and comparer: a proxy answering every probe reads as 'could not
   }]);
 });
 
-// ------------------------------------------------------- Cloudflare tier ----
-
 const bindings = {
   kv_namespaces: [{ binding: "RN_KV", id: "kv-1" }],
   r2_buckets: [{ binding: "PHOTOS_R2", bucket_name: "aadhar-photos" }],
@@ -590,8 +575,6 @@ test("a read-only token carrying an Edit group fails; one carrying none passes",
   assert.ok(fails(wide)[0].startsWith(`token ${want.name} (${want.env}) is declared read-only but carries Workers KV Storage Write`));
 });
 
-// ---------------------------------------------- a failed read, per port ----
-//
 // The invariant: a read that failed or was refused is an ADVISORY. It is never
 // a pass, never a hard failure, and never an empty observation that compares
 // clean. Each port gets a 401, a 403 and a network throw through its real
@@ -735,8 +718,6 @@ test("a failed read is not an empty read: the empty list it must not become is a
   assert.equal(fails(compareWorkerInventory(infra.workers, await readWorkerScripts(empty, "acct"))).length, infra.workers.expected.length);
   assert.equal(fails(compareLabels(repo, ok([]), anonymous)).length, repo.triage.labels.length);
 });
-
-// ------------------------------------------------------------- redaction ----
 
 const TOKEN = "abcd1234abcd1234abcd1234abcd1234abcd1234"; // 40, a Cloudflare token's length
 

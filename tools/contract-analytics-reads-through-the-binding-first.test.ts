@@ -13,7 +13,6 @@ const analyticsSql = ( env: any,  dataset: string,  build: any) => read(env, dat
 
 const QUERY = (from, sum) => `SELECT blob1 AS bot, ${sum("double1")} AS hits FROM ${from} GROUP BY bot`;
 
-/** Swap global fetch for one test, recording every call. */
 async function withFetch(answer, body) {
   const calls: any[] = [];
   const real = globalThis.fetch;

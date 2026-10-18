@@ -1,5 +1,4 @@
 // ── the deploy-time page renderers ──────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   ALBUMS,
   ROOT,
@@ -24,12 +23,12 @@ const withFixtureAlbum = (pool) => pool.map((p, i) =>
 const albumsUnderTest = () => [...Object.values(ALBUMS), FIXTURE_ALBUM];
 
 // ── the deploy-time page renderers ──────────────────────────────────
-// build.ts step 1e runs these in Node and writes photos.html / bot.html, which
-// step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
-// one property: the renderer is PURE over build-time artifacts, so Node and the
-// Worker produce identical bytes. If it ever reaches for runtime state the twin
-// stops matching what a visitor gets, and nothing else in the tree would notice —
-// the page would just quietly serve stale-but-plausible HTML.
+// build.ts step 1e runs these at build time and writes photos.html / bot.html,
+// which step 8 then turns into the q11 twin and the dcz deltas. The whole scheme
+// rests on one property: the renderer is PURE over build-time artifacts, so the
+// build and the Worker produce identical bytes. If it ever reaches for runtime
+// state the twin stops matching what a visitor gets, and nothing else in the tree
+// would notice — the page would just quietly serve stale-but-plausible HTML.
 test("renderPhotosPage is pure over the committed pool", async () => {
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
   const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));

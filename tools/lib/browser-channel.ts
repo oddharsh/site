@@ -9,8 +9,8 @@
 // after the rename shipped rather than the week it landed in Canary.
 //
 // ONE environment variable, read in one place. `CHROME_CHANNEL` names any
-// channel Playwright's registry knows (chrome, chrome-beta, chrome-canary,
-// chrome-beta, msedge-dev, ...), and an unknown one fails at launch with
+// channel Playwright's registry knows (chrome, chrome-beta, chrome-dev,
+// chrome-canary, msedge-dev, ...), and an unknown one fails at launch with
 // Playwright's own error naming the channel, so this does not restate the
 // list. Unset means what it always meant.
 //

@@ -12,8 +12,8 @@
 // underscores; a BigInt past 2^53), floats, inf and nan, booleans, and arrays
 // and inline tables, nested, across lines. It throws, naming the line, on
 // what it doesn't read: dates and times, multi-line strings, and a key set
-// twice. On all 8 TOML files in the tree its output deep-equals smol-toml
-// 1.9.0's.
+// twice. On 2026-10-08 its output deep-equalled smol-toml 1.9.0's on all 8
+// TOML files in the tree.
 //
 // Why own it: the tools that read TOML are one-shot processes, so loading the
 // parser is most of their cost. smol-toml's ES module build is 9 files, which

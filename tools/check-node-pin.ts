@@ -3,7 +3,7 @@
 //
 // WHY THIS IS NOT A BUMPER, WHICH IS THE WHOLE DESIGN.
 //
-// `bun:pin` exists because `packageManager` names an EXACT bun that nothing
+// `bun:pin` exists because config/bun-pin.json names an EXACT bun that nothing
 // updates, and because that bun compiles the site. Neither is true here, and
 // copying the bumper across would have built the wrong tool:
 //

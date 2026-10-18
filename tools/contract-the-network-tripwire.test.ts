@@ -1,5 +1,4 @@
 // ── the network tripwire ─────────────────────────────────────────────────
-// Shared imports live in contract-shared.mjs.
 import {
   assert,
   readFileSync,
@@ -7,7 +6,6 @@ import {
 } from "./contract-shared.ts";
 import { escaped } from "./lib/no-network.ts";
 
-// ── the network tripwire ─────────────────────────────────────────────────
 // `tools/lib/no-network.ts` is preloaded by both test scripts and fails the
 // run if anything reaches the network. These are the assertions that keep it
 // armed, because the gate is a flag in package.json and a flag is one careless
@@ -17,8 +15,8 @@ test("a refused fetch is RECORDED, not merely thrown", async () => {
   // The load-bearing property, and the reason a throw on its own would be a
   // tripwire that cannot fire. Every probe in lens.ts wraps its fetch in a
   // try/catch and degrades, so a refusal is SWALLOWED and the test still
-  // passes: measured on the real suite, all 47 files pass with `fetch` set to
-  // throw, on this commit and every commit before it. The record is what
+  // passes: measured on the real suite on 2026-08-21 (#508), all 47 files then
+  // passed with `fetch` set to throw. The record is what
   // survives the catch, so this asserts the record rather than the throw.
   //
   // It reads the SAME array the preload writes to, which is the thing worth
@@ -43,7 +41,7 @@ test("both test scripts arm it, and neither can drop it quietly", async () => {
   // `validate` runs `bun run test` and `bun run test:node`. A tripwire wired
   // into one of them is a tripwire for half the suite, and the node twin is
   // exactly where this repo has been bitten by a check that existed and never
-  // ran (CLAUDE.md's note on test:node not being in CI until it was).
+  // ran.
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
   const MODULE = "tools/lib/no-network.ts";
 

@@ -1,5 +1,4 @@
 // ── /radar — the instrument for somebody else's antenna ─────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   context,
@@ -7,8 +6,6 @@ import {
   terminalEnv,
   test,
 } from "./contract-shared.ts";
-
-// ── /radar — the instrument for somebody else's antenna ─────────
 
 test("radar drops readings that are not dBm, and bounds the rest", async () => {
   // The caller is a shell script somebody wrote in five minutes, so a bad sample

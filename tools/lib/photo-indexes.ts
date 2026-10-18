@@ -41,11 +41,12 @@ import path from "node:path";
 /**
  * The 22 pairs, SHORT key to metadata.json's long one, in emission order.
  *
- * extract-photo-metadata.sh carries the same map as a jq object literal, because
- * it still writes the local images/meta/ files that `zenc histogram` bakes into.
- * That is a second implementation of one rule, so check-photo-pipeline.ts holds
- * the two together wherever images/meta/ exists: it rolls that directory up and
- * fails on any stem where the two projections disagree.
+ * extract-photo-metadata.sh writes the local images/meta/ files that `zenc
+ * histogram` bakes into through `pipeline-json.ts meta-split`, which calls
+ * projectExifRecord, so this map is the one copy of the rule. Wherever
+ * images/meta/ exists, check-photo-pipeline.ts rolls that directory up and
+ * fails on any stem whose meta file disagrees with this index, which is what a
+ * meta file written from an older metadata.json looks like.
  */
 export const EXIF_KEY_MAP: readonly (readonly [string, string])[] = [
   ["cm", "camera"], ["ln", "lens"], ["ap", "aperture"], ["sp", "shutter"],
@@ -63,9 +64,8 @@ export const HISTOGRAM_KEY = "hi";
  * Project one metadata.json record through the key map, dropping nulls.
  *
  * A null field is DROPPED rather than emitted, because the tooltip skips a line
- * it has no value for and never fabricates one. jq's `select(.value != null)`
- * drops undefined the same way, since a key absent from the record reads as
- * null there, which is why this tests both.
+ * it has no value for and never fabricates one. A key absent from the record
+ * gets the same treatment as a null one, which is why this tests both.
  */
 export function projectExifRecord(record: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

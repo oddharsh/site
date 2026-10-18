@@ -1,5 +1,4 @@
 // ── every wrangler config points at a file that exists ──────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   ROOT,
   assert,
@@ -76,9 +75,10 @@ test("every wrangler config's entry point resolves to a real file", async () => 
   const configs = await wranglerConfigs();
 
   // FLOOR. A scanner that matches nothing reports a pass, which is the failure
-  // this repository has shipped three times. Six configs exist today: the two
-  // root ones, plus cal, lens-reader and lwe-ask on wrangler.*, plus cf-garage
-  // on cloudflare.config.ts.
+  // this repository has shipped three times. Six configs exist on 2026-10-16:
+  // the root cloudflare.config.ts, cal's wrangler.test.toml and counter's
+  // wrangler.jsonc, plus cf-garage, lens-reader and lwe-ask on
+  // cloudflare.config.ts.
   assert.ok(configs.length >= 6, `found only ${configs.length} Worker configs; the scanner is broken`);
 
   const missing: any[] = [];
@@ -91,8 +91,8 @@ test("every wrangler config's entry point resolves to a real file", async () => 
     const declared = match[1];
 
     // cloudflare.config.ts points at `.build/src/worker/index.ts`, which the build
-    // STAGES rather than commits. CLAUDE.md records that build.ts mirrors the
-    // source path there deliberately, so the staged path is checkable against
+    // STAGES rather than commits. build.ts mirrors the source path there
+    // deliberately, so the staged path is checkable against
     // its source twin without running a build.
     const resolved = declared.replace(/^\.\//, "").replace(/^\.build\//, "");
     const onDisk = new URL(dir === "." ? resolved : `${dir}/${resolved}`, ROOT);

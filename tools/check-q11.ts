@@ -199,7 +199,6 @@ async function main() {
     process.exit(2);
   }
 
-  // ── controls ───────────────────────────────────────────────────────────────
   const probe = twins.find((t) => t === "llms.txt.br") ?? twins[0];
   const probePlain = await readFile(BUILT + probe.slice(0, -3));
   const q4 = brotliCompressSync(probePlain, { params: { [zc.BROTLI_PARAM_QUALITY]: 4 } });
@@ -220,7 +219,6 @@ async function main() {
     + (liveOk ? "not at q11, so this run can see an on-the-fly encoding" : "which leaves this run unable to tell an edge encoding from a twin"));
   if (!liveOk) process.exit(2);
 
-  // ── the sweep ─────────────────────────────────────────────────────────────
   type Row = { rel: string; path: string; kind: string; status: number; v?: Verdict; error?: string };
   const rows: Row[] = [];
   let next = 0;

@@ -1,12 +1,10 @@
 // ── the /hit beacon ─────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   handleHit,
   test,
 } from "./contract-shared.ts";
 
-// ── the /hit beacon ─────────────────────────────────────────────────
 // The counter's Durable Object is a single global instance, so reaching it costs
 // a real round trip (185-308ms from SJC; 630ms observed on a cold contended
 // load). The ?tick=1 beacon discards the number, so it must not wait for one —

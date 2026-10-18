@@ -1,25 +1,22 @@
-// ── lib/tui.js ───────────────────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
+// ── src/worker/lib/tui.ts ────────────────────────────────────────────────────
 import {
   assert,
   test,
   tui,
 } from "./contract-shared.ts";
 
-// ── lib/tui.js ───────────────────────────────────────────────────────────────
 // A fixed-80-column renderer fails SILENTLY. A frame one column wide or narrow
 // still returns a string, still serves 200, and just looks subtly wrong; nothing
 // throws and no check notices. These pin the width contract instead, because it
 // is the property every renderer in that file depends on and none of them state.
 //
 // The module is pure ON PURPOSE, which is what lets one renderer answer HTTP,
-// MCP and `node --test` (see the note at its head). Until now that purity bought
-// 3.7% line coverage: it was testable and untested.
+// MCP and `node --test` (see the note at its head).
 
 test("tui width() counts code points, never UTF-16 units", () => {
-  // The `[...text]` spreads throughout tui.js exist for exactly this. Counting
-  // .length instead would make every frame containing an emoji or a CJK name
-  // render narrow, and photo captions plus third-party page titles both flow
+  // The `[...text]` spreads throughout tui.ts exist for exactly this. Counting
+  // .length instead would make every frame containing an emoji or another astral
+  // character render narrow, and photo captions plus third-party page titles both flow
   // through these frames.
   assert.equal(tui.width([tui.s("abc")]), 3);
   assert.equal(tui.width([tui.s("😀")]), 1, "an astral character is ONE column, not two");

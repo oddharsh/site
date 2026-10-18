@@ -1,11 +1,10 @@
 // ── a Workers Issues error becomes ONE GitHub issue ──────────────────────────
-// Shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // Workers Issues hands each new or recurring production error to a Claude Code
 // routine whose prompt is committed at docs/routines/workers-issue-triage.md.
 // The routine itself and the Cloudflare automation are web-UI state nobody can
-// declare from here (CLAUDE.md, Observability, layer 4), so what this holds is
+// declare from here, so what this holds is
 // the half that IS in the tree: the prompt keeps the properties the whole thing
 // rests on, and the label it applies is declared.
 

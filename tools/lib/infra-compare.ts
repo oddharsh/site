@@ -27,9 +27,10 @@
 // as "could not check" rather than as agreement.
 //
 // MESSAGES ARE THE CONTRACT. Every string below moved here verbatim from
-// check-infra.ts, and `infra:check --offline` prints byte-identical output
-// before and after the move. Nothing here redacts: findings are plain data, and
-// tools/lib/infra-report.ts redacts every message on the way into its store.
+// check-infra.ts on 2026-10-02 (#1113), and `infra:check --offline` printed
+// byte-identical output before and after the move. Nothing here redacts:
+// findings are plain data, and tools/lib/infra-report.ts redacts every message
+// on the way into its store.
 
 import { agentRepresentation, type AgentSurface } from "./agent-representation.ts";
 
@@ -63,14 +64,12 @@ const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 // ----------------------------------------------------------- tier: tree ----
 
-// The three auxiliary Workers, whose configs stopped being one format on
-// 2026-08-23: cf-garage moved to wrangler's experimental TypeScript config,
-// where the account pin is an `accountId` key on the default export (it sat on
-// a separate `settings` export until workers-sdk#15713, 2026-09-21; the
-// line-anchored regex below matched both) rather than a toml `account_id`.
-// The pattern and the label travel WITH the path, so a
-// fourth format joins by adding a row instead of by widening one regex until it
-// matches every shape and asserts nothing about any of them.
+// The auxiliary Worker configs, which stopped being one format on 2026-08-23
+// when cf-garage moved to wrangler's experimental TypeScript config, where the
+// account pin is an `accountId` key on the default export. The pattern and the
+// label travel WITH the path, so a new format joins by adding a row instead of
+// by widening one regex until it matches every shape and asserts nothing about
+// any of them.
 export const AUX_CONFIGS = [
   { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
   // lwe-ask and lens-reader joined cf-garage on 2026-09-28 (`cf migrate`), so all
@@ -78,8 +77,8 @@ export const AUX_CONFIGS = [
   // over a directory list for the reason above: the next format is a row.
   { path: "lwe-ask/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
   { path: "lens-reader/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
-  // aadhar-counter hosts the site's Counter Durable Object (CLAUDE.md, "Moving
-  // Counter out"). It stays on JSONC deliberately: the transfer's lifecycle
+  // aadhar-counter hosts the site's Counter Durable Object (the preview URL
+  // section of docs/MAINTENANCE.md says why it moved). It stays on JSONC deliberately: the transfer's lifecycle
   // states were rehearsed in that form, and the key is quoted there.
   { path: "counter/wrangler.jsonc", key: "account_id", pattern: /^\s*"account_id":\s*"([^"]+)"/m },
 ];
@@ -228,13 +227,11 @@ export function compareReleaseDeclaration(release, wrangler): Finding[] {
   if (!wrangler.build?.command) {
     out.fail(`wrangler.config.ts lost its build.command — the deploy would ship the readable originals`);
   }
-  // EVERY publishing command, from one list. The non-production command ran
-  // bare until 2026-08-04 and this loop only read the production one, so a
-  // push to any branch published with both flags at their default. The reason
-  // it hid for so long is that the rule enumerated deploy paths in prose and a
-  // branch build was not among the three it named. So iterate rather than name:
-  // the next trigger Cloudflare adds gets checked by being added here, and the
-  // failure names which command is loose instead of saying "the deploy command".
+  // EVERY publishing command, from one list. Until 2026-08-04 this read only
+  // the production command, and the non-production one ran bare, so a push to
+  // any branch published with both flags at their default. So iterate rather
+  // than name: the next trigger Cloudflare adds gets checked by being added
+  // here, and the failure names which command is loose.
   const deployCmd = String(release.deploy_command || "");
   const previewCmd = String(release.non_production_deploy_command || "");
   const publishCommands = [
@@ -369,7 +366,6 @@ export function compareDns(infra, observed: DnsObservations): Finding[] {
     }
   }
 
-  // Zone identity: nameservers and the DS the registrar publishes.
   const ns = look(infra.zone.name, "NS");
   if (ns.unreachable) out.warn(`could not resolve NS ${infra.zone.name}`);
   else {
@@ -491,9 +487,7 @@ export function compareEdgeCheck(check, seen: EdgeObservation | undefined, opts:
     // nothing to do with any diff. So on a hosted runner the rejection is
     // reported, with its sample count, as something a workstation must
     // confirm, and it fails nothing; a workstation keeps the hard failure,
-    // because there the three samples have never been wrong. GITHUB_ACTIONS
-    // rather than CI, since CI=1 is what this repo sets by hand to exercise
-    // the release guard locally (see the ramp-token control in CLAUDE.md).
+    // because there the three samples have never been wrong.
     if (want.earlyData) {
       const r = expect("early-data").result;
       if (r.skip) out.warn(`edge check ${check.id} skipped: ${r.skip}`);
@@ -678,25 +672,17 @@ export type WorkersBuildsObservation = { tag: string | null; triggers?: unknown 
 
 // The Workers Builds release config. This is the ONE setting in the whole
 // release path that lives outside the repo and can be changed with nothing
-// noticing: a bare `wrangler deploy` in the dashboard's Deploy command turns
-// every merge back into an instant 100% release and makes deploy:promote dead
-// code, and releases keep working, so the failure never surfaces.
+// noticing: a dashboard Deploy command that drops a provisioning pin, or a
+// branch trigger that deploys instead of uploading, keeps releases working,
+// so the failure never surfaces.
 //
-// It used to be unverifiable and infra.json said so at length. That is no
-// longer true (checked 2026-08-04): Workers Builds has a REST API, the
-// permission is `Workers Builds Configuration` and it HAS a Read variant, so
-// this fits the read-only token rule with no exception carved for it.
+// Checked 2026-08-04: Workers Builds has a REST API, the permission is
+// `Workers Builds Configuration` and it HAS a Read variant, so this fits the
+// read-only token rule with no exception carved for it.
 //
-// PROVEN AGAINST THE LIVE API, run 30927021869 on 2026-08-04. Both the
-// endpoint path and the response envelope below were originally written from
-// Cloudflare's docs without a live call, and both turned out right first try:
-//   ok  Workers Builds deploy_command matches infra.json ("npx wrangler versions upload ...")
-//   ok  Workers Builds build_command matches infra.json ("")
-//   ok  Workers Builds root_directory matches infra.json (".")
-//   ok  Workers Builds non-production trigger uploads without deploying
-// Left verbatim because it is a transcript of that run. Both commands moved
-// from `npx` to `pnpm exec` on 2026-08-14, so a run today prints the same
-// lines with the new prefix.
+// PROVEN AGAINST THE LIVE API, run 30927021869 on 2026-08-04. The endpoint
+// path and the response envelope below were written from Cloudflare's docs
+// without a live call, and both matched on the first live run.
 export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservation> | undefined): Finding[] {
   return section("Workers Builds release config", "Workers Builds Configuration:Read", builds, ({ tag, triggers: raw }, out) => {
     if (!tag) {
@@ -739,13 +725,10 @@ export function compareWorkersBuilds(release, builds: Read<WorkersBuildsObservat
     }
 
     // The non-production trigger, held to the SAME standard as the production
-    // one. This used to test only that the live command said `versions upload`,
-    // which it called a low-drama check because that is already the Cloudflare
-    // default. The drama was in what the test did not read: the two provisioning
-    // flags. A command can pass a `versions upload` match and still publish with
-    // --x-provision and --x-auto-create at their default TRUE, which is exactly
-    // what this trigger did until 2026-08-04. Compare the whole string, so a
-    // dropped flag reads as drift like any other.
+    // one: compare the whole string. A command can pass a `versions upload`
+    // match and still publish with --x-provision and --x-auto-create at their
+    // default TRUE, which is exactly what this trigger did until 2026-08-04, so
+    // a dropped flag must read as drift like any other.
     const preview = triggers.find((t) => t !== prod);
     const expectedPreview = String(release.non_production_deploy_command || "");
     if (expectedPreview && !preview) {
@@ -912,7 +895,7 @@ export function compareZoneSetting(
 }
 
 // 0-RTT. The value is declared "on" together with the Worker's early-data
-// guard (lib/early-data.ts); the arithmetic and the pairing argument are in
+// guard (src/worker/lib/early-data.ts); the arithmetic and the pairing argument are in
 // infra.json under zone.zero_rtt.
 export const ZERO_RTT_SECTION = { label: "0-RTT connection resumption", scope: "Zone:Zone Settings:Read and Zone:Zone:Read", short: "0-RTT" };
 // Shared Dictionaries passthrough. The docs say `disabled` strips
@@ -929,8 +912,8 @@ export type VersionAffinityObservation = { zoneId: string | null; ruleset?: any 
 // Version affinity: the Transform Rule that keeps one visitor on one Worker
 // version for the length of a ramp.
 //
-// ZONE-scoped, which makes it the first thing in this tier the account-scoped
-// CI token cannot reach. It needs Zone:Zone:Read to resolve the id and
+// ZONE-scoped, which puts it out of the account-scoped CI token's reach. It
+// needs Zone:Zone:Read to resolve the id and
 // Zone:Transform Rules:Read to read the phase, neither of which is among the
 // six reads CI carries, so IN CI THIS ALWAYS DEGRADES TO A NOTE. That is the
 // same standing as repository.code_scanning: the assertion runs on a
@@ -992,7 +975,7 @@ export function compareVersionAffinity(declared, zoneName: string, observed: Rea
     // matters rather than string-equal against the declaration. Cloudflare
     // normalizes expressions, so a textual diff would false-fire on formatting;
     // what has to hold is that the rule SKIPS a request that already carries the
-    // header. deploy-promote.mjs sends one key per request so it can still watch
+    // header. deploy-promote.ts sends one key per request so it can still watch
     // the split take from a single IP, and a rule that overwrites those keys
     // collapses every sample onto one version, which the ramp reads as dead and
     // aborts on. Fails closed, and loudly, but it aborts healthy releases.
@@ -1162,12 +1145,10 @@ export function compareRulesets(repo, core: Read<RulesetsObservation> | undefine
 // runs on every pull request with no credential rather than degrading to a note
 // like the account tier.
 //
-// A MISSING LABEL IS FATAL, and the reason is not tidiness. Three things break
-// on one: `gh pr create --label` fails outright, so the nightly dictionary roll
-// stops opening pull requests; triage.yml silently CREATES the label instead,
-// because the add-labels endpoint invents what it is handed; and the label list
-// stops being the thing you can filter the repository by, which is the only
-// reason any of this exists.
+// A MISSING LABEL IS FATAL. Two things break on one: `gh pr create --label`
+// fails outright, so the nightly dictionary roll stops opening pull requests;
+// and the label list stops being the thing you can filter the repository by,
+// which is the only reason any of this exists.
 //
 // Colour and description drift is fatal too, which looks strict for something
 // cosmetic. It is one command to fix and it is the only signal that somebody
@@ -1388,16 +1369,11 @@ export function compareActionsPermissions(repo, actions: Read<{ live: any; workf
 // Secret scanning, read off the repo metadata the rulesets read already
 // fetched for its `visibility` precondition. No third call:
 // `security_and_analysis` rides on that same payload, so this tier costs one
-// field rather than one request.
+// field rather than one request. It reads both directions (the stray pass
+// below says why).
 //
-// IT READS BOTH DIRECTIONS, which the first version did not. Looping the
-// DECLARED keys answers "is every setting I named still right" and is silent
-// about a setting GitHub added or the owner switched on;
-// `dependabot_security_updates` was live and undeclared the day this landed.
-// The stray pass below is an advisory, matching the undeclared-ruleset
-// line: an undeclared setting is a declaration to write.
-//
-// THE ABSENT-OBJECT CASE IS THE TRAP AND IS WHY THIS IS NOT A BARE LOOP. /repos/:slug answers HTTP 200 with NO credential and simply omits
+// THE ABSENT-OBJECT CASE IS THE TRAP AND IS WHY THIS IS NOT A BARE LOOP.
+// /repos/:slug answers HTTP 200 with NO credential and simply omits
 // `security_and_analysis` (measured 2026-08-27), which is sharper than the 401s
 // the Actions endpoints give: a checker written against the anonymous shape
 // gets a successful read of an object that is not there, and every `?.status`

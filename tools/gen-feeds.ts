@@ -1,4 +1,4 @@
-// gen-feeds.mjs — RSS 2.0 feeds for the three authored sections.
+// gen-feeds.ts — RSS 2.0 feeds for the three authored sections.
 //
 // WHY BUILD OUTPUT. A feed is a pure function of the registry, the sitemap's
 // dates, and posts.json, all of which the build already has in hand. Generating
@@ -84,10 +84,6 @@ export const FEEDS = [
   { path: "/lwe", section: "lwe", title: "aadhar.sh — learning with errors", description: "Chat-style explainers with live demos." },
 ];
 
-/**
- * Build every feed from the committed sources.
- *
- */
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));
   const dates = sitemapDates(readFileSync(`${root}/public/sitemap.xml`, "utf8"));

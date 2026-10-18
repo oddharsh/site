@@ -1,5 +1,4 @@
 // ── the histogram digest leaves zenc out because CI reproduces the output ────
-// Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { compareIndexes, controlCatchesOneBin, reproduces } from "./photos/check-histograms.ts";
 

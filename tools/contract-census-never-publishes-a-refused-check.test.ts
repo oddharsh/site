@@ -1,5 +1,4 @@
 // ── the census never publishes a check the platform refused ──────────────────
-// Split-file suite; shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import {
   configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
@@ -105,7 +104,7 @@ test("the cron dispatches and never scans in-line", async () => {
 test("the Workflow class is exported from the entrypoint and bound in the site config", async () => {
   // A `workflows` binding names a class_name that must resolve on the deployed
   // Worker. It resolves through the entrypoint's re-export, the same way
-  // BookingWorkflow and the Counter Durable Object do, and a class that is bound
+  // BookingWorkflow does, and a class that is bound
   // but not exported fails at startup rather than at review.
   const index = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
   assert.match(index, /export \{ CensusWorkflow \} from "\.\/census-workflow\.ts";/,

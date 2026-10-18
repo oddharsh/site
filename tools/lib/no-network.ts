@@ -33,7 +33,7 @@
 // machine: the checks that genuinely read the wire (`infra:check`, `dcz:check`,
 // `routes:check:remote`) are their own scripts and never run under `bun test`.
 //
-// To stub one test, follow the convention already in ~10 files here:
+// To stub one test, follow the convention the contract tests already use:
 //
 //   const realFetch = globalThis.fetch;
 //   try { testGlobals.fetch = async () => new Response("...", { status: 200 }); ... }
@@ -71,7 +71,7 @@ const arm = () => {
   // `fetch(u).then(...)` with no await would otherwise get an exception from a
   // line it never guarded, which is a different failure than the one reported.
   //
-  // Assigned through the loose alias for the reason contract-shared.mjs gives at
+  // Assigned through the loose alias for the reason contract-shared.ts gives at
   // `testGlobals`: bun types `globalThis.fetch` as `typeof fetch`, which carries
   // a `preconnect` method, and a double that refuses every request has no
   // business implementing it. This is a partial stand-in being installed on a
@@ -88,7 +88,6 @@ const arm = () => {
   process.on("exit", () => {
     if (escaped.length === 0) return;
 
-    // counts by host, filled as refusals arrive
     const counts = new Map<string, number>();
     for (const url of escaped) {
       let host = "(unparseable)";

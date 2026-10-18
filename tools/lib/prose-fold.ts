@@ -19,7 +19,7 @@
 // composes with them.
 //
 // A section starts only at a top-level <h2> or a top-level `section.demo` card
-// (horizon's 98 cards, each holding its own h2), which keeps the margin fix in
+// (horizon's demo cards, each holding its own h2), which keeps the margin fix in
 // prose.css simple: before an h2 fold the block above drops its bottom margin
 // and the h2 keeps its own, and a card has no top margin, so a card boundary
 // needs no fix. An h2 starts a new fold every

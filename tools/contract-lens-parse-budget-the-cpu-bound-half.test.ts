@@ -1,11 +1,8 @@
 // ── lens parse budget: the CPU-bound half ────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   assert,
   test,
 } from "./contract-shared.ts";
-
-// ── lens parse budget: the CPU-bound half ────────────────────────────────
 
 test("the parse is capped, and a prefix parse says so instead of under-reporting", async () => {
   // lensText/lensMarkdown are regex chains costing ~32ms per MB (measured, node,

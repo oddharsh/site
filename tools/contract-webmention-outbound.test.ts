@@ -1,5 +1,4 @@
 // ── webmention (outbound) ───────────────────────────────────────────────────
-// Split from contract-tests.test.ts; shared imports live in contract-shared.mjs.
 import {
   PROFILES,
   SELF_LINK_HOSTS,
@@ -9,7 +8,6 @@ import {
   test,
 } from "./contract-shared.ts";
 
-// ── webmention (outbound) ───────────────────────────────────────────────────
 test("outbound citations exclude the shell, self-links, and non-public URLs", () => {
   const origin = "https://aadhar.sh";
   const page = `

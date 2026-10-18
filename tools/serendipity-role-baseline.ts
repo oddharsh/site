@@ -7,7 +7,7 @@
 //   bun run serendipity:roles -- --labels f.json --clef    Clef on the same labels
 //   bun run serendipity:roles -- --clef [--clef-sample 60] label spread, no labels needed
 //
-// Reads production D1 through the pinned wrangler and writes nothing. The label
+// Reads production D1 through cf (tools/lib/cf.ts) and writes nothing. The label
 // file maps attendee id to one of LABELS and must live OUTSIDE this repository:
 // it pairs real names' ids with a judgment about them, and this repo is public.
 //
@@ -36,7 +36,6 @@
 // Bios leave this machine for Workers AI under --clef, the same place the
 // Worker would send them. The token is CLOUDFLARE_API_TOKEN when set, else
 // wrangler's own OAuth login. Without labels it prints counts only, never a bio.
-// The bios themselves come from D1 through cf (tools/lib/cf.ts).
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";

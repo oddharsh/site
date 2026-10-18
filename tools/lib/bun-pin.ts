@@ -18,9 +18,9 @@
 // gets pasted.
 //
 // WHY THE PIN MATTERS MORE THAN IT LOOKS. wrangler.config.ts's build command is
-// `bun tools/build.ts`, so the bun this field names is the compiler that mints
-// every content-addressed `/a/` and `/i/` URL production serves. Changing it is
-// a build change wearing a version string.
+// `BUILD_CACHE=0 bun tools/build.ts`, so the bun this field names is the
+// compiler that mints every content-addressed `/a/` and `/i/` URL production
+// serves. Changing it is a build change wearing a version string.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

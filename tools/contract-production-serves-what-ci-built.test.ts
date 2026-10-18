@@ -1,5 +1,4 @@
 // ── production serves what CI built, URL for URL ─────────────────────────────
-// Shared imports live in contract-shared.ts.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

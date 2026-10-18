@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// speculation-probe.mjs — does a speculation rule actually fetch anything?
+// speculation-probe.ts — does a speculation rule actually fetch anything?
 //
 //   bun run build && node node_modules/wrangler/bin/wrangler.js dev \
 //     -c .wrangler.site.jsonc -c counter/wrangler.jsonc --port 8806   # another shell

@@ -8,7 +8,7 @@
 // without being news" and "cards that moved" directions in the page's own
 // lede). And a probe that flips FALSE in a prerelease is a regression in the
 // browser, which is the bug report this site is unusually well placed to
-// file: 90-odd one-line probes, each one already pinned to a card that says
+// file: 127 one-line probes on 2026-10-16, each one already pinned to a card that says
 // what the feature is for.
 //
 // WHAT IS DIFFED. `window.__horizonCaps` is the object the page hoists into
@@ -26,19 +26,16 @@
 // PAIRS. `a:b` diffs b against a; a lone name is a snapshot with no control.
 // Names are Playwright's: the bare engines (chromium, firefox, webkit) launch
 // the bundled build, anything else is a `channel`. The default is what Linux
-// CI can INSTALL, which is narrower than what Playwright can launch, and it
-// moved under this leg once already: the first draft paired chromium with
-// `chromium-tip-of-tree` and firefox with `firefox-beta`, both of which
-// playwright-core 1.63's installer refuses ("Invalid installation targets"),
-// so the leg's first scheduled run on 2026-09-15 died at the install step
-// and every "first-run finding" before that came from a Mac. The installable
+// CI can INSTALL, which is narrower than what Playwright can launch:
+// `chromium-tip-of-tree` and `firefox-beta` are refused by playwright-core
+// 1.63's installer ("Invalid installation targets"), which killed the leg's
+// first scheduled run on 2026-09-15 at the install step. The installable
 // prerelease channels are Google's and Microsoft's: `chrome-beta` (one major
 // ahead of stable) and `msedge-dev` (Chromium's tip, roughly weekly), each
-// paired with its own stable. Until 2026-10-04 Chrome Beta was paired with
-// the BUNDLED chromium, which playwright-core pins (153 under 1.63) while
-// Google stable moves every four weeks: the pair spanned three majors, and a
-// flip already in stable Chrome stayed a flip until someone bumped
-// playwright, so the leg's one issue (#816) could never close itself.
+// paired with its OWN stable. Pairing Chrome Beta with the bundled chromium
+// (until 2026-10-04) spanned three majors, because playwright-core pins its
+// chromium while Google stable moves every four weeks, so a flip already in
+// stable Chrome could never clear and issue #816 could never close itself.
 // Playwright's bundled firefox and webkit are
 // themselves built from near-trunk, so they stand alone as snapshots. On a
 // Mac with Canary, `--pairs chrome:chrome-canary` is the one-minute version
@@ -49,8 +46,8 @@
 //
 // THE CONTROL is the stable half of each pair, and it is two assertions: the
 // engine returned every probe the page declares, and at least one probe is
-// true. A prerelease that reports 0 of 92 is a page that did not load in it,
-// which is the instrument, and it exits 2 rather than reporting 92 flips.
+// true. A prerelease that reports 0 of 127 is a page that did not load in it,
+// which is the instrument, and it exits 2 rather than reporting 127 flips.
 //
 // The page is loaded from the SOURCE file over file://, so this needs no
 // build and no server. The shell assets 404 there and nothing in <head>
@@ -278,7 +275,7 @@ for (const pair of pairs) {
       const total = Object.keys(s.probes).length;
       const truthy = Object.values(s.probes).filter((p) => p.value).length;
       console.log(`${name.padEnd(26)} ${s.version.padEnd(18)} ${truthy}/${total} probes true`);
-      // THE CONTROL. A page that did not load answers 0 of 0 or 0 of 92, and
+      // THE CONTROL. A page that did not load answers 0 of 0 or 0 of 127, and
       // either way every later comparison would be about the instrument.
       if (total === 0 || truthy === 0) {
         console.error(`${name}: ${truthy}/${total} true reads as a page that did not load in this engine`);

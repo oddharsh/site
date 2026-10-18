@@ -15,8 +15,7 @@
 //   - the WITNESSES. Every declared loader must end up carrying the hashed URL,
 //     and a rewrite that lands in a registered asset the registry does not
 //     list is refused. Together they hold the edges to the truth in both
-//     directions, which is what the ~20 hand-written `includes()` throws and
-//     the "ORDER IS LOAD-BEARING" comment did by hand until 2026-10-02.
+//     directions.
 //
 // Layout it assumes under root, each optional except public/: public/ (the
 // served tree), src/worker/, cal/src/, serendipity/serendipity.ts.

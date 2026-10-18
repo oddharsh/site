@@ -1,21 +1,24 @@
 #!/usr/bin/env node
-// gen-manifest.mjs — derive the mechanical, drift-prone projections of the site
+// gen-manifest.ts — derive the mechanical, drift-prone projections of the site
 // surface registry from site-manifest.json, so the places that used to list the
 // site's pages by hand cannot fork again.
 //
-//   node tools/gen-manifest.ts        # regen the worker module + Run fences
+//   bun run gen:manifest        # regen the worker module + Run fences
 //
 // What this OWNS (regenerated between markers; do not hand-edit those regions):
 //   - src/worker/lib/site-manifest.ts  — AGENT_SURFACES, the projection
 //     MCP resources/list serves (agents:true only, no shell bytes)
 //   - src/client/nav-run.ts generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
+//   - src/client/nav-run.ts generated:run-profiles — the desktop profiles from
+//     tools/photos/shell-data.ts
 //
-// What this deliberately does NOT own (hand-authored, VERIFIED by build.ts #8):
+// What this deliberately does NOT own (hand-authored, VERIFIED by the site-manifest
+// check in build.ts's invariants phase):
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
 //     flatten a real SEO freshness signal. build.ts enforces coverage instead.
 //   - src/pages/garage/index.html — rich hand-written gallery cards. Verified.
-//   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
+//   - nav-run.ts top-level PAGES (Home/photos/…) — hand-authored. Verified both ways.
 //
 // The projection functions below are PURE and exported, so build.ts re-runs the
 // exact same logic in-memory and fails the deploy if a committed output drifts.
@@ -71,7 +74,7 @@ export function agentSurfaces(surfaces) {
 
 // the webmention projection: paths that accept an inbound mention. A section
 // surface flagged webmention (e.g. /writing) also vouches for its leaf content,
-// which lives in its own registry (posts.json) rather than here — webmention.js
+// which lives in its own registry (posts.json) rather than here — webmention.ts
 // resolves those, so this list stays exactly "what the manifest itself knows".
 export function webmentionPaths(surfaces) {
   return surfaces.filter((s) => s.flags.webmention).map((s) => s.path);
@@ -97,7 +100,6 @@ export const WEBMENTION_SECTIONS = ${JSON.stringify(webmentionSections(surfaces)
 `;
 }
 
-// read the current body strictly between a fence's start/end marker lines.
 export function readFenceBody(src, marker) {
   const start = src.indexOf(`generated:${marker}:start`);
   const end = src.indexOf(`generated:${marker}:end`);

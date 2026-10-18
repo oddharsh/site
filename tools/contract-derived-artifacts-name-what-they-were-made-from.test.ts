@@ -17,8 +17,6 @@ const decl = JSON.parse(await readFile(new URL("config/derivations.json", ROOT),
 const lock = JSON.parse(await readFile(new URL("config/derivations.lock.json", ROOT), "utf8")).files;
 const graph = decl.derivations;
 
-// ── the declaration is well formed ───────────────────────────────────────────
-
 test("derivations: a pinned entry declares inputs and carries a recorded digest", () => {
   for (const d of graph.filter((x) => x.tier === "pinned")) {
     assert.ok(d.inputs?.paths?.length, `${d.id}: pinned with no inputs`);
@@ -132,8 +130,6 @@ test("derive: a declared input that has vanished is an error, never an empty set
   );
   await rm(dir, { recursive: true, force: true });
 });
-
-// ── set mode and coverage ────────────────────────────────────────────────────
 
 // The property set mode exists for. An artifact keyed by stem must NOT go stale
 // when a photo is re-encoded, or the check cries wolf on every encode and gets
@@ -353,7 +349,7 @@ test("derive: --only prunes its own dead rows and leaves every other derivation'
 // The same property asserted on the REAL lock, which is the half that would have
 // caught this: every row has to be one some pinned derivation still collects. It
 // covers set mode too, where the key is a projected stem rather than a path and a
-// stat cannot answer. Committed at 660 rows for 660 files.
+// stat cannot answer.
 test("derivations: every lock row is an input some derivation still collects", async () => {
   const live = new Set();
   for (const d of graph.filter((x) => x.tier === "pinned")) {

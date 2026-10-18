@@ -23,14 +23,13 @@
 // them is referenced anywhere in the tree, which is what an identical count
 // proves.
 //
-// ONE FILE FOR THREE CONFIGS (it was four until cf-garage got its own, below),
-// and that is asserted rather than assumed. The
-// runtime section is a function of compatibility date and flags, and the four
-// Workers here sit on four different dates (2026-05-01 to 2026-07-02) with two
-// flag sets. Generated separately, their runtime sections came back
-// byte-identical below the header line. This script regenerates the two
-// auxiliary configs wrangler can read alongside the site's and FAILS if any
-// pair diverges, because that is the day the programs need a file each and a
+// A SHARED FILE IS ASSERTED rather than assumed. The runtime section is a
+// function of compatibility date and flags, and the Workers here sit on
+// different dates with different flag sets. On 2026-09-02, generated
+// separately, their runtime sections came back byte-identical below the header
+// line. The site now has its own file (AUX_OUT, below, says why), and this
+// script regenerates lwe-ask and lens-reader alongside it and FAILS if those
+// two diverge, because that is the day the programs need a file each and a
 // silent divergence would type one Worker against another's runtime.
 //
 // CF-GARAGE GETS ITS OWN FILE, FROM ITS OWN CONFIG, since 2026-09-26. It is the
@@ -102,7 +101,8 @@ export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
 export const AUX_OUT = join(REPO, "config", ".generated", "workers-runtime-aux.d.ts");
 const KEY_PREFIX = "// gen-runtime-types key ";
 
-// The site config is the one whose output ships; the others are the control.
+// Order is read below: the first writes OUT, the second writes AUX_OUT, and
+// every config after the second must generate the same surface as it.
 const CONFIGS = [
   { name: "site", config: "cloudflare.config.ts" },
   { name: "lwe-ask", config: "lwe-ask/cloudflare.config.ts" },

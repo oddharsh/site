@@ -54,7 +54,7 @@
 // FIND_EDGES" used to mean.
 //
 // Two things changed on purpose with the port. cjpegli left the encoder
-// lineup: config/retired.json banned it in July and the Python went on calling
+// lineup: config/retired.json banned it on 2026-07-01 and the Python went on calling
 // an unmanaged copy in ~/.local/bin that tools:check could not see, because
 // the declaration scanner reads shell. And the contact sheet is an HTML page
 // rather than a bitmap with drawn labels, so the browser draws the text and no
@@ -200,15 +200,12 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
     "XT507517",   // license plate lettering
     "XT509535",   // Coca-Cola livery, text on a curve
   ]],
-  // The format axis: JPEG XL against AVIF at one byte budget. Detail crops,
+  // The format axis: JPEG XL, AVIF and AV2 at one byte budget. Detail crops,
   // because a format difference at equal bytes shows first in what each codec
   // chooses to smooth: AVIF's deblocking eats grain and fine texture, JXL
   // keeps texture and rings.
-  // Each stem yields one trial per budget tier (FORMAT_TIERS). The keep count
-  // is split evenly across the tiers and set above anything a tier has built
-  // (13 calls cleared the gate on 2026-10-07), because the axis also feeds the
-  // JPEG XL vs AVIF run: a cap of 3 a tier dropped the one tight-budget call
-  // JPEG XL won, for having a smaller margin than AVIF's three.
+  // Each stem yields one trial per budget tier (FORMAT_TIERS), and the keep
+  // count is split evenly across the tiers.
   //
   // The last three stems joined 2026-10-07, when the axis grew from two tiers
   // to four and needed a deeper pool. They come from the encoder and chroma
@@ -1227,7 +1224,7 @@ function main(): number {
   const argv = process.argv.slice(2);
   // --merge <axis> rebuilds ONE axis and splices it into the existing manifest,
   // leaving every other trial and tile byte-identical. It is how an axis is
-  // added without a full rebuild re-rolling 60 unrelated tiles through encoders
+  // added without a full rebuild re-rolling every unrelated tile through encoders
   // (sips above all) that may have moved since they were cut. The manifest
   // stays all-or-nothing per AXIS: the merged axis replaces its old trials whole.
   const merge = argv.includes("--merge") ? argv[argv.indexOf("--merge") + 1] as Axis : null;

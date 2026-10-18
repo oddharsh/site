@@ -14,8 +14,9 @@
 //                      with cloudflare.config.ts, and every declared `consumer` file
 //                      must exist. Catches the bimi.svg class of bug, where the
 //                      only thing referencing a file is a DNS record.
-//   dns   no secrets.  Public DoH. Every declared record, checked against two
-//                      independent resolvers. This is most of the value and it
+//   dns   no secrets.  Public DoH. Every declared record, read from dns.google
+//                      with cloudflare-dns.com as the fallback (infra-ports.ts
+//                      resolveWithFallback). This is most of the value and it
 //                      runs in CI with no credential at all.
 //   repo  no secrets.  GitHub repository rulesets, the branch half of the
 //                      release model. Public repo, public endpoint, so this
@@ -36,7 +37,7 @@
 //
 // Hard failures are "we checked and it is wrong". Advisories are "we could not
 // check" (resolver unreachable, no token) and never fail the run — same split
-// perf-budget.mjs uses, so a flaky network cannot redden an unrelated PR.
+// perf-budget.ts uses, so a flaky network cannot redden an unrelated PR.
 //
 // Usage:
 //   node tools/check-infra.ts              tree + dns, api if a token exists
@@ -160,8 +161,6 @@ const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
 
 const fetchEdge = edgeFetcher();
 
-// ----------------------------------------------------------- tier: tree ----
-
 // The config half of the tree tier is compareTree; this gathers the two local
 // observations it wants and then runs the three checks that walk files.
 async function checkTree(infra, wrangler, aux: Map<string, string>) {
@@ -274,7 +273,8 @@ async function checkActionPinning(repo) {
 }
 
 // The triage declaration, asserted WITHOUT a network call. The live half (do
-// these labels exist, with these colours) is in checkLabels below; this is the
+// these labels exist, with these colours) is compareLabels in
+// tools/lib/infra-compare.ts; this is the
 // half that can run on a plane, and it is the half that catches the failure
 // that matters most.
 //
@@ -286,9 +286,8 @@ async function checkActionPinning(repo) {
 // That is the whole argument for not splitting this block in two.
 //
 // The `gh --label` scan is the other direction, and it is the one with teeth.
-// A workflow that opens its own pull request passes `--label` at creation,
-// because an event created with the default GITHUB_TOKEN never triggers
-// triage.yml. `gh pr create --label` FAILS OUTRIGHT on an unknown label, so a
+// A workflow that opens its own pull request passes `--label` at creation.
+// `gh pr create --label` FAILS OUTRIGHT on an unknown label, so a
 // rename here without a sync does not mislabel the nightly roll, it stops it.
 //
 // Dependabot is the QUIET direction, and nothing read that file until #620 was
@@ -500,8 +499,6 @@ async function checkCodeqlWorkflow(repo) {
   pass(`${want.workflow} matches: ${got.length} analysis job(s) (${got.join(", ")}), ${want.query_suite} suite, ${want.threat_model} threat model, actions SHA-pinned`);
 }
 
-// ------------------------------------------------------------ tier: api ----
-
 async function checkApi(infra, wrangler, token: string) {
   const cf = cloudflareReader(token);
   // The account id, in the order it should be trusted. cloudflare.config.ts's accountId pin is
@@ -509,8 +506,8 @@ async function checkApi(infra, wrangler, token: string) {
   // already proven all 7 declarations agree by the time this runs.
   //
   // SECOND READER of that field, and deliberately not shared with the first:
-  // tools/print-account-id.ts makes exactly this argument in its header and
-  // emits the value for ramp.yml's $GITHUB_ENV. It cannot be imported, because
+  // tools/print-account-id.ts reads the same field and prints it for a
+  // `$GITHUB_ENV` append. It cannot be imported, because
   // it reads and writes at module scope, so importing it to borrow the lookup
   // would print to stdout as a side effect. Two readers of one committed
   // string, both failing loudly when it is absent, is the cheap shape here.
@@ -560,8 +557,6 @@ async function checkApi(infra, wrangler, token: string) {
   if (affinity) report.add(compareVersionAffinity(affinity, zone, await readVersionAffinity(cf, zone, affinity.phase)));
 }
 
-// ----------------------------------------------------- tier: repository ----
-
 /** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
  *  than remembered.
  *
@@ -587,11 +582,9 @@ async function workflowPermissionBlocks(): Promise<WorkflowBlocks> {
 }
 
 
-// ------------------------------------------- tier: agent markdown surface ----
-
 // Which pages answer an agent in Markdown, measured on the wire rather than inferred
 // from filenames. The twins arrive by three different conventions — /index.md for the
-// homepage, src/content/md/<name>.md for /whoareyou and /bot, build-generated twins for
+// homepage, src/content/md/<name>.md for hand-written ones like /whoareyou and /bot, build-generated twins for
 // /garage/* and /lwe/* — so a local file check would have to know all three and would
 // still be guessing about production. One request per page settles it.
 //
@@ -620,8 +613,6 @@ async function checkAgentMarkdown() {
   const answers = pages.length < AGENT_SURFACE_FLOOR ? new Map() : await readAgentAnswers(infra.edge.origin, pages, fetchEdge);
   report.add(compareAgentCoverage(pages, answers));
 }
-
-// ----------------------------------------------------------------- main ----
 
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 // The site config in its legacy shape (tools/lib/site-config.ts): every check

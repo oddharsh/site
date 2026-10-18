@@ -1,5 +1,4 @@
 // ── tools/lib/cf.ts names the same resources the site config does ───────────
-// Split-file convention: shared imports live in contract-shared.ts.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CF_ACCOUNT, CF_VERSION, D1, cfCommand } from "./lib/cf.ts";
 

@@ -1,5 +1,4 @@
 // ── the span vocabulary ─────────────────────────────────────────────
-// Shared imports live in contract-shared.ts.
 import {
   assert,
   readFileSync,
@@ -16,18 +15,15 @@ import { join } from "node:path";
 // A DECLARED NAME NOTHING OPENS. The type only constrains use, so an entry
 // left behind by a refactor stays in the registry forever, reading as part
 // of the vocabulary while emitting nothing. That is precisely what happened
-// to `rn.scrape.tracks` and `rn.scrape.artists`, which CLAUDE.md still lists
-// as a three-tier scrape: the tiers moved to the cron in #395 and the names
-// went with them. A registry that documents spans nobody emits is worse than
-// no registry, because it is believed.
+// to `rn.scrape.tracks` and `rn.scrape.artists`: the tiers moved to the cron
+// in #395 and the names went with them. A registry that documents spans
+// nobody emits is worse than no registry, because it is believed.
 //
-// THE SCANNER IS DELIBERATELY MULTILINE, and that is not a precaution either.
-// The grep that seeded the registry was `span\("` on one line, and it MISSED
-// `around.neighbor` and `rn.scrape.playlist` because both call sites wrap the
-// name onto its own line. The compiler caught both. A test that re-used the
-// same one-line assumption would have agreed with the broken grep and reported
-// a pass, which is the failure this repo has recorded three times over its own
-// minified HTML.
+// THE SCANNER IS DELIBERATELY MULTILINE. The grep that seeded the registry
+// was `span\("` on one line, and it MISSED `around.neighbor` and
+// `rn.scrape.playlist` because both call sites wrap the name onto its own
+// line. The compiler caught both. A test that re-used the same one-line
+// assumption would have agreed with the broken grep and reported a pass.
 
 const REGISTRY = "src/worker/lib/span-vocabulary.ts";
 const TREES = ["src/worker", "cal/src", "serendipity"];

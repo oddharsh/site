@@ -1,24 +1,15 @@
-// release-guard.mjs — may this process move production traffic?
+// release-guard.ts: may this process move production traffic?
 //
-// Extracted from deploy-promote.mjs so it can be tested. The script itself
+// Extracted from deploy-promote.ts so it can be tested. The script itself
 // cannot be imported by a test: it runs the ramp at module scope, so importing
 // it to check one condition would deploy.
 //
-// ── what this used to say, and why it changed ──────────────────────────────
-// The guard was a flat `if (process.env.CI) die(...)`, on the rule that GitHub
-// must never hold a Cloudflare token that can write. That rule was retired on
-// 2026-08-06: the owner is fine with a write token in Actions, scoped narrowly
-// and held as an ENVIRONMENT secret behind required reviewers, because the risk
-// a public repo actually carries is a workflow that runs untrusted input, not
-// the existence of the secret.
-//
-// A blanket CI ban is now the wrong shape. It refuses the case it was built to
-// protect (a ramp with a real token, gated by a human) while doing nothing about
-// the case that actually breaks: a ramp starting with no way to authenticate,
-// which surfaces as a wrangler auth error somewhere mid-sequence — possibly
+// The guard asks whether this process can authenticate. Until 2026-08-06 it
+// was a flat `if (process.env.CI) die(...)`, and a blanket CI ban is the wrong
+// shape: it refuses a ramp with a real token, gated by a human, while doing
+// nothing about the case that actually breaks. A ramp that starts with no way
+// to authenticate surfaces as an auth error somewhere mid-sequence, possibly
 // AFTER traffic has already moved to 10%.
-//
-// So the question is no longer "is this CI" but "can this process authenticate".
 export function releaseCredentialError(env = process.env) {
   // Interactively, the stored `cf auth login` is the credential (wrangler's
   // login until 2026-10-06, when the ramp moved to tools/lib/cf.ts) and no

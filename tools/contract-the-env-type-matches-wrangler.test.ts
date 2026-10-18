@@ -1,5 +1,4 @@
 // ── the Env type matches cloudflare.config.ts ─────────────────────────────
-// Shared imports live in contract-shared.ts.
 import {
   configText,
   assert,
@@ -40,8 +39,8 @@ const ENV_TS = "src/worker/lib/env.ts";
 // the binding shapes below keep the names cloudflare.config.ts gave them.
 const WRANGLER = "cloudflare.config.ts";
 
-// The four LEGACY-SHAPE keys that declare a binding (the projection lib/site-config.ts
-// makes of cloudflare.config.ts), since the key naming
+// The six LEGACY-SHAPE keys that declare a binding (the projection
+// tools/lib/site-config.ts makes of cloudflare.config.ts), since the key naming
 // the binding is not the same one in each. Anything not listed here is not a
 // binding (build config, routes, observability, compatibility flags).
 const BINDING_SOURCES = [
