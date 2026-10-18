@@ -18,6 +18,9 @@
   // directory's install, typecheck and tests on 2026-09-28 (#1001).
   "compilerOptions": {
     "noEmit": true,
+    // Erasable syntax only, for the reason tsconfig.json gives (+0 diagnostics
+    // here, measured 2026-10-17).
+    "erasableSyntaxOnly": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",

@@ -29,6 +29,9 @@
   // missing property is only visible to a checker.
   "compilerOptions": {
     "noEmit": true,
+    // Erasable syntax only, for the reason tsconfig.json gives (+0 diagnostics
+    // here, measured 2026-10-17).
+    "erasableSyntaxOnly": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",

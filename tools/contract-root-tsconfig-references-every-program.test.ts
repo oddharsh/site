@@ -18,3 +18,27 @@ test("root tsconfig.json references every config/tsconfig.*.json program and hol
   assert.ok(onDisk.length >= 10, `expected 10+ programs in config/, found ${onDisk.length}: the glob is reading nothing`);
   assert.deepEqual(referenced, onDisk, "root tsconfig.json must reference exactly the programs in config/");
 });
+
+// Node type-strips these files directly (routes:check, cpu-sweep, test:node), and strip mode rejects enums,
+// namespaces and parameter properties that Bun transpiles without complaint. A program without the flag lets
+// one through that only Node's path would trip on. Measured 2026-10-17: forcing it on added 0 diagnostics to
+// every program that lacked it.
+const sets = (program: { compilerOptions?: { erasableSyntaxOnly?: boolean; strict?: boolean } }) => program.compilerOptions?.erasableSyntaxOnly === true;
+
+test("every config/tsconfig.*.json program sets erasableSyntaxOnly", async () => {
+  const dir = fileURLToPath(new URL("config/", ROOT));
+  const programs = readdirSync(dir).filter((f) => /^tsconfig\..*\.json$|^tsconfig\.json$/.test(f));
+  assert.ok(programs.length >= 10, `expected 10+ programs in config/, found ${programs.length}: the glob is reading nothing`);
+  const missing: string[] = [];
+  for (const f of programs) {
+    if (!sets(parseJsonc(await readFile(new URL(`config/${f}`, ROOT), "utf8")))) missing.push(f);
+  }
+  assert.deepEqual(missing, [], "these programs would accept an enum or namespace that Node's type stripping rejects");
+});
+
+test("the erasableSyntaxOnly check can fail (control)", () => {
+  assert.equal(sets({ compilerOptions: { strict: false } }), false, "a program without the flag must read as missing");
+  assert.equal(sets({ compilerOptions: { erasableSyntaxOnly: false } }), false, "an explicit false must read as missing");
+  assert.equal(sets({}), false, "a program with no compilerOptions must read as missing");
+  assert.equal(sets({ compilerOptions: { erasableSyntaxOnly: true } }), true);
+});
