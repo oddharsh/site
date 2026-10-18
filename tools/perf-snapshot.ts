@@ -453,15 +453,15 @@ const flag = (name) => {
 const positional = rest.filter((a, i) => !a.startsWith("--") && !(i > 0 && rest[i - 1].startsWith("--")));
 
 if (mode === "record") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs record <out.json> [--label <name>]"); process.exit(2); }
+  if (!positional[0]) { console.error("usage: perf-snapshot.ts record <out.json> [--label <name>]"); process.exit(2); }
   await record(positional[0], flag("--label"));
 } else if (mode === "compare") {
-  if (positional.length < 2) { console.error("usage: perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
+  if (positional.length < 2) { console.error("usage: perf-snapshot.ts compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
   await compare(positional[0], positional[1], flag("--out"));
 } else if (mode === "row") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
+  if (!positional[0]) { console.error("usage: perf-snapshot.ts row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
   await row(positional[0], flag("--date"));
 } else {
-  console.error("usage: perf-snapshot.mjs record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
+  console.error("usage: perf-snapshot.ts record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
   process.exit(2);
 }

@@ -44,7 +44,7 @@ test("every LWE content page carries a wired ask surface", async () => {
     // An indexed concept with no passages retrieves nothing, so the box accepts a
     // question and answers with silence. That is worse than having no box at all.
     assert.ok(passages.includes(`concept: "${id}"`),
-      `${id}: no passages in the corpus. Add lwe-ask/corpus/${id}.json, then run build-corpus.mjs`);
+      `${id}: no passages in the corpus. Add lwe-ask/corpus/${id}.json, then run build-corpus.ts`);
   }
 
   // Reverse direction: a CONCEPTS entry whose page has gone away sends a real question

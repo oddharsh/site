@@ -35,7 +35,7 @@ const OUT = new URL("../../public/lwe/quadgrams.txt", import.meta.url);
 
 const src = process.argv[2];
 if (!src) {
-  console.error("usage: gen-quadgram-table.mjs <english_quadgrams.txt>");
+  console.error("usage: gen-quadgram-table.ts <english_quadgrams.txt>");
   process.exit(1);
 }
 

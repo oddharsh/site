@@ -399,7 +399,7 @@ saving; that editor is the only thing anywhere that checks this syntax.
 per-request keys `deploy:promote` sends and collapse every sampled sweep onto one
 version, which the ramp reads as a dead deploy. That fails closed rather than
 shipping anything bad, and it aborts healthy releases until someone works out why,
-so `check-infra.mjs` asserts the exemption and a contract test pins it against the
+so `check-infra.ts` asserts the exemption and a contract test pins it against the
 header the sampler actually sends.
 
 `ip.src` rather than the cookie Cloudflare's docs prefer. A cookie means minting
@@ -483,7 +483,7 @@ Both derive a config with `tools/gen-remote-config.ts` and never commit it
 (`.wrangler.remote.jsonc`, gitignored). Your Worker code still runs locally; the
 binding calls hop to the real resource.
 
-`routes:check:remote` un-skips the six rows `verify-routes.mjs` marks `remote`
+`routes:check:remote` un-skips the six rows `verify-routes.ts` marks `remote`
 (`/lens/fetch`, `/lens/shot`, `/around/json`, `/photos`, `/images/full/<key>`),
 whose assertions depend on content a local Worker structurally cannot have.
 Plain `bun run routes:check` stays the CI gate and stays honest about what it
@@ -571,7 +571,7 @@ matters:
 2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
    Deploy command → `bash .github/deploy-wrangler.sh versions upload
    --x-provision=false --x-auto-create=false`, the string declared in
-   `infra.json` and exact-matched by `check-infra.mjs`. Leave Build command
+   `infra.json` and exact-matched by `check-infra.ts`. Leave Build command
    blank and the non-production command alone (it already uploads).
 3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
 
@@ -788,7 +788,7 @@ the time.
   it off and DNS promises a protocol the edge cannot speak, while the DNS tier
   stays green because the record itself never changed.
 - **Compression on**, because the performance budget is denominated in
-  compressed bytes and `perf-budget.mjs` compresses locally, so it would keep
+  compressed bytes and `perf-budget.ts` compresses locally, so it would keep
   passing while real visitors stopped getting compressed responses.
 - **HSTS** exact-matched like SPF and DMARC, because it is hand-chosen policy.
   Raising `max-age` is fine and should update the declaration.
@@ -825,7 +825,7 @@ perf-budget runs it on the prebuilt bundle the dry-run already produced, so it
 adds no second build. Reading on 2026-08-04: **~8 ms active against a 400 ms
 platform limit**.
 
-Read it for what it is. The baseline comment in `perf-budget.mjs` already
+Read it for what it is. The baseline comment in `perf-budget.ts` already
 established by hand that bundle bytes are two orders of magnitude away from being
 a latency problem, and its caveat still holds: `check startup` ranks frames but
 does not cost them, and it profiles a local machine whose CPU is not
@@ -844,7 +844,7 @@ a flamegraph.
 **It is not the regression tripwire, and it used to be described as one here.**
 That job belongs to the deterministic numbers: the bundle gzip, the per-module
 attribution, and the wire-size diff below. Diffing two draws from a 2.6x-spread
-distribution manufactures findings, which is why `perf-snapshot.mjs` records
+distribution manufactures findings, which is why `perf-snapshot.ts` records
 neither this reading nor anything else sampled.
 
 This also closes out an older open question. The standing conclusion that cold
@@ -852,7 +852,7 @@ start here is not eval-bound came from a 2026-07-28 experiment where lazy route
 imports bought nothing but +27 KB of wrappers, which was an argument from bundle
 structure. The startup profile measures it directly and agrees.
 
-The bundle baseline itself lives in `perf-budget.mjs` with its full history (86 →
+The bundle baseline itself lives in `perf-budget.ts` with its full history (86 →
 129.23 → 204.24 KiB gzip) and the argument for each move. Read that comment
 before treating a breach as a regression; two of the three moves were legitimate
 growth, and it also records why the dry-run number and the `check startup` number
@@ -924,7 +924,7 @@ fallback, and `/coffee/availability.json` answers 503 without its calendar secre
 ### The wire-size diff (the differential half)
 
 Everything above is ABSOLUTE: a number against a constant somebody typed. That
-constant rots, and the baseline history in `perf-budget.mjs` is the receipt — 86
+constant rots, and the baseline history in `perf-budget.ts` is the receipt — 86
 → 129.23 → 204.24 KiB, with the 129.23 era spent permanently in breach while CI
 printed "hard checks green" over it. The 204.24 baseline set on 2026-08-04 was
 itself already firing by 2026-08-08 (258.34 KiB observed at `295ee97`).
@@ -973,7 +973,7 @@ because nothing drew the slope.
 
 `.github/workflows/perf-history.yml` runs at 09:00 UTC, skips when nothing was
 committed in 25 hours, records a snapshot of `main`, reduces it to one JSONL line
-(`perf-snapshot.mjs row`, ~430 bytes), and appends it to **`perf-history`**, an
+(`perf-snapshot.ts row`, ~430 bytes), and appends it to **`perf-history`**, an
 orphan branch holding `history.jsonl` and a README. `/garage/dyno` renders it, SWR-cached
 in KV for 6h.
 
@@ -998,7 +998,7 @@ Three things about the page, all about honesty rather than looks:
   so a chart that draws itself on the server costs one `<svg>` and no exceptions.
   Point tooltips are native `<title>` elements.
 - **Hand-entered history is drawn dashed.** `src/worker/dyno-seed.json`
-  carries the four points from `perf-budget.mjs`'s baseline comment so the page
+  carries the four points from `perf-budget.ts`'s baseline comment so the page
   is useful before the series fills up. They live in the repo rather than seeded
   into the branch so every hand-entered number goes through PR review, and they
   render differently from measured ones because a number somebody typed into a
@@ -1324,7 +1324,7 @@ under "What the automation does, and why it stopped".
 
 The [LWE guide](../pipelines/lwe/README.md) and
 [Garage guide](../pipelines/garage/README.md) own the creation steps. Both use
-[`page-contract.mjs`](../pipelines/content/page-contract.ts) for the editorial
+[`page-contract.ts`](../pipelines/content/page-contract.ts) for the editorial
 card and three-to-seven-question understanding check.
 
 Render the selected page with its generator and register the surface in
@@ -1642,7 +1642,7 @@ only sees photos that are already live.
 ```bash
 export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 ```
-`check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
+`check-photo-pipeline.ts` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
 ### Release a change

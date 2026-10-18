@@ -51,7 +51,7 @@
   var KBD = IS_MAC ? "⌘K" : "Ctrl K";
 
   // Run destinations and profiles live in /nav-run.js, transferred only when
-  // someone opens the palette. Section artwork lives only in shell-data.mjs;
+  // someone opens the palette. Section artwork lives only in shell-data.ts;
   // the compiler already projected it into each taskbar pin's sprite image.
   var WRITING = (null as any[] | null);         // lazy: [{ label, path, hint, kind:'writing' }]
   var photosPromise = (null as Promise<any> | null), writingPromise = (null as Promise<any> | null);

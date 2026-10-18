@@ -84,7 +84,7 @@
 # purges the edge so a refreshed card lands. Social crawlers cache on their own
 # side anyway; re-scrape on the platform if a card must update instantly.
 # the 11 compiled section tiles, each one a page's <link rel="icon">. Generated
-# from shell-data.mjs and NOT content-addressed, so `immutable` would be a lie:
+# from shell-data.ts and NOT content-addressed, so `immutable` would be a lie:
 # 30 days matches /og/, which is the other generated-but-unhashed image tier, and
 # a deploy purges the edge. Left unruled these inherited the static-assets default
 # of `max-age=0, must-revalidate`, which costs a 304 per section page view for an

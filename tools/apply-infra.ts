@@ -65,7 +65,7 @@ const OWNER = {
 // quietly degrade the one list whose entire job is explaining what is skipped.
 for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   if (mode !== "exact" && !OWNER[mode]) {
-    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
+    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.ts.`);
     console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
     process.exit(1);
   }

@@ -258,7 +258,7 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
   const top = Number(page.match(/var TOP = (-[\d.]+)/)[1]);
   const floor = Number(page.match(/FLOOR = (-[\d.]+)/)[1]);
   assert.ok(top > floor, "an observed quadgram must outscore an unseen one");
-  assert.ok(top > -3 && top < -2, `TOP looks recalibrated (${top}); rerun gen-quadgram-table.mjs and update the page`);
+  assert.ok(top > -3 && top < -2, `TOP looks recalibrated (${top}); rerun gen-quadgram-table.ts and update the page`);
   assert.ok(floor > -10 && floor < -8, `FLOOR looks recalibrated (${floor})`);
 
   // The page states the wire cost as a fact. It is a fact about these bytes.

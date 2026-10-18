@@ -83,7 +83,7 @@
     // purpose. Writing it out as `[undefined, ""]` says less, not more.
     "no-sparse-arrays": "off",
 
-    // 11 sites, 9 of them in check-infra.mjs, all one reporting shape:
+    // 11 sites, 9 of them in check-infra.ts, all one reporting shape:
     //     same ? pass(`nameservers match`) : drift(`...`)
     // A ternary used as a statement for its side effects is the house form for
     // every tier of that script. allowShortCircuit covers the `x && f()` twin.
