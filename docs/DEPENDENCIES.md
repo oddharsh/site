@@ -182,8 +182,9 @@ you decline it) costs about 35% more CPU for a guarantee this suite does not
 need, and the runner's 5s per-test default is what breaks first under
 contention. `--timings=config/test-timings.json` (2026-10-19) starts the
 slowest files first, since three spawn-bound files now carry 57s of the
-suite's 98s and the longest one sets the floor. Refresh it with
-`bun run test --update-timings`. The tables, the isolation argument and the
+suite's 98s and the longest one sets the floor. That's a laptop win (about
+22%); CI measured no change, because there the cpu-sweep contract test alone
+runs 43s of a 44s suite. Refresh it with `bun run test --update-timings`. The tables, the isolation argument and the
 control are at `comment:test-parallel`.
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
