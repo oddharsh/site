@@ -170,18 +170,22 @@ undici@7.29.1
         └─ dev lwe-ask@workspace (requires https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf)
 ```
 
-`bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's 92 files
-four at a time. On CI, where it counts, the `validate` test step goes from
-15-18s sequential to 7-10s; a version keeping the `--isolate` that `--parallel`
-implies measured 15s, inside the sequential range, so the win there is the
-isolation flag rather than the parallelism. On a macOS laptop, where a process
-spawn costs far more, it is 37s to 19s. All three
+`bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's files
+four at a time. On CI, where it counts, the `validate` test step went from
+15-18s sequential to 7-10s (92 files, 2026-09-10); a version keeping the
+`--isolate` that `--parallel` implies measured 15s, inside the sequential
+range, so the win there is the isolation flag rather than the parallelism. On a
+macOS laptop, where a process spawn costs far more, it is 37s to 19s. These
 flags are measured rather than defaulted: more workers only starve the
 interpreters these tests spawn, `--isolate` (which `--parallel` implies unless
 you decline it) costs about 35% more CPU for a guarantee this suite does not
 need, and the runner's 5s per-test default is what breaks first under
-contention. The tables, the isolation argument and the control are at
-`comment:test-parallel`.
+contention. `--timings=config/test-timings.json` (2026-10-19) starts the
+slowest files first, since three spawn-bound files now carry 57s of the
+suite's 98s and the longest one sets the floor. That's a laptop win (about
+22%); CI measured no change, because there the cpu-sweep contract test alone
+runs 43s of a 44s suite. Refresh it with `bun run test --update-timings`. The tables, the isolation argument and the
+control are at `comment:test-parallel`.
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
 anything a `.test.ts` file imports, or spawns with `process.execPath`, runs
