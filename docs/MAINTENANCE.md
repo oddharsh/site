@@ -907,6 +907,11 @@ under 4 ms, half the gate. Delete the entry.
 **When a route gets dearer on purpose:** raise its `ceilingMs` in the same PR and
 say why in `why`. Each ceiling is the highest of 14 scaled CI runs plus 20%.
 
+To see what a budget edit does to a run you already have, without sampling
+again, `node tools/cpu-sweep.ts --replay .build/cpu-sweep.json --budget <file> --gate`
+judges that run's recorded samples on the CPU model it ran on. It exits 2 if the
+edit would re-sample a route the run sampled once.
+
 **When a route fails on a PR that didn't touch the Worker:** a step smaller than
 the route's spread passed its own PR and is failing the ones after it (gotcha
 81). Pull the route's reading and the control's from 30 or more CPU jobs:
