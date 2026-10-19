@@ -2,6 +2,7 @@
 // perf-budget builds.
 //
 //   node tools/cpu-sweep.ts [--gate] [--markdown] [--routes /a,/b] [--bundle path] [--budget file] [--out file]
+//   node tools/cpu-sweep.ts --replay sweep.json [--gate] [--markdown] [--budget file] [--out file]
 //
 // Workers Free allows 10 ms of CPU per request, and nothing in CI read it. The
 // first sweep (2026-10-07, against a 0.22 ms floor) found five routes over 8 ms
@@ -62,6 +63,15 @@
 // with --gate, each failure an annotation on the run. Without --gate it prints,
 // writes .build/cpu-sweep.json and exits 0.
 //
+// REPLAY. Every sample a run took is in its .build/cpu-sweep.json, in order, and
+// --replay judges those against --budget and takes none, on the CPU model the
+// run recorded. It takes a route's re-samples only where this budget would have
+// asked for them, so it reaches the verdict a live run with those readings would
+// have, and it exits 2 if this budget wants re-samples the run never took. The
+// contract test judges one recorded sweep against every budget it tries this
+// way, since on CI's 4 cores each live sweep of the fixture cost 2.5 to 8.5 s
+// (2026-10-19).
+//
 // What it can't see: KV, D1 and R2 are empty, so data routes render their
 // fallback; there's no calendar secret, so /coffee/availability.json answers
 // 503; and outbound fetch is refused, so /agent-ready times its error path.
@@ -107,7 +117,7 @@ const { values } = parseArgs({
     routes: { type: "string" }, bundle: { type: "string", default: join(ROOT, ".build/.perfbudget/index.js") },
     budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
-    "cold-icu": { type: "boolean" },
+    "cold-icu": { type: "boolean" }, replay: { type: "string" },
   },
 });
 // absolute, so a relative --bundle names a file rather than a package in the child
@@ -194,7 +204,13 @@ if (values.one) {
 }
 
 // ── the sweep ───────────────────────────────────────────────────────────────
-if (!existsSync(BUNDLE)) {
+type Recording = { machine: string; control: { samples: number[] }; rows: { route: string; status: number; raw: number[] }[] };
+const recorded: Recording | undefined = values.replay ? JSON.parse(readFileSync(values.replay, "utf8")) : undefined;
+if (recorded && !recorded.control.samples) {
+  console.error(`cpu-sweep: ${values.replay} has no samples to replay; it predates --replay`);
+  process.exit(2);
+}
+if (!recorded && !existsSync(BUNDLE)) {
   console.error(`cpu-sweep: no bundle at ${BUNDLE}; run bun run perf-budget first, which builds it`);
   process.exit(2);
 }
@@ -206,13 +222,13 @@ type Budget = {
 };
 const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
 // The scale, from this CPU model to the EPYC 7763. A model with no factor reads
-// raw, and --gate judges nothing on it.
-const machine = cpus()[0]?.model.trim() ?? "unknown";
+// raw, and --gate judges nothing on it. A replay is judged on the model it ran on.
+const machine = recorded?.machine ?? cpus()[0]?.model.trim() ?? "unknown";
 const calibrated = machine in budget.machines;
 const scale = calibrated ? budget.machines[machine].factor : 1;
 const pages: string[] = JSON.parse(readFileSync(join(ROOT, "config/site-manifest.json"), "utf8")).surfaces.map((s: { path: string }) => s.path);
 const known = new Set([...pages, ...QUERIES]);
-const routes = values.routes ? values.routes.split(",") : [...known];
+const routes = recorded ? recorded.rows.map((r) => r.route) : values.routes ? values.routes.split(",") : [...known];
 for (const r of routes) known.add(r);
 
 const sample = (spec: string) => new Promise<{ ms: number; status: number }>((resolve, reject) => {
@@ -234,21 +250,36 @@ async function pool<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
 const iqr = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * 0.75)] - s[Math.floor((s.length - 1) * 0.25)]; };
 
-// The control is spread through the screening, so it sees the load the routes
-// see rather than a quiet first second.
-const specs = [...routes];
-for (let k = 0; k < SAMPLES; k++) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, CONTROL);
-const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
-const control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
+const ceiling = (route: string) => budget.routes[route]?.ceilingMs ?? GATE_MS;
+const confirms = (route: string, firstMs: number) => firstMs * scale >= ceiling(route) * CONFIRM_AT;
+let control: number[], screen: Map<string, { ms: number; status: number }>, again: (route: string) => Promise<number[]>;
+if (recorded) {
+  control = recorded.control.samples;
+  const taken = new Map(recorded.rows.map((r) => [r.route, r.raw]));
+  screen = new Map(recorded.rows.map((r) => [r.route, { ms: r.raw[0], status: r.status }]));
+  again = async (route) => taken.get(route)!.slice(1, 1 + CONFIRMS);
+  const short = recorded.rows.filter((r) => confirms(r.route, r.raw[0]) && r.raw.length < 1 + CONFIRMS).map((r) => r.route);
+  if (short.length) {
+    console.error(`cpu-sweep: this budget re-samples ${short.join(", ")}, which ${values.replay} took once; sweep again instead`);
+    process.exit(2);
+  }
+} else {
+  // The control is spread through the screening, so it sees the load the routes
+  // see rather than a quiet first second.
+  const specs = [...routes];
+  for (let k = 0; k < SAMPLES; k++) specs.splice(Math.round(((k + 0.5) * specs.length) / SAMPLES), 0, CONTROL);
+  const screened = await pool(specs.map((s) => async () => ({ spec: s, ...(await sample(s)) })));
+  control = screened.filter((r) => r.spec === CONTROL).map((r) => r.ms);
+  screen = new Map(screened.filter((r) => r.spec !== CONTROL).map((r) => [r.spec, r]));
+  // one after another, so the run never has more than WIDTH children
+  again = async (route) => { const ms: number[] = []; for (let k = 0; k < CONFIRMS; k++) ms.push((await sample(route)).ms); return ms; };
+}
 const floor = iqr(control);
-const screen = new Map(screened.filter((r) => r.spec !== CONTROL).map((r) => [r.spec, r]));
 const rows = await pool(routes.map((route) => async () => {
   const first = screen.get(route)!;
   const raw = [first.ms];
-  // one after another, so the run never has more than WIDTH children
-  const ceilingMs = budget.routes[route]?.ceilingMs ?? GATE_MS;
-  if (first.ms * scale >= ceilingMs * CONFIRM_AT) for (let k = 0; k < CONFIRMS; k++) raw.push((await sample(route)).ms);
-  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs, samples: raw.length };
+  if (confirms(route, first.ms)) raw.push(...(await again(route)));
+  return { route, status: first.status, ms: median(raw) * scale, rawMs: median(raw), ceilingMs: ceiling(route), samples: raw.length, raw };
 }));
 rows.sort((a, b) => b.ms - a.ms);
 const over = rows.filter((r) => r.ms > r.ceilingMs);
@@ -262,7 +293,7 @@ const drift = calibrated && budget.control ? (median(control) * scale) / budget.
 const offModel = budget.control !== undefined && Math.abs(drift) > budget.control.drift;
 const inconclusive = noisy || offModel;
 writeFileSync(values.out!, JSON.stringify({
-  gateMs: GATE_MS, machine, calibration: { calibrated, scale }, control: { median: median(control), iqr: floor, drift }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
+  gateMs: GATE_MS, machine, calibration: { calibrated, scale }, control: { median: median(control), iqr: floor, drift, samples: control }, inconclusive, unknown, stale: stale.map((r) => r.route), rows,
 }, null, 2) + "\n");
 
 const units = calibrated ? `EPYC 7763 ms (x${scale.toFixed(3)} for this CPU model)`
