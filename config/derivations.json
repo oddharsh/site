@@ -237,6 +237,16 @@
       "regenerate": "bun tools/photos/gen-pixel-peeper.ts"
     },
     {
+      "id": "pixel-peeper/ladder",
+      "tier": "unverifiable",
+      "why": "The /pixel-peeper format ladder: JPEG, AVIF and JPEG XL each walked from a starved setting to their best lossy one, plus lossless JPEG XL, AVIF and WebP, on the format axis's photos as 1:1 crops and as the 600px square the site ships. The page draws the curves and reads bytes-to-reach-a-score off them. It sits inside public/pixel-peeper, which pixel-peeper/trials writes, but its own generator writes only this file.",
+      "outputs": [
+        "public/pixel-peeper/ladder.json"
+      ],
+      "unverifiable": "gen-pixel-peeper-ladder.ts reads the same SOOC originals gen-pixel-peeper.ts does, outside the tree, and cuts the crops with the same scored scan, so there is no committed input to hash. What it does check is lossless: every lossless file is decoded and has to score exactly 100, and no lossy rung may.",
+      "regenerate": "bun tools/photos/gen-pixel-peeper-ladder.ts"
+    },
+    {
       "id": "og/cards",
       "tier": "unverifiable",
       "why": "One pre-baked 1200x630 card per garage and lwe page, each showing that page's live demo on the Bliss desktop, so a shared link unfurls as the interaction rather than a bare title.",

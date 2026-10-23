@@ -32,6 +32,10 @@
   /* the diff map's two sides, the first tile of a pair and the second. Kept off
      the metric blue and amber, and mirrored by DIFF_FS's CA and CB. */
   --da:#1fb5d6; --db:#e0479e;
+  /* the format ladder's three curves. Run through the dataviz palette
+     validator against --paper, all pairs: lightness, chroma, CVD (worst 9.8,
+     deutan) and contrast pass. Off the metric blue and amber on purpose. */
+  --f-jpeg:#b5532a; --f-avif:#6b4fd8; --f-jxl:#12866e;
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
 }
 /* The window frame, title bar, gel caption buttons and sunken .content field all
@@ -139,6 +143,18 @@ a{color:var(--link)}
 .fmtq dt{font-weight:700;color:var(--ink);margin:10px 0 3px}
 .fmtq dt:first-child{margin-top:0}
 .fmtq dd{margin:0}
+/* the format ladder: one chart, a crop/resized switch, a table under it */
+.ladder{margin:8px 0 6px}
+.ladder .row{margin-bottom:4px}
+.ladder .xp-button[aria-pressed="true"]{box-shadow:var(--bevel-sunken)}
+.lchart{position:relative}
+.lchart svg{display:block;width:100%;height:auto;font-family:var(--font-mono);font-size:10px}
+.lchart .tick{fill:var(--ink-dim)} .lchart .grid{stroke:var(--shadow);stroke-width:1;opacity:.5}
+.lchart .curve{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.lchart .leap{fill:none;stroke-width:1.5;stroke-dasharray:3 3}
+.ltip{position:absolute;pointer-events:none;background:var(--paper);border:1px solid var(--shadow);box-shadow:var(--bevel-raised);padding:4px 6px;font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--ink);white-space:nowrap}
+.ltip i,.lkey i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.lkey{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--ink-dim)}
 .zoompatch{width:192px;max-width:calc(50% - 5px);height:auto;aspect-ratio:1;image-rendering:pixelated;background:#000;border:2px solid var(--shadow);box-shadow:var(--bevel-sunken);border-radius:2px}
 .sharecard{display:block;width:100%;height:auto;margin:8px 0 0;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken)}
 /* metric-alignment axis (the hero) */
@@ -233,6 +249,13 @@ const FMT_QS=[
   {q:`why pick JPEG XL over AVIF?`,
    a:`when the picture already exists as a JPEG. the transcode from JPEG to JPEG XL is lossless: every pixel comes back identical, in a file 6 to 13% smaller on this site's photos. AVIF can only re-encode the JPEG, stacking its damage on the JPEG's. for lossless images in general, JPEG XL lands at 53 to 79% of AVIF's bytes. squeeze a fresh photo into a thumbnail budget and AVIF usually wins instead, and with more bytes the two converge. the cost is reach: only Chrome 155+ and Safari 17+ decode it, so it ships with an AVIF or JPEG behind it.`,
    more:()=>winsHTML("jxl")},
+  // Numbers from tools/photos/gen-pixel-peeper-ladder.ts's run of 2026-10-23
+  // (its header has the table). The chart and the table under it are drawn
+  // from ladder.json, so they stay true when the ladder is rerun; this prose
+  // has to be rerun by hand with it.
+  {q:`from a squeeze up to lossless, which one needs the fewest bytes?`,
+   a:`this walks each format's own quality knob, from starved to its best lossy setting and then lossless, on the 11 photos this exam crops, and reads off how many bits each one spends to reach a score. below lossless, AVIF spent the fewest at every score: JPEG XL needed 109 to 120% of AVIF's bytes on the 1:1 crops. the top is where that flips. every format's best lossy setting tops out at ssimulacra2 94 to 96, and lossless costs 7 to 12 bits a pixel, against 1.5 to 3.5 for a score of 90. there, JPEG XL took 68% of AVIF's bytes and 90% of lossless WebP's. resizing pulls the other way. shrink the whole frame to the 600px square this site ships and JPEG XL needed 124 to 155% of AVIF's bytes at every lossy score, though its lossless lead held at 74%. a resized photo has no JPEG left to carry over, so the lossless transcode is gone too.`,
+   more:()=>`<div class="ladder" id="ladder"><p class="meta">loading the ladder…</p></div>`},
   {q:`where does AV2 fit?`,
    a:`on AVIF's turf. AV2 succeeds AV1, the codec inside every AVIF, and its encoder's default speed leaves two of AV2's own tools off. with them turned back on and measured at matched bytes against this site's AVIF, it won 40 of 40 calls under half a bit per pixel and 37 of 54 above it. on 16 dense crops like this exam's, it won 11 of 32 calls, up from 2. so AV2 now wins on most of this site's photos, and the densest detail is where AVIF still holds.`,
    more:()=>`<table class="fmtcard" style="margin:8px 0 6px"><thead><tr><th>bits per pixel</th><th>AV2 beat AVIF</th><th>this site's photos</th></tr></thead><tbody>${
@@ -263,6 +286,107 @@ function poolHTML(){
     ...BPP_BANDS.map(([n,lo,hi])=>[n,P.filter(r=>r.tier!=="repack"&&r.bpp>=lo&&r.bpp<hi)]),["every call",P]].filter(([,r])=>r.length);
   return `<table class="fmtcard" style="margin:8px 0 6px"><thead><tr><th>budget</th><th>calls</th>${PAIRS.map(([a,b])=>`<th>${FMT_NAME[a]} vs ${FMT_NAME[b]}</th>`).join("")}</tr></thead><tbody>${
     groups.map(([n,r])=>`<tr><td>${n}</td><td>${r.length}</td>${PAIRS.map(([a,b])=>`<td>${pairCell(r,a,b)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+
+// The format ladder (gen-pixel-peeper-ladder.ts): each format's ssimulacra2
+// against bits per pixel, starved to lossless, on the format axis's photos at
+// two scales. Its own file, fetched only when this box draws, so a player who
+// never opens the showdown never downloads it.
+//
+// A curve is the MEDIAN photo's score at each bit rate, drawn only where every
+// photo's ladder reaches. Past one photo's end the median is over the rest,
+// and a curve would bend at each photo's edge instead of at the format's.
+const LADDER_FMTS=[["jpeg","JPEG"],["avif","AVIF"],["jxl","JPEG XL"]];
+// Each colour written out whole. The build renames custom properties across
+// the tree by find-and-replace (tools/lib/mangle-custom-properties.ts), so a
+// literal var(--f-jxl) follows the rename, and a name finished in a template
+// literal would not: every curve drew colourless in the built page until this
+// map (gotcha 83).
+const LCOL={jpeg:"var(--f-jpeg)",avif:"var(--f-avif)",jxl:"var(--f-jxl)"};
+const LADDER_SCALES={crop:"1:1 crops",resized:"resized to the 600px square"};
+let LADDER=null;
+// linear in log(bits per pixel) between rungs, null off either end: the same
+// reading the generator's summary uses
+function lS2(c,b){for(let i=1;i<c.length;i++){const[x0,y0]=c[i-1],[x1,y1]=c[i];
+  if(b>=x0&&b<=x1)return y0+(y1-y0)*Math.log(b/x0)/Math.log(x1/x0||1);}return null;}
+function lBpp(c,s){for(let i=1;i<c.length;i++){const[x0,y0]=c[i-1],[x1,y1]=c[i];
+  if(y0>=s)return i===1?x0:null; if(y1>=s)return x0*(x1/x0)**((s-y0)/(y1-y0));}return null;}
+const lMed=xs=>{const s=[...xs].sort((a,b)=>a-b),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+function ladderAt(photos,f,b){const v=photos.map(p=>lS2(p.curves[f],b));return v.includes(null)?null:lMed(v);}
+// a 600px square at this many bits per pixel, the size this site ships
+const lKB=b=>`${Math.round(b*600*600/8/1024)}KB`;
+// The viewBox is as wide as the box it lands in, between 300 and 640, so the
+// 10px labels draw at 10px. A fixed 640 viewBox scaled them to about 4px on a
+// 375px phone.
+const L_LEFT=40, L_RIGHT=12;
+function ladderSVG(photos,W){
+  const H=300,L=L_LEFT,R=L_RIGHT,T=46,B=34, X0=Math.log(0.1),X1=Math.log(16);
+  const x=b=>L+(W-L-R)*(Math.log(b)-X0)/(X1-X0), y=s=>T+(H-T-B)*(1-s/100);
+  const grid=[0.1,0.25,0.5,1,2,4,8,16], ys=[0,20,40,60,80,100];
+  const pts=Array.from({length:61},(_,i)=>Math.exp(X0+(X1-X0)*i/60));
+  const curves=LADDER_FMTS.map(([f])=>pts.map(b=>[b,ladderAt(photos,f,b)]).filter(([,s])=>s!==null));
+  const ll=f=>lMed(photos.map(p=>p.lossless[f]*8/p.px));
+  // lossless sits on the 100 line; labels step up so three close ones can't collide
+  const marks=[["jxl","JPEG XL","var(--f-jxl)"],["webp","WebP","var(--ink-dim)"],["avif","AVIF","var(--f-avif)"]].map(([f,n,c])=>({f,n,c,b:ll(f)})).sort((a,b)=>a.b-b.b);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ssimulacra2 against bits per pixel for JPEG, AVIF and JPEG XL, with each format's lossless size on the 100 line">
+    ${grid.map(b=>`<line class="grid" x1="${x(b)}" x2="${x(b)}" y1="${T}" y2="${H-B}"/><text class="tick" x="${x(b)}" y="${H-B+13}" text-anchor="middle">${b}</text>`).join("")}
+    ${ys.map(s=>`<line class="grid" x1="${L}" x2="${W-R}" y1="${y(s)}" y2="${y(s)}"/><text class="tick" x="${L-5}" y="${y(s)+3}" text-anchor="end">${s}</text>`).join("")}
+    <text class="tick" x="${(L+W-R)/2}" y="${H-4}" text-anchor="middle">bits per pixel (log scale)</text>
+    <text class="tick" x="${L}" y="${T-34}">ssimulacra2</text>
+    ${curves.map((c,i)=>{const col=LCOL[LADDER_FMTS[i][0]];
+      // AVIF and JPEG XL are labelled under where they start. JPEG starts on
+      // top of the other two, so it is labelled under where it ends, the lowest
+      // of the three top rungs.
+      const [b0,s0]=i===0?c[c.length-1]:c[0];
+      return `<polyline class="curve" stroke="${col}" points="${c.map(([b,s])=>`${x(b).toFixed(1)},${y(s).toFixed(1)}`).join(" ")}"/>
+        <text x="${x(b0)+(i===0?-4:4)}" y="${y(s0)+13}" text-anchor="${i===0?"end":"start"}" fill="var(--ink)">${LADDER_FMTS[i][1]}</text>`;}).join("")}
+    ${["avif","jxl"].map(f=>{const c=curves[LADDER_FMTS.findIndex(([g])=>g===f)],[b,s]=c[c.length-1],m=marks.find(k=>k.f===f);
+      return `<line class="leap" stroke="${LCOL[f]}" x1="${x(b)}" y1="${y(s)}" x2="${x(m.b)}" y2="${y(100)}"/>`;}).join("")}
+    ${marks.map((m,i)=>{const cx=x(m.b),cy=y(100),ly=T-6-i*12;
+      return `<line class="grid" x1="${cx}" x2="${cx}" y1="${cy}" y2="${ly+2}" style="opacity:1"/>
+        <path d="M${cx} ${cy-5}L${cx+5} ${cy}L${cx} ${cy+5}L${cx-5} ${cy}Z" fill="${m.f==="webp"?"var(--paper)":m.c}" stroke="${m.f==="webp"?m.c:"var(--paper)"}" stroke-width="${m.f==="webp"?1.5:2}"/>
+        <text x="${cx-4}" y="${ly}" text-anchor="end" fill="var(--ink)">${m.n} lossless, ${m.b.toFixed(1)}</text>`;}).join("")}
+    <line id="lx" class="grid" y1="${T}" y2="${H-B}" style="opacity:0;stroke:var(--ink-dim)"/>
+    <rect id="lhit" x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent"/></svg>`;
+}
+function ladderTable(photos){
+  const P=photos, row=(name,cells)=>`<tr><td>${name}</td>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`;
+  const cell=v=>{const ok=v.filter(n=>n!==null);return ok.length?`${lMed(ok).toFixed(2)}${ok.length<v.length?` (${ok.length} of ${v.length})`:""}`:"never";};
+  const rows=LADDER.targets.map(t=>{
+    const by=f=>P.map(p=>lBpp(p.curves[f],t)), [j,a,x]=LADDER_FMTS.map(([f])=>by(f));
+    const both=P.map((_,i)=>[x[i],a[i]]).filter(([p,q])=>p!==null&&q!==null);
+    return row(`score ${t}`,[cell(j),cell(a),cell(x),"·",...(both.length?[`${Math.round(100*lMed(both.map(([p,q])=>p/q)))}%`,`${both.filter(([p,q])=>p<q).length}/${both.length}`]:["·","·"])]);});
+  const llb=f=>lMed(P.map(p=>p.lossless[f]*8/p.px)).toFixed(2);
+  rows.push(row("lossless",["·",llb("avif"),llb("jxl"),llb("webp"),`${Math.round(100*lMed(P.map(p=>p.lossless.jxl/p.lossless.avif)))}%`,`${P.filter(p=>p.lossless.jxl<p.lossless.avif).length}/${P.length}`]));
+  return `<table class="fmtcard" style="margin:8px 0 4px"><thead><tr><th>to reach</th><th>JPEG</th><th>AVIF</th><th>JPEG XL</th><th>WebP</th><th>JPEG XL ÷ AVIF</th><th>JPEG XL smaller</th></tr></thead><tbody>${rows.join("")}</tbody></table>
+    <p class="meta" style="margin:0">median bits per pixel over the ${P.length} photos. the last two columns go photo by photo: JPEG XL's bytes as a share of AVIF's (the median), and on how many photos JPEG XL came out smaller. a count like "(8 of 11)" means the other photos never got there short of lossless. WebP ran lossless only.</p>`;
+}
+function drawLadder(scale){
+  const box=document.getElementById("ladder"); if(!box||!LADDER)return;
+  const photos=LADDER.photos.filter(p=>p.scale===scale);
+  box.innerHTML=`<div class="row" role="group" aria-label="which photos">${Object.entries(LADDER_SCALES).map(([k,n])=>
+      `<button class="xp-button compact" data-lscale="${k}" aria-pressed="${k===scale}">${n}</button>`).join("")}</div>
+    <div class="lkey">${LADDER_FMTS.map(([f,n])=>`<span><i style="background:${LCOL[f]}"></i>${n}</span>`).join("")}<span>dashed: the last step, to lossless</span></div>
+    <div class="lchart"><div class="ltip" hidden></div></div>${ladderTable(photos)}`;
+  const wrap=box.querySelector(".lchart"), W=Math.max(300,Math.min(640,Math.round(wrap.clientWidth)||640));
+  wrap.insertAdjacentHTML("afterbegin",ladderSVG(photos,W));
+  box.querySelectorAll("[data-lscale]").forEach(b=>b.onclick=()=>drawLadder(b.dataset.lscale));
+  // the crosshair: every format's median score at the bit rate under the pointer
+  const svg=box.querySelector("svg"), hit=svg.getElementById("lhit"), line=svg.getElementById("lx"), tip=box.querySelector(".ltip");
+  const move=e=>{const r=svg.getBoundingClientRect(), k=W/r.width, sx=(e.clientX-r.left)*k;
+    const b=Math.exp(Math.log(0.1)+(Math.log(16)-Math.log(0.1))*(sx-L_LEFT)/(W-L_LEFT-L_RIGHT)); if(b<0.1||b>16)return out();
+    line.setAttribute("x1",sx);line.setAttribute("x2",sx);line.style.opacity=1;
+    tip.innerHTML=`<b>${b<1?b.toFixed(2):b.toFixed(1)} bits per pixel</b> · ${lKB(b)} at 600px<br>${LADDER_FMTS.map(([f,n])=>{const s=ladderAt(photos,f,b);return `<i style="background:${LCOL[f]}"></i>${n} ${s===null?"·":s.toFixed(1)}`;}).join("<br>")}`;
+    tip.hidden=false; const px=(e.clientX-wrap.getBoundingClientRect().left);
+    tip.style.left=`${Math.min(px+12,wrap.clientWidth-tip.offsetWidth-2)}px`; tip.style.top="8px";};
+  const out=()=>{line.style.opacity=0;tip.hidden=true;};
+  hit.addEventListener("pointermove",move); hit.addEventListener("pointerleave",out); hit.addEventListener("pointerdown",move);
+}
+function wireLadder(){
+  if(!document.getElementById("ladder"))return;
+  (LADDER?Promise.resolve(LADDER):fetch("/pixel-peeper/ladder.json").then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}))
+    .then(d=>{LADDER=d;drawLadder("crop");})
+    .catch(e=>{const box=document.getElementById("ladder");if(box)box.innerHTML=`<p class="meta">the ladder couldn't load (${e.message}).</p>`;});
 }
 
 // Where JPEG XL beats AVIF, shown as well as told. The examples come out of the
@@ -687,7 +811,7 @@ function screenResult(){
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
   submitRun(overall,lean,decisive);
   wireQuiz();
-  if(showdown){wireWins("jxl");wireWins("av2");}
+  if(showdown){wireWins("jxl");wireWins("av2");wireLadder();}
   // a showdown card puts its needle on the line from JPEG XL to the AV1 family:
   // the share of your picks that went to AVIF or its successor, AV2
   wireShare(marks,overall,grade,clearLine,leanLine,showdown?(tally.pa+tally.p2)/Math.max(1,tally.n):lean,showdown?tally.n:decisive,showdown);
