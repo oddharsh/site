@@ -241,6 +241,16 @@ export function renderPrivacyPage() {
       counter stores a single number.
     </p>
 
+    <h2>The guestbook</h2>
+    <p>
+      <a href="/guestbook">/guestbook</a> is the one place the site stores an IP address, and it
+      publishes it. A program that signs it by POSTing a name and a reason has its IP address,
+      user agent, network, country and any <code>Signature-Agent</code> header recorded from the
+      request and shown on the page and in <code>/guestbook.json</code>, beside what it wrote.
+      Nothing is recorded for a visitor that doesn't sign, and a browser on another site can't
+      sign for its reader.
+    </p>
+
     <h2>Cookies and browser storage</h2>
     <p>
       The site sets one cookie, <code>${UID_COOKIE}</code>, and only on

@@ -35,6 +35,7 @@ export const CENSUS_TABLE_URL = "/lens/census/table.html";
 export const LEDGER_LINES_URL = "/ledger/lines.html";
 export const INBOX_MAIL_URL = "/inbox/mail.html";
 export const AROUND_SNAPSHOT_URL = "/around/snapshot.html";
+export const GUESTBOOK_ENTRIES_URL = "/guestbook/entries.html";
 
 type ExactRoute = {
   path: string;
@@ -203,6 +204,12 @@ export const EXACT_ROUTES = [
   // on a preview and on 0-RTT without a `writes` flag.
   { path: "/pixel-peeper/runs", claim: ["/pixel-peeper/*"] },
   { path: "/pixel-peeper/crowd.json", claim: ["/pixel-peeper/*"] },
+  // The guestbook (guestbook.ts): the page, which also takes the POST that
+  // signs it, its island, and its JSON, folded under one row. The POST is an
+  // unsafe method, so preview.ts and early-data.ts refuse it with no flag.
+  { path: "/guestbook", claim: ["/guestbook*"] },
+  { path: GUESTBOOK_ENTRIES_URL, claim: ["/guestbook*"] },
+  { path: "/guestbook.json", claim: ["/guestbook*"] },
 
   { path: "/bot", cacheable: true },
   // the trust pages (trust.ts): fixed documents baked at deploy, one row each
