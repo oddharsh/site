@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="/lwe-base.css">
 <style>:root{--accent:#3d5a80;--accent-soft:var(--surface-desktop);--glyph:"a";--pic-g0:#6b88b0;--pic-g1:#3d5a80;--pic-border:#2c4462;--name-color:#2c4462;--glyph-font:Georgia, serif}
 .msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--face-light); padding: 0 3px; border-radius: 2px; }
-.fs-ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px;font-size:var(--text-xs);color:var(--slate-38)}.fs-ctl label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%}.fs-ctl select,.fs-ctl input[type=text],.fs-ctl input:not([type]){font:inherit;font-size:var(--text-xs);padding:1px 4px;border:1px solid var(--slate-73);border-radius:2px;background:#fff}.fs-ctl input[type=range]{accent-color:var(--accent);width:9em;max-width:45vw}.fs-txt input{width:15em;max-width:100%}.fs-row{margin:0 0 8px}.fs-lab{font-size:var(--text-2xs);color:var(--slate-55);font-family:var(--font-mono);margin:0 0 3px}.fs-pair{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.fs-act{image-rendering:pixelated;display:block;max-width:100%;border:1px solid var(--slate-80)}.fs-mag{image-rendering:pixelated;display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-big{display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-out{font-size:var(--text-xs);color:var(--slate-38);margin:8px 0 0;line-height:1.5}.fs-out b{color:var(--slate-26)}.demo .mono{font-family:var(--font-mono)}.st-n{color:var(--slate-55)}.pp-tbl{border-collapse:collapse;font-size:var(--text-xs)}.pp-tbl td{padding:2px 14px 2px 0;border-bottom:1px solid var(--mist-96)}.pp-tbl td:first-child{color:var(--slate-55)}.pp-v{font-size:var(--text-xs);color:var(--slate-26);margin:8px 0 0;line-height:1.5}
+.fs-ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px;font-size:var(--text-xs);color:var(--slate-38)}.fs-ctl label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%}.fs-ctl select,.fs-ctl input[type=text],.fs-ctl input:not([type]){font:inherit;font-size:var(--text-xs);padding:1px 4px;border:1px solid var(--slate-73);border-radius:2px;background:#fff}.fs-ctl input[type=range]{accent-color:var(--accent);width:9em;max-width:45vw}.fs-txt input{width:15em;max-width:100%}.fs-row{margin:0 0 8px}.fs-lab{font-size:var(--text-2xs);color:var(--slate-55);font-family:var(--font-mono);margin:0 0 3px}.fs-pair{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.fs-act{image-rendering:pixelated;display:block;max-width:100%;border:1px solid var(--slate-80)}.fs-mag{image-rendering:pixelated;display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-big{display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-out{font-size:var(--text-xs);color:var(--slate-38);margin:8px 0 0;line-height:1.5}.fs-out b{color:var(--slate-26)}.fs-mark{color:#c25a00;font-weight:bold}.demo .mono{font-family:var(--font-mono)}.st-n{color:var(--slate-55)}.pp-tbl{border-collapse:collapse;font-size:var(--text-xs)}.pp-tbl td{padding:2px 14px 2px 0;border-bottom:1px solid var(--mist-96)}.pp-tbl td:first-child{color:var(--slate-55)}.pp-v{font-size:var(--text-xs);color:var(--slate-26);margin:8px 0 0;line-height:1.5}
 body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -58,7 +58,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-dial">
         <div class="bar">turn the dial &middot; redrawn live, fitted to macOS 27.2</div>
-        <div class="pad"><p class="lead">This draws the text itself, with the growth model fitted to those renders, so it shows the macOS mechanism in any browser, Windows included. The top row is always 0. The bottom row follows the dial, and the magnifier on the right shows one square per pixel.</p><div class="fs-ctl"><label>AppleFontSmoothing <input type="range" id="fsVal" min="0" max="3" step="1" value="2"> <b id="fsValL" class="mono">2</b></label><label>font <select id="fsFont"><option value="Helvetica, Arial, sans-serif">Helvetica</option><option value="Tahoma, Verdana, sans-serif">Tahoma</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="'Courier New', monospace">Courier New</option><option value="system-ui, sans-serif">system-ui</option></select></label><label>size <select id="fsSize"><option>11</option><option selected>13</option><option>16</option><option>24</option></select> pt</label><label>text <select id="fsPol"><option value="light">black on white</option><option value="dark">white on black</option></select></label><label>screen <select id="fsScale"><option value="1">1x, external</option><option value="2">2x, Retina</option></select></label><label class="fs-txt">sample <input id="fsText" value="Hamburgefonstiv 0123" maxlength="40" spellcheck="false"></label></div><div class="fs-row"><div class="fs-lab">AppleFontSmoothing 0</div><div class="fs-pair"><canvas id="fsRow0" class="fs-act"></canvas><canvas id="fsMag0" class="fs-mag"></canvas></div></div><div class="fs-row"><div class="fs-lab" id="fsRowVL">AppleFontSmoothing 2</div><div class="fs-pair"><canvas id="fsRowV" class="fs-act"></canvas><canvas id="fsMagV" class="fs-mag"></canvas></div></div><p class="fs-out" id="fsOut" aria-live="polite"></p></div>
+        <div class="pad"><p class="lead">This draws the text itself, with the growth model fitted to those renders, so it shows the macOS mechanism in any browser, Windows included. The row follows the dial. The magnifier beside it shows one square per pixel as the 0 render, turning orange where smoothing adds ink.</p><div class="fs-ctl"><label>AppleFontSmoothing <input type="range" id="fsVal" min="0" max="3" step="1" value="2"> <b id="fsValL" class="mono">2</b></label><label>font <select id="fsFont"><option value="Helvetica, Arial, sans-serif">Helvetica</option><option value="Tahoma, Verdana, sans-serif">Tahoma</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="'Courier New', monospace">Courier New</option><option value="system-ui, sans-serif">system-ui</option></select></label><label>size <select id="fsSize"><option>11</option><option selected>13</option><option>16</option><option>24</option></select> pt</label><label>text <select id="fsPol"><option value="light">black on white</option><option value="dark">white on black</option></select></label><label>screen <select id="fsScale"><option value="1">1x, external</option><option value="2">2x, Retina</option></select></label><label class="fs-txt">sample <input id="fsText" value="Hamburgefonstiv 0123" maxlength="40" spellcheck="false"></label></div><div class="fs-row"><div class="fs-lab" id="fsRowVL">AppleFontSmoothing 2</div><div class="fs-pair"><canvas id="fsRowV" class="fs-act"></canvas><canvas id="fsMagV" class="fs-mag"></canvas></div></div><p class="fs-out" id="fsOut" aria-live="polite"></p></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:44</time></div>
@@ -151,7 +151,10 @@ function raster(text, family, px, grow, sub, dx) {
   var S = 8 * sub, step = S / sub;
   wctx.font = px * S + "px " + family;
   var tw = wctx.measureText(text).width / S;
-  var W = Math.ceil(tw + grow + 3), H = Math.ceil(px * 1.4) + 2;
+  // The width reserves the 0.6 px growth cap whatever grow is, so a line
+  // drawn at 0 and the same line grown share dimensions and can be
+  // compared pixel for pixel.
+  var W = Math.ceil(tw + 0.6 + 3), H = Math.ceil(px * 1.4) + 2;
   work.width = W * S; work.height = H * S;
   wctx.font = px * S + "px " + family;
   // macOS puts the baseline on a whole pixel; the horizontal origin keeps
@@ -200,45 +203,64 @@ function growth(ppem, dark) { return Math.min((dark ? 0.032 : 0.0116) * ppem, 0.
 initWhenNear("demo-dial", function() {
   var $ = function(id) { return document.getElementById(id)       ; };
   var val = $("fsVal"), fam = $("fsFont"), size = $("fsSize"), pol = $("fsPol"), sc = $("fsScale"), txt = $("fsText");
-  var c0 = $("fsRow0"), cv = $("fsRowV"), m0 = $("fsMag0"), mv = $("fsMagV"), out = $("fsOut"), lab = $("fsValL"), labV = $("fsRowVL");
-  if (!val || !c0) return;
+  var cv = $("fsRowV"), mv = $("fsMagV"), out = $("fsOut"), lab = $("fsValL"), labV = $("fsRowVL");
+  if (!val || !cv) return;
   var NAMES = ["off", "light", "medium", "strong"];
-  function draw(canvas, mag, r, dark, scale) {
+  // The ink smoothing adds over 0 is drawn in this color in the magnifier.
+  var MARK = [232, 115, 12];
+  var tint = document.createElement("canvas");
+  // Draws the true render at actual size and returns the largest gain any
+  // pixel got, which the readout prints as the magnifier's scale.
+  function draw(canvas, mag, r, base, dark, scale) {
     var fg = dark ? 255 : 0, bg = dark ? 0 : 255;
     canvas.width = r.w; canvas.height = r.h;
     canvas.style.width = r.w / scale + "px";
-    var ctx = canvas.getContext("2d"), img = ctx.createImageData(r.w, r.h);
-    for (var i = 0; i < r.w * r.h; i++) {
+    var ctx = canvas.getContext("2d")                            , img = ctx.createImageData(r.w, r.h);
+    var Z = 7, cw = Math.min(r.w, Math.round(46 * scale)), peak = 0, i;
+    for (i = 0; i < r.w * r.h; i++) {
       var v = blend(fg, bg, r.cov[i]);
       img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+      peak = Math.max(peak, Math.min(1, r.cov[i]) - Math.min(1, base.cov[i]));
     }
     ctx.putImageData(img, 0, 0);
-    // The magnifier copies device pixels with no smoothing, so each square
-    // on screen is exactly one pixel the renderer chose.
-    var Z = 7, cw = Math.min(r.w, Math.round(46 * scale));
+    // The magnified copy is a difference map: each square shows what 0
+    // drew, pulled toward orange by its gain as a fraction of the peak gain.
+    // At 13 px a pixel gains about 7% of ink, which an unscaled tint shows
+    // too faintly to find; scaling to the peak makes the pattern visible,
+    // and the readout states the peak so the scale is never hidden.
+    var tx = (tint.width = r.w, tint.height = r.h, tint.getContext("2d")                            ), timg = tx.createImageData(r.w, r.h);
+    for (i = 0; i < r.w * r.h; i++) {
+      var c0 = blend(fg, bg, base.cov[i]), t = peak > 0 ? Math.max(0, Math.min(1, r.cov[i]) - Math.min(1, base.cov[i])) / peak : 0;
+      for (var k = 0; k < 3; k++) timg.data[i * 4 + k] = Math.round(c0 + (MARK[k] - c0) * t);
+      timg.data[i * 4 + 3] = 255;
+    }
+    tx.putImageData(timg, 0, 0);
     mag.width = cw * Z; mag.height = r.h * Z;
     var mx = mag.getContext("2d");
     mx.imageSmoothingEnabled = false;
-    mx.drawImage(canvas, 0, 0, cw, r.h, 0, 0, cw * Z, r.h * Z);
+    mx.drawImage(tint, 0, 0, cw, r.h, 0, 0, cw * Z, r.h * Z);
     mx.strokeStyle = dark ? "rgba(255,255,255,.10)" : "rgba(0,0,0,.08)";
     mx.beginPath();
     for (var x = 0; x <= cw; x++) { mx.moveTo(x * Z + 0.5, 0); mx.lineTo(x * Z + 0.5, r.h * Z); }
     for (var y = 0; y <= r.h; y++) { mx.moveTo(0, y * Z + 0.5); mx.lineTo(cw * Z, y * Z + 0.5); }
     mx.stroke();
+    return peak;
   }
   function ink(r) { var s = 0; for (var i = 0; i < r.cov.length; i++) s += Math.min(1, r.cov[i]); return s; }
   function render() {
     var v = +val.value, dark = pol.value === "dark", scale = +sc.value, pt = +size.value;
     var px = pt * scale, text = txt.value || "Hamburgefonstiv";
     var g = v > 0 ? growth(px, dark) : 0;
+    // The 0 render is never shown on its own: it is the baseline the orange
+    // in the magnifier and the ink readout are both measured against.
     var r0 = raster(text, fam.value, px, 0, 1, 0), rv = raster(text, fam.value, px, g, 1, 0);
-    draw(c0, m0, r0, dark, scale); draw(cv, mv, rv, dark, scale);
+    var peak = draw(cv, mv, rv, r0, dark, scale);
     lab.textContent = v + " (" + NAMES[v] + ")";
     labV.textContent = "AppleFontSmoothing " + v;
     var more = Math.round((ink(rv) / ink(r0) - 1) * 100);
     out.innerHTML = v === 0
-      ? "<b>0:</b> plain coverage. Both rows are the same bitmap."
-      : "<b>" + v + ":</b> every stem grows by <span class=\"mono\">" + g.toFixed(2) + " px</span> at " + px + " pixels per em, for <span class=\"mono\">+" + more + "%</span> ink. "
+      ? "<b>0:</b> plain area coverage, with no growth. Slide right to see what any other value adds."
+      : "<b>" + v + ":</b> every stem grows by <span class=\"mono\">" + g.toFixed(2) + " px</span> at " + px + " pixels per em, for <span class=\"mono\">+" + more + "%</span> ink over 0. In the magnifier, full <span class=\"fs-mark\">orange</span> is the biggest gain, <span class=\"mono\">+" + Math.round(peak * 100) + "%</span> of one pixel. "
         + (v === 1 ? "Slide to 2 or 3: on macOS 27.2 they draw the same bytes as 1." : "Same bitmap as 1. The old light, medium and strong names survive only in the key's history.");
   }
   [val, fam, size, pol, sc].forEach(function(el) { el.addEventListener("input", render); });
