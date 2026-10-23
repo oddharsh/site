@@ -120,7 +120,7 @@ test("visitor text is one plain line, and every render escapes it", async () => 
     id: 1,
     at: 0,
     name: "<script>alert(1)</script>",
-    purpose: '"><img src=x onerror=alert(1)>',
+    purpose: '"><IMG src=x onerror=alert(1)>',
     tools: '["<i>"]',
     note: "</blockquote><a href=javascript:alert(1)>",
     ip: "203.0.113.7",
@@ -128,7 +128,7 @@ test("visitor text is one plain line, and every render escapes it", async () => 
     verified_bot: 0,
   });
   const out = String(renderGuestbookEntries([entry], "ok"));
-  assert.doesNotMatch(out, /<script|<img|<i>|<a href=javascript|<ua>/);
+  assert.doesNotMatch(out, /<script|<img|<i>|<a href=javascript|<ua>/i, "a tag in any case reaches the page escaped");
   assert.match(out, /&lt;script&gt;/);
 });
 
