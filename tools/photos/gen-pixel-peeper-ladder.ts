@@ -63,9 +63,12 @@ const which = (name: string): string | null => {
   const r = spawnSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : null;
 };
-const CJXL = which("cjxl"), AVIFENC = which("avifenc"), CWEBP = which("cwebp"), DWEBP = which("dwebp");
+const CJXL = which("cjxl"),
+  AVIFENC = which("avifenc"),
+  CWEBP = which("cwebp"),
+  DWEBP = which("dwebp");
 
-const SHIP_EDGE = 600;   // add-photos.sh's SQ: the square every photo ships as
+const SHIP_EDGE = 600; // add-photos.sh's SQ: the square every photo ships as
 type Scale = "crop" | "resized";
 const SCALES: Scale[] = ["crop", "resized"];
 type Lossy = "jpeg" | "avif" | "jxl";
@@ -97,15 +100,18 @@ const zencFrame = (file: string, png: string): string => {
 };
 
 function ladder(fmt: Lossy, ref: string, px: number, tmp: string): Point[] {
-  return KNOBS[fmt].map((k, i) => {
-    const out = path.join(tmp, `${fmt}-${i}.${fmt === "jpeg" ? "jpg" : fmt}`);
-    const bytes = fmt === "jpeg" ? encode("zenc", { png: ref, ppm: ref }, out, k, "444") : encodeFmt(fmt, ref, out, k);
-    const dec = path.join(tmp, `${fmt}-${i}-dec.png`);
-    if (fmt === "jpeg") zencFrame(out, dec); else decodeFmt(fmt, out, dec);
-    const s2 = ssim2(ref, dec);
-    if (s2 === 100) throw new Error(`${fmt} at ${k} scored 100: that rung is lossless, and belongs in lossless()`);
-    return [Number(((bytes * 8) / px).toFixed(4)), s2, butter(ref, dec)] as Point;
-  }).sort((a, b) => a[0] - b[0]);
+  return KNOBS[fmt]
+    .map((k, i) => {
+      const out = path.join(tmp, `${fmt}-${i}.${fmt === "jpeg" ? "jpg" : fmt}`);
+      const bytes = fmt === "jpeg" ? encode("zenc", { png: ref, ppm: ref }, out, k, "444") : encodeFmt(fmt, ref, out, k);
+      const dec = path.join(tmp, `${fmt}-${i}-dec.png`);
+      if (fmt === "jpeg") zencFrame(out, dec);
+      else decodeFmt(fmt, out, dec);
+      const s2 = ssim2(ref, dec);
+      if (s2 === 100) throw new Error(`${fmt} at ${k} scored 100: that rung is lossless, and belongs in lossless()`);
+      return [Number(((bytes * 8) / px).toFixed(4)), s2, butter(ref, dec)] as Point;
+    })
+    .sort((a, b) => a[0] - b[0]);
 }
 
 /** Lossless bytes, each one decoded and held to a perfect score. */
@@ -122,7 +128,8 @@ function lossless(ref: string, tmp: string): Record<Lossless, number> {
     const r = run(cmd);
     if (!fs.existsSync(file)) throw new Error(`lossless ${fmt} wrote nothing: ${(r.stderr || "").trim().slice(0, 200)}`);
     const dec = path.join(tmp, `ll-${fmt}-dec.png`);
-    if (fmt === "webp") run([DWEBP as string, file, "-o", dec, "-quiet"]); else decodeFmt(fmt, file, dec);
+    if (fmt === "webp") run([DWEBP as string, file, "-o", dec, "-quiet"]);
+    else decodeFmt(fmt, file, dec);
     const s = ssim2(ref, dec);
     if (s !== 100) throw new Error(`lossless ${fmt} scored ${s}, not 100: it is not lossless`);
     out[fmt] = fs.statSync(file).size;
@@ -144,7 +151,10 @@ function one(stem: string): CropResult[] {
         const r = run([ZENC, "square", src.file, "--orient", String(src.orient), "--filter", "box", "--size", String(SHIP_EDGE), "--out", ref]);
         if (!fs.existsSync(ref)) throw new Error(`zenc square: ${r.stderr.trim()}`);
       }
-      const dims = run([ZENC, "frame", ref, "--out", path.join(dir, "probe.ppm")]).stdout.trim().split(/\s+/).map(Number);
+      const dims = run([ZENC, "frame", ref, "--out", path.join(dir, "probe.ppm")])
+        .stdout.trim()
+        .split(/\s+/)
+        .map(Number);
       const px = dims[0] * dims[1];
       const curves = Object.fromEntries(LOSSY.map((f) => [f, ladder(f, ref, px, dir)])) as Record<Lossy, Point[]>;
       return { stem, scale, px, curves, lossless: lossless(ref, dir) };
@@ -161,8 +171,12 @@ function one(stem: string): CropResult[] {
 // quality has no byte count for it, and extrapolating would invent one.
 function s2At(c: Point[], bpp: number): number | null {
   for (let i = 1; i < c.length; i += 1) {
-    const [x0, y0] = c[i - 1], [x1, y1] = c[i];
-    if (bpp >= x0 && bpp <= x1) { const t = Math.log(bpp / x0) / Math.log(x1 / x0 || 1); return y0 + t * (y1 - y0); }
+    const [x0, y0] = c[i - 1],
+      [x1, y1] = c[i];
+    if (bpp >= x0 && bpp <= x1) {
+      const t = Math.log(bpp / x0) / Math.log(x1 / x0 || 1);
+      return y0 + t * (y1 - y0);
+    }
   }
   return null;
 }
@@ -170,13 +184,21 @@ function s2At(c: Point[], bpp: number): number | null {
 // curve and takes the first crossing, so a rung that dips does not hide it.
 function bppFor(c: Point[], s2: number): number | null {
   for (let i = 1; i < c.length; i += 1) {
-    const [x0, y0] = c[i - 1], [x1, y1] = c[i];
-    if (y0 >= s2) return i === 1 ? x0 : null;   // already there at the bottom rung: not measured from below
-    if (y1 >= s2) { const t = (s2 - y0) / (y1 - y0); return x0 * (x1 / x0) ** t; }
+    const [x0, y0] = c[i - 1],
+      [x1, y1] = c[i];
+    if (y0 >= s2) return i === 1 ? x0 : null; // already there at the bottom rung: not measured from below
+    if (y1 >= s2) {
+      const t = (s2 - y0) / (y1 - y0);
+      return x0 * (x1 / x0) ** t;
+    }
   }
   return null;
 }
-const median = (xs: number[]): number => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
 
 // The page reads quality targets and budgets off these, so they live in the
 // file rather than being repeated in the page.
@@ -192,18 +214,28 @@ function summarize(results: CropResult[]): void {
       const by = (f: Lossy) => rs.map((r) => bppFor(r.curves[f], t));
       const [j, a, x] = LOSSY.map(by);
       const pairs = rs.map((_, i) => [x[i], a[i]]).filter(([p, q]) => p !== null && q !== null) as [number, number][];
-      const fmt = (v: (number | null)[]) => { const ok = v.filter((n): n is number => n !== null); return ok.length ? `${median(ok).toFixed(2)} (${ok.length})` : "never"; };
-      log(`  s2 ${t}: jpeg ${fmt(j)}  avif ${fmt(a)}  jxl ${fmt(x)}  jxl/avif ${pairs.length ? (100 * median(pairs.map(([p, q]) => p / q))).toFixed(0) : "-"}%, jxl fewer on ${pairs.filter(([p, q]) => p < q).length}/${pairs.length}`);
+      const fmt = (v: (number | null)[]) => {
+        const ok = v.filter((n): n is number => n !== null);
+        return ok.length ? `${median(ok).toFixed(2)} (${ok.length})` : "never";
+      };
+      log(
+        `  s2 ${t}: jpeg ${fmt(j)}  avif ${fmt(a)}  jxl ${fmt(x)}  jxl/avif ${pairs.length ? (100 * median(pairs.map(([p, q]) => p / q))).toFixed(0) : "-"}%, jxl fewer on ${pairs.filter(([p, q]) => p < q).length}/${pairs.length}`,
+      );
     }
     for (const b of BUDGETS) {
       const at = (f: Lossy) => rs.map((r) => s2At(r.curves[f], b));
       const [j, a, x] = LOSSY.map(at);
       const both = rs.map((_, i) => [x[i], a[i]]).filter(([p, q]) => p !== null && q !== null) as [number, number][];
-      const mean = (v: (number | null)[]) => { const ok = v.filter((n): n is number => n !== null); return ok.length ? (ok.reduce((s, n) => s + n, 0) / ok.length).toFixed(1) : "-"; };
+      const mean = (v: (number | null)[]) => {
+        const ok = v.filter((n): n is number => n !== null);
+        return ok.length ? (ok.reduce((s, n) => s + n, 0) / ok.length).toFixed(1) : "-";
+      };
       log(`  ${b} bpp: jpeg ${mean(j)}  avif ${mean(a)}  jxl ${mean(x)}  jxl ahead on ${both.filter(([p, q]) => p > q).length}/${both.length}`);
     }
     const ll = (f: Lossless) => median(rs.map((r) => (r.lossless[f] * 8) / r.px));
-    log(`  lossless bpp: jxl ${ll("jxl").toFixed(2)}  avif ${ll("avif").toFixed(2)}  webp ${ll("webp").toFixed(2)}  jxl/avif ${(100 * median(rs.map((r) => r.lossless.jxl / r.lossless.avif))).toFixed(0)}%  jxl/webp ${(100 * median(rs.map((r) => r.lossless.jxl / r.lossless.webp))).toFixed(0)}%`);
+    log(
+      `  lossless bpp: jxl ${ll("jxl").toFixed(2)}  avif ${ll("avif").toFixed(2)}  webp ${ll("webp").toFixed(2)}  jxl/avif ${(100 * median(rs.map((r) => r.lossless.jxl / r.lossless.avif))).toFixed(0)}%  jxl/webp ${(100 * median(rs.map((r) => r.lossless.jxl / r.lossless.webp))).toFixed(0)}%`,
+    );
     const top = (f: Lossy) => median(rs.map((r) => r.curves[f][r.curves[f].length - 1][1]));
     log(`  top lossy rung, median s2: jpeg ${top("jpeg").toFixed(1)}  avif ${top("avif").toFixed(1)}  jxl ${top("jxl").toFixed(1)}`);
   }
@@ -217,14 +249,31 @@ async function main(): Promise<number> {
   // A child does one photo and prints its JSON. The parent fans the photos out
   // over processes, since every tool here runs on one core at a time.
   const solo = arg("--one");
-  if (solo) { process.stdout.write(JSON.stringify(one(solo))); return 0; }
+  if (solo) {
+    process.stdout.write(JSON.stringify(one(solo)));
+    return 0;
+  }
   // --from rewrites ladder.json from a saved --json run without encoding
   // anything, for when only the shipped shape changed.
   const from = arg("--from");
-  if (from) { const rs = JSON.parse(fs.readFileSync(from, "utf8")) as CropResult[]; summarize(rs); writeLadder(rs); return 0; }
+  if (from) {
+    const rs = JSON.parse(fs.readFileSync(from, "utf8")) as CropResult[];
+    summarize(rs);
+    writeLadder(rs);
+    return 0;
+  }
 
-  for (const [n, p] of [["zenc", fs.existsSync(ZENC) ? ZENC : null], ["cjxl", CJXL], ["avifenc", AVIFENC], ["cwebp", CWEBP], ["dwebp", DWEBP]] as const) {
-    if (!p) { log(`missing: ${n}`); return 1; }
+  for (const [n, p] of [
+    ["zenc", fs.existsSync(ZENC) ? ZENC : null],
+    ["cjxl", CJXL],
+    ["avifenc", AVIFENC],
+    ["cwebp", CWEBP],
+    ["dwebp", DWEBP],
+  ] as const) {
+    if (!p) {
+      log(`missing: ${n}`);
+      return 1;
+    }
   }
   const stems = arg("--stems")?.split(",") ?? CANDIDATES.format[2];
   const jobs = Math.max(1, Math.floor(os.availableParallelism() / 2));
@@ -237,9 +286,14 @@ async function main(): Promise<number> {
       const s = stem;
       const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "--one", s, ...srcArgs], { stdio: ["ignore", "pipe", "inherit"] });
       let out = "";
-      child.stdout.on("data", (d) => { out += d; });
+      child.stdout.on("data", (d) => {
+        out += d;
+      });
       const code: number = await new Promise((resolve) => child.on("close", resolve));
-      if (code !== 0) { log(`  x ${s}: exit ${code}`); continue; }
+      if (code !== 0) {
+        log(`  x ${s}: exit ${code}`);
+        continue;
+      }
       results.push(...(JSON.parse(out) as CropResult[]));
       log(`  · ${s}`);
     }
@@ -247,12 +301,18 @@ async function main(): Promise<number> {
   await Promise.all(Array.from({ length: jobs }, worker));
   // author order, so ladder.json does not churn with which child finished first
   results.sort((a, b) => stems.indexOf(a.stem) - stems.indexOf(b.stem) || SCALES.indexOf(a.scale) - SCALES.indexOf(b.scale));
-  if (results.length !== stems.length * SCALES.length) { log(`\nonly ${results.length} of ${stems.length * SCALES.length} ladders finished; writing nothing`); return 1; }
+  if (results.length !== stems.length * SCALES.length) {
+    log(`\nonly ${results.length} of ${stems.length * SCALES.length} ladders finished; writing nothing`);
+    return 1;
+  }
   summarize(results);
 
   const json = arg("--json");
   if (json) fs.writeFileSync(json, JSON.stringify(results, null, 1));
-  if (argv.includes("--dry-run")) { log("\n--dry-run: ladder.json untouched"); return 0; }
+  if (argv.includes("--dry-run")) {
+    log("\n--dry-run: ladder.json untouched");
+    return 0;
+  }
   writeLadder(results);
   return 0;
 }
@@ -261,8 +321,13 @@ async function main(): Promise<number> {
  *  per rung, lossless bytes, and the pixel count that turns bytes into bits per
  *  pixel. butteraugli stays in --json, since the chart plots one metric. */
 function writeLadder(results: CropResult[]): void {
-  const photos = results.map((r) => ({ stem: r.stem, scale: r.scale, px: r.px, lossless: r.lossless,
-    curves: Object.fromEntries(LOSSY.map((f) => [f, r.curves[f].map(([b, s]) => [Number(b.toFixed(3)), Number(s.toFixed(2))])])) }));
+  const photos = results.map((r) => ({
+    stem: r.stem,
+    scale: r.scale,
+    px: r.px,
+    lossless: r.lossless,
+    curves: Object.fromEntries(LOSSY.map((f) => [f, r.curves[f].map(([b, s]) => [Number(b.toFixed(3)), Number(s.toFixed(2))])])),
+  }));
   fs.writeFileSync(LADDER, `${JSON.stringify({ targets: TARGETS, budgets: BUDGETS, ship_edge: SHIP_EDGE, photos })}\n`);
   log(`\nwrote ${path.relative(REPO, LADDER)}: ${results.length} ladders, ${fs.statSync(LADDER).size} B`);
 }

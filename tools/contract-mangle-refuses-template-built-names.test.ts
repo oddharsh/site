@@ -5,10 +5,7 @@
 // `--f-jxl`, nothing defines that any more, and the colour is gone. Unbuilt,
 // the page looks right. /pixel-peeper's format ladder shipped that way to a
 // preview on 2026-10-23 (gotcha 83). These pin that the build now stops.
-import {
-  assert,
-  test,
-} from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 
 const { assertNoDynamicPropertyNames } = await import("./lib/mangle-custom-properties.ts");
 const check = (text) => () => assertNoDynamicPropertyNames(new Map([["page.html", text]]));
@@ -19,12 +16,12 @@ test("a template-built property name fails the build", () => {
 });
 
 test("a literal name in a script passes, since the rename rewrites it", () => {
-  assert.doesNotThrow(check("<script>const LCOL={jxl:\"var(--f-jxl)\",avif:`var(--f-avif)`}</script>"));
+  assert.doesNotThrow(check('<script>const LCOL={jxl:"var(--f-jxl)",avif:`var(--f-avif)`}</script>'));
   // a template that only interpolates the VALUE is fine: the name is whole
   assert.doesNotThrow(check("<script>const s=`--ink:${v}`</script>"));
 });
 
 test("the setProperty rule still holds beside it", () => {
   assert.throws(check("<script>el.style.setProperty(name,1)</script>"), /built at runtime/);
-  assert.doesNotThrow(check("<script>el.style.setProperty(\"--x\",1)</script>"));
+  assert.doesNotThrow(check('<script>el.style.setProperty("--x",1)</script>'));
 });
