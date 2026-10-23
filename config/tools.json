@@ -72,6 +72,7 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/gen-jxl-source-crops.ts",
         "tools/photos/hif-archive.ts",
         "tools/photos/reencode-thumbnails.sh"
       ],
@@ -287,6 +288,7 @@
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.sh",
+        "tools/photos/gen-jxl-source-crops.ts",
         "tools/photos/hif-archive.ts",
         "tools/photos/migrate-originals.ts"
       ],

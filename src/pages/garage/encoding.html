@@ -93,6 +93,11 @@
 .zen-table td { vertical-align: top; }
 .zen-results { min-width: 480px; max-width: 620px; }
 .enc-ships { line-height: 1.6; }
+/* the two-kinds-of-.jxl figure: HIF, then each file, with each file's error map under it */
+.jx-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 560px; }
+.jx-grid .jx-err { grid-column-start: 2; }
+.jx-table { max-width: 620px; }
+.jx-table td { vertical-align: top; }
 
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -533,6 +538,69 @@
       old <code>.jpg</code> links answer 301. The cost is a browser without JPEG XL, which can&apos;t
       open an original: Chrome before 155, and Firefox until it turns JPEG XL on (planned for 158).</p>
 
+    <h3>Two files called <code>.jxl</code></h3>
+    <p class="note">Moving the archive taught one thing the byte tables above couldn&apos;t: a
+      <code>.jxl</code> holds something different depending on what went in. A JPEG goes in with its
+      own DCT coefficients. cjxl keeps them, adds a 602-byte reconstruction box (<code>jbrd</code>),
+      and <code>djxl -J</code> hands back the original file, every byte of it.</p>
+    <p class="note">A HIF carries HEVC and an AVIF carries AV1, each with its own transforms and
+      block sizes, so neither leaves coefficients JPEG XL can adopt and no lossless repack exists.
+      cjxl won&apos;t even open either file (<code>Getting pixel data failed</code>), because it
+      reads neither container.</p>
+    <p class="note">So the HIF goes through sips to a 16-bit PNG first, and what comes out is a new
+      lossy encode at a distance somebody has to choose. (The site keeps no AVIF originals, so for
+      AVIF the refusal is all I checked.)</p>
+    <div class="enc-table-scroll">
+      <table class="enc-table jx-table">
+        <thead><tr><th></th><th>from a JPEG</th><th>from a HIF (or an AVIF)</th></tr></thead>
+        <tbody>
+          <tr><td>cjxl reads</td><td>the <code>.jpg</code> itself</td><td>decoded pixels, since it can&apos;t open a <code>.HIF</code> or an <code>.avif</code></td></tr>
+          <tr><td>keeps</td><td>the JPEG&apos;s coefficients: 8 bits, 4:2:2 chroma, 8&times;8 blocks</td><td>the HIF&apos;s full depth, recoded in JPEG XL&apos;s own XYB colour space</td></tr>
+          <tr><td>costs</td><td>nothing against the JPEG</td><td>one new lossy generation</td></tr>
+          <tr><td>way back</td><td><code>djxl -J</code> rebuilds the JPEG byte for byte</td><td>none: <code>-J</code> refuses, and a plain <code>djxl x.jpg</code> quietly writes a fresh 12.7&nbsp;MB JPEG</td></tr>
+          <tr><td>metadata</td><td>rides inside the JPEG</td><td>copied from the HIF by exif-sooc, because sips keeps 40 of 75 tags and drops every Fujifilm maker note</td></tr>
+          <tr><td>XT509890</td><td>17.6&nbsp;MB, from a 19.4&nbsp;MB JPEG</td><td>16.0&nbsp;MB, at distance <code>0.179</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">That asymmetry made the HIF route look like a bargain. Encoding from the HIF skips
+      the <code>q100</code> JPEG, a second lossy generation cut to 8 bits, and the first sweep
+      (2026-10-08) put the saving at 33%.</p>
+    <p class="note">It scored the old archive through <code>djpeg</code>, though, and a visitor never
+      sees that decode. R2 serves the repack, and a JPEG XL decoder rebuilds the same coefficients
+      more precisely: 1.9 to 3.5 SSIMULACRA2 better on 6 of 6 photos. jxl-rs, the decoder Chrome
+      ships, lands within 0.05 of libjxl.</p>
+    <p class="note">The repack decodes better than the JPEG inside it, so the bar had to move.
+      Against the repack as a browser decodes it, 102 HIF archives still shrank when re-encoded
+      from the HIF: <b>9.8%</b> in total, 2.07 to 1.86&nbsp;GB, each winning on both metrics. The
+      other 16 kept their repack, because the smallest encode that beat it was no smaller; R2 has
+      held the new files since 2026-10-16.</p>
+    <p class="note">At 1:1 the two files look the same, which is the whole job of an archive. Below
+      are two 160-pixel crops of XT509890 at full resolution: the HIF, then each file R2 has served
+      for it. Under each file sits its difference from the HIF, multiplied 32 times. The loupe works
+      on all of them.</p>
+    <div class="enc-grid jx-grid">
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>HIF</b> the reference</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-jpeg.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the JPEG</b> until 10-16<span class="enc-sz">17.6 MB</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the HIF</b> now<span class="enc-sz">16.0 MB</span></figcaption></figure>
+        <figure class="enc-card jx-err"><img src="/garage/enc/jx-scaffold-from-jpeg-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-hif-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+    </div>
+    <div class="enc-grid jx-grid">
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>HIF</b> the reference</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-jpeg.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the JPEG</b> until 10-16<span class="enc-sz">17.6 MB</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the HIF</b> now<span class="enc-sz">16.0 MB</span></figcaption></figure>
+        <figure class="enc-card jx-err"><img src="/garage/enc/jx-paint-from-jpeg-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-hif-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+    </div>
+    <p class="note">On the scaffold both files miss in the same place, the colour edges along each
+      bar. The yellow paint pulls them apart: there the encode from the HIF moves as much red and
+      green as the repack and far more blue, 2.10 steps RMS against 0.65. That fits XYB, which spends
+      the fewest bits on blue because the eye resolves the least detail there.</p>
+    <p class="note">Both metrics still call the HIF-born file closer, at SSIMULACRA2 93.40 against
+      93.36 and butteraugli 0.143 against 0.189. <code>tools/photos/gen-jxl-source-crops.ts</code>
+      rebuilds the crops from the two R2 files.</p>
+
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:4:4</code> color / <code>4:0:0</code> gray) +
@@ -545,11 +613,12 @@
         (+5.6%, +6.5% and +7.0% on the 600, 400 and 200 tiles) and scores 1.3 to 1.7 higher: the
         equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
         <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
-      <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
-        the HIF&apos;s native sensor chroma, and the scan order is the point at 20&nbsp;MB. The true HEIF
-        originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
-        rearranged to progressive by <code>jpegtran</code> on the way up: a lossless reorder of the
-        same coefficients.</li>
+      <li><b>Full-res originals in R2 as JPEG XL</b>, one progressive file per photo. A JPG-source
+        original is the camera&apos;s file, rearranged by <code>jpegtran</code> and repacked by cjxl,
+        both lossless, so <code>djxl -J</code> rebuilds it. A HIF photo&apos;s is encoded from the HIF
+        at the fewest bytes that beat its old <code>q100 4:2:2</code> JPEG as a browser decodes it.
+        When nothing smaller wins, it stays that JPEG&apos;s repack. The true HEIF originals stay on
+        local disk.</li>
     </ul>
 
     <footer>
