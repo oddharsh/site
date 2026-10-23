@@ -727,3 +727,18 @@ skips it.
     window shell never scrolls, and `overflow: hidden` on a wrapper makes it
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
+
+83. **libavif 1.3.x's avifenc writes gray PNGs ~4x dark at `-d 10`.** 1.3.0
+    stopped routing gray PNGs through RGB, and its new gray branch in
+    `avifImageRGBToYUV` stores the raw 8-bit sample in the 10-bit Y plane, so
+    200 lands as 200 of 1023 (libavif#2827, fixed by 0b65e2e in 1.4.0). zenc
+    hands libavif RGB triples and never takes that branch, so on 1.3.x its
+    parity test fails with zenc the side that's right. Ubuntu 26.04 ships
+    1.3.0-1ubuntu4 with no backport, and `ubuntu-latest` moved to it on
+    2026-10-21. The Photos job now builds the libavif `config/tools.json`
+    records, statically: a shared build installs a second `libavif.so.16`, and
+    on 26.04 arm64 the loader cache lists the distro's first, so `avifenc
+    --version` read 1.3.0 while `pkg-config` said 1.4.2. Measured in a 26.04
+    container: stock fails the gray case (mdat 71 vs 52 bytes), static 1.4.2
+    passes 39 of 39 with the 1.3.0 library still installed.
+    Checked by: `tools/contract-photos-ci-builds-the-recorded-libavif.test.ts`.
