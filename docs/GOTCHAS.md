@@ -737,3 +737,20 @@ skips it.
     window shell never scrolls, and `overflow: hidden` on a wrapper makes it
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
+
+85. **An agent's four-hex `\u` escape reaches the disk as the raw character.**
+    The guestbook's sanitizer was written on 2026-10-23 with four-hex escapes
+    for U+202A to U+202E, and the file held the characters themselves: an
+    unreadable regex, and five Trojan Source controls (CVE-2021-42574) that
+    reorder what a reviewer sees. bun fmt was blamed first and kept every
+    escape, on the pin (1.4.3-canary.20261021.1) and on 1.4.4-canary.1, in
+    clean and badly formatted files alike. The decode happens before the tool
+    runs: Write into a scratch file the format hook never touches, and a Bash
+    `<<'EOF'` heredoc, both wrote raw é, NBSP, ZWSP and U+202E, and U+2028
+    never arrived. Escapes of `Cc` code points (C0, DEL, C1), a braced
+    `\u{202E}` and a doubled backslash came through as typed, which is why the
+    damage looks selective. Name the class by property
+    (`/[\p{Cc}\p{Bidi_Control}]/gu`), or build the string with
+    `String.fromCodePoint(0x202e)`; a braced escape also survives. The check
+    scans every tracked and untracked text file, so it fires before `git add`.
+    Checked by: `tools/contract-no-source-file-carries-a-bidi-control.test.ts`.
