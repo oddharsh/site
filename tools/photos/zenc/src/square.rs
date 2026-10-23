@@ -206,13 +206,20 @@ mod tests {
                     "--out", png.to_str().unwrap(), "--avif-out", direct.to_str().unwrap(), "--orient", "6"]
                     .iter().map(|s| s.to_string()).collect();
                 assert_eq!(run(&args), 0);
+                // The control is only as right as the CLI. libavif 1.3.0's avifenc reads a gray
+                // PNG into Y without lifting 8-bit to -d 10 (libavif#2827, fixed in 1.4.0), so
+                // its 4:0:0 file decodes ~4x dark and this fails with zenc correct (gotcha 83).
+                let version = std::process::Command::new("avifenc").arg("--version").output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string())
+                    .unwrap_or_default();
                 let output = std::process::Command::new("avifenc").args([
                     "-q", "63", "-d", "10", "--ignore-icc", "--ignore-exif", "--ignore-xmp",
                     "--speed", "2", "--jobs", "4", "--yuv", if gray { "400" } else { "444" },
                     png.to_str().unwrap(), control.to_str().unwrap(),
                 ]).output().expect("install avifenc alongside libavif to run the parity test");
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-                assert_eq!(std::fs::read(&direct).unwrap(), std::fs::read(&control).unwrap());
+                assert_eq!(std::fs::read(&direct).unwrap(), std::fs::read(&control).unwrap(),
+                    "zenc and avifenc ({version}) disagree at {size}px, gray={gray}; gotcha 83 names a CLI that is itself wrong");
                 // Exercise the production interface with no PNG destination.
                 let jpeg = root.join("direct.jpg");
                 let args: Vec<String> = [source.to_str().unwrap(), "--size", &size.to_string(),

@@ -25,7 +25,12 @@ concurrency:
 jobs:
   native-photos:
     name: native photo validation
-    runs-on: ubuntu-latest
+    # Pinned, because ubuntu-latest became 26.04 on 2026-10-21 and its libavif
+    # 1.3.0 avifenc reads a gray PNG into Y without lifting 8-bit samples to
+    # -d 10, so its 4:0:0 control decodes ~4x dark and the parity test fails
+    # against a CLI that is wrong (gotcha 83). Move back once 26.04 ships
+    # libavif >= 1.4.0 or backports upstream 0b65e2e.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out source

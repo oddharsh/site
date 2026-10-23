@@ -727,3 +727,16 @@ skips it.
     window shell never scrolls, and `overflow: hidden` on a wrapper makes it
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
+
+83. **libavif 1.3.0's avifenc writes gray PNGs ~4x dark at `-d 10`.** 1.3.0
+    stopped routing gray PNGs through RGB, and its new gray branch in
+    `avifImageRGBToYUV` stores the raw 8-bit sample in the 10-bit Y plane
+    (libavif#2827, fixed by 0b65e2e in 1.4.0). A 12px gray tier with mean 141
+    decodes to Y mean 141.5 of 1023 where zenc writes 565.9, and the file
+    shrinks from 332 to 313 bytes. zenc hands libavif RGB triples, so it
+    never takes that branch and is the side that's right. Ubuntu 26.04 ships
+    1.3.0-1ubuntu4 with no backport, and `ubuntu-latest` moved to it on
+    2026-10-21, which is why the Photos job pins `ubuntu-24.04`. Building
+    1.3.0 with 0b65e2e alone turns the parity test green on 26.04. Don't
+    trust any 1.3.x avifenc for a gray AVIF.
+    Checked by: `tools/photos/zenc/src/square.rs`, `.github/workflows/photos.yml`.
