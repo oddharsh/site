@@ -26,6 +26,7 @@ import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/bota
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { isLinkPreviewBot, previewCardHtml, WORK_CALENDAR_CARD } from "./lib/link-preview.ts";
+import { ogVideoFor, serveOgVideo, withOgVideo } from "./lib/og-video.ts";
 import { wantsMarkdown } from "./lib/http.ts";
 import { handleSiteMcp } from "./mcp.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
@@ -410,6 +411,7 @@ const PREFIX_HANDLERS: Record<PrefixLabel, RouteHandler> = {
   "/.well-known/<card>": routeTextTwin,
   "/images/full/<key>": servePhotoFromR2,
   "/images/<thumb>": routeImageThumb,
+  "/og/video/<clip>": (request: SiteRequest, env: Env) => serveOgVideo(request, env.ASSETS),
   // A sub-resource under a static section (images, ask.js, /dotfiles/macos.sh)
   // is matched out by serveStaticPage's extension test and passes straight
   // through to the asset layer.
@@ -905,7 +907,18 @@ function routeImagesMeta(request: SiteRequest, env: Env) {
   });
 }
 
-function routeStaticPage(request: SiteRequest, env: Env) {
+// A page with an og:video clip answers the two preview fetchers that play one
+// with a rewritten copy of its plain asset (lib/og-video.ts). The plain asset,
+// because the dcz and q11 bodies below are already compressed and a rewriter
+// can't read them. Everyone else takes the static path untouched.
+async function routeStaticPage(request: SiteRequest, env: Env) {
+  const url = new URL(request.url);
+  const video = request.method === "GET" ? ogVideoFor(url.pathname, request.headers.get("user-agent")) : null;
+  if (video) {
+    const page = await env.ASSETS.fetch(new Request(url.toString(), { headers: { "accept-encoding": "identity" } }));
+    if (page.ok && (page.headers.get("content-type") ?? "").startsWith("text/html")) return withOgVideo(page, url.origin, video);
+    return page;
+  }
   return serveStaticPage(request, env);
 }
 

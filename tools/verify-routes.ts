@@ -137,6 +137,28 @@ const ROUTES = [
   { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/html, text/markdown;q=0" } },
   { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/markdown;q=0, */*;q=1" } },
   { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/markdown;q=0.2, text/html;q=0.8, */*;q=1" } },
+  // og:video (lib/og-video.ts): the two fetchers that play a clip get one in
+  // the codec each decodes, and the clip answers Range, which the asset layer
+  // ignores (gotcha 83). The person row is the control: same path, no rewrite.
+  {
+    path: "/garage/encoding",
+    status: 200,
+    ct: "text/html",
+    headers: { "user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" },
+    marker: "/og/video/garage-encoding.av1.webm",
+  },
+  {
+    path: "/garage/encoding",
+    status: 200,
+    ct: "text/html",
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0",
+    },
+    marker: "/og/video/garage-encoding.hevc.mp4",
+  },
+  { path: "/og/video/garage-encoding.hevc.mp4", status: 206, ct: "video/mp4", headers: { range: "bytes=0-99" } },
+  { path: "/og/video/garage-encoding.av1.webm", status: 200, ct: "video/webm" },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count

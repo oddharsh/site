@@ -78,7 +78,10 @@ const HERO = {
   "garage-compression": { hero: [".cmp"] },
   "garage-octane": { hero: [".oct-demo"] },
   "garage-pqc": { hero: [".pqc-demo"] },
-  "garage-encoding": { hero: [".demo", ".sample-grid"] },
+  // .enc-grid is the eleven-card encoder grid. Until 2026-10-23 this named
+  // ".demo" and ".sample-grid", neither of which the page has, so the card
+  // came from the FALLBACK sweep. Its og:video clip records the same grid.
+  "garage-encoding": { hero: [".enc-grid"] },
   // Three more that name their own demo wrapper, for the reason above.
   // hidden-flags has two .hf-demo blocks and the first is the inventory,
   // which is the one worth unfurling.
@@ -93,7 +96,10 @@ const HERO = {
   "garage-safari27": { hero: [".demo"] },
   "garage-scroll": { hero: [".luna-scroller", ".scroll-room"] },
   "garage-teardown": { hero: [".demo"] },
-  "garage-tooltips": { hero: [".vinyl-demo", ".recipe-grid"] },
+  // The fallback was ".recipe-grid" until 2026-10-23, which exists only inside
+  // #photo-tip while a .fuji-slot is hovered, so it could never match a capture.
+  // #balloon-row is the XP balloon list, static markup with no fetch.
+  "garage-tooltips": { hero: [".vinyl-demo", "#balloon-row"] },
   "garage-wire": { hero: [".knob-panel", ".knob-grid"] },
   "garage-workers": { hero: [".cf-feat:has(#probe-btn)"], preset: "#probe-btn" },
   // av2 spans into the verdict line because the broken third tile only reads as
