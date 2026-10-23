@@ -5,10 +5,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
-const workflow = JSON.parse(execFileSync("bun", ["-e",
-  "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
-  fileURLToPath(new URL(".github/workflows/perf-diff.yml", ROOT)),
-], { encoding: "utf8" }));
+const workflow = JSON.parse(
+  execFileSync(
+    "bun",
+    [
+      "-e",
+      "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
+      fileURLToPath(new URL(".github/workflows/perf-diff.yml", ROOT)),
+    ],
+    { encoding: "utf8" },
+  ),
+);
 const steps = workflow.jobs["wire-size"].steps;
 const install = steps.find((step) => step.name === "Define the installer").run;
 const record = steps.find((step) => step.name === "Record both revisions concurrently").run;
@@ -32,7 +39,9 @@ for (const failed of ["", "base", "head"]) {
       const sha = git("rev-parse", "HEAD").trim();
       mkdirSync(join(repo, ".perf-measure"));
       writeFileSync(join(repo, ".perf-measure", "marker"), "same measurement code\n");
-      writeFileSync(join(bin, "bun"), `#!/bin/bash
+      writeFileSync(
+        join(bin, "bun"),
+        `#!/bin/bash
 set -eu
 if [ "$PWD" = "$RUNNER_TEMP/perf-base" ]; then leg=base; other=head; else leg=head; other=base; fi
 if [ "$1" = install ]; then
@@ -50,7 +59,9 @@ sleep 0.1
 echo "$PWD" > "$3"
 touch "$RUNNER_TEMP/$leg.finished"
 if [ "$FAIL_LEG" = "$leg" ]; then exit 7; fi
-`, { mode: 0o755 });
+`,
+        { mode: 0o755 },
+      );
       const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: temp, MERGE_BASE: sha, HEAD_SHA: sha, FAIL_LEG: failed };
       const setup = spawnSync("bash", ["-e", "-c", install], { cwd: repo, env, encoding: "utf8", timeout: 5000 });
       assert.equal(setup.status, 0, setup.stderr);

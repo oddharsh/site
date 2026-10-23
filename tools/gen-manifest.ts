@@ -30,7 +30,10 @@ import { PROFILES } from "../tools/photos/shell-data.ts";
 export const MANIFEST = "config/site-manifest.json";
 const NAV = "src/client/nav-run.ts";
 const WORKER_MOD = "src/worker/lib/site-manifest.ts";
-const FENCE_SECTIONS = [["garage", "garage-pages"], ["lwe", "lwe-pages"]];
+const FENCE_SECTIONS = [
+  ["garage", "garage-pages"],
+  ["lwe", "lwe-pages"],
+];
 
 export function readManifest() {
   return JSON.parse(readFileSync(MANIFEST, "utf8"));
@@ -40,8 +43,7 @@ export function readManifest() {
 // custom `short` the path can't spell (vigenère's accent, "programmable crypto").
 const seg = (p) => p.split("/").pop();
 const paletteLabel = (s) => `${s.section} · ${s.short || seg(s.path)}`;
-const navEntry = (s) =>
-  `    { label: ${JSON.stringify(paletteLabel(s))}, path: ${JSON.stringify(s.path)}, hint: ${JSON.stringify(s.hint)} },`;
+const navEntry = (s) => `    { label: ${JSON.stringify(paletteLabel(s))}, path: ${JSON.stringify(s.path)}, hint: ${JSON.stringify(s.hint)} },`;
 
 // the Run-palette entries for one fenced section (garage / lwe), in registry order.
 export function navFenceBody(surfaces, section) {
@@ -54,22 +56,23 @@ export function navFenceBody(surfaces, section) {
 // The Run island is a browser projection of the same profiles the shell compiler
 // stamps onto the desktop. This fence keeps search and visible shortcuts exact.
 export function runProfilesBody(profiles = PROFILES) {
-  return profiles.map((profile) => {
-    const fields = ["label", "icon", "hint", "url"]
-      .filter((key) => profile[key])
-      .map((key) => `${key}: ${JSON.stringify(profile[key])}`)
-      .join(", ");
-    return `    { ${fields} },`;
-  }).join("\n").replace(/,$/, "");
+  return profiles
+    .map((profile) => {
+      const fields = ["label", "icon", "hint", "url"]
+        .filter((key) => profile[key])
+        .map((key) => `${key}: ${JSON.stringify(profile[key])}`)
+        .join(", ");
+      return `    { ${fields} },`;
+    })
+    .join("\n")
+    .replace(/,$/, "");
 }
 
 // the agent catalog: only agents:true surfaces, only the fields resources/list
 // needs, so the worker bundle carries a purpose-built list rather than the registry.
 // mimeType selects the on-site representation for both discovery and reads.
 export function agentSurfaces(surfaces) {
-  return surfaces
-    .filter((s) => s.flags.agents)
-    .map((s) => ({ path: s.path, title: s.title, mimeType: s.mimeType ?? "text/html", description: s.description }));
+  return surfaces.filter((s) => s.flags.agents).map((s) => ({ path: s.path, title: s.title, mimeType: s.mimeType ?? "text/html", description: s.description }));
 }
 
 // the webmention projection: paths that accept an inbound mention. A section

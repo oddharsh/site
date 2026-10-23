@@ -31,7 +31,8 @@ test("clean() is the worker's post-processing, regex for regex", async () => {
   const script = await readFile(new URL("tools/photos/gen-alt-text.ts", ROOT), "utf8");
   const worker = await readFile(new URL("cf-garage/src/index.ts", ROOT), "utf8");
   const strip = /\.replace\((\/\^\(an\? \|the \)\?\(image\|photo\|photograph\|picture\) \(of\|shows\|depicts\|captures\)\\s\*\/i), ""\)/;
-  const a = script.match(strip), b = worker.match(strip);
+  const a = script.match(strip),
+    b = worker.match(strip);
   assert.ok(a && b, "both files must carry the strip regex in the same literal form");
   assert.equal(a[1], b[1]);
   assert.equal(clean("  an image of a bus seat with   a button "), "A bus seat with a button");
@@ -69,7 +70,10 @@ const PYTHON = [
   /[\w/-]\.py\b/,
   /setup-python/,
 ];
-const pythonSpawns = (rel, text) => codeOf(rel, text).split("\n").filter((l) => PYTHON.some((re) => re.test(l)));
+const pythonSpawns = (rel, text) =>
+  codeOf(rel, text)
+    .split("\n")
+    .filter((l) => PYTHON.some((re) => re.test(l)));
 
 /** Every committed file an entry point runs, followed transitively: shell
  *  `$SCRIPT_DIR/<name>`, `$PROJECT_DIR/tools/...`, `./tools/...` and bare
@@ -96,7 +100,12 @@ const invokedClosure = (entries, read, scripts) => {
   return [...seen];
 };
 
-const PIPELINE_ENTRIES = ["tools/photos/add-photos.sh", "tools/photos/reencode-thumbnails.sh", "tools/photos/extract-photo-metadata.sh", ".github/workflows/photo-pipeline.yml"];
+const PIPELINE_ENTRIES = [
+  "tools/photos/add-photos.sh",
+  "tools/photos/reencode-thumbnails.sh",
+  "tools/photos/extract-photo-metadata.sh",
+  ".github/workflows/photo-pipeline.yml",
+];
 
 test("nothing on the photo pipeline's path spawns python", async () => {
   const { execFileSync } = await import("node:child_process");
@@ -109,7 +118,14 @@ test("nothing on the photo pipeline's path spawns python", async () => {
   const closure = invokedClosure(PIPELINE_ENTRIES, read, scripts);
   // Floor: the closure has to reach the scripts this file exists for, or the
   // reference scanner has stopped matching and every assertion below is vacuous.
-  for (const must of ["tools/photos/hash-thumbnails.sh", "tools/photos/pipeline-json.ts", "tools/photos/gen-alt-text.ts", "tools/photos/require-exif-sooc.sh", "tools/photos/check-photo-pipeline.ts", "package.json#photos"]) {
+  for (const must of [
+    "tools/photos/hash-thumbnails.sh",
+    "tools/photos/pipeline-json.ts",
+    "tools/photos/gen-alt-text.ts",
+    "tools/photos/require-exif-sooc.sh",
+    "tools/photos/check-photo-pipeline.ts",
+    "package.json#photos",
+  ]) {
     assert.ok(closure.includes(must), `the invocation closure no longer reaches ${must}; it found ${closure.length} nodes`);
   }
   // Every committed shell script too, reached or not: a script nothing calls
@@ -131,14 +147,25 @@ test("no Python is committed, declared, or pinned anywhere in the tree", async (
   // probe, gen-pixel-peeper). config/retired.json bans the binary; this holds
   // the other three shapes a return could take.
   const { execFileSync } = await import("node:child_process");
-  const py = execFileSync("git", ["ls-files", "-z", "*.py", "**/*.py", "*/requirements*.txt", "**/requirements*.txt"], { cwd: fileURLToPath(ROOT), encoding: "utf8" }).split("\0").filter(Boolean);
+  const py = execFileSync("git", ["ls-files", "-z", "*.py", "**/*.py", "*/requirements*.txt", "**/requirements*.txt"], {
+    cwd: fileURLToPath(ROOT),
+    encoding: "utf8",
+  })
+    .split("\0")
+    .filter(Boolean);
   assert.deepEqual(py, [], `Python files are committed: ${py.join(", ")}`);
   const tools = JSON.parse(await readFile(new URL("config/tools.json", ROOT), "utf8")).tools;
-  assert.equal(tools.some((t) => /^python|^uv$/.test(t.bin)), false, "tools.json declares an interpreter");
+  assert.equal(
+    tools.some((t) => /^python|^uv$/.test(t.bin)),
+    false,
+    "tools.json declares an interpreter",
+  );
   const dependabot = await readFile(new URL(".github/dependabot.yml", ROOT), "utf8");
   assert.doesNotMatch(dependabot, /package-ecosystem: pip/, "the pip lane is back");
   // Control: the ls-files pathspec matches when there is something to match.
-  const ts = execFileSync("git", ["ls-files", "-z", "tools/photos/*.ts"], { cwd: fileURLToPath(ROOT), encoding: "utf8" }).split("\0").filter(Boolean);
+  const ts = execFileSync("git", ["ls-files", "-z", "tools/photos/*.ts"], { cwd: fileURLToPath(ROOT), encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
   assert.ok(ts.includes("tools/photos/gen-pixel-peeper.ts"), "the pathspec scanner sees files that exist");
 });
 
@@ -146,15 +173,23 @@ test("control: the derived scan catches the heredoc the hand-kept list missed", 
   // The exact shapes that shipped on 2026-09-15: add-photos.sh calling
   // hash-thumbnails.sh, and hash-thumbnails.sh piping a heredoc to python3.
   const repo = {
-    "tools/photos/add-photos.sh": '#!/usr/bin/env bash\n# python is gone from this pipeline\n"$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1\nbun "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE"\n',
-    "tools/photos/hash-thumbnails.sh": "#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p \"$OUT_DIR\"\n\npython3 - \"$SRC_DIR\" \"$OUT_DIR\" \"$MAP\" <<'EOF'\nimport hashlib\nEOF\n",
-    "tools/photos/pipeline-json.ts": "// a comment may say python3 script.py\nimport fs from \"node:fs\";\n",
+    "tools/photos/add-photos.sh":
+      '#!/usr/bin/env bash\n# python is gone from this pipeline\n"$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1\nbun "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE"\n',
+    "tools/photos/hash-thumbnails.sh":
+      '#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p "$OUT_DIR"\n\npython3 - "$SRC_DIR" "$OUT_DIR" "$MAP" <<\'EOF\'\nimport hashlib\nEOF\n',
+    "tools/photos/pipeline-json.ts": '// a comment may say python3 script.py\nimport fs from "node:fs";\n',
   };
   const closure = invokedClosure(["tools/photos/add-photos.sh"], (rel) => repo[rel], {});
   assert.deepEqual(closure, ["tools/photos/add-photos.sh", "tools/photos/hash-thumbnails.sh", "tools/photos/pipeline-json.ts"]);
   // The old list held three files and not this one, which is the whole bug.
-  assert.ok(!["tools/photos/add-photos.sh", "tools/photos/extract-photo-metadata.sh", ".github/workflows/photo-pipeline.yml"].includes("tools/photos/hash-thumbnails.sh"));
-  assert.deepEqual(pythonSpawns("tools/photos/hash-thumbnails.sh", repo["tools/photos/hash-thumbnails.sh"]), [`python3 - "$SRC_DIR" "$OUT_DIR" "$MAP" <<'EOF'`]);
+  assert.ok(
+    !["tools/photos/add-photos.sh", "tools/photos/extract-photo-metadata.sh", ".github/workflows/photo-pipeline.yml"].includes(
+      "tools/photos/hash-thumbnails.sh",
+    ),
+  );
+  assert.deepEqual(pythonSpawns("tools/photos/hash-thumbnails.sh", repo["tools/photos/hash-thumbnails.sh"]), [
+    `python3 - "$SRC_DIR" "$OUT_DIR" "$MAP" <<'EOF'`,
+  ]);
   // Comments stay free to say the word; the other spawn shapes do not.
   assert.deepEqual(pythonSpawns("tools/photos/add-photos.sh", repo["tools/photos/add-photos.sh"]), []);
   assert.deepEqual(pythonSpawns("tools/photos/pipeline-json.ts", repo["tools/photos/pipeline-json.ts"]), []);
@@ -166,6 +201,10 @@ test("control: the derived scan catches the heredoc the hand-kept list missed", 
   // the closure, since a renamed callee is exactly how a scan goes quiet.
   assert.throws(() => invokedClosure(["a.sh"], (rel) => ({ "a.sh": '"$SCRIPT_DIR/gone.sh"\n' })[rel], {}), /gone\.sh is invoked/);
   // `bun run` goes through package.json.
-  assert.deepEqual(invokedClosure(["w.yml"], (rel) => ({ "w.yml": "run: bun run photos\n", "tools/photos/add-photos.sh": "" })[rel], { photos: "bash tools/photos/add-photos.sh" }),
-    ["w.yml", "package.json#photos", "tools/photos/add-photos.sh"]);
+  assert.deepEqual(
+    invokedClosure(["w.yml"], (rel) => ({ "w.yml": "run: bun run photos\n", "tools/photos/add-photos.sh": "" })[rel], {
+      photos: "bash tools/photos/add-photos.sh",
+    }),
+    ["w.yml", "package.json#photos", "tools/photos/add-photos.sh"],
+  );
 });

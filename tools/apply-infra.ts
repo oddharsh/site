@@ -158,7 +158,10 @@ const stripDot = (s) => s.replace(/\.$/, "");
 function normalize(type, data) {
   if (type === "TXT") {
     if (!data.startsWith('"')) return data.trim();
-    return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join("").trim();
+    return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)]
+      .map((m) => m[1])
+      .join("")
+      .trim();
   }
   if (type === "SVCB" || type === "HTTPS") return canonicalSvcb(data);
   if (type === "MX") {
@@ -270,8 +273,8 @@ for (const c of create) {
   if (declared === 1 && liveCount > 0) {
     blocked.push(
       `${c.record.type} ${c.record.name}: plan would CREATE a second record where ${liveCount} already ` +
-      `exist and the declaration wants exactly one. The live value is probably the declared one in a ` +
-      `different textual form; comparing them is the bug, not the zone.`,
+        `exist and the declaration wants exactly one. The live value is probably the declared one in a ` +
+        `different textual form; comparing them is the bug, not the zone.`,
     );
   }
 }
@@ -360,15 +363,16 @@ for (const { record, value } of create) {
     await cf(`/zones/${zoneId}/dns_records`, { method: "POST", body: JSON.stringify(payload(record, value)) });
     console.log(`  created ${record.type} ${record.name}`);
     done++;
-  } catch (e) { failed.push(`create ${record.type} ${record.name}: ${e.message}`); }
+  } catch (e) {
+    failed.push(`create ${record.type} ${record.name}: ${e.message}`);
+  }
 }
 
 // The id comes from the same snapshot the plan was computed against, so an
 // update can never target a record the plan did not actually see. Re-querying
 // here would reintroduce a window where the zone changed under us between plan
 // and write.
-const idFor = (record, value) =>
-  (apiRecords.get(`${record.name}|${record.type}`) || []).find((r) => r.value === value)?.id;
+const idFor = (record, value) => (apiRecords.get(`${record.name}|${record.type}`) || []).find((r) => r.value === value)?.id;
 
 for (const { record, from, to } of update) {
   try {
@@ -377,7 +381,9 @@ for (const { record, from, to } of update) {
     await cf(`/zones/${zoneId}/dns_records/${id}`, { method: "PATCH", body: JSON.stringify(payload(record, to)) });
     console.log(`  updated ${record.type} ${record.name}`);
     done++;
-  } catch (e) { failed.push(`update ${record.type} ${record.name}: ${e.message}`); }
+  } catch (e) {
+    failed.push(`update ${record.type} ${record.name}: ${e.message}`);
+  }
 }
 
 if (PRUNE) {
@@ -388,7 +394,9 @@ if (PRUNE) {
       await cf(`/zones/${zoneId}/dns_records/${id}`, { method: "DELETE" });
       console.log(`  deleted ${record.type} ${record.name}`);
       done++;
-    } catch (e) { failed.push(`delete ${record.type} ${record.name}: ${e.message}`); }
+    } catch (e) {
+      failed.push(`delete ${record.type} ${record.name}: ${e.message}`);
+    }
   }
 }
 

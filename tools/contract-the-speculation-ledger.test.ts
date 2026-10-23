@@ -1,13 +1,5 @@
 // ── the speculation ledger ────────────────────────────────────────────────────
-import {
-  ROOT,
-  assert,
-  existsSync,
-  readFile,
-  readFileSync,
-  readdir,
-  test,
-} from "./contract-shared.ts";
+import { ROOT, assert, existsSync, readFile, readFileSync, readdir, test } from "./contract-shared.ts";
 
 // ── the speculation ledger ────────────────────────────────────────────────────
 // Both halves are best-effort counters wrapped around a live response, so the
@@ -25,10 +17,10 @@ test("the speculation denominator counts real speculations and nothing else", as
 
   const cases = [
     ["prefetch", "prefetch", 1],
-    ["prefetch;prerender", "prerender", 1],   // the stronger claim wins
+    ["prefetch;prerender", "prerender", 1], // the stronger claim wins
     ["prerender", "prerender", 1],
-    ["", null, 0],                            // a plain navigation is not a speculation
-    ["fetch", null, 0],                       // Sec-Purpose exists but isn't speculative
+    ["", null, 0], // a plain navigation is not a speculation
+    ["fetch", null, 0], // Sec-Purpose exists but isn't speculative
   ];
   for (const [purpose, kind, expected] of cases) {
     const { env, points } = speculationEnv();
@@ -47,21 +39,38 @@ test("the speculation denominator counts real speculations and nothing else", as
 
   // a speculation that errored is not a speculation worth counting
   const { env, points } = speculationEnv();
-  countSpeculativeLoad(env, new Request("https://aadhar.sh/nope", { headers: { "sec-purpose": "prefetch" } }),
-    new Response("", { status: 404 }), "/nope");
+  countSpeculativeLoad(env, new Request("https://aadhar.sh/nope", { headers: { "sec-purpose": "prefetch" } }), new Response("", { status: 404 }), "/nope");
   assert.equal(points.length, 0, "a 4xx speculation must not enter the denominator");
 
   // no binding, and a binding that throws, must both be survivable
-  assert.doesNotThrow(() => countSpeculativeLoad({}, new Request("https://aadhar.sh/", {
-    headers: { "sec-purpose": "prefetch" } }), ok, "/"));
-  assert.doesNotThrow(() => countSpeculativeLoad(
-    { SPECULATION: { writeDataPoint() { throw new Error("AE down"); } } },
-    new Request("https://aadhar.sh/", { headers: { "sec-purpose": "prefetch" } }), ok, "/"));
+  assert.doesNotThrow(() =>
+    countSpeculativeLoad(
+      {},
+      new Request("https://aadhar.sh/", {
+        headers: { "sec-purpose": "prefetch" },
+      }),
+      ok,
+      "/",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    countSpeculativeLoad(
+      {
+        SPECULATION: {
+          writeDataPoint() {
+            throw new Error("AE down");
+          },
+        },
+      },
+      new Request("https://aadhar.sh/", { headers: { "sec-purpose": "prefetch" } }),
+      ok,
+      "/",
+    ),
+  );
 });
 
 test("the activation beacon answers 204 and records which page paid off", async () => {
-  const { handlePrefetchActivation, prefetchActivationHeader } =
-    await import("../src/worker/speculation.ts");
+  const { handlePrefetchActivation, prefetchActivationHeader } = await import("../src/worker/speculation.ts");
 
   // the header the browser is handed must round-trip a path through the query
   const value = prefetchActivationHeader("/garage/horizon");
@@ -70,8 +79,7 @@ test("the activation beacon answers 204 and records which page paid off", async 
 
   // the browser sends HEAD; the response is an acknowledgement, never a document
   const { env, points } = speculationEnv();
-  const res = handlePrefetchActivation(
-    new Request("https://aadhar.sh" + value, { method: "HEAD" }), env);
+  const res = handlePrefetchActivation(new Request("https://aadhar.sh" + value, { method: "HEAD" }), env);
   assert.equal(res.status, 204);
   assert.equal(res.headers.get("cache-control"), "no-store", "a cached beacon counts once, forever");
   assert.equal(await res.text(), "", "204 means no body");
@@ -80,14 +88,12 @@ test("the activation beacon answers 204 and records which page paid off", async 
   assert.equal(points[0].blobs[1], "/garage/horizon");
 
   // anything that isn't a read is refused, and says so properly
-  const bad = handlePrefetchActivation(
-    new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
+  const bad = handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
   assert.equal(bad.status, 405);
   assert.equal(bad.headers.get("allow"), "GET, HEAD");
 
   // a beacon with no binding still answers; telemetry never gates the reply
-  assert.equal(handlePrefetchActivation(
-    new Request("https://aadhar.sh/ledger/prefetch", { method: "HEAD" }), {}).status, 204);
+  assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch", { method: "HEAD" }), {}).status, 204);
 });
 
 test("the activation header lands on navigable HTML only", async () => {
@@ -95,8 +101,7 @@ test("the activation header lands on navigable HTML only", async () => {
   const html = () => new Response("<p>hi", { headers: { "content-type": "text/html; charset=utf-8" } });
   const HDR = "on-prefetch-activation";
 
-  assert.equal(withSecurityHeaders(html(), "/garage/horizon").headers.get(HDR),
-    "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
+  assert.equal(withSecurityHeaders(html(), "/garage/horizon").headers.get(HDR), "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
 
   // no pathname means no navigable document (the /lens self-fetch), so no beacon
   assert.equal(withSecurityHeaders(html()).headers.get(HDR), null);
@@ -126,20 +131,37 @@ export function responseRebuilds(src) {
   const NEEDLE = "new Response(";
   for (let i = src.indexOf(NEEDLE); i !== -1; i = src.indexOf(NEEDLE, i + 1)) {
     const open = i + NEEDLE.length - 1;
-    let depth = 0, quote = "", args: any[] = [], start = open + 1, j = open;
+    let depth = 0,
+      quote = "",
+      args: any[] = [],
+      start = open + 1,
+      j = open;
     for (; j < src.length; j++) {
       const c = src[j];
       if (quote) {
         if (c === quote && src[j - 1] !== "\\") quote = "";
         continue;
       }
-      if (c === '"' || c === "'" || c === "`") { quote = c; continue; }
-      if (c === "/" && src[j + 1] === "/") { j = src.indexOf("\n", j); if (j === -1) break; continue; }
+      if (c === '"' || c === "'" || c === "`") {
+        quote = c;
+        continue;
+      }
+      if (c === "/" && src[j + 1] === "/") {
+        j = src.indexOf("\n", j);
+        if (j === -1) break;
+        continue;
+      }
       if ("([{".includes(c)) depth++;
       else if (")]}".includes(c)) {
         depth--;
-        if (depth === 0) { args.push(src.slice(start, j)); break; }
-      } else if (c === "," && depth === 1) { args.push(src.slice(start, j)); start = j + 1; }
+        if (depth === 0) {
+          args.push(src.slice(start, j));
+          break;
+        }
+      } else if (c === "," && depth === 1) {
+        args.push(src.slice(start, j));
+        start = j + 1;
+      }
     }
     if (depth !== 0) continue;
     const body = (args[0] || "").trim();
@@ -157,21 +179,28 @@ export function responseRebuilds(src) {
     // `preserves` means the runtime keeps the flag on its own because the init is
     // another Response; `carries` means this call sets it explicitly.
     let preserves, carries;
-    if (init === "") { preserves = false; carries = false; }
-    else if (init.startsWith("{")) { preserves = false; carries = /\bencodeBody\b/.test(init); }
-    else if (/^[A-Za-z_$][\w$]*$/.test(init)) {
+    if (init === "") {
+      preserves = false;
+      carries = false;
+    } else if (init.startsWith("{")) {
+      preserves = false;
+      carries = /\bencodeBody\b/.test(init);
+    } else if (/^[A-Za-z_$][\w$]*$/.test(init)) {
       // Scope BOTH lookups to the nearest declaration before this call, never to
       // the whole file. security.ts has two rebuild sites that both name their
       // init `init`, so a file-wide search lets one site's carry vouch for the
       // other: deleting the flag from one of them left this test green, which is
       // precisely the regression it is here to catch.
       const decl = new RegExp(`(?:const|let|var)\\s+${init}\\s*=\\s*\\{`, "g");
-      let declAt = -1, m;
+      let declAt = -1,
+        m;
       while ((m = decl.exec(src)) !== null && m.index < i) declAt = m.index;
       preserves = declAt === -1;
-      carries = declAt !== -1
-        && new RegExp(`\\b${init}\\.encodeBody\\b`).test(src.slice(declAt, i));
-    } else { preserves = false; carries = /\bencodeBody\b/.test(init); }
+      carries = declAt !== -1 && new RegExp(`\\b${init}\\.encodeBody\\b`).test(src.slice(declAt, i));
+    } else {
+      preserves = false;
+      carries = /\bencodeBody\b/.test(init);
+    }
 
     out.push({ line: src.slice(0, i).split("\n").length, body, preserves, carries });
   }
@@ -208,30 +237,32 @@ test("every Response rebuilt from another response's body either preserves encod
   const RECORDED = {
     "src/worker/lib/assets.ts": {
       count: 2,
-      why: "rebuilds an env.ASSETS.fetch() response. MEASURED 2026-08-18: the binding "
-         + "hands the Worker decoded bytes with content-encoding: null, so there is no "
-         + "flag to lose. The three sites in this file that DO build encoded responses "
-         + "from .br bytes set encodeBody themselves.",
+      why:
+        "rebuilds an env.ASSETS.fetch() response. MEASURED 2026-08-18: the binding " +
+        "hands the Worker decoded bytes with content-encoding: null, so there is no " +
+        "flag to lose. The three sites in this file that DO build encoded responses " +
+        "from .br bytes set encodeBody themselves.",
     },
     "src/worker/photos.ts": {
       count: 2,
-      why: "rebuilds an R2 object body. R2 sets content-encoding only when the upload "
-         + "set httpMetadata.contentEncoding, and the photo pipeline never does. Note "
-         + "this is an upload-time property rather than anything the code enforces.",
+      why:
+        "rebuilds an R2 object body. R2 sets content-encoding only when the upload " +
+        "set httpMetadata.contentEncoding, and the photo pipeline never does. Note " +
+        "this is an upload-time property rather than anything the code enforces.",
     },
     "src/worker/rn.ts": {
       count: 1,
-      why: "rebuilds an image-transform response; the body is image bytes and the path "
-         + "sets no content-encoding.",
+      why: "rebuilds an image-transform response; the body is image bytes and the path " + "sets no content-encoding.",
     },
     "serendipity/serendipity.ts": {
       count: 3,
-      why: "two rebuild locally-built HTML or add a cookie, and one is this file's own "
-         + "withSecurityHeaders twin. None of them is a precompressed path. Since "
-         + "2026-09-25 serendipity DOES serve precompressed bytes, the built dashboard, "
-         + "and index.ts routeSerendipity returns that response WITHOUT the twin, passing "
-         + "its headers through serveStaticPage instead, which is what keeps it off this "
-         + "list. The fourth site was the old edge-cached dashboard, which the island replaced.",
+      why:
+        "two rebuild locally-built HTML or add a cookie, and one is this file's own " +
+        "withSecurityHeaders twin. None of them is a precompressed path. Since " +
+        "2026-09-25 serendipity DOES serve precompressed bytes, the built dashboard, " +
+        "and index.ts routeSerendipity returns that response WITHOUT the twin, passing " +
+        "its headers through serveStaticPage instead, which is what keeps it off this " +
+        "list. The fourth site was the old edge-cached dashboard, which the island replaced.",
     },
   };
 
@@ -245,7 +276,7 @@ test("every Response rebuilt from another response's body either preserves encod
   let scanned = 0;
   const unrecorded: any[] = [];
   const seen: Record<string, any> = {};
-  for (const file of files.sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)) {
+  for (const file of files.sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0))) {
     for (const hit of responseRebuilds(await readFile(new URL(file, ROOT), "utf8"))) {
       scanned++;
       if (hit.preserves || hit.carries) continue;
@@ -256,21 +287,25 @@ test("every Response rebuilt from another response's body either preserves encod
 
   // A scanner that matches nothing reports a pass, so pin the floor. 20 sites on
   // 2026-08-18; this only has to catch a collapse, not track the exact number.
-  assert.ok(scanned >= 15,
-    `the rebuild scanner found ${scanned} sites, so it has probably stopped matching`);
+  assert.ok(scanned >= 15, `the rebuild scanner found ${scanned} sites, so it has probably stopped matching`);
 
-  assert.deepEqual(unrecorded, [],
-    "a Response rebuilt from another response's body with an object init drops "
-  + "encodeBody. Either pass the response itself as init (and mutate headers on the "
-  + "result), set encodeBody when a content-encoding is present the way security.ts "
-  + "does, or add an entry to RECORDED above saying why this path cannot carry one.");
+  assert.deepEqual(
+    unrecorded,
+    [],
+    "a Response rebuilt from another response's body with an object init drops " +
+      "encodeBody. Either pass the response itself as init (and mutate headers on the " +
+      "result), set encodeBody when a content-encoding is present the way security.ts " +
+      "does, or add an entry to RECORDED above saying why this path cannot carry one.",
+  );
 
   // A stale entry is the other direction: if a file stops having these sites, the
   // recorded reason outlives what it described and the next reader trusts it.
   for (const [file, { count }] of Object.entries(RECORDED)) {
-    assert.equal(seen[file] || 0, count,
-      `RECORDED says ${file} has ${count} object-init rebuild(s) and the scan found ${seen[file] || 0}. `
-    + "Re-check the reason, then update the count.");
+    assert.equal(
+      seen[file] || 0,
+      count,
+      `RECORDED says ${file} has ${count} object-init rebuild(s) and the scan found ${seen[file] || 0}. ` + "Re-check the reason, then update the count.",
+    );
   }
 });
 
@@ -289,10 +324,8 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   const index = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
   const block = index.match(/const HOMEPAGE_HEADERS = \{[\s\S]*?\};/);
   assert.ok(block, "HOMEPAGE_HEADERS must still exist");
-  assert.match(block[0], /SHELL_PRELOAD_LINK/,
-    "the homepage Link header must include the shell preloads, or Early Hints has nothing to harvest");
-  assert.match(block[0], /HOMEPAGE_DISCOVERY_LINK/,
-    "the homepage Link header must still carry the discovery links");
+  assert.match(block[0], /SHELL_PRELOAD_LINK/, "the homepage Link header must include the shell preloads, or Early Hints has nothing to harvest");
+  assert.match(block[0], /HOMEPAGE_DISCOVERY_LINK/, "the homepage Link header must still carry the discovery links");
 
   // Dead code is how this hid the first time: the behaviour stayed described in
   // lib/security.ts while nothing called it, so reading that file suggested the
@@ -301,23 +334,30 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // file explains what used to live there and why it went, which is worth
   // keeping. It is a second LIVE definition that must not come back.
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
-  assert.doesNotMatch(security, /^\s*(export )?function withHomepageDiscoveryHeaders/m,
-    "lib/security.js should not keep a second, uncalled definition of the homepage Link header");
-  assert.doesNotMatch(security, /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
-    "the homepage Link header should be composed at the route, not in a constant nothing imports");
+  assert.doesNotMatch(
+    security,
+    /^\s*(export )?function withHomepageDiscoveryHeaders/m,
+    "lib/security.js should not keep a second, uncalled definition of the homepage Link header",
+  );
+  assert.doesNotMatch(
+    security,
+    /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
+    "the homepage Link header should be composed at the route, not in a constant nothing imports",
+  );
 
   // `/` shipped `private, no-cache, must-revalidate` from its SSR era, which cost it
   // two things at once: no shared cache could hold it (so every front-door hit ran the
   // worker) and no browser would keep a dictionary offered under it (so it was the one
   // page outside the per-page dcz tier). It takes PAGE_CACHE_CONTROL now. Four surfaces
   // have to agree on that string or the fix is partial in a way nothing else reports.
-  assert.match(block[0], /\.\.\.GENERATED_PAGE_HEADERS/,
-    "the homepage must take the shared generated-page policy, not a hand-written one");
-  assert.doesNotMatch(block[0], /no-cache|must-revalidate|private/,
-    "no-cache vetoes dictionary registration, must-revalidate cancels the swr window a max-age=0 page lives on, and private keeps shared caches out; `/` cannot carry them");
+  assert.match(block[0], /\.\.\.GENERATED_PAGE_HEADERS/, "the homepage must take the shared generated-page policy, not a hand-written one");
+  assert.doesNotMatch(
+    block[0],
+    /no-cache|must-revalidate|private/,
+    "no-cache vetoes dictionary registration, must-revalidate cancels the swr window a max-age=0 page lives on, and private keeps shared caches out; `/` cannot carry them",
+  );
   const { CACHEABLE_PATHS } = await import("../src/worker/routes.ts");
-  assert.ok(CACHEABLE_PATHS.has("/"),
-    "`/` must be cacheable in routes.ts, or a cacheable homepage still invokes the worker every hit");
+  assert.ok(CACHEABLE_PATHS.has("/"), "`/` must be cacheable in routes.ts, or a cacheable homepage still invokes the worker every hit");
 
   // The HEAD path used to write its own headers, which is how it drifted: a
   // hand-maintained duplicate can only be checked by asserting it restates the
@@ -326,10 +366,12 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // rather than that a second copy still agrees. Same move as the
   // withHomepageDiscoveryHeaders assertions above.
   const home = await readFile(new URL("src/worker/home.ts", ROOT), "utf8");
-  assert.doesNotMatch(home, /^\s*(export )?function homepageHeadResponse/m,
-    "the homepage HEAD must not go back to a hand-written header set; it takes the GET's own path");
-  assert.doesNotMatch(index, /method === "HEAD"\s*\)\s*return homepageHeadResponse/,
-    "routeHomepage must not fork on HEAD again");
+  assert.doesNotMatch(
+    home,
+    /^\s*(export )?function homepageHeadResponse/m,
+    "the homepage HEAD must not go back to a hand-written header set; it takes the GET's own path",
+  );
+  assert.doesNotMatch(index, /method === "HEAD"\s*\)\s*return homepageHeadResponse/, "routeHomepage must not fork on HEAD again");
 
   // _headers is the static-asset fallback for the same URL, and check-dictionary-support
   // exists precisely because production policy for some pages comes from this file, which
@@ -338,8 +380,11 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const rootRule = headers.match(/^\/\n((?:  .*\n)+)/m);
   assert.ok(rootRule, "_headers must still carry a rule for /");
-  assert.match(rootRule[1], new RegExp(`Cache-Control: ${PAGE_CACHE_CONTROL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"),
-    "_headers `/` must state the same policy the worker route does");
+  assert.match(
+    rootRule[1],
+    new RegExp(`Cache-Control: ${PAGE_CACHE_CONTROL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"),
+    "_headers `/` must state the same policy the worker route does",
+  );
 
   // The predicate itself is exercised where serveStaticPage is already under test, in
   // "static page negotiation prefers 304, then DCZ with the current validator".
@@ -367,7 +412,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
   // `_headers` blocks: a line starting with `/`, then its indented header lines.
   const rules = [...raw.matchAll(/^(\/\S*)\n((?:[ \t]+\S.*\n)+)/gm)].map(([, pattern, body]) => ({
     pattern,
-    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*(.+?)\s*$/mi) || [])[1] || null,
+    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*(.+?)\s*$/im) || [])[1] || null,
     // Matching rules ACCUMULATE and duplicate headers are comma-joined with no
     // most-specific-wins, so `*` has to be modelled as a real glob, not a prefix test.
     matches: (path) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*")}$`).test(path),
@@ -382,11 +427,9 @@ test("_headers page rules match the twin the worker fetches, not the request pat
       if (!file.endsWith(".html")) continue;
       const twin = `/${family}/${file}.br`;
       const hit = rules.filter((rule) => rule.matches(twin) && rule.cacheControl);
-      assert.ok(hit.length > 0,
-        `${twin}: no _headers rule matches the twin, so this page ships the Workers-assets default`);
+      assert.ok(hit.length > 0, `${twin}: no _headers rule matches the twin, so this page ships the Workers-assets default`);
       for (const rule of hit) {
-        assert.equal(rule.cacheControl, PAGE_CACHE_CONTROL,
-          `${rule.pattern} matches ${twin} but states a different policy than every other page`);
+        assert.equal(rule.cacheControl, PAGE_CACHE_CONTROL, `${rule.pattern} matches ${twin} but states a different policy than every other page`);
       }
       checked++;
     }
@@ -399,16 +442,18 @@ test("_headers page rules match the twin the worker fetches, not the request pat
   // sets its own policy, because the comma-join would prepend max-age=0 to it.
   const tile = "/pixel-peeper/tiles/05c532a8be2a.jpg";
   const tileRules = rules.filter((rule) => rule.matches(tile) && rule.cacheControl);
-  assert.deepEqual(tileRules.map((rule) => rule.cacheControl), ["public, max-age=31536000, immutable"],
-    "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped");
+  assert.deepEqual(
+    tileRules.map((rule) => rule.cacheControl),
+    ["public, max-age=31536000, immutable"],
+    "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped",
+  );
 });
 
 test("the offscreen Horizon iframe does not start ticking during initial load", async () => {
   const horizon = await readFile(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   const iframe = horizon.match(/<iframe\s+[^>]*id="mb-frame"[^>]*>/)?.[0];
   assert.ok(iframe, "the state-preserving move demo must keep its uptime iframe");
-  assert.match(iframe, /\sloading="lazy"(?:\s|>)/,
-    "the deep-page iframe runs a perpetual timer and must wait until it nears the viewport");
+  assert.match(iframe, /\sloading="lazy"(?:\s|>)/, "the deep-page iframe runs a perpetual timer and must wait until it nears the viewport");
 });
 
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
@@ -451,10 +496,11 @@ test("the hashed policy REPLACES the asset layer's generic stamp, and never a be
       headers: { "content-type": "text/html", "content-security-policy": LOOSE },
     });
     const out = await withSecurityHeaders(stamped, "/probe");
-    assert.match(out.headers.get("content-security-policy"), /'sha256-AAAA'/,
-      "the generic _headers stamp must not shadow the per-document hashes");
-    assert.ok(!/script-src 'self' 'unsafe-inline'/.test(out.headers.get("content-security-policy")),
-      "'unsafe-inline' must be gone from script-src once a document is hashed");
+    assert.match(out.headers.get("content-security-policy"), /'sha256-AAAA'/, "the generic _headers stamp must not shadow the per-document hashes");
+    assert.ok(
+      !/script-src 'self' 'unsafe-inline'/.test(out.headers.get("content-security-policy")),
+      "'unsafe-inline' must be gone from script-src once a document is hashed",
+    );
 
     // The bail still has a job: lens.js composes its own policy for the framed
     // view, and that one is an OPINION rather than a default.
@@ -463,8 +509,7 @@ test("the hashed policy REPLACES the asset layer's generic stamp, and never a be
       headers: { "content-type": "text/html", "content-security-policy": bespoke },
     });
     const kept = await withSecurityHeaders(framed, "/probe");
-    assert.equal(kept.headers.get("content-security-policy"), bespoke,
-      "a route that set its own policy keeps it");
+    assert.equal(kept.headers.get("content-security-policy"), bespoke, "a route that set its own policy keeps it");
   } finally {
     for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
     Object.assign(mod.PAGE_SCRIPT_HASHES, original);
@@ -547,13 +592,11 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   const { createHash } = await import("node:crypto");
   const { readdir } = await import("node:fs/promises");
 
-  const emitted = readFileSync(STAGED_CSP_HASHES, "utf8")
-    .match(/^export const PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes$/m);
+  const emitted = readFileSync(STAGED_CSP_HASHES, "utf8").match(/^export const PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes$/m);
   assert.ok(emitted, "the build did not rewrite the build:csp-hashes marker");
   const map = JSON.parse(emitted[1]);
 
-  const pages = (await readdir("./.build/public", { recursive: true }))
-    .filter((p) => p.endsWith(".html") && !p.endsWith(".src.html"));
+  const pages = (await readdir("./.build/public", { recursive: true })).filter((p) => p.endsWith(".html") && !p.endsWith(".src.html"));
   assert.ok(pages.length >= 40, `expected the full staged document set, saw ${pages.length}`);
 
   const EXECUTABLE = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|module|speculationrules)$/;
@@ -589,11 +632,13 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
         continue;
       }
       // find this tag's `>`, stepping over quoted attribute values
-      let j = lt + 1, quote = "";
+      let j = lt + 1,
+        quote = "";
       while (j < source.length) {
         const ch = source[j];
-        if (quote) { if (ch === quote) quote = ""; }
-        else if (ch === '"' || ch === "'") quote = ch;
+        if (quote) {
+          if (ch === quote) quote = "";
+        } else if (ch === '"' || ch === "'") quote = ch;
         else if (ch === ">") break;
         j++;
       }
@@ -606,7 +651,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
         i = close + 8;
         continue;
       }
-      i = j + 1;   // consumed the whole tag, attributes included
+      i = j + 1; // consumed the whole tag, attributes included
     }
   };
 
@@ -629,8 +674,10 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
       const type = (t ? (t[1] ?? t[2] ?? t[3] ?? "") : "").toLowerCase();
       if (!EXECUTABLE.test(type)) continue;
       const digest = createHash("sha256").update(m.body, "utf8").digest("base64");
-      assert.ok(map[path].includes(digest),
-        `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map, so the enforcing CSP BLOCKS it`);
+      assert.ok(
+        map[path].includes(digest),
+        `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map, so the enforcing CSP BLOCKS it`,
+      );
       checked++;
     }
   }
@@ -656,19 +703,28 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   const req = (url, headers: Record<string, any> = {}) => new Request(url, { headers });
 
   // the whole reason `/` is in the set: a plain navigation should still be cacheable
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", {
-    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8",
-  }), PATHS), true, "an ordinary browser navigation must still reach Workers Cache");
+  assert.equal(
+    shouldUseWorkersCache(
+      req("https://aadhar.sh/", {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8",
+      }),
+      PATHS,
+    ),
+    true,
+    "an ordinary browser navigation must still reach Workers Cache",
+  );
 
   // ...and the bug: markdown at the same URL must bypass it
   // The last entry is the TIE, added 2026-08-27 with the wantsMarkdown fix: both
   // types at q=1, decided by order. It used to resolve to HTML, so it never
   // bailed, and a cached HTML copy would now answer an agent asking for Markdown.
-  for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9",
-                        "text/markdown, text/html, */*"]) {
+  for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9", "text/markdown, text/html, */*"]) {
     for (const path of ["/", "/bot", "/lens", "/reading"]) {
-      assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`, { accept }), PATHS), false,
-        `${path} with "${accept}" must bypass Workers Cache or the stored HTML answers it`);
+      assert.equal(
+        shouldUseWorkersCache(req(`https://aadhar.sh${path}`, { accept }), PATHS),
+        false,
+        `${path} with "${accept}" must bypass Workers Cache or the stored HTML answers it`,
+      );
     }
   }
 
@@ -676,9 +732,16 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   // real q-value comparison, so html-outranks-markdown stays cacheable. Pinning it
   // keeps a future over-broad "has an accept header" bail from silently disabling
   // the cache for every browser on the site.
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", {
-    accept: "text/html, text/markdown;q=0.1",
-  }), PATHS), true, "html outranking markdown is an ordinary request and must stay cacheable");
+  assert.equal(
+    shouldUseWorkersCache(
+      req("https://aadhar.sh/", {
+        accept: "text/html, text/markdown;q=0.1",
+      }),
+      PATHS,
+    ),
+    true,
+    "html outranking markdown is an ordinary request and must stay cacheable",
+  );
 
   // the bails that were already there, so a rewrite cannot quietly drop one
   assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/?cb=1"), PATHS), false, "query strings bypass");
@@ -710,7 +773,8 @@ test("only the canonical hostname may be served from Workers Cache", async () =>
     assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`), PATHS), true, `aadhar.sh${path} is the site and stays cacheable`);
     for (const host of ["cal.aadhar.sh", "aadhar-sh.workers.dev", "a1b2c3-aadhar-sh.workers.dev", "aadhar-sh.pages.dev"]) {
       assert.equal(
-        shouldUseWorkersCache(req(`https://${host}${path}`), PATHS), false,
+        shouldUseWorkersCache(req(`https://${host}${path}`), PATHS),
+        false,
         `${host}${path} must reach the dispatcher — a hit here publishes the canonical page on a second hostname`,
       );
     }
@@ -734,7 +798,13 @@ test("only the canonical hostname may be served from Workers Cache", async () =>
 test("the denominator counts speculated DOCUMENTS, not a prerender's own sub-resources", async () => {
   const { countSpeculativeLoad } = await import("../src/worker/speculation.ts");
   const ok = new Response("", { status: 200 });
-  for (const [dest, expected] of [["document", 1], ["script", 0], ["style", 0], ["empty", 0], [null, 1]]) {
+  for (const [dest, expected] of [
+    ["document", 1],
+    ["script", 0],
+    ["style", 0],
+    ["empty", 0],
+    [null, 1],
+  ]) {
     const { env, points } = speculationEnv();
 
     const headers: Record<string, string> = { "sec-purpose": "prefetch;prerender" };
@@ -749,16 +819,25 @@ test("nav.js's beacon lands as activated-client, and the header beacon stays act
   const { env, points } = speculationEnv();
   assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch?via=client&p=%2Fgarage", { method: "HEAD" }), env).status, 204);
   assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch?p=%2Fgarage", { method: "HEAD" }), env).status, 204);
-  assert.deepEqual(points.map((p) => [p.blobs[0], p.blobs[1]]), [["activated-client", "/garage"], ["activated", "/garage"]]);
-  assert.deepEqual(points.map((p) => p.indexes), [["activated-client"], ["activated"]]);
+  assert.deepEqual(
+    points.map((p) => [p.blobs[0], p.blobs[1]]),
+    [
+      ["activated-client", "/garage"],
+      ["activated", "/garage"],
+    ],
+  );
+  assert.deepEqual(
+    points.map((p) => p.indexes),
+    [["activated-client"], ["activated"]],
+  );
 });
 
 test("the readback takes the larger activation source per path and never sums them", async () => {
   const { summarizeSpeculation } = await import("../src/worker/speculation.ts");
   const rows = summarizeSpeculation([
     { kind: "prerender", path: "/garage", n: 20 },
-    { kind: "activated", path: "/garage", n: 3 },          // the header beacon, once it ships
-    { kind: "activated-client", path: "/garage", n: 5 },   // nav.js, for the same activations
+    { kind: "activated", path: "/garage", n: 3 }, // the header beacon, once it ships
+    { kind: "activated-client", path: "/garage", n: 5 }, // nav.js, for the same activations
     { kind: "prerender", path: "/lwe", n: 10 },
     { kind: "activated-client", path: "/lwe", n: 4 },
   ]);

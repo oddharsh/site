@@ -33,15 +33,26 @@
 
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
   function section(title, badge, caption, inner) {
-    return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) +
+    return (
+      '<div class="lx-sec"><div class="lx-sec-h">' +
+      esc(title) +
       (badge ? ' <span class="lx-badge' + (badge.kind ? " " + badge.kind : "") + '">' + esc(badge.text) + "</span>" : "") +
-      "</div>" + (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") + inner + "</div>";
+      "</div>" +
+      (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") +
+      inner +
+      "</div>"
+    );
   }
   function trim(value, max) {
-    var text = String(value == null ? "" : value).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    var text = String(value == null ? "" : value)
+      .replace(/\s+/g, " ")
+      .replace(/^\s+|\s+$/g, "");
     return text.length > max ? text.slice(0, max) + "…" : text;
   }
 
@@ -51,15 +62,11 @@
     // SHUT and UNREADABLE are different findings and are drawn differently, the
     // same distinction classifyDoor keeps: "there is no endpoint here" and "we
     // never got to look" must never read as the same sentence.
-    var badge = s.gated ? { text: "locked", kind: "warn" }
-      : s.unreadable ? { text: "unreadable", kind: "warn" }
-        : { text: "no answer", kind: "bad" };
+    var badge = s.gated ? { text: "locked", kind: "warn" } : s.unreadable ? { text: "unreadable", kind: "warn" } : { text: "no answer", kind: "bad" };
     var why = s.unreadable
       ? "The door is there and we did not get to look through it, so this is not evidence that the endpoint is missing."
       : "Nothing at this origin answered as an NLWeb endpoint.";
-    return section("What it answers", badge,
-      esc(s.endpoint || "") + " · " + esc(s.error || ""),
-      '<div class="lx-nlweb-shut">' + esc(why) + "</div>");
+    return section("What it answers", badge, esc(s.endpoint || "") + " · " + esc(s.error || ""), '<div class="lx-nlweb-shut">' + esc(why) + "</div>");
   }
 
   function coverageTable(s) {
@@ -67,67 +74,109 @@
       var got = s.coverage[field] || 0;
       var kind = got === s.total ? "ok" : got ? "warn" : "bad";
       var pct = s.total ? Math.round((got / s.total) * 100) : 0;
-      return '<tr><td><code>' + esc(field) + "</code></td>" +
-        '<td class="lx-nlweb-n"><span class="lx-badge ' + kind + '">' + got + " / " + s.total + "</span></td>" +
-        '<td class="lx-nlweb-bar"><i style="width:' + pct + '%"></i></td>' +
-        "<td>" + esc(FIELD_NOTE[field]) + "</td></tr>";
+      return (
+        "<tr><td><code>" +
+        esc(field) +
+        "</code></td>" +
+        '<td class="lx-nlweb-n"><span class="lx-badge ' +
+        kind +
+        '">' +
+        got +
+        " / " +
+        s.total +
+        "</span></td>" +
+        '<td class="lx-nlweb-bar"><i style="width:' +
+        pct +
+        '%"></i></td>' +
+        "<td>" +
+        esc(FIELD_NOTE[field]) +
+        "</td></tr>"
+      );
     }).join("");
-    return '<table class="lx-nlweb-cov"><thead><tr><th>field</th><th>present</th><th></th><th>what it is for</th></tr></thead><tbody>' +
-      rows + "</tbody></table>";
+    return (
+      '<table class="lx-nlweb-cov"><thead><tr><th>field</th><th>present</th><th></th><th>what it is for</th></tr></thead><tbody>' + rows + "</tbody></table>"
+    );
   }
 
   function paneHtml(s) {
-    if (!s) return section("What it answers", { text: "not run" },
-      "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
-      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'A door that answers 200 can still answer with nothing an agent can use, and the field that decides it is ' +
-      '<code>schema_object</code>.' +
-      '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
-      'placeholder="what is this site about" aria-label="the question to ask this origin">' +
-      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>' +
-      '<div class="lx-cap">One request, cached for an hour. Asking somebody else’s retrieval endpoint a question ' +
-      'costs them a lookup, so this sends <code>mode=list</code> and never fires on its own.</div></div>');
-    if (s.pending) return section("What it answers", { text: "asking…" },
-      "One request to this origin's /ask endpoint.", '<div class="lx-nlweb-shut">Waiting for the answer.</div>');
+    if (!s)
+      return section(
+        "What it answers",
+        { text: "not run" },
+        "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
+        '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+          "A door that answers 200 can still answer with nothing an agent can use, and the field that decides it is " +
+          "<code>schema_object</code>." +
+          '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
+          'placeholder="what is this site about" aria-label="the question to ask this origin">' +
+          '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>' +
+          '<div class="lx-cap">One request, cached for an hour. Asking somebody else’s retrieval endpoint a question ' +
+          "costs them a lookup, so this sends <code>mode=list</code> and never fires on its own.</div></div>",
+      );
+    if (s.pending)
+      return section(
+        "What it answers",
+        { text: "asking…" },
+        "One request to this origin's /ask endpoint.",
+        '<div class="lx-nlweb-shut">Waiting for the answer.</div>',
+      );
     if (!s.ok) return shutPane(s);
     state = s;
 
-    var badge = s.conformant
-      ? { text: "conformant", kind: "ok" }
-      : { text: s.total ? "partial" : "empty", kind: s.total ? "warn" : "bad" };
+    var badge = s.conformant ? { text: "conformant", kind: "ok" } : { text: s.total ? "partial" : "empty", kind: s.total ? "warn" : "bad" };
 
     // The dialect is worth surfacing rather than normalising away: the reference
     // server speaks two, and which one an origin answers in is a real fact about
     // how current its implementation is.
-    var how = s.framing === "sse"
-      ? "streamed" + (s.dialect === "v0.55" ? " as named v0.55 events" : " as legacy message_type frames")
-      : "one JSON body";
-    var caption = esc(s.endpoint) + " · asked “" + esc(s.query) + "” · " +
-      s.total + (s.total === 1 ? " result" : " results") +
-      (s.shown < s.total ? " (" + s.shown + " shown)" : "") + " · " + how +
+    var how = s.framing === "sse" ? "streamed" + (s.dialect === "v0.55" ? " as named v0.55 events" : " as legacy message_type frames") : "one JSON body";
+    var caption =
+      esc(s.endpoint) +
+      " · asked “" +
+      esc(s.query) +
+      "” · " +
+      s.total +
+      (s.total === 1 ? " result" : " results") +
+      (s.shown < s.total ? " (" + s.shown + " shown)" : "") +
+      " · " +
+      how +
       (s.fromCache ? " · cached" : "");
 
     var types = (s.schemaTypes || []).length
       ? '<div class="lx-cap">schema.org types returned: ' +
-        s.schemaTypes.map((t) => { return "<code>" + esc(t.name) + "</code> " + t.count; }).join(", ") +
-        " · " + s.schemaBytes + " bytes of structured data</div>"
-      // Stated as an absence rather than omitted. A missing row reads as a
-      // question nobody asked; this one was asked and the answer was none.
-      : '<div class="lx-cap">No <code>schema_object</code> came back, so nothing here is structured data.</div>';
+        s.schemaTypes
+          .map((t) => {
+            return "<code>" + esc(t.name) + "</code> " + t.count;
+          })
+          .join(", ") +
+        " · " +
+        s.schemaBytes +
+        " bytes of structured data</div>"
+      : // Stated as an absence rather than omitted. A missing row reads as a
+        // question nobody asked; this one was asked and the answer was none.
+        '<div class="lx-cap">No <code>schema_object</code> came back, so nothing here is structured data.</div>';
 
-    var verdict = s.total === 0
-      ? "The endpoint answered and found nothing. That is a working door onto an empty room for this query."
-      : s.conformant
-        ? "Every result carries all six fields the protocol names."
-        : "Some results are missing fields the protocol names, so an agent has to handle both shapes.";
+    var verdict =
+      s.total === 0
+        ? "The endpoint answered and found nothing. That is a working door onto an empty room for this query."
+        : s.conformant
+          ? "Every result carries all six fields the protocol names."
+          : "Some results are missing fields the protocol names, so an agent has to handle both shapes.";
 
-    return section("What it answers", badge, caption,
-      '<div class="lx-nlweb-verdict">' + esc(verdict) + "</div>" +
-      coverageTable(s) + types +
-      '<div class="lx-nlweb-results" id="lx-nlweb-results"></div>' +
-      '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" value="' + esc(s.query) +
-      '" aria-label="the question to ask this origin">' +
-      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask again</button></div>');
+    return section(
+      "What it answers",
+      badge,
+      caption,
+      '<div class="lx-nlweb-verdict">' +
+        esc(verdict) +
+        "</div>" +
+        coverageTable(s) +
+        types +
+        '<div class="lx-nlweb-results" id="lx-nlweb-results"></div>' +
+        '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" value="' +
+        esc(s.query) +
+        '" aria-label="the question to ask this origin">' +
+        '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask again</button></div>',
+    );
   }
 
   /** One result row, built as nodes because every string in it is foreign. */
@@ -180,7 +229,9 @@
       pre.textContent = JSON.stringify(item.schema_object, null, 1);
       schema.appendChild(pre);
     } else if (item.schemaOversize) {
-      schema.textContent = "schema_object was " + item.schemaOversize +
+      schema.textContent =
+        "schema_object was " +
+        item.schemaOversize +
         " bytes and was dropped whole rather than truncated — half a schema describes something that does not exist.";
       schema.className += " lx-nlweb-missing";
     } else {
@@ -193,12 +244,15 @@
 
   window.LensNlweb = {
     run: (targetUrl, query, onOk, onFail) => {
-      var url = "/lens/nlweb?url=" + encodeURIComponent(targetUrl) +
-        (query ? "&q=" + encodeURIComponent(query) : "");
+      var url = "/lens/nlweb?url=" + encodeURIComponent(targetUrl) + (query ? "&q=" + encodeURIComponent(query) : "");
       fetch(url, { headers: { accept: "application/json" } })
-        .then((r) => { return r.json(); })
+        .then((r) => {
+          return r.json();
+        })
         .then(onOk)
-        .catch(() => { onFail(); });
+        .catch(() => {
+          onFail();
+        });
     },
     render: paneHtml,
     // Called after the pane's HTML lands, exactly like LensTools.bind. The rows
@@ -215,7 +269,10 @@
       // the kind of small lie this site tries not to tell.
       if (input && button) {
         input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") { event.preventDefault(); button.click(); }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            button.click();
+          }
         });
       }
     },

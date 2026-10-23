@@ -18,7 +18,9 @@ function authoredQuizzes() {
   const quizzes: any[] = [];
   for (const family of ["garage", "lwe"]) {
     const dir = new URL(`src/pages/${family}/`, ROOT);
-    for (const file of readdirSync(dir).filter((f) => f.endsWith(".html")).sort()) {
+    for (const file of readdirSync(dir)
+      .filter((f) => f.endsWith(".html"))
+      .sort()) {
       const ref = quizReference(readFileSync(new URL(file, dir), "utf8"));
       if (ref) quizzes.push({ page: `${family}/${file}`, data: JSON.parse(ref.inline) });
     }
@@ -49,7 +51,7 @@ test("the length guessers score near chance across the site", () => {
   // questions. The ceiling leaves room for honest variation and none for a
   // habit.
   const ceiling = chance / questions + 0.08;
-  assert.ok(longest / questions <= ceiling, `pick-the-longest scores ${longest}/${questions}; chance is ${(chance / questions * 100).toFixed(0)}%`);
+  assert.ok(longest / questions <= ceiling, `pick-the-longest scores ${longest}/${questions}; chance is ${((chance / questions) * 100).toFixed(0)}%`);
   assert.ok(shortest / questions <= ceiling, `pick-the-shortest scores ${shortest}/${questions}; an over-correction is its own tell`);
   ratios.sort((a, b) => a - b);
   const median = ratios[ratios.length >> 1];

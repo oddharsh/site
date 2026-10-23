@@ -23,7 +23,9 @@ export async function originBuild(origin: string): Promise<{ commit: string | nu
 
 /** The `served-manifest` artifact of ci.yml's push run for a commit, downloaded to a temp dir. */
 export function downloadManifest(repo: string, commit: string): string | null {
-  const runs = JSON.parse(gh(["run", "list", "--repo", repo, "--workflow", "ci.yml", "--commit", commit, "--event", "push", "--json", "databaseId,conclusion", "--limit", "5"]));
+  const runs = JSON.parse(
+    gh(["run", "list", "--repo", repo, "--workflow", "ci.yml", "--commit", commit, "--event", "push", "--json", "databaseId,conclusion", "--limit", "5"]),
+  );
   const run = runs.find((r: { conclusion: string }) => r.conclusion === "success") ?? runs[0];
   if (!run) return null;
   const dir = mkdtempSync(join(tmpdir(), "served-manifest-"));

@@ -37,7 +37,7 @@ const MAP = Buffer.from("# aadhar.sh\n\nthe map.\n");
 // `any` because the route's Env (src/worker/lib/env.ts) declares every binding
 // and this fake owes the two asset paths it reads; the same shape contract-native-byte-decoders uses.
 function fakeEnv({ noTwin = false, nothingStaged = false }: Record<string, any> = {}) {
-  return ({
+  return {
     ASSETS: {
       async fetch(input) {
         const path = new URL(input instanceof Request ? input.url : input).pathname;
@@ -49,7 +49,7 @@ function fakeEnv({ noTwin = false, nothingStaged = false }: Record<string, any> 
         return new Response("not found", { status: 404 });
       },
     },
-  } as any);
+  } as any;
 }
 const get = () => new Request("https://aadhar.sh/llms-full.txt");
 
@@ -74,7 +74,10 @@ test("the paywall's own headers survive both paths, and dev still assembles", as
   // passed in, so this doubles as the check that the route's own headers are
   // not lost to the twin's: servePrecompressedText copies the ASSET's headers
   // first and applies the route's over them.
-  for (const [label, env] of [["twin", fakeEnv()], ["no twin", fakeEnv({ noTwin: true })]]) {
+  for (const [label, env] of [
+    ["twin", fakeEnv()],
+    ["no twin", fakeEnv({ noTwin: true })],
+  ]) {
     const res = await handleLlmsFull(get(), env, {});
     assert.equal(res.headers.get("cache-control"), "no-store", `${label}: a per-payment receipt must never be cached`);
     assert.equal(res.headers.get("content-type"), "text/plain; charset=utf-8", `${label}: content-type`);
@@ -90,5 +93,9 @@ test("the paywall's own headers survive both paths, and dev still assembles", as
 
 test("build.ts twins this path, so the route has something to serve", async () => {
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
-  assert.match(build, /llms-full\\\.txt/, "build.ts's TWINNED list no longer names llms-full.txt, so the twin stops being written and the route silently serves plain bytes");
+  assert.match(
+    build,
+    /llms-full\\\.txt/,
+    "build.ts's TWINNED list no longer names llms-full.txt, so the twin stops being written and the route silently serves plain bytes",
+  );
 });

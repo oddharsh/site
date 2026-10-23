@@ -30,7 +30,10 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   assert.equal(written.length, 1, "a working probe writes exactly one datapoint");
   const [dp] = written;
   assert.equal(dp.doubles.length, 5, "doubles are positional: [assets, tracks, alt, counter, total]");
-  assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
+  assert.ok(
+    dp.doubles.every((v) => typeof v === "number"),
+    "every double must be a real number",
+  );
   assert.deepEqual([dp.doubles[0], dp.doubles[2], dp.doubles[3]], [-1, -1, -1]);
   assert.ok(dp.doubles[1] >= 0 && dp.doubles[4] >= dp.doubles[1]);
   assert.deepEqual(dp.blobs, ["", "dev"]);
@@ -48,7 +51,9 @@ test("fragment probe preserves timings, missing values, cancellation and version
     await writeFile(join(root, "lib/const.ts"), 'export const CANONICAL_HOST = "fixture.example";');
     await writeFile(join(root, "home.ts"), 'import { fragment } from "./fixture.mjs"; export const handlePhotoGrid = (...args) => fragment("grid", ...args);');
     await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const rnTracksHtml = (...args) => fragment("tracks", ...args);');
-    await writeFile(join(root, "fixture.mjs"), `
+    await writeFile(
+      join(root, "fixture.mjs"),
+      `
       export const state = { clock: 100, phases: {}, events: [], requests: [] };
       export async function fragment(kind, request, env, ctx, opts) {
         const phase = state.phases[kind];
@@ -64,12 +69,13 @@ test("fragment probe preserves timings, missing values, cancellation and version
           }
         }));
       }
-    `);
+    `,
+    );
     const { state } = await import(pathToFileURL(join(root, "fixture.mjs")).href);
     const { cronHomeProbe: probe } = await import(pathToFileURL(join(root, "perf-probe.ts")).href);
     Date.now = () => state.clock;
 
-type Phase = {ms: number, cancelMs?: number, error?: boolean, noBody?: boolean, cancelError?: boolean};
+    type Phase = { ms: number; cancelMs?: number; error?: boolean; noBody?: boolean; cancelError?: boolean };
 
     const cases: Array<[string, Phase, Phase, number[] | null]> = [
       ["both measured", { ms: 5, cancelMs: 2 }, { ms: 11, cancelMs: 3 }, [-1, 7, -1, -1, 21]],
@@ -87,7 +93,11 @@ type Phase = {ms: number, cancelMs?: number, error?: boolean, noBody?: boolean, 
       const ctx = { waitUntil() {} };
       await probe(env, ctx);
       assert.deepEqual(written, doubles ? [{ doubles, blobs: ["", "version-fixture"], indexes: ["home"] }] : [], label);
-      assert.deepEqual(state.events, ["tracks", ...(!tracks.error && !tracks.noBody ? ["cancel:tracks"] : []), "grid", ...(!grid.error && !grid.noBody ? ["cancel:grid"] : [])], label);
+      assert.deepEqual(
+        state.events,
+        ["tracks", ...(!tracks.error && !tracks.noBody ? ["cancel:tracks"] : []), "grid", ...(!grid.error && !grid.noBody ? ["cancel:grid"] : [])],
+        label,
+      );
       for (const { request, env: received } of state.requests) {
         assert.equal(request.url, "https://fixture.example/");
         assert.equal(request.headers.get("user-agent"), "AadharshBot/1.0 (+https://aadhar.sh/bot) perf-probe");
@@ -106,7 +116,17 @@ type Phase = {ms: number, cancelMs?: number, error?: boolean, noBody?: boolean, 
       assert.deepEqual(written[0].blobs, ["", "dev"]);
     }
     let writeAttempts = 0;
-    await probe({ PERF_PROBE: { writeDataPoint() { writeAttempts++; throw new Error("dataset unavailable"); } } }, {});
+    await probe(
+      {
+        PERF_PROBE: {
+          writeDataPoint() {
+            writeAttempts++;
+            throw new Error("dataset unavailable");
+          },
+        },
+      },
+      {},
+    );
     assert.equal(writeAttempts, 1, "a dataset failure is swallowed only after attempting the write");
     state.events = [];
     await probe({}, {});
@@ -154,22 +174,41 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
 // one shared copy cannot quietly narrow.
 test("the shared SSRF host floor blocks every non-public shape", () => {
   const blocked = [
-    "localhost", "app.localhost", "printer.local", "db.internal", "x.onion",
-    "::1", "[::1]", "fc00::1", "fd12::9", "fe80::1",
-    "0.0.0.0", "10.1.2.3", "127.0.0.1", "192.168.1.1",
-    "169.254.169.254",                    // cloud metadata, the one that matters most
-    "172.16.0.1", "172.31.255.254",       // RFC1918 lower + upper edge
-    "100.64.0.1", "100.127.255.255",      // CGNAT lower + upper edge
-    "224.0.0.1", "255.255.255.255",       // multicast / reserved
+    "localhost",
+    "app.localhost",
+    "printer.local",
+    "db.internal",
+    "x.onion",
+    "::1",
+    "[::1]",
+    "fc00::1",
+    "fd12::9",
+    "fe80::1",
+    "0.0.0.0",
+    "10.1.2.3",
+    "127.0.0.1",
+    "192.168.1.1",
+    "169.254.169.254", // cloud metadata, the one that matters most
+    "172.16.0.1",
+    "172.31.255.254", // RFC1918 lower + upper edge
+    "100.64.0.1",
+    "100.127.255.255", // CGNAT lower + upper edge
+    "224.0.0.1",
+    "255.255.255.255", // multicast / reserved
   ];
   for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
 
   const allowed = [
-    "aadhar.sh", "example.com", "8.8.8.8", "1.1.1.1",
-    "172.15.0.1", "172.32.0.1",           // just OUTSIDE RFC1918's 172.16-31
-    "100.63.0.1", "100.128.0.1",          // just OUTSIDE CGNAT's 100.64-127
-    "223.255.255.255",                    // just below the multicast floor
-    "localhost.example.com",              // ends in a real TLD, not a bare localhost
+    "aadhar.sh",
+    "example.com",
+    "8.8.8.8",
+    "1.1.1.1",
+    "172.15.0.1",
+    "172.32.0.1", // just OUTSIDE RFC1918's 172.16-31
+    "100.63.0.1",
+    "100.128.0.1", // just OUTSIDE CGNAT's 100.64-127
+    "223.255.255.255", // just below the multicast floor
+    "localhost.example.com", // ends in a real TLD, not a bare localhost
   ];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
 });
@@ -180,13 +219,22 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
 // spelled ::ffff:169.254.169.254, which is the metadata endpoint by another name.
 test("the SSRF floor covers the alternate spellings of a blocked host", () => {
   const blocked = [
-    "localhost.", "127.0.0.1.", "db.internal.",     // trailing dot is a legal FQDN
-    "::", "[::]",                                    // unspecified address
-    "::ffff:127.0.0.1", "[::ffff:169.254.169.254]",  // v4-mapped IPv6
-    "::ffff:10.0.0.1", "::ffff:192.168.1.1",
-    "fe81::1", "fe9f::1", "fea0::1", "febf::1",      // fe80::/10 is 64 prefixes, not one
-    "LOCALHOST", "169.254.169.254.",                 // case and dot together
-    "",                                              // an empty host resolves to nothing good
+    "localhost.",
+    "127.0.0.1.",
+    "db.internal.", // trailing dot is a legal FQDN
+    "::",
+    "[::]", // unspecified address
+    "::ffff:127.0.0.1",
+    "[::ffff:169.254.169.254]", // v4-mapped IPv6
+    "::ffff:10.0.0.1",
+    "::ffff:192.168.1.1",
+    "fe81::1",
+    "fe9f::1",
+    "fea0::1",
+    "febf::1", // fe80::/10 is 64 prefixes, not one
+    "LOCALHOST",
+    "169.254.169.254.", // case and dot together
+    "", // an empty host resolves to nothing good
   ];
   for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
 
@@ -212,7 +260,7 @@ test("the SSRF floor covers the alternate spellings of a blocked host", () => {
 // Assert through validateLensTarget, which is the door every scan really uses.
 test("a blocked address stays blocked through the URL parser that rewrites it", () => {
   const refused = [
-    "https://[::ffff:169.254.169.254]/",   // cloud metadata, the one that matters
+    "https://[::ffff:169.254.169.254]/", // cloud metadata, the one that matters
     "https://[::ffff:127.0.0.1]/",
     "https://[::ffff:10.0.0.1]/",
     "https://[::ffff:192.168.1.1]/",
@@ -222,7 +270,17 @@ test("a blocked address stays blocked through the URL parser that rewrites it", 
   ];
   for (const raw of refused) {
     const verdict = validateLensTarget(raw);
-    assert.equal(verdict.ok, false, `${raw} normalizes to ${(() => { try { return new URL(raw).hostname; } catch { return "unparseable"; } })()} and must be refused`);
+    assert.equal(
+      verdict.ok,
+      false,
+      `${raw} normalizes to ${(() => {
+        try {
+          return new URL(raw).hostname;
+        } catch {
+          return "unparseable";
+        }
+      })()} and must be refused`,
+    );
   }
   // A public v4-mapped address is still a public address.
   assert.equal(validateLensTarget("https://[::ffff:8.8.8.8]/").ok, true);
@@ -289,32 +347,41 @@ test("production binds the Durable Object the slot claim needs", async () => {
   assert.equal(counter.class_name, "Counter");
   // The class lives in aadhar-counter since 2026-09-29, and a binding without
   // script_name would name a class this Worker no longer implements.
-  assert.equal(counter.script_name, "aadhar-counter",
-    `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
+  assert.equal(counter.script_name, "aadhar-counter", `${config} must bind COUNTER in aadhar-counter, which owns the class since step 3`);
 
   // THE SITE IMPLEMENTS NO DURABLE OBJECT, an invariant in CLAUDE.md: a Worker
   // that implements one gets no preview URLs (docs/MAINTENANCE.md has the
   // story).
   // A class reappearing here, in exports or through a migrations array, takes
   // the previews away again without a single other symptom.
-  assert.equal(parsed.migrations, undefined,
-    `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
+  assert.equal(parsed.migrations, undefined, `${config} carries a migrations array, which would make this Worker implement a Durable Object`);
   const classes = Object.entries<{ type: string }>(parsed.exports ?? {})
     .filter(([, e]) => e?.type === "durable-object")
     .map(([name]) => name);
-  assert.deepEqual(classes, [],
-    `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`);
+  assert.deepEqual(
+    classes,
+    [],
+    `${config} declares Durable Object classes ${JSON.stringify(classes)}; aadhar-sh must implement none, or it loses preview URLs`,
+  );
 
   // The other end of the binding: aadhar-counter must actually implement the
   // class, as a live sqlite class. It is also the ONE class the slot claim and
   // the odometer share, on purpose: a second class is a lifecycle change.
   const target = parseJsonc(readFileSync("counter/wrangler.jsonc", "utf8"));
   assert.equal(target.name, "aadhar-counter");
-  assert.deepEqual(target.exports?.Counter, { type: "durable-object", storage: "sqlite" },
-    "counter/wrangler.jsonc must implement Counter as a plain sqlite class");
-  const targetClasses = Object.entries<{ type: string }>(target.exports ?? {}).filter(([, e]) => e?.type === "durable-object").map(([n]) => n);
-  assert.deepEqual(targetClasses, ["Counter"],
-    `counter/wrangler.jsonc declares Durable Object classes ${JSON.stringify(targetClasses)}; the slot claim assumes Counter is the only one`);
+  assert.deepEqual(
+    target.exports?.Counter,
+    { type: "durable-object", storage: "sqlite" },
+    "counter/wrangler.jsonc must implement Counter as a plain sqlite class",
+  );
+  const targetClasses = Object.entries<{ type: string }>(target.exports ?? {})
+    .filter(([, e]) => e?.type === "durable-object")
+    .map(([n]) => n);
+  assert.deepEqual(
+    targetClasses,
+    ["Counter"],
+    `counter/wrangler.jsonc declares Durable Object classes ${JSON.stringify(targetClasses)}; the slot claim assumes Counter is the only one`,
+  );
 });
 
 // One instance per slot is the entire exclusivity argument: two different times
@@ -351,7 +418,9 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   assert.ok(census, `no census cron found among ${crons.length} expressions`);
 
   const token = census.split(/\s+/)[4];
-  const day = CF_WEEKDAYS[token] || { SUN: "Sunday", MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday", FRI: "Friday", SAT: "Saturday" }[token.toUpperCase()];
+  const day =
+    CF_WEEKDAYS[token] ||
+    { SUN: "Sunday", MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday", FRI: "Friday", SAT: "Saturday" }[token.toUpperCase()];
   assert.ok(day, `unrecognised weekday token ${token}; Cloudflare takes 1-7 or a 3-letter name`);
   assert.equal(day, "Sunday", `the census cron declares ${token}, which Cloudflare fires on ${day}`);
 

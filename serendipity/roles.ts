@@ -31,7 +31,8 @@ export const ROLE_MODEL = "clef";
 export const ROLE_CRITERIA = Object.freeze({
   founder: "Started or co-founded a company or project and runs it now: founder, cofounder, or a bio that says they are building their own company.",
   investor: "Invests as their job: VC, angel, fund GP or partner, or an investing role at a fund. A founder who also angel invests is a founder.",
-  operator: "Runs a business function at a company they did not found: product, growth, sales, business development, marketing, GTM, partnerships, operations, community or general management, at any level.",
+  operator:
+    "Runs a business function at a company they did not found: product, growth, sales, business development, marketing, GTM, partnerships, operations, community or general management, at any level.",
   engineer: "Builds software, hardware or protocols as their job: engineer, developer, designer, smart contract or ML engineer.",
   researcher: "Does research as their job: academic, ML, cryptography, economics or applied research, including PhD candidates.",
   student: "Is currently a student: undergraduate, master's, or bootcamp, with no other role stated as their main one.",
@@ -52,18 +53,24 @@ const BIO_CHARS = 1000;
 export function buildRoleRequest(bio: string) {
   return {
     model: ROLE_MODEL,
-    state: { bio: String(bio || "").replace(/\s+/g, " ").trim().slice(0, BIO_CHARS) },
+    state: {
+      bio: String(bio || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, BIO_CHARS),
+    },
     questions: {
       role: {
         type: "choice",
-        instructions: "What is this person's main job, judged from their own `bio`? If they name several roles, choose the one they lead with or that reads as their main work, not a side project.",
+        instructions:
+          "What is this person's main job, judged from their own `bio`? If they name several roles, choose the one they lead with or that reads as their main work, not a side project.",
         criteria: ROLE_CRITERIA,
       },
     },
   };
 }
 
-export type RolePrediction = { role: RoleLabel, confidence: number, probabilities: Record<string, number> };
+export type RolePrediction = { role: RoleLabel; confidence: number; probabilities: Record<string, number> };
 
 /** A prediction, or null for any response this parser does not understand. */
 export function parseRoleAnswer(body: any): RolePrediction | null {

@@ -17,12 +17,16 @@ import { assert, test } from "./contract-shared.ts";
 // Split a selector list on its top-level commas.
 function splitList(list) {
   const out: any[] = [];
-  let depth = 0, start = 0;
+  let depth = 0,
+    start = 0;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c === "(") depth++;
     else if (c === ")") depth--;
-    else if (c === "," && depth === 0) { out.push(list.slice(start, i)); start = i + 1; }
+    else if (c === "," && depth === 0) {
+      out.push(list.slice(start, i));
+      start = i + 1;
+    }
   }
   out.push(list.slice(start));
   return out.map((s) => s.trim()).filter(Boolean);

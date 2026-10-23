@@ -63,17 +63,25 @@ export function topicOf(ogTitle: string | null): string | null {
 export function h1Of(html: string): string | null {
   const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
   if (!h1) return null;
-  const text = decodeEntities(h1[1]
-    .replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
-    .replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ").trim();
+  const text = decodeEntities(h1[1].replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
   return text || null;
 }
 
 export type ArticleLd = {
-  "@context": string; "@type": string; headline: string; description?: string;
-  url: string; mainEntityOfPage: string; datePublished: string; inLanguage: string;
-  image?: string; author: typeof PERSON; publisher: { "@id": string }; isPartOf: { "@id": string };
+  "@context": string;
+  "@type": string;
+  headline: string;
+  description?: string;
+  url: string;
+  mainEntityOfPage: string;
+  datePublished: string;
+  inLanguage: string;
+  image?: string;
+  author: typeof PERSON;
+  publisher: { "@id": string };
+  isPartOf: { "@id": string };
 };
 
 /** `date` is a sitemap lookup, so it may be missing; that is refused here. */

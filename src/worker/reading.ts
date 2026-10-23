@@ -15,7 +15,7 @@ import { READING_LIST_URL } from "./routes.ts";
 
 export const CURIUS_USER_ID = 5766;
 
-export const CURIUS_HANDLE   = "aadharsh-pannirselvam";
+export const CURIUS_HANDLE = "aadharsh-pannirselvam";
 
 export const CURIUS_CACHE_KEY = "curius:links";
 
@@ -23,7 +23,8 @@ export const CURIUS_TTL = 21600; // 6h: the list moves a few times a day at most
 
 export async function fetchCuriusLinks(env) {
   const out = [];
-  const PER = 30, MAX_PAGES = 8;   // 30/page; cap the crawl so a runaway can't loop
+  const PER = 30,
+    MAX_PAGES = 8; // 30/page; cap the crawl so a runaway can't loop
   // ONE shared deadline across the whole crawl (not per-page): Curius measured
   // ~3s/page, so a full 8-page serial crawl could otherwise hang ~13s. This
   // aborts the whole thing at ~3.5s and returns whatever pages arrived. In
@@ -39,16 +40,20 @@ export async function fetchCuriusLinks(env) {
       });
       if (!res.ok) break;
       data = await res.json();
-    } catch (_e) { break; }   // abort (deadline) or network error → stop, return what we have
+    } catch (_e) {
+      break;
+    } // abort (deadline) or network error → stop, return what we have
     const saved = Array.isArray(data && data.userSaved) ? data.userSaved : [];
     if (!saved.length) break;
     for (const it of saved) {
       if (!it || !it.link) continue;
       let domain = "";
-      try { domain = new URL(it.link).hostname.replace(/^www\./, ""); } catch (_e) {}
+      try {
+        domain = new URL(it.link).hostname.replace(/^www\./, "");
+      } catch (_e) {}
       out.push({
-        title:   (it.title || it.link).replace(/\s+/g, " ").trim().slice(0, 200),
-        link:    it.link,
+        title: (it.title || it.link).replace(/\s+/g, " ").trim().slice(0, 200),
+        link: it.link,
         domain,
         snippet: (it.snippet || "").replace(/\s+/g, " ").trim().slice(0, 280),
         favorite: !!it.favorite,
@@ -56,12 +61,13 @@ export async function fetchCuriusLinks(env) {
         // the passages I highlighted while reading — the best part to surface
         highlights: (Array.isArray(it.highlights) ? it.highlights : [])
           .map((h) => (h && h.highlight ? h.highlight.replace(/\s+/g, " ").trim() : ""))
-          .filter(Boolean).slice(0, 3),
+          .filter(Boolean)
+          .slice(0, 3),
       });
     }
-    if (saved.length < PER) break;   // short page = last page
+    if (saved.length < PER) break; // short page = last page
   }
-  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || "")));  // newest first
+  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || ""))); // newest first
   return out;
 }
 
@@ -150,7 +156,9 @@ export async function refreshReadingList(request, env, ctx) {
   if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const { ok, response } = await readReadingList(request, env, ctx);
   if (ok) {
-    try { await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone())); } catch {}
+    try {
+      await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone()));
+    } catch {}
   }
   return response;
 }
@@ -170,12 +178,14 @@ export async function handleReadingList(request, env, ctx) {
 export async function handleReading(request, env, ctx) {
   if (new URL(request.url).searchParams.has("bust")) {
     const busted = await refreshReadingList(request, env, ctx);
-    try { await busted?.body?.cancel(); } catch {}
+    try {
+      await busted?.body?.cancel();
+    } catch {}
   }
   return serveBuiltPage(request, env, {
     headers: {
-      "cache-control":   PAGE_CACHE_CONTROL,
-      "link":            SHELL_PRELOAD_LINK,
+      "cache-control": PAGE_CACHE_CONTROL,
+      "link": SHELL_PRELOAD_LINK,
       "referrer-policy": "strict-origin-when-cross-origin",
     },
     live: () => renderReadingPage(),
@@ -191,10 +201,11 @@ export async function handleReading(request, env, ctx) {
 // defaults (the reasoning cal's slotLabels rests on). Built on first use, so a
 // request that never renders the list doesn't pay for them.
 let rowDates: { month: Intl.DateTimeFormat; day: Intl.DateTimeFormat } | undefined;
-const readingDates = () => rowDates ??= {
-  month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
-  day:   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
-};
+const readingDates = () =>
+  (rowDates ??= {
+    month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    day: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+  });
 
 /** The island: the count bar, the rows and the footer, or the placeholder. */
 export function renderReadingList(payload, hn: HnMap = {}): Html {
@@ -204,11 +215,13 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
   const fetched = payload?.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
 
-  let listHtml, discussed = 0;
+  let listHtml,
+    discussed = 0;
   if (!count) {
     listHtml = `<div class="rd-empty">Couldn't reach Curius just now — the list refills on the next sync. It always lives at <a href="${esc(profile)}" rel="external" target="_blank">curius.app/${esc(CURIUS_HANDLE)}</a>.</div>`;
   } else {
-    let curMonth = "", parts = [];
+    let curMonth = "",
+      parts = [];
     const dates = readingDates();
     for (const it of items) {
       const d = it.created ? new Date(it.created) : null;
@@ -237,8 +250,9 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
         `<div class="rd-item">` +
           `<div class="rd-head">${title}${star}</div>` +
           `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}${hnLink}</div>` +
-          snip + hls +
-        `</div>`
+          snip +
+          hls +
+          `</div>`,
       );
     }
     listHtml = parts.join("");
@@ -249,8 +263,8 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
     : `${count} link${count === 1 ? "" : "s"}${discussed ? ` &middot; ${discussed} discussed on Hacker News` : ""}${fetched ? ` &middot; last synced ${fetched}` : ""}`;
   return unsafeHtml(
     `<div class="rd-bar">${bar} &middot; source: Curius, via AadharshBot</div>` +
-    listHtml +
-    `<footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>`,
+      listHtml +
+      `<footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>`,
   );
 }
 

@@ -8,8 +8,15 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import {
-  EVENT_TAGS_DDL, EVENT_TOPICS, FORMAT_CRITERIA, TAG_MODEL, TOPIC_CRITERIA,
-  askClef, buildTagRequest, parseTagAnswers, tagInputHash,
+  EVENT_TAGS_DDL,
+  EVENT_TOPICS,
+  FORMAT_CRITERIA,
+  TAG_MODEL,
+  TOPIC_CRITERIA,
+  askClef,
+  buildTagRequest,
+  parseTagAnswers,
+  tagInputHash,
 } from "../serendipity/event-tags.ts";
 import { clefRunOptions } from "../src/worker/lib/clef.ts";
 import { tagEvents } from "../serendipity/serendipity.ts";
@@ -38,15 +45,22 @@ test("one event per request, naming a model the binding accepts, with a bounded 
   assert.deepEqual(Object.keys(req.state), ["name", "description", "location"]);
   assert.ok(req.state.description.length <= 2000);
   assert.deepEqual(Object.keys(req.questions), ["topic", "format"]);
-  assert.ok("other" in req.questions.topic.criteria && "other" in req.questions.format.criteria,
-    "both questions need a no-match option or the model is forced onto the nearest wrong label");
+  assert.ok(
+    "other" in req.questions.topic.criteria && "other" in req.questions.format.criteria,
+    "both questions need a no-match option or the model is forced onto the nearest wrong label",
+  );
 });
 
 test("the input hash moves when the event, the taxonomy or the model moves, and only then", async () => {
   const base = await tagInputHash(buildTagRequest(EV));
   // lowercase SHA-256 hex of the exact request, checked against node:crypto rather than
   // the Worker's own encoder, so every tag already stored under it keeps its key
-  assert.equal(base, createHash("sha256").update(JSON.stringify(buildTagRequest(EV))).digest("hex"));
+  assert.equal(
+    base,
+    createHash("sha256")
+      .update(JSON.stringify(buildTagRequest(EV)))
+      .digest("hex"),
+  );
   assert.equal(await tagInputHash(buildTagRequest({ ...EV })), base, "same event, same hash");
   assert.notEqual(await tagInputHash(buildTagRequest({ ...EV, description: EV.description + " Now with talks." })), base);
   const req = buildTagRequest(EV);
@@ -59,7 +73,10 @@ test("an answer outside the declared options, or without a confidence, is no ans
   assert.equal(parseTagAnswers(answer("crypto", "meal"))?.topic, "crypto");
   assert.equal(parseTagAnswers(answer("astrology", "meal")), null);
   const good = answer("crypto", "meal");
-  const noConf = { ...good, answers: { topic: good.answers.topic, format: { type: "choice", choice: "meal", probabilities: good.answers.format.probabilities } } };
+  const noConf = {
+    ...good,
+    answers: { topic: good.answers.topic, format: { type: "choice", choice: "meal", probabilities: good.answers.format.probabilities } },
+  };
   assert.equal(parseTagAnswers(noConf), null);
   assert.equal(parseTagAnswers({}), null);
 });
@@ -73,9 +90,17 @@ test("the gateway rides the binding's third argument, uncached, and an empty gat
 
 test("a throw from the binding is classified by its Workers AI code, never thrown on", async () => {
   // gotcha 23's measured message for a gateway that does not exist
-  const missing = { run: async () => { throw new Error("2001: Please configure AI Gateway in the Cloudflare dashboard"); } };
+  const missing = {
+    run: async () => {
+      throw new Error("2001: Please configure AI Gateway in the Cloudflare dashboard");
+    },
+  };
   assert.deepEqual(await askClef(buildTagRequest(EV), { AI: missing }), { error: "ai 2001" });
-  const bare = { run: async () => { throw new Error("upstream went away"); } };
+  const bare = {
+    run: async () => {
+      throw new Error("upstream went away");
+    },
+  };
   assert.deepEqual(await askClef(buildTagRequest(EV), { AI: bare }), { error: "ai error" });
   const odd = { run: async () => ({ answers: { topic: { type: "noul", noul: 0.9 } } }) };
   assert.deepEqual(await askClef(buildTagRequest(EV), { AI: odd }), { error: "unparseable" });
@@ -84,7 +109,11 @@ test("a throw from the binding is classified by its Workers AI code, never throw
 
 test("the runtime DDL is the migration's statement, on one line", () => {
   const migration = readFileSync(new URL("../serendipity/migrations/0003_event_tags.sql", import.meta.url), "utf8");
-  const stmt = migration.split("\n").filter((l) => l.trim() && !l.startsWith("--")).join(" ").replace(/;\s*$/, "");
+  const stmt = migration
+    .split("\n")
+    .filter((l) => l.trim() && !l.startsWith("--"))
+    .join(" ")
+    .replace(/;\s*$/, "");
   assert.equal(stmt, EVENT_TAGS_DDL);
   assert.ok(!EVENT_TAGS_DDL.includes("\n"));
 });
@@ -100,7 +129,9 @@ async function fakeTagDb(rows) {
     writes,
     raw,
     stmt,
-    async batch(stmts) { writes.push(...stmts.map((s) => s.args)); },
+    async batch(stmts) {
+      writes.push(...stmts.map((s) => s.args));
+    },
     prepare: () => ({ all: async () => rows }),
   };
 }
@@ -123,8 +154,15 @@ test("tagEvents asks only for events whose stored hash is stale, and writes only
     },
   };
   const r = await tagEvents(d, { AI, AI_GATEWAY: "default" }, 10);
-  assert.deepEqual(asked.sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0), [EV.name, "Gateway says no"].sort(), "an event whose hash matches is never re-asked");
-  assert.ok(calls.every((c) => c.model === `@cf/cloudflare/${TAG_MODEL}`), "the Workers AI id is the request's model, under @cf/cloudflare");
+  assert.deepEqual(
+    asked.sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+    [EV.name, "Gateway says no"].sort(),
+    "an event whose hash matches is never re-asked",
+  );
+  assert.ok(
+    calls.every((c) => c.model === `@cf/cloudflare/${TAG_MODEL}`),
+    "the Workers AI id is the request's model, under @cf/cloudflare",
+  );
   assert.ok(calls.every((c) => c.options?.gateway?.id === "default" && c.options.gateway.skipCache === true));
   assert.equal(r.tagged, 1);
   assert.deepEqual(r.failed, { "ai 2001": 1 }, "a missing gateway is named by its code, not folded into zero tags");
@@ -137,7 +175,16 @@ test("tagEvents asks only for events whose stored hash is stale, and writes only
 
 test("without the AI binding the pass skips before touching D1", async () => {
   let touched = false;
-  const d = { raw: { prepare: () => { touched = true; } }, prepare: () => { touched = true; } };
+  const d = {
+    raw: {
+      prepare: () => {
+        touched = true;
+      },
+    },
+    prepare: () => {
+      touched = true;
+    },
+  };
   const r = await tagEvents(d, { AI_GATEWAY: "default" }, 10);
   assert.deepEqual(r, { skipped: "no AI binding" });
   assert.equal(touched, false);

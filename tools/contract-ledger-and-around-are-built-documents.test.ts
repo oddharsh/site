@@ -17,7 +17,7 @@ import { handleAroundSnapshot, NEIGHBORS, refreshAroundSnapshot, renderAroundPag
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
 // No bindings at all: every read degrades to its unconfigured arm.
-const NO_BINDINGS = (({} as unknown) as import("../src/worker/lib/env.ts").Env);
+const NO_BINDINGS = {} as unknown as import("../src/worker/lib/env.ts").Env;
 const count = (s, re) => (s.match(re) || []).length;
 
 // cachedRender reads and writes caches.default, which neither test runtime
@@ -25,9 +25,21 @@ const count = (s, re) => (s.match(re) || []).length;
 async function withColdCache(fn) {
   const real = globalThis.caches;
   const puts: any[] = [];
-  const fake = { default: { match: async () => undefined, put: async (k, v) => { puts.push([k, v]); }, delete: async () => false } };
-  globalThis.caches = ((fake as unknown) as CacheStorage);
-  try { return await fn(puts); } finally { globalThis.caches = real; }
+  const fake = {
+    default: {
+      match: async () => undefined,
+      put: async (k, v) => {
+        puts.push([k, v]);
+      },
+      delete: async () => false,
+    },
+  };
+  globalThis.caches = fake as unknown as CacheStorage;
+  try {
+    return await fn(puts);
+  } finally {
+    globalThis.caches = real;
+  }
 }
 
 for (const { name, render, url, loaderIn } of [
@@ -63,7 +75,10 @@ test("the ledger placeholder is one unread line per nameable crawler, and names 
   assert.match(mount, /Total due<\/span> <b>\$…<\/b>/);
   assert.match(live, /Total due<\/span> <b>\$\d/);
   // Values are escaped by construction.
-  const hostile = renderLedgerLines({ ok: true, rows: [{ bot: "<script>x</script>", owner: "o", kind: "train", hits: 1 }] }, { ok: false, reason: "unconfigured" }).html;
+  const hostile = renderLedgerLines(
+    { ok: true, rows: [{ bot: "<script>x</script>", owner: "o", kind: "train", hits: 1 }] },
+    { ok: false, reason: "unconfigured" },
+  ).html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;"));
 });
 
@@ -73,7 +88,11 @@ test("/ledger/lines.html is an edge-cached island that degrades without tokens",
     // ETag, so the test awaits those promises rather than guessing how long they
     // take. A setTimeout(0) passed under bun and lost the race on CI's node leg.
     const waits: any[] = [];
-    const res = await handleLedgerLines(new Request("https://aadhar.sh" + LINES_URL), NO_BINDINGS, { waitUntil(p) { waits.push(p); } });
+    const res = await handleLedgerLines(new Request("https://aadhar.sh" + LINES_URL), NO_BINDINGS, {
+      waitUntil(p) {
+        waits.push(p);
+      },
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     assert.equal(res.headers.get("cache-control"), "public, max-age=60, s-maxage=300");
@@ -107,7 +126,11 @@ test("/around/snapshot.html refuses a wrong bust secret and serves the cached re
   assert.equal(await refreshAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=wrong"), env), null);
   assert.equal(await refreshAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL), { RN_KV: env.RN_KV }), null, "no secret configured means no bust");
   await withColdCache(async () => {
-    const res = await handleAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=wrong"), env, { waitUntil(p) { return p; } });
+    const res = await handleAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=wrong"), env, {
+      waitUntil(p) {
+        return p;
+      },
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     // No snapshot in KV: the pending panel, cached briefly, never a table.

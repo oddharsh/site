@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 export function browserJavaScripts(sources: ReadonlyMap<string, string>): Map<string, string> {
   if (sources.size === 0) return new Map();
-  const result = spawnSync("node", ["--disable-warning=ExperimentalWarning", fileURLToPath(new URL("./browser-source-node.ts", import.meta.url))],
-  { input: JSON.stringify([...sources]), encoding: "utf8", maxBuffer: 8 << 20 });
+  const result = spawnSync("node", ["--disable-warning=ExperimentalWarning", fileURLToPath(new URL("./browser-source-node.ts", import.meta.url))], {
+    input: JSON.stringify([...sources]),
+    encoding: "utf8",
+    maxBuffer: 8 << 20,
+  });
   if (result.error || result.status !== 0) throw new Error(`browser TypeScript erasure failed: ${result.error?.message ?? result.stderr}`);
   return new Map(JSON.parse(result.stdout));
 }

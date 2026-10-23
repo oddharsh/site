@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
+const ROOT = join(HERE, "..", ".."); // pipelines/<name>/ -> repo root
 const concept = process.argv[2];
 
 if (!concept || concept.startsWith("--")) {

@@ -24,14 +24,14 @@ const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
  * */
 function tables(config: Record<string, import("./lib/toml.ts").TomlValue>, key: string): Record<string, any>[] {
   const value = config[key];
-  return Array.isArray(value) ?  (value as Record<string, any>[]) : [];
+  return Array.isArray(value) ? (value as Record<string, any>[]) : [];
 }
 
 /**
  * The rule, pure so the control below can feed it a semver pin.
  *
  * */
-export function auditOsvIgnores(toml: string, pkg: { dependencies?: Record<string, string>, devDependencies?: Record<string, string> }) {
+export function auditOsvIgnores(toml: string, pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }) {
   const problems: any[] = [];
   const config = parse(toml);
   for (const entry of tables(config, "IgnoredVulns")) {
@@ -40,12 +40,16 @@ export function auditOsvIgnores(toml: string, pkg: { dependencies?: Record<strin
     }
     const dep = URL_PIN_IGNORES[entry.id];
     if (!dep) {
-      problems.push(`${entry.id} is ignored and this test does not know which URL pin excuses it; add it to URL_PIN_IGNORES with the package, or delete the ignore`);
+      problems.push(
+        `${entry.id} is ignored and this test does not know which URL pin excuses it; add it to URL_PIN_IGNORES with the package, or delete the ignore`,
+      );
       continue;
     }
     const pin = pkg.devDependencies?.[dep] ?? pkg.dependencies?.[dep] ?? "";
     if (!/^https?:\/\//.test(pin)) {
-      problems.push(`${entry.id} is ignored because ${dep} was pinned by URL, and ${dep} is now "${pin}": the scanner can read that version, so delete the ignore`);
+      problems.push(
+        `${entry.id} is ignored because ${dep} was pinned by URL, and ${dep} is now "${pin}": the scanner can read that version, so delete the ignore`,
+      );
     }
   }
   for (const override of tables(config, "PackageOverrides")) {

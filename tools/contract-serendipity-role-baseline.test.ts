@@ -20,14 +20,24 @@ test("an enriched role outranks the bio it was derived from", () => {
 });
 
 test("first tier wins, investor sitting after the job titles", () => {
-  assert.deepEqual(ROLE_TIERS.map(([t]) => t), ["founder", "c-level", "investor", "president", "vp", "director", "lead", "senior", "ic", "junior"]);
+  assert.deepEqual(
+    ROLE_TIERS.map(([t]) => t),
+    ["founder", "c-level", "investor", "president", "vp", "director", "lead", "senior", "ic", "junior"],
+  );
   assert.equal(roleTier("co-founder and CTO at AEON").tier, "founder");
   assert.equal(roleTier("Senior Community Lead").tier, "lead");
   assert.equal(roleTier("CTO & angel investor").tier, "c-level", "the job outranks the side portfolio");
 });
 
 test("founders are read the way they write a bio", () => {
-  for (const bio of ["Cofounder @ Colosseum", "cofounder of strobe", "Co founder of Kaleidoscope", "building @halldon", "Building Exa.ai", "Building Doorman | Ex-Ramp"]) {
+  for (const bio of [
+    "Cofounder @ Colosseum",
+    "cofounder of strobe",
+    "Co founder of Kaleidoscope",
+    "building @halldon",
+    "Building Exa.ai",
+    "Building Doorman | Ex-Ramp",
+  ]) {
     assert.equal(roleTier(bio).tier, "founder", bio);
   }
   // The "Building <Name>" rule reads the capital, and only at the start.
@@ -36,7 +46,14 @@ test("founders are read the way they write a bio", () => {
 });
 
 test("investors have a tier, and partnerships do not count as one", () => {
-  for (const bio of ["Investor @ Archetype", "Investing at Slow Ventures", "GP @ Further.ae", "Managing Partner, Amino Capital", "Partner @ Variant", "pre-seed VC"]) {
+  for (const bio of [
+    "Investor @ Archetype",
+    "Investing at Slow Ventures",
+    "GP @ Further.ae",
+    "Managing Partner, Amino Capital",
+    "Partner @ Variant",
+    "pre-seed VC",
+  ]) {
     assert.equal(roleTier(bio).tier, "investor", bio);
   }
   assert.equal(roleTier("Partnerships at Acme").tier, "unmatched");
@@ -53,11 +70,11 @@ test("saying nothing and saying something untiered are different", () => {
 
 test("the baseline scores precision over matches and recall over stated roles", () => {
   const bios = [
-    { id: "a", bio: "Founder of X" },            // matched, right
+    { id: "a", bio: "Founder of X" }, // matched, right
     { id: "b", bio: "aspiring product manager" }, // matched, wrong
-    { id: "c", bio: "Growth at Corgi" },          // stated, missed
-    { id: "d", bio: "espresso and tennis" },      // not stated, ignored by recall
-    { id: "e", bio: "Engineer at Z" },            // unlabelled, ignored entirely
+    { id: "c", bio: "Growth at Corgi" }, // stated, missed
+    { id: "d", bio: "espresso and tennis" }, // not stated, ignored by recall
+    { id: "e", bio: "Engineer at Z" }, // unlabelled, ignored entirely
   ];
   const s = scoreTiers(bios, { a: "founder", b: "other", c: "operator", d: "not_stated" });
   assert.deepEqual({ matched: s.matched, right: s.right, stated: s.stated, found: s.found }, { matched: 2, right: 1, stated: 3, found: 1 });
@@ -97,12 +114,12 @@ test("Clef is scored like the regex: abstentions cost recall, never precision", 
   const labels = { a: "founder", b: "operator", c: "operator", d: "creator", e: "not_stated", f: "investor" };
   const p = (role, confidence) => ({ role, confidence, probabilities: {} });
   const predictions = {
-    a: p("founder", 0.95),   // claimed, right
-    b: p("operator", 0.6),   // claimed at 0, abstains at 0.7
-    c: p("founder", 0.9),    // claimed, wrong
-    d: p("creator", 0.9),    // right, on a label no tier can fit
+    a: p("founder", 0.95), // claimed, right
+    b: p("operator", 0.6), // claimed at 0, abstains at 0.7
+    c: p("founder", 0.9), // claimed, wrong
+    d: p("creator", 0.9), // right, on a label no tier can fit
     e: p("not_stated", 0.99), // an abstention whatever its confidence
-    f: null,                 // the call failed
+    f: null, // the call failed
   };
   const at0 = scoreClef(bios, labels, predictions, 0);
   assert.deepEqual(

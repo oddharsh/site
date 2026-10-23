@@ -88,7 +88,10 @@ function usesValue(rest: string): string | null {
   const quoted = /^(['"])((?:\\.|[^\\])*?)\1/.exec(s);
   if (quoted) return quoted[2];
   // A plain scalar ends at flow punctuation or an inline `#` comment.
-  const plain = s.split(/[,}\]]/)[0].replace(/\s+#.*$/, "").trim();
+  const plain = s
+    .split(/[,}\]]/)[0]
+    .replace(/\s+#.*$/, "")
+    .trim();
   return plain || null;
 }
 
@@ -149,7 +152,10 @@ export function scanActionRefs(file: string, source: string): ActionRef[] {
       const kind = classifyRef(ref);
       if (kind.kind === "pinned") continue;
       out.push({
-        file, line: i + 1, ref, kind: "unpinned",
+        file,
+        line: i + 1,
+        ref,
+        kind: "unpinned",
         why: "an action reference by shape, on a line carrying no `uses:` key this scanner could read. YAML's explicit-key form spells the key on its own line, so a ref found this way may well be live",
       });
     }
@@ -226,16 +232,17 @@ export type ActionAudit = {
  *  a reference GitHub honours and no walk of .github can see. */
 export async function auditActionPins(io: ActionIo): Promise<ActionAudit> {
   const audit: ActionAudit = {
-    files: [], refs: [], remote: 0, local: 0,
-    repos: new Set(), paths: new Set(), problems: [],
+    files: [],
+    refs: [],
+    remote: 0,
+    local: 0,
+    repos: new Set(),
+    paths: new Set(),
+    problems: [],
   };
 
-  const workflows = (await io.list(".github/workflows"))
-    .filter((f) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(f))
-    .sort();
-  const composites = (await io.list(".github/actions"))
-    .filter((f) => /(^|\/)action\.ya?ml$/.test(f))
-    .sort();
+  const workflows = (await io.list(".github/workflows")).filter((f) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(f)).sort();
+  const composites = (await io.list(".github/actions")).filter((f) => /(^|\/)action\.ya?ml$/.test(f)).sort();
 
   const queue = [...workflows, ...composites];
   const seen = new Set(queue);
@@ -268,7 +275,10 @@ export async function auditActionPins(io: ActionIo): Promise<ActionAudit> {
       const dir = localTargetDir(found.ref!);
       if (dir === null) {
         audit.problems.push({
-          file: rel, line: found.line, ref: found.ref, kind: "local-missing",
+          file: rel,
+          line: found.line,
+          ref: found.ref,
+          kind: "local-missing",
           why: "it climbs above the repository root, so it names nothing inside this checkout",
         });
         continue;
@@ -278,17 +288,26 @@ export async function auditActionPins(io: ActionIo): Promise<ActionAudit> {
       const candidates = /\.ya?ml$/.test(dir) ? [dir] : [`${dir}/action.yml`, `${dir}/action.yaml`].map((p) => p.replace(/^\//, ""));
       let target: string | null = null;
       for (const c of candidates) {
-        if ((await io.read(c)) !== null) { target = c; break; }
+        if ((await io.read(c)) !== null) {
+          target = c;
+          break;
+        }
       }
       if (!target) {
         audit.problems.push({
-          file: rel, line: found.line, ref: found.ref, kind: "local-missing",
+          file: rel,
+          line: found.line,
+          ref: found.ref,
+          kind: "local-missing",
           why: `there is no action file at ${candidates.join(" or ")}`,
         });
         continue;
       }
       found.target = target;
-      if (!seen.has(target)) { seen.add(target); queue.push(target); }
+      if (!seen.has(target)) {
+        seen.add(target);
+        queue.push(target);
+      }
     }
   }
 

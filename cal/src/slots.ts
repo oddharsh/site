@@ -21,17 +21,22 @@ export async function listOpenSlots(env, ctx, timings: Record<string, number> | 
   const mark = (name, p) => {
     if (!timings) return p;
     const s = Date.now();
-    return p.then(v => { timings[name] = Date.now() - s; return v; },
-                  e => { timings[name] = Date.now() - s; throw e; });
+    return p.then(
+      (v) => {
+        timings[name] = Date.now() - s;
+        return v;
+      },
+      (e) => {
+        timings[name] = Date.now() - s;
+        throw e;
+      },
+    );
   };
   // every held slot (pending reservation OR confirmed coffee) blocks its exact
   // slot AND counts toward the caps. A pending hold is reclaimed by the booking's
   // expiry Workflow if the host never acts; a confirmed hold self-expires just
   // after the event. listHeld reads them all in one shot (one key per slot).
-  const [cal, held] = await Promise.all([
-    mark("ics", fetchBusySWR(env, ctx, options)),
-    mark("held", listHeld(env)),
-  ]);
+  const [cal, held] = await Promise.all([mark("ics", fetchBusySWR(env, ctx, options)), mark("held", listHeld(env))]);
   // busy and held stay separate inputs: see generateSlots for why.
   const t = Date.now();
   const slots = generateSlots(env, cal.busy, held);
@@ -54,12 +59,14 @@ export async function getPublicAvailability(env, ctx) {
     ageSeconds: ageMs == null ? null : Math.floor(ageMs / 1000),
     timezone: env.HOST_TIMEZONE || "UTC",
     bookingUrl: "https://aadhar.sh/coffee",
-    slots: available ? slots.map(({ start, end }) => ({
-      start: new Date(start).toISOString(),
-      end: new Date(end).toISOString(),
-      startMs: start,
-      endMs: end,
-      durationMinutes: Math.round((end - start) / 60000),
-    })) : [],
+    slots: available
+      ? slots.map(({ start, end }) => ({
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          startMs: start,
+          endMs: end,
+          durationMinutes: Math.round((end - start) / 60000),
+        }))
+      : [],
   };
 }

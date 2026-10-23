@@ -31,10 +31,7 @@ import { spawnSync } from "node:child_process";
 test("docs/DEPENDENCIES.md agrees with the manifests", async () => {
   const { claims, problems } = await checkDependencyDocs();
   assert.deepEqual(problems, [], problems.join("\n"));
-  assert.ok(
-    claims.length >= FLOOR_CLAIMS,
-    `only ${claims.length} version claims matched, floor is ${FLOOR_CLAIMS}`,
-  );
+  assert.ok(claims.length >= FLOOR_CLAIMS, `only ${claims.length} version claims matched, floor is ${FLOOR_CLAIMS}`);
 });
 
 test("the dependency-doc check catches every drift it exists for", () => {
@@ -63,8 +60,10 @@ test("the dependency-doc check catches every drift it exists for", () => {
   // restating the number, because a stale version inside its own correction is
   // still a greppable stale version.
   const removed = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`, pins: {}, ...quiet });
-  assert.ok(removed.problems.some((p) => /wrangler is declared in DOC_ALIASES but package\.json no longer pins it/.test(p)),
-    removed.problems.join("\n"));
+  assert.ok(
+    removed.problems.some((p) => /wrangler is declared in DOC_ALIASES but package\.json no longer pins it/.test(p)),
+    removed.problems.join("\n"),
+  );
 
   // 4. the floor: a doc with no claims at all must fail rather than pass empty
   const empty = auditDependencyDocs({ doc: `${BASELINE_HEADING}\nno versions here`, pins: {} });
@@ -92,8 +91,10 @@ test("the collapsed check keeps the two rules that came from #382", () => {
     pins: { wrangler: "^4.120.1" },
     ...quiet,
   });
-  assert.ok(ranged.problems.some((p) => /range-pinned \(\^4\.120\.1\).*Move it to VERSIONLESS/s.test(p)),
-    ranged.problems.join("\n"));
+  assert.ok(
+    ranged.problems.some((p) => /range-pinned \(\^4\.120\.1\).*Move it to VERSIONLESS/s.test(p)),
+    ranged.problems.join("\n"),
+  );
 
   // (b) A DECLARED PACKAGE LOSING ITS SENTENCE. Deleting the line must not
   // silently drop it from the check, which is what a forward-only scan does.
@@ -102,8 +103,10 @@ test("the collapsed check keeps the two rules that came from #382", () => {
     pins: { wrangler: "4.120.1" },
     ...quiet,
   });
-  assert.ok(dropped.problems.some((p) => /no longer states a version for Wrangler/.test(p)),
-    dropped.problems.join("\n"));
+  assert.ok(
+    dropped.problems.some((p) => /no longer states a version for Wrangler/.test(p)),
+    dropped.problems.join("\n"),
+  );
 
   // (c) BASELINE SCOPING. A claim in the intro prose is not the baseline making
   // it, so the scan must not see it, and a renamed heading must fail loudly
@@ -124,13 +127,15 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const H = BASELINE_HEADING;
   // Root kept quiet so each assertion is about the sub-manifest under test.
   const quiet = { aliases: [], versionless: new Map(), floor: 0, pins: {} };
-  const sub = (over: Record<string, any> = {}) => [{
-    manifest: "lens-reader/package.json",
-    aliases: [{ prose: "linkedom", pkg: "linkedom" }],
-    versionless: new Map(),
-    pins: { linkedom: "0.18.13" },
-    ...over,
-  }];
+  const sub = (over: Record<string, any> = {}) => [
+    {
+      manifest: "lens-reader/package.json",
+      aliases: [{ prose: "linkedom", pkg: "linkedom" }],
+      versionless: new Map(),
+      pins: { linkedom: "0.18.13" },
+      ...over,
+    },
+  ];
 
   const ok = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(ok.problems, [], "a matching sub-manifest claim must pass");
@@ -144,8 +149,10 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
 
   // 2. a bumped sub-manifest pin against an unbumped sentence
   const stale = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.12 supplies a DOM.`, ...quiet, subManifests: sub() });
-  assert.ok(stale.problems.some((p) => /states "linkedom 0\.18\.12" but lens-reader\/package\.json pins linkedom at 0\.18\.13/.test(p)),
-    stale.problems.join("\n"));
+  assert.ok(
+    stale.problems.some((p) => /states "linkedom 0\.18\.12" but lens-reader\/package\.json pins linkedom at 0\.18\.13/.test(p)),
+    stale.problems.join("\n"),
+  );
 
   // 3. a NEW sub-manifest dependency nobody documented. This is the direction
   //    that found serde_json, which arrived with #373 and was unmentioned.
@@ -154,8 +161,10 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
     ...quiet,
     subManifests: sub({ pins: { linkedom: "0.18.13", "left-pad": "1.0.0" } }),
   });
-  assert.ok(undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
-    undocumented.problems.join("\n"));
+  assert.ok(
+    undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
+    undocumented.problems.join("\n"),
+  );
 
   // 4. a RANGE in a sub-manifest alias table. Cargo's bare "0.25" is a caret
   //    range, so it has to fail here exactly as a ^ would.
@@ -164,7 +173,10 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
     ...quiet,
     subManifests: sub({ manifest: "tools/photos/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
   });
-  assert.ok(ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)), ranged.problems.join("\n"));
+  assert.ok(
+    ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)),
+    ranged.problems.join("\n"),
+  );
 
   // 5. a manifest that cannot be read must be REPORTED, never audited as {}.
   //    An empty pin set scans clean and asserts nothing, which is how a moved
@@ -174,8 +186,10 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
     ...quiet,
     subManifests: sub({ missing: true, pins: {} }),
   });
-  assert.ok(missing.problems.some((p) => /lens-reader\/package\.json is declared in SUB_MANIFEST_POLICY but could not be read/.test(p)),
-    missing.problems.join("\n"));
+  assert.ok(
+    missing.problems.some((p) => /lens-reader\/package\.json is declared in SUB_MANIFEST_POLICY but could not be read/.test(p)),
+    missing.problems.join("\n"),
+  );
 
   // 6. a stale exemption in a sub-manifest, same rule the root has.
   const staleExempt = auditDependencyDocs({
@@ -183,27 +197,33 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
     ...quiet,
     subManifests: sub({ versionless: new Map([["gone-pkg", "reason"]]) }),
   });
-  assert.ok(staleExempt.problems.some((p) => /gone-pkg is exempted .* but is no longer a lens-reader\/package\.json dependency/.test(p)),
-    staleExempt.problems.join("\n"));
+  assert.ok(
+    staleExempt.problems.some((p) => /gone-pkg is exempted .* but is no longer a lens-reader\/package\.json dependency/.test(p)),
+    staleExempt.problems.join("\n"),
+  );
 });
 
 test("the Cargo reader takes both dependency shapes and ignores the rest", () => {
   const toml = [
-    "[package]", 'name = "zenc"', 'version = "0.1.0"',
-    "", "[dependencies]",
+    "[package]",
+    'name = "zenc"',
+    'version = "0.1.0"',
+    "",
+    "[dependencies]",
     "# a comment",
     'zenjpeg = { version = "0.8.4", features = ["parallel"] }',
     'image = "0.25"',
     'serde_json = { version = "1.0", features = ["preserve_order"] }',
-    "", "[profile.release]", "opt-level = 3",
+    "",
+    "[profile.release]",
+    "opt-level = 3",
   ].join("\n");
   const deps = parseCargoDeps(toml);
   assert.deepEqual(deps, { zenjpeg: "0.8.4", image: "0.25", serde_json: "1.0" });
   // [package] and [profile.release] must not leak in: `version = "0.1.0"` sits
   // in [package] and would otherwise read as a dependency called "version".
-  assert.ok(!("version" in deps) && !("name" in deps) && !("opt-level" in deps),
-    "only the [dependencies] table may be read");
-  assert.deepEqual(parseCargoDeps("[package]\nname = \"x\"\n"), {}, "no [dependencies] table is an empty set");
+  assert.ok(!("version" in deps) && !("name" in deps) && !("opt-level" in deps), "only the [dependencies] table may be read");
+  assert.deepEqual(parseCargoDeps('[package]\nname = "x"\n'), {}, "no [dependencies] table is an empty set");
 
   // The [dependencies] table LAST, with no section after it. The first draft
   // anchored on `\Z`, which JavaScript does not have, so this case returned {}
@@ -241,12 +261,13 @@ test("the Cargo reader refuses malformed manifests instead of auditing a partial
     '[dependencies]\ncodec = { version = "1.2.3"\n',
     '[dependencies]\ncodec = "1.2.3"\ncodec = "2.0.0"\n',
     '[dependencies]\ncodec = "1.2.3" trailing\n',
-    '[dependencies]\ncodec = false\n',
-    '[dependencies]\ncodec = { version = 123 }\n',
-    'dependencies = []\n',
-    '[dependencies]\ncodec = 2026-09-01\n',
-    '[dependencies]\ncodec = []\n',
-  ]) assert.throws(() => parseCargoDeps(toml), Error, toml);
+    "[dependencies]\ncodec = false\n",
+    "[dependencies]\ncodec = { version = 123 }\n",
+    "dependencies = []\n",
+    "[dependencies]\ncodec = 2026-09-01\n",
+    "[dependencies]\ncodec = []\n",
+  ])
+    assert.throws(() => parseCargoDeps(toml), Error, toml);
 });
 
 test("Cargo comments at EOF cannot hang the dependency audit or relocker", () => {
@@ -259,14 +280,14 @@ test("Cargo comments at EOF cannot hang the dependency audit or relocker", () =>
     try { console.log(JSON.stringify({ dependencies: parseCargoDeps(process.argv[1]) })); }
     catch { console.log(JSON.stringify({ rejected: true })); }
   `;
-  for (const [toml, expected] of  ([
-    ['[package]\nvalues = [1 #', { rejected: true }],
-    ['[package]\nvalues = { key = 1 #', { rejected: true }],
+  for (const [toml, expected] of [
+    ["[package]\nvalues = [1 #", { rejected: true }],
+    ["[package]\nvalues = { key = 1 #", { rejected: true }],
     ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" #', { rejected: true }],
     ['[dependencies]\ncodec = { version = "1.2.3" #', { rejected: true }],
     ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" # comment\n] }\n', { dependencies: { codec: "1.2.3" } }],
     ['[dependencies]\ncodec = "1.2.3" #', { dependencies: { codec: "1.2.3" } }],
-  ] as const)) {
+  ] as const) {
     const result = spawnSync(process.execPath, ["--eval", script, toml], { encoding: "utf8", timeout: 3000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
@@ -278,11 +299,17 @@ test("versionless Cargo dependencies require policy and do not look removed", ()
   const pins = parseCargoDeps('[dependencies]\nhalflight = { git = "https://example.test/halflight.git", rev = "abc" }\n');
   const sub = { manifest: "Cargo.toml", pins, aliases: [], versionless: new Map() };
   const run = () => auditDependencyDocs({ doc: BASELINE_HEADING, pins: {}, aliases: [], versionless: new Map(), floor: 0, subManifests: [sub] });
-  assert.ok(run().problems.some((p) => /halflight is a Cargo.toml dependency/.test(p)), "git dependencies cannot disappear from the reverse check");
+  assert.ok(
+    run().problems.some((p) => /halflight is a Cargo.toml dependency/.test(p)),
+    "git dependencies cannot disappear from the reverse check",
+  );
   sub.versionless.set("halflight", "A git revision has no semantic version to quote.");
   assert.deepEqual(run().problems, [], "present without a version is different from absent");
   delete pins.halflight;
-  assert.ok(run().problems.some((p) => /halflight is exempted .* but is no longer/.test(p)), "removal still invalidates the policy");
+  assert.ok(
+    run().problems.some((p) => /halflight is exempted .* but is no longer/.test(p)),
+    "removal still invalidates the policy",
+  );
 });
 
 test("the dependency-doc scanner does not read prose as a version claim", () => {
@@ -303,13 +330,12 @@ test("the dependency-doc scanner does not read prose as a version claim", () => 
 });
 
 test("a flex item is its own box, and promoting one never eats an image", () => {
-  const page = (style, body) =>
-    `<html><head><title>T</title><style>${style}</style></head><body><main>${body}</main></body></html>`;
+  const page = (style, body) => `<html><head><title>T</title><style>${style}</style></head><body><main>${body}</main></body></html>`;
 
   // the /updates shape: the item declares `flex`, never `display`
-  const welded = readDocument(
-    page(".tag{flex:0 0 92px}", "<p><span class=tag>hit-route</span><span>counter tick endpoint renamed</span></p>"),
-    { origin: "https://aadhar.sh" });
+  const welded = readDocument(page(".tag{flex:0 0 92px}", "<p><span class=tag>hit-route</span><span>counter tick endpoint renamed</span></p>"), {
+    origin: "https://aadhar.sh",
+  });
   assert.doesNotMatch(welded.body, /hit-routecounter/, "a flex item must not weld onto the text after it");
   assert.match(welded.body, /hit-route/);
   assert.match(welded.body, /counter tick endpoint renamed/);
@@ -317,16 +343,19 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
   // the /lwe/encoding regression: an <img> carrying a flex-item class renders as
   // a token already, and the block path has no case for it, so promoting it drops
   // the image entirely.
-  const withImage = readDocument(
-    page(".pic{flex:0 0 auto}", '<p>before<img src="/enc/c.jpg" alt="sample photo" class="pic">after</p>'),
-    { origin: "https://aadhar.sh" });
-  assert.match(withImage.body, /!\[sample photo\]\(https:\/\/aadhar\.sh\/enc\/c\.jpg\)/,
-    "an image must survive its class being promoted out of the inline flow");
+  const withImage = readDocument(page(".pic{flex:0 0 auto}", '<p>before<img src="/enc/c.jpg" alt="sample photo" class="pic">after</p>'), {
+    origin: "https://aadhar.sh",
+  });
+  assert.match(
+    withImage.body,
+    /!\[sample photo\]\(https:\/\/aadhar\.sh\/enc\/c\.jpg\)/,
+    "an image must survive its class being promoted out of the inline flow",
+  );
 
   // container properties say nothing about THIS element and must not promote it
-  const container = readDocument(
-    page(".row{flex-direction:row;flex-flow:wrap}", "<p><span class=row>alpha</span><span>beta</span></p>"),
-    { origin: "https://aadhar.sh" });
+  const container = readDocument(page(".row{flex-direction:row;flex-flow:wrap}", "<p><span class=row>alpha</span><span>beta</span></p>"), {
+    origin: "https://aadhar.sh",
+  });
   assert.match(container.body, /alphabeta|alpha beta/, "flex-direction/flex-flow describe children, not this box");
 
   // and the original heuristic still holds
@@ -340,13 +369,16 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
 // reads a scheme case-insensitively after stripping leading control characters.
 // No page here authors one, so this asserts the floor rather than a fixed bug.
 test("a twin never emits a link on a scheme that executes", () => {
-  const link = (href) =>
-    readDocument(`<html><body><main><p><a href="${href}">CLICKME</a></p></main></body></html>`,
-      { origin: "https://aadhar.sh" }).body;
+  const link = (href) => readDocument(`<html><body><main><p><a href="${href}">CLICKME</a></p></main></body></html>`, { origin: "https://aadhar.sh" }).body;
 
   // the text survives; only the href is refused, so the prose is never lost
-  for (const href of ["javascript:alert(1)", "JavaScript:alert(1)", "vbscript:msgbox(1)",
-                      "data:text/html,<script>alert(1)</script>", "\tdata:text/html;base64,PHM+"]) {
+  for (const href of [
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "vbscript:msgbox(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "\tdata:text/html;base64,PHM+",
+  ]) {
     assert.equal(link(href), "CLICKME", `${href} must render as text, never as a link`);
   }
 
@@ -409,8 +441,7 @@ test("HEAD advertises the same representation its GET would serve", async () => 
   const head = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD", headers: md }), env);
 
   assert.equal(get.headers.get("content-type"), "text/markdown; charset=utf-8");
-  assert.equal(head.headers.get("content-type"), "text/markdown; charset=utf-8",
-    "HEAD must not advertise HTML for a URL whose GET negotiates Markdown");
+  assert.equal(head.headers.get("content-type"), "text/markdown; charset=utf-8", "HEAD must not advertise HTML for a URL whose GET negotiates Markdown");
   assert.equal(head.status, 200);
   assert.equal(await head.text(), "", "a HEAD carries no body");
 
@@ -454,15 +485,21 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   const env = makeEnv("public, max-age=0, s-maxage=86400");
   const currentBr = 'W/"page-br"';
   const currentDcz = 'W/"page-dcz"';
-  const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "if-none-match": currentBr, "available-dictionary": available },
-  }), env);
+  const unchanged = await serveStaticPage(
+    new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "if-none-match": currentBr, "available-dictionary": available },
+    }),
+    env,
+  );
   assert.equal(unchanged.status, 304);
   assert.equal(unchanged.headers.get("etag"), currentBr);
 
-  const changed = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "if-none-match": '"old"', "available-dictionary": available },
-  }), env);
+  const changed = await serveStaticPage(
+    new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "if-none-match": '"old"', "available-dictionary": available },
+    }),
+    env,
+  );
   assert.equal(changed.status, 200);
   assert.equal(changed.headers.get("content-encoding"), "dcz");
   assert.equal(changed.headers.get("etag"), currentDcz);
@@ -470,9 +507,12 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
   assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
 
-  const dczUnchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "if-none-match": currentDcz, "available-dictionary": available },
-  }), env);
+  const dczUnchanged = await serveStaticPage(
+    new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "if-none-match": currentDcz, "available-dictionary": available },
+    }),
+    env,
+  );
   assert.equal(dczUnchanged.status, 304);
   assert.equal(dczUnchanged.headers.get("etag"), currentDcz);
 
@@ -483,17 +523,20 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // Chrome 2026-07-29 and re-measured 2026-09-23; the table is in
   // src/worker/lib/assets.ts.
   for (const cc of [
-    "public, max-age=0, s-maxage=86400",                       // PAGE_CACHE_CONTROL minus swr
+    "public, max-age=0, s-maxage=86400", // PAGE_CACHE_CONTROL minus swr
     "public, max-age=0, must-revalidate, s-maxage=86400",
     "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
-    "max-age=0, must-revalidate, stale-while-revalidate=60",   // ...at any window
-    "private, no-cache, must-revalidate",                      // `/` until 2026-07-31
-    "max-age=3600, no-cache",                                  // no-cache vetoes a live max-age
+    "max-age=0, must-revalidate, stale-while-revalidate=60", // ...at any window
+    "private, no-cache, must-revalidate", // `/` until 2026-07-31
+    "max-age=3600, no-cache", // no-cache vetoes a live max-age
     "no-store",
   ]) {
-    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-      headers: { "available-dictionary": available },
-    }), makeEnv(cc));
+    const res = await serveStaticPage(
+      new Request("https://aadhar.sh/lwe/drivers", {
+        headers: { "available-dictionary": available },
+      }),
+      makeEnv(cc),
+    );
     assert.equal(res.headers.get("use-as-dictionary"), null, `must not self-offer under "${cc}"`);
   }
   // ...and it comes back on its own if a page is ever given a policy that survives to the
@@ -502,11 +545,13 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // cancels only that second arm, so a positive max-age still registers under it
   // (measured in Chrome 152, 2026-09-23).
   for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800", "max-age=3600, must-revalidate"]) {
-    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-      headers: { "available-dictionary": available },
-    }), makeEnv(cc));
-    assert.equal(res.headers.get("use-as-dictionary"),
-                 'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
+    const res = await serveStaticPage(
+      new Request("https://aadhar.sh/lwe/drivers", {
+        headers: { "available-dictionary": available },
+      }),
+      makeEnv(cc),
+    );
+    assert.equal(res.headers.get("use-as-dictionary"), 'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
   }
 
   // The policy every deploy-time document actually ships has to be one of those, or the
@@ -514,12 +559,17 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // is spent on offers no browser keeps. Pinned against the live constant rather than a
   // copy, so editing the policy runs this check instead of quietly bypassing it.
   const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
-  const shipped = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "available-dictionary": available },
-  }), makeEnv(PAGE_CACHE_CONTROL));
-  assert.equal(shipped.headers.get("use-as-dictionary"),
-               'match="/lwe/drivers", match-dest=("document")',
-               `PAGE_CACHE_CONTROL must register as a dictionary, got "${PAGE_CACHE_CONTROL}"`);
+  const shipped = await serveStaticPage(
+    new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "available-dictionary": available },
+    }),
+    makeEnv(PAGE_CACHE_CONTROL),
+  );
+  assert.equal(
+    shipped.headers.get("use-as-dictionary"),
+    'match="/lwe/drivers", match-dest=("document")',
+    `PAGE_CACHE_CONTROL must register as a dictionary, got "${PAGE_CACHE_CONTROL}"`,
+  );
   // swr is the clause doing that work AND the registered dictionary's lifetime, so a
   // future trim below a day would keep every assertion above green while shortening how
   // long the tier keeps working. Measured 2026-07-29: swr=5 registered nothing.
@@ -544,15 +594,13 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   // ignore line keeps a file from being uploaded, while being outside public/
   // means the build never stages it in the first place.
   const served = await readdir(new URL("public/", ROOT));
-  assert.ok(!served.includes("p-dict") && !served.includes("a-dict"),
-    "dictionary snapshots are build input and must not sit in the served tree");
+  assert.ok(!served.includes("p-dict") && !served.includes("a-dict"), "dictionary snapshots are build input and must not sit in the served tree");
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
   // DERIVED from the directory rather than listed. The hand-written list this
   // replaces was missing lean, so the one page that had drifted out of every
   // other LWE registry was also the one page these assertions never covered.
-  const lwePages = (await readdir(new URL("src/pages/lwe/", ROOT)))
-    .filter((f) => f.endsWith(".html")).map((f) => f.replace(/\.html$/, ""));
+  const lwePages = (await readdir(new URL("src/pages/lwe/", ROOT))).filter((f) => f.endsWith(".html")).map((f) => f.replace(/\.html$/, ""));
   assert.ok(lwePages.length >= 12, `expected the LWE section to hold pages, saw ${lwePages.length}`);
   for (const name of lwePages) {
     const html = await readFile(new URL(`src/pages/lwe/${name}.html`, ROOT), "utf8");
@@ -569,15 +617,13 @@ test("the page-family dictionary outranks exact snapshots without narrowing its 
   const pattern = new URLPattern({ pathname: PAGE_FAMILY_MATCH, baseURL: "https://aadhar.sh" });
   assert.equal(pattern.hasRegExpGroups, false, "RFC 9842 rejects URLPatterns with custom regexp groups");
 
-  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
-    .filter((path) => path.endsWith(".html"));
+  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true })).filter((path) => path.endsWith(".html"));
   const routes = pages.map((path) => {
     const route = path.replace(/\.html$/, "").replace(/(^|\/)index$/, "$1");
     return `/${route}`.replace(/\/$/, "") || "/";
   });
   for (const route of routes) {
     assert.equal(pattern.test(`https://aadhar.sh${route}`), true, `${PAGE_FAMILY_MATCH} must match ${route}`);
-    assert.ok(PAGE_FAMILY_MATCH.length > route.length,
-      `the family match must outrank the exact-page match for ${route}`);
+    assert.ok(PAGE_FAMILY_MATCH.length > route.length, `the family match must outrank the exact-page match for ${route}`);
   }
 });

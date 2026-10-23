@@ -104,7 +104,9 @@ async function cfOrDie(args) {
     // died here and printed thirty lines of ChildProcess internals around one
     // line of usable error, which is a poor way to learn that traffic did not
     // move. lib/cf.ts cuts stderr to its first real lines; this frames it.
-    die(`${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
+    die(
+      `${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`,
+    );
   }
 }
 
@@ -149,7 +151,10 @@ async function productionAlias() {
     // Workers Builds sanitizes a branch name into an alias by replacing runs of
     // non-alphanumerics with a single dash. Identity for "production"; correct
     // if the production branch is ever renamed to something with a slash.
-    return String(branch).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return String(branch)
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
   } catch (e) {
     die(`could not read the production branch from infra.json: ${e.message}`);
   }
@@ -206,8 +211,7 @@ async function newestVersion() {
   const productionAliasName = await productionAlias();
   const list = await versionList();
   // Sort on the timestamp rather than trusting the API's order.
-  const sorted = [...list].sort((a, b) =>
-    String(b.created_on || "").localeCompare(String(a.created_on || "")));
+  const sorted = [...list].sort((a, b) => String(b.created_on || "").localeCompare(String(a.created_on || "")));
 
   const aliasOf = (v) => (v.annotations || {})["workers/alias"] || "(no alias)";
   const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
@@ -218,12 +222,15 @@ async function newestVersion() {
     // list that carries no `workers/alias` annotation. Guessing here is
     // exactly the bug being fixed, so name the candidates and let a human
     // choose.
-    const seen = sorted.slice(0, 20).map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
+    const seen = sorted
+      .slice(0, 20)
+      .map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`)
+      .join("\n");
     die(
       `no \`${productionAliasName}\` build among the ${sorted.length} most recent versions.\n\n` +
-      `  The newest of what is listed:\n\n${seen}\n\n` +
-      `  Pick the one you mean and pass it explicitly:\n` +
-      `    bun run deploy:promote --version <id>`,
+        `  The newest of what is listed:\n\n${seen}\n\n` +
+        `  Pick the one you mean and pass it explicitly:\n` +
+        `    bun run deploy:promote --version <id>`,
     );
   }
 
@@ -251,7 +258,6 @@ async function workerName() {
     die(`could not read the worker name from infra.json: ${e.message}`);
   }
 }
-
 
 // WHY. Workers Builds takes a couple of minutes to upload after a merge, and a
 // ramp inside that window silently targets the PREVIOUS release. Nothing
@@ -313,8 +319,8 @@ async function reportTargetFreshness(targetId) {
     // here. That is not an error; it is the normal answer for a deliberately
     // old target.
     console.log(
-      `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` +
-      `${list.length} newest versions, so it has no timestamp to compare)\n`);
+      `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` + `${list.length} newest versions, so it has no timestamp to compare)\n`,
+    );
     return;
   }
   const gap = built.getTime() - head.at.getTime();
@@ -324,13 +330,13 @@ async function reportTargetFreshness(targetId) {
   }
   console.log(
     `\n  ⚠ STALE TARGET: ${String(targetId).slice(0, 8)} was built ${humanGap(gap)} BEFORE your HEAD commit.\n` +
-    `\n    HEAD    ${head.sha}  committed ${head.at.toISOString()}` +
-    `\n    target  ${String(targetId).slice(0, 8)}  built     ${built.toISOString()}\n` +
-    `\n    A version uploaded before a commit cannot contain it. If you just merged,` +
-    `\n    Workers Builds has probably not finished uploading — wait a couple of` +
-    `\n    minutes and re-run --dry-run until this line clears.\n` +
-    `\n    Ramp anyway only if you MEAN to serve an older build (a rollback, or` +
-    `\n    re-ramping the serving version to write a missed changelog row).\n`,
+      `\n    HEAD    ${head.sha}  committed ${head.at.toISOString()}` +
+      `\n    target  ${String(targetId).slice(0, 8)}  built     ${built.toISOString()}\n` +
+      `\n    A version uploaded before a commit cannot contain it. If you just merged,` +
+      `\n    Workers Builds has probably not finished uploading — wait a couple of` +
+      `\n    minutes and re-run --dry-run until this line clears.\n` +
+      `\n    Ramp anyway only if you MEAN to serve an older build (a rollback, or` +
+      `\n    re-ramping the serving version to write a missed changelog row).\n`,
   );
 }
 
@@ -371,7 +377,9 @@ if (has("rollback")) {
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
-    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`);
+    die(
+      `nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`,
+    );
   }
   const to = older.sort((a, b) => b.pct - a.pct)[0];
   console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
@@ -380,7 +388,7 @@ if (has("rollback")) {
   process.exit(0);
 }
 
-const target = flag("version") || await newestVersion();
+const target = flag("version") || (await newestVersion());
 // The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.ts
 // for the measurement that made an arbitrary pick a real hazard.
 const previous = remainderHolder(active, target);
@@ -390,9 +398,7 @@ const previous = remainderHolder(active, target);
 // which is also a (harmless) second scan of argv on the release path.
 const toFlag = flag("to");
 const stepsFlag = flag("steps");
-const steps = toFlag
-  ? [Number(toFlag)]
-  : (stepsFlag ? stepsFlag.split(",").map(Number) : DEFAULT_STEPS);
+const steps = toFlag ? [Number(toFlag)] : stepsFlag ? stepsFlag.split(",").map(Number) : DEFAULT_STEPS;
 if (steps.some((s) => !Number.isFinite(s) || s <= 0 || s > 100)) die(`bad steps: ${steps.join(",")}`);
 
 console.log(`target version:   ${target.slice(0, 8)}`);
@@ -445,9 +451,13 @@ for (const pct of steps) {
   //
   // Below 100 the remainder goes explicitly to the version that is serving now,
   // which also keeps the intent reviewable in the log.
-  const specs = pct >= 100 || !previous
-    ? [{ id: target, pct: 100 }]
-    : [{ id: target, pct }, { id: previous, pct: 100 - pct }];
+  const specs =
+    pct >= 100 || !previous
+      ? [{ id: target, pct: 100 }]
+      : [
+          { id: target, pct },
+          { id: previous, pct: 100 - pct },
+        ];
   await deployVersions(specs, `deploy:promote ramp to ${pct}%`);
 
   // Let the change propagate before believing a sample of it, then RETRY rather
@@ -594,7 +604,7 @@ if (steps[steps.length - 1] === 100) {
   const file = new URL("../src/worker/checkpoints.json", import.meta.url);
   // The changelog rows this release adds: whatever checkpoints.json carries
   // beyond what D1 already holds.
-  let staged: { vnum: number, ymd: string, version: string, slug: string, title: string }[] = [];
+  let staged: { vnum: number; ymd: string; version: string; slug: string; title: string }[] = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
     // d1Rows() returns parsed rows. A second JSON.parse here once stringified

@@ -181,7 +181,7 @@ function generateCfGarage() {
     process.stderr.write(`${out.stdout ?? ""}${out.stderr ?? ""}`);
     throw new Error(
       `gen-runtime-types: \`wrangler build --x-new-config --x-cf-build-output\` in cf-garage/ exited ${out.status} ` +
-      `and left ${text ? `${text.length} bytes without a full Env + runtime surface` : "no file"} at cf-garage/.cloudflare/types/index.d.ts`,
+        `and left ${text ? `${text.length} bytes without a full Env + runtime surface` : "no file"} at cf-garage/.cloudflare/types/index.d.ts`,
     );
   }
   mkdirSync(dirname(CF_GARAGE_KEY), { recursive: true });
@@ -232,7 +232,8 @@ function generate(config: string, out: string) {
   if (!fields.compatibility_date) throw new Error(`gen-runtime-types: no compatibility date read from ${config}`);
   writeFileSync(runtimeConfig, JSON.stringify(fields));
   execFileSync(...wranglerCommand(["types", "-c", runtimeConfig, "--include-env=false", out]), {
-    cwd: REPO, stdio: ["ignore", "ignore", "inherit"],
+    cwd: REPO,
+    stdio: ["ignore", "ignore", "inherit"],
   });
   const text = readFileSync(out, "utf8");
   const at = text.indexOf(MARKER);
@@ -248,8 +249,8 @@ try {
     if (other.body !== aux.body) {
       throw new Error(
         `gen-runtime-types: ${other.config} generates a different runtime surface from ${aux.config} ` +
-        `(${other.body.length} vs ${aux.body.length} bytes). The shared auxiliary file no longer fits both; ` +
-        `give that program its own generated file rather than typing it against another Worker's runtime.`,
+          `(${other.body.length} vs ${aux.body.length} bytes). The shared auxiliary file no longer fits both; ` +
+          `give that program its own generated file rather than typing it against another Worker's runtime.`,
       );
     }
   }
@@ -261,7 +262,9 @@ try {
   writeFileSync(OUT, KEY_PREFIX + key + "\n" + site.text);
   writeFileSync(AUX_OUT, KEY_PREFIX + key + "\n" + aux.text);
   const header = site.text.split("\n").find((l) => l.startsWith("// Runtime types generated with")) ?? "";
-  console.log(`gen-runtime-types: ${site.body.length} bytes -> workers-runtime.d.ts, ${aux.body.length} bytes -> workers-runtime-aux.d.ts (${header.replace("// ", "")}; ${others.length + 1} auxiliary configs agree)`);
+  console.log(
+    `gen-runtime-types: ${site.body.length} bytes -> workers-runtime.d.ts, ${aux.body.length} bytes -> workers-runtime-aux.d.ts (${header.replace("// ", "")}; ${others.length + 1} auxiliary configs agree)`,
+  );
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

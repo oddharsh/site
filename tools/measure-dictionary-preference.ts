@@ -5,7 +5,15 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { brotliDecompressSync, zstdDecompressSync } from "node:zlib";
-import { familyDictionaryName, pageSlug, pageSnapshotName, parseDcz, parseFamilyDictionary, parsePageDelta, tagOfDigest } from "../src/worker/lib/dictionary-names.ts";
+import {
+  familyDictionaryName,
+  pageSlug,
+  pageSnapshotName,
+  parseDcz,
+  parseFamilyDictionary,
+  parsePageDelta,
+  tagOfDigest,
+} from "../src/worker/lib/dictionary-names.ts";
 
 export type PageBytes = {
   page: string;
@@ -19,16 +27,20 @@ export function preferenceModel(pages: PageBytes[], acquisition: number, hitRate
   if (!Number.isFinite(hitRate) || hitRate < 0 || hitRate > 1) throw new Error("hitRate must be between 0 and 1");
   if (!Number.isFinite(acquisition) || acquisition < 0) throw new Error("Invalid dictionary acquisition size");
   const sum = (value: (p: PageBytes) => number) => pages.reduce((n, p) => n + value(p), 0);
-  const brotli = sum(p => p.brotli);
-  const family = sum(p => p.family);
-  const exactBest = sum(p => p.exact.length ? Math.min(...p.exact) : p.brotli);
-  const exactWorst = sum(p => p.exact.length ? Math.max(...p.exact) : p.brotli);
-  const threshold = (exact: number) => exact < family ? (brotli - family) / (brotli - exact) : null;
+  const brotli = sum((p) => p.brotli);
+  const family = sum((p) => p.family);
+  const exactBest = sum((p) => (p.exact.length ? Math.min(...p.exact) : p.brotli));
+  const exactWorst = sum((p) => (p.exact.length ? Math.max(...p.exact) : p.brotli));
+  const threshold = (exact: number) => (exact < family ? (brotli - family) / (brotli - exact) : null);
   const meanSaving = (brotli - family) / pages.length;
   return {
     pages: pages.length,
-    pagesWithExact: pages.filter(p => p.exact.length).length,
-    brotli, family, exactBest, exactWorst, acquisition,
+    pagesWithExact: pages.filter((p) => p.exact.length).length,
+    brotli,
+    family,
+    exactBest,
+    exactWorst,
+    acquisition,
     // Both choices already have the family dictionary. When exact is selected
     // but unavailable, the server receives no second choice and sends Brotli.
     hitRate,
@@ -43,7 +55,7 @@ export function preferenceModel(pages: PageBytes[], acquisition: number, hitRate
 
 export async function measureDictionaryPreference(root = ".build/public", snapshots = "src/dict/p-dict") {
   const files = (await readdir(root, { recursive: true })).sort();
-  const families = files.filter(n => n.startsWith("a/") && parseFamilyDictionary(n.slice(2)));
+  const families = files.filter((n) => n.startsWith("a/") && parseFamilyDictionary(n.slice(2)));
   if (families.length !== 1) throw new Error(`Expected one built family dictionary, found ${families.length}; run bun run build`);
   const dictionary = await readFile(join(root, families[0]));
   const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest();
@@ -56,14 +68,14 @@ export async function measureDictionaryPreference(root = ".build/public", snapsh
   const acquisition = familyTwin.length;
   const pages: PageBytes[] = [];
   let verifiedDeltas = 0;
-  for (const twin of files.filter(n => n.endsWith(".html.br") && !n.endsWith(".src.html.br"))) {
+  for (const twin of files.filter((n) => n.endsWith(".html.br") && !n.endsWith(".src.html.br"))) {
     const page = twin.slice(0, -3);
     const raw = await readFile(join(root, page));
     const compressed = await readFile(join(root, twin));
     if (!brotliDecompressSync(compressed).equals(raw)) throw new Error(`Brotli twin does not reconstruct ${page}`);
     const slug = pageSlug(page);
     const row: PageBytes = { page, brotli: compressed.length, family: compressed.length, exact: [] };
-    for (const file of files.filter(n => n.startsWith("pd/") && parsePageDelta(n.slice(3))?.slug === slug)) {
+    for (const file of files.filter((n) => n.startsWith("pd/") && parsePageDelta(n.slice(3))?.slug === slug)) {
       const { tag } = parsePageDelta(file.slice(3))!;
       const dict = tag === familyTag ? dictionary : brotliDecompressSync(await readFile(join(snapshots, pageSnapshotName(slug, tag))));
       const bytes = await readFile(join(root, file));
@@ -85,7 +97,7 @@ export async function measureDictionaryPreference(root = ".build/public", snapsh
     family: families[0],
     verifiedDeltas,
     model: preferenceModel(pages, acquisition, 0.5),
-    pages: pages.map(p => ({
+    pages: pages.map((p) => ({
       ...p,
       exactHitThresholdWorst: preferenceModel([p], 0, 0.5).exactHitThresholdWorst,
     })),

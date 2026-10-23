@@ -1,9 +1,5 @@
 // ── version affinity: the rule and the ramp have to agree ────────────────────
-import {
-  assert,
-  readFile,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFile, test } from "./contract-shared.ts";
 
 // STRUCTURAL, and it has to be: Cloudflare's expression language runs at their
 // edge, so nothing here can execute the rule. What can be checked is the seam,
@@ -35,11 +31,7 @@ test("the affinity rule exempts the header the ramp sampler sends", async () => 
     new RegExp(header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     "the rule expression must reference the header, or it cannot exempt a request that already carries one",
   );
-  assert.match(
-    declared.expression.toLowerCase(),
-    /\bnot\b/,
-    "the exemption is a negation: the rule applies only when the header is ABSENT",
-  );
+  assert.match(declared.expression.toLowerCase(), /\bnot\b/, "the exemption is a negation: the rule applies only when the header is ABSENT");
 
   // And the ramp has to actually send it. If this line ever goes, the exemption
   // above is exempting nothing and the affinity rule silently governs the
@@ -57,10 +49,8 @@ test("the affinity rule exempts the header the ramp sampler sends", async () => 
   // And the seam itself, so the two cannot become two COPIES. A re-declared
   // sampler in deploy-promote.ts would satisfy every assertion below while
   // drifting from the one lib/version-probe.ts exports.
-  assert.match(rampSource, /from "\.\/lib\/version-probe\.ts"/,
-    "deploy-promote must import the probes rather than carry its own");
-  assert.doesNotMatch(rampSource, /async function (sampleSplit|probePinned)\b/,
-    "the probes have one home; a second copy here is a drift waiting to happen");
+  assert.match(rampSource, /from "\.\/lib\/version-probe\.ts"/, "deploy-promote must import the probes rather than carry its own");
+  assert.doesNotMatch(rampSource, /async function (sampleSplit|probePinned)\b/, "the probes have one home; a second copy here is a drift waiting to happen");
 
   assert.match(ramp, new RegExp(`"${header}"\\s*:`), "the ramp must send a per-request affinity key");
   assert.match(ramp, /"cloudflare-workers-version-overrides"\s*:/, "the ramp must pin its health probe to one version");

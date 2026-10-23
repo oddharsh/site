@@ -43,7 +43,7 @@ test("webmention rejects private, non-http, and same-origin sources", async () =
 test("webmention verifies the source really links back, then moderates before publishing", async () => {
   const db = fakeD1();
   const env = wmEnv(db);
-  const target = "https://aadhar.sh/writing/in-flux";   // a post, via the /writing section flag
+  const target = "https://aadhar.sh/writing/in-flux"; // a post, via the /writing section flag
   const source = "https://mari.example/resto-mod-web";
   const realFetch = globalThis.fetch;
 
@@ -57,10 +57,12 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.equal(db.rows.length, 0, "an unverified mention must never be stored");
 
     // 2. a source that DOES link back is stored, but only as pending.
-    testGlobals.fetch = async () => new Response(
-      `<html><head><title>Resto-mod web</title><meta name="author" content="Mari"></head>
+    testGlobals.fetch = async () =>
+      new Response(
+        `<html><head><title>Resto-mod web</title><meta name="author" content="Mari"></head>
        <body><p class="e-content">A lovely note about <a class="u-in-reply-to" href="${target}">in flux</a> and its ideas.</p></body></html>`,
-      { headers: { "content-type": "text/html" } });
+        { headers: { "content-type": "text/html" } },
+      );
     const ctx2 = deferredContext();
     res = await handleWebmention(wmPost(source, target), env, ctx2);
     assert.equal(res.status, 202);
@@ -72,8 +74,11 @@ test("webmention verifies the source really links back, then moderates before pu
     const upserts = db.statements.filter((sql) => /^INSERT INTO webmentions/i.test(sql));
     assert.equal(upserts.length, 1, "a verified mention is stored by one upsert");
     assert.match(upserts[0], /RETURNING status/i, "the upsert returns the moderation status it preserved");
-    assert.equal(db.statements.filter((sql) => /^SELECT status FROM webmentions/i.test(sql)).length, 0,
-      "the verified path must not spend a second D1 call rereading moderation status");
+    assert.equal(
+      db.statements.filter((sql) => /^SELECT status FROM webmentions/i.test(sql)).length,
+      0,
+      "the verified path must not spend a second D1 call rereading moderation status",
+    );
 
     // 3. it stays out of /inbox until approved.
     let inbox = await handleInboxMail(new Request("https://aadhar.sh/inbox/mail.html"), env, context());
@@ -119,7 +124,9 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.equal(res.status, 202);
     await ctx4.settle();
     assert.equal(db.rows.length, 0, "a mention whose source dropped the link is retracted");
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("/inbox degrades honestly when the mention store is unbound", async () => {
@@ -140,9 +147,7 @@ test("every page that accepts a mention also advertises where to send it", async
     .filter((block) => /Link:.*rel="webmention"/.test(block))
     .map((block) => block.split("\n")[0].trim());
 
-  const coveredByStatics = (path) =>
-    advertisedByHeaders.some((rule) =>
-      rule.endsWith("/*") ? path.startsWith(rule.slice(0, -1)) : rule === path);
+  const coveredByStatics = (path) => advertisedByHeaders.some((rule) => (rule.endsWith("/*") ? path.startsWith(rule.slice(0, -1)) : rule === path));
 
   // The worker-rendered ones, asked through their REAL handler rather than the
   // inner render, so an edge-cache wrapper that drops the header on its way out
@@ -151,7 +156,7 @@ test("every page that accepts a mention also advertises where to send it", async
   // whole point of this test is that the flag is not enough on its own.
   const workerRendered = {
     "/writing": () => handleWritingIndex(new Request("https://aadhar.sh/writing"), { ASSETS: staticAssets({}) }, context()),
-    "/inbox":   () => handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }),
+    "/inbox": () => handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }),
   };
 
   for (const path of WEBMENTION_PATHS) {
@@ -167,11 +172,7 @@ test("every page that accepts a mention also advertises where to send it", async
       if (priorCaches === undefined) delete globalThis.caches;
       else testGlobals.caches = priorCaches;
     }
-    assert.match(
-      res.headers.get("link") || "",
-      /rel="webmention"/,
-      `${path} accepts mentions, so it must say where to send them`
-    );
+    assert.match(res.headers.get("link") || "", /rel="webmention"/, `${path} accepts mentions, so it must say where to send them`);
   }
 });
 
@@ -200,13 +201,14 @@ async function storeFrom(html, source = "https://webmention.rocks/receive/1/abc"
   const db = fakeD1();
   const target = "https://aadhar.sh/writing/in-flux";
   const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () => new Response(typeof html === "function" ? html(target) : html,
-    { headers: { "content-type": "text/html" } });
+  testGlobals.fetch = async () => new Response(typeof html === "function" ? html(target) : html, { headers: { "content-type": "text/html" } });
   try {
     const ctx = deferredContext();
     await handleWebmention(wmPost(source, target), wmEnv(db), ctx);
     await ctx.settle();
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
   return db.rows[0];
 }
 
@@ -231,16 +233,22 @@ test("an entry title is never mistaken for an author", async () => {
 
 test("a source with no author markup falls back to its host, never to nothing", async () => {
   const target = "https://aadhar.sh/writing/in-flux";
-  const row = await storeFrom(`<html><head><title>A post</title></head><body>
-    <p>see <a href="${target}">this</a></p></body></html>`, "https://mari.example/post");
+  const row = await storeFrom(
+    `<html><head><title>A post</title></head><body>
+    <p>see <a href="${target}">this</a></p></body></html>`,
+    "https://mari.example/post",
+  );
   assert.equal(row.author, "mari.example", "the documented floor: an unknown author reads as the site it came from");
 });
 
 test("a p-author with real text still wins over the floor", async () => {
   const target = "https://aadhar.sh/writing/in-flux";
-  const row = await storeFrom(`<html><body>
+  const row = await storeFrom(
+    `<html><body>
     <div class="h-card p-author"><a class="p-name" href="/">Mari Kondo</a></div>
-    <p>see <a href="${target}">this</a></p></body></html>`, "https://mari.example/post");
+    <p>see <a href="${target}">this</a></p></body></html>`,
+    "https://mari.example/post",
+  );
   assert.equal(row.author, "Mari Kondo");
 });
 
@@ -262,21 +270,21 @@ test("a source that is not an absolute URL is refused, not guessed at", async ()
   // because a 202 hands the work to waitUntil and the suite refuses to let a
   // real fetch escape a test.
   const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () => new Response(
-    `<html><body><a href="${target}">x</a></body></html>`, { headers: { "content-type": "text/html" } });
+  testGlobals.fetch = async () => new Response(`<html><body><a href="${target}">x</a></body></html>`, { headers: { "content-type": "text/html" } });
   try {
     const ctx = deferredContext();
     assert.equal((await handleWebmention(wmPost("https://mari.example/post", target), env, ctx)).status, 202);
     await ctx.settle();
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("absoluteHttpUrl accepts only what a machine could have sent", () => {
   for (const ok of ["https://a.example/x", "http://a.example", "https://a.example:443/x?q=1#f"]) {
     assert.equal(absoluteHttpUrl(ok), true, ok);
   }
-  for (const bad of ["/path", "path", "", "https:///x", "ftp://a.example/x", "javascript:alert(1)",
-                     "//a.example/x", "mailto:a@b.c", null, undefined]) {
+  for (const bad of ["/path", "path", "", "https:///x", "ftp://a.example/x", "javascript:alert(1)", "//a.example/x", "mailto:a@b.c", null, undefined]) {
     assert.equal(absoluteHttpUrl(bad), false, JSON.stringify(bad));
   }
 });

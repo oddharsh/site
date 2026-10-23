@@ -133,17 +133,22 @@ export function scoreRun(index: TileIndex, body: unknown): { ok: true; run: Scor
     // only the format axis ever loses a tile, to a browser that can't draw it
     if (!full && trial.axis !== "format") return { ok: false, error: "only a format call can show fewer tiles" };
 
-    const { rated, disagree } = rate(trial, hits.map((h) => h!.option));
+    const { rated, disagree } = rate(
+      trial,
+      hits.map((h) => h!.option),
+    );
     const chosen = rated.find((r) => r.option.src === pick)!;
     const answer = ANSWERS[trial.axis];
     if (answer) {
-      run.clear++; if (answer(chosen.option)) run.hit++;
+      run.clear++;
+      if (answer(chosen.option)) run.hit++;
     } else if (disagree) {
       if (chosen.s2best) run.split.s2++;
       else if (chosen.butterbest) run.split.butter++;
       else run.split.neither++;
     } else {
-      run.clear++; if (chosen.s2best && chosen.butterbest) run.hit++;
+      run.clear++;
+      if (chosen.s2best && chosen.butterbest) run.hit++;
     }
     const id = tileId(pick);
     if (full) run.pooled.push(id);
@@ -163,7 +168,10 @@ export function scoreRun(index: TileIndex, body: unknown): { ok: true; run: Scor
 const key = (k: string) => `$."${k}"`;
 
 export function tallyStatement(run: ScoredRun, day: string, cap: number): { sql: string; params: (string | number)[] } {
-  const bumps: [string, number][] = [[`n:${run.mode}`, 1], [`h:${run.mode}:${run.overall}`, 1]];
+  const bumps: [string, number][] = [
+    [`n:${run.mode}`, 1],
+    [`h:${run.mode}:${run.overall}`, 1],
+  ];
   if (run.split.s2) bumps.push(["l:s2", run.split.s2]);
   if (run.split.butter) bumps.push(["l:bu", run.split.butter]);
   if (run.split.neither) bumps.push(["l:no", run.split.neither]);
@@ -196,7 +204,11 @@ export type Crowd = {
 export function crowdFromTally(v: string | null | undefined): Crowd {
   const crowd: Crowd = { runs: {}, hist: {}, lean: { s2: 0, butter: 0, neither: 0 }, leanRuns: {}, picks: {} };
   let flat: Record<string, unknown> = {};
-  try { flat = asRecord(JSON.parse(v || "{}")) || {}; } catch { /* an unreadable row reads as an empty crowd */ }
+  try {
+    flat = asRecord(JSON.parse(v || "{}")) || {};
+  } catch {
+    /* an unreadable row reads as an empty crowd */
+  }
   for (const [k, raw] of Object.entries(flat)) {
     const n = asNumber(raw);
     if (n === null) continue;
@@ -247,10 +259,15 @@ let manifestIndex: Promise<TileIndex> | null = null;
 function loadIndex(env): Promise<TileIndex> {
   if (manifestIndex) return manifestIndex;
   const loading: Promise<TileIndex> = env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`))
-    .then((r: Response) => { if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`); return r.json(); })
+    .then((r: Response) => {
+      if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`);
+      return r.json();
+    })
     .then((m: Manifest) => indexManifest(m));
   // a failed load is forgotten, so the next run tries again
-  loading.catch(() => { manifestIndex = null; });
+  loading.catch(() => {
+    manifestIndex = null;
+  });
   manifestIndex = loading;
   return loading;
 }
@@ -277,10 +294,18 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
   const text = await request.text();
   if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
   let body: unknown;
-  try { body = JSON.parse(text); } catch { return json({ error: "invalid JSON" }, 400); }
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return json({ error: "invalid JSON" }, 400);
+  }
 
   let index: TileIndex;
-  try { index = await loadIndex(env); } catch { return json({ error: "the manifest did not load" }, 503); }
+  try {
+    index = await loadIndex(env);
+  } catch {
+    return json({ error: "the manifest did not load" }, 503);
+  }
   const scored = scoreRun(index, body);
   if (!scored.ok) return json({ error: scored.error }, 400);
   const run = scored.run;
@@ -291,18 +316,38 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
   const now = new Date();
   const { sql, params } = tallyStatement(run, now.toISOString().slice(0, 10), DAILY_RUN_CAP);
   // RETURNING hands back the new tally, or no row when the cap refused the run
-  const updated = asText(asRecord(await db.prepare(sql).bind(...params).first())?.v);
+  const updated = asText(
+    asRecord(
+      await db
+        .prepare(sql)
+        .bind(...params)
+        .first(),
+    )?.v,
+  );
   const counted = updated !== null;
   if (counted) {
-    const insert = db.prepare(`INSERT INTO ${RUNS} (at, mode, overall, clear_n, clear_hit, split_s2, split_butter, split_neither, picks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(Math.floor(now.getTime() / 1000), run.mode, run.overall, run.clear, run.hit,
-        run.split.s2, run.split.butter, run.split.neither, JSON.stringify(run.picks))
+    const insert = db
+      .prepare(
+        `INSERT INTO ${RUNS} (at, mode, overall, clear_n, clear_hit, split_s2, split_butter, split_neither, picks)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        Math.floor(now.getTime() / 1000),
+        run.mode,
+        run.overall,
+        run.clear,
+        run.hit,
+        run.split.s2,
+        run.split.butter,
+        run.split.neither,
+        JSON.stringify(run.picks),
+      )
       .run()
       .catch((e) => console.error("pixel-peeper: run row not written", e?.message || e));
-    if (ctx?.waitUntil) ctx.waitUntil(insert); else await insert;
+    if (ctx?.waitUntil) ctx.waitUntil(insert);
+    else await insert;
   }
-  const crowd = crowdFromTally(updated ?? await readTally(db));
+  const crowd = crowdFromTally(updated ?? (await readTally(db)));
   const you = { overall: run.overall, clear: run.clear, hit: run.hit, split: run.split };
   return json({ counted, you, crowd });
 }

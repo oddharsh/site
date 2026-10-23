@@ -9,10 +9,20 @@ import { handleRun } from "../src/worker/run.ts";
 import { AGENT_SURFACES } from "../src/worker/lib/site-manifest.ts";
 import { assert, test } from "./contract-shared.ts";
 
-const env = { ASSETS: { fetch: async (req) => new Response(new URL(req.url).pathname === "/writing/posts.json" ? "[]" : "not found", { status: new URL(req.url).pathname === "/writing/posts.json" ? 200 : 404 }) } };
+const env = {
+  ASSETS: {
+    fetch: async (req) =>
+      new Response(new URL(req.url).pathname === "/writing/posts.json" ? "[]" : "not found", {
+        status: new URL(req.url).pathname === "/writing/posts.json" ? 200 : 404,
+      }),
+  },
+};
 const ctx = { waitUntil() {} };
 const run = (cmd) => handleRun(new Request(`https://aadhar.sh/run?cmd=${encodeURIComponent(cmd)}`), env, ctx);
-const opens = async (cmd) => { const r = await run(cmd); return r.status === 302 ? r.headers.get("location") : null; };
+const opens = async (cmd) => {
+  const r = await run(cmd);
+  return r.status === 302 ? r.headers.get("location") : null;
+};
 
 test("a registered page opens by its path or by a last segment only it has", async () => {
   assert.equal(await opens("garage/av2"), "https://aadhar.sh/garage/av2");
@@ -41,5 +51,8 @@ test("a miss keeps the Run error and offers a filled-in search", async () => {
   const html = await res.text();
   assert.match(html, /Windows cannot find 'zzz nothing &lt;b&gt;'/);
   assert.match(html, /href="\/search\?q=zzz%20nothing%20%3Cb%3E"/, "the search link is filled in and encoded");
-  assert.ok(AGENT_SURFACES.some((s) => s.path === "/search"), "the link points at a page the site registers");
+  assert.ok(
+    AGENT_SURFACES.some((s) => s.path === "/search"),
+    "the link points at a page the site registers",
+  );
 });

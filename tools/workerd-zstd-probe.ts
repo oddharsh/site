@@ -49,12 +49,15 @@ export default {
 const dir = mkdtempSync(join(tmpdir(), "workerd-zstd-probe-"));
 try {
   writeFileSync(join(dir, "worker.mjs"), WORKER);
-  writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({
-    name: "workerd-zstd-probe",
-    main: "./worker.mjs",
-    compatibility_date: "2026-09-01",
-    compatibility_flags: ["nodejs_compat"],
-  }));
+  writeFileSync(
+    join(dir, "wrangler.jsonc"),
+    JSON.stringify({
+      name: "workerd-zstd-probe",
+      main: "./worker.mjs",
+      compatibility_date: "2026-09-01",
+      compatibility_flags: ["nodejs_compat"],
+    }),
+  );
   const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
   try {
     await server.listen();

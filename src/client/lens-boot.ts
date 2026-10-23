@@ -9,7 +9,6 @@
 (() => {
   "use strict";
 
-
   var app: Promise<void> | null = null;
   var ready = false;
   var replaying = false;
@@ -17,34 +16,47 @@
   // one narrow handoff through which the full client gives it live handlers;
   // ordering the promises here makes that handoff race-free even when a person
   // clicks while the registrar is still crossing the wire.
-  var pageTools = (document.modelContext || navigator.modelContext)
-    ? import("/lens-webmcp.js").catch(() => { return null; })
-    : null;
+  var pageTools =
+    document.modelContext || navigator.modelContext
+      ? import("/lens-webmcp.js").catch(() => {
+          return null;
+        })
+      : null;
 
   function load() {
     if (app) return app;
-    var loading = Promise.resolve(pageTools).then(() => {
-      // @ts-expect-error — a CACHE-BUSTED specifier. "/lens.js?v=1" is a real URL
-      // the browser resolves and no path mapping can match. Pointing tsc at the
-      // file instead answers "is not a module", because lens.js is a classic
-      // script IIFE, and the fix for THAT would be adding an `export {}` that
-      // changes it from script scope to module scope for a type checker. This is
-      // a side-effect import. @ts-expect-error rather than @ts-ignore so it fails
-      // the day the situation changes.
-      return import("/lens.js?v=1");
-    }).then(() => {
-      ready = true;
-    }, (error) => {
-      app = null;
-      throw error;
-    });
+    var loading = Promise.resolve(pageTools)
+      .then(() => {
+        // @ts-expect-error — a CACHE-BUSTED specifier. "/lens.js?v=1" is a real URL
+        // the browser resolves and no path mapping can match. Pointing tsc at the
+        // file instead answers "is not a module", because lens.js is a classic
+        // script IIFE, and the fix for THAT would be adding an `export {}` that
+        // changes it from script scope to module scope for a type checker. This is
+        // a side-effect import. @ts-expect-error rather than @ts-ignore so it fails
+        // the day the situation changes.
+        return import("/lens.js?v=1");
+      })
+      .then(
+        () => {
+          ready = true;
+        },
+        (error) => {
+          app = null;
+          throw error;
+        },
+      );
     app = loading;
     return loading;
   }
 
   function hasClientState() {
     var params = new URLSearchParams(location.search);
-    if (["url", "vs", "view", "lens", "cf"].some((key) => { return params.has(key); })) return true;
+    if (
+      ["url", "vs", "view", "lens", "cf"].some((key) => {
+        return params.has(key);
+      })
+    )
+      return true;
     try {
       var saved = localStorage.getItem("lx-mode");
       return !!saved && saved !== "both";
@@ -111,6 +123,11 @@
   // WebMCP discovery happens before interaction, so register the six lightweight
   // definitions now. Their handlers call load() only when an agent invokes one.
   // Keep the ordinary cold shell lazy and hydrate saved/deep-linked state as before.
-  if (pageTools) pageTools.then((wm) => { return wm && wm.boot(load); }).catch(() => {});
+  if (pageTools)
+    pageTools
+      .then((wm) => {
+        return wm && wm.boot(load);
+      })
+      .catch(() => {});
   if (hasClientState()) load().catch(() => {});
 })();

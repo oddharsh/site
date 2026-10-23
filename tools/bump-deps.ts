@@ -118,8 +118,10 @@ function rewriteDocPins() {
 }
 
 function prBody(group: string, bumps: Bump[]) {
-  const rows = bumps.map((b) =>
-    `| [\`${b.pkg}\`](https://www.npmjs.com/package/${b.pkg}?activeTab=versions) | ${b.from} | **${b.to}** | ${b.type} | ${b.manifests.map((m) => `\`${m}\``).join(", ")} |`);
+  const rows = bumps.map(
+    (b) =>
+      `| [\`${b.pkg}\`](https://www.npmjs.com/package/${b.pkg}?activeTab=versions) | ${b.from} | **${b.to}** | ${b.type} | ${b.manifests.map((m) => `\`${m}\``).join(", ")} |`,
+  );
   return [
     `Moves the \`${group}\` group to the newest versions that are at least as old as \`bunfig.toml\`'s \`minimumReleaseAge\`.`,
     "",
@@ -151,7 +153,10 @@ for (const g of groups) {
 if (!groups.length) console.log(`nothing to bump: ${names.length} packages checked`);
 
 if (JSON_OUT) {
-  writeFileSync(JSON_OUT, JSON.stringify({ groups: groups.map((g) => ({ name: g, branch: branchFor(g), bumps: bumps.filter((b) => b.group === g) })) }, null, 2) + "\n");
+  writeFileSync(
+    JSON_OUT,
+    JSON.stringify({ groups: groups.map((g) => ({ name: g, branch: branchFor(g), bumps: bumps.filter((b) => b.group === g) })) }, null, 2) + "\n",
+  );
 }
 
 if (WRITE) {

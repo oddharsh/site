@@ -68,7 +68,8 @@ type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
  *  which agrees inside the BMP and disagrees past it; stems are ASCII today
  *  and this keeps the tie from ever mattering. */
 const byCodePoint = (a: string, b: string): number => {
-  const A = Array.from(a, (c) => c.codePointAt(0)!), B = Array.from(b, (c) => c.codePointAt(0)!);
+  const A = Array.from(a, (c) => c.codePointAt(0)!),
+    B = Array.from(b, (c) => c.codePointAt(0)!);
   for (let i = 0; i < Math.min(A.length, B.length); i += 1) if (A[i] !== B[i]) return A[i] - B[i];
   return A.length - B.length;
 };
@@ -80,7 +81,11 @@ export function sortKeysDeep(value: Json): Json {
   // and a plain object is the only one whose constructor is Object.
   if (value === null || value.constructor !== Object) return value;
   const record = value as { [k: string]: Json };
-  return Object.fromEntries(Object.keys(record).sort(byCodePoint).map((k) => [k, sortKeysDeep(record[k])]));
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort(byCodePoint)
+      .map((k) => [k, sortKeysDeep(record[k])]),
+  );
 }
 
 /** jaq's default pretty-printer: 2-space indent, one trailing newline. */
@@ -89,11 +94,11 @@ export const pretty = (value: Json): string => `${JSON.stringify(value, null, 2)
 /** jq's @uri: percent-encode every byte outside the unreserved set, uppercase
  *  hex. encodeURIComponent would leave !'()* alone, which @uri does not. */
 export function jqUri(s: string): string {
-  return Array.from(Buffer.from(s, "utf8"), (b) => (
+  return Array.from(Buffer.from(s, "utf8"), (b) =>
     (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || b === 0x2d || b === 0x5f || b === 0x2e || b === 0x7e
       ? String.fromCharCode(b)
-      : `%${b.toString(16).toUpperCase().padStart(2, "0")}`
-  )).join("");
+      : `%${b.toString(16).toUpperCase().padStart(2, "0")}`,
+  ).join("");
 }
 
 /** `jpeg` is the R2 key a JPEG original had before migrate-originals.ts moved
@@ -114,7 +119,8 @@ export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uplo
   for (let i = 0; i < fields.length; i += 5) {
     const [stem, full, sizeText, album, heif] = fields.slice(i, i + 5);
     const size = Number(sizeText);
-    if (!stem || !full || !Number.isInteger(size) || size < 0) throw new Error(`bad spool record for ${JSON.stringify(stem)}: full=${JSON.stringify(full)} size=${JSON.stringify(sizeText)}`);
+    if (!stem || !full || !Number.isInteger(size) || size < 0)
+      throw new Error(`bad spool record for ${JSON.stringify(stem)}: full=${JSON.stringify(full)} size=${JSON.stringify(sizeText)}`);
     const entry: Omit<IndexEntry, "uploaded"> = { full, size };
     if (album) entry.album = album;
     if (heif) entry.heif = heif;
@@ -130,8 +136,10 @@ export function parseSpool(spool: Buffer): Record<string, Omit<IndexEntry, "uplo
 export function jxlKind(file: string): "transcode" | "direct" {
   const fd = fs.openSync(file, "r");
   try {
-    const size = fs.fstatSync(fd).size, head = Buffer.alloc(16);
-    let at = 0, boxes = 0;
+    const size = fs.fstatSync(fd).size,
+      head = Buffer.alloc(16);
+    let at = 0,
+      boxes = 0;
     while (at + 8 <= size) {
       fs.readSync(fd, head, 0, 16, at);
       let len = head.readUInt32BE(0);
@@ -141,7 +149,8 @@ export function jxlKind(file: string): "transcode" | "direct" {
       if (len === 1) len = Number(head.readBigUInt64BE(8));
       else if (len === 0) len = size - at;
       if (len < 8 || at + len > size) throw new Error(`${file}: a box runs past the end of the file`);
-      at += len; boxes++;
+      at += len;
+      boxes++;
     }
     if (boxes === 0) throw new Error(`${file} is empty`);
     return "direct";
@@ -214,9 +223,14 @@ export function tierStem(name: string): string | null {
 
 /** The four tiers as [map key, name suffix, extension], in the heredoc's order.
  *  A source is `<stem><suffix><ext>` and its address `<stem><suffix>.<h8><ext>`. */
-const TIERS = [["a", "", ".avif"], ["j", "", ".jpg"], ["s", "-400", ".avif"], ["x", "-200", ".avif"]] as const;
-const sourceName = (stem: string, [, suffix, ext]: typeof TIERS[number]) => `${stem}${suffix}${ext}`;
-const hashedName = (stem: string, [, suffix, ext]: typeof TIERS[number], h: string) => `${stem}${suffix}.${h}${ext}`;
+const TIERS = [
+  ["a", "", ".avif"],
+  ["j", "", ".jpg"],
+  ["s", "-400", ".avif"],
+  ["x", "-200", ".avif"],
+] as const;
+const sourceName = (stem: string, [, suffix, ext]: (typeof TIERS)[number]) => `${stem}${suffix}${ext}`;
+const hashedName = (stem: string, [, suffix, ext]: (typeof TIERS)[number], h: string) => `${stem}${suffix}.${h}${ext}`;
 
 /** hash-thumbnails.sh's body: address every tier in `srcDir` into `outDir`
  *  under its hash8, MERGE the result into the map at `mapPath`, then prune the
@@ -225,7 +239,14 @@ const hashedName = (stem: string, [, suffix, ext]: typeof TIERS[number], h: stri
  *  each half exists; this is the mechanism, kept statement for statement. */
 export function hashTiers(srcDir: string, outDir: string, mapPath: string): string[] {
   const h8 = (file: string) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0, 8);
-  const stems = [...new Set(fs.readdirSync(srcDir).map(tierStem).filter((s): s is string => Boolean(s)))].sort(byCodePoint);
+  const stems = [
+    ...new Set(
+      fs
+        .readdirSync(srcDir)
+        .map(tierStem)
+        .filter((s): s is string => Boolean(s)),
+    ),
+  ].sort(byCodePoint);
 
   // A MISSING map starts empty, because a first run has none. A map that EXISTS
   // and does not parse is refused here, above the first copy, so the run writes
@@ -240,10 +261,12 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
   let loaded: Json = {};
   if (fs.existsSync(mapPath)) {
     const raw = fs.readFileSync(mapPath, "utf8");
-    try { loaded = JSON.parse(raw); } catch (e) {
+    try {
+      loaded = JSON.parse(raw);
+    } catch (e) {
       throw new Error(
         `${mapPath} exists but is not valid JSON (${e instanceof Error ? e.message : String(e)}). ` +
-        "Refusing to prune /i/ against an empty map; restore it (git checkout -- public/images/hashes.json) and re-run.",
+          "Refusing to prune /i/ against an empty map; restore it (git checkout -- public/images/hashes.json) and re-run.",
       );
     }
   }
@@ -270,7 +293,10 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
       if (!fs.existsSync(src)) continue;
       const h = h8(src);
       const out = path.join(outDir, hashedName(stem, tier, h));
-      if (!fs.existsSync(out)) { fs.copyFileSync(src, out); copied += 1; }
+      if (!fs.existsSync(out)) {
+        fs.copyFileSync(src, out);
+        copied += 1;
+      }
       entry[tier[0]] = h;
     }
     // MERGE per stem too: an additive run carries only the tier it generated.
@@ -283,17 +309,24 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
   // addressed (they live in /i/ now; metadata.json, alt.json, hashes.json and
   // meta/ stay put), then drop every /i/ file a re-encode superseded, so /i/ is
   // 1:1 with hashes.json and check-photo-pipeline.ts passes.
-  let prunedSrc = 0, prunedI = 0;
+  let prunedSrc = 0,
+    prunedI = 0;
   for (const stem of stems) {
     for (const tier of TIERS) {
       const p = path.join(srcDir, sourceName(stem, tier));
-      if (fs.existsSync(p)) { fs.rmSync(p); prunedSrc += 1; }
+      if (fs.existsSync(p)) {
+        fs.rmSync(p);
+        prunedSrc += 1;
+      }
     }
   }
   const expected = new Set<string>();
   for (const [st, e] of Object.entries(hashes)) for (const tier of TIERS) if (Object.hasOwn(e, tier[0])) expected.add(hashedName(st, tier, e[tier[0]]));
   for (const f of fs.readdirSync(outDir)) {
-    if ((f.endsWith(".avif") || f.endsWith(".jpg")) && !expected.has(f)) { fs.rmSync(path.join(outDir, f)); prunedI += 1; }
+    if ((f.endsWith(".avif") || f.endsWith(".jpg")) && !expected.has(f)) {
+      fs.rmSync(path.join(outDir, f));
+      prunedI += 1;
+    }
   }
 
   const lines = [
@@ -302,7 +335,10 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
     `map: ${mapPath}`,
   ];
   // `prev_j.get(st)` is truthy-tested, so a prior entry with no j never warns.
-  const restale = Object.entries(hashes).filter(([st, e]) => prevJ.get(st) && e.j !== prevJ.get(st)).map(([st]) => st).sort(byCodePoint);
+  const restale = Object.entries(hashes)
+    .filter(([st, e]) => prevJ.get(st) && e.j !== prevJ.get(st))
+    .map(([st]) => st)
+    .sort(byCodePoint);
   if (restale.length) {
     const shown = restale.slice(0, 8).join(", ") + (restale.length > 8 ? " ..." : "");
     lines.push(
@@ -319,8 +355,15 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
 
 /** `-` reads stdin, for the one caller that pipes curl straight in. */
 const readJson = (file: string): Json => JSON.parse(fs.readFileSync(file === "-" ? 0 : file, "utf8"));
-const flag = (args: string[], name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
-const need = (args: string[], name: string): string => { const v = flag(args, name); if (v === undefined) throw new Error(`${name} is required`); return v; };
+const flag = (args: string[], name: string): string | undefined => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const need = (args: string[], name: string): string => {
+  const v = flag(args, name);
+  if (v === undefined) throw new Error(`${name} is required`);
+  return v;
+};
 
 export function main(argv: string[]): number {
   const [cmd, ...args] = argv;
@@ -337,7 +380,7 @@ export function main(argv: string[]): number {
     case "index-merge": {
       const [indexFile] = positional;
       const entries = parseSpool(fs.readFileSync(need(args, "--entries")));
-      const index = fs.existsSync(indexFile) ? readJson(indexFile) as Record<string, IndexEntry> : {};
+      const index = fs.existsSync(indexFile) ? (readJson(indexFile) as Record<string, IndexEntry>) : {};
       // Write beside and rename, so a failure part-way leaves the committed file
       // exactly as it was; the shell used the same .tmp then mv shape.
       fs.writeFileSync(`${indexFile}.tmp`, pretty(mergeIndex(index, entries, need(args, "--now")) as Json));
@@ -351,7 +394,7 @@ export function main(argv: string[]): number {
       const kept: Record<string, Json> = {};
       const dropped: string[] = [];
       // Insertion order is preserved, as jaq preserves it: this file is not -S.
-      for (const [k, v] of Object.entries(record)) (Object.hasOwn(published, k) ? (kept[k] = v) : dropped.push(k));
+      for (const [k, v] of Object.entries(record)) Object.hasOwn(published, k) ? (kept[k] = v) : dropped.push(k);
       fs.writeFileSync(need(args, "--out"), pretty(kept));
       // `keys - ...` in jaq sorts; the dropped list is a notice, so it sorts too.
       for (const k of dropped.sort(byCodePoint)) process.stdout.write(`${k}\n`);
@@ -361,7 +404,10 @@ export function main(argv: string[]): number {
       const [hashesFile] = positional;
       const hashes = readJson(hashesFile) as Record<string, Json>;
       const against = readJson(need(args, "--against")) as Record<string, Json>;
-      for (const k of Object.keys(hashes).filter((k) => !Object.hasOwn(against, k)).sort(byCodePoint)) process.stdout.write(`${k}\n`);
+      for (const k of Object.keys(hashes)
+        .filter((k) => !Object.hasOwn(against, k))
+        .sort(byCodePoint))
+        process.stdout.write(`${k}\n`);
       return 0;
     }
     case "meta-split": {
@@ -406,6 +452,10 @@ export function main(argv: string[]): number {
 }
 
 if (import.meta.main) {
-  try { process.exit(main(process.argv.slice(2))); }
-  catch (e) { process.stderr.write(`pipeline-json: ${e instanceof Error ? e.message : String(e)}\n`); process.exit(1); }
+  try {
+    process.exit(main(process.argv.slice(2)));
+  } catch (e) {
+    process.stderr.write(`pipeline-json: ${e instanceof Error ? e.message : String(e)}\n`);
+    process.exit(1);
+  }
 }

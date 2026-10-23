@@ -87,14 +87,16 @@ let built: string | null = null;
 export function ensureTimbradoEngine(): string {
   const named = process.env.TIMBRADO_BIN;
   if (named !== undefined) {
-    if (!isAbsolute(named) || !existsSync(named)) throw new Error(`TIMBRADO_BIN names ${JSON.stringify(named)}, which is not an absolute path to a built timbrado engine`);
+    if (!isAbsolute(named) || !existsSync(named))
+      throw new Error(`TIMBRADO_BIN names ${JSON.stringify(named)}, which is not an absolute path to a built timbrado engine`);
     return named;
   }
   if (built) return built;
   const build = spawnSync("cargo", ["build", "--release", "--locked", "--manifest-path", join(TIMBRADO_PACKAGE, "Cargo.toml")], {
     stdio: ["ignore", "ignore", "inherit"],
   });
-  if (build.error) throw new Error(`timbrado's Rust engine needs cargo, which did not run (${build.error.message}); install Rust or set TIMBRADO_BIN to a built engine`);
+  if (build.error)
+    throw new Error(`timbrado's Rust engine needs cargo, which did not run (${build.error.message}); install Rust or set TIMBRADO_BIN to a built engine`);
   if (build.status !== 0) throw new Error(`cargo build of timbrado's Rust engine exited ${build.status}`);
   if (!existsSync(TIMBRADO_ENGINE)) throw new Error(`cargo exited 0 and ${TIMBRADO_ENGINE} is still missing`);
   return (built = TIMBRADO_ENGINE);
@@ -137,7 +139,7 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "bun-image-rejects-wrong-option-types",
     issue: "https://github.com/oven-sh/bun/issues/40490",
-    landed: "Bun.Image throws on `quality: \"84\"` (a string) instead of falling back to the default (robobun's fix is oven-sh/bun#40491)",
+    landed: 'Bun.Image throws on `quality: "84"` (a string) instead of falling back to the default (robobun\'s fix is oven-sh/bun#40491)',
     measured: "2026-09-15, bun 1.4.2: accepted, wrote 647 B at the q80 default",
     runtime: "bun",
     script: `
@@ -152,7 +154,7 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "bun-image-linear-light-resize",
     issue: "https://github.com/oven-sh/bun/issues/40510",
-    landed: "`resize(w, h, { colorspace: \"linear\" })` produces different bytes from the default, so the opt-in exists (robobun's fix is oven-sh/bun#40512)",
+    landed: '`resize(w, h, { colorspace: "linear" })` produces different bytes from the default, so the opt-in exists (robobun\'s fix is oven-sh/bun#40512)',
     measured: "2026-09-15, bun 1.4.2: byte-identical to the default, the option is ignored",
     runtime: "bun",
     script: `
@@ -166,7 +168,8 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "bun-image-keeps-16-bit-samples",
     issue: "https://github.com/oven-sh/bun/issues/30462",
-    landed: "a 16-bit PNG round-trips through Bun.Image at 16 bits (IHDR depth 16), which is the depth the HIF decode would need before it can replace sips in the photo ingest",
+    landed:
+      "a 16-bit PNG round-trips through Bun.Image at 16 bits (IHDR depth 16), which is the depth the HIF decode would need before it can replace sips in the photo ingest",
     measured: "2026-09-15, bun 1.4.2: IHDR depth 8 on output, the 16-bit source is collapsed on decode",
     runtime: "bun",
     script: `
@@ -179,7 +182,8 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "fetch-honours-dispatcher",
     issue: "https://github.com/oven-sh/bun/issues/39247",
-    landed: "`fetch(url, { dispatcher })` calls the dispatcher's `dispatch()` under bun, which is what miniflare's `dispatchFetch()` relies on and the reason wrangler's harness hangs under bun (robobun's fix is oven-sh/bun#39250; this is the issue that decides whether node can leave `engines`)",
+    landed:
+      "`fetch(url, { dispatcher })` calls the dispatcher's `dispatch()` under bun, which is what miniflare's `dispatchFetch()` relies on and the reason wrangler's harness hangs under bun (robobun's fix is oven-sh/bun#39250; this is the issue that decides whether node can leave `engines`)",
     measured: "2026-09-15, bun 1.4.2: dispatch() never called, the fetch went to the network and failed to connect",
     runtime: "bun",
     script: `
@@ -193,7 +197,8 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "css-minifier-knows-the-seven-pseudo-elements",
     issue: "https://github.com/oven-sh/bun/issues/41120",
-    landed: "`Bun.build({ minify: true })` on CSS naming ::details-content, ::picker(), ::checkmark, ::picker-icon, ::scroll-marker, ::scroll-marker-group and ::scroll-button() logs no `Invalid selector` warning (oven-sh/bun#41122 shipped four of the seven in 1.4.2)",
+    landed:
+      "`Bun.build({ minify: true })` on CSS naming ::details-content, ::picker(), ::checkmark, ::picker-icon, ::scroll-marker, ::scroll-marker-group and ::scroll-button() logs no `Invalid selector` warning (oven-sh/bun#41122 shipped four of the seven in 1.4.2)",
     measured: "2026-09-15, bun 1.4.2: three warnings, the first on ::scroll-marker",
     runtime: "bun",
     script: `
@@ -206,7 +211,8 @@ export const BUN_WATCHES: Watch[] = [
   {
     name: "css-minifier-lowercases-target-current",
     issue: "https://github.com/oven-sh/bun/issues/42480",
-    landed: "`:TARGET-CURRENT` is emitted lowercased like `:TARGET-WITHIN`, so two spellings of one selector merge to one rule (robobun adopted the fix as oven-sh/bun#42484, from oven-sh/bun#41139)",
+    landed:
+      "`:TARGET-CURRENT` is emitted lowercased like `:TARGET-WITHIN`, so two spellings of one selector merge to one rule (robobun adopted the fix as oven-sh/bun#42484, from oven-sh/bun#41139)",
     measured: "2026-09-15, bun 1.4.2: `:TARGET-CURRENT` emitted verbatim beside a lowercased `:target-within`",
     runtime: "bun",
     script: `
@@ -242,8 +248,10 @@ export const BUN_WATCHES: Watch[] = [
     // in the wire-byte sweep note before changing either fixture.
     name: "oxc-minifier-reaches-swc-parity",
     issue: "https://github.com/oxc-project/oxc",
-    landed: "oxc-minify at the pin, run with the build's exact options over the two frozen fixtures, produces no more brotli q11 bytes than SWC 1.16.2 did on the same bytes (5,786 B)",
-    measured: "2026-10-05, oxc-minify 0.151.0: 5,843 B against SWC's 5,786 B, +57 B, the same total 0.150.0 gave on 2026-09-15 (then quiz.js 2,974 vs 2,932; lens-wire.js 2,869 vs 2,854)",
+    landed:
+      "oxc-minify at the pin, run with the build's exact options over the two frozen fixtures, produces no more brotli q11 bytes than SWC 1.16.2 did on the same bytes (5,786 B)",
+    measured:
+      "2026-10-05, oxc-minify 0.151.0: 5,843 B against SWC's 5,786 B, +57 B, the same total 0.150.0 gave on 2026-09-15 (then quiz.js 2,974 vs 2,932; lens-wire.js 2,869 vs 2,854)",
     runtime: "bun",
     script: `
       const { minifySync } = require(${JSON.stringify(REPO + "node_modules/oxc-minify/index.js")});
@@ -275,7 +283,8 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
   {
     name: "workerd-honours-zstd-dictionary",
     issue: "https://github.com/cloudflare/workerd/pull/7106",
-    landed: "the workerd this wrangler ships compresses SMALLER with the right zstd dictionary than with none (tools/workerd-zstd-probe.ts), which is what a runtime dcz tier for the pages build.ts cannot precompress would need; cloudflare/workerd#7106 is this repository's fix for cloudflare/workerd#6967",
+    landed:
+      "the workerd this wrangler ships compresses SMALLER with the right zstd dictionary than with none (tools/workerd-zstd-probe.ts), which is what a runtime dcz tier for the pages build.ts cannot precompress would need; cloudflare/workerd#7106 is this repository's fix for cloudflare/workerd#6967",
     measured: "2026-09-15, workerd 1.20260911.1 via wrangler 982b806: 73 none / 73 good / 73 wrong, the option is accepted and ignored",
   },
   // RETIRED 2026-09-26: `wrangler-types-accepts-x-new-config`. It watched the
@@ -303,8 +312,10 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     // "landed", so a rerun of that build reads not-yet rather than landed.
     name: "workerd-exposes-temporal",
     issue: "https://github.com/cloudflare/workerd/issues/6907",
-    landed: "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
-    measured: "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
+    landed:
+      "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
+    measured:
+      "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
   },
   // RETIRED 2026-10-05: `new-config-dev-boots-auxiliary-workers`. Like the
   // types watch above, it watched one DOOR (`wrangler dev --x-new-config -c
@@ -316,7 +327,6 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
   // registry directory, read COUNTER [connected] and /hit?peek=1 digits.
   // tools/dev.ts is that door, so `bun run dev` reads config/dev/ natively and
   // the projection no longer runs on every dev start.
-
 ];
 
 /**
@@ -328,7 +338,11 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
  */
 export function interpretTemporalProbe(stdout: unknown): { landed: boolean | null; detail: string } {
   let raw: unknown = null;
-  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch { /* left null on purpose */ }
+  try {
+    raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? "");
+  } catch {
+    /* left null on purpose */
+  }
   const parsed = asRecord(raw);
   if (!parsed || (parsed.present !== true && parsed.present !== false)) return { landed: null, detail: "probe did not run" };
   const date = asText(parsed.date);

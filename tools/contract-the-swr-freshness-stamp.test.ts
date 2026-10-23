@@ -5,13 +5,7 @@
 // operation COUNTS, because the whole change is invisible to a test that only
 // checks the value that comes back, and they pin the legacy path, which is the
 // one that runs on the first request after the deploy.
-import {
-  assert,
-  deleteSWRKV,
-  handleHit,
-  swrKV,
-  test,
-} from "./contract-shared.ts";
+import { assert, deleteSWRKV, handleHit, swrKV, test } from "./contract-shared.ts";
 
 // A KV fake that records ops and stores metadata beside each value, so a test
 // can tell "one read" from "two reads that happen to agree".
@@ -19,9 +13,7 @@ function fakeKV(entries: any[] = []) {
   const store = new Map<string, { value: string; metadata?: { t?: number } }>(entries);
   const ops = { get: 0, getWithMetadata: 0, put: 0, delete: 0 };
   const decode = (raw, typeOrOptions) => {
-    const type = typeOrOptions && typeof typeOrOptions === "object"
-      ? (typeOrOptions.type || "text")
-      : (typeOrOptions || "text");
+    const type = typeOrOptions && typeof typeOrOptions === "object" ? typeOrOptions.type || "text" : typeOrOptions || "text";
     return type === "json" ? JSON.parse(raw) : raw;
   };
   return {
@@ -49,10 +41,7 @@ function fakeKV(entries: any[] = []) {
   };
 }
 
-const entry = (value, ageMs) => [
-  "k",
-  { value: JSON.stringify(value), metadata: ageMs === null ? null : { t: Date.now() - ageMs } },
-];
+const entry = (value, ageMs) => ["k", { value: JSON.stringify(value), metadata: ageMs === null ? null : { t: Date.now() - ageMs } }];
 
 function collector() {
   const kept: any[] = [];
@@ -62,7 +51,9 @@ function collector() {
 test("a fresh entry is one read, and no sentinel key is consulted", async () => {
   const kv = fakeKV([entry({ n: 1 }, 0)]);
   const { kept, ctx } = collector();
-  const value = await swrKV({ RN_KV: kv }, ctx, "k", 60, () => { throw new Error("must not rebuild"); });
+  const value = await swrKV({ RN_KV: kv }, ctx, "k", 60, () => {
+    throw new Error("must not rebuild");
+  });
 
   assert.deepEqual(value, { n: 1 });
   assert.equal(kv.ops.getWithMetadata, 1, "value and stamp arrive in ONE read");
@@ -91,14 +82,20 @@ test("an entry with no metadata reads as stale, rebuilds once, and is fresh afte
   let builds = 0;
   const env = { RN_KV: kv };
 
-  const stale = await swrKV(env, ctx, "k", 60, () => { builds += 1; return { n: 2 }; });
+  const stale = await swrKV(env, ctx, "k", 60, () => {
+    builds += 1;
+    return { n: 2 };
+  });
   assert.deepEqual(stale, { n: 1 }, "a legacy entry still serves instantly");
   assert.equal(kept.length, 1, "missing metadata is treated as stale, never as fresh");
   await Promise.all(kept);
   assert.equal(builds, 1);
   assert.ok(kv.store.get("k")!.metadata!.t, "the rebuild is what writes the first stamp");
 
-  const warm = await swrKV(env, ctx, "k", 60, () => { builds += 1; return { n: 3 }; });
+  const warm = await swrKV(env, ctx, "k", 60, () => {
+    builds += 1;
+    return { n: 3 };
+  });
   assert.deepEqual(warm, { n: 2 });
   assert.equal(builds, 1, "the stamp converges after exactly one rebuild per key");
   assert.equal(kept.length, 1);
@@ -133,7 +130,11 @@ test("deleteSWRKV drops the value key, and leaves a legacy sentinel to expire", 
 function counterStub(n) {
   return {
     idFromName: () => "homepage-visits",
-    get: () => ({ async fetch() { return Response.json({ n }); } }),
+    get: () => ({
+      async fetch() {
+        return Response.json({ n });
+      },
+    }),
   };
 }
 

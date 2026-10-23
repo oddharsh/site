@@ -20,7 +20,6 @@ import { RDAP_CACHE_TTL_S } from "../src/worker/whoareyou.ts";
 import { TTL_BOOKING_DAYS } from "../cal/src/booking.ts";
 import { UID_COOKIE, UID_COOKIE_MAX_AGE_S } from "../serendipity/serendipity.ts";
 
-
 const PAGES: Array<[string, () => Response]> = [
   ["/about", trust.renderAboutPage],
   ["/contact", trust.renderContactPage],
@@ -31,11 +30,16 @@ const PAGES: Array<[string, () => Response]> = [
 // The text between the page's <h1> and its <footer>: the document itself,
 // without the chrome. That region holds no <script> or <style> (asserted
 // below), so dropping tags is enough to read it.
-const text = (html) => html
-  .replace(/<[^>]+>/g, " ")
-  .replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
-  .replace(/&[a-z]+;|&#\d+;/g, " ")
-  .replace(/\s+/g, " ");
+const text = (html) =>
+  html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&[a-z]+;|&#\d+;/g, " ")
+    .replace(/\s+/g, " ");
 const main = (html) => text(html.slice(html.indexOf("<h1"), html.indexOf("<footer")));
 
 for (const [route, render] of PAGES) {
@@ -72,10 +76,16 @@ test("/developers lists every operation /openapi.json describes, with the code's
   assert.ok(page.includes(`comparisons to ${LENS_BUDGETS.compare.max} a minute`));
   assert.ok(page.includes(`ranks ${ASK_BUDGET.max} questions`));
   const shown = JSON.parse(text(html.slice(html.indexOf("<pre><code>{"), html.indexOf("}</code></pre>") + 1)));
-  assert.deepEqual(shown, missJson("https://aadhar.sh", "/no-such-endpoint.json", { section: null, pages: [] }),
-    "the error example is the body a real 404 sends");
-  assert.match(readFileSync("public/sitemap.xml", "utf8"), new RegExp(`<loc>https://aadhar.sh${trust.MARKDOWN_EXAMPLE}</loc>`),
-    "the Markdown example names a real page");
+  assert.deepEqual(
+    shown,
+    missJson("https://aadhar.sh", "/no-such-endpoint.json", { section: null, pages: [] }),
+    "the error example is the body a real 404 sends",
+  );
+  assert.match(
+    readFileSync("public/sitemap.xml", "utf8"),
+    new RegExp(`<loc>https://aadhar.sh${trust.MARKDOWN_EXAMPLE}</loc>`),
+    "the Markdown example names a real page",
+  );
 });
 
 test("each twin is generated from its baked page, not written by hand", async () => {
@@ -84,7 +94,7 @@ test("each twin is generated from its baked page, not written by hand", async ()
     mkdirSync(join(root, "public"), { recursive: true });
     for (const [route, render] of PAGES) writeFileSync(join(root, "public", `${route}.html`), await render().text());
     const { files } = buildTwins(".", { generatedRoot: root });
-    const generated = (buildTwins(".", { generatedRoot: root }).generated as string[]);
+    const generated = buildTwins(".", { generatedRoot: root }).generated as string[];
     for (const [route] of PAGES) {
       assert.ok(!existsSync(`src/content/md${route}.md`), `${route} has no hand twin to drift`);
       assert.ok(generated.includes(route), `${route} takes the generated tier`);
@@ -94,7 +104,9 @@ test("each twin is generated from its baked page, not written by hand", async ()
     }
     assert.ok(files.get("/privacy.md").includes(`stored for ${TTL_BOOKING_DAYS} days`), "a figure survives into the twin");
     assert.ok(files.get("/developers.md").includes(`limited to ${LENS_BUDGETS.inspect.max} a minute`));
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("each trust page is registered for agents, the sitemap and search", () => {

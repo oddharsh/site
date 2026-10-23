@@ -41,7 +41,10 @@ function lockfileDirs() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  return out.split("\0").filter(Boolean).map((rel) => (rel.includes("/") ? dirname(rel) : ""));
+  return out
+    .split("\0")
+    .filter(Boolean)
+    .map((rel) => (rel.includes("/") ? dirname(rel) : ""));
 }
 
 /** A LINE-LEADING `#` is the only comment this drops, so a trailing `# note`
@@ -93,11 +96,7 @@ test("every bun install in .github/workflows is --frozen-lockfile", async () => 
   }
 
   assert.ok(found.length >= 10, `found only ${found.length} bun installs; the scanner is broken`);
-  assert.deepEqual(
-    unfrozen,
-    [],
-    `these installs let the resolver pick versions the committed lockfile does not name:\n  ${unfrozen.join("\n  ")}`,
-  );
+  assert.deepEqual(unfrozen, [], `these installs let the resolver pick versions the committed lockfile does not name:\n  ${unfrozen.join("\n  ")}`);
 });
 
 test("every directory with its own bun.lock carries its own bunfig.toml", async () => {
@@ -129,7 +128,6 @@ test("every directory with its own bun.lock carries its own bunfig.toml", async 
     assert.equal(age, floor, `${where} floors installs at ${age}s where the root floors them at ${floor}s`);
   }
 });
-
 
 test("the global-install exemption admits an exact version and nothing looser", () => {
   assert.equal(installObeysFloor("          bun install -g @anthropic-ai/claude-code@2.1.270"), true);

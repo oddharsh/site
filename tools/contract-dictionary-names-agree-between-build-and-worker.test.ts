@@ -14,9 +14,25 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  DCZ_HEADER_BYTES, DCZ_ZSTD_LEVEL, dczHeader, familyDictionaryName, pageDeltaName, pageDeltaPaths, pageSlug,
-  pageSnapshotName, parseDcz, parseFamilyDictionary, parsePageDelta, parsePageSnapshot, parseShellAsset,
-  parseShellDelta, shellAssetName, shellDeltaName, shellDeltaPath, tagFromAvailableDictionary, tagOfDigest,
+  DCZ_HEADER_BYTES,
+  DCZ_ZSTD_LEVEL,
+  dczHeader,
+  familyDictionaryName,
+  pageDeltaName,
+  pageDeltaPaths,
+  pageSlug,
+  pageSnapshotName,
+  parseDcz,
+  parseFamilyDictionary,
+  parsePageDelta,
+  parsePageSnapshot,
+  parseShellAsset,
+  parseShellDelta,
+  shellAssetName,
+  shellDeltaName,
+  shellDeltaPath,
+  tagFromAvailableDictionary,
+  tagOfDigest,
 } from "../src/worker/lib/dictionary-names.ts";
 import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
 
@@ -24,7 +40,7 @@ const sha = (bytes) => createHash("sha256").update(bytes).digest();
 // What a browser holding `dict` sends: a Structured Field Byte Sequence.
 const available = (dict) => `:${sha(dict).toString("base64")}:`;
 // The request path as serveStaticPage reduces it before any lookup.
-const relOf = (route) => route === "/" ? "index" : route.replace(/^\/+/, "").replace(/\/+$/, "");
+const relOf = (route) => (route === "/" ? "index" : route.replace(/^\/+/, "").replace(/\/+$/, ""));
 
 const DICT = Buffer.from("the bytes a returning browser already holds");
 // [staged asset path, the route html_handling serves it at]
@@ -41,7 +57,11 @@ const SHELL = ["nav.1a2b3c4d.js", "luna.00ff00ff.css", "icons.deadbeef.svg", "na
 // The writer's half, as build.ts step 8 calls it.
 const writtenPageDelta = (page, dict) => `/pd/${pageDeltaName(pageSlug(page), frameDcz(Buffer.alloc(0), dict).tag)}`;
 // A header the Worker accepts always yields a tag; null here is a test bug.
-const tagFrom = (header) => { const tag = tagFromAvailableDictionary(header); assert.ok(tag, String(header)); return tag; };
+const tagFrom = (header) => {
+  const tag = tagFromAvailableDictionary(header);
+  assert.ok(tag, String(header));
+  return tag;
+};
 // The reader's half, as lib/assets.ts calls it.
 const pageLookups = (route, header) => pageDeltaPaths(relOf(route), tagFrom(header));
 // The reader before 2026-07-28: one candidate, named after the ROUTE.
@@ -58,8 +78,7 @@ test("a page delta is found at the name the build wrote it under, section indexe
 });
 
 test("control: the old route-named lookup misses every section index and nothing else", () => {
-  const missed = PAGES.filter(([page, route]) => !oldPageLookups(route, available(DICT)).includes(writtenPageDelta(page, DICT)))
-    .map(([page]) => page);
+  const missed = PAGES.filter(([page, route]) => !oldPageLookups(route, available(DICT)).includes(writtenPageDelta(page, DICT))).map(([page]) => page);
   assert.deepEqual(missed, ["garage/index.html", "lwe/index.html", "access/index.html"]);
 });
 
@@ -128,10 +147,8 @@ test("the dcz header is the RFC 9842 skippable frame, byte for byte", () => {
   const digest = Uint8Array.from({ length: 32 }, (_, i) => i);
   // magic 0x184D2A5E little-endian, a 4-byte LE length of 32, then the digest
   const expected = Buffer.from([
-    0x5e, 0x2a, 0x4d, 0x18,
-    0x20, 0x00, 0x00, 0x00,
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x5e, 0x2a, 0x4d, 0x18, 0x20, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+    0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
   ]);
   assert.equal(DCZ_HEADER_BYTES, 40);
   assert.equal(DCZ_ZSTD_LEVEL, 19);

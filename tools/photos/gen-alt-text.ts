@@ -59,9 +59,10 @@ const OUT = path.join(ROOT, "images", "alt.json");
 
 // keep in sync with cf-garage/src/index.ts's ?mode=alt branch: that endpoint is
 // the public /garage/cf demo and carries its own copy of this prompt.
-export const PROMPT = "Write alt text for this photo: one plain, factual sentence naming only "
-  + "what is clearly visible (main subject and setting). No mood, no "
-  + "interpretation, no guessing, no 'image of'. Under 16 words.";
+export const PROMPT =
+  "Write alt text for this photo: one plain, factual sentence naming only " +
+  "what is clearly visible (main subject and setting). No mood, no " +
+  "interpretation, no guessing, no 'image of'. Under 16 words.";
 const ENDPOINT = "https://aadhar.sh/garage/cf/caption?mode=alt&img=";
 // a real UA: Cloudflare's WAF 403s a bare library default
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 alt-gen";
@@ -112,7 +113,11 @@ async function captionRemote(stem: string): Promise<string> {
 }
 
 const readJson = (file: string, fallback: unknown) => {
-  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
 };
 
 async function main(): Promise<number> {
@@ -127,8 +132,10 @@ async function main(): Promise<number> {
   console.log(`${stems.length} photos, ${Object.keys(alt).length} already done, ${todo.length} to generate`);
   console.log(`route: ${route}`);
   if (!TOKEN && todo.length) {
-    console.log("  no CLOUDFLARE_API_TOKEN: a photo that is not deployed yet will fail here.\n"
-      + "  set a token scoped to Account · Workers AI · Read to caption pre-deploy.");
+    console.log(
+      "  no CLOUDFLARE_API_TOKEN: a photo that is not deployed yet will fail here.\n" +
+        "  set a token scoped to Account · Workers AI · Read to caption pre-deploy.",
+    );
   }
 
   let done = 0;
@@ -151,7 +158,8 @@ async function main(): Promise<number> {
         break;
       }
       console.log(`  ${tag}: ERROR ${msg}`);
-      if (msg.includes("429")) {  // neuron budget hit: stop, resume later
+      if (msg.includes("429")) {
+        // neuron budget hit: stop, resume later
         console.log("  rate-limited (429), stopping; re-run to resume.");
         break;
       }

@@ -54,20 +54,49 @@ type TransformSpec = {
 type ImagePreset = { width?: number; height?: number; fit?: string; format?: string; quality?: number };
 
 const PHOTO_FIELDS = [
-  "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
-  "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
-  "exposure_mode", "meter", "focus_mode", "drive", "film", "dr", "dr_value",
-  "chrome", "chrome_blue", "grain", "grain_size", "highlight_tone", "shadow_tone",
-  "saturation", "recipe",
+  "camera",
+  "lens",
+  "aperture",
+  "shutter",
+  "iso",
+  "focal",
+  "ev",
+  "date",
+  "width",
+  "height",
+  "color_space",
+  "white_balance",
+  "color_temp",
+  "wb_shift",
+  "exposure_mode",
+  "meter",
+  "focus_mode",
+  "drive",
+  "film",
+  "dr",
+  "dr_value",
+  "chrome",
+  "chrome_blue",
+  "grain",
+  "grain_size",
+  "highlight_tone",
+  "shadow_tone",
+  "saturation",
+  "recipe",
 ];
 
-function error(message) { return { _error: String(message).slice(0, 400) }; }
+function error(message) {
+  return { _error: String(message).slice(0, 400) };
+}
 
 function decodeBase64(value) {
   let raw = String(value || "").trim();
   let mime = "";
   const match = raw.match(/^data:([^;,]+);base64,(.*)$/is);
-  if (match) { mime = match[1].toLowerCase(); raw = match[2]; }
+  if (match) {
+    mime = match[1].toLowerCase();
+    raw = match[2];
+  }
   if (!raw || raw.length > Math.ceil(INPUT_CAP / 3) * 4 + 64 || !/^[A-Za-z0-9+/\s]+=*$/.test(raw)) return null;
   try {
     // the strip stays: fromBase64 skips ASCII whitespace alone, and the check above
@@ -75,7 +104,9 @@ function decodeBase64(value) {
     const bytes = Uint8Array.fromBase64(raw.replace(/\s/g, ""));
     if (bytes.length > INPUT_CAP) return null;
     return { bytes, mime };
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function readBytesCapped(response, maxBytes) {
@@ -92,24 +123,39 @@ async function readBytesCapped(response, maxBytes) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!value?.byteLength) continue;
-      if (total >= maxBytes) { truncated = true; break; }
+      if (total >= maxBytes) {
+        truncated = true;
+        break;
+      }
       const take = Math.min(value.byteLength, maxBytes - total);
       chunks.push(value.subarray(0, take));
       total += take;
-      if (take < value.byteLength) { truncated = true; break; }
+      if (take < value.byteLength) {
+        truncated = true;
+        break;
+      }
     }
   } finally {
-    if (truncated) { try { await reader.cancel(); } catch {} }
+    if (truncated) {
+      try {
+        await reader.cancel();
+      } catch {}
+    }
   }
   if (truncated) return { bytes: null, truncated: true };
   const bytes = new Uint8Array(total);
   let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   return { bytes, truncated: false };
 }
 
 function normalizeFormat(value, fallback = "avif") {
-  const format = String(value || fallback).toLowerCase().replace(/^image\//, "");
+  const format = String(value || fallback)
+    .toLowerCase()
+    .replace(/^image\//, "");
   return format === "jpg" ? "jpeg" : format;
 }
 
@@ -120,7 +166,7 @@ function safeNumber(value, min, max, fallback) {
 }
 
 function transformOptions(args: ImageToolArgs = {}): TransformSpec | ImageFailure {
-  const presetKey = args.preset && args.preset in PRESETS ? args.preset as keyof typeof PRESETS : null;
+  const presetKey = args.preset && args.preset in PRESETS ? (args.preset as keyof typeof PRESETS) : null;
   const preset: ImagePreset = presetKey ? PRESETS[presetKey] : {};
   const format = normalizeFormat(args.format || preset.format, "avif");
   if (!MIME_BY_FORMAT[format]) return { error: "format must be avif, webp, or jpeg" };
@@ -146,7 +192,9 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
   const encoded = decodeBase64(args.image_data);
   if (args.image_data !== undefined && !encoded) return { error: "image_data must be valid base64 and no larger than 8 MiB" };
   if (encoded) {
-    const mime = String(args.mime_type || encoded.mime || "").toLowerCase().split(";")[0];
+    const mime = String(args.mime_type || encoded.mime || "")
+      .toLowerCase()
+      .split(";")[0];
     if (mime && !mime.startsWith("image/")) return { error: "mime_type must be an image type" };
     return { bytes: encoded.bytes, mime: mime || "application/octet-stream", source: "image_data" };
   }
@@ -156,9 +204,7 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
   if (!target.ok) return { error: target.error };
   try {
     const signal = AbortSignal.timeout(8000);
-    const followed = await fetchFollowingPublicRedirects(
-      target.url, () => ({ method: "GET", signal }), validateLensTarget, 20,
-    ); // Preserve native fetch's twenty-redirect allowance.
+    const followed = await fetchFollowingPublicRedirects(target.url, () => ({ method: "GET", signal }), validateLensTarget, 20); // Preserve native fetch's twenty-redirect allowance.
     if (!followed.ok) return { error: "source_url redirected to a disallowed target" };
     const response = followed.response;
     const type = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
@@ -167,12 +213,18 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
     const body = await readBytesCapped(response, INPUT_CAP);
     if (body.truncated) return { error: "source_url response exceeds the 8 MiB input limit" };
     return { bytes: body.bytes, mime: type || "application/octet-stream", source: "source_url", url: followed.finalUrl };
-  } catch { return { error: "source_url could not be fetched" }; }
+  } catch {
+    return { error: "source_url could not be fetched" };
+  }
 }
 
 async function imageInfo(env, bytes) {
   if (!env.IMAGES?.info) return null;
-  try { return await env.IMAGES.info(bytes); } catch { return null; }
+  try {
+    return await env.IMAGES.info(bytes);
+  } catch {
+    return null;
+  }
 }
 
 async function transformBytes(env, bytes, spec: TransformSpec): Promise<TransformedImage | ImageFailure> {
@@ -186,7 +238,9 @@ async function transformBytes(env, bytes, spec: TransformSpec): Promise<Transfor
     const body = await readBytesCapped(response, OUTPUT_CAP);
     if (body.truncated) return { error: "transformed image exceeds the 4 MiB output limit" };
     return { bytes: body.bytes, mime: spec.output.format, quality: spec.output.quality };
-  } catch { return { error: "Image binding could not transform the image." }; }
+  } catch {
+    return { error: "Image binding could not transform the image." };
+  }
 }
 
 function imageReceipt(input: ImageInput, info, output: TransformedImage | null) {
@@ -202,8 +256,9 @@ function imageReceipt(input: ImageInput, info, output: TransformedImage | null) 
 function mcpOutput(receipt, images: TransformedImage[] = []) {
   // MCP content is a union of block shapes; without the annotation the array
   // infers as text-only off its first element and refuses the image blocks.
-  const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] =
-    [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
+  const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [
+    { type: "text", text: JSON.stringify(receipt, null, 2) },
+  ];
   for (const image of images) content.push({ type: "image", data: image.bytes.toBase64(), mimeType: image.mime });
   return { _mcp: { structured: receipt, content } };
 }
@@ -253,12 +308,14 @@ export async function imageCompare(args: ImageToolArgs, env) {
   // three-encode waterfall. The combined-output cap is checked below, after
   // every encode settles; parallelism does not increase its 3 x 4 MiB
   // worst-case residency.
-  const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(jobs.map(async ({ format, spec }) => {
-    const output = await transformBytes(env, input.bytes, spec);
-    if ("error" in output) return error(output.error);
-    output.sha256 = await sha256Hex(output.bytes);
-    return { ...output, format };
-  }));
+  const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(
+    jobs.map(async ({ format, spec }) => {
+      const output = await transformBytes(env, input.bytes, spec);
+      if ("error" in output) return error(output.error);
+      output.sha256 = await sha256Hex(output.bytes);
+      return { ...output, format };
+    }),
+  );
   const variants: (TransformedImage & { format: string })[] = [];
   let total = 0;
   for (const output of outputs) {
@@ -268,7 +325,9 @@ export async function imageCompare(args: ImageToolArgs, env) {
     variants.push(output);
   }
   const receipt = {
-    ...imageReceipt(input, info, null), operation: "compare", preset: args.preset || null,
+    ...imageReceipt(input, info, null),
+    operation: "compare",
+    preset: args.preset || null,
     variants: variants.map(({ bytes, ...variant }) => variant),
     recommendation: variants.slice().sort((a, b) => a.bytes.byteLength - b.bytes.byteLength)[0]?.format || null,
     note: "Size is measured exactly; visual quality is not scored by this tool.",
@@ -280,7 +339,9 @@ async function loadJson(env, path, fallback = {}) {
   try {
     const response = await env.ASSETS.fetch(`https://assets.local/${path}`);
     return response.ok ? await response.json() : fallback;
-  } catch { return fallback; }
+  } catch {
+    return fallback;
+  }
 }
 
 function archiveStemFromUrl(rawUrl, hashes) {
@@ -289,12 +350,14 @@ function archiveStemFromUrl(rawUrl, hashes) {
     if (url.hostname.toLowerCase() !== CANONICAL_HOST) return null;
     const full = decodeURIComponent(url.pathname.replace(/^\/images\/full\//, ""));
     // `jpeg`: a link from before the original moved to JPEG XL still names its photo.
-    for (const [stem, entry] of Object.entries(photoIndex)) if (entry.full === full || (entry as { jpeg?: string }).jpeg === full) return { stem, kind: "archive-url" };
+    for (const [stem, entry] of Object.entries(photoIndex))
+      if (entry.full === full || (entry as { jpeg?: string }).jpeg === full) return { stem, kind: "archive-url" };
     const match = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+?)(-400)?\.([a-f0-9]{8})\.(avif|jpg)$/i);
     if (match && hashes[match[1]]) {
       const entry = hashes[match[1]];
       const tier = match[2] ? "s" : match[4].toLowerCase() === "jpg" ? "j" : "a";
-      if ((tier === "j" && entry.j === match[3]) || (tier === "a" && entry.a === match[3]) || (tier === "s" && entry.s === match[3])) return { stem: match[1], kind: "archive-url", tier };
+      if ((tier === "j" && entry.j === match[3]) || (tier === "a" && entry.a === match[3]) || (tier === "s" && entry.s === match[3]))
+        return { stem: match[1], kind: "archive-url", tier };
     }
   } catch {}
   return null;
@@ -305,10 +368,18 @@ function publicPhoto(record, stem, hashes, alt, kind, tier) {
   const hash = hashes?.[stem] || {};
   const index = photoIndex[stem];
   return {
-    stem, matchKind: kind, matchedTier: tier || null,
+    stem,
+    matchKind: kind,
+    matchedTier: tier || null,
     full: index?.full ? `/images/full/${encodeURIComponent(index.full).replace(/%2F/g, "/")}` : null,
-    thumb: { avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null, jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null, small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null, xs: hash.x ? `/i/${stem}-200.${hash.x}.avif` : null },
-    alt: String(alt?.[stem] || "").slice(0, 240), metadata,
+    thumb: {
+      avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null,
+      jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null,
+      small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
+      xs: hash.x ? `/i/${stem}-200.${hash.x}.avif` : null,
+    },
+    alt: String(alt?.[stem] || "").slice(0, 240),
+    metadata,
   };
 }
 
@@ -347,8 +418,11 @@ export async function photoRecipe(args, env) {
     const cut = hit.lastIndexOf(":");
     const hitStem = cut > 0 ? hit.slice(0, cut) : "";
     const hitTier = cut > 0 ? hit.slice(cut + 1) : "";
-    if (!hitStem || !["a", "j", "s"].includes(hitTier)) return { matched: false, inputSha256, reason: "No exact published thumbnail match. Arbitrary originals are not treated as recipe matches." };
-    stem = hitStem; kind = "published-thumbnail"; tier = hitTier;
+    if (!hitStem || !["a", "j", "s"].includes(hitTier))
+      return { matched: false, inputSha256, reason: "No exact published thumbnail match. Arbitrary originals are not treated as recipe matches." };
+    stem = hitStem;
+    kind = "published-thumbnail";
+    tier = hitTier;
   }
 
   if (!stem && !args.source_url) return error("provide a published stem, archive URL, or exact bytes from a published thumbnail");
@@ -360,8 +434,17 @@ export async function photoRecipe(args, env) {
   ]);
   if (!stem && args.source_url) {
     const match = archiveStemFromUrl(args.source_url, hashes);
-    if (match) { stem = match.stem; kind = match.kind; tier = match.tier; }
+    if (match) {
+      stem = match.stem;
+      kind = match.kind;
+      tier = match.tier;
+    }
   }
   if (!stem || !metadata[stem]) return error("provide a published stem, archive URL, or exact bytes from a published thumbnail");
-  return { matched: true, input: inputSha256 ? { sha256: inputSha256 } : null, photo: publicPhoto(metadata[stem], stem, hashes, alt, kind, tier), note: "Recipe data is returned only after an explicit archive identity or exact published-thumbnail match." };
+  return {
+    matched: true,
+    input: inputSha256 ? { sha256: inputSha256 } : null,
+    photo: publicPhoto(metadata[stem], stem, hashes, alt, kind, tier),
+    note: "Recipe data is returned only after an explicit archive identity or exact published-thumbnail match.",
+  };
 }

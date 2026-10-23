@@ -54,7 +54,10 @@ const ENCODINGS = /\.(?:br|dcz)$/;
  * manifest instead of quietly listing a file the asset upload skips.
  */
 export function parseAssetsIgnore(text: string): (rel: string) => boolean {
-  const rules = text.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+  const rules = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
   const matchers = rules.map((rule) => {
     if (rule.startsWith("!") || rule.includes("**") || /[?[\]\\]/.test(rule)) {
       throw new Error(`.assetsignore: ${JSON.stringify(rule)} uses syntax served-manifest does not implement; extend parseAssetsIgnore first`);
@@ -113,7 +116,11 @@ function walk(root: string, dir = root, out: string[] = []): string[] {
 /** Cut a manifest from a staged tree (`.build/public`). */
 export function buildManifest(root: string, commit: string | null): ServedManifest {
   let ignoreText = "";
-  try { ignoreText = readFileSync(join(root, ".assetsignore"), "utf8"); } catch { /* no file, nothing ignored */ }
+  try {
+    ignoreText = readFileSync(join(root, ".assetsignore"), "utf8");
+  } catch {
+    /* no file, nothing ignored */
+  }
   const ignored = parseAssetsIgnore(ignoreText);
   const files: Record<string, string> = {};
   for (const rel of walk(root).sort()) {
@@ -127,7 +134,11 @@ export function buildManifest(root: string, commit: string | null): ServedManife
 
 /** Stable bytes, so two builds of one commit write identical manifests. */
 export function serializeManifest(m: ServedManifest): string {
-  const files = Object.fromEntries(Object.keys(m.files).sort().map((k) => [k, m.files[k]]));
+  const files = Object.fromEntries(
+    Object.keys(m.files)
+      .sort()
+      .map((k) => [k, m.files[k]]),
+  );
   return `${JSON.stringify({ schema: m.schema, commit: m.commit, files }, null, 1)}\n`;
 }
 
@@ -138,13 +149,15 @@ export function serializeManifest(m: ServedManifest): string {
 export function parseManifest(text: string): ServedManifest {
   const m = JSON.parse(text);
   if (m?.schema !== SCHEMA) throw new Error(`served-manifest: schema is ${JSON.stringify(m?.schema)}, expected ${SCHEMA}`);
-  if (m.commit !== null && !/^[0-9a-f]{40}$/.test(String(m.commit))) throw new Error(`served-manifest: commit ${JSON.stringify(m.commit)} is neither null nor a 40-hex commit`);
+  if (m.commit !== null && !/^[0-9a-f]{40}$/.test(String(m.commit)))
+    throw new Error(`served-manifest: commit ${JSON.stringify(m.commit)} is neither null nor a 40-hex commit`);
   if (m.files === null || m.files === undefined || Array.isArray(m.files) || Object.getPrototypeOf(m.files) !== Object.prototype) {
     throw new Error("served-manifest: files is not a URL-to-sha256 map");
   }
   const files: Record<string, string> = {};
   for (const [url, digest] of Object.entries(m.files)) {
-    if (!url.startsWith("/") || !/^[0-9a-f]{64}$/.test(String(digest))) throw new Error(`served-manifest: ${JSON.stringify(url)} -> ${JSON.stringify(digest)} is not a path and a sha256`);
+    if (!url.startsWith("/") || !/^[0-9a-f]{64}$/.test(String(digest)))
+      throw new Error(`served-manifest: ${JSON.stringify(url)} -> ${JSON.stringify(digest)} is not a path and a sha256`);
     files[url] = String(digest);
   }
   return { schema: SCHEMA, commit: m.commit, files };
@@ -152,14 +165,20 @@ export function parseManifest(text: string): ServedManifest {
 
 /** URLs whose expected bytes differ, or that are new, in `next` against `prev`. */
 export function changedUrls(prev: ServedManifest, next: ServedManifest): string[] {
-  return Object.keys(next.files).filter((u) => prev.files[u] !== next.files[u]).sort();
+  return Object.keys(next.files)
+    .filter((u) => prev.files[u] !== next.files[u])
+    .sort();
 }
 
 // ── checking one against an origin ───────────────────────────────────────────
 
 export type Verdict = "match" | "mismatch" | "redirect" | "status" | "error";
 
-export interface UrlResult { url: string; verdict: Verdict; detail?: string }
+export interface UrlResult {
+  url: string;
+  verdict: Verdict;
+  detail?: string;
+}
 
 export interface CheckOptions {
   origin: string;

@@ -323,8 +323,10 @@ export function renderDevelopersPage() {
     <p>${lead}</p>
     <pre><code>${lines.join("\n")}</code></pre>`;
   });
-  const endpoints = OPERATIONS.map((op) => html`
-      <li><a href="${exampleUrl(op)}">${op.method === "post" ? "POST " : ""}${op.path}</a> (<code>${op.operationId}</code>): ${op.summary}.</li>`);
+  const endpoints = OPERATIONS.map(
+    (op) => html`
+      <li><a href="${exampleUrl(op)}">${op.method === "post" ? "POST " : ""}${op.path}</a> (<code>${op.operationId}</code>): ${op.summary}.</li>`,
+  );
 
   return page({
     route: "/developers",
@@ -393,8 +395,10 @@ export function renderDevelopersPage() {
       purpose, for the reason beside it, so a readiness audit that marks one missing is
       reading a decision this site already made.
     </p>
-    <dl class="fields">${LEAVES_OUT.map(({ what, why }) => html`
-      <dt>${what}</dt><dd>${why}</dd>`)}
+    <dl class="fields">${LEAVES_OUT.map(
+      ({ what, why }) => html`
+      <dt>${what}</dt><dd>${why}</dd>`,
+    )}
     </dl>
 
     <h2>Pages as Markdown</h2>

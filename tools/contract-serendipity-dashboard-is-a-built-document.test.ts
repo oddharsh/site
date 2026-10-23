@@ -9,38 +9,93 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ISLAND_MARKER, islandPreload, islandScript } from "../src/worker/lib/island.ts";
-import { EVENTS_URL, handleSerendipity, MCP_INFO_PATH, renderMcpInfoPage, renderSerendipityPage, SERENDIPITY_SECURITY_HEADERS, serendipityCsp } from "../serendipity/serendipity.ts";
+import {
+  EVENTS_URL,
+  handleSerendipity,
+  MCP_INFO_PATH,
+  renderMcpInfoPage,
+  renderSerendipityPage,
+  SERENDIPITY_SECURITY_HEADERS,
+  serendipityCsp,
+} from "../serendipity/serendipity.ts";
 
 const EVENTS = [
-  { id: "e1", name: "Future <script>", start_at: "2099-01-02T18:00:00Z", location: "NYC", user_status: "going", cover_url: null, attendee_count: 4, host_count: 1, contributors: "alice" },
-  { id: "e2", name: "Past thing", start_at: "2001-01-02T18:00:00Z", location: "SF", user_status: null, cover_url: null, attendee_count: 0, host_count: 0, contributors: "" },
+  {
+    id: "e1",
+    name: "Future <script>",
+    start_at: "2099-01-02T18:00:00Z",
+    location: "NYC",
+    user_status: "going",
+    cover_url: null,
+    attendee_count: 4,
+    host_count: 1,
+    contributors: "alice",
+  },
+  {
+    id: "e2",
+    name: "Past thing",
+    start_at: "2001-01-02T18:00:00Z",
+    location: "SF",
+    user_status: null,
+    cover_url: null,
+    attendee_count: 0,
+    host_count: 0,
+    contributors: "",
+  },
 ];
 
 // A D1 that answers the dashboard's two queries and nothing else.
 
-function fakeDb(events: Array<Omit<(typeof EVENTS)[number], "start_at"> & {start_at: string | null}> = EVENTS) {
-  return { prepare(sql) {
-    const bound = { all: async () => ({ results: /FROM events e/.test(sql) ? events : [] }), first: async () => (/COUNT\(\*\) AS n/.test(sql) ? { n: 3 } : null) };
-    return { ...bound, bind: () => bound };
-  } };
+function fakeDb(events: Array<Omit<(typeof EVENTS)[number], "start_at"> & { start_at: string | null }> = EVENTS) {
+  return {
+    prepare(sql) {
+      const bound = {
+        all: async () => ({ results: /FROM events e/.test(sql) ? events : [] }),
+        first: async () => (/COUNT\(\*\) AS n/.test(sql) ? { n: 3 } : null),
+      };
+      return { ...bound, bind: () => bound };
+    },
+  };
 }
 
 // caches.default, which neither test runtime provides.
 function fakeCache() {
-  const store = new Map(), deleted: any[] = [];
-  return { deleted, store, default: {
-    match: async (k) => store.get(k.url)?.clone(),
-    put: async (k, v) => { store.set(k.url, v); },
-    delete: async (k) => { deleted.push(k.url); return store.delete(k.url); },
-  } };
+  const store = new Map(),
+    deleted: any[] = [];
+  return {
+    deleted,
+    store,
+    default: {
+      match: async (k) => store.get(k.url)?.clone(),
+      put: async (k, v) => {
+        store.set(k.url, v);
+      },
+      delete: async (k) => {
+        deleted.push(k.url);
+        return store.delete(k.url);
+      },
+    },
+  };
 }
 
 async function withCache(fn) {
-  const real = globalThis.caches, c = fakeCache();
-  globalThis.caches = ((c as unknown) as CacheStorage);
+  const real = globalThis.caches,
+    c = fakeCache();
+  globalThis.caches = c as unknown as CacheStorage;
   const waits: any[] = [];
-  try { return await fn(c, { waitUntil(p) { waits.push(p); } }, () => Promise.all(waits)); }
-  finally { globalThis.caches = real; }
+  try {
+    return await fn(
+      c,
+      {
+        waitUntil(p) {
+          waits.push(p);
+        },
+      },
+      () => Promise.all(waits),
+    );
+  } finally {
+    globalThis.caches = real;
+  }
 }
 
 test("the dashboard shell is deterministic, carries its island, and bakes no pool value", async () => {
@@ -138,10 +193,15 @@ test("shared event HTML normalizes offsets and zoneless dates, labels UTC, and t
 });
 
 test("event detail pages ship the same UTC time markup and client as the dashboard", async () => {
-  const db = { prepare(sql) {
-    const bound = { all: async () => ({ results: [] }), first: async () => /SELECT id, name, description/.test(sql) ? { ...EVENTS[0], start_at: "2026-10-03 01:00:00" } : null };
-    return { ...bound, bind: () => bound };
-  } };
+  const db = {
+    prepare(sql) {
+      const bound = {
+        all: async () => ({ results: [] }),
+        first: async () => (/SELECT id, name, description/.test(sql) ? { ...EVENTS[0], start_at: "2026-10-03 01:00:00" } : null),
+      };
+      return { ...bound, bind: () => bound };
+    },
+  };
   const response = await handleSerendipity(new Request("https://aadhar.sh/serendipity/event/e1"), { SERENDIPITY_DB: db }, { waitUntil() {} });
   const body = await response.text();
   assert.equal(response.status, 200);

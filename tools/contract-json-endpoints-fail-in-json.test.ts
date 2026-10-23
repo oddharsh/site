@@ -10,7 +10,6 @@ import { handleRnTracks, handleRnTracksHtml } from "../src/worker/rn.ts";
 import { handleLedgerJson } from "../src/worker/ledger.ts";
 import { handleSpeculationJson } from "../src/worker/speculation.ts";
 
-
 async function assertJsonError(r: Response, status, code) {
   assert.equal(r.status, status);
   assert.match(r.headers.get("content-type") || "", /^application\/json/);
@@ -23,18 +22,41 @@ async function assertJsonError(r: Response, status, code) {
 const quiet = async (fn) => {
   const original = console.error;
   console.error = () => {};
-  try { return await fn(); } finally { console.error = original; }
+  try {
+    return await fn();
+  } finally {
+    console.error = original;
+  }
 };
 
 test("/lens/census.json answers a D1 throw with a JSON 503", async () => {
-  const env = { RESTORE_DB: { prepare() { throw new Error("D1_ERROR: no such table"); }, exec() { throw new Error("D1_ERROR"); }, batch() { throw new Error("D1_ERROR"); } } };
+  const env = {
+    RESTORE_DB: {
+      prepare() {
+        throw new Error("D1_ERROR: no such table");
+      },
+      exec() {
+        throw new Error("D1_ERROR");
+      },
+      batch() {
+        throw new Error("D1_ERROR");
+      },
+    },
+  };
   const r = await quiet(() => handleCensusJson(new Request("https://aadhar.sh/lens/census.json"), env));
   await assertJsonError(r, 503, "storage_unavailable");
   assert.equal(r.headers.get("retry-after"), "60");
 });
 
 test("/rn/tracks answers a KV throw with a JSON 503", async () => {
-  const env = { RN_KV: { get() { throw new Error("KV GET failed: 500"); }, put() {} } };
+  const env = {
+    RN_KV: {
+      get() {
+        throw new Error("KV GET failed: 500");
+      },
+      put() {},
+    },
+  };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const r = await quiet(() => handleRnTracks(new Request("https://aadhar.sh/rn/tracks"), env, ctx));
   const body = await assertJsonError(r, 503, "storage_unavailable");
@@ -60,7 +82,7 @@ test("/rn/tracks with no playlist set is a 503 for machines and still a 200 frag
 });
 
 test("/ledger.json with analytics unconfigured is a 503 in the error shape", async () => {
-  const r = await handleLedgerJson(new Request("https://aadhar.sh/ledger.json"),  ({} as any));
+  const r = await handleLedgerJson(new Request("https://aadhar.sh/ledger.json"), {} as any);
   const body = await assertJsonError(r, 503, "not_configured");
   assert.equal(body.ok, false);
   assert.equal(body.reason, "unconfigured", "the reason a client may already read stays");

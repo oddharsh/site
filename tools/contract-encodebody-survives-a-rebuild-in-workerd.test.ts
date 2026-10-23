@@ -35,8 +35,7 @@ import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
 import { underNode } from "./lib/harness-dispatch.ts";
-import {
-  configText, ROOT, assert, test } from "./contract-shared.ts";
+import { configText, ROOT, assert, test } from "./contract-shared.ts";
 
 // Every shape the walker has an opinion about, plus production's own wrapper
 // down each of its three exits.
@@ -88,80 +87,83 @@ async function decodedOnce(response) {
 
 // Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const DISPATCH = "encodeBody survives every rebuild shape the walker allows, measured in the pinned workerd";
-test(DISPATCH, underNode(import.meta.url, DISPATCH, async () => {
-  const PAGE = Buffer.from("<p>encodeBody, carried or lost</p>\n".repeat(500));
-  const BROTLI = brotliCompressSync(PAGE);
+test(
+  DISPATCH,
+  underNode(import.meta.url, DISPATCH, async () => {
+    const PAGE = Buffer.from("<p>encodeBody, carried or lost</p>\n".repeat(500));
+    const BROTLI = brotliCompressSync(PAGE);
 
-  // Production's flags rather than a default: compatibility_flags carries
-  // new_module_registry, and a runtime behaviour measured under different
-  // flags would be a measurement of a different runtime.
-  const site = parseJsonc(await configText("cloudflare.config.ts"));
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "encodebody-")));
-  writeFileSync(join(dir, "worker.js"),
-    workerSource(fileURLToPath(new URL("src/worker/lib/security.ts", ROOT))));
-  writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({
-    name: "encodebody-probe",
-    main: "worker.js",
-    compatibility_date: site.compatibility_date,
-    compatibility_flags: site.compatibility_flags,
-  }));
+    // Production's flags rather than a default: compatibility_flags carries
+    // new_module_registry, and a runtime behaviour measured under different
+    // flags would be a measurement of a different runtime.
+    const site = parseJsonc(await configText("cloudflare.config.ts"));
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "encodebody-")));
+    writeFileSync(join(dir, "worker.js"), workerSource(fileURLToPath(new URL("src/worker/lib/security.ts", ROOT))));
+    writeFileSync(
+      join(dir, "wrangler.jsonc"),
+      JSON.stringify({
+        name: "encodebody-probe",
+        main: "worker.js",
+        compatibility_date: site.compatibility_date,
+        compatibility_flags: site.compatibility_flags,
+      }),
+    );
 
-  const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
-  try {
-    await server.listen();
-    const worker = server.getWorker();
-    const send = (path) => worker.fetch(`http://encodebody.test${path}`, {
-      method: "POST",
-      body: BROTLI,
-      headers: { "accept-encoding": "br" },
-    });
+    const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
+    try {
+      await server.listen();
+      const worker = server.getWorker();
+      const send = (path) =>
+        worker.fetch(`http://encodebody.test${path}`, {
+          method: "POST",
+          body: BROTLI,
+          headers: { "accept-encoding": "br" },
+        });
 
-    // THE CONTROL, first, because every row after it reads as a pass for a
-    // broken instrument too. An object init must leave one brotli layer behind
-    // after the client's decode, and exactly one: decoding it again yields the
-    // page. If this row ever reads as the plain page, workerd changed the
-    // asymmetry and the walker's RECORDED entries need re-reading, not this row.
-    const lost = await decodedOnce(await send("/object-init"));
-    assert.notDeepEqual(lost, PAGE,
-      "an object-init rebuild came back clean, so either workerd now preserves encodeBody "
-    + "through a plain init (re-read gotcha 13 and the walker's rules) or this probe stopped "
-    + "seeing the second layer");
-    assert.deepEqual(brotliDecompressSync(lost), PAGE,
-      "the object-init body should be the page wrapped in exactly one extra brotli layer");
+      // THE CONTROL, first, because every row after it reads as a pass for a
+      // broken instrument too. An object init must leave one brotli layer behind
+      // after the client's decode, and exactly one: decoding it again yields the
+      // page. If this row ever reads as the plain page, workerd changed the
+      // asymmetry and the walker's RECORDED entries need re-reading, not this row.
+      const lost = await decodedOnce(await send("/object-init"));
+      assert.notDeepEqual(
+        lost,
+        PAGE,
+        "an object-init rebuild came back clean, so either workerd now preserves encodeBody " +
+          "through a plain init (re-read gotcha 13 and the walker's rules) or this probe stopped " +
+          "seeing the second layer",
+      );
+      assert.deepEqual(brotliDecompressSync(lost), PAGE, "the object-init body should be the page wrapped in exactly one extra brotli layer");
 
-    for (const path of ["/untouched", "/response-init"]) {
-      assert.deepEqual(await decodedOnce(await send(path)), PAGE,
-        `${path}: a client decoding once did not get the page back`);
+      for (const path of ["/untouched", "/response-init"]) {
+        assert.deepEqual(await decodedOnce(await send(path)), PAGE, `${path}: a client decoding once did not get the page back`);
+      }
+
+      // Production's wrapper. The header assertions are what stop these rows
+      // passing vacuously: a withSecurityHeaders that bailed before its rebuild
+      // would hand the body through untouched and read exactly like a carry.
+      const secured = await send("/security-headers");
+      assert.ok(secured.headers.get("content-security-policy"), "withSecurityHeaders did not reach its rebuild, so this row proves nothing");
+      assert.deepEqual(await decodedOnce(secured), PAGE, "withSecurityHeaders double-encoded a precompressed body: its init must carry encodeBody");
+
+      const noindex = await send("/security-headers-noindex");
+      assert.ok(noindex.headers.get("x-robots-tag"), "the noindex rebuild did not run, so this row proves nothing");
+      assert.deepEqual(await decodedOnce(noindex), PAGE, "the noindex path double-encoded a precompressed body across its two rebuilds");
+
+      // The early rebuild ALONE. x-robots-tag says the noindex rebuild ran and a
+      // missing CSP says the image bail returned before the main one could set the
+      // flag again, so this row has exactly one carry to lean on.
+      const image = await send("/security-headers-noindex-image");
+      assert.ok(image.headers.get("x-robots-tag"), "the noindex rebuild did not run on the image row, so it proves nothing");
+      assert.equal(image.headers.get("content-security-policy"), null, "the image row reached the main rebuild, so it no longer isolates the noindex carry");
+      assert.deepEqual(
+        await decodedOnce(image),
+        PAGE,
+        "the noindex rebuild double-encoded a body that then took the image bail: " + "its init must carry encodeBody, since no later rebuild sets it again",
+      );
+    } finally {
+      await server.close();
+      rmSync(dir, { recursive: true, force: true });
     }
-
-    // Production's wrapper. The header assertions are what stop these rows
-    // passing vacuously: a withSecurityHeaders that bailed before its rebuild
-    // would hand the body through untouched and read exactly like a carry.
-    const secured = await send("/security-headers");
-    assert.ok(secured.headers.get("content-security-policy"),
-      "withSecurityHeaders did not reach its rebuild, so this row proves nothing");
-    assert.deepEqual(await decodedOnce(secured), PAGE,
-      "withSecurityHeaders double-encoded a precompressed body: its init must carry encodeBody");
-
-    const noindex = await send("/security-headers-noindex");
-    assert.ok(noindex.headers.get("x-robots-tag"),
-      "the noindex rebuild did not run, so this row proves nothing");
-    assert.deepEqual(await decodedOnce(noindex), PAGE,
-      "the noindex path double-encoded a precompressed body across its two rebuilds");
-
-    // The early rebuild ALONE. x-robots-tag says the noindex rebuild ran and a
-    // missing CSP says the image bail returned before the main one could set the
-    // flag again, so this row has exactly one carry to lean on.
-    const image = await send("/security-headers-noindex-image");
-    assert.ok(image.headers.get("x-robots-tag"),
-      "the noindex rebuild did not run on the image row, so it proves nothing");
-    assert.equal(image.headers.get("content-security-policy"), null,
-      "the image row reached the main rebuild, so it no longer isolates the noindex carry");
-    assert.deepEqual(await decodedOnce(image), PAGE,
-      "the noindex rebuild double-encoded a body that then took the image bail: "
-    + "its init must carry encodeBody, since no later rebuild sets it again");
-  } finally {
-    await server.close();
-    rmSync(dir, { recursive: true, force: true });
-  }
-}));
+  }),
+);

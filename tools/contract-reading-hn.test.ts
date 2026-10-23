@@ -20,7 +20,8 @@ test("hnKey folds the spellings HN submitters vary on, and nothing else", () => 
     "http://www.paulgraham.com/greatwork.html",
     "https://PaulGraham.com/greatwork.html/#top",
     "https://paulgraham.com/greatwork.html?utm_source=curius&ref=x",
-  ]) assert.equal(hnKey(spelling), key, spelling);
+  ])
+    assert.equal(hnKey(spelling), key, spelling);
   // A query parameter that names the PAGE survives, so two videos stay two.
   assert.equal(hnKey("https://www.youtube.com/watch?v=abc&si=share"), "youtube.com/watch?v=abc");
   assert.notEqual(hnKey("https://a.com/x?id=1"), hnKey("https://a.com/x?id=2"));
@@ -29,11 +30,7 @@ test("hnKey folds the spellings HN submitters vary on, and nothing else", () => 
 });
 
 test("pickThread takes only hits for the exact page, and the most-commented of those", () => {
-  const body = { hits: [
-    hit("https://danluu.com/look-stupid/", "28942189", 777),
-    hit("http://danluu.com/", "100", 12),
-    hit("https://danluu.com", "101", 40),
-  ] };
+  const body = { hits: [hit("https://danluu.com/look-stupid/", "28942189", 777), hit("http://danluu.com/", "100", 12), hit("https://danluu.com", "101", 40)] };
   assert.deepEqual(pickThread("danluu.com", body), { id: 101, c: 40, p: 10, n: 2 });
   // The control: the same answer for a page nobody submitted is no thread at all.
   assert.deepEqual(pickThread("danluu.com/unsubmitted", body), { id: null, c: 0, p: 0, n: 0 });
@@ -59,7 +56,10 @@ test("pickPending asks never-asked links first, newest-saved first, then the sta
   const keys = pickPending(items, map, NOW).map((p) => p.key);
   // An HN link IS its thread, and a second spelling of one page is one lookup.
   assert.deepEqual(keys, ["a.com/new", "a.com/old", "a.com/stale"]);
-  assert.deepEqual(pickPending(items, map, NOW, 1).map((p) => p.key), ["a.com/new"]);
+  assert.deepEqual(
+    pickPending(items, map, NOW, 1).map((p) => p.key),
+    ["a.com/new"],
+  );
 });
 
 test("hnInterval re-reads live threads often and settled answers rarely", () => {

@@ -20,7 +20,10 @@ const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 test("the staged manifest is byte-identical to what the fallback renders", { skip: needsBuild }, async () => {
   const staged = await readFile(new URL("images/manifest.json", BUILT));
   const rendered = Buffer.from(await handleImagesManifest().arrayBuffer());
-  assert.ok(staged.equals(rendered), "build.ts and the Worker's fallback disagree about the manifest's bytes, so which one a visitor gets depends on whether the deploy staged it");
+  assert.ok(
+    staged.equals(rendered),
+    "build.ts and the Worker's fallback disagree about the manifest's bytes, so which one a visitor gets depends on whether the deploy staged it",
+  );
   // A floor, because an empty pool serializes to valid JSON and would pass the
   // equality above on both sides.
   const { count, photos } = JSON.parse(staged.toString("utf8"));
@@ -69,7 +72,11 @@ test("the route's headers replace the immutable cache /images/* would hand it", 
   for (const { label, req, env, encoding } of cases) {
     const res = await servePrecompressedText(req, env, { headers: IMAGES_MANIFEST_HEADERS });
     assert.equal(res.status, 200, label);
-    assert.equal(res.headers.get("cache-control"), IMAGES_MANIFEST_HEADERS["cache-control"], `${label}: the manifest must not inherit a one-year immutable cache`);
+    assert.equal(
+      res.headers.get("cache-control"),
+      IMAGES_MANIFEST_HEADERS["cache-control"],
+      `${label}: the manifest must not inherit a one-year immutable cache`,
+    );
     assert.equal(res.headers.get("access-control-allow-origin"), "*", `${label}: the manifest was always public to other origins`);
     assert.equal(res.headers.get("content-encoding"), encoding, label);
   }

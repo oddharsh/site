@@ -57,7 +57,9 @@ export function tagFromAvailableDictionary(raw: string | null | undefined): stri
     const digest = Uint8Array.fromBase64(m[1]);
     if (digest.length !== 32) return null;
     return tagOfDigest(digest);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // js, css and the icon sprite. A delta exists only for these (DICTIONARY_TYPES
@@ -73,8 +75,7 @@ export function parseShellAsset(name: string): ShellAsset | null {
   return m ? { base: m[1], hash8: m[2], ext: m[3], name } : null;
 }
 
-export const shellAssetName = (asset: { base: string; hash8: string; ext: string }): string =>
-  `${asset.base}.${asset.hash8}.${asset.ext}`;
+export const shellAssetName = (asset: { base: string; hash8: string; ext: string }): string => `${asset.base}.${asset.hash8}.${asset.ext}`;
 
 const FAMILY_DICTIONARY = /^page-family\.([0-9a-f]{8})\.dict$/;
 
@@ -88,8 +89,7 @@ const SHELL_DELTA = /^(.+)\.([0-9a-f]{8})\.([0-9a-f]{16})\.dcz$/;
 
 // The file under /ad/ holding `asset` encoded against the dictionary `tag` names.
 // The extension is deliberately absent: a base never ships under two types.
-export const shellDeltaName = (asset: { base: string; hash8: string }, tag: string): string =>
-  `${asset.base}.${asset.hash8}.${tag}.dcz`;
+export const shellDeltaName = (asset: { base: string; hash8: string }, tag: string): string => `${asset.base}.${asset.hash8}.${tag}.dcz`;
 
 export function parseShellDelta(name: string): { base: string; hash8: string; tag: string } | null {
   const m = name.match(SHELL_DELTA);
@@ -107,8 +107,7 @@ export function shellDeltaPath(pathname: string, tag: string): string | null {
 // slug: the asset path with separators folded, so it survives as one filename
 // segment. `garage/index.html` -> `garage__index`; an extensionless stem
 // (`garage/index`) gives the same answer, which is what lets the Worker call it.
-export const pageSlug = (assetPath: string): string =>
-  assetPath.replace(/\.html$/, "").replace(/\//g, "__");
+export const pageSlug = (assetPath: string): string => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
 const PAGE_DELTA = /^(.+)\.([0-9a-f]{16})\.dcz$/;
 const PAGE_SNAPSHOT = /^(.+)\.([0-9a-f]{16})\.html\.br$/;

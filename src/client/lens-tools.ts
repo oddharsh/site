@@ -24,11 +24,25 @@
 //     so the form is built with createElement and textContent, never innerHTML,
 //     and depth, property count and option count are all capped.
 type PlannedField = {
-  name: string; required: boolean; description: string; constraints: string[];
-  kind?: string; why?: string; value?: unknown; format?: string | null;
-  options?: { value: unknown; label: string }[]; truncated?: number;
-  integer?: boolean; min?: number; max?: number; step?: number | "any";
-  maxItems?: number; itemType?: string; item?: string; fields?: PlannedField[]; columns?: PlannedField[];
+  name: string;
+  required: boolean;
+  description: string;
+  constraints: string[];
+  kind?: string;
+  why?: string;
+  value?: unknown;
+  format?: string | null;
+  options?: { value: unknown; label: string }[];
+  truncated?: number;
+  integer?: boolean;
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  maxItems?: number;
+  itemType?: string;
+  item?: string;
+  fields?: PlannedField[];
+  columns?: PlannedField[];
 };
 
 (() => {
@@ -38,19 +52,34 @@ type PlannedField = {
   // from a stranger's MCP server, so it is parsed once, by name, at the top.
   /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
      of typeof; keeping those checks in these three lines is the whole point. */
-  function asText(v) { return typeof v === "string" && v !== "" ? v : null; }
-  function asNumber(v) { return typeof v === "number" && isFinite(v) ? v : null; }
-  function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
+  function asText(v) {
+    return typeof v === "string" && v !== "" ? v : null;
+  }
+  function asNumber(v) {
+    return typeof v === "number" && isFinite(v) ? v : null;
+  }
+  function asRecord(v) {
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  }
   /* oxlint-enable anti-slop/no-runtime-typeof */
 
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
   function section(title, badge, caption, inner) {
-    return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) +
+    return (
+      '<div class="lx-sec"><div class="lx-sec-h">' +
+      esc(title) +
       (badge ? ' <span class="lx-badge' + (badge.kind ? " " + badge.kind : "") + '">' + esc(badge.text) + "</span>" : "") +
-      "</div>" + (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") + inner + "</div>";
+      "</div>" +
+      (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") +
+      inner +
+      "</div>"
+    );
   }
 
   // ── the planner: JSON Schema in, a description of controls out ────────────
@@ -61,7 +90,9 @@ type PlannedField = {
   var SCALARS = { string: 1, number: 1, integer: 1, boolean: 1 };
 
   function trim(value, max) {
-    var text = String(value == null ? "" : value).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    var text = String(value == null ? "" : value)
+      .replace(/\s+/g, " ")
+      .replace(/^\s+|\s+$/g, "");
     return text.length > max ? text.slice(0, max) + "…" : text;
   }
 
@@ -71,7 +102,9 @@ type PlannedField = {
   function typeOf(schema) {
     var raw = schema.type;
     if (Object.prototype.toString.call(raw) === "[object Array]") {
-      var real = raw.filter((t) => { return t !== "null"; });
+      var real = raw.filter((t) => {
+        return t !== "null";
+      });
       return { type: real[0], nullable: raw.indexOf("null") >= 0, union: real.length > 1, all: real };
     }
     return { type: raw, nullable: false, union: false, all: raw ? [raw] : [] };
@@ -81,10 +114,20 @@ type PlannedField = {
   // never merely enforced: a hidden rule is a rule the reader cannot check.
   function constraintsOf(schema) {
     var out: string[] = [];
-    var pairs = [["minimum", "min"], ["maximum", "max"], ["exclusiveMinimum", ">"], ["exclusiveMaximum", "<"],
-      ["multipleOf", "multiple of"], ["minLength", "min length"], ["maxLength", "max length"],
-      ["minItems", "min items"], ["maxItems", "max items"], ["pattern", "pattern"],
-      ["format", "format"], ["default", "default"]];
+    var pairs = [
+      ["minimum", "min"],
+      ["maximum", "max"],
+      ["exclusiveMinimum", ">"],
+      ["exclusiveMaximum", "<"],
+      ["multipleOf", "multiple of"],
+      ["minLength", "min length"],
+      ["maxLength", "max length"],
+      ["minItems", "min items"],
+      ["maxItems", "max items"],
+      ["pattern", "pattern"],
+      ["format", "format"],
+      ["default", "default"],
+    ];
     for (var i = 0; i < pairs.length; i++) {
       if (schema[pairs[i][0]] !== undefined) out.push(pairs[i][1] + " " + JSON.stringify(schema[pairs[i][0]]));
     }
@@ -105,9 +148,17 @@ type PlannedField = {
     // planner deliberately does not hold.
     var composite = ["oneOf", "anyOf", "allOf", "not", "if", "$ref"];
     for (var i = 0; i < composite.length; i++) {
-      if (schema[composite[i]] !== undefined) { base.kind = "json"; base.why = "schema uses " + composite[i]; return base; }
+      if (schema[composite[i]] !== undefined) {
+        base.kind = "json";
+        base.why = "schema uses " + composite[i];
+        return base;
+      }
     }
-    if (schema.const !== undefined) { base.kind = "const"; base.value = schema.const; return base; }
+    if (schema.const !== undefined) {
+      base.kind = "const";
+      base.value = schema.const;
+      return base;
+    }
 
     if (Object.prototype.toString.call(schema.enum) === "[object Array]") {
       var all = schema.enum;
@@ -121,7 +172,11 @@ type PlannedField = {
 
     var t = typeOf(schema);
     if (t.nullable) base.constraints.push("nullable");
-    if (t.union) { base.kind = "json"; base.why = "type is a union (" + t.all.join(" | ") + ")"; return base; }
+    if (t.union) {
+      base.kind = "json";
+      base.why = "type is a union (" + t.all.join(" | ") + ")";
+      return base;
+    }
 
     if (t.type === "string") {
       base.kind = Number(schema.maxLength) > 160 ? "textarea" : "text";
@@ -129,17 +184,24 @@ type PlannedField = {
       return base;
     }
     if (t.type === "number" || t.type === "integer") {
-      base.kind = "number"; base.integer = t.type === "integer";
-      base.min = schema.minimum; base.max = schema.maximum;
+      base.kind = "number";
+      base.integer = t.type === "integer";
+      base.min = schema.minimum;
+      base.max = schema.maximum;
       base.step = t.type === "integer" ? 1 : "any";
       return base;
     }
-    if (t.type === "boolean") { base.kind = "checkbox"; return base; }
+    if (t.type === "boolean") {
+      base.kind = "checkbox";
+      return base;
+    }
 
     if (t.type === "array") {
       var items = schema.items;
       if (!asRecord(items) || Object.prototype.toString.call(items) === "[object Array]") {
-        base.kind = "json"; base.why = items ? "tuple-style items" : "array with no item schema"; return base;
+        base.kind = "json";
+        base.why = items ? "tuple-style items" : "array with no item schema";
+        return base;
       }
       if (Object.prototype.toString.call(items.enum) === "[object Array]") {
         base.kind = "multiselect";
@@ -151,20 +213,42 @@ type PlannedField = {
       }
       var inner = typeOf(items);
       if (SCALARS[inner.type] && !inner.union) {
-        base.kind = "list"; base.item = planField("item", items, true, depth + 1); base.maxItems = schema.maxItems; return base;
+        base.kind = "list";
+        base.item = planField("item", items, true, depth + 1);
+        base.maxItems = schema.maxItems;
+        return base;
       }
       if (inner.type === "object" && items.properties) {
-        if (depth + 1 > PLAN_LIMITS.depth) { base.kind = "json"; base.why = "nesting deeper than " + PLAN_LIMITS.depth + " levels"; return base; }
+        if (depth + 1 > PLAN_LIMITS.depth) {
+          base.kind = "json";
+          base.why = "nesting deeper than " + PLAN_LIMITS.depth + " levels";
+          return base;
+        }
         var sub = planObject(items, depth + 1);
-        base.kind = "table"; base.columns = sub.fields; base.maxItems = schema.maxItems; return base;
+        base.kind = "table";
+        base.columns = sub.fields;
+        base.maxItems = schema.maxItems;
+        return base;
       }
-      base.kind = "json"; base.why = "array items are not a shape this can model"; return base;
+      base.kind = "json";
+      base.why = "array items are not a shape this can model";
+      return base;
     }
 
     if (t.type === "object") {
-      if (!schema.properties) { base.kind = "json"; base.why = "free-form object"; return base; }
-      if (depth + 1 > PLAN_LIMITS.depth) { base.kind = "json"; base.why = "nesting deeper than " + PLAN_LIMITS.depth + " levels"; return base; }
-      base.kind = "group"; base.fields = planObject(schema, depth + 1).fields; return base;
+      if (!schema.properties) {
+        base.kind = "json";
+        base.why = "free-form object";
+        return base;
+      }
+      if (depth + 1 > PLAN_LIMITS.depth) {
+        base.kind = "json";
+        base.why = "nesting deeper than " + PLAN_LIMITS.depth + " levels";
+        return base;
+      }
+      base.kind = "group";
+      base.fields = planObject(schema, depth + 1).fields;
+      return base;
     }
 
     base.kind = "json";
@@ -180,9 +264,11 @@ type PlannedField = {
     for (var r = 0; r < req.length; r++) required[req[r]] = true;
     var names = Object.keys(props);
     var kept = names.slice(0, PLAN_LIMITS.properties);
-    if (names.length > kept.length) notes.push((names.length - kept.length) + " more properties not rendered");
+    if (names.length > kept.length) notes.push(names.length - kept.length + " more properties not rendered");
     if (schema.additionalProperties === true) notes.push("additionalProperties is true: this tool accepts keys the schema does not name");
-    var fields = kept.map((name) => { return planField(name, props[name], required[name], depth); });
+    var fields = kept.map((name) => {
+      return planField(name, props[name], required[name], depth);
+    });
     return { fields: fields, notes: notes };
   }
 
@@ -207,7 +293,10 @@ type PlannedField = {
         var f = fields[i];
         var value = scope ? scope[f.name] : undefined;
         var at = path ? path + "." + f.name : f.name;
-        if (value === undefined || value === "") { if (f.required) problems.push({ at: at, why: "required" }); continue; }
+        if (value === undefined || value === "") {
+          if (f.required) problems.push({ at: at, why: "required" });
+          continue;
+        }
         if (f.kind === "number") {
           if (asNumber(value) === null) problems.push({ at: at, why: "not a number" });
           else {
@@ -234,10 +323,13 @@ type PlannedField = {
     // a byte on the wire the real call would never carry.
     if (asRecord(value) && value.__parseError) return undefined;
     if (Object.prototype.toString.call(value) === "[object Array]") {
-      return value.map(strip).filter((v) => { return v !== undefined; });
+      return value.map(strip).filter((v) => {
+        return v !== undefined;
+      });
     }
     if (asRecord(value)) {
-      var out: Record<string, any> = {}, keys = Object.keys(value);
+      var out: Record<string, any> = {},
+        keys = Object.keys(value);
       for (var i = 0; i < keys.length; i++) {
         var clean = strip(value[keys[i]]);
         if (clean !== undefined && clean !== "") out[keys[i]] = clean;
@@ -252,7 +344,9 @@ type PlannedField = {
   // clientCapabilities empty because a form offers a server nothing.
   function buildFrame(toolName, values) {
     return {
-      jsonrpc: "2.0", id: 1, method: "tools/call",
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
       params: {
         name: toolName,
         arguments: strip(values || {}),
@@ -264,13 +358,22 @@ type PlannedField = {
     };
   }
 
-  function shellQuote(text) { return "'" + String(text).replace(/'/g, "'\\''") + "'"; }
+  function shellQuote(text) {
+    return "'" + String(text).replace(/'/g, "'\\''") + "'";
+  }
   function toCurl(endpoint, frame) {
-    return "curl -sS " + shellQuote(endpoint) + " \\\n" +
+    return (
+      "curl -sS " +
+      shellQuote(endpoint) +
+      " \\\n" +
       "  -H 'content-type: application/json' \\\n" +
       "  -H 'accept: application/json, text/event-stream' \\\n" +
-      "  -H 'mcp-method: tools/call' -H " + shellQuote("mcp-name: " + frame.params.name) + " \\\n" +
-      "  -d " + shellQuote(JSON.stringify(frame));
+      "  -H 'mcp-method: tools/call' -H " +
+      shellQuote("mcp-name: " + frame.params.name) +
+      " \\\n" +
+      "  -d " +
+      shellQuote(JSON.stringify(frame))
+    );
   }
 
   // ── the renderer: a plan in, DOM plus a read() closure out ────────────────
@@ -293,7 +396,7 @@ type PlannedField = {
     var wrap = mk("div", "lx-tf");
     var row = mk("div", "lx-tf-head");
     var label = mk("label", "lx-tf-label");
-    label.id = "lxt" + (++uid);
+    label.id = "lxt" + ++uid;
     label.appendChild(mk("span", "lx-tf-name", field.name));
     if (field.required) label.appendChild(mk("span", "lx-tf-req", "required"));
     // The kind badge is a SIBLING of the label. Inside it, the accessible name
@@ -308,42 +411,70 @@ type PlannedField = {
     // association; composite ones get role=group plus aria-labelledby, since
     // there is no one control for `for` to point at.
     function name(control) {
-      if (control) { control.id = "lxt" + (++uid); label.htmlFor = control.id; return control; }
+      if (control) {
+        control.id = "lxt" + ++uid;
+        label.htmlFor = control.id;
+        return control;
+      }
       wrap.setAttribute("role", "group");
       wrap.setAttribute("aria-labelledby", label.id);
       return null;
     }
-    function bind(node, event?: any) { node.addEventListener(event || "input", onChange); return node; }
+    function bind(node, event?: any) {
+      node.addEventListener(event || "input", onChange);
+      return node;
+    }
 
     if (field.kind === "text" || field.kind === "textarea") {
       var input = mk(field.kind === "textarea" ? "textarea" : "input", "lx-tf-input");
       if (field.kind === "textarea") input.rows = 3;
       else input.type = field.format === "uri" ? "url" : field.format === "email" ? "email" : "text";
       wrap.appendChild(bind(name(input)));
-      return { el: wrap, read: () => { return input.value.replace(/^\s+|\s+$/g, "") === "" ? undefined : input.value; } };
+      return {
+        el: wrap,
+        read: () => {
+          return input.value.replace(/^\s+|\s+$/g, "") === "" ? undefined : input.value;
+        },
+      };
     }
     if (field.kind === "number") {
       var num = mk("input", "lx-tf-input");
-      num.type = "number"; num.step = String(field.step);
+      num.type = "number";
+      num.step = String(field.step);
       if (field.min !== undefined) num.min = String(field.min);
       if (field.max !== undefined) num.max = String(field.max);
       wrap.appendChild(bind(name(num)));
-      return { el: wrap, read: () => { return readNumber(num.value, field.integer); } };
+      return {
+        el: wrap,
+        read: () => {
+          return readNumber(num.value, field.integer);
+        },
+      };
     }
     if (field.kind === "checkbox") {
-      var cb = mk("input"); cb.type = "checkbox"; name(cb);
+      var cb = mk("input");
+      cb.type = "checkbox";
+      name(cb);
       var cbRow = mk("div", "lx-tf-check");
-      var cbLabel = mk("label", null, "true"); cbLabel.htmlFor = cb.id;
-      cbRow.appendChild(bind(cb, "change")); cbRow.appendChild(cbLabel);
+      var cbLabel = mk("label", null, "true");
+      cbLabel.htmlFor = cb.id;
+      cbRow.appendChild(bind(cb, "change"));
+      cbRow.appendChild(cbLabel);
       wrap.appendChild(cbRow);
       // An UNCHECKED optional boolean is ABSENT, not false. Sending false claims
       // the caller made a choice they never made.
-      return { el: wrap, read: () => { return cb.checked ? true : field.required ? false : undefined; } };
+      return {
+        el: wrap,
+        read: () => {
+          return cb.checked ? true : field.required ? false : undefined;
+        },
+      };
     }
     if (field.kind === "select") {
       var sel = mk("select", "lx-tf-input");
       var blank = mk("option", null, field.required ? "— choose —" : "— omit —");
-      blank.value = ""; sel.appendChild(blank);
+      blank.value = "";
+      sel.appendChild(blank);
       // Option values are the JSON ENCODING of the real value, so a numeric enum
       // survives the round trip as a number. An index would work and makes the
       // DOM opaque, which is the wrong trade on a pane whose claim is showing
@@ -356,23 +487,39 @@ type PlannedField = {
       });
       wrap.appendChild(bind(name(sel), "change"));
       if (field.truncated) wrap.appendChild(mk("div", "lx-tf-warn", field.truncated + " more options not shown"));
-      return { el: wrap, read: () => { return sel.value === "" ? undefined : JSON.parse(sel.value); } };
+      return {
+        el: wrap,
+        read: () => {
+          return sel.value === "" ? undefined : JSON.parse(sel.value);
+        },
+      };
     }
     if (field.kind === "multiselect") {
       name(null);
       var box = mk("div", "lx-tf-multi");
       var boxes = field.options.map((option) => {
         var r = mk("label", "lx-tf-multi-row");
-        var i = mk("input"); i.type = "checkbox";
-        r.appendChild(bind(i, "change")); r.appendChild(mk("span", null, option.label));
+        var i = mk("input");
+        i.type = "checkbox";
+        r.appendChild(bind(i, "change"));
+        r.appendChild(mk("span", null, option.label));
         box.appendChild(r);
         return { input: i, value: option.value };
       });
       wrap.appendChild(box);
-      return { el: wrap, read: () => {
-        var picked = boxes.filter((b) => { return b.input.checked; }).map((b) => { return b.value; });
-        return picked.length ? picked : undefined;
-      } };
+      return {
+        el: wrap,
+        read: () => {
+          var picked = boxes
+            .filter((b) => {
+              return b.input.checked;
+            })
+            .map((b) => {
+              return b.value;
+            });
+          return picked.length ? picked : undefined;
+        },
+      };
     }
     if (field.kind === "list" || field.kind === "table") {
       name(null);
@@ -380,18 +527,40 @@ type PlannedField = {
       var body = mk("div", "lx-tf-rows");
       function addRow() {
         var rowEl = mk("div", "lx-tf-row");
-        var inner = field.kind === "list"
-          ? buildField({ name: field.name, kind: field.item.kind, required: true, constraints: [], description: "", options: field.item.options, integer: field.item.integer, step: field.item.step, min: field.item.min, max: field.item.max, format: field.item.format }, onChange)
-          : buildGroup(field.columns, onChange);
+        var inner =
+          field.kind === "list"
+            ? buildField(
+                {
+                  name: field.name,
+                  kind: field.item.kind,
+                  required: true,
+                  constraints: [],
+                  description: "",
+                  options: field.item.options,
+                  integer: field.item.integer,
+                  step: field.item.step,
+                  min: field.item.min,
+                  max: field.item.max,
+                  format: field.item.format,
+                },
+                onChange,
+              )
+            : buildGroup(field.columns, onChange);
         var kill = mk("button", "lx-tf-kill", "×");
-        kill.type = "button"; kill.title = "remove this row";
+        kill.type = "button";
+        kill.title = "remove this row";
         kill.setAttribute("aria-label", "remove this " + field.name + " row");
         kill.addEventListener("click", () => {
-          for (var i = 0; i < rows.length; i++) if (rows[i].row === rowEl) { rows.splice(i, 1); break; }
+          for (var i = 0; i < rows.length; i++)
+            if (rows[i].row === rowEl) {
+              rows.splice(i, 1);
+              break;
+            }
           rowEl.parentNode.removeChild(rowEl);
           onChange();
         });
-        rowEl.appendChild(inner.el); rowEl.appendChild(kill);
+        rowEl.appendChild(inner.el);
+        rowEl.appendChild(kill);
         body.appendChild(rowEl);
         rows.push({ row: rowEl, read: inner.read });
         onChange();
@@ -399,11 +568,21 @@ type PlannedField = {
       var add = mk("button", "lx-tf-add", "Add " + field.name.replace(/s$/, ""));
       add.type = "button";
       add.addEventListener("click", addRow);
-      wrap.appendChild(body); wrap.appendChild(add);
-      return { el: wrap, read: () => {
-        var values = rows.map((r) => { return r.read(); }).filter((v) => { return v !== undefined; });
-        return values.length ? values : undefined;
-      } };
+      wrap.appendChild(body);
+      wrap.appendChild(add);
+      return {
+        el: wrap,
+        read: () => {
+          var values = rows
+            .map((r) => {
+              return r.read();
+            })
+            .filter((v) => {
+              return v !== undefined;
+            });
+          return values.length ? values : undefined;
+        },
+      };
     }
     if (field.kind === "group") {
       name(null);
@@ -416,20 +595,34 @@ type PlannedField = {
     if (field.kind === "const") {
       name(null);
       wrap.appendChild(mk("div", "lx-tf-const", JSON.stringify(field.value)));
-      return { el: wrap, read: () => { return field.value; } };
+      return {
+        el: wrap,
+        read: () => {
+          return field.value;
+        },
+      };
     }
 
     // json: the escape hatch, and it always states WHY it is one. This is the
     // honest failure of a schema-driven form, so it is styled to be noticed.
     name(null);
     wrap.appendChild(mk("div", "lx-tf-warn", "no control can carry this: " + field.why));
-    var raw = mk("textarea", "lx-tf-input lx-tf-json"); raw.rows = 2; raw.placeholder = "raw JSON";
+    var raw = mk("textarea", "lx-tf-input lx-tf-json");
+    raw.rows = 2;
+    raw.placeholder = "raw JSON";
     wrap.appendChild(bind(name(raw)));
-    return { el: wrap, read: () => {
-      var text = raw.value.replace(/^\s+|\s+$/g, "");
-      if (!text) return undefined;
-      try { return JSON.parse(text); } catch (e) { return { __parseError: String(e.message).slice(0, 80) }; }
-    } };
+    return {
+      el: wrap,
+      read: () => {
+        var text = raw.value.replace(/^\s+|\s+$/g, "");
+        if (!text) return undefined;
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          return { __parseError: String(e.message).slice(0, 80) };
+        }
+      },
+    };
   }
 
   function buildGroup(fields, onChange) {
@@ -439,35 +632,61 @@ type PlannedField = {
       box.appendChild(node.el);
       return { name: field.name, read: node.read };
     });
-    return { el: box, read: () => {
-      var out: Record<string, any> = {};
-      for (var i = 0; i < built.length; i++) {
-        var value = built[i].read();
-        if (value !== undefined) out[built[i].name] = value;
-      }
-      return Object.keys(out).length ? out : undefined;
-    } };
+    return {
+      el: box,
+      read: () => {
+        var out: Record<string, any> = {};
+        for (var i = 0; i < built.length; i++) {
+          var value = built[i].read();
+          if (value !== undefined) out[built[i].name] = value;
+        }
+        return Object.keys(out).length ? out : undefined;
+      },
+    };
   }
 
   function renderForm(plan, onChange) {
     var root = mk("form", "lx-tf-form");
-    root.addEventListener("submit", (e) => { e.preventDefault(); });
-    (plan.notes || []).forEach((note) => { root.appendChild(mk("div", "lx-tf-note", note)); });
+    root.addEventListener("submit", (e) => {
+      e.preventDefault();
+    });
+    (plan.notes || []).forEach((note) => {
+      root.appendChild(mk("div", "lx-tf-note", note));
+    });
     if (!plan.fields.length) {
-      if (!plan.freeform) return { el: root, read: () => { return {}; } };
+      if (!plan.freeform)
+        return {
+          el: root,
+          read: () => {
+            return {};
+          },
+        };
       var raw = mk("textarea", "lx-tf-input lx-tf-json");
-      raw.rows = 3; raw.placeholder = "raw JSON arguments";
+      raw.rows = 3;
+      raw.placeholder = "raw JSON arguments";
       raw.addEventListener("input", onChange);
       root.appendChild(raw);
-      return { el: root, read: () => {
-        var text = raw.value.replace(/^\s+|\s+$/g, "");
-        if (!text) return {};
-        try { return JSON.parse(text); } catch (e) { return { __parseError: String(e.message) }; }
-      } };
+      return {
+        el: root,
+        read: () => {
+          var text = raw.value.replace(/^\s+|\s+$/g, "");
+          if (!text) return {};
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            return { __parseError: String(e.message) };
+          }
+        },
+      };
     }
     var group = buildGroup(plan.fields, onChange);
     root.appendChild(group.el);
-    return { el: root, read: () => { return group.read() || {}; } };
+    return {
+      el: root,
+      read: () => {
+        return group.read() || {};
+      },
+    };
   }
 
   // ── the pane ──────────────────────────────────────────────────────────────
@@ -487,22 +706,32 @@ type PlannedField = {
 
   function intro(state) {
     if (!state) {
-      return section("What it accepts", { text: "not run" },
+      return section(
+        "What it accepts",
+        { text: "not run" },
         "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
         '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
-        'and <code>inputSchema</code> is the same artefact under another name. What a block explorer can also do, and this cannot, ' +
-        'is simulate the call: a chain is a public state machine anyone can fork, while an MCP server is a private database behind ' +
-        'an RPC. There is no dry run in the protocol. So this builds the frame and stops.</div>' +
-        '<button class="lx-run-btn" id="lx-tools-run" type="button">Read the catalogue</button>');
+          "and <code>inputSchema</code> is the same artefact under another name. What a block explorer can also do, and this cannot, " +
+          "is simulate the call: a chain is a public state machine anyone can fork, while an MCP server is a private database behind " +
+          "an RPC. There is no dry run in the protocol. So this builds the frame and stops.</div>" +
+          '<button class="lx-run-btn" id="lx-tools-run" type="button">Read the catalogue</button>',
+      );
     }
-    if (state.pending) return section("What it accepts", { text: "reading" }, "Asking the origin for its tool list.", '<div class="lx-cap">Reading tools/list…</div>');
+    if (state.pending)
+      return section("What it accepts", { text: "reading" }, "Asking the origin for its tool list.", '<div class="lx-cap">Reading tools/list…</div>');
     if (!state.ok) {
       var why = state.unreadable
         ? "The probe never reached a server, so this says nothing about whether one is there."
         : "The origin answered, and the answer was not a tool list.";
-      return section("What it accepts", { text: state.unreadable ? "unreadable" : "no catalogue", kind: "warn" }, why,
-        '<div class="lx-tools-fail">' + esc(state.error || "no detail") + "</div>" +
-        '<button class="lx-run-btn" id="lx-tools-run" type="button">Try again</button>');
+      return section(
+        "What it accepts",
+        { text: state.unreadable ? "unreadable" : "no catalogue", kind: "warn" },
+        why,
+        '<div class="lx-tools-fail">' +
+          esc(state.error || "no detail") +
+          "</div>" +
+          '<button class="lx-run-btn" id="lx-tools-run" type="button">Try again</button>',
+      );
     }
     return null;
   }
@@ -511,43 +740,74 @@ type PlannedField = {
     var head = intro(state);
     if (head) return head;
 
-    var rows = state.tools.map((tool) => {
-      var isOpen = tool.name === selected;
-      var schemaNote = tool.schemaOversize
-        ? '<span class="lx-badge warn">schema too large to carry</span>'
-        : !tool.inputSchema ? '<span class="lx-badge">no schema</span>' : "";
-      return '<div class="lx-tool' + (isOpen ? " is-open" : "") + '">' +
-        '<button class="lx-tool-head" type="button" data-tool="' + esc(tool.name) + '" aria-expanded="' + (isOpen ? "true" : "false") + '">' +
-        '<span class="lx-tool-name">' + esc(tool.name) + "</span>" + badges(tool) + schemaNote + "</button>" +
-        (isOpen
-          ? '<div class="lx-tool-body">' +
-            (tool.description ? '<p class="lx-tool-desc">' + esc(tool.description) + "</p>" : "") +
-            '<p class="lx-cap">Those badges are what the server says about itself. Nothing here verifies them.</p>' +
-            '<div class="lx-tool-form" data-mount="' + esc(tool.name) + '"></div>' +
-            '<div class="lx-tool-problems"></div>' +
-            '<div class="lx-sec-h">What would be sent</div>' +
-            '<pre class="lx-tool-frame"></pre>' +
-            '<div class="lx-sec-h">curl</div>' +
-            '<pre class="lx-tool-curl"></pre>' +
-            '<button class="lx-tf-add lx-tool-copy" type="button">Copy curl</button>' +
-            '<p class="lx-cap">Nothing is sent from this page. Run the curl yourself, against your own credentials.</p>' +
-            "</div>"
-          : "") + "</div>";
-    }).join("");
+    var rows = state.tools
+      .map((tool) => {
+        var isOpen = tool.name === selected;
+        var schemaNote = tool.schemaOversize
+          ? '<span class="lx-badge warn">schema too large to carry</span>'
+          : !tool.inputSchema
+            ? '<span class="lx-badge">no schema</span>'
+            : "";
+        return (
+          '<div class="lx-tool' +
+          (isOpen ? " is-open" : "") +
+          '">' +
+          '<button class="lx-tool-head" type="button" data-tool="' +
+          esc(tool.name) +
+          '" aria-expanded="' +
+          (isOpen ? "true" : "false") +
+          '">' +
+          '<span class="lx-tool-name">' +
+          esc(tool.name) +
+          "</span>" +
+          badges(tool) +
+          schemaNote +
+          "</button>" +
+          (isOpen
+            ? '<div class="lx-tool-body">' +
+              (tool.description ? '<p class="lx-tool-desc">' + esc(tool.description) + "</p>" : "") +
+              '<p class="lx-cap">Those badges are what the server says about itself. Nothing here verifies them.</p>' +
+              '<div class="lx-tool-form" data-mount="' +
+              esc(tool.name) +
+              '"></div>' +
+              '<div class="lx-tool-problems"></div>' +
+              '<div class="lx-sec-h">What would be sent</div>' +
+              '<pre class="lx-tool-frame"></pre>' +
+              '<div class="lx-sec-h">curl</div>' +
+              '<pre class="lx-tool-curl"></pre>' +
+              '<button class="lx-tf-add lx-tool-copy" type="button">Copy curl</button>' +
+              '<p class="lx-cap">Nothing is sent from this page. Run the curl yourself, against your own credentials.</p>' +
+              "</div>"
+            : "") +
+          "</div>"
+        );
+      })
+      .join("");
 
-    var caption = state.count + (state.count === 1 ? " tool" : " tools") +
+    var caption =
+      state.count +
+      (state.count === 1 ? " tool" : " tools") +
       (state.shown < state.count ? ", " + state.shown + " shown" : "") +
-      " · " + state.withSchema + " with an argument schema · " + esc(state.endpoint);
-    return section("What it accepts", { text: state.count + " tools", kind: "ok" }, caption,
-      '<div class="lx-tools-list">' + rows + "</div>");
+      " · " +
+      state.withSchema +
+      " with an argument schema · " +
+      esc(state.endpoint);
+    return section("What it accepts", { text: state.count + " tools", kind: "ok" }, caption, '<div class="lx-tools-list">' + rows + "</div>");
   }
 
   window.LensTools = {
     run: (targetUrl, onOk, onFail) => {
       fetch("/lens/tools?url=" + encodeURIComponent(targetUrl), { headers: { accept: "application/json" } })
-        .then((r) => { return r.json(); })
-        .then((json) => { selected = json && json.ok && json.tools.length ? json.tools[0].name : null; onOk(json); })
-        .catch(() => { onFail(); });
+        .then((r) => {
+          return r.json();
+        })
+        .then((json) => {
+          selected = json && json.ok && json.tools.length ? json.tools[0].name : null;
+          onOk(json);
+        })
+        .catch(() => {
+          onFail();
+        });
     },
     render: paneHtml,
     // Called after the pane's HTML lands, exactly like bindCounterfactuals. The
@@ -583,7 +843,9 @@ type PlannedField = {
           var note = mk("div", "lx-tools-fail");
           note.appendChild(mk("b", null, found.length + (found.length === 1 ? " problem" : " problems")));
           var ul = mk("ul");
-          found.forEach((p) => { ul.appendChild(mk("li", null, p.at + ": " + p.why)); });
+          found.forEach((p) => {
+            ul.appendChild(mk("li", null, p.at + ": " + p.why));
+          });
           note.appendChild(ul);
           problems.appendChild(note);
         }
@@ -596,14 +858,22 @@ type PlannedField = {
       update();
 
       var copy = body.querySelector(".lx-tool-copy");
-      if (copy) copy.addEventListener("click", function () {
-        // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
-        var btn = this;
-        navigator.clipboard.writeText(curlPre.textContent).then(() => {
-          btn.textContent = "Copied";
-          setTimeout(() => { btn.textContent = "Copy curl"; }, 1200);
-        }, () => { btn.textContent = "Copy failed"; });
-      });
+      if (copy)
+        copy.addEventListener("click", function () {
+          // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
+          var btn = this;
+          navigator.clipboard.writeText(curlPre.textContent).then(
+            () => {
+              btn.textContent = "Copied";
+              setTimeout(() => {
+                btn.textContent = "Copy curl";
+              }, 1200);
+            },
+            () => {
+              btn.textContent = "Copy failed";
+            },
+          );
+        });
     },
     // Exported for the contract tests, which exercise the planner with no DOM.
     _plan: planForm,

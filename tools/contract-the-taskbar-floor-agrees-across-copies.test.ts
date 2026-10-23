@@ -1,11 +1,7 @@
 // ── the taskbar floor agrees across luna.css and its two inline copies ──────
 // Split-file convention: shared imports live in contract-shared.ts.
 import { readFileSync } from "node:fs";
-import {
-  assert,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 
 // Build step 5 compares the body floor in the three documents that set it

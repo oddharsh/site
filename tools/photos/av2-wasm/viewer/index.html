@@ -1,163 +1,173 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AV2 Viewer</title>
-<link rel="stylesheet" href="/prose.css">
-<link rel="stylesheet" href="/luna.css">
-<style>
-  .av2v-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
-  .av2v-bar label { display: inline-flex; gap: 4px; align-items: center; }
-  .av2v-sets { display: grid; gap: 16px; }
-  .av2v-set { border: 1px solid var(--border, #7f9db9); padding: 8px; background: var(--window, #fff); }
-  .av2v-set h3 { margin: 0 0 6px; font-size: 13px; }
-  .av2v-row { display: flex; flex-wrap: wrap; gap: 12px; }
-  .av2v-cell { display: flex; flex-direction: column; gap: 4px; }
-  .av2v-frame { overflow: auto; max-width: min(92vw, 640px); max-height: 640px; border: 1px solid #7f9db9; cursor: pointer; background: #000; }
-  .av2v-frame canvas, .av2v-frame img { display: block; image-rendering: pixelated; }
-  .av2v-cap { font: 11px Tahoma, Verdana, sans-serif; }
-  .av2v-cap b { font-weight: bold; }
-  .av2v-drop { border: 2px dashed #7f9db9; padding: 16px; text-align: center; margin-bottom: 12px; }
-  .av2v-drop.over { background: oklch(94% 0.03 250); }
-  .av2v-err { color: #b00; }
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span class="title-text"><span class="icon" aria-hidden="true"></span>AV2 Viewer (local)</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span>
-  </div>
-  <div class="content prose">
-    <h1>AV2 Viewer</h1>
-    <p id="status">Loading the decoder...</p>
-    <div class="av2v-drop" id="drop">Drop .avif files here (AV2 or AV1), or <input type="file" id="pick" accept=".avif,image/avif" multiple></div>
-    <div class="av2v-bar">
-      <label>Zoom <select id="zoom"><option value="1">1x</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x</option></select></label>
-      <label><input type="checkbox" id="flip"> Flip mode: one frame per set, click to cycle</label>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AV2 Viewer</title>
+    <link rel="stylesheet" href="/prose.css" />
+    <link rel="stylesheet" href="/luna.css" />
+    <style>
+      .av2v-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+      .av2v-bar label { display: inline-flex; gap: 4px; align-items: center; }
+      .av2v-sets { display: grid; gap: 16px; }
+      .av2v-set { border: 1px solid var(--border, #7f9db9); padding: 8px; background: var(--window, #fff); }
+      .av2v-set h3 { margin: 0 0 6px; font-size: 13px; }
+      .av2v-row { display: flex; flex-wrap: wrap; gap: 12px; }
+      .av2v-cell { display: flex; flex-direction: column; gap: 4px; }
+      .av2v-frame { overflow: auto; max-width: min(92vw, 640px); max-height: 640px; border: 1px solid #7f9db9; cursor: pointer; background: #000; }
+      .av2v-frame canvas, .av2v-frame img { display: block; image-rendering: pixelated; }
+      .av2v-cap { font: 11px Tahoma, Verdana, sans-serif; }
+      .av2v-cap b { font-weight: bold; }
+      .av2v-drop { border: 2px dashed #7f9db9; padding: 16px; text-align: center; margin-bottom: 12px; }
+      .av2v-drop.over { background: oklch(94% 0.03 250); }
+      .av2v-err { color: #b00; }
+    </style>
+  </head>
+  <body>
+    <div class="window">
+      <div class="title-bar">
+        <span class="title-text"><span class="icon" aria-hidden="true"></span>AV2 Viewer (local)</span>
+        <span class="controls"
+          ><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span
+        ></span>
+      </div>
+      <div class="content prose">
+        <h1>AV2 Viewer</h1>
+        <p id="status">Loading the decoder...</p>
+        <div class="av2v-drop" id="drop">Drop .avif files here (AV2 or AV1), or <input type="file" id="pick" accept=".avif,image/avif" multiple /></div>
+        <div class="av2v-bar">
+          <label
+            >Zoom
+            <select id="zoom">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="3">3x</option>
+              <option value="4">4x</option>
+            </select></label
+          >
+          <label><input type="checkbox" id="flip" /> Flip mode: one frame per set, click to cycle</label>
+        </div>
+        <div class="av2v-sets" id="sets"></div>
+      </div>
     </div>
-    <div class="av2v-sets" id="sets"></div>
-  </div>
-</div>
-<script type="module">
-// the exact module /garage/av2 ships (src/client/garage/av2-decode.ts)
-const worker = new Worker("/garage/av2-decode.js", { type: "module" });
-const pending = new Map();
-let nextId = 0;
-worker.onmessage = ({ data }) => { const p = pending.get(data.id); pending.delete(data.id); data.error ? p.reject(new Error(data.error)) : p.resolve(data); };
-const decodeInWorker = (buf) => new Promise((resolve, reject) => { const id = nextId++; pending.set(id, { resolve, reject }); worker.postMessage({ id, buf }, [buf]); });
+    <script type="module">
+      // the exact module /garage/av2 ships (src/client/garage/av2-decode.ts)
+      const worker = new Worker("/garage/av2-decode.js", { type: "module" });
+      const pending = new Map();
+      let nextId = 0;
+      worker.onmessage = ({ data }) => { const p = pending.get(data.id); pending.delete(data.id); data.error ? p.reject(new Error(data.error)) : p.resolve(data); };
+      const decodeInWorker = (buf) => new Promise((resolve, reject) => { const id = nextId++; pending.set(id, { resolve, reject }); worker.postMessage({ id, buf }, [buf]); });
 
-// The item type decides the path: av02 goes to the WASM decoder, everything
-// else is left to the browser, which is the AV1 baseline the site ships.
-// The image item's type, read the cheap way: the 4 bytes after the primary
-// item's infe header. Only "av02" goes to the worker; the browser takes the rest.
-function itemType(buf) {
-  const b = new Uint8Array(buf);
-  for (let i = 4; i + 16 < Math.min(b.length, 8192); i++)
-    if (b[i] === 0x69 && b[i + 1] === 0x6e && b[i + 2] === 0x66 && b[i + 3] === 0x65) {
-      const off = i + 4 + 4 + (b[i + 4] >= 3 ? 4 : 2) + 2;
-      return String.fromCharCode(...b.subarray(off, off + 4));
-    }
-  return "?";
-}
+      // The item type decides the path: av02 goes to the WASM decoder, everything
+      // else is left to the browser, which is the AV1 baseline the site ships.
+      // The image item's type, read the cheap way: the 4 bytes after the primary
+      // item's infe header. Only "av02" goes to the worker; the browser takes the rest.
+      function itemType(buf) {
+        const b = new Uint8Array(buf);
+        for (let i = 4; i + 16 < Math.min(b.length, 8192); i++)
+          if (b[i] === 0x69 && b[i + 1] === 0x6e && b[i + 2] === 0x66 && b[i + 3] === 0x65) {
+            const off = i + 4 + 4 + (b[i + 4] >= 3 ? 4 : 2) + 2;
+            return String.fromCharCode(...b.subarray(off, off + 4));
+          }
+        return "?";
+      }
 
-const zoomSel = document.getElementById("zoom"), flipBox = document.getElementById("flip");
-const zoom = () => +zoomSel.value;
-const fmt = (n) => n.toLocaleString("en-US");
+      const zoomSel = document.getElementById("zoom"), flipBox = document.getElementById("flip");
+      const zoom = () => +zoomSel.value;
+      const fmt = (n) => n.toLocaleString("en-US");
 
-async function makeCell(name, buf, label) {
-  const cell = document.createElement("div");
-  cell.className = "av2v-cell";
-  const frame = document.createElement("div");
-  frame.className = "av2v-frame";
-  const cap = document.createElement("div");
-  cap.className = "av2v-cap";
-  cell.append(frame, cap);
-  const type = itemType(buf), bytes = buf.byteLength;
-  let el, w, h, note;
-  if (type === "av02") {
-    const t0 = performance.now();
-    const r = await decodeInWorker(buf.slice(0));
-    const wall = performance.now() - t0;
-    el = document.createElement("canvas");
-    el.width = w = r.width; el.height = h = r.height;
-    el.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(r.rgba), w, h), 0, 0);
-    note = `AV2 (WASM AVM 1.0.0), ${r.depth}-bit ${r.subsampling}, decode ${r.decodeMs.toFixed(0)} ms, ${wall.toFixed(0)} ms wall`;
-  } else {
-    el = new Image();
-    el.src = URL.createObjectURL(new Blob([buf], { type: name.endsWith(".png") ? "image/png" : name.endsWith(".jpg") ? "image/jpeg" : "image/avif" }));
-    const t0 = performance.now();
-    await el.decode();
-    w = el.naturalWidth; h = el.naturalHeight;
-    note = `${type === "av01" ? "AV1, browser decoder" : "browser decoder"}, ${(performance.now() - t0).toFixed(0)} ms`;
-  }
-  el.dataset.w = w; el.dataset.h = h;
-  frame.append(el);
-  cap.innerHTML = `<b>${label || name}</b>: ${w}x${h}, ${fmt(bytes)} B (${((bytes * 8) / (w * h)).toFixed(2)} bpp)<br>${note}`;
-  return cell;
-}
+      async function makeCell(name, buf, label) {
+        const cell = document.createElement("div");
+        cell.className = "av2v-cell";
+        const frame = document.createElement("div");
+        frame.className = "av2v-frame";
+        const cap = document.createElement("div");
+        cap.className = "av2v-cap";
+        cell.append(frame, cap);
+        const type = itemType(buf), bytes = buf.byteLength;
+        let el, w, h, note;
+        if (type === "av02") {
+          const t0 = performance.now();
+          const r = await decodeInWorker(buf.slice(0));
+          const wall = performance.now() - t0;
+          el = document.createElement("canvas");
+          el.width = w = r.width; el.height = h = r.height;
+          el.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(r.rgba), w, h), 0, 0);
+          note = `AV2 (WASM AVM 1.0.0), ${r.depth}-bit ${r.subsampling}, decode ${r.decodeMs.toFixed(0)} ms, ${wall.toFixed(0)} ms wall`;
+        } else {
+          el = new Image();
+          el.src = URL.createObjectURL(new Blob([buf], { type: name.endsWith(".png") ? "image/png" : name.endsWith(".jpg") ? "image/jpeg" : "image/avif" }));
+          const t0 = performance.now();
+          await el.decode();
+          w = el.naturalWidth; h = el.naturalHeight;
+          note = `${type === "av01" ? "AV1, browser decoder" : "browser decoder"}, ${(performance.now() - t0).toFixed(0)} ms`;
+        }
+        el.dataset.w = w; el.dataset.h = h;
+        frame.append(el);
+        cap.innerHTML = `<b>${label || name}</b>: ${w}x${h}, ${fmt(bytes)} B (${((bytes * 8) / (w * h)).toFixed(2)} bpp)<br>${note}`;
+        return cell;
+      }
 
-function applyZoom() {
-  for (const el of document.querySelectorAll(".av2v-frame > *")) {
-    el.style.width = el.dataset.w * zoom() + "px";
-    el.style.height = el.dataset.h * zoom() + "px";
-  }
-}
-zoomSel.onchange = applyZoom;
+      function applyZoom() {
+        for (const el of document.querySelectorAll(".av2v-frame > *")) {
+          el.style.width = el.dataset.w * zoom() + "px";
+          el.style.height = el.dataset.h * zoom() + "px";
+        }
+      }
+      zoomSel.onchange = applyZoom;
 
-function applyFlip() {
-  for (const set of document.querySelectorAll(".av2v-set")) {
-    const cells = [...set.querySelectorAll(".av2v-cell")];
-    cells.forEach((c, i) => (c.hidden = flipBox.checked && i !== +(set.dataset.cur || 0)));
-  }
-}
-flipBox.onchange = applyFlip;
+      function applyFlip() {
+        for (const set of document.querySelectorAll(".av2v-set")) {
+          const cells = [...set.querySelectorAll(".av2v-cell")];
+          cells.forEach((c, i) => (c.hidden = flipBox.checked && i !== +(set.dataset.cur || 0)));
+        }
+      }
+      flipBox.onchange = applyFlip;
 
-// Scroll every frame in a set together, so a zoomed region lines up.
-function linkScroll(set) {
-  const frames = [...set.querySelectorAll(".av2v-frame")];
-  for (const f of frames) f.addEventListener("scroll", () => { for (const g of frames) if (g !== f) { g.scrollLeft = f.scrollLeft; g.scrollTop = f.scrollTop; } });
-}
+      // Scroll every frame in a set together, so a zoomed region lines up.
+      function linkScroll(set) {
+        const frames = [...set.querySelectorAll(".av2v-frame")];
+        for (const f of frames) f.addEventListener("scroll", () => { for (const g of frames) if (g !== f) { g.scrollLeft = f.scrollLeft; g.scrollTop = f.scrollTop; } });
+      }
 
-async function addSet(title, files) {
-  const set = document.createElement("section");
-  set.className = "av2v-set";
-  set.innerHTML = `<h3></h3><div class="av2v-row"></div>`;
-  set.querySelector("h3").textContent = title;
-  document.getElementById("sets").append(set);
-  const row = set.querySelector(".av2v-row");
-  // Slots keep file order while cells finish in any order.
-  await Promise.all(files.map(async (f) => {
-    const slot = document.createElement("div");
-    row.append(slot);
-    try { slot.replaceWith(await makeCell(f.name, f.buf, f.label)); }
-    catch (e) { slot.className = "av2v-err"; slot.textContent = `${f.name}: ${e.message}`; }
-    applyZoom(); applyFlip();
-  }));
-  set.addEventListener("click", () => {
-    const n = set.querySelectorAll(".av2v-cell").length;
-    set.dataset.cur = ((+(set.dataset.cur || 0)) + 1) % n;
-    applyFlip();
-  });
-  linkScroll(set);
-  applyZoom(); applyFlip();
-}
+      async function addSet(title, files) {
+        const set = document.createElement("section");
+        set.className = "av2v-set";
+        set.innerHTML = `<h3></h3><div class="av2v-row"></div>`;
+        set.querySelector("h3").textContent = title;
+        document.getElementById("sets").append(set);
+        const row = set.querySelector(".av2v-row");
+        // Slots keep file order while cells finish in any order.
+        await Promise.all(files.map(async (f) => {
+          const slot = document.createElement("div");
+          row.append(slot);
+          try { slot.replaceWith(await makeCell(f.name, f.buf, f.label)); }
+          catch (e) { slot.className = "av2v-err"; slot.textContent = `${f.name}: ${e.message}`; }
+          applyZoom(); applyFlip();
+        }));
+        set.addEventListener("click", () => {
+          const n = set.querySelectorAll(".av2v-cell").length;
+          set.dataset.cur = ((+(set.dataset.cur || 0)) + 1) % n;
+          applyFlip();
+        });
+        linkScroll(set);
+        applyZoom(); applyFlip();
+      }
 
-const fetchBuf = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); };
-const status = document.getElementById("status");
-try {
-  const sets = await (await fetch("/corpus/sets.json")).json();
-  status.textContent = `Decoder: AVM 1.0.0 reference, compiled to WebAssembly, running in a Worker. ${sets.length} sample sets.`;
-  for (const s of sets) addSet(s.title, await Promise.all(s.files.map(async (f) => ({ ...f, buf: await fetchBuf("/corpus/" + f.name) }))));
-} catch (e) { status.textContent = "Sample sets failed to load: " + e.message; }
+      const fetchBuf = async (u) => { const r = await fetch(u); if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.arrayBuffer(); };
+      const status = document.getElementById("status");
+      try {
+        const sets = await (await fetch("/corpus/sets.json")).json();
+        status.textContent = `Decoder: AVM 1.0.0 reference, compiled to WebAssembly, running in a Worker. ${sets.length} sample sets.`;
+        for (const s of sets) addSet(s.title, await Promise.all(s.files.map(async (f) => ({ ...f, buf: await fetchBuf("/corpus/" + f.name) }))));
+      } catch (e) { status.textContent = "Sample sets failed to load: " + e.message; }
 
-const takeFiles = async (list) => addSet("Dropped files", await Promise.all([...list].map(async (f) => ({ name: f.name, buf: await f.arrayBuffer() }))));
-document.getElementById("pick").onchange = (e) => takeFiles(e.target.files);
-const drop = document.getElementById("drop");
-drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
-drop.ondragleave = () => drop.classList.remove("over");
-drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); takeFiles(e.dataTransfer.files); };
-</script>
-</body>
+      const takeFiles = async (list) => addSet("Dropped files", await Promise.all([...list].map(async (f) => ({ name: f.name, buf: await f.arrayBuffer() }))));
+      document.getElementById("pick").onchange = (e) => takeFiles(e.target.files);
+      const drop = document.getElementById("drop");
+      drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+      drop.ondragleave = () => drop.classList.remove("over");
+      drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); takeFiles(e.dataTransfer.files); };
+    </script>
+  </body>
 </html>

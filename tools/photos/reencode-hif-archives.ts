@@ -47,7 +47,10 @@ const WRANGLER = path.join(ROOT, "node_modules/.bin/wrangler");
 const BUCKET = "aadhar-photos";
 
 const argv = process.argv.slice(2);
-const opt = (name: string) => { const i = argv.indexOf(name); return i === -1 ? undefined : argv[i + 1]; };
+const opt = (name: string) => {
+  const i = argv.indexOf(name);
+  return i === -1 ? undefined : argv[i + 1];
+};
 const dryRun = argv.includes("--dry-run");
 const hifDir = opt("--hif-dir");
 const backup = opt("--backup");
@@ -60,7 +63,7 @@ if (!hifDir) throw new Error("--hif-dir <folder of HIF originals> is required");
 if (!dryRun && !backup) throw new Error("--backup <dir> is required: it is the only copy of an archive once its key is overwritten");
 if (!fs.existsSync(WRANGLER)) throw new Error(`pinned wrangler not found at ${WRANGLER} (run: bun install)`);
 const sooc = (spawnSync("exif-sooc", ["--version"], { encoding: "utf8" }).stdout ?? "").match(/(\d+)\.(\d+)\.(\d+)/);
-if (!sooc || Number(sooc[1]) === 0 && Number(sooc[2]) < 4) throw new Error("exif-sooc 0.4.0 or later is required to copy a HIF's EXIF onto JPEG XL");
+if (!sooc || (Number(sooc[1]) === 0 && Number(sooc[2]) < 4)) throw new Error("exif-sooc 0.4.0 or later is required to copy a HIF's EXIF onto JPEG XL");
 
 // stem -> HIF, from the folder of originals
 const hifs = new Map<string, string>();
@@ -70,9 +73,7 @@ for (const rel of fs.readdirSync(hifDir, { recursive: true }) as string[]) {
 const index = JSON.parse(fs.readFileSync(INDEX, "utf8")) as Record<string, IndexEntry>;
 const unknown = stems.filter((s) => !index[s]);
 if (unknown.length) throw new Error(`not in photo-index.json: ${unknown.join(", ")}`);
-const todo = (stems.length ? stems : Object.keys(index).sort())
-  .filter((s) => hifs.has(s) && index[s].full.endsWith(".jxl"))
-  .slice(0, limit);
+const todo = (stems.length ? stems : Object.keys(index).sort()).filter((s) => hifs.has(s) && index[s].full.endsWith(".jxl")).slice(0, limit);
 console.log(`${todo.length} HIF photos to consider${dryRun ? " (dry run: no uploads, no index writes)" : ""}, ${jobs} at a time`);
 
 function run(cmd: string[]) {
@@ -93,40 +94,73 @@ const record = (stem: string, size: number) => {
   return writing;
 };
 
-const SYSTEMIC = /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
+const SYSTEMIC =
+  /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
 const STOP_AFTER = 3;
 let streak = 0;
 let halted = null as string | null;
-let moved = 0, kept = 0, already = 0, failed = 0, before = 0, after = 0;
+let moved = 0,
+  kept = 0,
+  already = 0,
+  failed = 0,
+  before = 0,
+  after = 0;
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "reencode-hif-archives-"));
 async function one(stem: string) {
   const key = index[stem].full;
-  const d = path.join(work, stem); fs.mkdirSync(d, { recursive: true });
-  const cur = path.join(d, "current.jxl"), base = path.join(d, "bar.jpg"), next = path.join(d, "next.jxl"), back = path.join(d, "readback.jxl");
+  const d = path.join(work, stem);
+  fs.mkdirSync(d, { recursive: true });
+  const cur = path.join(d, "current.jxl"),
+    base = path.join(d, "bar.jpg"),
+    next = path.join(d, "next.jxl"),
+    back = path.join(d, "readback.jxl");
   try {
     run([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${cur}`, "--remote"]);
-    if (jxlKind(cur) === "direct") { already++; streak = 0; console.log(`  · ${stem}: already encoded from its HIF`); return; }
+    if (jxlKind(cur) === "direct") {
+      already++;
+      streak = 0;
+      console.log(`  · ${stem}: already encoded from its HIF`);
+      return;
+    }
     if (!dryRun) {
       const saved = path.join(backup!, key);
-      if (!fs.existsSync(saved)) { fs.mkdirSync(backup!, { recursive: true }); fs.copyFileSync(cur, saved); }
+      if (!fs.existsSync(saved)) {
+        fs.mkdirSync(backup!, { recursive: true });
+        fs.copyFileSync(cur, saved);
+      }
     }
     run(["djxl", cur, base]);
     const made = await hifArchive(hifs.get(stem)!, base, next);
     const was = fs.statSync(cur).size;
-    if (made.mode !== "direct") { kept++; streak = 0; console.log(`  = ${stem}: kept as is (${made.reason})`); return; }
+    if (made.mode !== "direct") {
+      kept++;
+      streak = 0;
+      console.log(`  = ${stem}: kept as is (${made.reason})`);
+      return;
+    }
     // hif-archive.ts weighs its encode against a fresh repack, whose metadata
     // boxes are uncompressed; the archive in R2 compressed them, so it can be a
     // few KB smaller still. The bucket only shrinks.
-    if (made.bytes >= was) { kept++; streak = 0; console.log(`  = ${stem}: kept as is (d${made.distance}, ${made.bytes} B, is no smaller than the ${was} B in R2)`); return; }
+    if (made.bytes >= was) {
+      kept++;
+      streak = 0;
+      console.log(`  = ${stem}: kept as is (d${made.distance}, ${made.bytes} B, is no smaller than the ${was} B in R2)`);
+      return;
+    }
     if (!dryRun) {
       run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${next}`, "--content-type=image/jxl", "--remote"]);
       run([WRANGLER, "r2", "object", "get", `${BUCKET}/${key}`, `--file=${back}`, "--remote"]);
       if (!fs.readFileSync(back).equals(fs.readFileSync(next))) throw new Error(`${key} read back different from what was uploaded`);
       await record(stem, made.bytes);
     }
-    moved++; streak = 0; before += was; after += made.bytes;
-    console.log(`  ✓ ${stem}: d${made.distance}, ${(was / 1e6).toFixed(2)} -> ${(made.bytes / 1e6).toFixed(2)} MB (${((made.bytes / was - 1) * 100).toFixed(1)}%), s2 ${made.baseline.s2.toFixed(2)} -> ${made.s2.toFixed(2)}, ba3 ${made.baseline.ba3.toFixed(3)} -> ${made.ba3.toFixed(3)}${dryRun ? " (dry run)" : ""}`);
+    moved++;
+    streak = 0;
+    before += was;
+    after += made.bytes;
+    console.log(
+      `  ✓ ${stem}: d${made.distance}, ${(was / 1e6).toFixed(2)} -> ${(made.bytes / 1e6).toFixed(2)} MB (${((made.bytes / was - 1) * 100).toFixed(1)}%), s2 ${made.baseline.s2.toFixed(2)} -> ${made.s2.toFixed(2)}, ba3 ${made.baseline.ba3.toFixed(3)} -> ${made.ba3.toFixed(3)}${dryRun ? " (dry run)" : ""}`,
+    );
   } catch (e) {
     const message = (e as Error).message;
     failed++;
@@ -139,13 +173,20 @@ async function one(stem: string) {
 }
 
 const queue = [...todo];
-await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
-  while (!halted && queue.length) await one(queue.shift() as string);
-}));
+await Promise.all(
+  Array.from({ length: Math.min(jobs, queue.length) }, async () => {
+    while (!halted && queue.length) await one(queue.shift() as string);
+  }),
+);
 await writing;
 fs.rmSync(work, { recursive: true, force: true });
 
-console.log(`re-encoded ${moved}, kept ${kept}, already direct ${already}, failed ${failed}; ${(before / 1e9).toFixed(2)} GB -> ${(after / 1e9).toFixed(2)} GB${before ? ` (${((after / before - 1) * 100).toFixed(1)}%)` : ""}`);
-if (halted) console.error(`stopped after ${STOP_AFTER} connection or login failures in a row, ${queue.length} photos not attempted: ${halted}\n  check the connection, run \`bun run wrangler:site login\`, and rerun; finished photos are skipped`);
+console.log(
+  `re-encoded ${moved}, kept ${kept}, already direct ${already}, failed ${failed}; ${(before / 1e9).toFixed(2)} GB -> ${(after / 1e9).toFixed(2)} GB${before ? ` (${((after / before - 1) * 100).toFixed(1)}%)` : ""}`,
+);
+if (halted)
+  console.error(
+    `stopped after ${STOP_AFTER} connection or login failures in a row, ${queue.length} photos not attempted: ${halted}\n  check the connection, run \`bun run wrangler:site login\`, and rerun; finished photos are skipped`,
+  );
 if (moved && !dryRun) console.log("next: ship photo-index.json with ARCHIVE_VERSION bumped (src/worker/lib/const.ts), then Purge Everything once");
 process.exit(failed ? 1 : 0);

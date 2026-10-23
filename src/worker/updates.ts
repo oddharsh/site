@@ -38,16 +38,21 @@ export async function renderWindowsUpdate(cp) {
   // the running build only when the release that serves carried an entry;
   // /whoareyou.json reports the serving version itself.
   const state = cp.state;
-  const pts = cp.points.slice(-18).reverse();          // newest first
-  let build = "aadhar.sh", log = [];
-  if (pts.length) { build = pts[0].version; log = pts.map((p) => [p.slug, p.title]); }
+  const pts = cp.points.slice(-18).reverse(); // newest first
+  let build = "aadhar.sh",
+    log = [];
+  if (pts.length) {
+    build = pts[0].version;
+    log = pts.map((p) => [p.slug, p.title]);
+  }
   const rows = log.length
-    ? log.map(([tag, desc]) =>
-        `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
+    ? log.map(([tag, desc]) => `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
     : `<li><span class="wu-desc">${esc(
-        state === "unbound" ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
-        : state === "error" ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
-        : "No updates recorded yet."
+        state === "unbound"
+          ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
+          : state === "error"
+            ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
+            : "No updates recorded yet.",
       )}</span></li>`;
   return lunaPage({
     title: "Windows Update · aadhar.sh",
@@ -86,7 +91,7 @@ export async function renderWindowsUpdate(cp) {
     closeTitle: "back to Security Center",
     closeLabel: "back to Security Center",
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });
@@ -99,14 +104,23 @@ export async function handleUpdatesJson(request, env, ctx) {
 }
 
 export async function renderUpdatesJson(cp) {
-  const pts = cp.points.slice(-8).reverse();           // newest first
-  let build = "aadhar.sh", items = [];
-  if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
-  return jsonResponse({ build, items }, 200, {
-    "cache-control":   "public, max-age=0, s-maxage=300",
-    "x-robots-tag":    "noindex",
-    "referrer-policy": "strict-origin-when-cross-origin",
-  }, { pretty: false });
+  const pts = cp.points.slice(-8).reverse(); // newest first
+  let build = "aadhar.sh",
+    items = [];
+  if (pts.length) {
+    build = pts[0].version;
+    items = pts.map((p) => ({ slug: p.slug, title: p.title }));
+  }
+  return jsonResponse(
+    { build, items },
+    200,
+    {
+      "cache-control": "public, max-age=0, s-maxage=300",
+      "x-robots-tag": "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+    { pretty: false },
+  );
 }
 
 // ── /restore handler (Windows System Restore reskin) ─────────────────
@@ -124,9 +138,7 @@ export async function renderSystemRestore(cp) {
   // "You are here" tracks the newest checkpoint, so it can't go stale on deploy
   // the way a hardcoded constant did.
   const newest = points.length ? points[points.length - 1] : null;
-  const live = newest
-    ? { version: newest.version, title: newest.title, ymd: newest.ymd }
-    : { version: "aadhar.sh", title: "live build", ymd: "" };
+  const live = newest ? { version: newest.version, title: newest.title, ymd: newest.ymd } : { version: "aadhar.sh", title: "live build", ymd: "" };
 
   const liveBar =
     `<div class="sr-now"><span class="pin"></span><div><b>You are here.</b>` +
@@ -135,9 +147,8 @@ export async function renderSystemRestore(cp) {
 
   let main;
   if (state === "ok") {
-    const data = points.map(p => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
-    main =
-`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
+    const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
     <div class="sr-stage">
       <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
       <div class="sr-detail" id="srDetail"></div>
@@ -187,13 +198,13 @@ var POINTS = ${JSON.stringify(data)};
 })();
     </script>`;
   } else {
-    const msg = state === "unbound"
-      ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
-      : state === "empty"
-        ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
-        : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
-    main =
-`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
+    const msg =
+      state === "unbound"
+        ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
+        : state === "empty"
+          ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
+          : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
+    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
     <div class="sr-pending"><span class="sr-gear"></span><div><b>System Restore is finishing setup.</b><div class="sub">${esc(msg)}</div></div></div>
     <p class="sr-foot">Backed by <b>Cloudflare D1</b>, with a 7-day Time Travel window underneath for real recovery. See what's shipped in <a href="/updates">Windows Update</a>.</p>`;
   }
@@ -259,7 +270,7 @@ ${main}
     closeTitle: "back to Windows Update",
     closeLabel: "back to Windows Update",
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });

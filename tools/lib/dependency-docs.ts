@@ -43,9 +43,18 @@ export const DOC_ALIASES = [
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
 // here is a decision; a package in neither list fails the reverse direction.
 export const VERSIONLESS = new Map<string, string>([
-  ["av2-tone", "a git dependency pinned to a full commit sha of github.com/oddharsh/av2-tone since 2026-10-14: the AV2 tooling that moved out of tools/photos (the pinned libavif + AVM build, the tuned encoder patches, the WebAssembly decoder, GDF on Metal), unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0 by design until the Rust decoder publishes to crates.io, and the prose names the shape rather than a number"],
-  ["timbrado", "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number"],
-  ["wrangler", "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves"],
+  [
+    "av2-tone",
+    "a git dependency pinned to a full commit sha of github.com/oddharsh/av2-tone since 2026-10-14: the AV2 tooling that moved out of tools/photos (the pinned libavif + AVM build, the tuned encoder patches, the WebAssembly decoder, GDF on Metal), unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0 by design until the Rust decoder publishes to crates.io, and the prose names the shape rather than a number",
+  ],
+  [
+    "timbrado",
+    "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number",
+  ],
+  [
+    "wrangler",
+    "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves",
+  ],
 ]);
 
 // A null version keeps git/path dependencies in the census without inventing
@@ -56,14 +65,16 @@ export function parseCargoDeps(toml: string): DependencyVersions {
   if (raw === undefined) return {};
   const dependencies = asRecord(raw);
   if (!dependencies) throw new Error("Cargo dependencies must be a table");
-  return Object.fromEntries(Object.entries(dependencies).map(([name, value]) => {
-    const spec = asRecord(value);
-    const version = spec ? spec.version : value;
-    if (spec && version === undefined && !(value instanceof Date)) return [name, null];
-    const text = asText(version);
-    if (text === null) throw new Error(`Cargo dependency ${name} must declare a string version or a source table`);
-    return [name, text];
-  }));
+  return Object.fromEntries(
+    Object.entries(dependencies).map(([name, value]) => {
+      const spec = asRecord(value);
+      const version = spec ? spec.version : value;
+      if (spec && version === undefined && !(value instanceof Date)) return [name, null];
+      const text = asText(version);
+      if (text === null) throw new Error(`Cargo dependency ${name} must declare a string version or a source table`);
+      return [name, text];
+    }),
+  );
 }
 
 // Each separately owned manifest has its own aliases and versionless policies.
@@ -99,7 +110,10 @@ export const SUB_MANIFEST_POLICY = [
     kind: "npm",
     aliases: [],
     versionless: new Map([
-      ["wrangler", "the root's exact pkg.pr.new commit URL, restated so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version"],
+      [
+        "wrangler",
+        "the root's exact pkg.pr.new commit URL, restated so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version",
+      ],
     ]),
   },
   {
@@ -107,7 +121,10 @@ export const SUB_MANIFEST_POLICY = [
     kind: "npm",
     aliases: [],
     versionless: new Map([
-      ["wrangler", "the root's exact pkg.pr.new commit URL, restated so `cf dev` (tools/dev.ts) finds a dev server in config/dev's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version"],
+      [
+        "wrangler",
+        "the root's exact pkg.pr.new commit URL, restated so `cf dev` (tools/dev.ts) finds a dev server in config/dev's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version",
+      ],
     ]),
   },
   {
@@ -115,9 +132,15 @@ export const SUB_MANIFEST_POLICY = [
     kind: "cargo",
     aliases: [{ prose: "zenjpeg", pkg: "zenjpeg" }],
     versionless: new Map([
-      ["halflight", "Pinned by git revision in Cargo.toml and Cargo.lock, with no semantic version to state; docs/DEPENDENCIES.md records its manual update and output-parity requirements"],
-      ["image", "Cargo reads a bare \"0.25\" as a caret range, so there is no exact pin to state; it decodes pipeline input and never touches output bytes"],
-      ["serde_json", "Cargo reads a bare \"1.0\" as a caret range. It arrived with the histogram bake in #373 and was undocumented until this check's reverse direction found it, which is the second time that direction has caught a real gap"],
+      [
+        "halflight",
+        "Pinned by git revision in Cargo.toml and Cargo.lock, with no semantic version to state; docs/DEPENDENCIES.md records its manual update and output-parity requirements",
+      ],
+      ["image", 'Cargo reads a bare "0.25" as a caret range, so there is no exact pin to state; it decodes pipeline input and never touches output bytes'],
+      [
+        "serde_json",
+        'Cargo reads a bare "1.0" as a caret range. It arrived with the histogram bake in #373 and was undocumented until this check\'s reverse direction found it, which is the second time that direction has caught a real gap',
+      ],
     ]),
   },
 ];
@@ -130,8 +153,7 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // more often than bare, so requiring `name 1.2.3` would silently match nothing
 // for every entry written in the file's own house style. Found the moment the
 // sub-manifest entries were added, where every name is backticked.
-const claimPattern = (prose) =>
-  new RegExp(`(?<![\\w-])${escape(prose)}\`?\\s+v?(\\d+\\.\\d+\\.\\d+[\\w.-]*)`, "gi");
+const claimPattern = (prose) => new RegExp(`(?<![\\w-])${escape(prose)}\`?\\s+v?(\\d+\\.\\d+\\.\\d+[\\w.-]*)`, "gi");
 
 export function findClaims(doc: string, aliases: DocAlias[] = DOC_ALIASES): DocClaim[] {
   const claims: DocClaim[] = [];
@@ -166,10 +188,7 @@ export const FLOOR_CLAIMS = 11;
 // `membership`, `table` and `exemptList`, because the negative tests assert on
 // them and a refactor that quietly reworded them would be asserting less while
 // still passing.
-export function auditManifest({
-  claims, claimed, problems, pins, aliases, versionless,
-  manifest, membership, table, exemptList,
-}) {
+export function auditManifest({ claims, claimed, problems, pins, aliases, versionless, manifest, membership, table, exemptList }) {
   // Every declared alias must still be pinned AND still be claimed. The two
   // halves stop the alias table going stale in opposite directions: a package
   // that leaves the manifest has to leave the table, and deleting its sentence
@@ -179,8 +198,8 @@ export function auditManifest({
     if (!Object.hasOwn(pins, key)) {
       problems.push(
         `${key} is declared in ${table} but ${manifest} no longer pins it. ` +
-        `Remove it from the table, and say so in prose without restating a version: ` +
-        `a stale number written inside its own correction is still a stale number.`
+          `Remove it from the table, and say so in prose without restating a version: ` +
+          `a stale number written inside its own correction is still a stale number.`,
       );
       continue;
     }
@@ -196,7 +215,7 @@ export function auditManifest({
     if (!/^\d+\.\d+\.\d/.test(pinned)) {
       problems.push(
         `${key} is range-pinned (${pinned}) but declared in ${table}, which is for exact pins. ` +
-        `Move it to ${exemptList} with the reason the range is deliberate.`
+          `Move it to ${exemptList} with the reason the range is deliberate.`,
       );
       continue;
     }
@@ -209,10 +228,7 @@ export function auditManifest({
   for (const { prose, pkg: key, version } of claims) {
     const pinned = pins[key];
     if (pinned && /^\d/.test(pinned) && pinned !== version) {
-      problems.push(
-        `docs/DEPENDENCIES.md states "${prose} ${version}" but ${manifest} pins ${key} at ${pinned}. ` +
-        `Update the prose to ${pinned}.`
-      );
+      problems.push(`docs/DEPENDENCIES.md states "${prose} ${version}" but ${manifest} pins ${key} at ${pinned}. ` + `Update the prose to ${pinned}.`);
     }
   }
 
@@ -224,7 +240,7 @@ export function auditManifest({
     if (claimed.has(key) || versionless.has(key)) continue;
     problems.push(
       `${key} is ${membership} and docs/DEPENDENCIES.md does not state its version. ` +
-      `Add a line for it, or add it to ${exemptList} in tools/lib/dependency-docs.ts with the reason.`
+        `Add a line for it, or add it to ${exemptList} in tools/lib/dependency-docs.ts with the reason.`,
     );
   }
 
@@ -265,7 +281,7 @@ export function auditDependencyDocs({
   if (baseline === null) {
     problems.push(
       `docs/DEPENDENCIES.md has no "${heading}" section, so there is nothing to check. ` +
-      `If the heading was renamed, update BASELINE_HEADING in tools/lib/dependency-docs.ts.`
+        `If the heading was renamed, update BASELINE_HEADING in tools/lib/dependency-docs.ts.`,
     );
     return { claims: [], problems, pillow: null };
   }
@@ -293,13 +309,17 @@ export function auditDependencyDocs({
   if (claims.length < floor) {
     problems.push(
       `only ${claims.length} version claim(s) matched in the baseline section, below the floor of ${floor}. ` +
-      `The scanner has probably stopped matching rather than the doc having shrunk; check DOC_ALIASES against the prose.`
+        `The scanner has probably stopped matching rather than the doc having shrunk; check DOC_ALIASES against the prose.`,
     );
   }
 
   auditManifest({
-    claims, claimed, problems,
-    pins, aliases, versionless,
+    claims,
+    claimed,
+    problems,
+    pins,
+    aliases,
+    versionless,
     manifest: "package.json",
     membership: "a root dependency",
     table: "DOC_ALIASES",
@@ -313,14 +333,15 @@ export function auditDependencyDocs({
   for (const sub of subManifests) {
     if (!sub.missing) continue;
     problems.push(
-      `${sub.manifest} is declared in SUB_MANIFEST_POLICY but could not be read. ` +
-      `If it moved, update the path; if the project is gone, remove the entry.`
+      `${sub.manifest} is declared in SUB_MANIFEST_POLICY but could not be read. ` + `If it moved, update the path; if the project is gone, remove the entry.`,
     );
   }
 
   for (const { sub, subClaims, subClaimed } of subScans) {
     auditManifest({
-      claims: subClaims, claimed: subClaimed, problems,
+      claims: subClaims,
+      claimed: subClaimed,
+      problems,
       pins: sub.pins,
       aliases: sub.aliases,
       versionless: sub.versionless,
@@ -345,10 +366,7 @@ export function auditDependencyDocs({
 // The thin I/O shell. Everything decidable lives in auditDependencyDocs above.
 export async function checkDependencyDocs(root = REPO_ROOT) {
   const read = (p) => readFile(path.join(root, p), "utf8");
-  const [doc, pkgRaw] = await Promise.all([
-    read("docs/DEPENDENCIES.md"),
-    read("package.json"),
-  ]);
+  const [doc, pkgRaw] = await Promise.all([read("docs/DEPENDENCIES.md"), read("package.json")]);
   const pkg = JSON.parse(pkgRaw);
 
   // A manifest that cannot be READ is a problem rather than an empty pin set:
@@ -362,9 +380,13 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
       subManifests.push({ ...entry, pins: {}, missing: true });
       continue;
     }
-    const pins = entry.kind === "cargo"
-      ? parseCargoDeps(raw)
-      : (() => { const m = JSON.parse(raw); return { ...m.dependencies, ...m.devDependencies }; })();
+    const pins =
+      entry.kind === "cargo"
+        ? parseCargoDeps(raw)
+        : (() => {
+            const m = JSON.parse(raw);
+            return { ...m.dependencies, ...m.devDependencies };
+          })();
     subManifests.push({ ...entry, pins });
   }
 

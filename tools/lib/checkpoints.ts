@@ -12,14 +12,14 @@
 
 import { execFileSync } from "node:child_process";
 
-export type Checkpoint = { vnum: number, ymd: string, version: string, slug: string, title: string };
+export type Checkpoint = { vnum: number; ymd: string; version: string; slug: string; title: string };
 
 export const PROJECTION = "src/worker/checkpoints.json";
 export const RELEASED_REF = "origin/production";
 
 /** The projection as the production branch carries it, or null when the ref
  *  is missing locally (a clone that never fetched `production`). */
-export function releasedProjection(root: string, ref = RELEASED_REF): { sha: string, rows: Checkpoint[] } | null {
+export function releasedProjection(root: string, ref = RELEASED_REF): { sha: string; rows: Checkpoint[] } | null {
   try {
     const sha = execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     const text = execFileSync("git", ["show", `${sha}:${PROJECTION}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -35,10 +35,16 @@ export function releasedProjection(root: string, ref = RELEASED_REF): { sha: str
  *  undercounts by that much. Falls back to now if git can't say. */
 export function shippedAt(root: string, sha: string, vnum: number): number {
   try {
-    const out = execFileSync("git", ["log", "--reverse", "--format=%ct", `-S"vnum": ${vnum},`, sha, "--", PROJECTION], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const out = execFileSync("git", ["log", "--reverse", "--format=%ct", `-S"vnum": ${vnum},`, sha, "--", PROJECTION], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
     const first = Number(out.split("\n")[0]);
     if (Number.isFinite(first) && first > 0) return first;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return Math.floor(Date.now() / 1000);
 }
 
