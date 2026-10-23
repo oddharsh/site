@@ -703,3 +703,18 @@ skips it.
     headroom: at 14 ms the 404 passed a spin that added 3 ms and failed one
     that added 5 ms.
     Checked by: `tools/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
+
+82. **Lightning CSS folds `animation-timeline` into a shorthand no engine
+    parses.** With no `targets`, Lightning 1.33 turns `animation: x linear
+    both; animation-timeline: view()` into `animation:linear both x view()`.
+    CSS Animations 2 allows that, but Chrome 152 rejects it (`CSS.supports`
+    answers false), and Lightning's own compat table gives Safari 26 and
+    Firefox 150 the longhand. The browser drops the whole declaration
+    silently, so all four scroll-driven demos on `/garage/scroll` and
+    `/garage/horizon` shipped frozen on their first keyframe until
+    2026-10-23. Write `animation-name`, `-timing-function` and `-fill-mode`
+    as longhands beside `animation-timeline`; Lightning only folds a full
+    shorthand. Two traps rode along: `scroll(root)` watched an `<html>` the
+    window shell never scrolls, and `overflow: hidden` on a wrapper makes it
+    the `nearest` scroll container (use `overflow: clip`).
+    Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
