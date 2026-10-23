@@ -55,6 +55,18 @@ const CUSTOM_MEDIA = readFileSync(new URL("../../src/styles/custom-media.css", i
 
 export const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(?:element|class)/;
 
+// An `animation` shorthand carrying a timeline (gotcha 82). CSS Animations 2
+// allows `animation: x linear both scroll()`, and with no `targets` Lightning
+// 1.33 folds `animation` + `animation-timeline` into exactly that. No engine
+// parses it: Chrome 152 answers CSS.supports false, and Lightning's own compat
+// table gives Safari 26 and Firefox 150 the longhand. The browser drops the
+// whole declaration, so the demo sits on its keyframes' from-state with nothing
+// in the console. Matched on the OUTPUT, because that is what ships, and on
+// scroll()/view() or a bare dashed ident (a named timeline); var(--x) is not one.
+const ANIMATION_DECL = /(?:^|[{;\s])animation\s*:\s*([^;{}]*)/g;
+const carriesTimeline = (value: string) =>
+  value.split(/[\s,]+/).some((t) => /^(?:scroll|view)\(/.test(t) || /^--[\w-]+$/.test(t));
+
 // Parse `sourceText`, throwing on anything Lightning reports that is not the
 // tolerated family, and throwing again if a tolerated selector failed to survive.
 // `minify` is the caller's business: the build wants minified bytes, a contract
@@ -86,6 +98,11 @@ export const parseCss = (filename: string, sourceText: string, { minify = false 
   }
   if (fatal.length) {
     throw new Error(`${filename}: Lightning CSS emitted warnings: ${fatal.join("; ")}`);
+  }
+  for (const [, value] of out.matchAll(ANIMATION_DECL)) {
+    if (carriesTimeline(value)) {
+      throw new Error(`${filename}: \`animation: ${value.trim()}\` puts a timeline in the shorthand, which no engine parses, so the browser drops the declaration (gotcha 82). Write animation-name/-timing-function/-fill-mode as longhands beside animation-timeline; Lightning CSS only folds a full shorthand`);
+    }
   }
   for (const selector of new Set(tolerated)) {
     if (!out.includes(selector)) {

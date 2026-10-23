@@ -380,6 +380,10 @@
    layout cost. The homepage also sets it inline, since luna lands after its
    first paint. */
 html{text-wrap:pretty}
+/* text selection in XP's Highlight/HighlightText pair (#316AC5 on white text).
+   Unstyled, macOS paints its own pale accent blue. Selecting inside a title bar
+   reads blue on blue; XP did the same, so that stays. */
+::selection{background:var(--selection);color:var(--selection-text)}
 /* View Transitions (@view-transition) are OFF, deliberately (2026-07-30). The
    cross-document opt-in used to live here and animate the window minimize/restore
    across real navigations. Every internal page is prerendered on hover (the

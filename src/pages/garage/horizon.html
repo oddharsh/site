@@ -221,7 +221,9 @@ pre {
       scroll the box, wired via a named scroll-timeline on the scroller.
    2. view() reveal: each row fades+slides in as it enters the scrollport,
       driven by its own view-timeline. */
-.sd-wrap { margin-top: 10px; border: 1px solid var(--frame);
+/* timeline-scope hoists --sd-scroll up here, so the meter (the scroller's
+   sibling, not its child) can see the name */
+.sd-wrap { timeline-scope: --sd-scroll; margin-top: 10px; border: 1px solid var(--frame);
   border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: var(--paper-cool); }
 
@@ -234,8 +236,10 @@ pre {
   height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
   background: repeating-linear-gradient(90deg,
     oklch(55.0% 0.135 251) 0 9px, oklch(62% 0.124 252) 9px 11px);
-  /* the timeline lives on the scroller below, referenced by name */
-  animation: sd-fill linear both;
+  /* the timeline lives on the scroller below, referenced by name. Longhands,
+     because Lightning CSS folds a shorthand + timeline into one declaration
+     no engine parses (gotcha 82). */
+  animation-name: sd-fill; animation-timing-function: linear; animation-fill-mode: both;
   animation-timeline: --sd-scroll;
 }
 @keyframes sd-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -254,7 +258,7 @@ pre {
   margin: 7px 0; padding: 7px 9px; background: oklch(100% 0 0);
   border: 1px solid oklch(86% 0.02 250); font-size: var(--text-sm); color: var(--slate-30);
   font-family: var(--font-caption);
-  animation: sd-reveal linear both;
+  animation-name: sd-reveal; animation-timing-function: linear; animation-fill-mode: both;
   animation-timeline: view();
   animation-range: entry 0% cover 35%;
 }
