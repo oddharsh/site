@@ -66,6 +66,7 @@ export function createRun(options) {
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
     { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs" },
     { label: "lwe · efuses", path: "/lwe/fuse", hint: "efuses, anti-rollback, and why a phone refuses old firmware" },
+    { label: "lwe · smoothing", path: "/lwe/smoothing", hint: "macOS font smoothing: AppleFontSmoothing, subpixel vs greyscale, ClearType" },
 // generated:lwe-pages:end
     // generated:garage-pages:start
     { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },

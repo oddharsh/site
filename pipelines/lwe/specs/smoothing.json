@@ -1,0 +1,241 @@
+{
+  "id": "smoothing",
+  "description": "What AppleFontSmoothing 0 to 3 does on macOS 27.2 (1, 2 and 3 draw identical pixels), subpixel versus greyscale antialiasing, ClearType and hinting, and why external monitors look worse on a Mac. Four live demos.",
+  "buddyStat": "AppleFontSmoothing, 0 to 3",
+  "petsLine": "Learning&nbsp;With&nbsp;Errors<br>pixels &amp; stripes",
+  "composeNote": "This is a recorded conversation. Every demo above redraws live.",
+  "hasAsk": true,
+  "disclosure": "<b>Measured on macOS 27.2.</b> The value sweep, the stem widths and the CSS checks come from AppKit, WebKit and Chrome renders on an Apple silicon Mac whose system setting is 0. The demos redraw text with this page's own rasterizer and a growth model fitted to those renders, so they show the mechanism the same way in every browser. As a control, the model's ink for 13 pt Helvetica lands within 3 percentage points of AppKit's in all four cases (1x and 2x, both polarities). The history and the Windows side are paraphrased from the linked sources.",
+  "editorial": {
+    "reader": "A Mac user on an external monitor who pasted the AppleFontSmoothing command from a forum and wants to know what it changes.",
+    "problem": "The reader can see that text on their monitor looks worse than on a MacBook or on Windows, and can't say which step of text rendering causes it or what the values 0 to 3 change.",
+    "thesis": "On macOS 27.2 AppleFontSmoothing is a switch that thickens stems by up to 0.6 px, and external monitors look worse because macOS dropped subpixel rendering, never snaps stems to the pixel grid, and tunes everything for 2x.",
+    "evidence": [
+      "A 48-case AppKit sweep renders byte-identical bitmaps for 1, 2 and 3, and only 0 differs.",
+      "Stem measurements from 9 to 96 pt fit growth of 0.0116 px per ppem for dark text and 0.032 for light text, capped at 0.6 px.",
+      "With the system at 0, Chrome and WebKit draw the same pixels for every -webkit-font-smoothing value."
+    ],
+    "uncertainty": "I measured one Mac on one OS release with the system set to 0, so the browser path with smoothing left on rests on MDN, and the Windows side rests on the cited sources."
+  },
+  "understanding": {
+    "intro": "Before you close the window: 5 questions, no grades. Every demo above still runs if you want to check an answer against it.",
+    "questions": [
+      {
+        "q": "You set AppleFontSmoothing to 3 and relaunch an app on macOS 27.2. Compared with 1, what changes on screen?",
+        "options": [
+          {
+            "t": "nothing at all, since 1 and 3 grow every stem by exactly the same amount",
+            "ok": true,
+            "why": "Right. The 48-case sweep produced byte-identical bitmaps for 1, 2 and 3. The light, medium and strong names belong to the LCD era."
+          },
+          {
+            "t": "stems thicken about three times as much, since the value scales the growth",
+            "why": "That's a fair reading of the Snow Leopard names. On 27.2 the value only switches the growth on, and its size comes from pixels per em."
+          },
+          {
+            "t": "text switches to subpixel rendering, since 3 was the strong LCD setting",
+            "why": "Subpixel rendering left with Mojave. No value of this key brings the colored stripes back."
+          }
+        ]
+      },
+      {
+        "q": "At smoothing on, why does white-on-black text look heavier than black-on-white on a 1x monitor?",
+        "options": [
+          {
+            "t": "light text grows 2.75 times faster per ppem, so a 13 pt stem gains 0.41 px",
+            "ok": true,
+            "why": "Right. Dark text gains 0.15 px at the same size. The measured rates are 0.032 and 0.0116 px per ppem, both capped at 0.6 px."
+          },
+          {
+            "t": "dark backgrounds trigger subpixel rendering, and its fringes add weight",
+            "why": "No polarity brings back subpixel rendering. The extra weight is greyscale coverage from a larger outline."
+          },
+          {
+            "t": "the eye spreads light into dark surroundings, so equal stems look unequal",
+            "why": "That effect exists, but the stems here are unequal on disk too: at 0 both polarities had identical ink, and smoothing grew the light stems far more."
+          }
+        ]
+      },
+      {
+        "q": "Subpixel rendering gives sharper edges on a 1x LCD. What made it a poor fit for a GPU-composited desktop?",
+        "options": [
+          {
+            "t": "it needs the background color at raster time, since each stripe blends alone",
+            "ok": true,
+            "why": "Right. One alpha can blend over anything later. Three alphas need the color behind the glyph before compositing has decided it."
+          },
+          {
+            "t": "it needs a Retina display, since stripes are too small to address at 1x",
+            "why": "Backwards. Subpixel rendering pays off most at 1x, where a third of a pixel is still large enough to matter."
+          },
+          {
+            "t": "it triples the size of every font file, since each glyph ships three outlines",
+            "why": "A font ships one outline per glyph. The cost lands in the glyph cache at render time, which grows with every subpixel offset."
+          }
+        ]
+      },
+      {
+        "q": "A 27-inch 4K monitor is set to look like 2560x1440. What happens to a glyph on its way to the panel?",
+        "options": [
+          {
+            "t": "macOS draws it into a 5120x2880 frame, then shrinks that frame by 0.75",
+            "ok": true,
+            "why": "Right. The glyph gets filtered twice, once by the rasterizer and once by the scaler, which is the softness people notice."
+          },
+          {
+            "t": "macOS draws it straight at 3840x2160 with stems snapped to panel pixels",
+            "why": "That's closer to what Windows does at 150%. macOS renders a HiDPI mode at exactly 2x and resamples the result."
+          },
+          {
+            "t": "macOS sends 2560x1440 and the monitor's own scaler stretches it to 4K",
+            "why": "The Mac sends native 3840x2160. The resample happens on the Mac's GPU, before the signal leaves the machine."
+          }
+        ]
+      },
+      {
+        "q": "On a Mac whose system setting is left on, what can a page's CSS do about the thickening?",
+        "options": [
+          {
+            "t": "switch it off per element with -webkit-font-smoothing: antialiased",
+            "ok": true,
+            "why": "Right, and only in that direction. With the system at 0, subpixel-antialiased drew the same pixels as antialiased in Chrome and WebKit."
+          },
+          {
+            "t": "pick light, medium or strong through font-smooth values from 1 to 3",
+            "why": "No CSS value maps to the old strengths, and on 27.2 the strengths themselves no longer exist."
+          },
+          {
+            "t": "bring back ClearType-style stripes with subpixel-antialiased",
+            "why": "The keyword survives from the LCD era. Since Mojave it can't bring stripes back, and at system 0 it changed no pixel in either engine."
+          }
+        ]
+      }
+    ]
+  },
+  "messages": [
+    {
+      "who": "you",
+      "time": "22:41",
+      "html": "<p>first thing i run on any new mac: <code>defaults -currentHost write -g AppleFontSmoothing -int 0</code>. what is that actually changing, and what do 1, 2 and 3 do?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:41",
+      "html": "<p>It writes one integer into this Mac's global preferences. <code>-g</code> is the domain every app reads, and <code>-currentHost</code> files the value under this machine's hardware UUID in <code>~/Library/Preferences/ByHost/</code>, where the old System Preferences checkbox kept it. AppKit reads the key when an app launches, so an app that's already open keeps its old text until you quit it.</p><p>The numbers date from Snow Leopard. That release cut the Appearance pane down to one checkbox, and a Terminal command became the only way back to the old menu: 1 for light, 2 for medium and 3 for strong LCD smoothing.</p>",
+      "cite": {
+        "url": "https://www.macworld.com/article/1145157/smoothsnow.html",
+        "title": "Macworld, 2009: Enable better font smoothing on some LCD displays in Snow Leopard"
+      }
+    },
+    {
+      "who": "bot",
+      "time": "22:42",
+      "html": "<p>So I swept them on macOS 27.2: Helvetica, the system font, Tahoma and Verdana, at 11, 13 and 16 pt, at 1x and 2x, as black-on-white and as white-on-black. In all 48 cases, 1, 2 and 3 drew byte-identical bitmaps, and only 0 differed. The key is a switch now. Any value above 0 means on.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-dial",
+        "bar": "turn the dial &middot; redrawn live, fitted to macOS 27.2",
+        "html": "<p class=\"lead\">This draws the text itself, with the growth model fitted to those renders, so it shows the macOS mechanism in any browser, Windows included. The top row is always 0. The bottom row follows the dial, and the magnifier on the right shows one square per pixel.</p><div class=\"fs-ctl\"><label>AppleFontSmoothing <input type=\"range\" id=\"fsVal\" min=\"0\" max=\"3\" step=\"1\" value=\"2\"> <b id=\"fsValL\" class=\"mono\">2</b></label><label>font <select id=\"fsFont\"><option value=\"Helvetica, Arial, sans-serif\">Helvetica</option><option value=\"Tahoma, Verdana, sans-serif\">Tahoma</option><option value=\"Verdana, sans-serif\">Verdana</option><option value=\"Georgia, serif\">Georgia</option><option value=\"'Courier New', monospace\">Courier New</option><option value=\"system-ui, sans-serif\">system-ui</option></select></label><label>size <select id=\"fsSize\"><option>11</option><option selected>13</option><option>16</option><option>24</option></select> pt</label><label>text <select id=\"fsPol\"><option value=\"light\">black on white</option><option value=\"dark\">white on black</option></select></label><label>screen <select id=\"fsScale\"><option value=\"1\">1x, external</option><option value=\"2\">2x, Retina</option></select></label><label class=\"fs-txt\">sample <input id=\"fsText\" value=\"Hamburgefonstiv 0123\" maxlength=\"40\" spellcheck=\"false\"></label></div><div class=\"fs-row\"><div class=\"fs-lab\">AppleFontSmoothing 0</div><div class=\"fs-pair\"><canvas id=\"fsRow0\" class=\"fs-act\"></canvas><canvas id=\"fsMag0\" class=\"fs-mag\"></canvas></div></div><div class=\"fs-row\"><div class=\"fs-lab\" id=\"fsRowVL\">AppleFontSmoothing 2</div><div class=\"fs-pair\"><canvas id=\"fsRowV\" class=\"fs-act\"></canvas><canvas id=\"fsMagV\" class=\"fs-mag\"></canvas></div></div><p class=\"fs-out\" id=\"fsOut\" aria-live=\"polite\"></p>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "22:44",
+      "html": "<p>ok so what is \"on\" doing to the letters?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:44",
+      "html": "<p>It fattens them. AppKit grows every outline a little before it fills it, so each stem widens on both edges. I measured the stem of a Helvetica <code>l</code>: at 13 pt on a 1x screen it's 1.14 px wide at 0 and 1.30 px with smoothing on.</p><p>The growth tracks <a class=\"term\" data-t=\"ppem\" href=\"https://en.wikipedia.org/wiki/Em_(typography)\" title=\"Pixels per em: the font size measured in device pixels. 13 pt is 13 ppem on a 1x screen and 26 ppem on a 2x screen.\" rel=\"external\">pixels per em</a>, about 0.0116 px per ppem, and stops at 0.6 px, which a 2x screen reaches near 26 pt. White text on black grows 2.75 times faster, 0.032 px per ppem, so the same 13 pt stem in dark mode lands at 1.55 px, 36% heavier than at 0. That asymmetry is why light-on-dark text gains the most when you set 0.</p>"
+    },
+    {
+      "who": "you",
+      "time": "22:46",
+      "html": "<p>and subpixel vs greyscale antialiasing? i've seen both blamed for this</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:46",
+      "html": "<p>Both answer one question per pixel: how much of it does the letter cover? <a class=\"term\" data-t=\"antialiasing\" href=\"https://en.wikipedia.org/wiki/Font_rasterization\" title=\"Shading each edge pixel by the fraction of it the letter covers, using one value for all three color channels.\" rel=\"external\">Greyscale antialiasing</a> turns that fraction into a shade, so a pixel half inside a stem becomes 50% grey. All three color channels get the same value, which lets the text sit on any background, under any blend or animation.</p><p><a class=\"term\" data-t=\"subpixel-rendering\" href=\"https://en.wikipedia.org/wiki/Subpixel_rendering\" title=\"Drawing text against the red, green and blue stripes inside each LCD pixel, so edges can land on a third of a pixel.\" rel=\"external\">Subpixel rendering</a> notices that an LCD pixel is three vertical stripes, red, green and blue, and asks the question three times per pixel. Edges can land on a third of a pixel, which triples horizontal resolution. The price is color: an edge that covers only the red stripe tints red, so a filter spreads each third into its neighbours until the fringe fades.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-grid",
+        "bar": "one letter, magnified &middot; switch the fill",
+        "html": "<p class=\"lead\">A 13 px Georgia letter, drawn three ways and blown up so each square is one pixel. Shift it sideways by part of a pixel and watch the edge shading move. Tick <b>stripes</b> to see what the panel actually lights.</p><div class=\"fs-ctl\"><label>fill <select id=\"pgMode\"><option value=\"mono\">1-bit</option><option value=\"grey\" selected>greyscale</option><option value=\"lcd\">subpixel (RGB)</option></select></label><label>letter <select id=\"pgGlyph\"><option>a</option><option>e</option><option>W</option><option>sh</option></select></label><label>shift <input type=\"range\" id=\"pgOff\" min=\"0\" max=\"1\" step=\"0.05\" value=\"0\"> <span id=\"pgOffL\" class=\"mono\"></span></label><label><input type=\"checkbox\" id=\"pgStripes\"> stripes</label></div><canvas id=\"pgCanvas\" class=\"fs-big\"></canvas><p class=\"fs-out\" id=\"pgOut\" aria-live=\"polite\"></p>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "22:49",
+      "html": "<p>subpixel sounds strictly better. why would apple remove it?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:49",
+      "html": "<p>Mojave turned it off in 2018, and the reason lives in the compositor. Greyscale coverage is one alpha value, so the GPU can blend a finished glyph onto anything. Subpixel coverage is three alphas, one per stripe, so the renderer has to know the exact color behind the glyph at the moment it rasterizes. A translucent, layer-backed, animated desktop hasn't decided that color yet.</p><p>An ex-macOS engineer listed the rest on Hacker News during the Mojave beta: the panel's stripe geometry threaded through every graphics layer, glyph caches multiplied by every subpixel offset, and artifacts whenever text switched between static and animated. Rotate the panel, or use an OLED without RGB stripes, and the three-stripe assumption breaks outright.</p><p>What survived is the thickening. Mojave's checkbox became \"Use font smoothing when available\" and drove only that, and Big Sur deleted the checkbox, which left the <code>defaults</code> key as the only switch.</p>",
+      "cite": {
+        "url": "https://news.ycombinator.com/item?id=17476873",
+        "title": "Hacker News, 2018: macOS Mojave removes subpixel anti-aliasing"
+      }
+    },
+    {
+      "who": "you",
+      "time": "22:52",
+      "html": "<p>how does windows handle the same problem?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:52",
+      "html": "<p>It made the opposite bet, twice. <a class=\"term\" data-t=\"cleartype\" href=\"https://en.wikipedia.org/wiki/ClearType\" title=\"Microsoft's subpixel text rendering, the Windows system default since Vista.\" rel=\"external\">ClearType</a> is subpixel rendering, and Windows Vista made it the system default. Windows fonts also lean on <a class=\"term\" data-t=\"hinting\" href=\"https://en.wikipedia.org/wiki/Font_hinting\" title=\"Instructions inside a font that move its outlines onto the pixel grid at small sizes, before the letter is rasterized.\" rel=\"external\">hinting</a>: small programs inside the font that move outlines onto the pixel grid before rasterizing, so a stem that would cover 1.14 px snaps to one whole, dark column.</p><p>Joel Spolsky drew the split in 2007. Apple keeps each typeface's true shape and accepts some blur; Microsoft hammers letters onto pixel boundaries and accepts some distortion. Newer Windows frameworks soften both bets, since DirectWrite can place glyphs at fractions of a pixel and modern Windows UI text renders in greyscale.</p><p>This site's chrome copies Windows XP, which <a href=\"https://learn.microsoft.com/en-us/archive/blogs/e7/engineering-changes-to-cleartype-in-windows-7\" rel=\"external\">shipped with ClearType off</a>: its default was greyscale smoothing, the same as Windows 2000, because plenty of desks still had CRTs.</p>",
+      "cite": {
+        "url": "https://www.joelonsoftware.com/2007/06/12/font-smoothing-anti-aliasing-and-sub-pixel-rendering/",
+        "title": "Joel Spolsky, 2007: Font smoothing, anti-aliasing, and sub-pixel rendering"
+      }
+    },
+    {
+      "demo": {
+        "id": "demo-stem",
+        "bar": "one stem, six pixels &middot; drag it across the grid",
+        "html": "<p class=\"lead\">One vertical stem, as wide as a 13 pt Helvetica <code>l</code> on a 1x screen. The top two rows render it the macOS way, greyscale and unhinted; the second adds the 0.15 px that smoothing grows at that size. The bottom two snap it to the grid first, the way hinted fonts on Windows do, and the last adds ClearType's stripes and filter.</p><div class=\"fs-ctl\"><label>position <input type=\"range\" id=\"stPos\" min=\"0\" max=\"1\" step=\"0.02\" value=\"0.4\"> <span id=\"stPosL\" class=\"mono\"></span></label><label>width <input type=\"range\" id=\"stW\" min=\"0.6\" max=\"2.4\" step=\"0.02\" value=\"1.14\"> <span id=\"stWL\" class=\"mono\"></span></label></div><canvas id=\"stCanvas\" class=\"fs-big\"></canvas><p class=\"fs-out\" id=\"stOut\" aria-live=\"polite\"></p>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "22:55",
+      "html": "<p>which gets to my actual complaint. why does a mac look so much worse than windows on the same external monitor?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:55",
+      "html": "<p>Because macOS prices every one of those choices for about 220 PPI, and the common 24- and 27-inch monitors sit between 92 and 109. A 27-inch 1440p panel is 109 PPI, so macOS draws it at 1x. There the 13 pt stem is 1.14 px wide, and with no hinting it straddles two columns as two greys. No stripes sharpen its edges. Then smoothing adds 0.15 px of grey on top, or 0.41 px in dark mode. Windows on the same panel snaps the stem to one column and resolves its edges in thirds.</p><p>A 27-inch 4K panel has a different problem. Its exact 2x mode looks like 1920x1080, which most owners find too large, so they pick \"looks like 2560x1440\". macOS draws that at 5120x2880 and then shrinks the whole frame by 0.75 to fit 3840 pixels, so every glyph gets filtered a second time after it was drawn. The external panels that look like a MacBook are the ones where 2x lands exactly on native: 5K at 27 inches and 6K at 32.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-ppi",
+        "bar": "pick a monitor &middot; see what macOS does to it",
+        "html": "<p class=\"lead\">Pick a panel and a display mode. The numbers come from the panel's geometry and from how macOS runs a HiDPI mode: it draws at twice the \"looks like\" size, then resamples to the panel's native pixels.</p><div class=\"fs-ctl\"><label>monitor <select id=\"ppPreset\"></select></label><label>mode <select id=\"ppMode\"></select></label></div><div id=\"ppOut\" aria-live=\"polite\"></div>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "22:58",
+      "html": "<p>so is 0 the right call?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "22:58",
+      "html": "<p>On a 1x monitor I think so. It strips 13% of extra width from black-on-white stems and 36% from white-on-black, and the text stays soft but gets lighter and more even. It can't restore subpixel rendering or hinting, so no setting makes 109 PPI on a Mac look like ClearType. On a Retina screen it comes down to taste: 0.3 px on a 2.3 px stem reads as weight, and the stems are wide enough that their grey edges barely show.</p><p>Web pages get the same switch per element. In Safari and Chrome on a Mac, <code>-webkit-font-smoothing: antialiased</code> asks for the 0 rendering. The other direction is closed. With the system at 0, I measured <code>subpixel-antialiased</code> drawing the same pixels as <code>antialiased</code> in both Chrome and WebKit, so CSS can switch the thickening off and has no way to switch it back on.</p>",
+      "cite": {
+        "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth",
+        "title": "MDN: font-smooth"
+      }
+    },
+    {
+      "scrollnote": "end of conversation"
+    }
+  ],
+  "demoCss": ".fs-ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px;font-size:var(--text-xs);color:var(--slate-38)}.fs-ctl label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%}.fs-ctl select,.fs-ctl input[type=text],.fs-ctl input:not([type]){font:inherit;font-size:var(--text-xs);padding:1px 4px;border:1px solid var(--slate-73);border-radius:2px;background:#fff}.fs-ctl input[type=range]{accent-color:var(--accent);width:9em;max-width:45vw}.fs-txt input{width:15em;max-width:100%}.fs-row{margin:0 0 8px}.fs-lab{font-size:var(--text-2xs);color:var(--slate-55);font-family:var(--font-mono);margin:0 0 3px}.fs-pair{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.fs-act{image-rendering:pixelated;display:block;max-width:100%;border:1px solid var(--slate-80)}.fs-mag{image-rendering:pixelated;display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-big{display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-out{font-size:var(--text-xs);color:var(--slate-38);margin:8px 0 0;line-height:1.5}.fs-out b{color:var(--slate-26)}.demo .mono{font-family:var(--font-mono)}.st-n{color:var(--slate-55)}.pp-tbl{border-collapse:collapse;font-size:var(--text-xs)}.pp-tbl td{padding:2px 14px 2px 0;border-bottom:1px solid var(--mist-96)}.pp-tbl td:first-child{color:var(--slate-55)}.pp-v{font-size:var(--text-xs);color:var(--slate-26);margin:8px 0 0;line-height:1.5}\nbody { text-wrap: pretty; } /* progressive; older engines ignore it */",
+  "demoJsFile": "smoothing-demo.ts"
+}

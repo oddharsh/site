@@ -39,6 +39,11 @@
     "plain": "A CSS feature that places one element relative to another, such as a tooltip pinned to its button, without JavaScript measuring positions.",
     "src": "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning"
   },
+  "antialiasing": {
+    "label": "Greyscale antialiasing",
+    "plain": "Shading each edge pixel by the fraction of it the letter covers, using one value for all three color channels.",
+    "src": "https://en.wikipedia.org/wiki/Font_rasterization"
+  },
   "apple-t2": {
     "label": "Apple T2",
     "plain": "A security chip in Intel-based Macs from 2017 onward that stores encryption keys and Touch ID data and checks the startup software.",
@@ -223,6 +228,11 @@
     "label": "CKKS",
     "plain": "A homomorphic encryption scheme by Cheon, Kim, Kim and Song that computes on encrypted real numbers approximately, treating its noise as rounding error.",
     "src": "https://eprint.iacr.org/2016/421"
+  },
+  "cleartype": {
+    "label": "ClearType",
+    "plain": "Microsoft's subpixel text rendering, the Windows system default since Vista.",
+    "src": "https://en.wikipedia.org/wiki/ClearType"
   },
   "cloudflare-pages": {
     "label": "Cloudflare Pages",
@@ -594,6 +604,11 @@
     "plain": "A search that starts from a guess and keeps any small change that improves a score, stopping when no change helps.",
     "src": "https://en.wikipedia.org/wiki/Hill_climbing"
   },
+  "hinting": {
+    "label": "Font hinting",
+    "plain": "Instructions inside a font that move its outlines onto the pixel grid at small sizes, before the letter is rasterized.",
+    "src": "https://en.wikipedia.org/wiki/Font_hinting"
+  },
   "hmac": {
     "label": "HMAC",
     "plain": "A way to tag a message using a shared secret key and a hash function, so anyone holding the key can check the message wasn't changed.",
@@ -944,6 +959,11 @@
     "plain": "A compact binary format for Rust that turns data structures into short byte strings and back.",
     "src": "https://docs.rs/postcard/latest/postcard/"
   },
+  "ppem": {
+    "label": "Pixels per em",
+    "plain": "Pixels per em: the font size measured in device pixels. 13 pt is 13 ppem on a 1x screen and 26 ppem on a 2x screen.",
+    "src": "https://en.wikipedia.org/wiki/Em_(typography)"
+  },
   "prefers-reduced-motion": {
     "label": "prefers-reduced-motion",
     "plain": "A CSS media feature that tells a page the user has asked their system to minimize animation.",
@@ -1278,6 +1298,11 @@
     "label": "stdin",
     "plain": "A program's standard input, the stream it reads from by default. A tool that talks over stdin and stdout can be driven by another program.",
     "src": "https://en.wikipedia.org/wiki/Standard_streams"
+  },
+  "subpixel-rendering": {
+    "label": "Subpixel rendering",
+    "plain": "Drawing text against the red, green and blue stripes inside each LCD pixel, so edges can land on a third of a pixel.",
+    "src": "https://en.wikipedia.org/wiki/Subpixel_rendering"
   },
   "superscript": {
     "label": "superscript",

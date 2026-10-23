@@ -1,7 +1,7 @@
 {
   "$comment": "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.",
   "files": {
-    "config/site-manifest.json": "4daff3293ae870dcffe3b8ee88caaaa00aa8f3264eee5816c3065cdaef5f04ed",
+    "config/site-manifest.json": "03fb74f8f0095a81cffea4f111c49369d87022012be8c00474fc70a1cc3710df",
     "images/alt#L1000069_3": "set",
     "images/alt#L1009919_2": "set",
     "images/alt#L1009920": "set",

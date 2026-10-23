@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/lwe/smoothing · font smoothing</title>
+<meta name="description" content="What AppleFontSmoothing 0 to 3 does on macOS 27.2 (1, 2 and 3 draw identical pixels), subpixel versus greyscale antialiasing, ClearType and hinting, and why external monitors look worse on a Mac. Four live demos.">
+<link rel="canonical" href="https://aadhar.sh/lwe/smoothing">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%233d5a80'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='Georgia,%20serif'%20fill='%23fff'%20text-anchor='middle'%3Ea%3C/text%3E%3C/svg%3E">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/smoothing · font smoothing">
+<meta property="og:url" content="https://aadhar.sh/lwe/smoothing">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/lwe-smoothing.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/lwe/smoothing · font smoothing, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/lwe-smoothing.jpg">
+
+<link rel="stylesheet" href="/lwe-base.css">
+<style>:root{--accent:#3d5a80;--accent-soft:var(--surface-desktop);--glyph:"a";--pic-g0:#6b88b0;--pic-g1:#3d5a80;--pic-border:#2c4462;--name-color:#2c4462;--glyph-font:Georgia, serif}
+.msg .bubble code { font-family: var(--font-mono); font-size: var(--text-sm); background: var(--face-light); padding: 0 3px; border-radius: 2px; }
+.fs-ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:0 0 10px;font-size:var(--text-xs);color:var(--slate-38)}.fs-ctl label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:100%}.fs-ctl select,.fs-ctl input[type=text],.fs-ctl input:not([type]){font:inherit;font-size:var(--text-xs);padding:1px 4px;border:1px solid var(--slate-73);border-radius:2px;background:#fff}.fs-ctl input[type=range]{accent-color:var(--accent);width:9em;max-width:45vw}.fs-txt input{width:15em;max-width:100%}.fs-row{margin:0 0 8px}.fs-lab{font-size:var(--text-2xs);color:var(--slate-55);font-family:var(--font-mono);margin:0 0 3px}.fs-pair{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.fs-act{image-rendering:pixelated;display:block;max-width:100%;border:1px solid var(--slate-80)}.fs-mag{image-rendering:pixelated;display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-big{display:block;max-width:100%;height:auto;border:1px solid var(--slate-80)}.fs-out{font-size:var(--text-xs);color:var(--slate-38);margin:8px 0 0;line-height:1.5}.fs-out b{color:var(--slate-26)}.demo .mono{font-family:var(--font-mono)}.st-n{color:var(--slate-55)}.pp-tbl{border-collapse:collapse;font-size:var(--text-xs)}.pp-tbl td{padding:2px 14px 2px 0;border-bottom:1px solid var(--mist-96)}.pp-tbl td:first-child{color:var(--slate-55)}.pp-v{font-size:var(--text-xs);color:var(--slate-26);margin:8px 0 0;line-height:1.5}
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; font smoothing</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div><!-- /axp:window -->
+  <main id="main" class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <h1 class="who"><b>smoothing</b><span class="stat">Online, AppleFontSmoothing, 0 to 3</span></h1>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>pixels &amp; stripes</div>
+      </div>
+
+      <p class="disclosure"><b>Measured on macOS 27.2.</b> The value sweep, the stem widths and the CSS checks come from AppKit, WebKit and Chrome renders on an Apple silicon Mac whose system setting is 0. The demos redraw text with this page's own rasterizer and a growth model fitted to those renders, so they show the mechanism the same way in every browser. As a control, the model's ink for 13 pt Helvetica lands within 3 percentage points of AppKit's in all four cases (1x and 2x, both polarities). The history and the Windows side are paraphrased from the linked sources.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:41</time></div>
+        <div class="bubble"><p>first thing i run on any new mac: <code>defaults -currentHost write -g AppleFontSmoothing -int 0</code>. what is that actually changing, and what do 1, 2 and 3 do?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:41</time></div>
+        <div class="bubble"><p>It writes one integer into this Mac's global preferences. <code>-g</code> is the domain every app reads, and <code>-currentHost</code> files the value under this machine's hardware UUID in <code>~/Library/Preferences/ByHost/</code>, where the old System Preferences checkbox kept it. AppKit reads the key when an app launches, so an app that's already open keeps its old text until you quit it.</p><p>The numbers date from Snow Leopard. That release cut the Appearance pane down to one checkbox, and a Terminal command became the only way back to the old menu: 1 for light, 2 for medium and 3 for strong LCD smoothing.</p> <a href="https://www.macworld.com/article/1145157/smoothsnow.html" rel="external" title="Macworld, 2009: Enable better font smoothing on some LCD displays in Snow Leopard">[src]</a></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:42</time></div>
+        <div class="bubble"><p>So I swept them on macOS 27.2: Helvetica, the system font, Tahoma and Verdana, at 11, 13 and 16 pt, at 1x and 2x, as black-on-white and as white-on-black. In all 48 cases, 1, 2 and 3 drew byte-identical bitmaps, and only 0 differed. The key is a switch now. Any value above 0 means on.</p></div></div></div>
+
+      <div class="demo" id="demo-dial">
+        <div class="bar">turn the dial &middot; redrawn live, fitted to macOS 27.2</div>
+        <div class="pad"><p class="lead">This draws the text itself, with the growth model fitted to those renders, so it shows the macOS mechanism in any browser, Windows included. The top row is always 0. The bottom row follows the dial, and the magnifier on the right shows one square per pixel.</p><div class="fs-ctl"><label>AppleFontSmoothing <input type="range" id="fsVal" min="0" max="3" step="1" value="2"> <b id="fsValL" class="mono">2</b></label><label>font <select id="fsFont"><option value="Helvetica, Arial, sans-serif">Helvetica</option><option value="Tahoma, Verdana, sans-serif">Tahoma</option><option value="Verdana, sans-serif">Verdana</option><option value="Georgia, serif">Georgia</option><option value="'Courier New', monospace">Courier New</option><option value="system-ui, sans-serif">system-ui</option></select></label><label>size <select id="fsSize"><option>11</option><option selected>13</option><option>16</option><option>24</option></select> pt</label><label>text <select id="fsPol"><option value="light">black on white</option><option value="dark">white on black</option></select></label><label>screen <select id="fsScale"><option value="1">1x, external</option><option value="2">2x, Retina</option></select></label><label class="fs-txt">sample <input id="fsText" value="Hamburgefonstiv 0123" maxlength="40" spellcheck="false"></label></div><div class="fs-row"><div class="fs-lab">AppleFontSmoothing 0</div><div class="fs-pair"><canvas id="fsRow0" class="fs-act"></canvas><canvas id="fsMag0" class="fs-mag"></canvas></div></div><div class="fs-row"><div class="fs-lab" id="fsRowVL">AppleFontSmoothing 2</div><div class="fs-pair"><canvas id="fsRowV" class="fs-act"></canvas><canvas id="fsMagV" class="fs-mag"></canvas></div></div><p class="fs-out" id="fsOut" aria-live="polite"></p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:44</time></div>
+        <div class="bubble"><p>ok so what is "on" doing to the letters?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:44</time></div>
+        <div class="bubble"><p>It fattens them. AppKit grows every outline a little before it fills it, so each stem widens on both edges. I measured the stem of a Helvetica <code>l</code>: at 13 pt on a 1x screen it's 1.14 px wide at 0 and 1.30 px with smoothing on.</p><p>The growth tracks <a class="term" data-t="ppem" href="https://en.wikipedia.org/wiki/Em_(typography)" title="Pixels per em: the font size measured in device pixels. 13 pt is 13 ppem on a 1x screen and 26 ppem on a 2x screen." rel="external">pixels per em</a>, about 0.0116 px per ppem, and stops at 0.6 px, which a 2x screen reaches near 26 pt. White text on black grows 2.75 times faster, 0.032 px per ppem, so the same 13 pt stem in dark mode lands at 1.55 px, 36% heavier than at 0. That asymmetry is why light-on-dark text gains the most when you set 0.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:46</time></div>
+        <div class="bubble"><p>and subpixel vs greyscale antialiasing? i've seen both blamed for this</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:46</time></div>
+        <div class="bubble"><p>Both answer one question per pixel: how much of it does the letter cover? <a class="term" data-t="antialiasing" href="https://en.wikipedia.org/wiki/Font_rasterization" title="Shading each edge pixel by the fraction of it the letter covers, using one value for all three color channels." rel="external">Greyscale antialiasing</a> turns that fraction into a shade, so a pixel half inside a stem becomes 50% grey. All three color channels get the same value, which lets the text sit on any background, under any blend or animation.</p><p><a class="term" data-t="subpixel-rendering" href="https://en.wikipedia.org/wiki/Subpixel_rendering" title="Drawing text against the red, green and blue stripes inside each LCD pixel, so edges can land on a third of a pixel." rel="external">Subpixel rendering</a> notices that an LCD pixel is three vertical stripes, red, green and blue, and asks the question three times per pixel. Edges can land on a third of a pixel, which triples horizontal resolution. The price is color: an edge that covers only the red stripe tints red, so a filter spreads each third into its neighbours until the fringe fades.</p></div></div></div>
+
+      <div class="demo" id="demo-grid">
+        <div class="bar">one letter, magnified &middot; switch the fill</div>
+        <div class="pad"><p class="lead">A 13 px Georgia letter, drawn three ways and blown up so each square is one pixel. Shift it sideways by part of a pixel and watch the edge shading move. Tick <b>stripes</b> to see what the panel actually lights.</p><div class="fs-ctl"><label>fill <select id="pgMode"><option value="mono">1-bit</option><option value="grey" selected>greyscale</option><option value="lcd">subpixel (RGB)</option></select></label><label>letter <select id="pgGlyph"><option>a</option><option>e</option><option>W</option><option>sh</option></select></label><label>shift <input type="range" id="pgOff" min="0" max="1" step="0.05" value="0"> <span id="pgOffL" class="mono"></span></label><label><input type="checkbox" id="pgStripes"> stripes</label></div><canvas id="pgCanvas" class="fs-big"></canvas><p class="fs-out" id="pgOut" aria-live="polite"></p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:49</time></div>
+        <div class="bubble"><p>subpixel sounds strictly better. why would apple remove it?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:49</time></div>
+        <div class="bubble"><p>Mojave turned it off in 2018, and the reason lives in the compositor. Greyscale coverage is one alpha value, so the GPU can blend a finished glyph onto anything. Subpixel coverage is three alphas, one per stripe, so the renderer has to know the exact color behind the glyph at the moment it rasterizes. A translucent, layer-backed, animated desktop hasn't decided that color yet.</p><p>An ex-macOS engineer listed the rest on Hacker News during the Mojave beta: the panel's stripe geometry threaded through every graphics layer, glyph caches multiplied by every subpixel offset, and artifacts whenever text switched between static and animated. Rotate the panel, or use an OLED without RGB stripes, and the three-stripe assumption breaks outright.</p><p>What survived is the thickening. Mojave's checkbox became "Use font smoothing when available" and drove only that, and Big Sur deleted the checkbox, which left the <code>defaults</code> key as the only switch.</p> <a href="https://news.ycombinator.com/item?id=17476873" rel="external" title="Hacker News, 2018: macOS Mojave removes subpixel anti-aliasing">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:52</time></div>
+        <div class="bubble"><p>how does windows handle the same problem?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:52</time></div>
+        <div class="bubble"><p>It made the opposite bet, twice. <a class="term" data-t="cleartype" href="https://en.wikipedia.org/wiki/ClearType" title="Microsoft's subpixel text rendering, the Windows system default since Vista." rel="external">ClearType</a> is subpixel rendering, and Windows Vista made it the system default. Windows fonts also lean on <a class="term" data-t="hinting" href="https://en.wikipedia.org/wiki/Font_hinting" title="Instructions inside a font that move its outlines onto the pixel grid at small sizes, before the letter is rasterized." rel="external">hinting</a>: small programs inside the font that move outlines onto the pixel grid before rasterizing, so a stem that would cover 1.14 px snaps to one whole, dark column.</p><p>Joel Spolsky drew the split in 2007. Apple keeps each typeface's true shape and accepts some blur; Microsoft hammers letters onto pixel boundaries and accepts some distortion. Newer Windows frameworks soften both bets, since DirectWrite can place glyphs at fractions of a pixel and modern Windows UI text renders in greyscale.</p><p>This site's chrome copies Windows XP, which <a href="https://learn.microsoft.com/en-us/archive/blogs/e7/engineering-changes-to-cleartype-in-windows-7" rel="external">shipped with ClearType off</a>: its default was greyscale smoothing, the same as Windows 2000, because plenty of desks still had CRTs.</p> <a href="https://www.joelonsoftware.com/2007/06/12/font-smoothing-anti-aliasing-and-sub-pixel-rendering/" rel="external" title="Joel Spolsky, 2007: Font smoothing, anti-aliasing, and sub-pixel rendering">[src]</a></div></div></div>
+
+      <div class="demo" id="demo-stem">
+        <div class="bar">one stem, six pixels &middot; drag it across the grid</div>
+        <div class="pad"><p class="lead">One vertical stem, as wide as a 13 pt Helvetica <code>l</code> on a 1x screen. The top two rows render it the macOS way, greyscale and unhinted; the second adds the 0.15 px that smoothing grows at that size. The bottom two snap it to the grid first, the way hinted fonts on Windows do, and the last adds ClearType's stripes and filter.</p><div class="fs-ctl"><label>position <input type="range" id="stPos" min="0" max="1" step="0.02" value="0.4"> <span id="stPosL" class="mono"></span></label><label>width <input type="range" id="stW" min="0.6" max="2.4" step="0.02" value="1.14"> <span id="stWL" class="mono"></span></label></div><canvas id="stCanvas" class="fs-big"></canvas><p class="fs-out" id="stOut" aria-live="polite"></p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:55</time></div>
+        <div class="bubble"><p>which gets to my actual complaint. why does a mac look so much worse than windows on the same external monitor?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:55</time></div>
+        <div class="bubble"><p>Because macOS prices every one of those choices for about 220 PPI, and the common 24- and 27-inch monitors sit between 92 and 109. A 27-inch 1440p panel is 109 PPI, so macOS draws it at 1x. There the 13 pt stem is 1.14 px wide, and with no hinting it straddles two columns as two greys. No stripes sharpen its edges. Then smoothing adds 0.15 px of grey on top, or 0.41 px in dark mode. Windows on the same panel snaps the stem to one column and resolves its edges in thirds.</p><p>A 27-inch 4K panel has a different problem. Its exact 2x mode looks like 1920x1080, which most owners find too large, so they pick "looks like 2560x1440". macOS draws that at 5120x2880 and then shrinks the whole frame by 0.75 to fit 3840 pixels, so every glyph gets filtered a second time after it was drawn. The external panels that look like a MacBook are the ones where 2x lands exactly on native: 5K at 27 inches and 6K at 32.</p></div></div></div>
+
+      <div class="demo" id="demo-ppi">
+        <div class="bar">pick a monitor &middot; see what macOS does to it</div>
+        <div class="pad"><p class="lead">Pick a panel and a display mode. The numbers come from the panel's geometry and from how macOS runs a HiDPI mode: it draws at twice the "looks like" size, then resamples to the panel's native pixels.</p><div class="fs-ctl"><label>monitor <select id="ppPreset"></select></label><label>mode <select id="ppMode"></select></label></div><div id="ppOut" aria-live="polite"></div></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:58</time></div>
+        <div class="bubble"><p>so is 0 the right call?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>smoothing</b><time>22:58</time></div>
+        <div class="bubble"><p>On a 1x monitor I think so. It strips 13% of extra width from black-on-white stems and 36% from white-on-black, and the text stays soft but gets lighter and more even. It can't restore subpixel rendering or hinting, so no setting makes 109 PPI on a Mac look like ClearType. On a Retina screen it comes down to taste: 0.3 px on a 2.3 px stem reads as weight, and the stems are wide enough that their grey edges barely show.</p><p>Web pages get the same switch per element. In Safari and Chrome on a Mac, <code>-webkit-font-smoothing: antialiased</code> asks for the 0 rendering. The other direction is closed. With the system at 0, I measured <code>subpixel-antialiased</code> drawing the same pixels as <code>antialiased</code> in both Chrome and WebKit, so CSS can switch the thickening off and has no way to switch it back on.</p> <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth" rel="external" title="MDN: font-smooth">[src]</a></div></div></div>
+
+      <div class="scrollnote">end of conversation</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Every demo above redraws live.</div></div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// One IIFE around the whole file: every LWE demo shares one typecheck program
+// as a global script, so a top-level name here would collide with the same
+// helper in another page's demo file.
+(function () {
+function initWhenNear(id, fn, margin      ) {
+  var target = document.getElementById(id);
+  if (!target || !("IntersectionObserver" in window)) { fn(); return; }
+  var observer = new IntersectionObserver(function(entries) {
+    if (!entries.some(function(entry) { return entry.isIntersecting; })) return;
+    observer.disconnect(); fn();
+  }, { root: target.closest(".content"), rootMargin: (margin == null ? 300 : margin) + "px 0px" });
+  observer.observe(target);
+}
+
+// ── The rasterizer every demo shares ───────────────────────────────────
+// The page draws its own text instead of trusting the browser's, because the
+// browser's text already went through the reader's OS: a Mac set to 0 and a
+// Mac left at the default would show different "0" rows, and Windows would
+// add ClearType. So each line is filled at S times its size, and every output
+// pixel (or third of a pixel, for subpixel) averages its S*S block of
+// samples. That is plain area coverage with no hinting, which is what
+// macOS 27.2 draws at AppleFontSmoothing 0 (the "0" rows of the measurement
+// match it: identical ink for black-on-white and white-on-black).
+var work = document.createElement("canvas");
+var wctx = work.getContext("2d", { willReadFrequently: true })                            ;
+
+function raster(text, family, px, grow, sub, dx) {
+  var S = 8 * sub, step = S / sub;
+  wctx.font = px * S + "px " + family;
+  var tw = wctx.measureText(text).width / S;
+  var W = Math.ceil(tw + grow + 3), H = Math.ceil(px * 1.4) + 2;
+  work.width = W * S; work.height = H * S;
+  wctx.font = px * S + "px " + family;
+  // macOS puts the baseline on a whole pixel; the horizontal origin keeps
+  // its fraction, so dx moves the glyphs by part of a pixel.
+  var bx = (1 + (dx || 0)) * S, by = Math.round(px * 1.05) * S;
+  wctx.fillStyle = "#000"; wctx.fillText(text, bx, by);
+  // A stroke of width g adds g/2 to each side of every edge, so the stem
+  // grows by exactly g in total: the quantity the measurement reports.
+  if (grow > 0) { wctx.lineWidth = grow * S; wctx.lineJoin = "round"; wctx.strokeStyle = "#000"; wctx.strokeText(text, bx, by); }
+  var d = wctx.getImageData(0, 0, W * S, H * S).data;
+  var cols = W * sub, cov = new Float32Array(cols * H);
+  for (var y = 0; y < H * S; y++) {
+    var row = ((y / S) | 0) * cols, base = y * W * S * 4;
+    for (var x = 0; x < W * S; x++) cov[row + ((x / step) | 0)] += d[base + x * 4 + 3];
+  }
+  var norm = 1 / (255 * step * S);
+  for (var i = 0; i < cov.length; i++) cov[i] *= norm;
+  return { w: W, h: H, cols: cols, cov: cov };
+}
+
+// FreeType's default LCD filter, five taps over thirds of a pixel. Without
+// it, a stem edge that lights only the red third reads as a red line; the
+// filter spreads each third into its neighbours until the fringe is faint.
+var FIR = [8 / 256, 77 / 256, 86 / 256, 77 / 256, 8 / 256];
+function lcdFilter(cov, cols, h) {
+  var out = new Float32Array(cov.length);
+  for (var y = 0; y < h; y++) for (var x = 0; x < cols; x++) {
+    var s = 0;
+    for (var k = 0; k < 5; k++) { var xx = x + k - 2; if (xx >= 0 && xx < cols) s += FIR[k] * cov[y * cols + xx]; }
+    out[y * cols + x] = s;
+  }
+  return out;
+}
+
+// Blend in encoded sRGB, the way the measured 0 renders do: a pixel half
+// covered by black text on white comes out at code 128 (or 127).
+function blend(fg, bg, a) { return Math.round(bg + (fg - bg) * Math.min(1, a)); }
+
+// The growth AppKit adds when smoothing is on, fitted to stems measured on
+// macOS 27.2 (Helvetica "l", 9 to 96 pt, at 1x and 2x): it scales with
+// pixels per em and stops at 0.6 px. Light text on a dark ground grows 2.75
+// times faster, which is why dark mode looks heaviest on a 1x screen.
+function growth(ppem, dark) { return Math.min((dark ? 0.032 : 0.0116) * ppem, 0.6); }
+
+// ── Demo 1: the dial ───────────────────────────────────────────────────
+initWhenNear("demo-dial", function() {
+  var $ = function(id) { return document.getElementById(id)       ; };
+  var val = $("fsVal"), fam = $("fsFont"), size = $("fsSize"), pol = $("fsPol"), sc = $("fsScale"), txt = $("fsText");
+  var c0 = $("fsRow0"), cv = $("fsRowV"), m0 = $("fsMag0"), mv = $("fsMagV"), out = $("fsOut"), lab = $("fsValL"), labV = $("fsRowVL");
+  if (!val || !c0) return;
+  var NAMES = ["off", "light", "medium", "strong"];
+  function draw(canvas, mag, r, dark, scale) {
+    var fg = dark ? 255 : 0, bg = dark ? 0 : 255;
+    canvas.width = r.w; canvas.height = r.h;
+    canvas.style.width = r.w / scale + "px";
+    var ctx = canvas.getContext("2d"), img = ctx.createImageData(r.w, r.h);
+    for (var i = 0; i < r.w * r.h; i++) {
+      var v = blend(fg, bg, r.cov[i]);
+      img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    // The magnifier copies device pixels with no smoothing, so each square
+    // on screen is exactly one pixel the renderer chose.
+    var Z = 7, cw = Math.min(r.w, Math.round(46 * scale));
+    mag.width = cw * Z; mag.height = r.h * Z;
+    var mx = mag.getContext("2d");
+    mx.imageSmoothingEnabled = false;
+    mx.drawImage(canvas, 0, 0, cw, r.h, 0, 0, cw * Z, r.h * Z);
+    mx.strokeStyle = dark ? "rgba(255,255,255,.10)" : "rgba(0,0,0,.08)";
+    mx.beginPath();
+    for (var x = 0; x <= cw; x++) { mx.moveTo(x * Z + 0.5, 0); mx.lineTo(x * Z + 0.5, r.h * Z); }
+    for (var y = 0; y <= r.h; y++) { mx.moveTo(0, y * Z + 0.5); mx.lineTo(cw * Z, y * Z + 0.5); }
+    mx.stroke();
+  }
+  function ink(r) { var s = 0; for (var i = 0; i < r.cov.length; i++) s += Math.min(1, r.cov[i]); return s; }
+  function render() {
+    var v = +val.value, dark = pol.value === "dark", scale = +sc.value, pt = +size.value;
+    var px = pt * scale, text = txt.value || "Hamburgefonstiv";
+    var g = v > 0 ? growth(px, dark) : 0;
+    var r0 = raster(text, fam.value, px, 0, 1, 0), rv = raster(text, fam.value, px, g, 1, 0);
+    draw(c0, m0, r0, dark, scale); draw(cv, mv, rv, dark, scale);
+    lab.textContent = v + " (" + NAMES[v] + ")";
+    labV.textContent = "AppleFontSmoothing " + v;
+    var more = Math.round((ink(rv) / ink(r0) - 1) * 100);
+    out.innerHTML = v === 0
+      ? "<b>0:</b> plain coverage. Both rows are the same bitmap."
+      : "<b>" + v + ":</b> every stem grows by <span class=\"mono\">" + g.toFixed(2) + " px</span> at " + px + " pixels per em, for <span class=\"mono\">+" + more + "%</span> ink. "
+        + (v === 1 ? "Slide to 2 or 3: on macOS 27.2 they draw the same bytes as 1." : "Same bitmap as 1. The old light, medium and strong names survive only in the key's history.");
+  }
+  [val, fam, size, pol, sc].forEach(function(el) { el.addEventListener("input", render); });
+  txt.addEventListener("input", render);
+  render();
+});
+
+// ── Demo 2: one letter, three ways to fill a pixel ─────────────────────
+initWhenNear("demo-grid", function() {
+  var $ = function(id) { return document.getElementById(id)       ; };
+  var cnv = $("pgCanvas"), mode = $("pgMode"), glyph = $("pgGlyph"), off = $("pgOff"), stripes = $("pgStripes"), out = $("pgOut"), offL = $("pgOffL");
+  if (!cnv) return;
+  var PX = 13, Z = 24;
+  function render() {
+    var m = mode.value, dx = +off.value, sub = m === "lcd" ? 3 : 1;
+    var r = raster(glyph.value, "Georgia, serif", PX, 0, sub, dx);
+    var cov = m === "lcd" ? lcdFilter(r.cov, r.cols, r.h) : r.cov;
+    // Crop to the rows the letter touches, plus one blank row each side, so
+    // the magnified grid spends its height on the glyph.
+    var W = r.w, y0 = r.h, y1 = 0;
+    for (var yy = 0; yy < r.h; yy++) for (var xx = 0; xx < r.cols; xx++) if (cov[yy * r.cols + xx] > 0.004) { y0 = Math.min(y0, yy); y1 = Math.max(y1, yy); }
+    y0 = Math.max(0, y0 - 1); y1 = Math.min(r.h - 1, y1 + 1);
+    var H = y1 - y0 + 1;
+    cnv.width = W * Z; cnv.height = H * Z;
+    cnv.style.width = Math.min(W * Z, 560) + "px";
+    var ctx = cnv.getContext("2d");
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W * Z, H * Z);
+    var colored = 0;
+    for (var y = y0; y <= y1; y++) for (var x = 0; x < W; x++) {
+      var rgb;
+      if (m === "lcd") rgb = [0, 1, 2].map(function(k) { return blend(0, 255, cov[y * r.cols + x * 3 + k]); });
+      else {
+        var a = cov[y * W + x];
+        var g = m === "mono" ? (a >= 0.5 ? 0 : 255) : blend(0, 255, a);
+        rgb = [g, g, g];
+      }
+      if (Math.max(rgb[0], rgb[1], rgb[2]) - Math.min(rgb[0], rgb[1], rgb[2]) > 2) colored++;
+      if (stripes.checked) {
+        // What the panel physically lights: three vertical bars per pixel,
+        // each at its own channel's level. Greyscale lights all three alike.
+        var bw = Z / 3;
+        ctx.fillStyle = "rgb(" + rgb[0] + ",0,0)"; ctx.fillRect(x * Z, (y - y0) * Z, bw - 1, Z - 1);
+        ctx.fillStyle = "rgb(0," + rgb[1] + ",0)"; ctx.fillRect(x * Z + bw, (y - y0) * Z, bw - 1, Z - 1);
+        ctx.fillStyle = "rgb(0,0," + rgb[2] + ")"; ctx.fillRect(x * Z + 2 * bw, (y - y0) * Z, bw - 1, Z - 1);
+      } else {
+        ctx.fillStyle = "rgb(" + rgb.join(",") + ")"; ctx.fillRect(x * Z, (y - y0) * Z, Z - 1, Z - 1);
+      }
+    }
+    offL.textContent = "+" + dx.toFixed(2) + " px";
+    var name = { mono: "1-bit", grey: "greyscale", lcd: "subpixel" }[m];
+    out.innerHTML = "<b>" + name + "</b>, " + PX + " px Georgia: <span class=\"mono\">" + colored + "</span> of " + W * H + " pixels carry color. "
+      + (m === "mono" ? "Each pixel is in or out, so the curve becomes stairs." : m === "grey" ? "Edge pixels turn grey in proportion to how much the letter covers them." : "Each third of a pixel gets its own coverage, so edges land three times more precisely. " + (stripes.checked ? "Each bar is one stripe at its own level, and the uneven bars are the color it costs." : "Tick the stripes to see the color it costs."));
+  }
+  [mode, glyph, off, stripes].forEach(function(el) { el.addEventListener("input", render); });
+  render();
+});
+
+// ── Demo 3: one stem against the pixel grid ────────────────────────────
+// A vertical stem is a rectangle, so its coverage is exact interval overlap
+// and needs no sampling at all.
+initWhenNear("demo-stem", function() {
+  var $ = function(id) { return document.getElementById(id)       ; };
+  var cnv = $("stCanvas"), pos = $("stPos"), wid = $("stW"), posL = $("stPosL"), widL = $("stWL"), out = $("stOut");
+  if (!cnv) return;
+  var COLS = 6, Z = 34, ROWH = 46, LABEL = 178;
+  function overlap(a0, a1, b0, b1) { return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0)); }
+  function cover(x0, w, sub) {
+    var n = COLS * sub, c = new Float32Array(n);
+    for (var i = 0; i < n; i++) c[i] = overlap(x0, x0 + w, i / sub, (i + 1) / sub) * sub;
+    return c;
+  }
+  var ROWS = [
+    { name: "macOS, smoothing 0", snap: false, lcd: false, grow: 0 },
+    { name: "macOS, smoothing on", snap: false, lcd: false, grow: 0.15 },
+    { name: "snapped to the grid", snap: true, lcd: false, grow: 0 },
+    { name: "snapped + ClearType", snap: true, lcd: true, grow: 0 },
+  ];
+  function render() {
+    var x = 2 + +pos.value, w = +wid.value;
+    cnv.width = LABEL + COLS * Z; cnv.height = ROWS.length * ROWH;
+    var ctx = cnv.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cnv.width, cnv.height);
+    var notes           = [];
+    ROWS.forEach(function(row, ri) {
+      // Grid fitting, the way hinted fonts do it: the stem's width rounds to
+      // whole pixels (never below one) and its left edge to a pixel boundary.
+      var sx = row.snap ? Math.round(x) : x - row.grow / 2, sw = row.snap ? Math.max(1, Math.round(w)) : w + row.grow;
+      var sub = row.lcd ? 3 : 1, c = cover(sx, sw, sub);
+      if (row.lcd) c = lcdFilter(c, COLS * 3, 1);
+      var y0 = ri * ROWH + 6, touched = 0, peak = 0;
+      ctx.fillStyle = "#3c4656"; ctx.font = "11px Tahoma, Verdana, sans-serif"; ctx.textBaseline = "middle";
+      ctx.fillText(row.name, 4, y0 + Z / 2);
+      for (var i = 0; i < COLS; i++) {
+        var rgb = sub === 3 ? [0, 1, 2].map(function(k) { return blend(0, 255, c[i * 3 + k]); }) : [blend(0, 255, c[i]), blend(0, 255, c[i]), blend(0, 255, c[i])];
+        var dark = 1 - Math.min(rgb[0], rgb[1], rgb[2]) / 255;
+        if (Math.min(rgb[0], rgb[1], rgb[2]) < 250) touched++;
+        peak = Math.max(peak, dark);
+        ctx.fillStyle = "rgb(" + rgb.join(",") + ")"; ctx.fillRect(LABEL + i * Z, y0, Z - 2, Z);
+        ctx.strokeStyle = "#c7d0dc"; ctx.strokeRect(LABEL + i * Z + 0.5, y0 + 0.5, Z - 3, Z - 1);
+      }
+      notes.push(touched + " col" + (touched === 1 ? "" : "s") + ", darkest " + Math.round(peak * 100) + "%");
+    });
+    posL.textContent = "+" + (+pos.value).toFixed(2) + " px";
+    widL.textContent = w.toFixed(2) + " px";
+    out.innerHTML = ROWS.map(function(r, i) { return "<span class=\"st-n\">" + r.name + ":</span> <span class=\"mono\">" + notes[i] + "</span>"; }).join("<br>");
+  }
+  [pos, wid].forEach(function(el) { el.addEventListener("input", render); });
+  render();
+});
+
+// ── Demo 4: what macOS does with a given monitor ───────────────────────
+// macOS draws a HiDPI mode at twice the "looks like" size and then scales
+// that framebuffer to the panel's native pixels. Only when twice the looks-
+// like width equals the native width does nothing get resampled.
+initWhenNear("demo-ppi", function() {
+  var $ = function(id) { return document.getElementById(id)       ; };
+  var pre = $("ppPreset"), mode = $("ppMode"), out = $("ppOut");
+  if (!pre) return;
+  // def is the mode each panel ships in, or the one most owners pick.
+  var PRESETS = [
+    { n: "24-inch 1920x1080", d: 24, w: 1920, h: 1080, def: "1x" },
+    { n: "27-inch 2560x1440", d: 27, w: 2560, h: 1440, def: "1x" },
+    { n: "27-inch 3840x2160 (4K)", d: 27, w: 3840, h: 2160, def: "2560" },
+    { n: "32-inch 3840x2160 (4K)", d: 31.5, w: 3840, h: 2160, def: "2560" },
+    { n: "27-inch 5120x2880 (5K)", d: 27, w: 5120, h: 2880, def: "2560" },
+    { n: "32-inch 6016x3384 (6K)", d: 32, w: 6016, h: 3384, def: "3008" },
+    { n: "MacBook Air 13.6-inch 2560x1664", d: 13.6, w: 2560, h: 1664, def: "1470" },
+  ];
+  pre.innerHTML = PRESETS.map(function(p, i) { return "<option value=\"" + i + "\"" + (i === 1 ? " selected" : "") + ">" + p.n + "</option>"; }).join("");
+  function modes(p) {
+    var list = [{ k: "1x", t: "native at 1x, looks like " + p.w + "x" + p.h }];
+    [p.w / 2, 1470, 1920, 2304, 2560, 3008, 3200, 3360].forEach(function(lw) {
+      lw = Math.round(lw);
+      if (lw < p.w / 2 || lw >= p.w || list.some(function(m) { return m.k === "" + lw; })) return;
+      list.push({ k: "" + lw, t: "HiDPI, looks like " + lw + "x" + Math.round(lw * p.h / p.w) });
+    });
+    return list;
+  }
+  function fillModes() {
+    var p = PRESETS[+pre.value], ms = modes(p);
+    mode.innerHTML = ms.map(function(m) { return "<option value=\"" + m.k + "\">" + m.t + "</option>"; }).join("");
+    mode.value = p.def;
+  }
+  function render() {
+    var p = PRESETS[+pre.value], ppi = Math.sqrt(p.w * p.w + p.h * p.h) / p.d, m = mode.value;
+    var lw = m === "1x" ? p.w : +m, backing = m === "1x" ? p.w : lw * 2, factor = p.w / backing;
+    var perPt = p.w / lw, stem = 0.088 * 13 * perPt;
+    var rows = [
+      ["pixel density", Math.round(ppi) + " PPI"],
+      ["macOS draws at", m === "1x" ? p.w + "x" + p.h + " (1x)" : backing + "x" + Math.round(backing * p.h / p.w) + " (2x)"],
+      ["then resamples by", factor === 1 ? "nothing, exact fit" : factor.toFixed(3)],
+      ["a 13 pt Helvetica stem", stem.toFixed(2) + " panel pixels"],
+    ];
+    var verdict = m === "1x"
+      ? (ppi < 150 ? "1x with no subpixel stripes and no hinting: every stem is a grey smear one or two pixels wide. This is where AppleFontSmoothing 0 earns its keep." : "Native at 1x on a dense panel: sharp, and very small.")
+      : factor === 1 ? "Exact 2x. Text is rasterized at panel resolution and nothing resamples it afterwards. This is the case macOS is built for."
+      : "Drawn at 2x, then scaled by " + factor.toFixed(3) + " to fit. Every glyph gets filtered twice, once by the rasterizer and once by the scaler.";
+    out.innerHTML = "<table class=\"pp-tbl\">" + rows.map(function(r) { return "<tr><td>" + r[0] + "</td><td class=\"mono\">" + r[1] + "</td></tr>"; }).join("") + "</table><p class=\"pp-v\">" + verdict + "</p>";
+  }
+  pre.addEventListener("input", function() { fillModes(); render(); });
+  mode.addEventListener("input", render);
+  fillModes(); render();
+});
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "lwe",
+  "intro": "Before you close the window: 5 questions, no grades. Every demo above still runs if you want to check an answer against it.",
+  "questions": [
+    {
+      "q": "You set AppleFontSmoothing to 3 and relaunch an app on macOS 27.2. Compared with 1, what changes on screen?",
+      "options": [
+        {
+          "t": "nothing at all, since 1 and 3 grow every stem by exactly the same amount",
+          "ok": true,
+          "why": "Right. The 48-case sweep produced byte-identical bitmaps for 1, 2 and 3. The light, medium and strong names belong to the LCD era."
+        },
+        {
+          "t": "stems thicken about three times as much, since the value scales the growth",
+          "why": "That's a fair reading of the Snow Leopard names. On 27.2 the value only switches the growth on, and its size comes from pixels per em."
+        },
+        {
+          "t": "text switches to subpixel rendering, since 3 was the strong LCD setting",
+          "why": "Subpixel rendering left with Mojave. No value of this key brings the colored stripes back."
+        }
+      ]
+    },
+    {
+      "q": "At smoothing on, why does white-on-black text look heavier than black-on-white on a 1x monitor?",
+      "options": [
+        {
+          "t": "light text grows 2.75 times faster per ppem, so a 13 pt stem gains 0.41 px",
+          "ok": true,
+          "why": "Right. Dark text gains 0.15 px at the same size. The measured rates are 0.032 and 0.0116 px per ppem, both capped at 0.6 px."
+        },
+        {
+          "t": "dark backgrounds trigger subpixel rendering, and its fringes add weight",
+          "why": "No polarity brings back subpixel rendering. The extra weight is greyscale coverage from a larger outline."
+        },
+        {
+          "t": "the eye spreads light into dark surroundings, so equal stems look unequal",
+          "why": "That effect exists, but the stems here are unequal on disk too: at 0 both polarities had identical ink, and smoothing grew the light stems far more."
+        }
+      ]
+    },
+    {
+      "q": "Subpixel rendering gives sharper edges on a 1x LCD. What made it a poor fit for a GPU-composited desktop?",
+      "options": [
+        {
+          "t": "it needs the background color at raster time, since each stripe blends alone",
+          "ok": true,
+          "why": "Right. One alpha can blend over anything later. Three alphas need the color behind the glyph before compositing has decided it."
+        },
+        {
+          "t": "it needs a Retina display, since stripes are too small to address at 1x",
+          "why": "Backwards. Subpixel rendering pays off most at 1x, where a third of a pixel is still large enough to matter."
+        },
+        {
+          "t": "it triples the size of every font file, since each glyph ships three outlines",
+          "why": "A font ships one outline per glyph. The cost lands in the glyph cache at render time, which grows with every subpixel offset."
+        }
+      ]
+    },
+    {
+      "q": "A 27-inch 4K monitor is set to look like 2560x1440. What happens to a glyph on its way to the panel?",
+      "options": [
+        {
+          "t": "macOS draws it into a 5120x2880 frame, then shrinks that frame by 0.75",
+          "ok": true,
+          "why": "Right. The glyph gets filtered twice, once by the rasterizer and once by the scaler, which is the softness people notice."
+        },
+        {
+          "t": "macOS draws it straight at 3840x2160 with stems snapped to panel pixels",
+          "why": "That's closer to what Windows does at 150%. macOS renders a HiDPI mode at exactly 2x and resamples the result."
+        },
+        {
+          "t": "macOS sends 2560x1440 and the monitor's own scaler stretches it to 4K",
+          "why": "The Mac sends native 3840x2160. The resample happens on the Mac's GPU, before the signal leaves the machine."
+        }
+      ]
+    },
+    {
+      "q": "On a Mac whose system setting is left on, what can a page's CSS do about the thickening?",
+      "options": [
+        {
+          "t": "switch it off per element with -webkit-font-smoothing: antialiased",
+          "ok": true,
+          "why": "Right, and only in that direction. With the system at 0, subpixel-antialiased drew the same pixels as antialiased in Chrome and WebKit."
+        },
+        {
+          "t": "pick light, medium or strong through font-smooth values from 1 to 3",
+          "why": "No CSS value maps to the old strengths, and on 27.2 the strengths themselves no longer exist."
+        },
+        {
+          "t": "bring back ClearType-style stripes with subpixel-antialiased",
+          "why": "The keyword survives from the LCD era. Since Mojave it can't bring stripes back, and at system 0 it changed no pixel in either engine."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="28"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>
