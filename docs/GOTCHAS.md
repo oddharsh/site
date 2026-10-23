@@ -728,10 +728,15 @@ skips it.
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
 
-83. **libavif 1.3.x's avifenc writes gray PNGs ~4x dark at `-d 10`.** 1.3.0
-    stopped routing gray PNGs through RGB, and its new gray branch in
-    `avifImageRGBToYUV` stores the raw 8-bit sample in the 10-bit Y plane, so
-    200 lands as 200 of 1023 (libavif#2827, fixed by 0b65e2e in 1.4.0). zenc
+83. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
+    changes.** 1.3.0 stopped routing gray PNGs through RGB, and its new gray
+    branch in `avifImageRGBToYUV` stores the raw sample with no scaling or
+    range mapping, so at `-d 10` an 8-bit 200 lands as 200 of 1023
+    (libavif#2827, fixed by 0b65e2e in 1.4.0). Measured on 1.3.0-1ubuntu4:
+    `-d 10` reads ~4x dark at 4:0:0 and 4:4:4 alike, a 16-bit gray PNG at
+    `-d 8` clips to white (20000 becomes 255, not 78), and `-r limited`
+    stores white as 255, not 235. Only 8-bit gray at 8 bits, full range, comes
+    out right, which hides it in casual use. zenc
     hands libavif RGB triples and never takes that branch, so on 1.3.x its
     parity test fails with zenc the side that's right. Ubuntu 26.04 ships
     1.3.0-1ubuntu4 with no backport, and `ubuntu-latest` moved to it on
