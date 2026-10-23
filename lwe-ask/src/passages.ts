@@ -21,7 +21,7 @@ export const SOURCE_TITLE = "Privacy 2.0: PETs and the Promise of Private Shared
 // A content hash of the whole corpus, maintained by pipelines/lwe/build-corpus.ts.
 // Folded into the ask cache key, so changing any passage (then reindexing) bumps the
 // version and busts every stale cached answer.
-export const CORPUS_VERSION = "3d7e3d859b";
+export const CORPUS_VERSION = "f6c5b736c5";
 
 export const PASSAGES = [
   // ── FHE ──────────────────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ export const PASSAGES = [
   { id: "pcrypto-13", concept: "pcrypto", text:
     "A garbled circuit, introduced by Andrew Yao, lets two mutually distrusting parties jointly evaluate a function expressed as a Boolean circuit without a trusted third party. One party encrypts the circuit by assigning random labels to each wire; the other obtains the labels for its own inputs through oblivious transfer (the sender learns nothing about which input the receiver chose) and then evaluates the garbled circuit to recover the output, so neither party learns the other's input.", source: "https://en.wikipedia.org/wiki/Garbled_circuit", title: "Garbled circuit (Wikipedia)" },
 
-  // smoothing (8)
+  // smoothing (10)
   { id: "smoothing-1", concept: "smoothing", text:
     "The command defaults -currentHost write -g AppleFontSmoothing -int 0 writes one integer into the Mac's global preferences. The -g flag names the global domain every app reads, and -currentHost files the value under the machine's hardware UUID in ~/Library/Preferences/ByHost/, where the old System Preferences checkbox kept it. AppKit reads the key when an app launches, so apps that are already open keep their old text until they are quit and reopened.", source: "https://aadhar.sh/lwe/smoothing", title: "aadhar.sh: font smoothing" },
   { id: "smoothing-2", concept: "smoothing", text:
@@ -263,6 +263,10 @@ export const PASSAGES = [
     "Text on a Mac looks worse than on Windows on common external monitors because macOS tunes rendering for about 220 PPI while 24- and 27-inch 1080p and 1440p monitors sit between 92 and 109 PPI. At 1x, macOS draws with no subpixel rendering and no hinting, so a 1.14 px stem straddles two pixel columns as two greys, and smoothing adds 0.15 px (0.41 px in dark mode). A 27-inch 4K monitor set to look like 2560x1440 is drawn at 5120x2880 and then scaled by 0.75 to 3840x2160, filtering every glyph a second time. Panels where 2x lands exactly on native, such as 5K at 27 inches and 6K at 32 inches, avoid both problems.", source: "https://aadhar.sh/lwe/smoothing", title: "aadhar.sh: font smoothing" },
   { id: "smoothing-8", concept: "smoothing", text:
     "Setting AppleFontSmoothing to 0 on a 1x monitor removes about 13% of extra stem width for black-on-white text and 36% for white-on-black, making text lighter but still soft; it cannot restore subpixel rendering or hinting. On Retina screens the choice is mostly taste. In CSS, -webkit-font-smoothing: antialiased requests the unthickened rendering for an element in Safari and Chrome on macOS. With the system set to 0, subpixel-antialiased was measured drawing the same pixels as antialiased in both Chrome and WebKit, so CSS can turn the thickening off but cannot turn it back on.", source: "https://aadhar.sh/lwe/smoothing", title: "aadhar.sh: font smoothing" },
+  { id: "smoothing-9", concept: "smoothing", text:
+    "Turning AppleFontSmoothing off barely affects performance. The stem thickening happens when a glyph is rasterized, before it is stored in the glyph cache. Timing AppKit drawing a 33-character Helvetica line 3,000 times on macOS 27.2: at 3,000 distinct sizes, where every glyph is rasterized fresh, smoothing 0 took 380 to 397 ms and smoothing on took 464 to 473 ms, about 20% more (repeat runs at 0 differed by 17 ms). Drawing the same 13 pt line 3,000 times took 41 to 44 ms at either setting, because cached glyphs cost the same. The extra cost is roughly a microsecond per glyph, paid once per glyph and size.", source: "https://aadhar.sh/lwe/smoothing", title: "aadhar.sh: font smoothing" },
+  { id: "smoothing-10", concept: "smoothing", text:
+    "AppleFontSmoothing 0 is not the same as turning antialiasing off. At 0, macOS still antialiases text in greyscale and only skips the stem thickening: one 13 pt Helvetica line used 224 distinct grey levels at 0 and 229 with smoothing on. With antialiasing switched off in the graphics context, the same line used 2 levels, pure black and white, and the smoothing value no longer changed any pixel. The old Appearance pane's 'Turn off text smoothing for font sizes N and smaller' option, stored as AppleAntiAliasingThreshold, was the real antialiasing switch; on macOS 27.2, setting it to 14 left 13 pt text antialiased in an offscreen render.", source: "https://aadhar.sh/lwe/smoothing", title: "aadhar.sh: font smoothing" },
 
   // utf8 (10)
   { id: "utf8-1", concept: "utf8", text:

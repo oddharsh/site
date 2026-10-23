@@ -1,6 +1,6 @@
 {
   "id": "smoothing",
-  "description": "What AppleFontSmoothing 0 to 3 does on macOS 27.2 (1, 2 and 3 draw identical pixels), subpixel versus greyscale antialiasing, ClearType and hinting, and why external monitors look worse on a Mac. Four live demos.",
+  "description": "What AppleFontSmoothing 0 to 3 does on macOS 27.2 (1, 2 and 3 draw identical pixels), subpixel versus greyscale antialiasing, ClearType and hinting, why external monitors look worse on a Mac, what 0 costs or saves, and how it differs from turning antialiasing off. Four live demos.",
   "buddyStat": "AppleFontSmoothing, 0 to 3",
   "petsLine": "Learning&nbsp;With&nbsp;Errors<br>pixels &amp; stripes",
   "composeNote": "This is a recorded conversation. Every demo above redraws live.",
@@ -13,12 +13,13 @@
     "evidence": [
       "A 48-case AppKit sweep renders byte-identical bitmaps for 1, 2 and 3, and only 0 differs.",
       "Stem measurements from 9 to 96 pt fit growth of 0.0116 px per ppem for dark text and 0.032 for light text, capped at 0.6 px.",
-      "With the system at 0, Chrome and WebKit draw the same pixels for every -webkit-font-smoothing value."
+      "With the system at 0, Chrome and WebKit draw the same pixels for every -webkit-font-smoothing value.",
+      "Timed AppKit draws show smoothing adds about 20% to first rasterization and nothing once glyphs are cached, and antialiasing off draws 2 grey levels against 224 at 0."
     ],
     "uncertainty": "I measured one Mac on one OS release with the system set to 0, so the browser path with smoothing left on rests on MDN, and the Windows side rests on the cited sources."
   },
   "understanding": {
-    "intro": "Before you close the window: 5 questions, no grades. Every demo above still runs if you want to check an answer against it.",
+    "intro": "Before you close the window: 7 questions, no grades. Every demo above still runs if you want to check an answer against it.",
     "questions": [
       {
         "q": "You set AppleFontSmoothing to 3 and relaunch an app on macOS 27.2. Compared with 1, what changes on screen?",
@@ -107,6 +108,42 @@
           {
             "t": "bring back ClearType-style stripes with subpixel-antialiased",
             "why": "The keyword survives from the LCD era. Since Mojave it can't bring stripes back, and at system 0 it changed no pixel in either engine."
+          }
+        ]
+      },
+      {
+        "q": "Which setting turns a Mac's text into pure black and white pixels?",
+        "options": [
+          {
+            "t": "switching antialiasing off, since smoothing 0 still draws 224 grey levels",
+            "ok": true,
+            "why": "Right. AppleFontSmoothing 0 keeps antialiasing and drops only the stem growth. Antialiasing off left 2 levels, and then the smoothing value changed nothing."
+          },
+          {
+            "t": "AppleFontSmoothing 0, since it removes the smoothing that greys the edges",
+            "why": "The name suggests it, but the edges stay grey at 0. Only the thickening goes away, and the line still used 224 grey levels."
+          },
+          {
+            "t": "AppleFontSmoothing 3, since strong smoothing snaps every edge to the grid",
+            "why": "No value of this key snaps anything to the grid, and on 27.2 the value 3 draws the same pixels as 1."
+          }
+        ]
+      },
+      {
+        "q": "Where does the extra cost of smoothing land when you scroll a long page?",
+        "options": [
+          {
+            "t": "almost nowhere, since each glyph is thickened once and then cached",
+            "ok": true,
+            "why": "Right. Fresh rasterization ran about 20% slower with smoothing on, and drawing cached glyphs took 41 to 44 ms either way."
+          },
+          {
+            "t": "on every frame, since the GPU thickens each glyph again as it composites",
+            "why": "The growth happens on the CPU when the glyph is rasterized. The compositor only moves the finished bitmap."
+          },
+          {
+            "t": "on every line, since each new line of text is rasterized again from outlines",
+            "why": "A new line reuses glyphs already in the cache. Only a letter at a size the cache hasn't seen gets rasterized."
           }
         ]
       }
@@ -231,6 +268,26 @@
         "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth",
         "title": "MDN: font-smooth"
       }
+    },
+    {
+      "who": "you",
+      "time": "23:01",
+      "html": "<p>does turning it off help performance at all?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:01",
+      "html": "<p>Barely, and only once per glyph. The thickening happens when a glyph is rasterized, before it lands in the glyph cache. I timed AppKit drawing a 33-character Helvetica line 3,000 times, each run seven times. At 3,000 different sizes, so every glyph rasterized fresh, 0 took 380 to 397 ms and smoothing on took 464 to 473 ms, about 20% more. Two separate runs at 0 differed by only 17 ms, so the gap is real.</p><p>Drawing the same 13 pt line 3,000 times took 41 to 44 ms either way, because every glyph after the first came from the cache. That's the everyday case: a page of text reuses the same letters at the same few sizes, so smoothing costs about a microsecond per glyph the first time and nothing after. Set 0 for how text looks. Nothing will feel faster.</p>"
+    },
+    {
+      "who": "you",
+      "time": "23:03",
+      "html": "<p>and is 0 the same as turning antialiasing off?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:03",
+      "html": "<p>No. 0 keeps antialiasing and drops only the thickening. I drew one 13 pt Helvetica line three ways and counted its distinct grey levels: 224 at smoothing 0, 229 with smoothing on, and 2 with antialiasing switched off in the graphics context, which leaves pure black and white. With antialiasing off the smoothing value stops mattering, since 0 and 1 drew identical 1-bit pixels.</p><p>The old Appearance pane did have a real antialiasing switch, \"Turn off text smoothing for font sizes N and smaller\", stored as <code>AppleAntiAliasingThreshold</code>. On 27.2 it changed nothing I could measure: set to 14, it left 13 pt text antialiased in an offscreen render. The letter demo above shows what that switch used to do. Pick 1-bit and the curves turn into stairs.</p>"
     },
     {
       "scrollnote": "end of conversation"
