@@ -527,21 +527,24 @@ skips it.
 69. **A dated canary's npm sha can name a different commit from its
     binary.** The tarball's `package.json` version carries npm's `gitHead`
     (`+9bcbf1e`), and `bun --revision` carries the commit the binary was
-    built from (`+9bcbf1ecb`). They agreed through 20261013.1 and again from
-    20261021.1. From 20261014.1 to 20261019.1 they didn't, on Linux x64 and
-    macOS arm64 alike: each tarball shipped whatever the rolling `canary`
-    release was at publish time under a newer commit's label (20261017.1
-    shipped `5f5799ed1`, the build the canary leg ran that afternoon), and
-    the 20261015.1, 20261016.1 and 20261017.1 Linux binaries are
-    byte-identical under three labels. No pin satisfies both: pinning the
+    built from (`+9bcbf1ecb`). They agreed through 20261013.1, at 20261021.1,
+    and again from 20261023.1. From 20261014.1 to 20261019.1 they didn't, on
+    Linux x64 and macOS arm64 alike: each tarball shipped whatever the
+    rolling `canary` release was at publish time under a newer commit's
+    label (20261017.1 shipped `5f5799ed1`, the build the canary leg ran that
+    afternoon), and the 20261015.1, 20261016.1 and 20261017.1 Linux binaries
+    are byte-identical under three labels. No pin satisfies both: pinning the
     binary's sha fails the installer's second witness and pinning npm's
     fails its third. So the bumper's identity gate refused all six (#1373)
-    and moved only when 20261021.1 matched. Read that red gate as an
+    and moved only when 20261021.1 matched. The next day it happened once
+    more: 1.4.4-canary.20261022.1 is labeled `+38afee6`, the 1.4.4 release
+    commit, and its Linux x64 binary is 20261021.1's `963452075` byte for
+    byte. The installer refuses it under either sha. Read that red gate as an
     upstream mislabel and wait for a matching build; never relax the gate
     to pass one. Check a candidate by hand with
     `npm view @oven/bun-linux-x64@<version> gitHead` against
     `bun --revision` on the unpacked binary. Measured 2026-10-15; every
-    build from 20261010.1 to 20261021.1 re-read 2026-10-23.
+    build from 20261010.1 to 20261023.1 re-read 2026-10-23.
     Checked by: `.github/install-bun.sh`.
 
 70. **Safari reads a fixed box's background-color, never its gradient.**
