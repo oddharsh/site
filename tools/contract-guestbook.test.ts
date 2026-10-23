@@ -110,7 +110,7 @@ test("the write guards: JSON only, no cross-site browsers, name and purpose requ
 
 test("visitor text is one plain line, and every render escapes it", async () => {
   const { clean, renderGuestbookEntries, rowToEntry } = await gb();
-  // Built from code points: the formatter turns a \u escape into the invisible character itself.
+  // Built from code points, so no source line carries the invisible characters themselves.
   const [rlo, bell, lrm] = [0x202e, 0x07, 0x200e].map((c) => String.fromCodePoint(c));
   assert.equal(clean(`evil${rlo}txt.exe${bell}  two\n lines${lrm}`, 80), "evil txt.exe two lines", "bidi controls and C0 controls go");
   assert.equal(clean("👨‍👩‍👧".repeat(3), 2), "👨‍👩‍👧".repeat(2), "the cap counts graphemes, never half an emoji");

@@ -73,8 +73,9 @@ export type Entry = Signature & Observed & { id: number; at: string };
 
 // Control characters (C0 and C1), and the bidi marks, embeddings, overrides and
 // isolates that reorder how text displays without changing what it says. Named
-// by Unicode property, because a literal range here is invisible in the source
-// and the formatter turns its escapes into the characters themselves.
+// by Unicode property, because a literal range here is invisible in the source,
+// and an agent writing the escaped form can land the raw characters instead
+// (Claude Code's tool input decodes them; bun fmt leaves escapes alone).
 const INVISIBLE = /[\p{Cc}\p{Bidi_Control}]/gu;
 const GRAPHEMES = new Intl.Segmenter();
 
