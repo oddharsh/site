@@ -21,12 +21,12 @@ test("a /lens scan that times out still says it timed out", async () => {
   const scan = async (error) => {
     // aadhar.sh scans dispatch through SELF_FETCH, so the deadline's rejection can
     // be injected without the network, with the exact shape workerd throws.
-    const env = { SELF_FETCH: async () => { throw error; } };
-    const res = await handleLensFetch(
-      new Request("https://aadhar.sh/lens/fetch?url=https%3A%2F%2Faadhar.sh%2F&phases=page"),
-      env,
-      { waitUntil() {} },
-    );
+    const env = {
+      SELF_FETCH: async () => {
+        throw error;
+      },
+    };
+    const res = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?url=https%3A%2F%2Faadhar.sh%2F&phases=page"), env, { waitUntil() {} });
     return { status: res.status, body: await res.json() };
   };
 
@@ -56,6 +56,9 @@ test("no Worker code arms its own abort timer", () => {
   // FLOOR. An enumerator that returns nothing passes everything.
   assert.ok(files.length >= 100, `found only ${files.length} Worker source files; the enumerator is broken`);
   const offenders = files.filter((rel) => HAND_ROLLED.test(readFileSync(new URL(rel, new URL(".", ROOT)), "utf8")));
-  assert.deepEqual(offenders, [],
-    "use `AbortSignal.timeout(ms)` for a request deadline: the platform owns the timer, so there is no finally to forget, and the body read is covered too");
+  assert.deepEqual(
+    offenders,
+    [],
+    "use `AbortSignal.timeout(ms)` for a request deadline: the platform owns the timer, so there is no finally to forget, and the body read is covered too",
+  );
 });

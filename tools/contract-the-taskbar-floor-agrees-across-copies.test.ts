@@ -1,11 +1,7 @@
 // ── the taskbar floor agrees across luna.css and its two inline copies ──────
 // Split-file convention: shared imports live in contract-shared.ts.
 import { readFileSync } from "node:fs";
-import {
-  assert,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 
 // Build step 5 compares the body floor in the three documents that set it
@@ -54,7 +50,7 @@ test("control: a document with no body floor yields nothing, so the build refuse
 test("build step 5 fails, rather than warns, on a missing or disagreeing floor", () => {
   const build = read("tools/build.ts");
   assert.match(build, /import \{ taskbarFloors \} from "\.\/lib\/taskbar-floor\.ts"/);
-  assert.match(build, /if \(!found\.length\) hard\.push\(`\$\{f\}: no taskbar-floor calc found/);
-  assert.match(build, /if \(floorVals\.size > 1\) hard\.push\(`taskbar-floor disagrees/);
+  assert.match(build, /if \(!found\.length\)\s*hard\.push\(\s*`\$\{f\}: no taskbar-floor calc found/);
+  assert.match(build, /if \(floorVals\.size > 1\)\s*hard\.push\(\s*`taskbar-floor disagrees/);
   for (const f of COPIES) assert.ok(build.includes(`"${f}"`), `build step 5 no longer lists ${f}`);
 });

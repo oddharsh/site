@@ -76,7 +76,11 @@ export function lengthGuesses(understanding) {
 function checkLengthTell(understanding, context) {
   const { questions, longest, shortest } = lengthGuesses(understanding);
   const cap = Math.floor(questions / 2);
-  if (longest > cap) fail(`${context}.questions`, `the right answer is the longest option on ${longest} of ${questions} questions (cap ${cap}); trim it or give a distractor its detail`);
+  if (longest > cap)
+    fail(
+      `${context}.questions`,
+      `the right answer is the longest option on ${longest} of ${questions} questions (cap ${cap}); trim it or give a distractor its detail`,
+    );
   if (shortest > cap) fail(`${context}.questions`, `the right answer is the shortest option on ${shortest} of ${questions} questions (cap ${cap})`);
 }
 

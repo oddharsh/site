@@ -146,12 +146,18 @@ export const EXACT_ROUTES = [
 
   // One wildcard per tool covers the bare route and its .txt frame. NOT
   // cosmetic: twelve exact rows put the config at 102 of 100.
-  { path: "/finger", claim: ["/finger*"] }, { path: "/finger.txt", claim: ["/finger*"] },
-  { path: "/radar", claim: ["/radar*"] }, { path: "/radar.txt", claim: ["/radar*"] },
-  { path: "/dict", claim: ["/dict*"] }, { path: "/dict.txt", claim: ["/dict*"] },
-  { path: "/cache", claim: ["/cache*"] }, { path: "/cache.txt", claim: ["/cache*"] },
-  { path: "/agent-ready", claim: ["/agent-ready*"] }, { path: "/agent-ready.txt", claim: ["/agent-ready*"] },
-  { path: "/encode", claim: ["/encode*"] }, { path: "/encode.txt", claim: ["/encode*"] },
+  { path: "/finger", claim: ["/finger*"] },
+  { path: "/finger.txt", claim: ["/finger*"] },
+  { path: "/radar", claim: ["/radar*"] },
+  { path: "/radar.txt", claim: ["/radar*"] },
+  { path: "/dict", claim: ["/dict*"] },
+  { path: "/dict.txt", claim: ["/dict*"] },
+  { path: "/cache", claim: ["/cache*"] },
+  { path: "/cache.txt", claim: ["/cache*"] },
+  { path: "/agent-ready", claim: ["/agent-ready*"] },
+  { path: "/agent-ready.txt", claim: ["/agent-ready*"] },
+  { path: "/encode", claim: ["/encode*"] },
+  { path: "/encode.txt", claim: ["/encode*"] },
   { path: "/photos.txt" },
   { path: "/lens.txt" },
 
@@ -241,10 +247,7 @@ export type ExactPath = (typeof EXACT_ROUTES)[number]["path"];
 
 // One generated page per album (albums.ts) plus its slashed twin. A root path
 // has no wildcard to inherit, so each album costs two rows: fold before adding.
-export const ALBUM_ROUTES: readonly ExactRoute[] = Object.values(ALBUMS).flatMap((album) => [
-  { path: albumPath(album) },
-  { path: `${albumPath(album)}/` },
-]);
+export const ALBUM_ROUTES: readonly ExactRoute[] = Object.values(ALBUMS).flatMap((album) => [{ path: albumPath(album) }, { path: `${albumPath(album)}/` }]);
 
 // ── prefix routes ────────────────────────────────────────────────────────────
 // ORDERED: the dispatcher takes the first match, after the exact routes. Three
@@ -362,10 +365,7 @@ export const PREFIX_ROUTES = [
     label: "/images/<thumb>",
     match: (pathname: string) => /^\/images\/[^/]+\.(avif|jpe?g|png|gif|heic|heif|hif)$/i.test(pathname),
     probe: "/images/XT500010.jpg",
-    claim: [
-      "/images/*.avif", "/images/*.jpg", "/images/*.jpeg", "/images/*.png",
-      "/images/*.gif", "/images/*.heic", "/images/*.heif", "/images/*.hif",
-    ],
+    claim: ["/images/*.avif", "/images/*.jpg", "/images/*.jpeg", "/images/*.png", "/images/*.gif", "/images/*.heic", "/images/*.heif", "/images/*.hif"],
   },
   // The static sections, worker-first for the dcz delta and the q11 twin. The
   // bare path is claimed SEPARATELY because "/garage/*" does not match
@@ -440,12 +440,12 @@ export const CACHEABLE_PATHS: ReadonlySet<string> = new Set([
 ]);
 
 /** Exact paths whose handler is handed SELF_FETCH (dispatch.ts). */
-export const SELF_FETCH_PATHS: ReadonlySet<string> =
-  new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.selfFetch).map((r) => r.path));
+export const SELF_FETCH_PATHS: ReadonlySet<string> = new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.selfFetch).map((r) => r.path));
 
 /** Path prefixes Workers Cache may answer anything under (lib/cache.ts). */
-export const CACHEABLE_PREFIXES: readonly string[] =
-  (PREFIX_ROUTES as readonly PrefixRoute[]).flatMap((r) => (r.cacheable?.startsWith ? [r.cacheable.startsWith] : []));
+export const CACHEABLE_PREFIXES: readonly string[] = (PREFIX_ROUTES as readonly PrefixRoute[]).flatMap((r) =>
+  r.cacheable?.startsWith ? [r.cacheable.startsWith] : [],
+);
 
 /** GET-shaped writes: refused on a preview, 425 in early data. */
 export const GET_WRITES: ReadonlySet<string> = new Set([
@@ -454,8 +454,7 @@ export const GET_WRITES: ReadonlySet<string> = new Set([
 ]);
 
 /** Paths a preview admits unsafe methods on, refusing writes per tool instead. */
-export const PER_TOOL_WRITES: ReadonlySet<string> =
-  new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.writes === "per-tool").map((r) => r.path));
+export const PER_TOOL_WRITES: ReadonlySet<string> = new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.writes === "per-tool").map((r) => r.path));
 
 // The allowlist's glob as wrangler and build.ts read it: `*` spans slashes, and
 // a row without one matches only itself. Negated rows (`!/x`) are dropped, as

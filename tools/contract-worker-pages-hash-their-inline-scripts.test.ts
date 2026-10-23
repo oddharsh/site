@@ -54,12 +54,16 @@ test("the runtime scanner agrees with the build's parser", { skip: typeof HTMLRe
     ...ADVERSARIAL.map((d, i) => [`adversarial ${i}`, d]),
     ["/security", await renderSecurityCenter().text()],
     ["/whoareyou", await renderWhoareyouPage().text()],
-    ["lunaPage with head + body + scripts", await lunaPage({
-      title: "t", route: "/t",
-      head: html`<script type="speculationrules">{"prerender":[]}</script>`,
-      body: html`<p>${"<script>not a script</script>"}</p>`,
-      scripts: unsafeHtml(`<script>document.title = "a < b";</script>`),
-    }).text()],
+    [
+      "lunaPage with head + body + scripts",
+      await lunaPage({
+        title: "t",
+        route: "/t",
+        head: html`<script type="speculationrules">{"prerender":[]}</script>`,
+        body: html`<p>${"<script>not a script</script>"}</p>`,
+        scripts: unsafeHtml(`<script>document.title = "a < b";</script>`),
+      }).text(),
+    ],
   ];
   for (const [label, doc] of docs) {
     const mine = inlineScriptHashes(doc);

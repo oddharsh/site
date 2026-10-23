@@ -31,7 +31,10 @@ export const stripRawText = (s: string, tag: string): string => {
   let rest = s;
   for (;;) {
     const i = rest.search(open);
-    if (i < 0) { kept.push(rest); break; }
+    if (i < 0) {
+      kept.push(rest);
+      break;
+    }
     kept.push(rest.slice(0, i));
     const after = rest.slice(i);
     const c = after.search(close);
@@ -64,7 +67,10 @@ export const stripUnrendered = (s: string, tags: readonly string[] = ["script", 
       const at = rest.search(open);
       if (at >= 0 && (first.at < 0 || at < first.at)) first = { at, tag };
     }
-    if (first.at < 0) { kept.push(rest); break; }
+    if (first.at < 0) {
+      kept.push(rest);
+      break;
+    }
     kept.push(rest.slice(0, first.at));
     const after = rest.slice(first.at);
     let end;

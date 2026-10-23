@@ -34,7 +34,10 @@ function headerless(html, { scoped = false }: Record<string, any> = {}) {
     if (!/<th\b/.test(table)) continue;
     const head = /<thead\b[^>]*>([\s\S]*?)<\/thead>/.exec(table)?.[1];
     const label = table.slice(0, 60).replace(/\s+/g, " ");
-    if (!head) { out.push(`${label}: no <thead>`); continue; }
+    if (!head) {
+      out.push(`${label}: no <thead>`);
+      continue;
+    }
     const cells = [...head.matchAll(/<th\b([^>]*)>/g)];
     if (!cells.length) out.push(`${label}: an empty <thead>`);
     else if (scoped && cells.some(([, attrs]) => !/\sscope="col"/.test(attrs))) out.push(`${label}: a header cell without scope="col"`);
@@ -44,8 +47,8 @@ function headerless(html, { scoped = false }: Record<string, any> = {}) {
 
 test("the check flags a header row outside <thead> and a <th> without scope (control)", () => {
   assert.equal(headerless('<table class="t">\n  <tr><th>a</th><th>b</th></tr>\n  <tr><td>1</td><td>2</td></tr></table>').length, 1);
-  assert.equal(headerless('<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>', { scoped: true }).length, 1);
-  assert.deepEqual(headerless('<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>'), [], "a <thead> alone passes site-wide");
+  assert.equal(headerless("<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>", { scoped: true }).length, 1);
+  assert.deepEqual(headerless("<table><thead><tr><th>a</th></tr></thead><tr><td>1</td></tr></table>"), [], "a <thead> alone passes site-wide");
   assert.deepEqual(headerless('<table><thead><tr><th scope="col">a</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>'), []);
   assert.deepEqual(headerless('<table id="x"></table>'), [], "an empty table a script fills is checked in its script");
 });
@@ -57,7 +60,7 @@ test("no static page ships a data table without a declared header row", () => {
   assert.deepEqual(found, []);
 });
 
-test("the audited tables say scope=\"col\" outright", () => {
+test('the audited tables say scope="col" outright', () => {
   const audited = ["octane", "pqc", "typed-config", "hidden-flags", "teardown"].map((p) => `src/pages/garage/${p}.html`);
   for (const file of audited) {
     const html = readFileSync(file, "utf8");

@@ -15,9 +15,7 @@ import { decodeEntities } from "./html-to-md.ts";
 export function objectNameOf(html: string): string {
   const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
   if (!h1) return "";
-  return decodeEntities(h1[1]
-    .replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
-    .replace(/<[^>]+>/g, " "))
+  return decodeEntities(h1[1].replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "").replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }

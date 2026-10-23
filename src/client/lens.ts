@@ -13,35 +13,38 @@
   // coercions is the same trade these files already make for esc().
   /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
      of typeof; keeping the checks here rather than at each use is the point. */
-  function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
-  function asText(v) { return typeof v === "string" && v !== "" ? v : null; }
+  function asRecord(v) {
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  }
+  function asText(v) {
+    return typeof v === "string" && v !== "" ? v : null;
+  }
   /* oxlint-enable anti-slop/no-runtime-typeof */
   var form = document.getElementById("lx-form");
   if (!form) return; // not the /lens page
 
-  var urlInput = (document.getElementById("lx-url") as HTMLInputElement);
-  var panes = (document.getElementById("lx-panes") as HTMLElement);
-  var humanBody = (document.getElementById("lx-human-body") as HTMLElement);
-  var machineBody = (document.getElementById("lx-machine-body") as HTMLElement);
-  var machineTop = (document.getElementById("lx-machine-top") as HTMLElement);
+  var urlInput = document.getElementById("lx-url") as HTMLInputElement;
+  var panes = document.getElementById("lx-panes") as HTMLElement;
+  var humanBody = document.getElementById("lx-human-body") as HTMLElement;
+  var machineBody = document.getElementById("lx-machine-body") as HTMLElement;
+  var machineTop = document.getElementById("lx-machine-top") as HTMLElement;
   // The machine pane's single scroller, wrapping the static block, the tab
   // strip and the lens report. Null on any older cached shell, which every use
   // guards for.
   var machineScroll = document.getElementById("lx-machine-scroll");
-  var browserBody = (document.getElementById("lx-browser-body") as HTMLElement);
-  var machineH = (document.getElementById("lx-machine-h") as HTMLElement);
-  var humanH = (document.getElementById("lx-human-h") as HTMLElement);
-  var modeNote = (document.getElementById("lx-mode-note") as HTMLElement);
-  var statusBar = (document.getElementById("lx-status") as HTMLElement);
-  var toolbar = (document.getElementById("lx-toolbar") as HTMLElement);
-  var vsRow = (document.getElementById("lx-addr-vs") as HTMLElement);
-  var vsInput = (document.getElementById("lx-url-vs") as HTMLInputElement);
-  var vsToggle = (document.getElementById("lx-vs-toggle") as HTMLElement);
-  var vsCloseBtn = (document.getElementById("lx-vs-close") as HTMLElement);
-  var vsSection = (document.getElementById("lx-vs") as HTMLElement);
+  var browserBody = document.getElementById("lx-browser-body") as HTMLElement;
+  var machineH = document.getElementById("lx-machine-h") as HTMLElement;
+  var humanH = document.getElementById("lx-human-h") as HTMLElement;
+  var modeNote = document.getElementById("lx-mode-note") as HTMLElement;
+  var statusBar = document.getElementById("lx-status") as HTMLElement;
+  var toolbar = document.getElementById("lx-toolbar") as HTMLElement;
+  var vsRow = document.getElementById("lx-addr-vs") as HTMLElement;
+  var vsInput = document.getElementById("lx-url-vs") as HTMLInputElement;
+  var vsToggle = document.getElementById("lx-vs-toggle") as HTMLElement;
+  var vsCloseBtn = document.getElementById("lx-vs-close") as HTMLElement;
+  var vsSection = document.getElementById("lx-vs") as HTMLElement;
 
-
-  var data: any = null;       // last successful HTTP envelope
+  var data: any = null; // last successful HTTP envelope
 
   var browserData: any = null; // last opt-in Browser Run snapshot
   // The post-interaction snapshot lives BESIDE the plain one, never on top of
@@ -49,34 +52,46 @@
   // comparison this feature exists to make.
 
   var browserRecipeData: any = null;
-  var view = "both";     // both | human | machine | browser | delta
-  var lens = "anatomy";  // default = the raw observation; must match lensState() in _worker.js/lens.js
+  var view = "both"; // both | human | machine | browser | delta
+  var lens = "anatomy"; // default = the raw observation; must match lensState() in _worker.js/lens.js
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
   var busy = false;
   var browserBusy = false;
-  var vsMode = false;    // head-to-head: #lx-vs shown, single-scan chrome .lx-off
+  var vsMode = false; // head-to-head: #lx-vs shown, single-scan chrome .lx-off
   var vsBusy = false;
 
-  var vsData: any = null;  // last head-to-head payload, so a WebMCP caller can read what is on screen
+  var vsData: any = null; // last head-to-head payload, so a WebMCP caller can read what is on screen
 
-  var lastShotUrl: any = null;   // the live snapshot object URL, revoked before the next mint / on decode
+  var lastShotUrl: any = null; // the live snapshot object URL, revoked before the next mint / on decode
 
   // Must match LENS_TAB_LABELS in src/worker/lens.ts: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers", markdown: "What agents get" };
+  var LENS_LABEL = {
+    readiness: "Agent-ready?",
+    anatomy: "Raw response",
+    reader: "Reader's guess",
+    wire: "What it costs",
+    structured: "What it claims",
+    ai: "Model cost",
+    terms: "Who's allowed",
+    discovery: "Agent doors",
+    tools: "What it accepts",
+    nlweb: "What it answers",
+    markdown: "What agents get",
+  };
 
-  var readerData: any = null;   // last /lens/read extraction, null until asked for
+  var readerData: any = null; // last /lens/read extraction, null until asked for
   var readerBusy = false;
 
-  var wireData: any = null;     // last /lens/wire trace, null until asked for
+  var wireData: any = null; // last /lens/wire trace, null until asked for
   var wireBusy = false;
 
-  var toolsData: any = null;    // last /lens/tools catalogue, null until asked for
+  var toolsData: any = null; // last /lens/tools catalogue, null until asked for
   var toolsBusy = false;
 
-  var nlwebData: any = null;    // last /lens/nlweb answer, null until asked for
+  var nlwebData: any = null; // last /lens/nlweb answer, null until asked for
   var nlwebBusy = false;
-  var nlwebQuery = "";     // the visitor's question, kept across re-renders
+  var nlwebQuery = ""; // the visitor's question, kept across re-renders
 
   var markdownData: any = null; // last /lens/markdown replay, null until asked for
   var markdownBusy = false;
@@ -86,7 +101,9 @@
 
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
   // ── glossary ──────────────────────────────────────────────────────────────
@@ -95,8 +112,11 @@
   // worker owns the facts rail, this file owns the checks. A second hand-kept
   // copy here is exactly the drift the /*luq-data*/ pattern exists to avoid.
   var GLOSS = (() => {
-    try { return JSON.parse(document.getElementById("lx-glossary").textContent); }
-    catch (e) { return {}; }
+    try {
+      return JSON.parse(document.getElementById("lx-glossary").textContent);
+    } catch (e) {
+      return {};
+    }
   })();
   // Flattened [key, spelling] pairs, longest spelling first so "llms.txt" is
   // never eaten by a shorter overlap. A term may carry alt spellings because the
@@ -108,7 +128,9 @@
       GLOSS_SPELLINGS.push([key, s]);
     });
   });
-  GLOSS_SPELLINGS.sort((a, b) => { return b[1].length - a[1].length; });
+  GLOSS_SPELLINGS.sort((a, b) => {
+    return b[1].length - a[1].length;
+  });
 
   // Mirrors glossify() in _worker.js/lens.js. Input MUST already be escaped:
   // this inserts real tags, and only esc() having removed every < and > makes
@@ -127,8 +149,7 @@
   function term(key, text) {
     var g = GLOSS[key];
     if (!g) return esc(text);
-    return '<abbr class="lx-term" data-t="' + esc(key) + '"' +
-      (hoistLive ? "" : ' title="' + esc(g.plain) + '"') + ">" + esc(text) + "</abbr>";
+    return '<abbr class="lx-term" data-t="' + esc(key) + '"' + (hoistLive ? "" : ' title="' + esc(g.plain) + '"') + ">" + esc(text) + "</abbr>";
   }
 
   // Boundary rules mirror glossify() in _worker.js/lens.js, including the two
@@ -146,11 +167,11 @@
     var out = "";
     var pos = 0;
     for (;;) {
-
-      var best: {at: number, key: any, text: string} | null = null;
+      var best: { at: number; key: any; text: string } | null = null;
       for (var i = 0; i < GLOSS_SPELLINGS.length; i++) {
-        var key = GLOSS_SPELLINGS[i][0], spelling = GLOSS_SPELLINGS[i][1];
-        if (seen[key]) continue;         // one definition per string, not one per spelling
+        var key = GLOSS_SPELLINGS[i][0],
+          spelling = GLOSS_SPELLINGS[i][1];
+        if (seen[key]) continue; // one definition per string, not one per spelling
         if (only && only.indexOf(key) === -1) continue;
         var lit = spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         var m = src.slice(pos).match(new RegExp("(^|[^\\w.-])(" + lit + ")(?!\\w)(?!\\.\\w)"));
@@ -162,9 +183,15 @@
       }
       if (!best) break;
       seen[best.key] = 1;
-      out += src.slice(pos, best.at) +
-        '<abbr class="lx-term" data-t="' + esc(best.key) + '"' +
-        (hoistLive ? "" : ' title="' + esc(GLOSS[best.key].plain) + '"') + ">" + best.text + "</abbr>";
+      out +=
+        src.slice(pos, best.at) +
+        '<abbr class="lx-term" data-t="' +
+        esc(best.key) +
+        '"' +
+        (hoistLive ? "" : ' title="' + esc(GLOSS[best.key].plain) + '"') +
+        ">" +
+        best.text +
+        "</abbr>";
       pos = best.at + best.text.length;
     }
     return out + src.slice(pos);
@@ -177,29 +204,30 @@
   // a touch visitor never fetches an engine that would return a dead surface.
   // The <abbr title> stays the honest fallback for everyone else.
   if (!(window.matchMedia && (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches))) {
-    import("/hoist.js").then((h) => {
-      var node = document.getElementById("lx-tip");
-      if (!node) return;
-      h.createHoist({
-        node: node,
-        anchorName: "--lx-tip",
-        findTarget: ( el: Element) => {
-          return el && el.closest ? el.closest(".lx-term") : null;
-        },
-        contentFor: (t) => {
-          var g = GLOSS[t.getAttribute("data-t")];
-          if (!g) return "";
-          return "<b>" + esc(g.label) + "</b>" + esc(g.plain) +
-            (g.more ? "<i>" + esc(g.more) + "</i>" : "");
-        },
-      });
-      hoistLive = true;
-      // The shell was server-rendered before this file ran, so its terms already
-      // carry the fallback title. Retire those now that the real surface exists;
-      // everything rendered from here on is emitted without one.
-      var pre = document.querySelectorAll(".lx-term[title]");
-      for (var i = 0; i < pre.length; i++) pre[i].removeAttribute("title");
-    }).catch(() => {});
+    import("/hoist.js")
+      .then((h) => {
+        var node = document.getElementById("lx-tip");
+        if (!node) return;
+        h.createHoist({
+          node: node,
+          anchorName: "--lx-tip",
+          findTarget: (el: Element) => {
+            return el && el.closest ? el.closest(".lx-term") : null;
+          },
+          contentFor: (t) => {
+            var g = GLOSS[t.getAttribute("data-t")];
+            if (!g) return "";
+            return "<b>" + esc(g.label) + "</b>" + esc(g.plain) + (g.more ? "<i>" + esc(g.more) + "</i>" : "");
+          },
+        });
+        hoistLive = true;
+        // The shell was server-rendered before this file ran, so its terms already
+        // carry the fallback title. Retire those now that the real surface exists;
+        // everything rendered from here on is emitted without one.
+        var pre = document.querySelectorAll(".lx-term[title]");
+        for (var i = 0; i < pre.length; i++) pre[i].removeAttribute("title");
+      })
+      .catch(() => {});
   }
 
   function bytes(n) {
@@ -219,7 +247,9 @@
     if (x > 0) return "<$0.0005";
     return "$0";
   }
-  function has(o) { return asRecord(o) !== null && Object.keys(o).length > 0; }
+  function has(o) {
+    return asRecord(o) !== null && Object.keys(o).length > 0;
+  }
 
   // The one-sentence thesis, stated in dollars, shown above every scanned lens so
   // the cost gap is visceral without hunting for the AI-view tab. Built entirely
@@ -236,12 +266,17 @@
     var field = r && r.field;
     // A button, not a span: the strip's own copy points at Agent-ready?, so the
     // number is the click target that opens it (renderMachine binds it).
-    var score = field && field.overall != null
-      ? '<button class="lx-verdict-score" type="button" title="Lens field evidence — open Agent-ready?">' + esc(field.overall) + "<span>/100</span></button>"
-      : "";
+    var score =
+      field && field.overall != null
+        ? '<button class="lx-verdict-score" type="button" title="Lens field evidence — open Agent-ready?">' + esc(field.overall) + "<span>/100</span></button>"
+        : "";
     if (!c || !c.tiers || c.tiers.length < 2) {
       return score
-        ? '<div class="lx-verdict">' + score + "Lens observed <b>" + esc(field.overall) + "/100</b> field access. The independent Cloudflare and Readability inputs sit under <b>Agent-ready?</b>.</div>"
+        ? '<div class="lx-verdict">' +
+            score +
+            "Lens observed <b>" +
+            esc(field.overall) +
+            "/100</b> field access. The independent Cloudflare and Readability inputs sit under <b>Agent-ready?</b>.</div>"
         : "";
     }
     var rate = (c.rates && c.rates[0]) || { usdPerMtok: 3 };
@@ -250,22 +285,34 @@
     // not the headings-only outline — an outline of a heading-light page yields an
     // absurd ×1000+ that reads as hyperbole. Phrase it as "a clean markdown copy"
     // without claiming the site does or doesn't publish one (some, like this one, do).
-    var clean = (c.tiers.filter((t) => { return t.key === "markdown"; })[0]) ||
-                (c.tiers.filter((t) => { return t.key === "text"; })[0]) ||
-                c.tiers[c.tiers.length - 1];
-    var per1 = base.tokens / 1e6 * rate.usdPerMtok;
+    var clean =
+      c.tiers.filter((t) => {
+        return t.key === "markdown";
+      })[0] ||
+      c.tiers.filter((t) => {
+        return t.key === "text";
+      })[0] ||
+      c.tiers[c.tiers.length - 1];
+    var per1 = (base.tokens / 1e6) * rate.usdPerMtok;
     var per1k = per1 * 1000;
-    var mult = (clean && clean.tokens && clean !== base) ? Math.round(base.tokens / clean.tokens) : 0;
+    var mult = clean && clean.tokens && clean !== base ? Math.round(base.tokens / clean.tokens) : 0;
     // Sentence order is deliberate. The multiplier used to sit mid-sentence,
     // between the token count and the 1,000-read total, which is the one spot a
     // reader's eye skips. It is the punchline — the whole "this is waste, not
     // cost" argument — so it now ends its own sentence, in the stress position.
     // The free/paid contrast opens, because that is the part that needs no setup.
-    var line = "A person reads this page for free. A machine pays <b>" + fmtUsd(per1) +
-      "</b> for the same words, because it chews through " + fmtTok(base.tokens) +
-      " " + term("token", "tokens") + " of raw HTML" +
+    var line =
+      "A person reads this page for free. A machine pays <b>" +
+      fmtUsd(per1) +
+      "</b> for the same words, because it chews through " +
+      fmtTok(base.tokens) +
+      " " +
+      term("token", "tokens") +
+      " of raw HTML" +
       (mult > 1 ? ". As clean text it would cost <b>&times;" + mult + "</b> less" : "") +
-      ". At 1,000 reads that is <b>" + fmtUsd(per1k) + "</b> of inference, and the publisher collects <b>$0.00</b>.";
+      ". At 1,000 reads that is <b>" +
+      fmtUsd(per1k) +
+      "</b> of inference, and the publisher collects <b>$0.00</b>.";
     return '<div class="lx-verdict">' + score + line + "</div>";
   }
 
@@ -287,7 +334,11 @@
   function readInitialData() {
     var node = document.getElementById("lx-initial-data");
     if (!node) return null;
-    try { return JSON.parse(node.textContent || "null"); } catch (e) { return null; }
+    try {
+      return JSON.parse(node.textContent || "null");
+    } catch (e) {
+      return null;
+    }
   }
   var initialData = readInitialData();
 
@@ -332,9 +383,15 @@
 
   function syncUrl(push) {
     var u;
-    try { u = new URL(location.href); } catch (e) { return; }
+    try {
+      u = new URL(location.href);
+    } catch (e) {
+      return;
+    }
     u.pathname = "/lens";
-    ["url", "vs", "view", "lens", "cf"].forEach((key) => { u.searchParams.delete(key); });
+    ["url", "vs", "view", "lens", "cf"].forEach((key) => {
+      u.searchParams.delete(key);
+    });
     var raw = urlInput.value.trim();
     if (raw) u.searchParams.set("url", raw);
     // head-to-head state is url + vs, nothing else: view/lens/cf describe the
@@ -345,7 +402,9 @@
     } else {
       if (view !== "both") u.searchParams.set("view", view);
       if (lens !== "anatomy") u.searchParams.set("lens", lens);
-      var cf = Object.keys(counterfactuals).filter((key) => { return counterfactuals[key]; });
+      var cf = Object.keys(counterfactuals).filter((key) => {
+        return counterfactuals[key];
+      });
       if (cf.length) u.searchParams.set("cf", cf.join(","));
     }
     var next = u.pathname + (u.search || "") + (u.hash || "");
@@ -365,8 +424,12 @@
   // only on a click now: the panel used to pop itself open once a session, which
   // meant the tool greeted you with something to dismiss. No-op with no dialog.
   function openStateWeb() {
-    var d = (document.getElementById("lx-sow-dialog") as HTMLDialogElement);
-    if (d && !d.open && d.showModal) { try { d.showModal(); } catch (e) {} }
+    var d = document.getElementById("lx-sow-dialog") as HTMLDialogElement;
+    if (d && !d.open && d.showModal) {
+      try {
+        d.showModal();
+      } catch (e) {}
+    }
   }
 
   function showError(j) {
@@ -391,8 +454,11 @@
   function run(url) {
     if (busy) return;
     url = (url || "").trim();
-    if (!url) { urlInput.focus(); return; }
-    if (vsMode) exitVs(false);   // a single scan replaces the head-to-head
+    if (!url) {
+      urlInput.focus();
+      return;
+    }
+    if (vsMode) exitVs(false); // a single scan replaces the head-to-head
     busy = true;
     browserData = null;
     browserRecipeData = null;
@@ -446,17 +512,16 @@
     // simply had not been checked yet, which is the exact lie the phases flag
     // exists to prevent.
     var scan = (phases?: any) => {
-      return fetch("/lens/fetch?url=" + encodeURIComponent(url) + (phases ? "&phases=" + phases : ""))
-        .then((r) => {
-          var ct = r.headers.get("content-type") || "";
-          if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
-          return r.json();
-        });
+      return fetch("/lens/fetch?url=" + encodeURIComponent(url) + (phases ? "&phases=" + phases : "")).then((r) => {
+        var ct = r.headers.get("content-type") || "";
+        if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
+        return r.json();
+      });
     };
 
     scan("page")
       .then((j) => {
-        if (!j || !j.ok) return;         // pass 2 is authoritative; stay quiet here
+        if (!j || !j.ok) return; // pass 2 is authoritative; stay quiet here
         data = j;
         renderHuman();
         renderStatus();
@@ -464,7 +529,9 @@
       })
       // A failed fast pass must not abort the real one, so swallow and continue.
       .catch(() => {})
-      .then(() => { return scan(); })
+      .then(() => {
+        return scan();
+      })
       .then((j) => {
         busy = false;
         if (!j || !j.ok) {
@@ -480,7 +547,7 @@
       })
       .catch((e) => {
         busy = false;
-        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
+        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -493,12 +560,19 @@
   // chrome (toolbar, mode note, panes) keeps its DOM and takes .lx-off, so
   // closing the comparison is a class flip back to whatever was there.
   var VS_SURFACES = [
-    ["llms", "llms.txt"], ["markdown", "markdown negotiation"], ["mcp", "MCP"],
-    ["agentCard", "an agent card"], ["apiCatalog", "an API catalog"],
+    ["llms", "llms.txt"],
+    ["markdown", "markdown negotiation"],
+    ["mcp", "MCP"],
+    ["agentCard", "an agent card"],
+    ["apiCatalog", "an API catalog"],
   ];
 
   function vsHost(u) {
-    try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u || ""); }
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch (e) {
+      return String(u || "");
+    }
   }
 
   // `source` is the payload's discovery.left or .right: live, cached, shared,
@@ -511,14 +585,24 @@
     var levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
     var deferred = source === "deferred" || !!(s.phases && s.phases.discoveryDeferred);
     var measured = !deferred && source !== "none" && !(s.phases && s.phases.discovery === false);
-    var pub = VS_SURFACES.filter((x) => { return s.surfaces && s.surfaces[x[0]]; })
-      .map((x) => { return '<span class="lx-tag">' + esc(x[1]) + "</span>"; }).join("");
-    var surfaces = pub
-      || (measured && s.surfaces
+    var pub = VS_SURFACES.filter((x) => {
+      return s.surfaces && s.surfaces[x[0]];
+    })
+      .map((x) => {
+        return '<span class="lx-tag">' + esc(x[1]) + "</span>";
+      })
+      .join("");
+    var surfaces =
+      pub ||
+      (measured && s.surfaces
         ? '<span class="lx-none">no machine surfaces published</span>'
-        : '<span class="lx-none">not measured in this comparison' + (deferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") + "</span>");
+        : '<span class="lx-none">not measured in this comparison' +
+          (deferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") +
+          "</span>");
     var refused = source === "refused" || !!(s.phases && s.phases.subrequestCap);
-    if (refused) surfaces += '<div class="lx-cap" style="margin-top:4px">The subrequest cap refused some of this side\'s probes, so those checks read as unknown rather than absent.</div>';
+    if (refused)
+      surfaces +=
+        '<div class="lx-cap" style="margin-top:4px">The subrequest cap refused some of this side\'s probes, so those checks read as unknown rather than absent.</div>';
     var cost = s.cost
       ? "~" + fmtTok(s.cost.tokens) + " " + term("token", "tokens") + " &middot; " + fmtUsd(s.cost.usdPerRead) + "/read"
       : "no cost model (non-HTML)";
@@ -529,12 +613,31 @@
       ["one model read", cost],
       ["payload", esc(bytes(s.bytes))],
       ["words", esc(String(s.wordCount || 0))],
-    ].map((row) => { return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>"; }).join("");
-    return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + esc(host) + '</span><a href="/lens?url=' + esc(encodeURIComponent(s.url || "")) + '">full scan &rarr;</a></div>' +
-      '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : esc(s.readiness)) + "<span>/100</span></b>" +
-      badge("Level " + (s.level == null ? "?" : s.level), levelKind, s.levelNote || "") + "<span>" + esc(s.levelName || "") + "</span></div>" +
-      '<table class="lx-kv">' + rows + "</table>" +
-      '<div class="lx-tags" style="margin-top:6px">' + surfaces + "</div></div></div>";
+    ]
+      .map((row) => {
+        return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>";
+      })
+      .join("");
+    return (
+      '<div class="lx-vs-col"><div class="lx-vs-h"><span>' +
+      esc(host) +
+      '</span><a href="/lens?url=' +
+      esc(encodeURIComponent(s.url || "")) +
+      '">full scan &rarr;</a></div>' +
+      '<div class="lx-vs-body"><div class="lx-vs-score"><b>' +
+      (s.readiness == null ? "?" : esc(s.readiness)) +
+      "<span>/100</span></b>" +
+      badge("Level " + (s.level == null ? "?" : s.level), levelKind, s.levelNote || "") +
+      "<span>" +
+      esc(s.levelName || "") +
+      "</span></div>" +
+      '<table class="lx-kv">' +
+      rows +
+      "</table>" +
+      '<div class="lx-tags" style="margin-top:6px">' +
+      surfaces +
+      "</div></div></div>"
+    );
   }
 
   function renderVs(payload) {
@@ -542,7 +645,8 @@
       vsSection.innerHTML = '<div class="lx-empty">' + esc((payload && payload.error) || "The comparison did not run.") + "</div>";
       return;
     }
-    var L = payload.left, R = payload.right;
+    var L = payload.left,
+      R = payload.right;
     var src = payload.discovery || {};
     var headline = "";
     if (L && R && L.readiness != null && R.readiness != null) {
@@ -550,21 +654,43 @@
       var lose = win === L ? R : L;
       var extras = VS_SURFACES.filter((x) => {
         return win.surfaces && win.surfaces[x[0]] && !(lose.surfaces && lose.surfaces[x[0]]);
-      }).map((x) => { return x[1]; });
-      var spread = win.readiness === lose.readiness
-        ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
-        : "<b>" + esc(vsHost(win.finalUrl || win.url)) + " " + esc(win.readiness) + ", " + esc(vsHost(lose.finalUrl || lose.url)) + " " + esc(lose.readiness) + ".</b>";
-      headline = '<div class="lx-vs-headline">' + spread +
-        (extras.length ? " The gap is published surfaces: " + esc(extras.join(", ")) + "." : " Both publish the same surfaces; the gap sits in the individual checks.") +
+      }).map((x) => {
+        return x[1];
+      });
+      var spread =
+        win.readiness === lose.readiness
+          ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
+          : "<b>" +
+            esc(vsHost(win.finalUrl || win.url)) +
+            " " +
+            esc(win.readiness) +
+            ", " +
+            esc(vsHost(lose.finalUrl || lose.url)) +
+            " " +
+            esc(lose.readiness) +
+            ".</b>";
+      headline =
+        '<div class="lx-vs-headline">' +
+        spread +
+        (extras.length
+          ? " The gap is published surfaces: " + esc(extras.join(", ")) + "."
+          : " Both publish the same surfaces; the gap sits in the individual checks.") +
         "</div>";
     }
-    vsSection.innerHTML = '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
-      '<div class="lx-vs-grid">' + vsColumn(L || {}, src.left) + vsColumn(R || {}, src.right) + "</div>" + headline;
+    vsSection.innerHTML =
+      '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
+      '<div class="lx-vs-grid">' +
+      vsColumn(L || {}, src.left) +
+      vsColumn(R || {}, src.right) +
+      "</div>" +
+      headline;
   }
 
   function setVsChrome(on) {
     vsMode = !!on;
-    [toolbar, modeNote, panes].forEach((el) => { if (el) el.classList.toggle("lx-off", vsMode); });
+    [toolbar, modeNote, panes].forEach((el) => {
+      if (el) el.classList.toggle("lx-off", vsMode);
+    });
     if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
     if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
     if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
@@ -572,7 +698,8 @@
 
   function runVs(left, right, push?: any) {
     if (vsBusy) return;
-    left = (left || "").trim(); right = (right || "").trim();
+    left = (left || "").trim();
+    right = (right || "").trim();
     if (!left || !right) return;
     vsBusy = true;
     urlInput.value = left;
@@ -583,18 +710,25 @@
     vsSection.innerHTML = '<div class="lx-spin">Scanning both sites as AadharshBot&hellip;</div>';
     statusBar.innerHTML = "<span>Comparing <b>" + esc(vsHost(left)) + "</b> and <b>" + esc(vsHost(right)) + "</b> server-side&hellip;</span>";
     fetch("/lens/compare.json?left=" + encodeURIComponent(left) + "&right=" + encodeURIComponent(right))
-      .then((r) => { return r.json(); })
+      .then((r) => {
+        return r.json();
+      })
       .then((j) => {
         vsBusy = false;
         vsData = j;
         renderVs(j);
-        statusBar.innerHTML = j && j.ok
-          ? '<span><b>Head-to-head</b></span><span>' + esc(vsHost(left)) + " vs " + esc(vsHost(right)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
-          : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
+        statusBar.innerHTML =
+          j && j.ok
+            ? "<span><b>Head-to-head</b></span><span>" +
+              esc(vsHost(left)) +
+              " vs " +
+              esc(vsHost(right)) +
+              '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
+            : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
       })
       .catch((e) => {
         vsBusy = false;
-        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
+        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -604,7 +738,7 @@
     setVsChrome(false);
     if (writeHistory !== false) syncUrl(true);
     if (data) renderStatus();
-    else statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
+    else statusBar.innerHTML = "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>";
   }
 
   // ---- human pane: a live browser window --------------------------------
@@ -613,15 +747,19 @@
   // screenshot. Neither available → the readable-text reader as a last resort.
   function setHumanH(badge, sub) {
     var el = document.getElementById("lx-human-h");
-    if (el) el.innerHTML = "Human view <span class=\"lx-mode\">" + esc(badge) + "</span> <span class=\"lx-mode-sub\">" + esc(sub) + "</span>";
+    if (el) el.innerHTML = 'Human view <span class="lx-mode">' + esc(badge) + '</span> <span class="lx-mode-sub">' + esc(sub) + "</span>";
   }
-  function bleed(on) { humanBody.classList.toggle("is-bleed", !!on); }
+  function bleed(on) {
+    humanBody.classList.toggle("is-bleed", !!on);
+  }
 
   function renderHuman() {
     if (data.framable) {
       bleed(true);
       setHumanH("Live", "loaded by your browser, like a real tab");
-      humanBody.innerHTML = '<iframe class="lx-frame" src="' + esc(data.finalUrl) +
+      humanBody.innerHTML =
+        '<iframe class="lx-frame" src="' +
+        esc(data.finalUrl) +
         '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
         ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
       return;
@@ -635,11 +773,10 @@
   // and what still works. Falls through to the server's own text whenever that
   // text is already plain, so a new server-side message is never swallowed.
   function shotTrouble(j, status) {
-    if (j && j.reason === "budget_spent") return null;      // server text is already plain
+    if (j && j.reason === "budget_spent") return null; // server text is already plain
     if (status === 429) return null;
     if (j && j.error && !/^Browser Run (returned|request failed)/.test(j.error)) return j.error;
-    return "A rendered snapshot needs a real headless Chrome, and this one did not come back (upstream said " +
-      (status || "no status") + ")";
+    return "A rendered snapshot needs a real headless Chrome, and this one did not come back (upstream said " + (status || "no status") + ")";
   }
 
   function renderShot() {
@@ -659,7 +796,10 @@
           if (!data || (data.finalUrl || data.url) !== shotUrl) return;
           bleed(true);
           // The refusal is evidence, and we hold the refusing header: cite it.
-          setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
+          setHumanH(
+            "Refused",
+            (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in",
+          );
           return r.blob().then((b) => {
             // The scan may have moved on while headless Chrome took its minute.
             // Painting a stale snapshot under a new URL is the one failure here
@@ -670,22 +810,38 @@
             // NOT the blob-URL registry entry, so scanning several framing-blocked sites
             // in a session (nytimes + stripe are both seeded chips) otherwise pins a full
             // Browser-Rendering PNG each.
-            if (lastShotUrl) { URL.revokeObjectURL(lastShotUrl); lastShotUrl = null; }
+            if (lastShotUrl) {
+              URL.revokeObjectURL(lastShotUrl);
+              lastShotUrl = null;
+            }
             var objUrl = URL.createObjectURL(b);
             lastShotUrl = objUrl;
             var img = new Image();
             img.className = "lx-shot";
             img.alt = "Rendered snapshot of " + shotUrl;
-            img.onload = () => { if (lastShotUrl === objUrl) { URL.revokeObjectURL(objUrl); lastShotUrl = null; } };
+            img.onload = () => {
+              if (lastShotUrl === objUrl) {
+                URL.revokeObjectURL(objUrl);
+                lastShotUrl = null;
+              }
+            };
             img.src = objUrl;
             humanBody.innerHTML = "";
             humanBody.appendChild(img);
           });
         }
-        return r.json().then((j) => { renderReader(shotTrouble(j, r.status) || (j && j.error) || ("snapshot failed (" + r.status + ")")); })
-          .catch(() => { renderReader(shotTrouble(null, r.status) || ("snapshot failed (" + r.status + ")")); });
+        return r
+          .json()
+          .then((j) => {
+            renderReader(shotTrouble(j, r.status) || (j && j.error) || "snapshot failed (" + r.status + ")");
+          })
+          .catch(() => {
+            renderReader(shotTrouble(null, r.status) || "snapshot failed (" + r.status + ")");
+          });
       })
-      .catch(() => { renderReader("The snapshot request did not go through"); });
+      .catch(() => {
+        renderReader("The snapshot request did not go through");
+      });
   }
 
   // ---- Browser Run pane --------------------------------------------------
@@ -696,11 +852,13 @@
     if (!data) {
       // "Run Browser Run after a URL scan" defined the button by its own name.
       // Say what it does instead: a plain fetch sees the file, this sees the page.
-      browserBody.innerHTML = '<div class="lx-empty">Scan a URL first.<span>Then this pane fetches it with a real Chrome, so the site\'s JavaScript runs. Many pages look empty until it does.</span></div>';
+      browserBody.innerHTML =
+        '<div class="lx-empty">Scan a URL first.<span>Then this pane fetches it with a real Chrome, so the site\'s JavaScript runs. Many pages look empty until it does.</span></div>';
       return;
     }
     if (!window.LensBrowser) {
-      browserBody.innerHTML = '<div class="lx-browser-intro"><b>Browser Run:</b> rendered HTML, screenshot, Markdown, and accessibility tree.' +
+      browserBody.innerHTML =
+        '<div class="lx-browser-intro"><b>Browser Run:</b> rendered HTML, screenshot, Markdown, and accessibility tree.' +
         '<button class="lx-browser-run" type="button" id="lx-browser-run">Run snapshot</button></div>';
       var button = document.getElementById("lx-browser-run");
       if (button) button.addEventListener("click", runBrowser);
@@ -735,16 +893,27 @@
     if (asText(recipeId) === null) recipeId = "";
     browserBusy = true;
     function runLoaded() {
-      if (!window.LensBrowser) { browserBusy = false; renderBrowser(); return; }
-      window.LensBrowser.run(browserBody, data, (j) => {
+      if (!window.LensBrowser) {
         browserBusy = false;
-        if (recipeId) browserRecipeData = j;
-        else browserData = j;
         renderBrowser();
-        renderStatus();
-      }, (e) => {
-        browserBusy = false;
-      }, runBrowser, recipeId);
+        return;
+      }
+      window.LensBrowser.run(
+        browserBody,
+        data,
+        (j) => {
+          browserBusy = false;
+          if (recipeId) browserRecipeData = j;
+          else browserData = j;
+          renderBrowser();
+          renderStatus();
+        },
+        (e) => {
+          browserBusy = false;
+        },
+        runBrowser,
+        recipeId,
+      );
     }
     if (window.LensBrowser) {
       runLoaded();
@@ -753,7 +922,10 @@
     var script = document.createElement("script");
     script.src = "/lens-browser.js?v=1";
     script.onload = runLoaded;
-    script.onerror = () => { browserBusy = false; renderBrowser(); };
+    script.onerror = () => {
+      browserBusy = false;
+      renderBrowser();
+    };
     document.head.appendChild(script);
   }
 
@@ -763,21 +935,25 @@
   // still in flight, so the header must not yet claim there is none.
   function renderReader(note, pending?: any) {
     bleed(false);
-    setHumanH("Reader", pending
-      ? "embedding blocked, so here is the readable text while a snapshot is fetched"
-      : "embedding blocked, no snapshot, so here is the readable text");
+    setHumanH(
+      "Reader",
+      pending ? "embedding blocked, so here is the readable text while a snapshot is fetched" : "embedding blocked, no snapshot, so here is the readable text",
+    );
     var a = data.anatomy;
     var out = "";
     if (pending) out = '<div class="lx-fallback-note lx-pending">' + esc(pending) + "&hellip;</div>";
     else if (note) out = '<div class="lx-fallback-note">' + esc(String(note).replace(/\.\s*$/, "")) + ". Showing the readable text instead.</div>";
-    if (!a) { humanBody.innerHTML = out + '<div class="lx-empty">No readable text either.</div>'; return; }
+    if (!a) {
+      humanBody.innerHTML = out + '<div class="lx-empty">No readable text either.</div>';
+      return;
+    }
     var title = (data.structured && data.structured.title) || "";
     if (title) out += '<div class="lx-h-title">' + esc(title) + "</div>";
     if (a.headings && a.headings.length) {
       out += '<div class="lx-h-outline"><b>Document outline</b><br>';
       for (var i = 0; i < a.headings.length && i < 60; i++) {
         var h = a.headings[i];
-        out += '<div style="padding-left:' + ((h.level - 1) * 12) + 'px"><span style="color:#9aa">h' + h.level + "</span> " + esc(h.text) + "</div>";
+        out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + esc(h.text) + "</div>";
       }
       out += "</div>";
     }
@@ -798,16 +974,30 @@
     return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) + b + "</div>" + c + inner + "</div>";
   }
   function kvTable(obj, order?: any) {
-    var keys = order ? order.filter((k) => { return obj[k] != null && obj[k] !== ""; }) : Object.keys(obj);
+    var keys = order
+      ? order.filter((k) => {
+          return obj[k] != null && obj[k] !== "";
+        })
+      : Object.keys(obj);
     if (!keys.length) return '<div class="lx-none">none</div>';
-    var rows = keys.map((k) => {
-      return "<tr><td>" + esc(k) + "</td><td>" + esc(obj[k]) + "</td></tr>";
-    }).join("");
+    var rows = keys
+      .map((k) => {
+        return "<tr><td>" + esc(k) + "</td><td>" + esc(obj[k]) + "</td></tr>";
+      })
+      .join("");
     return '<table class="lx-kv">' + rows + "</table>";
   }
   function tags(arr) {
     if (!arr || !arr.length) return '<div class="lx-none">none found</div>';
-    return '<div class="lx-tags">' + arr.map((t) => { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>";
+    return (
+      '<div class="lx-tags">' +
+      arr
+        .map((t) => {
+          return '<span class="lx-tag">' + esc(t) + "</span>";
+        })
+        .join("") +
+      "</div>"
+    );
   }
   function pre(text, light?: any) {
     return '<pre class="lx-pre' + (light ? " lx-pre-light" : "") + '">' + esc(text) + "</pre>";
@@ -818,10 +1008,15 @@
   }
 
   function briefTable(rows) {
-    return '<table class="lx-bots"><tr><th>surface</th><th>what a machine can establish</th><th>state</th></tr>' +
-      rows.map((r) => {
-        return '<tr><td class="ua">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + badge(r[2], r[3]) + '</td></tr>';
-      }).join("") + '</table>';
+    return (
+      '<table class="lx-bots"><tr><th>surface</th><th>what a machine can establish</th><th>state</th></tr>' +
+      rows
+        .map((r) => {
+          return '<tr><td class="ua">' + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td><td>" + badge(r[2], r[3]) + "</td></tr>";
+        })
+        .join("") +
+      "</table>"
+    );
   }
 
   function lensFocus() {
@@ -838,43 +1033,64 @@
 
     var entityTypes: string[] = [];
     (s.jsonld || []).forEach((b) => {
-      (b.types || []).forEach((x) => { if (entityTypes.indexOf(x) < 0) entityTypes.push(x); });
+      (b.types || []).forEach((x) => {
+        if (entityTypes.indexOf(x) < 0) entityTypes.push(x);
+      });
     });
-    var title, badgeData, caption, rows, extra = "";
+    var title,
+      badgeData,
+      caption,
+      rows,
+      extra = "";
 
     if (lens === "readiness") {
       var rr = data.readiness || {};
       var rf = rr.field || {};
       var firstFix = rr.nextActions && rr.nextActions[0];
       title = "Field evidence focus";
-      badgeData = { text: (rf.overall == null ? "unknown" : rf.overall + "/100"), kind: rf.overall >= 75 ? "ok" : "warn" };
+      badgeData = { text: rf.overall == null ? "unknown" : rf.overall + "/100", kind: rf.overall >= 75 ? "ok" : "warn" };
       caption = "This is what Lens observed itself; external standards and Readability recovery join it only in Agent-ready?.";
-      rows = { "identified fetch": data.status == null ? "unknown" : data.status, "bot samples": rr.botViews ? rr.botViews.length : 0, "machine door": data.agent && data.agent.strategy ? data.agent.strategy.verdict : "unknown", "next standards gap": firstFix ? readinessCopy(firstFix).label : "none observed" };
+      rows = {
+        "identified fetch": data.status == null ? "unknown" : data.status,
+        "bot samples": rr.botViews ? rr.botViews.length : 0,
+        "machine door": data.agent && data.agent.strategy ? data.agent.strategy.verdict : "unknown",
+        "next standards gap": firstFix ? readinessCopy(firstFix).label : "none observed",
+      };
     } else if (lens === "anatomy") {
-      var alt = a.imgTotal ? ((a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " images have alt") : "no images found";
+      var alt = a.imgTotal ? a.imgTotal - a.imgNoAlt + " / " + a.imgTotal + " images have alt" : "no images found";
       title = "Anatomy focus";
       badgeData = { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" };
       caption = "Can a machine get a usable reading surface before it knows what the page means?";
-      rows = { "response": (data.contentType || "(none)") + " · " + bytes(a.rawBytes), "shape": (a.headings ? a.headings.length : 0) + " headings · " + (a.wordCount || 0) + " words", "accessibility": alt, "headers": Object.keys(data.headers || {}).length + " received" };
+      rows = {
+        "response": (data.contentType || "(none)") + " · " + bytes(a.rawBytes),
+        "shape": (a.headings ? a.headings.length : 0) + " headings · " + (a.wordCount || 0) + " words",
+        "accessibility": alt,
+        "headers": Object.keys(data.headers || {}).length + " received",
+      };
     } else if (lens === "reader") {
       // Without this branch `reader` falls off the end of the chain into the
       // Discovery focus, which would caption the pane with the wrong question.
       var rd = readerData;
       var dropped = rd && rd.ok && rd.dropped ? rd.dropped.pct : null;
       title = "Reader focus";
-      badgeData = { text: rd == null ? "not run" : !rd.ok ? "failed" : dropped == null ? "n/a" : dropped + "% dropped",
-        kind: rd == null ? "" : !rd.ok ? "warn" : dropped >= 50 ? "warn" : "ok" };
-      caption = "How much of this page survives a reader-mode extractor, and how much of what survives is not prose.";
-      rows = rd && rd.ok ? {
-        "as served": (rd.source ? rd.source.words : "?") + " words",
-        "extractor kept": (rd.kept ? rd.kept.words : "?") + " words",
-        "control labels kept": rd.controls ? rd.controls.kept + " of " + rd.controls.total : "not counted",
-        "extractor": rd.extractor ? rd.extractor.name + " " + rd.extractor.version : "readability",
-      } : {
-        "status": rd == null ? "not run — this lens costs a second fetch" : "extraction failed",
-        "what it is": "a third-party extractor's opinion, not the served bytes",
-        "engine": "readability (Apache-2.0), in its own Worker",
+      badgeData = {
+        text: rd == null ? "not run" : !rd.ok ? "failed" : dropped == null ? "n/a" : dropped + "% dropped",
+        kind: rd == null ? "" : !rd.ok ? "warn" : dropped >= 50 ? "warn" : "ok",
       };
+      caption = "How much of this page survives a reader-mode extractor, and how much of what survives is not prose.";
+      rows =
+        rd && rd.ok
+          ? {
+              "as served": (rd.source ? rd.source.words : "?") + " words",
+              "extractor kept": (rd.kept ? rd.kept.words : "?") + " words",
+              "control labels kept": rd.controls ? rd.controls.kept + " of " + rd.controls.total : "not counted",
+              "extractor": rd.extractor ? rd.extractor.name + " " + rd.extractor.version : "readability",
+            }
+          : {
+              "status": rd == null ? "not run — this lens costs a second fetch" : "extraction failed",
+              "what it is": "a third-party extractor's opinion, not the served bytes",
+              "engine": "readability (Apache-2.0), in its own Worker",
+            };
     } else if (lens === "wire") {
       // Same reason the reader branch exists: without it `wire` falls off the end
       // of the chain into the Discovery focus and captions the pane with the
@@ -882,48 +1098,83 @@
       var wd = wireData;
       var third = wd && wd.ok ? wd.thirdParty.bytesPct : null;
       title = "Wire focus";
-      badgeData = { text: wd == null ? "not run" : !wd.ok ? "failed" : third + "% third-party",
-        kind: wd == null ? "" : !wd.ok ? "warn" : third >= 60 ? "warn" : third >= 30 ? "" : "ok" };
-      caption = "What loading this page actually spends, and how much of it goes to somebody who wrote none of it.";
-      rows = wd && wd.ok ? {
-        "requests": wd.requests + " to " + wd.hostTotal + " host" + (wd.hostTotal === 1 ? "" : "s"),
-        "transferred": bytes(wd.bytes),
-        "third-party": wd.thirdParty.requests + " requests · " + bytes(wd.thirdParty.bytes),
-        "load": wd.loadFired ? wd.navMs + " ms" : "load event never fired",
-      } : {
-        "status": wd == null ? "not run — this lens costs a whole browser instance" : "the trace failed",
-        "what it is": "one cold load recorded over CDP, as a declared bot",
-        "why it is opt-in": "ten browser-minutes a day, shared with every other browser lens",
+      badgeData = {
+        text: wd == null ? "not run" : !wd.ok ? "failed" : third + "% third-party",
+        kind: wd == null ? "" : !wd.ok ? "warn" : third >= 60 ? "warn" : third >= 30 ? "" : "ok",
       };
+      caption = "What loading this page actually spends, and how much of it goes to somebody who wrote none of it.";
+      rows =
+        wd && wd.ok
+          ? {
+              "requests": wd.requests + " to " + wd.hostTotal + " host" + (wd.hostTotal === 1 ? "" : "s"),
+              "transferred": bytes(wd.bytes),
+              "third-party": wd.thirdParty.requests + " requests · " + bytes(wd.thirdParty.bytes),
+              "load": wd.loadFired ? wd.navMs + " ms" : "load event never fired",
+            }
+          : {
+              "status": wd == null ? "not run — this lens costs a whole browser instance" : "the trace failed",
+              "what it is": "one cold load recorded over CDP, as a declared bot",
+              "why it is opt-in": "ten browser-minutes a day, shared with every other browser lens",
+            };
     } else if (lens === "structured") {
       title = "Structured focus";
-      badgeData = { text: (jsonld || micro || rdfa || mf) ? "signals found" : "mostly untyped", kind: (jsonld || micro || rdfa || mf) ? "ok" : "off" };
+      badgeData = { text: jsonld || micro || rdfa || mf ? "signals found" : "mostly untyped", kind: jsonld || micro || rdfa || mf ? "ok" : "off" };
       caption = "What entities and relationships can be lifted from the markup without guessing?";
-      rows = { "title": s.title || "(untitled)", "schema": jsonld + " JSON-LD · " + micro + " microdata · " + rdfa + " RDFa", "microformats": mf + " class signal" + (mf === 1 ? "" : "s"), "preview": has(s.og) ? "Open Graph card present" : "no Open Graph card" };
+      rows = {
+        "title": s.title || "(untitled)",
+        "schema": jsonld + " JSON-LD · " + micro + " microdata · " + rdfa + " RDFa",
+        "microformats": mf + " class signal" + (mf === 1 ? "" : "s"),
+        "preview": has(s.og) ? "Open Graph card present" : "no Open Graph card",
+      };
       if (entityTypes.length) extra = tags(entityTypes.slice(0, 18));
     } else if (lens === "ai") {
       var md = ag.mdNegotiation && ag.mdNegotiation.supported ? "negotiated text/markdown" : "HTML only";
-      var markdownTier = (data.cost && data.cost.tiers || []).filter((x) => { return x.key === "markdown"; })[0];
-      var directives = data.ai && data.ai.directives || {};
+      var markdownTier = ((data.cost && data.cost.tiers) || []).filter((x) => {
+        return x.key === "markdown";
+      })[0];
+      var directives = (data.ai && data.ai.directives) || {};
       title = "AI view focus";
       badgeData = { text: markdownTier ? "~" + fmtTok(markdownTier.tokens) + " tok" : md, kind: markdownTier ? "ok" : "warn" };
       caption = "What a model can ingest, how much context it costs, and whether the site offers a cleaner representation.";
-      rows = { "representation": md + " · " + bytes((data.ai && data.ai.markdown || "").length), "directives": (directives.metaRobots || directives.xRobotsTag || directives.namesAiCrawlers) ? "crawler signals published" : "no AI-specific signal", "curation": data.ai && data.ai.llmsTxtPresent ? "llms.txt present" : "no llms.txt", "cheapest shortcut": markdownTier ? "markdown is the selected compact read" : "none observed" };
+      rows = {
+        "representation": md + " · " + bytes(((data.ai && data.ai.markdown) || "").length),
+        "directives": directives.metaRobots || directives.xRobotsTag || directives.namesAiCrawlers ? "crawler signals published" : "no AI-specific signal",
+        "curation": data.ai && data.ai.llmsTxtPresent ? "llms.txt present" : "no llms.txt",
+        "cheapest shortcut": markdownTier ? "markdown is the selected compact read" : "none observed",
+      };
     } else if (lens === "terms") {
-      var tier = t.spectrum && t.spectrum.tier || "unknown";
-      var blocked = (t.scoreboard || []).filter((b) => { return b.verdict === "block"; }).length;
+      var tier = (t.spectrum && t.spectrum.tier) || "unknown";
+      var blocked = (t.scoreboard || []).filter((b) => {
+        return b.verdict === "block";
+      }).length;
       var enforcement = t.enforcement && (t.enforcement.challenged ? "bot challenge" : t.enforcement.blocked ? "fetch refused" : "fetch passed");
       title = "Terms focus";
       badgeData = { text: tier, kind: tier === "open" ? "ok" : "warn" };
       caption = "Is reading open, merely requested, actively enforced, or priced? Published policy and observed behavior stay separate.";
-      rows = { "spectrum": tier, "robots": t.robotsUnknown ? "unknown / unreachable" : t.robotsPresent ? blocked + " of " + (t.scoreboard || []).length + " bots blocked" : "no robots.txt", "enforcement": enforcement || "not observed", "price": t.paid && t.paid.http402 ? "402 Payment Required" : "no payment signal" };
+      rows = {
+        "spectrum": tier,
+        "robots": t.robotsUnknown
+          ? "unknown / unreachable"
+          : t.robotsPresent
+            ? blocked + " of " + (t.scoreboard || []).length + " bots blocked"
+            : "no robots.txt",
+        "enforcement": enforcement || "not observed",
+        "price": t.paid && t.paid.http402 ? "402 Payment Required" : "no payment signal",
+      };
     } else {
-      var doors = [ag.mcp, ag.nlweb, ag.webmcp, ag.agentCard, ag.openapi, ag.apiCatalog].filter((x) => { return x && (x.verdict === "yes" || x.verdict === "likely" || x.verdict === "maybe" || x.present || x.found); }).length;
+      var doors = [ag.mcp, ag.nlweb, ag.webmcp, ag.agentCard, ag.openapi, ag.apiCatalog].filter((x) => {
+        return x && (x.verdict === "yes" || x.verdict === "likely" || x.verdict === "maybe" || x.present || x.found);
+      }).length;
       var maps = (d.llmsTxt && d.llmsTxt.ok ? 1 : 0) + (d.sitemapXml && d.sitemapXml.ok ? 1 : 0);
       title = "Discovery focus";
       badgeData = { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" };
       caption = "What can an agent discover before it has to drive the human page?";
-      rows = { "strategy": st.note || st.verdict || "unknown", "site maps": maps + " of 2 found · llms.txt / sitemap.xml", "agent doors": doors + " declared or probable", "feeds": (d.feeds || []).length + " advertised" };
+      rows = {
+        "strategy": st.note || st.verdict || "unknown",
+        "site maps": maps + " of 2 found · llms.txt / sitemap.xml",
+        "agent doors": doors + " declared or probable",
+        "feeds": (d.feeds || []).length + " advertised",
+      };
     }
     return '<div class="lx-focus">' + section(title, badgeData, caption, kvTable(rows) + extra) + "</div>";
   }
@@ -943,21 +1194,48 @@
     var rate = (data.cost && data.cost.rates && data.cost.rates[0]) || { usdPerMtok: 3 };
 
     var lines: string[] = [];
-    function line(kind, text) { lines.push({ kind: kind, text: text }); }
+    function line(kind, text) {
+      lines.push({ kind: kind, text: text });
+    }
 
     // READ
-    var costNote = c ? " (~" + fmtTok(c.tokens) + " tok, " + fmtUsd(c.tokens / 1e6 * rate.usdPerMtok) + " at " + (rate.model || "Sonnet") + " rates)" : "";
-    line("ok", "GET " + (data.finalUrl || data.url) + " as an agent → " + data.status + " " + esc(httpText(data.status)) + ", " + (data.contentType || "?") + ", " + bytes(a.rawBytes) + costNote + ".");
+    var costNote = c ? " (~" + fmtTok(c.tokens) + " tok, " + fmtUsd((c.tokens / 1e6) * rate.usdPerMtok) + " at " + (rate.model || "Sonnet") + " rates)" : "";
+    line(
+      "ok",
+      "GET " +
+        (data.finalUrl || data.url) +
+        " as an agent → " +
+        data.status +
+        " " +
+        esc(httpText(data.status)) +
+        ", " +
+        (data.contentType || "?") +
+        ", " +
+        bytes(a.rawBytes) +
+        costNote +
+        ".",
+    );
     var md = ag.mdNegotiation;
     if (md && md.supported) line("ok", "Asked for text/markdown → the site served a clean machine copy. No HTML tax.");
     else line("warn", "Asked for text/markdown → still HTML. Paying the token tax to read markup meant for a browser.");
     // UNDERSTAND
     var jsonld = (s.jsonld || []).length;
     if (jsonld) {
-
       var types: string[] = [];
-      (s.jsonld || []).forEach((b) => { (b.types || []).forEach((x) => { if (types.indexOf(x) < 0) types.push(x); }); });
-      line("ok", "Parsed structured data → " + jsonld + " JSON-LD block" + (jsonld === 1 ? "" : "s") + (types.length ? " (" + types.slice(0, 4).join(", ") + ")" : "") + ". Entities without guessing.");
+      (s.jsonld || []).forEach((b) => {
+        (b.types || []).forEach((x) => {
+          if (types.indexOf(x) < 0) types.push(x);
+        });
+      });
+      line(
+        "ok",
+        "Parsed structured data → " +
+          jsonld +
+          " JSON-LD block" +
+          (jsonld === 1 ? "" : "s") +
+          (types.length ? " (" + types.slice(0, 4).join(", ") + ")" : "") +
+          ". Entities without guessing.",
+      );
     } else {
       line("warn", "Looked for a typed entity graph → none. Any structure must be inferred from the prose.");
     }
@@ -965,11 +1243,20 @@
     var action = st.action && st.action.length;
     if (action) line("ok", "Probed for an action surface → " + st.action.join(", ") + ". It can call, not just read.");
     else {
-      var doorNote = (d.agentsMd && d.agentsMd.present) ? " (an AGENTS.md exists, but that's instructions, not a callable endpoint)" : "";
-      line("warn", "Probed for a callable contract (MCP, OpenAPI, agent-card)" + doorNote + " → none. To do anything it must drive the human page and guess at side effects.");
+      var doorNote = d.agentsMd && d.agentsMd.present ? " (an AGENTS.md exists, but that's instructions, not a callable endpoint)" : "";
+      line(
+        "warn",
+        "Probed for a callable contract (MCP, OpenAPI, agent-card)" +
+          doorNote +
+          " → none. To do anything it must drive the human page and guess at side effects.",
+      );
     }
     // AUTHORIZE
-    var authority = (d.oauthProtectedResource && d.oauthProtectedResource.ok) || (d.oauthDiscovery && ((d.oauthDiscovery.openidConfiguration && d.oauthDiscovery.openidConfiguration.ok) || (d.oauthDiscovery.oauthAuthorizationServer && d.oauthDiscovery.oauthAuthorizationServer.ok)));
+    var authority =
+      (d.oauthProtectedResource && d.oauthProtectedResource.ok) ||
+      (d.oauthDiscovery &&
+        ((d.oauthDiscovery.openidConfiguration && d.oauthDiscovery.openidConfiguration.ok) ||
+          (d.oauthDiscovery.oauthAuthorizationServer && d.oauthDiscovery.oauthAuthorizationServer.ok)));
     // A site that declares every operation keyless has no permission to scope,
     // so a missing consent boundary there is not a gap (lensKeylessDeclaration).
     var keyless = !authority && data.readiness && data.readiness.keyless;
@@ -978,21 +1265,43 @@
     else line("warn", "Checked for a consent boundary → none. No scoped, revocable way to act on a user's behalf.");
 
     var verdict, vkind;
-    if (action && authority) { verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract."; vkind = "ok"; }
-    else if (action && keyless) { verdict = "ACT: this site was built for agents. Its contract needs no credential, so an agent calls it as itself."; vkind = "ok"; }
-    else if (action) { verdict = "ACT (unsafe): an action surface exists, but with no consent boundary an agent acts without scoped permission."; vkind = "warn"; }
-    else { verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser."; vkind = "no"; }
+    if (action && authority) {
+      verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract.";
+      vkind = "ok";
+    } else if (action && keyless) {
+      verdict = "ACT: this site was built for agents. Its contract needs no credential, so an agent calls it as itself.";
+      vkind = "ok";
+    } else if (action) {
+      verdict = "ACT (unsafe): an action surface exists, but with no consent boundary an agent acts without scoped permission.";
+      vkind = "warn";
+    } else {
+      verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser.";
+      vkind = "no";
+    }
     line(vkind, "task verdict → " + verdict);
 
-    var body = lines.map((l) => {
-      var glyph = l.kind === "ok" ? "✓" : l.kind === "no" ? "✗" : "•";
-      // glossify LAST, over already-escaped text: it inserts real tags, and the
-      // only thing making that safe is esc() having removed every < and > first.
-      return '<div class="lx-trace-line ' + l.kind + '"><span class="lx-trace-g">' + glyph + '</span><span>' + glossify(esc(l.text).replace(/&amp;times;/g, "&times;")) + "</span></div>";
-    }).join("");
-    return section("Agent trace", { text: "what an agent would do", kind: vkind === "no" ? "warn" : vkind },
+    var body = lines
+      .map((l) => {
+        var glyph = l.kind === "ok" ? "✓" : l.kind === "no" ? "✗" : "•";
+        // glossify LAST, over already-escaped text: it inserts real tags, and the
+        // only thing making that safe is esc() having removed every < and > first.
+        return (
+          '<div class="lx-trace-line ' +
+          l.kind +
+          '"><span class="lx-trace-g">' +
+          glyph +
+          "</span><span>" +
+          glossify(esc(l.text).replace(/&amp;times;/g, "&times;")) +
+          "</span></div>"
+        );
+      })
+      .join("");
+    return section(
+      "Agent trace",
+      { text: "what an agent would do", kind: vkind === "no" ? "warn" : vkind },
       "One agent's attempt at a task on this URL, narrated only from evidence Lens already gathered. No model was called.",
-      '<div class="lx-trace">' + body + "</div>");
+      '<div class="lx-trace">' + body + "</div>",
+    );
   }
 
   function machineBrief() {
@@ -1024,37 +1333,101 @@
     // trace and the per-lens focus block both used to open this briefing; the
     // trace moved up beside it, and lensFocus() moved DOWN under the tabs,
     // because it is the one part of the old briefing a tab does change.
-    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>';
-    out += section("Observed document", { text: "observed", kind: "ok" },
-      "The minimum contract a machine can recover from this response.", kvTable(facts));
-    out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
+    var out =
+      '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>';
+    out += section("Observed document", { text: "observed", kind: "ok" }, "The minimum contract a machine can recover from this response.", kvTable(facts));
+    out += section(
+      "Machine affordances",
+      { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
       "A readable page, a declared action surface, and permission are separate signals.",
       briefTable([
         ["read", (data.contentType || "response") + ", " + bytes(a.rawBytes), "observed", "ok"],
-        ["structure", jsonldCount + " JSON-LD, " + microCount + " microdata, " + rdfaCount + " RDFa type(s)", jsonldCount || microCount || rdfaCount ? "found" : "absent", jsonldCount || microCount || rdfaCount ? "ok" : "off"],
-        ["discover", ((d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "") + (d.sitemapXml && d.sitemapXml.ok ? " + sitemap" : "")) || "site files not found", d.llmsTxt && d.llmsTxt.ok || d.sitemapXml && d.sitemapXml.ok ? "found" : "absent", d.llmsTxt && d.llmsTxt.ok || d.sitemapXml && d.sitemapXml.ok ? "ok" : "off"],
-        ["action", st.action && st.action.length ? st.action.join(", ") : "no declared action surface", st.action && st.action.length ? "found" : "absent", st.action && st.action.length ? "ok" : "off"],
-        ["policy", robots + "; spectrum: " + spectrum, robots === "robots.txt answered" ? "observed" : "unknown", robots === "robots.txt answered" ? "" : "warn"],
-        ["markdown", ag.mdNegotiation && ag.mdNegotiation.supported ? "same URL serves text/markdown" : "HTML response stays HTML", ag.mdNegotiation && ag.mdNegotiation.supported ? "supported" : "absent", ag.mdNegotiation && ag.mdNegotiation.supported ? "ok" : "off"],
-      ]));
-    var briefText = "# observed\n" +
-      "url       " + data.finalUrl + "\n" +
-      "title     " + title + "\n" +
-      "response  " + data.status + " " + httpText(data.status) + "\n" +
-      "read      " + (data.contentType || "unknown") + " · " + bytes(a.rawBytes) + "\n" +
-      "structure " + jsonldCount + " JSON-LD · " + microCount + " microdata · " + rdfaCount + " RDFa\n" +
-      "action    " + (st.action && st.action.length ? st.action.join(", ") : "none observed") + "\n\n" +
+        [
+          "structure",
+          jsonldCount + " JSON-LD, " + microCount + " microdata, " + rdfaCount + " RDFa type(s)",
+          jsonldCount || microCount || rdfaCount ? "found" : "absent",
+          jsonldCount || microCount || rdfaCount ? "ok" : "off",
+        ],
+        [
+          "discover",
+          (d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "") + (d.sitemapXml && d.sitemapXml.ok ? " + sitemap" : "") || "site files not found",
+          (d.llmsTxt && d.llmsTxt.ok) || (d.sitemapXml && d.sitemapXml.ok) ? "found" : "absent",
+          (d.llmsTxt && d.llmsTxt.ok) || (d.sitemapXml && d.sitemapXml.ok) ? "ok" : "off",
+        ],
+        [
+          "action",
+          st.action && st.action.length ? st.action.join(", ") : "no declared action surface",
+          st.action && st.action.length ? "found" : "absent",
+          st.action && st.action.length ? "ok" : "off",
+        ],
+        [
+          "policy",
+          robots + "; spectrum: " + spectrum,
+          robots === "robots.txt answered" ? "observed" : "unknown",
+          robots === "robots.txt answered" ? "" : "warn",
+        ],
+        [
+          "markdown",
+          ag.mdNegotiation && ag.mdNegotiation.supported ? "same URL serves text/markdown" : "HTML response stays HTML",
+          ag.mdNegotiation && ag.mdNegotiation.supported ? "supported" : "absent",
+          ag.mdNegotiation && ag.mdNegotiation.supported ? "ok" : "off",
+        ],
+      ]),
+    );
+    var briefText =
+      "# observed\n" +
+      "url       " +
+      data.finalUrl +
+      "\n" +
+      "title     " +
+      title +
+      "\n" +
+      "response  " +
+      data.status +
+      " " +
+      httpText(data.status) +
+      "\n" +
+      "read      " +
+      (data.contentType || "unknown") +
+      " · " +
+      bytes(a.rawBytes) +
+      "\n" +
+      "structure " +
+      jsonldCount +
+      " JSON-LD · " +
+      microCount +
+      " microdata · " +
+      rdfaCount +
+      " RDFa\n" +
+      "action    " +
+      (st.action && st.action.length ? st.action.join(", ") : "none observed") +
+      "\n\n" +
       "# boundaries\n" +
-      "identity  " + (data.fetchedBy || "identified fetch") + "\n" +
-      "policy    " + robots + " · " + spectrum + "\n" +
+      "identity  " +
+      (data.fetchedBy || "identified fetch") +
+      "\n" +
+      "policy    " +
+      robots +
+      " · " +
+      spectrum +
+      "\n" +
       "sidefx    Lens inspected; it submitted no forms or tools";
-    out += section("Copyable machine brief", { text: "plain text" },
-      "The compact representation an agent could carry forward without the browser chrome.", pre(briefText, true));
-    out += section("Boundaries", { text: "explicit", kind: "warn" },
+    out += section(
+      "Copyable machine brief",
+      { text: "plain text" },
+      "The compact representation an agent could carry forward without the browser chrome.",
+      pre(briefText, true),
+    );
+    out += section(
+      "Boundaries",
+      { text: "explicit", kind: "warn" },
       "These limits keep the reconstruction honest.",
-      '<ul class="lx-why"><li>Lens fetched as ' + esc(data.fetchedBy || "an identified bot") + '; no other bot identity was tested.</li>' +
-      '<li>Robots policy describes a request; the enforcement result appears separately in the Terms lens.</li>' +
-      '<li>Reading a page does not grant permission to act on a user\'s behalf.</li></ul>');
+      '<ul class="lx-why"><li>Lens fetched as ' +
+        esc(data.fetchedBy || "an identified bot") +
+        "; no other bot identity was tested.</li>" +
+        "<li>Robots policy describes a request; the enforcement result appears separately in the Terms lens.</li>" +
+        "<li>Reading a page does not grant permission to act on a user's behalf.</li></ul>",
+    );
     return out;
   }
 
@@ -1071,21 +1444,31 @@
   // "is the STAGE satisfied". Read is satisfied by the fetch actually carrying words,
   // so markdown negotiation feeds that stage's `signal` and not its `observed`.
   var CF_MAP = {
-    markdown:  { checks: ["markdownNegotiation"] },
-    contract:  { checks: ["apiCatalog"] },
+    markdown: { checks: ["markdownNegotiation"] },
+    contract: { checks: ["apiCatalog"] },
     authority: { checks: ["oauthProtectedResource", "oauthDiscovery", "authMd"] },
   };
   function cfObserved(key, checks) {
     var m = CF_MAP[key];
     checks = checks || {};
-    return !!(m && m.checks.some((n) => { return checks[n] && checks[n].status === "pass"; }));
+    return !!(
+      m &&
+      m.checks.some((n) => {
+        return checks[n] && checks[n].status === "pass";
+      })
+    );
   }
   // Every check behind a stage was declared not applicable by the site, which
   // satisfies the stage without claiming a surface was published.
   function cfNotApplicable(key, checks) {
     var m = CF_MAP[key];
     checks = checks || {};
-    return !!(m && m.checks.every((n) => { return checks[n] && checks[n].notApplicable; }));
+    return !!(
+      m &&
+      m.checks.every((n) => {
+        return checks[n] && checks[n].notApplicable;
+      })
+    );
   }
   // A probe that never answered (a 5xx, a timeout, the subrequest cap) grades its
   // check "unknown". Reading that as "missing" would claim the surface is absent
@@ -1093,7 +1476,13 @@
   function cfUnknown(key, checks) {
     var m = CF_MAP[key];
     checks = checks || {};
-    return !!(m && !cfObserved(key, checks) && m.checks.some((n) => { return checks[n] && checks[n].status === "unknown"; }));
+    return !!(
+      m &&
+      !cfObserved(key, checks) &&
+      m.checks.some((n) => {
+        return checks[n] && checks[n].status === "unknown";
+      })
+    );
   }
 
   function deltaView() {
@@ -1104,7 +1493,7 @@
     var checks = (data.readiness && data.readiness.checks) || {};
     var jsonld = s.jsonld && s.jsonld.length > 0;
     var semantic = jsonld || (s.microdata && s.microdata.itemtypes && s.microdata.itemtypes.length) || (s.rdfa && s.rdfa.typeof && s.rdfa.typeof.length);
-    var action = st.action && st.action.length > 0;   // the agent strategy's action surface, for the evidence line below
+    var action = st.action && st.action.length > 0; // the agent strategy's action surface, for the evidence line below
 
     // Reading is the one stage on this path Lens MEASURES rather than infers from a
     // published surface: the identified fetch either came back carrying words or it
@@ -1119,17 +1508,72 @@
     var canRead = !!(fetchOk && words >= 40);
 
     var cf = [
-      { key: "markdown", label: "Clean machine text", stage: "Read", observed: canRead, signal: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
-      { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
-      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), unknown: cfUnknown("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), na: cfNotApplicable("authority", checks), unknown: cfUnknown("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
-      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
+      {
+        key: "markdown",
+        label: "Clean machine text",
+        stage: "Read",
+        observed: canRead,
+        signal: cfObserved("markdown", checks),
+        detail: "Serve a deliberate text/markdown representation from the same URL.",
+      },
+      {
+        key: "semantic",
+        label: "Entity schema",
+        stage: "Understand",
+        observed: !!semantic,
+        detail: "Publish stable entities and properties a parser can validate.",
+      },
+      {
+        key: "contract",
+        label: "Action contract",
+        stage: "Act",
+        observed: cfObserved("contract", checks),
+        unknown: cfUnknown("contract", checks),
+        detail:
+          "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped.",
+      },
+      {
+        key: "authority",
+        label: "Delegated authority",
+        stage: "Authorize",
+        observed: cfObserved("authority", checks),
+        na: cfNotApplicable("authority", checks),
+        unknown: cfUnknown("authority", checks),
+        detail: "Add a consent boundary with scopes and an explicit user approval.",
+      },
+      {
+        key: "receipt",
+        label: "A result receipt",
+        stage: "Confirm",
+        observed: false,
+        detail:
+          "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed.",
+      },
     ];
-    var controls = '<div class="lx-cf-grid">' + cf.map((x) => {
-      var on = !!counterfactuals[x.key];
-      return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + '</h4><p>' + esc(x.detail) + '</p>' +
-        '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
-    }).join("") + "</div>";
+    var controls =
+      '<div class="lx-cf-grid">' +
+      cf
+        .map((x) => {
+          var on = !!counterfactuals[x.key];
+          return (
+            '<div class="lx-cf-card' +
+            (on ? " is-on" : "") +
+            '"><h4>' +
+            esc(x.label) +
+            "</h4><p>" +
+            esc(x.detail) +
+            "</p>" +
+            '<button class="lx-cf-toggle" type="button" data-cf="' +
+            esc(x.key) +
+            '" aria-pressed="' +
+            (on ? "true" : "false") +
+            '"><span class="lx-cf-dot" aria-hidden="true"></span>' +
+            (on ? "on" : "off") +
+            "</button></div>"
+          );
+        })
+        .join("") +
+      "</div>";
     // The five stages are a CHAIN and this rendered them as five detached booleans,
     // so the lab would draw a machine that understood a page it could not read.
     // Measured 2026-08-15: stripe.com and nytimes.com both publish structured
@@ -1139,44 +1583,84 @@
     // signal sitting below the break reads as published-and-unreached rather than as
     // a rung somebody climbs. Flipping one switch therefore lights the rest of the
     // ladder, which is the lesson a micro-world is for.
-    var open = true, reached: any = null, stopStage: any = null;
-    var path = cf.map((x) => {
-      var signal = x.signal == null ? x.observed : x.signal;
-      var satisfied = x.observed || !!x.na || !!counterfactuals[x.key];
-      var state, copy;
-      if (!open) {
-        state = { text: "unreached", kind: "off" };
-        copy = signal
-          ? "This surface is published. Nothing upstream carries a machine to it."
-          : "Nothing upstream carries a machine this far.";
-      } else if (x.observed) {
-        state = { text: "observed", kind: "ok" };
-        copy = x.key === "markdown"
-          ? words + " words reached an identified bot." + (signal ? " The same URL also answers text/markdown." : " There is no deliberate machine text; the switch adds one.")
-          : "published signal found";
-      } else if (x.na) {
-        state = { text: "not applicable", kind: "ok" };
-        copy = "The site declares every operation keyless, so there is no authority to delegate.";
-      } else if (counterfactuals[x.key]) {
-        state = { text: "counterfactual", kind: "warn" };
-        copy = x.detail;
-      } else if (x.unknown) {
-        state = { text: "unknown", kind: "warn" };
-        copy = "The probe for this surface did not answer, so Lens cannot say whether it is published.";
-      } else {
-        state = { text: "missing", kind: "off" };
-        copy = x.key === "markdown"
-          ? (!fetchOk ? "The identified fetch returned no readable response."
-            : words === null ? "The response body was never parsed."
-            : "Only " + words + " words survived the fetch.")
-          : "no matching surface observed";
-      }
-      if (open) { if (satisfied) reached = x.stage; else { open = false; stopStage = x.stage; } }
-      return '<div class="lx-stage"><div class="lx-stage-name">' + esc(x.stage) + '</div><div class="lx-stage-copy">' + badge(state.text, state.kind) + esc(copy) + '</div></div>';
-    }).join("");
-    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally, or that a probe never answered.</div>';
-    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : d.llmsTxt && d.llmsTxt.error ? "The llms.txt probe did not answer. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
-    var deltaText = cf.filter((x) => { return counterfactuals[x.key]; }).map((x) => { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
+    var open = true,
+      reached: any = null,
+      stopStage: any = null;
+    var path = cf
+      .map((x) => {
+        var signal = x.signal == null ? x.observed : x.signal;
+        var satisfied = x.observed || !!x.na || !!counterfactuals[x.key];
+        var state, copy;
+        if (!open) {
+          state = { text: "unreached", kind: "off" };
+          copy = signal ? "This surface is published. Nothing upstream carries a machine to it." : "Nothing upstream carries a machine this far.";
+        } else if (x.observed) {
+          state = { text: "observed", kind: "ok" };
+          copy =
+            x.key === "markdown"
+              ? words +
+                " words reached an identified bot." +
+                (signal ? " The same URL also answers text/markdown." : " There is no deliberate machine text; the switch adds one.")
+              : "published signal found";
+        } else if (x.na) {
+          state = { text: "not applicable", kind: "ok" };
+          copy = "The site declares every operation keyless, so there is no authority to delegate.";
+        } else if (counterfactuals[x.key]) {
+          state = { text: "counterfactual", kind: "warn" };
+          copy = x.detail;
+        } else if (x.unknown) {
+          state = { text: "unknown", kind: "warn" };
+          copy = "The probe for this surface did not answer, so Lens cannot say whether it is published.";
+        } else {
+          state = { text: "missing", kind: "off" };
+          copy =
+            x.key === "markdown"
+              ? !fetchOk
+                ? "The identified fetch returned no readable response."
+                : words === null
+                  ? "The response body was never parsed."
+                  : "Only " + words + " words survived the fetch."
+              : "no matching surface observed";
+        }
+        if (open) {
+          if (satisfied) reached = x.stage;
+          else {
+            open = false;
+            stopStage = x.stage;
+          }
+        }
+        return (
+          '<div class="lx-stage"><div class="lx-stage-name">' +
+          esc(x.stage) +
+          '</div><div class="lx-stage-copy">' +
+          badge(state.text, state.kind) +
+          esc(copy) +
+          "</div></div>"
+        );
+      })
+      .join("");
+    var intro =
+      '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally, or that a probe never answered.</div>';
+    var proof =
+      '<div class="lx-proof"><b>Current evidence:</b> ' +
+      esc(
+        (d.llmsTxt && d.llmsTxt.ok
+          ? "llms.txt is present. "
+          : d.llmsTxt && d.llmsTxt.error
+            ? "The llms.txt probe did not answer. "
+            : "No llms.txt observed. ") +
+          (action ? "An action surface answered. " : "No action surface answered. ") +
+          (semantic ? "Structured data exists." : "Structured entity data is absent."),
+      ) +
+      "</div>";
+    var deltaText = cf
+      .filter((x) => {
+        return counterfactuals[x.key];
+      })
+      .map((x) => {
+        return "+ " + x.stage.toLowerCase() + " · " + x.label;
+      })
+      .join("\n");
 
     // The wire group: transport counterfactuals that sit under the same task path.
     // Both read straight off data.wire (dictionary from the site's own response
@@ -1187,33 +1671,112 @@
     var wireDict = w.dictionary || {};
     var wireEch = w.ech || {};
     var wire = [
-      { key: "dictionary", label: "Shared compression dictionary", observed: !!wireDict.observed,
-        state: wireDict.observed ? { text: "advertised", kind: "ok" } : counterfactuals.dictionary ? { text: "counterfactual", kind: "warn" } : { text: "not offered", kind: "off" },
-        detail: "Advertise a compression dictionary so a returning agent fetches a small delta against the copy it already holds, in place of the whole page. The trade: Available-Dictionary names the exact copy a client holds, so the origin (or a CDN managing dictionaries for it) learns cache state as the price of the byte win." },
-      { key: "ech", label: "Encrypted Client Hello", observed: !!wireEch.observed,
-        state: wireEch.observed ? { text: "configured", kind: "ok" } : wireEch.recordPresent && !wireEch.parsed ? { text: "record unread", kind: "warn" } : counterfactuals.ech ? { text: "counterfactual", kind: "warn" } : { text: "not configured", kind: "off" },
-        detail: "Encrypt the TLS handshake server name so an on-path observer cannot see which site the fetch is for." },
+      {
+        key: "dictionary",
+        label: "Shared compression dictionary",
+        observed: !!wireDict.observed,
+        state: wireDict.observed
+          ? { text: "advertised", kind: "ok" }
+          : counterfactuals.dictionary
+            ? { text: "counterfactual", kind: "warn" }
+            : { text: "not offered", kind: "off" },
+        detail:
+          "Advertise a compression dictionary so a returning agent fetches a small delta against the copy it already holds, in place of the whole page. The trade: Available-Dictionary names the exact copy a client holds, so the origin (or a CDN managing dictionaries for it) learns cache state as the price of the byte win.",
+      },
+      {
+        key: "ech",
+        label: "Encrypted Client Hello",
+        observed: !!wireEch.observed,
+        state: wireEch.observed
+          ? { text: "configured", kind: "ok" }
+          : wireEch.recordPresent && !wireEch.parsed
+            ? { text: "record unread", kind: "warn" }
+            : counterfactuals.ech
+              ? { text: "counterfactual", kind: "warn" }
+              : { text: "not configured", kind: "off" },
+        detail: "Encrypt the TLS handshake server name so an on-path observer cannot see which site the fetch is for.",
+      },
     ];
-    var wireControls = '<div class="lx-cf-grid">' + wire.map((x) => {
-      var on = !!counterfactuals[x.key];
-      return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + " " + badge(x.state.text, x.state.kind) + "</h4><p>" + esc(x.detail) + "</p>" +
-        '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
-    }).join("") + "</div>";
-    var wireProof = '<div class="lx-proof"><b>On the wire:</b> ' + esc(
-      (wireDict.observed ? "This site advertises a compression dictionary, so a returning fetch can be a delta against the copy the client already holds. " : "This site ships full responses, so a returning fetch re-transfers the whole page. ") +
-      (wireEch.observed ? "ECH is configured in DNS, so the handshake hides which site the fetch is for." : wireEch.recordPresent ? "An HTTPS record is published but carries no ECH, so the destination name travels in the clear." : "No ECH in DNS, so the destination name travels in the clear.")
-    ) + "</div>";
-    var wireCap = "A dictionary was worth 87-97% fewer bytes on the aadhar.sh shell (measured 2026-07); the token win follows for an agent that re-reads only the delta. ECH changes what a network observer learns, leaving the byte count alone.";
-    var wireOn = wire.filter((x) => { return !!counterfactuals[x.key]; }).map((x) => { return "+ wire · " + x.label; }).join("\n");
+    var wireControls =
+      '<div class="lx-cf-grid">' +
+      wire
+        .map((x) => {
+          var on = !!counterfactuals[x.key];
+          return (
+            '<div class="lx-cf-card' +
+            (on ? " is-on" : "") +
+            '"><h4>' +
+            esc(x.label) +
+            " " +
+            badge(x.state.text, x.state.kind) +
+            "</h4><p>" +
+            esc(x.detail) +
+            "</p>" +
+            '<button class="lx-cf-toggle" type="button" data-cf="' +
+            esc(x.key) +
+            '" aria-pressed="' +
+            (on ? "true" : "false") +
+            '"><span class="lx-cf-dot" aria-hidden="true"></span>' +
+            (on ? "on" : "off") +
+            "</button></div>"
+          );
+        })
+        .join("") +
+      "</div>";
+    var wireProof =
+      '<div class="lx-proof"><b>On the wire:</b> ' +
+      esc(
+        (wireDict.observed
+          ? "This site advertises a compression dictionary, so a returning fetch can be a delta against the copy the client already holds. "
+          : "This site ships full responses, so a returning fetch re-transfers the whole page. ") +
+          (wireEch.observed
+            ? "ECH is configured in DNS, so the handshake hides which site the fetch is for."
+            : wireEch.recordPresent
+              ? "An HTTPS record is published but carries no ECH, so the destination name travels in the clear."
+              : "No ECH in DNS, so the destination name travels in the clear."),
+      ) +
+      "</div>";
+    var wireCap =
+      "A dictionary was worth 87-97% fewer bytes on the aadhar.sh shell (measured 2026-07); the token win follows for an agent that re-reads only the delta. ECH changes what a network observer learns, leaving the byte count alone.";
+    var wireOn = wire
+      .filter((x) => {
+        return !!counterfactuals[x.key];
+      })
+      .map((x) => {
+        return "+ wire · " + x.label;
+      })
+      .join("\n");
     var allDelta = [deltaText, wireOn].filter(Boolean).join("\n");
-    var routeLine = "reaches " + (reached ? reached.toLowerCase() : "nothing") +
-      (stopStage ? ", stops at " + stopStage.toLowerCase() : ", complete");
+    var routeLine = "reaches " + (reached ? reached.toLowerCase() : "nothing") + (stopStage ? ", stops at " + stopStage.toLowerCase() : ", complete");
 
-    return intro + section("Infrastructure switches", null, "Each switch adds one piece of infrastructure at one stage. A later stage becomes reachable only once every stage above it holds.", controls) +
-      section("The route", { text: "no score" }, "A task path is more useful here than a readiness number. Each stage depends on the one above it, so the route stops at the first stage nothing satisfies.", '<div class="lx-path">' + path + '</div>' + proof) +
-      section("The wire", { text: "transport" }, "Two knobs under the same task path: what the wire carries, and what it hides. Folks rarely turn either on.", wireControls + wireProof + '<div class="lx-cap">' + esc(wireCap) + "</div>") +
-      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# route\n" + routeLine + "\n\n# delta\n" + (allDelta || "(no switches on)"), true)) +
-      '<div class="lx-cf-credit">Papert&rsquo;s micro-world: flip, predict, check. After <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck">Geoffrey Litt&rsquo;s &ldquo;Understanding is the new bottleneck&rdquo;</a>.</div>';
+    return (
+      intro +
+      section(
+        "Infrastructure switches",
+        null,
+        "Each switch adds one piece of infrastructure at one stage. A later stage becomes reachable only once every stage above it holds.",
+        controls,
+      ) +
+      section(
+        "The route",
+        { text: "no score" },
+        "A task path is more useful here than a readiness number. Each stage depends on the one above it, so the route stops at the first stage nothing satisfies.",
+        '<div class="lx-path">' + path + "</div>" + proof,
+      ) +
+      section(
+        "The wire",
+        { text: "transport" },
+        "Two knobs under the same task path: what the wire carries, and what it hides. Folks rarely turn either on.",
+        wireControls + wireProof + '<div class="lx-cap">' + esc(wireCap) + "</div>",
+      ) +
+      section(
+        "What this proves",
+        { text: "local simulation", kind: "warn" },
+        "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.",
+        pre("# route\n" + routeLine + "\n\n# delta\n" + (allDelta || "(no switches on)"), true),
+      ) +
+      '<div class="lx-cf-credit">Papert&rsquo;s micro-world: flip, predict, check. After <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck">Geoffrey Litt&rsquo;s &ldquo;Understanding is the new bottleneck&rdquo;</a>.</div>'
+    );
   }
 
   function bindCounterfactuals() {
@@ -1233,21 +1796,31 @@
   // server-side changed the SSR text but not the hydrated text. Labels now come off
   // the envelope item; this map is just key -> how-to-fix, which the worker never carries.
   var READINESS_FIX = {
-    robotsTxt: "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive.", sitemap: "Publish /sitemap.xml and reference it from robots.txt.",
-    linkHeaders: "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation.", dnsAid: "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery.",
+    robotsTxt: "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive.",
+    sitemap: "Publish /sitemap.xml and reference it from robots.txt.",
+    linkHeaders: "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation.",
+    dnsAid: "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery.",
     markdownNegotiation: "Return text/markdown when a client sends Accept: text/markdown, while keeping HTML for browsers.",
-    robotsTxtAiRules: "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt.", contentSignals: "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt.",
-    webBotAuth: "Publish a valid JWKS at /.well-known/http-message-signatures-directory.", apiCatalog: "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links.",
-    oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.", oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
-    authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.", mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
-    a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.", agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
-    webMcp: "Expose safe browser actions with document.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
-    mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.", ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
-    acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
+    robotsTxtAiRules: "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt.",
+    contentSignals: "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt.",
+    webBotAuth: "Publish a valid JWKS at /.well-known/http-message-signatures-directory.",
+    apiCatalog: "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links.",
+    oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.",
+    oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
+    authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.",
+    mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
+    a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.",
+    agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
+    webMcp: "Expose safe browser actions with document.modelContext and JSON Schemas.",
+    x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
+    mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.",
+    ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
+    acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.",
+    ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };
   function readinessCopy(itemOrKey) {
     var key = asText(itemOrKey) !== null ? itemOrKey : itemOrKey && itemOrKey.key;
-    var label = (itemOrKey && itemOrKey.label) || key || "check";   // the worker ships label on both items and nextActions entries
+    var label = (itemOrKey && itemOrKey.label) || key || "check"; // the worker ships label on both items and nextActions entries
     return { label: label, fix: READINESS_FIX[key] || "Inspect this surface and publish the expected machine-readable contract." };
   }
 
@@ -1260,8 +1833,12 @@
   }
 
   function readinessPolicy(bot) {
-    var rows = data.terms && data.terms.scoreboard || [];
-    return rows.filter((r) => { return r.ua === bot.key; })[0] || null;
+    var rows = (data.terms && data.terms.scoreboard) || [];
+    return (
+      rows.filter((r) => {
+        return r.ua === bot.key;
+      })[0] || null
+    );
   }
 
   function readinessBotState(bot) {
@@ -1284,12 +1861,22 @@
       { key: "contract", label: "Action contract" },
       { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks) && !cfNotApplicable(x.key, checks); });
+    var active = direct.filter((x) => {
+      return counterfactuals[x.key] && !cfObserved(x.key, checks) && !cfNotApplicable(x.key, checks);
+    });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
-    active.forEach((x) => { var c = checks[CF_MAP[x.key].checks[0]]; if (c && c.countInScore) pass++; });
-    return { score: counted ? Math.round(pass / counted * 100) : readiness.overall, labels: active.map((x) => { return x.label; }) };
+    active.forEach((x) => {
+      var c = checks[CF_MAP[x.key].checks[0]];
+      if (c && c.countInScore) pass++;
+    });
+    return {
+      score: counted ? Math.round((pass / counted) * 100) : readiness.overall,
+      labels: active.map((x) => {
+        return x.label;
+      }),
+    };
   }
 
   function copyText(text, button) {
@@ -1297,37 +1884,72 @@
       if (!button) return;
       var old = button.textContent;
       button.textContent = "Copied";
-      setTimeout(() => { button.textContent = old; }, 1400);
+      setTimeout(() => {
+        button.textContent = old;
+      }, 1400);
     };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => {});
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard
+        .writeText(text)
+        .then(done)
+        .catch(() => {});
     else {
       var ta = document.createElement("textarea");
-      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); done(); } catch (e) {}
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        done();
+      } catch (e) {}
       ta.remove();
     }
   }
 
   function bindReadinessActions() {
     [].forEach.call(machineBody.querySelectorAll(".lx-copy-fix"), (button) => {
-      button.addEventListener("click", () => { copyText(button.getAttribute("data-fix") || "", button); });
+      button.addEventListener("click", () => {
+        copyText(button.getAttribute("data-fix") || "", button);
+      });
     });
     var all = machineBody.querySelector(".lx-copy-all");
-    if (all) all.addEventListener("click", () => {
-      var fixes = [].map.call(machineBody.querySelectorAll(".lx-readiness-check[data-status='fail']"), (row) => {
-        return "- " + row.getAttribute("data-label") + ": " + row.getAttribute("data-fix");
+    if (all)
+      all.addEventListener("click", () => {
+        var fixes = [].map.call(machineBody.querySelectorAll(".lx-readiness-check[data-status='fail']"), (row) => {
+          return "- " + row.getAttribute("data-label") + ": " + row.getAttribute("data-fix");
+        });
+        copyText("Lens readiness fixes for " + (data.finalUrl || data.url) + "\n\n" + fixes.join("\n"), all);
       });
-      copyText("Lens readiness fixes for " + (data.finalUrl || data.url) + "\n\n" + fixes.join("\n"), all);
-    });
   }
 
   function readinessSource(index, title, value, caption, details, state) {
-    return '<div class="lx-composite-source ' + esc(state || "") + '">' +
-      '<div class="lx-composite-source-top"><span>0' + index + '</span><b>' + title + '</b><strong>' + value + '</strong></div>' +
-      '<div class="lx-composite-caption">' + caption + '</div>' +
-      (details && details.length ? '<ul>' + details.map((detail) => { return '<li>' + detail + '</li>'; }).join("") + '</ul>' : "") +
-      '</div>';
+    return (
+      '<div class="lx-composite-source ' +
+      esc(state || "") +
+      '">' +
+      '<div class="lx-composite-source-top"><span>0' +
+      index +
+      "</span><b>" +
+      title +
+      "</b><strong>" +
+      value +
+      "</strong></div>" +
+      '<div class="lx-composite-caption">' +
+      caption +
+      "</div>" +
+      (details && details.length
+        ? "<ul>" +
+          details
+            .map((detail) => {
+              return "<li>" + detail + "</li>";
+            })
+            .join("") +
+          "</ul>"
+        : "") +
+      "</div>"
+    );
   }
 
   function compositeReadiness(r) {
@@ -1339,29 +1961,74 @@
     var complete = cfScore != null && fieldScore != null && recoveryScore != null;
     var overall = complete ? Math.round((cfScore + fieldScore + recoveryScore) / 3) : null;
 
-    var cloudflareValue = cloudflareBusy ? "checking…" : cfScore == null ? "—" : esc(cfScore) + '<span>/100</span>';
+    var cloudflareValue = cloudflareBusy ? "checking…" : cfScore == null ? "—" : esc(cfScore) + "<span>/100</span>";
     var cloudflareCaption = cloudflareBusy
       ? "Asking Cloudflare's public scanner for its independent standards level."
       : cfScore == null
         ? esc((cloudflareData && cloudflareData.error) || "Cloudflare's independent score is unavailable.")
-        : '<a href="' + esc(cloudflareData.sourceUrl || "https://isitagentready.com/") + '" rel="noopener">Cloudflare Agent Readiness</a> · Level ' + esc(cloudflareData.level) + '/5' + (cloudflareData.levelName ? ' · ' + esc(cloudflareData.levelName) : "");
+        : '<a href="' +
+          esc(cloudflareData.sourceUrl || "https://isitagentready.com/") +
+          '" rel="noopener">Cloudflare Agent Readiness</a> · Level ' +
+          esc(cloudflareData.level) +
+          "/5" +
+          (cloudflareData.levelName ? " · " + esc(cloudflareData.levelName) : "");
     var fieldDetails = (field.components || []).map((component) => {
-      return '<b>' + esc(component.label) + ':</b> ' + (Number.isFinite(component.score) ? esc(component.score) + '/100' : 'unknown');
+      return "<b>" + esc(component.label) + ":</b> " + (Number.isFinite(component.score) ? esc(component.score) + "/100" : "unknown");
     });
-    var recoveryDetails = recovery ? (recovery.checks || []).map((check) => {
-      return (check.pass ? '&#10003; ' : '&#10005; ') + esc(check.label);
-    }) : [];
+    var recoveryDetails = recovery
+      ? (recovery.checks || []).map((check) => {
+          return (check.pass ? "&#10003; " : "&#10005; ") + esc(check.label);
+        })
+      : [];
 
-    var sources = '<div class="lx-composite-sources">' +
-      readinessSource(1, "Cloudflare standards", cloudflareValue, cloudflareCaption, [], cloudflareBusy ? "is-waiting" : cfScore == null ? "is-missing" : "is-ready") +
-      readinessSource(2, "Lens field evidence", fieldScore == null ? "—" : esc(fieldScore) + '<span>/100</span>', "Observed here: an identified fetch, six named bot samples, a usable body, and a machine door.", fieldDetails, fieldScore == null ? "is-missing" : "is-ready") +
-      readinessSource(3, "Readability content recovery", readerBusy ? "extracting…" : recoveryScore == null ? "—" : esc(recoveryScore) + '<span>/100</span>', readerBusy ? "Readability is re-reading the page in the separate Reader Worker." : recoveryScore == null ? esc((readerData && readerData.error) || "The extraction result is unavailable.") : 'Lens’s transparent checks over <a href="https://github.com/mozilla/readability" rel="noopener">Readability</a> output; Readability does not publish this score.', recoveryDetails, readerBusy ? "is-waiting" : recoveryScore == null ? "is-missing" : "is-ready") +
-      '</div>';
-    var formula = '<div class="lx-composite-formula"><b>' +
-      (cfScore == null ? "?" : esc(cfScore)) + '</b> + <b>' + (fieldScore == null ? "?" : esc(fieldScore)) + '</b> + <b>' + (recoveryScore == null ? "?" : esc(recoveryScore)) +
-      '</b> <span>÷ 3</span> = <strong>' + (overall == null ? "unfinished" : esc(overall) + '/100') + '</strong></div>';
-    var hero = '<div class="lx-readiness-hero lx-composite-hero"><div class="lx-readiness-number">' + (overall == null ? "—" : esc(overall)) + '<span>/100</span></div>' +
-      '<div><div class="lx-readiness-kicker">Composite agent access</div><div class="lx-readiness-level"><b>' + (complete ? "Three independent views agree to make this number." : "Waiting for all three independent views.") + '</b></div>' +
+    var sources =
+      '<div class="lx-composite-sources">' +
+      readinessSource(
+        1,
+        "Cloudflare standards",
+        cloudflareValue,
+        cloudflareCaption,
+        [],
+        cloudflareBusy ? "is-waiting" : cfScore == null ? "is-missing" : "is-ready",
+      ) +
+      readinessSource(
+        2,
+        "Lens field evidence",
+        fieldScore == null ? "—" : esc(fieldScore) + "<span>/100</span>",
+        "Observed here: an identified fetch, six named bot samples, a usable body, and a machine door.",
+        fieldDetails,
+        fieldScore == null ? "is-missing" : "is-ready",
+      ) +
+      readinessSource(
+        3,
+        "Readability content recovery",
+        readerBusy ? "extracting…" : recoveryScore == null ? "—" : esc(recoveryScore) + "<span>/100</span>",
+        readerBusy
+          ? "Readability is re-reading the page in the separate Reader Worker."
+          : recoveryScore == null
+            ? esc((readerData && readerData.error) || "The extraction result is unavailable.")
+            : 'Lens’s transparent checks over <a href="https://github.com/mozilla/readability" rel="noopener">Readability</a> output; Readability does not publish this score.',
+        recoveryDetails,
+        readerBusy ? "is-waiting" : recoveryScore == null ? "is-missing" : "is-ready",
+      ) +
+      "</div>";
+    var formula =
+      '<div class="lx-composite-formula"><b>' +
+      (cfScore == null ? "?" : esc(cfScore)) +
+      "</b> + <b>" +
+      (fieldScore == null ? "?" : esc(fieldScore)) +
+      "</b> + <b>" +
+      (recoveryScore == null ? "?" : esc(recoveryScore)) +
+      "</b> <span>÷ 3</span> = <strong>" +
+      (overall == null ? "unfinished" : esc(overall) + "/100") +
+      "</strong></div>";
+    var hero =
+      '<div class="lx-readiness-hero lx-composite-hero"><div class="lx-readiness-number">' +
+      (overall == null ? "—" : esc(overall)) +
+      "<span>/100</span></div>" +
+      '<div><div class="lx-readiness-kicker">Composite agent access</div><div class="lx-readiness-level"><b>' +
+      (complete ? "Three independent views agree to make this number." : "Waiting for all three independent views.") +
+      "</b></div>" +
       '<div class="lx-cap">Equal thirds. If one source fails, the aggregate stays unfinished instead of moving the goalposts.</div></div></div>';
     return hero + sources + formula;
   }
@@ -1372,62 +2039,202 @@
   function needReadiness(need) {
     if (!need) return "";
     var state = (c) => {
-      return c.status === "pass" ? badge("pass", "ok") : c.status === "neutral" ? badge("not measured", "off")
-        : c.status === "partial" ? badge(Math.round(c.credit * 100) + "%", "warn") : badge(c.status === "unknown" ? "unknown" : "fix", "warn");
+      return c.status === "pass"
+        ? badge("pass", "ok")
+        : c.status === "neutral"
+          ? badge("not measured", "off")
+          : c.status === "partial"
+            ? badge(Math.round(c.credit * 100) + "%", "warn")
+            : badge(c.status === "unknown" ? "unknown" : "fix", "warn");
     };
     var rows = (checks) => {
-      return '<div class="lx-readiness-checks">' + checks.map((c) => {
-        return '<div class="lx-readiness-check" data-status="' + esc(c.status) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(c.label)) + '</b>' + state(c) + '</div><div class="lx-readiness-detail">' + glossify(esc(c.detail || "")) + '</div></div>';
-      }).join("") + '</div>';
+      return (
+        '<div class="lx-readiness-checks">' +
+        checks
+          .map((c) => {
+            return (
+              '<div class="lx-readiness-check" data-status="' +
+              esc(c.status) +
+              '"><div class="lx-readiness-check-top"><b>' +
+              glossify(esc(c.label)) +
+              "</b>" +
+              state(c) +
+              '</div><div class="lx-readiness-detail">' +
+              glossify(esc(c.detail || "")) +
+              "</div></div>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
     };
-    var e = need.essential, rc = need.recommended, b = need.bonus;
-    var pools = '<div class="lx-readiness-cats">' +
-      '<div class="lx-readiness-cat"><div><b>Essential</b><span>' + e.passing + "/" + e.total + '</span></div><strong>' + esc(e.earned) + '<span>/' + esc(e.available) + '</span></strong></div>' +
-      '<div class="lx-readiness-cat' + (rc.total ? "" : " is-skipped") + '"><div><b>Recommended here</b><span>' + (rc.total ? rc.passing + "/" + rc.total : "none apply") + '</span></div><strong>' + (rc.total ? esc(rc.earned) + '<span>/' + esc(rc.available) + '</span>' : "—") + '</strong></div>' +
-      '<div class="lx-readiness-cat"><div><b>Emerging doors</b><span>' + b.signals.length + ' present</span></div><strong>+' + esc(b.points) + '<span>/' + esc(b.cap) + '</span></strong></div>' +
-      '</div>';
-    var surfaces = '<ul class="lx-why">' + need.surfaces.map((s) => {
-      return '<li>' + (s.applies ? "&#10003; " : "&#8211; ") + '<b>' + esc(s.label) + '</b>: ' + esc(s.why) + '</li>';
-    }).join("") + '</ul>';
+    var e = need.essential,
+      rc = need.recommended,
+      b = need.bonus;
+    var pools =
+      '<div class="lx-readiness-cats">' +
+      '<div class="lx-readiness-cat"><div><b>Essential</b><span>' +
+      e.passing +
+      "/" +
+      e.total +
+      "</span></div><strong>" +
+      esc(e.earned) +
+      "<span>/" +
+      esc(e.available) +
+      "</span></strong></div>" +
+      '<div class="lx-readiness-cat' +
+      (rc.total ? "" : " is-skipped") +
+      '"><div><b>Recommended here</b><span>' +
+      (rc.total ? rc.passing + "/" + rc.total : "none apply") +
+      "</span></div><strong>" +
+      (rc.total ? esc(rc.earned) + "<span>/" + esc(rc.available) + "</span>" : "—") +
+      "</strong></div>" +
+      '<div class="lx-readiness-cat"><div><b>Emerging doors</b><span>' +
+      b.signals.length +
+      " present</span></div><strong>+" +
+      esc(b.points) +
+      "<span>/" +
+      esc(b.cap) +
+      "</span></strong></div>" +
+      "</div>";
+    var surfaces =
+      '<ul class="lx-why">' +
+      need.surfaces
+        .map((s) => {
+          return "<li>" + (s.applies ? "&#10003; " : "&#8211; ") + "<b>" + esc(s.label) + "</b>: " + esc(s.why) + "</li>";
+        })
+        .join("") +
+      "</ul>";
     var past = (need.beyondNeed || []).concat(need.skip || []);
-    var pastHtml = past.length ? '<div class="lx-next-actions lx-need-skip">' + past.map((p) => {
-      return '<div><b>' + esc(p.label) + '</b><span>' + esc(p.why) + '</span></div>';
-    }).join("") + '</div>' : '<div class="lx-none">Nothing here is built past need.</div>';
-    var head = '<div class="lx-local-mirror"><b>' + (need.overall == null ? "—" : esc(need.overall)) + '/100</b> <span>need-weighted, after <a href="' + esc(need.source.url) + '" rel="noopener">' + esc(need.source.name) + '</a> (checked ' + esc(need.source.checked) + ')</span></div>';
-    return section("What this site needs", { text: (need.surfaces.filter((s) => { return s.applies; }).length) + " surfaces" }, need.scoringNote, head + pools + surfaces + rows(e.checks.concat(rc.checks))) +
-      section("Past need", { text: past.length + " items" }, "Doors this site lacks and has no reason to build, and doors it built that buy little. Build each one for a reader you can name.", pastHtml);
+    var pastHtml = past.length
+      ? '<div class="lx-next-actions lx-need-skip">' +
+        past
+          .map((p) => {
+            return "<div><b>" + esc(p.label) + "</b><span>" + esc(p.why) + "</span></div>";
+          })
+          .join("") +
+        "</div>"
+      : '<div class="lx-none">Nothing here is built past need.</div>';
+    var head =
+      '<div class="lx-local-mirror"><b>' +
+      (need.overall == null ? "—" : esc(need.overall)) +
+      '/100</b> <span>need-weighted, after <a href="' +
+      esc(need.source.url) +
+      '" rel="noopener">' +
+      esc(need.source.name) +
+      "</a> (checked " +
+      esc(need.source.checked) +
+      ")</span></div>";
+    return (
+      section(
+        "What this site needs",
+        {
+          text:
+            need.surfaces.filter((s) => {
+              return s.applies;
+            }).length + " surfaces",
+        },
+        need.scoringNote,
+        head + pools + surfaces + rows(e.checks.concat(rc.checks)),
+      ) +
+      section(
+        "Past need",
+        { text: past.length + " items" },
+        "Doors this site lacks and has no reason to build, and doors it built that buy little. Build each one for a reader you can name.",
+        pastHtml,
+      )
+    );
   }
 
   function lensReadiness() {
     var r = data.readiness;
     if (!r) return '<div class="lx-empty">Readiness checks were unavailable for this origin.</div>';
     var skipped = Object.create(null);
-    ((r.need && r.need.skip) || []).forEach((s) => { skipped[s.key] = s.why; });
+    ((r.need && r.need.skip) || []).forEach((s) => {
+      skipped[s.key] = s.why;
+    });
     var levelKind = r.level >= 5 ? "ok" : r.level >= 3 ? "" : "warn";
     var projection = readinessProjection(r);
     var score = compositeReadiness(r);
 
-    var cats = '<div class="lx-readiness-cats">' + (r.categories || []).map((c) => {
-      var skipped = c.total === 0 && c.checkCount > 0;
-      return '<div class="lx-readiness-cat' + (skipped ? " is-skipped" : "") + '"><div><b>' + esc(c.label) + '</b><span>' + (c.countInScore ? c.passed + "/" + c.total : "optional") + '</span></div><strong>' + (skipped ? "—" : c.score) + '</strong></div>';
-    }).join("") + '</div>';
+    var cats =
+      '<div class="lx-readiness-cats">' +
+      (r.categories || [])
+        .map((c) => {
+          var skipped = c.total === 0 && c.checkCount > 0;
+          return (
+            '<div class="lx-readiness-cat' +
+            (skipped ? " is-skipped" : "") +
+            '"><div><b>' +
+            esc(c.label) +
+            "</b><span>" +
+            (c.countInScore ? c.passed + "/" + c.total : "optional") +
+            "</span></div><strong>" +
+            (skipped ? "—" : c.score) +
+            "</strong></div>"
+          );
+        })
+        .join("") +
+      "</div>";
 
-    var checks = Object.keys(r.checks || {}).map((key) => { return r.checks[key]; });
-    var checkHtml = '<div class="lx-readiness-checks">' + checks.map((item) => {
-      var state = readinessStatus(item);
-      var copy = readinessCopy(item);
-      var fix = copy.fix;
-      // A fail the need read calls unnecessary keeps its row (the mirror is the
-      // mirror) but says so, and stays off the Copy all fixes brief.
-      if ((item.status === "fail" || item.status === "unknown") && skipped[item.key]) {
-        return '<div class="lx-readiness-check" data-status="skip" data-label="' + esc(copy.label) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(copy.label)) + '</b>' + badge("not needed here", "off") + '</div><div class="lx-readiness-detail">' + glossify(esc(item.detail || "")) + '</div><div class="lx-readiness-consume">Skip it: ' + esc(skipped[item.key]) + '</div></div>';
-      }
-      var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + glossify(esc(CONSUMPTION[item.key])) + '</div>' : "";
-      // Glossify the VISIBLE strings only. data-label and data-fix stay plain:
-      // one is an attribute, the other is what the Copy fix button puts on the
-      // clipboard, and neither should carry markup.
-      return '<div class="lx-readiness-check" data-status="' + esc(item.status) + '" data-label="' + esc(copy.label) + '" data-fix="' + esc(fix) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(copy.label)) + '</b>' + badge(state.text, state.kind) + '</div><div class="lx-readiness-detail">' + glossify(esc(item.detail || "")) + '</div>' + consume + (item.status === "fail" ? '<div class="lx-readiness-fix"><span>' + glossify(esc(fix)) + '</span><button class="lx-copy-fix" type="button" data-fix="' + esc(fix) + '">Copy fix</button></div>' : "") + '</div>';
-    }).join("") + '</div>';
+    var checks = Object.keys(r.checks || {}).map((key) => {
+      return r.checks[key];
+    });
+    var checkHtml =
+      '<div class="lx-readiness-checks">' +
+      checks
+        .map((item) => {
+          var state = readinessStatus(item);
+          var copy = readinessCopy(item);
+          var fix = copy.fix;
+          // A fail the need read calls unnecessary keeps its row (the mirror is the
+          // mirror) but says so, and stays off the Copy all fixes brief.
+          if ((item.status === "fail" || item.status === "unknown") && skipped[item.key]) {
+            return (
+              '<div class="lx-readiness-check" data-status="skip" data-label="' +
+              esc(copy.label) +
+              '"><div class="lx-readiness-check-top"><b>' +
+              glossify(esc(copy.label)) +
+              "</b>" +
+              badge("not needed here", "off") +
+              '</div><div class="lx-readiness-detail">' +
+              glossify(esc(item.detail || "")) +
+              '</div><div class="lx-readiness-consume">Skip it: ' +
+              esc(skipped[item.key]) +
+              "</div></div>"
+            );
+          }
+          var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + glossify(esc(CONSUMPTION[item.key])) + "</div>" : "";
+          // Glossify the VISIBLE strings only. data-label and data-fix stay plain:
+          // one is an attribute, the other is what the Copy fix button puts on the
+          // clipboard, and neither should carry markup.
+          return (
+            '<div class="lx-readiness-check" data-status="' +
+            esc(item.status) +
+            '" data-label="' +
+            esc(copy.label) +
+            '" data-fix="' +
+            esc(fix) +
+            '"><div class="lx-readiness-check-top"><b>' +
+            glossify(esc(copy.label)) +
+            "</b>" +
+            badge(state.text, state.kind) +
+            '</div><div class="lx-readiness-detail">' +
+            glossify(esc(item.detail || "")) +
+            "</div>" +
+            consume +
+            (item.status === "fail"
+              ? '<div class="lx-readiness-fix"><span>' +
+                glossify(esc(fix)) +
+                '</span><button class="lx-copy-fix" type="button" data-fix="' +
+                esc(fix) +
+                '">Copy fix</button></div>'
+              : "") +
+            "</div>"
+          );
+        })
+        .join("") +
+      "</div>";
 
     var bots = r.botViews || [];
     // A control got in, so a crawler refusal on this origin is about the NAME.
@@ -1436,41 +2243,130 @@
     var controlIn = bots.some((b) => {
       return b.role === "control" && b.status >= 200 && b.status < 400 && !b.blocked && !b.challenge;
     });
-    var anyControl = bots.some((b) => { return b.role === "control"; });
-    var botHtml = bots.length ? (anyControl && !controlIn ? '<div class="lx-bot-caveat">No control identity got a readable response, so every row below reports this origin refusing <em>us</em> rather than refusing a crawler by name. Read them as unmeasured.</div>' : "") + '<table class="lx-bot-matrix"><tr><th>identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' + bots.map((bot) => {
-      var isControl = bot.role === "control";
-      // robots.txt governs crawlers. Grading a browser against it invents a
-      // verdict, so a control shows the dash it has earned.
-      var policy = isControl ? null : readinessPolicy(bot);
-      var actual = readinessBotState(bot);
-      var implication = isControl
-        ? (bot.blocked ? "Control refused. This origin turns away more than crawlers." : "Control admitted. A refusal below is about the name it was given.")
-        : bot.blocked ? "This identity may not retrieve the route." : policy && policy.verdict === "block" ? "Robots asks it not to read; the sampled response is not enforcement." : bot.status >= 200 && bot.status < 400 ? "It can retrieve this response; parsing and action are separate." : "Access is uncertain from this sample.";
-      return '<tr' + (isControl ? ' class="control"' : "") + '><td class="ua"><b>' + esc(bot.label) + '</b>' + (isControl ? '<span class="tag">control</span>' : "") + '<br><span class="who">' + esc(bot.owner) + '</span></td><td>' + (isControl ? '<span class="na">n/a</span>' : badge(policy ? policy.verdict : "not scored", policy && policy.verdict === "allow" ? "ok" : "warn")) + '</td><td>' + badge(actual.text, actual.kind) + '</td><td class="rule">' + esc(implication) + '</td></tr>';
-    }).join("") + '</table>' : '<div class="lx-none">Bot identity samples were unavailable.</div>';
-
+    var anyControl = bots.some((b) => {
+      return b.role === "control";
+    });
+    var botHtml = bots.length
+      ? (anyControl && !controlIn
+          ? '<div class="lx-bot-caveat">No control identity got a readable response, so every row below reports this origin refusing <em>us</em> rather than refusing a crawler by name. Read them as unmeasured.</div>'
+          : "") +
+        '<table class="lx-bot-matrix"><tr><th>identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' +
+        bots
+          .map((bot) => {
+            var isControl = bot.role === "control";
+            // robots.txt governs crawlers. Grading a browser against it invents a
+            // verdict, so a control shows the dash it has earned.
+            var policy = isControl ? null : readinessPolicy(bot);
+            var actual = readinessBotState(bot);
+            var implication = isControl
+              ? bot.blocked
+                ? "Control refused. This origin turns away more than crawlers."
+                : "Control admitted. A refusal below is about the name it was given."
+              : bot.blocked
+                ? "This identity may not retrieve the route."
+                : policy && policy.verdict === "block"
+                  ? "Robots asks it not to read; the sampled response is not enforcement."
+                  : bot.status >= 200 && bot.status < 400
+                    ? "It can retrieve this response; parsing and action are separate."
+                    : "Access is uncertain from this sample.";
+            return (
+              "<tr" +
+              (isControl ? ' class="control"' : "") +
+              '><td class="ua"><b>' +
+              esc(bot.label) +
+              "</b>" +
+              (isControl ? '<span class="tag">control</span>' : "") +
+              '<br><span class="who">' +
+              esc(bot.owner) +
+              "</span></td><td>" +
+              (isControl
+                ? '<span class="na">n/a</span>'
+                : badge(policy ? policy.verdict : "not scored", policy && policy.verdict === "allow" ? "ok" : "warn")) +
+              "</td><td>" +
+              badge(actual.text, actual.kind) +
+              '</td><td class="rule">' +
+              esc(implication) +
+              "</td></tr>"
+            );
+          })
+          .join("") +
+        "</table>"
+      : '<div class="lx-none">Bot identity samples were unavailable.</div>';
 
     var gaps: any[] = [];
     var c = r.checks || {};
-    if (c.markdownNegotiation && c.markdownNegotiation.status !== "pass") gaps.push("Agents pay the HTML/token tax because this URL does not negotiate a clean machine representation.");
-    if (data.structured && !(data.structured.jsonld || []).length && c.apiCatalog && c.apiCatalog.status !== "pass") gaps.push("A machine can read the page, but it has no stable entity graph or declared action catalog to validate.");
-    if (data.agent && data.agent.strategy && !data.agent.strategy.action.length) gaps.push("Reading is possible; acting is not declared. An agent must drive the human page and guess at side effects.");
+    if (c.markdownNegotiation && c.markdownNegotiation.status !== "pass")
+      gaps.push("Agents pay the HTML/token tax because this URL does not negotiate a clean machine representation.");
+    if (data.structured && !(data.structured.jsonld || []).length && c.apiCatalog && c.apiCatalog.status !== "pass")
+      gaps.push("A machine can read the page, but it has no stable entity graph or declared action catalog to validate.");
+    if (data.agent && data.agent.strategy && !data.agent.strategy.action.length)
+      gaps.push("Reading is possible; acting is not declared. An agent must drive the human page and guess at side effects.");
     if (!gaps.length) gaps.push("The main access surfaces are published. Inspect the individual checks for the remaining edge cases and bot-specific policy.");
-    var gapHtml = '<ul class="lx-why">' + gaps.map((g) => { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
-    var nextActions = (r.nextActions || []).filter((a) => { return !skipped[a.key]; });
-    var next = nextActions.length ? '<div class="lx-next-actions">' + nextActions.map((a) => { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
+    var gapHtml =
+      '<ul class="lx-why">' +
+      gaps
+        .map((g) => {
+          return "<li>" + esc(g) + "</li>";
+        })
+        .join("") +
+      "</ul>";
+    var nextActions = (r.nextActions || []).filter((a) => {
+      return !skipped[a.key];
+    });
+    var next = nextActions.length
+      ? '<div class="lx-next-actions">' +
+        nextActions
+          .map((a) => {
+            var copy = readinessCopy(a);
+            return "<div><b>" + esc(copy.label) + "</b><span>" + esc(copy.fix) + "</span></div>";
+          })
+          .join("") +
+        "</div>"
+      : '<div class="lx-none">No scored fixes are waiting.</div>';
     // The level is capped when one signal outruns the breadth of the score, and
     // the cap has to be VISIBLE or the two numbers beside each other read as a
     // contradiction. The worker ships `levelNote` on exactly those scans; the
     // SSR floor renders it as a title on the badge, and this is the same fact
     // for the ~everyone who has JavaScript.
     var levelWhy = r.levelNote ? '<div class="lx-level-note">' + esc(r.levelNote) + "</div>" : "";
-    var localMirror = '<div class="lx-local-mirror"><b>' + esc(r.overall) + '/100</b> ' + badge("Level " + r.level, levelKind) + ' <span>' + esc(r.levelName) + '</span></div>' + levelWhy + cats;
-    if (projection) localMirror += '<div class="lx-projection"><b>Local standards projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
-    return score + needReadiness(r.need) + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
+    var localMirror =
+      '<div class="lx-local-mirror"><b>' +
+      esc(r.overall) +
+      "/100</b> " +
+      badge("Level " + r.level, levelKind) +
+      " <span>" +
+      esc(r.levelName) +
+      "</span></div>" +
+      levelWhy +
+      cats;
+    if (projection)
+      localMirror +=
+        '<div class="lx-projection"><b>Local standards projection:</b> ' +
+        esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") +
+        " <span>illustrative; the origin has not changed.</span></div>";
+    return (
+      score +
+      needReadiness(r.need) +
+      section(
+        "Local standards mirror",
+        null,
+        "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.",
+        localMirror,
+      ) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +
-      section("Bot views", { text: bots.length + " sampled" }, "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all. Robots policy and enforcement stay deliberately separate.", botHtml) +
-      section("Checks and fixes", null, "Every failed check has a concrete next move. Copy the complete implementation brief into your coding agent.", '<button class="lx-copy-all" type="button">Copy all fixes</button>' + next + checkHtml);
+      section(
+        "Bot views",
+        { text: bots.length + " sampled" },
+        "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all. Robots policy and enforcement stay deliberately separate.",
+        botHtml,
+      ) +
+      section(
+        "Checks and fixes",
+        null,
+        "Every failed check has a concrete next move. Copy the complete implementation brief into your coding agent.",
+        '<button class="lx-copy-all" type="button">Copy all fixes</button>' + next + checkHtml,
+      )
+    );
   }
 
   function renderMachine() {
@@ -1489,7 +2385,9 @@
     // the Compare pane had just shown. This runs BEFORE the no-data bail so a
     // reset cannot leave the last scan's verdict pinned over an empty pane.
     if (machineTop) machineTop.innerHTML = data && view === "machine" ? verdictStrip() + agentTrace() + machineBrief() : "";
-    if (!data) { return; }
+    if (!data) {
+      return;
+    }
     // own-property lookup: `lens` comes off the tab strip and the URL, and a bare
     // object literal still inherits Object.prototype, so lens="toString" or
     // "constructor" resolves to a truthy inherited function that the || never
@@ -1509,11 +2407,10 @@
     LENS_FN.nlweb = lensNlweb;
     LENS_FN.markdown = lensMarkdownTab;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
-  // Capability probe on a caller-supplied callback, not a parsed value.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    // Capability probe on a caller-supplied callback, not a parsed value.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
-    var body = view === "machine" ? lensFocus() + fn()
-      : view === "delta" ? deltaView() : fn();
+    var body = view === "machine" ? lensFocus() + fn() : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
     // own no-score narrative). Machine view already leads with the briefing/trace.
     if (view !== "delta" && view !== "machine") body = verdictStrip() + body;
@@ -1548,9 +2445,11 @@
     if (lens === "markdown" && window.LensMarkdown) window.LensMarkdown.bind(machineBody);
     // The strip sits in machineTop in Machine view and inside the body in every
     // other one, so look in both rather than in whichever was true last week.
-    var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
-      (machineTop && machineTop.querySelector(".lx-verdict-score"));
-    if (scoreBtn) scoreBtn.addEventListener("click", () => { setLens("readiness"); });
+    var scoreBtn = machineBody.querySelector(".lx-verdict-score") || (machineTop && machineTop.querySelector(".lx-verdict-score"));
+    if (scoreBtn)
+      scoreBtn.addEventListener("click", () => {
+        setLens("readiness");
+      });
     if (lens === "readiness" && view !== "delta") setTimeout(ensureReadinessSources, 0);
   }
 
@@ -1566,11 +2465,14 @@
     if (window.LensReader) return window.LensReader.mount(readerData, readerBusy, data);
     // Pre-module fallback. It has to be self-contained: the module may never
     // arrive (offline, blocked), and a bare empty pane would read as a bug.
-    return section("Reader's guess", { text: "not run" },
+    return section(
+      "Reader's guess",
+      { text: "not run" },
       "A third-party extractor's opinion of this page, from its own Worker.",
       '<div class="lx-reader-intro">Readability (Apache-2.0, mozilla/readability) guesses which part of the document is the article and throws the rest away. ' +
-      'The Raw response tab is what the server actually sent. The interesting number is the gap.' +
-      '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>');
+        "The Raw response tab is what the server actually sent. The interesting number is the gap." +
+        '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>',
+    );
   }
 
   function runReader() {
@@ -1580,22 +2482,38 @@
     renderMachine();
     function loaded() {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensReader) { readerBusy = false; renderMachine(); return; }
-      window.LensReader.run(data, (json) => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        readerBusy = false; readerData = json; renderMachine(); renderStatus();
-      }, () => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        readerBusy = false; renderMachine();
-      });
+      if (!window.LensReader) {
+        readerBusy = false;
+        renderMachine();
+        return;
+      }
+      window.LensReader.run(
+        data,
+        (json) => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          readerBusy = false;
+          readerData = json;
+          renderMachine();
+          renderStatus();
+        },
+        () => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          readerBusy = false;
+          renderMachine();
+        },
+      );
     }
-    if (window.LensReader) { loaded(); return; }
+    if (window.LensReader) {
+      loaded();
+      return;
+    }
     var script = document.createElement("script");
     script.src = "/lens-reader.js?v=1";
     script.onload = loaded;
     script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      readerBusy = false; renderMachine();
+      readerBusy = false;
+      renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1610,11 +2528,14 @@
   function lensWire() {
     if (window.LensWire) return window.LensWire.mount(wireData, wireBusy, data);
     // Pre-module fallback, self-contained because the module may never arrive.
-    return section("What it costs", { text: "not run" },
+    return section(
+      "What it costs",
+      { text: "not run" },
       "Every request the page actually makes, and who receives them.",
       '<div class="lx-wire-intro">Every other lens reads the document. This one records the load: each request the page ' +
-      'fires, its bytes on the wire, and which host got it.' +
-      '<button class="lx-browser-run" type="button" id="lx-wire-run">Record the load</button></div>');
+        "fires, its bytes on the wire, and which host got it." +
+        '<button class="lx-browser-run" type="button" id="lx-wire-run">Record the load</button></div>',
+    );
   }
 
   function runWire() {
@@ -1629,22 +2550,38 @@
       // the edge one, and a late reply must not paint site A's waterfall over
       // site B's scan.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensWire) { wireBusy = false; renderMachine(); return; }
-      window.LensWire.run(data, (json) => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        wireBusy = false; wireData = json; renderMachine(); renderStatus();
-      }, () => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        wireBusy = false; renderMachine();
-      });
+      if (!window.LensWire) {
+        wireBusy = false;
+        renderMachine();
+        return;
+      }
+      window.LensWire.run(
+        data,
+        (json) => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          wireBusy = false;
+          wireData = json;
+          renderMachine();
+          renderStatus();
+        },
+        () => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          wireBusy = false;
+          renderMachine();
+        },
+      );
     }
-    if (window.LensWire) { loaded(); return; }
+    if (window.LensWire) {
+      loaded();
+      return;
+    }
     var script = document.createElement("script");
     script.src = "/lens-wire.js?v=1";
     script.onload = loaded;
     script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      wireBusy = false; renderMachine();
+      wireBusy = false;
+      renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1664,69 +2601,107 @@
     var w = wireData && wireData.webmcp;
     var head = "Tools the PAGE registers";
     if (!wireData) {
-      return section(head, { text: "not read" },
+      return section(
+        head,
+        { text: "not read" },
         "Browser-local tools only exist once the page has run.",
         '<div class="lx-wmcp-intro">A site can hand an agent tools that live in the document rather than on the server. ' +
-        'Reading them means rendering the page, so this fills in when you run <b>What it costs</b>.</div>');
+          "Reading them means rendering the page, so this fills in when you run <b>What it costs</b>.</div>",
+      );
     }
     // The engine is a CONTROL. Browser Run renders in Chrome 128, which predates
     // WebMCP entirely, so it cannot see a catalogue on ANY origin. Reporting that
     // as "this site has no tools" would be the same false negative the bot-view
     // controls exist to prevent, and on a far more confident-looking number.
     if (w && w.supported === false) {
-      return section(head, { text: "unmeasurable" },
+      return section(
+        head,
+        { text: "unmeasurable" },
         "The rendering engine has no WebMCP, so no catalogue could be read.",
         '<div class="lx-wmcp-intro">This says <b>nothing</b> about whether the site registers tools. ' +
-        'The render happened in <span class="lx-wmcp-k">' + esc(w.engine || "an engine that does not implement it") +
-        '</span>, which has no <code>document.modelContext</code> to ask.</div>');
+          'The render happened in <span class="lx-wmcp-k">' +
+          esc(w.engine || "an engine that does not implement it") +
+          "</span>, which has no <code>document.modelContext</code> to ask.</div>",
+      );
     }
     if (!w || w.present === null) {
-      return section(head, { text: "unreadable" },
+      return section(
+        head,
+        { text: "unreadable" },
         "The render happened; the catalogue could not be read.",
-        '<div class="lx-wmcp-intro">' + (w && w.error ? esc(w.error) : "The probe did not return a catalogue.") +
-        ' This says nothing about whether the site has tools.</div>');
+        '<div class="lx-wmcp-intro">' +
+          (w && w.error ? esc(w.error) : "The probe did not return a catalogue.") +
+          " This says nothing about whether the site has tools.</div>",
+      );
     }
     if (!w.present) {
-      return section(head, { text: "none" },
+      return section(
+        head,
+        { text: "none" },
         "The page ran and registered no browser-local tools.",
-        '<div class="lx-wmcp-intro">Its agent surface, if any, is whatever the server publishes above.</div>');
+        '<div class="lx-wmcp-intro">Its agent surface, if any, is whatever the server publishes above.</div>',
+      );
     }
     // Read-vs-write is the most a visitor CAN be told: Chrome carries one of
     // MCP's five annotations across registration. A tool that stated nothing is
     // its own column rather than being counted as safe.
-    var split = '<div class="lx-wmcp-intro"><b>' + w.count + '</b> tool' + (w.count === 1 ? "" : "s") +
-      ' registered into <code>document.modelContext</code>' +
-      ' \u00b7 <b>' + (w.read || 0) + '</b> read \u00b7 <b>' + (w.write || 0) + '</b> write' +
-      (w.unstated ? ' \u00b7 <b>' + w.unstated + '</b> unstated' : "") +
+    var split =
+      '<div class="lx-wmcp-intro"><b>' +
+      w.count +
+      "</b> tool" +
+      (w.count === 1 ? "" : "s") +
+      " registered into <code>document.modelContext</code>" +
+      " \u00b7 <b>" +
+      (w.read || 0) +
+      "</b> read \u00b7 <b>" +
+      (w.write || 0) +
+      "</b> write" +
+      (w.unstated ? " \u00b7 <b>" + w.unstated + "</b> unstated" : "") +
       (w.truncated ? " (list truncated)" : "") +
       '<br><span class="lx-wmcp-k">Chrome keeps only <code>readOnlyHint</code> across registration, so read-versus-write is the whole safety story a page can tell your agent. ' +
       (w.unstated ? "An unstated tool has not claimed to be safe; it has said nothing." : "Every tool here stated one.") +
-      '</span></div>';
-    var rows = (w.tools || []).map((t) => {
-      var kind = t.readOnly === true ? '<span class="lx-wmcp-read">read</span>'
-        : t.readOnly === false ? '<span class="lx-wmcp-write">write</span>'
-        : '<span class="lx-wmcp-k">unstated</span>';
-      var args = (t.params || []).map((a) => {
-        return '<code>' + esc(a.name) + (a.required ? "*" : "") + "</code>";
-      }).join(" ");
-      return '<div class="lx-wmcp-row"><div><b>' + esc(t.name || "?") + "</b> " + kind +
-        (t.untrustedContent === true ? ' <span class="lx-wmcp-k">untrusted content</span>' : "") +
-        "</div>" +
-        (t.description ? "<div>" + esc(t.description) + "</div>" : "") +
-        (args ? '<div class="lx-wmcp-k">takes ' + args + "</div>" : '<div class="lx-wmcp-k">takes no arguments</div>') +
-        "</div>";
-    }).join("");
-    return section(head, { text: w.count + " live" },
-      "Read from the page itself, in a real browser. Never called.", split + rows);
+      "</span></div>";
+    var rows = (w.tools || [])
+      .map((t) => {
+        var kind =
+          t.readOnly === true
+            ? '<span class="lx-wmcp-read">read</span>'
+            : t.readOnly === false
+              ? '<span class="lx-wmcp-write">write</span>'
+              : '<span class="lx-wmcp-k">unstated</span>';
+        var args = (t.params || [])
+          .map((a) => {
+            return "<code>" + esc(a.name) + (a.required ? "*" : "") + "</code>";
+          })
+          .join(" ");
+        return (
+          '<div class="lx-wmcp-row"><div><b>' +
+          esc(t.name || "?") +
+          "</b> " +
+          kind +
+          (t.untrustedContent === true ? ' <span class="lx-wmcp-k">untrusted content</span>' : "") +
+          "</div>" +
+          (t.description ? "<div>" + esc(t.description) + "</div>" : "") +
+          (args ? '<div class="lx-wmcp-k">takes ' + args + "</div>" : '<div class="lx-wmcp-k">takes no arguments</div>') +
+          "</div>"
+        );
+      })
+      .join("");
+    return section(head, { text: w.count + " live" }, "Read from the page itself, in a real browser. Never called.", split + rows);
   }
 
   function lensTools() {
     if (window.LensTools) return window.LensTools.render(toolsBusy ? { pending: true } : toolsData) + webmcpSection();
-    return section("What it accepts", { text: "not run" },
-      "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
-      '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
-      'and <code>inputSchema</code> is the same artefact under another name.' +
-      '<button class="lx-browser-run" type="button" id="lx-tools-run">Read the catalogue</button></div>') + webmcpSection();
+    return (
+      section(
+        "What it accepts",
+        { text: "not run" },
+        "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
+        '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
+          "and <code>inputSchema</code> is the same artefact under another name." +
+          '<button class="lx-browser-run" type="button" id="lx-tools-run">Read the catalogue</button></div>',
+      ) + webmcpSection()
+    );
   }
 
   function runTools() {
@@ -1739,24 +2714,38 @@
       // this is in flight is normal, and a late reply must not paint origin A's
       // catalogue over origin B's scan.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensTools) { toolsBusy = false; renderMachine(); return; }
-      window.LensTools.run(targetUrl, (json) => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        toolsBusy = false; toolsData = json; renderMachine();
-      }, () => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensTools) {
         toolsBusy = false;
-        toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" };
         renderMachine();
-      });
+        return;
+      }
+      window.LensTools.run(
+        targetUrl,
+        (json) => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          toolsBusy = false;
+          toolsData = json;
+          renderMachine();
+        },
+        () => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          toolsBusy = false;
+          toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" };
+          renderMachine();
+        },
+      );
     }
-    if (window.LensTools) { loaded(); return; }
+    if (window.LensTools) {
+      loaded();
+      return;
+    }
     var script = document.createElement("script");
     script.src = "/lens-tools.js?v=1";
     script.onload = loaded;
     script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      toolsBusy = false; renderMachine();
+      toolsBusy = false;
+      renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1766,11 +2755,14 @@
   // which costs them a lookup and, on an LLM-backed instance, a model call.
   function lensNlweb() {
     if (window.LensNlweb) return window.LensNlweb.render(nlwebBusy ? { pending: true } : nlwebData);
-    return section("What it answers", { text: "not run" },
+    return section(
+      "What it answers",
+      { text: "not run" },
       "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
       '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'A door that answers 200 can still answer with nothing an agent can use.' +
-      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>');
+        "A door that answers 200 can still answer with nothing an agent can use." +
+        '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>',
+    );
   }
 
   function runNlweb() {
@@ -1789,24 +2781,39 @@
       // visitor may change the QUESTION as well as the URL while a request is in
       // flight, and a late reply must not be labelled with the new question.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensNlweb) { nlwebBusy = false; renderMachine(); return; }
-      window.LensNlweb.run(targetUrl, askedFor, (json) => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
-        nlwebBusy = false; nlwebData = json; renderMachine();
-      }, () => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
+      if (!window.LensNlweb) {
         nlwebBusy = false;
-        nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" };
         renderMachine();
-      });
+        return;
+      }
+      window.LensNlweb.run(
+        targetUrl,
+        askedFor,
+        (json) => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
+          nlwebBusy = false;
+          nlwebData = json;
+          renderMachine();
+        },
+        () => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
+          nlwebBusy = false;
+          nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" };
+          renderMachine();
+        },
+      );
     }
-    if (window.LensNlweb) { loaded(); return; }
+    if (window.LensNlweb) {
+      loaded();
+      return;
+    }
     var script = document.createElement("script");
     script.src = "/lens-nlweb.js?v=1";
     script.onload = loaded;
     script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      nlwebBusy = false; renderMachine();
+      nlwebBusy = false;
+      renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1816,12 +2823,15 @@
   // which costs the origin bandwidth every time somebody clicks.
   function lensMarkdownTab() {
     if (window.LensMarkdown) return window.LensMarkdown.render(markdownBusy ? { pending: true } : markdownData);
-    return section("What agents get", { text: "not run" },
+    return section(
+      "What agents get",
+      { text: "not run" },
       "Replays the Accept header seven named agent clients actually send, and reports what each one got back.",
       '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'An origin can flip its content-type for a bare <code>text/markdown</code> and still hand ' +
-      'the client you use HTML.' +
-      '<button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>');
+        "An origin can flip its content-type for a bare <code>text/markdown</code> and still hand " +
+        "the client you use HTML." +
+        '<button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>',
+    );
   }
 
   function runMarkdown() {
@@ -1833,24 +2843,38 @@
       // Same staleness guard as runTools: a visitor can scan a different URL
       // while this is in flight, and a late reply must not be labelled with it.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensMarkdown) { markdownBusy = false; renderMachine(); return; }
-      window.LensMarkdown.run(targetUrl, (json) => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-        markdownBusy = false; markdownData = json; renderMachine();
-      }, () => {
-        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensMarkdown) {
         markdownBusy = false;
-        markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" };
         renderMachine();
-      });
+        return;
+      }
+      window.LensMarkdown.run(
+        targetUrl,
+        (json) => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          markdownBusy = false;
+          markdownData = json;
+          renderMachine();
+        },
+        () => {
+          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+          markdownBusy = false;
+          markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" };
+          renderMachine();
+        },
+      );
     }
-    if (window.LensMarkdown) { loaded(); return; }
+    if (window.LensMarkdown) {
+      loaded();
+      return;
+    }
     var script = document.createElement("script");
     script.src = "/lens-markdown.js?v=1";
     script.onload = loaded;
     script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      markdownBusy = false; renderMachine();
+      markdownBusy = false;
+      renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1861,7 +2885,9 @@
     cloudflareBusy = true;
     renderMachine();
     fetch("/lens/fetch?mode=cloudflare&url=" + encodeURIComponent(targetUrl))
-      .then((response) => { return response.json(); })
+      .then((response) => {
+        return response.json();
+      })
       .then((json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         cloudflareBusy = false;
@@ -1883,13 +2909,14 @@
   }
 
   function lensAnatomy() {
-    var a = data.anatomy, out = "";
+    var a = data.anatomy,
+      out = "";
     var summary = {
       status: data.status,
       "content-type": data.contentType || "(none)",
       size: bytes(a ? a.rawBytes : 0) + (data.truncated ? " (capped)" : ""),
       words: a ? a.wordCount : 0,
-      "img alt coverage": a ? (a.imgTotal ? (a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " have alt text" : "no images") : "?",
+      "img alt coverage": a ? (a.imgTotal ? a.imgTotal - a.imgNoAlt + " / " + a.imgTotal + " have alt text" : "no images") : "?",
     };
     // Compare's machine pane is ~310px wide, and this lens is now its DEFAULT:
     // render the observation compactly (the response, the price, the scraper's
@@ -1898,30 +2925,46 @@
     if (view === "both") {
       var c = data.cost && data.cost.tiers && data.cost.tiers[0];
       var rate = (data.cost && data.cost.rates && data.cost.rates[0]) || { usdPerMtok: 3 };
-      if (c) summary["model read"] = "~" + fmtTok(c.tokens) + " tok · " + fmtUsd(c.tokens / 1e6 * rate.usdPerMtok);
-      out += section("What the bot received", { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" },
-        "The response before any browser touched it.", kvTable(summary));
+      if (c) summary["model read"] = "~" + fmtTok(c.tokens) + " tok · " + fmtUsd((c.tokens / 1e6) * rate.usdPerMtok);
+      out += section(
+        "What the bot received",
+        { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" },
+        "The response before any browser touched it.",
+        kvTable(summary),
+      );
       var md = (data.ai && data.ai.markdown) || "";
       if (md) {
-        out += section("The scraper's diet", { text: bytes(md.length) },
+        out += section(
+          "The scraper's diet",
+          { text: bytes(md.length) },
           "The first slice of the markdown a basic LLM scraper ingests.",
-          pre(md.slice(0, 1400) + (md.length > 1400 ? "\n\n[… " + bytes(md.length) + " total]" : ""), true));
+          pre(md.slice(0, 1400) + (md.length > 1400 ? "\n\n[… " + bytes(md.length) + " total]" : ""), true),
+        );
       } else if (a && a.rawHtml) {
-        out += section("Raw body, first slice", { text: bytes(a.rawBytes) },
+        out += section(
+          "Raw body, first slice",
+          { text: bytes(a.rawBytes) },
           "Served as-is; already machine-shaped.",
-          pre(a.rawHtml.slice(0, 1400) + (a.rawBytes > 1400 ? "\n\n[… " + bytes(a.rawBytes) + " total]" : ""), true));
+          pre(a.rawHtml.slice(0, 1400) + (a.rawBytes > 1400 ? "\n\n[… " + bytes(a.rawBytes) + " total]" : ""), true),
+        );
       }
       out += '<div class="lx-cap">Headers and the full raw source: the Machine segment, same tab, full width.</div>';
       return out;
     }
-    out += section("Response", null, "What the server actually sent back, before a browser touched it.",
-      kvTable(summary));
-    out += section("HTTP headers", { text: Object.keys(data.headers || {}).length + " headers" },
+    out += section("Response", null, "What the server actually sent back, before a browser touched it.", kvTable(summary));
+    out += section(
+      "HTTP headers",
+      { text: Object.keys(data.headers || {}).length + " headers" },
       "The envelope metadata: caching, content type, security, crawler hints.",
-      kvTable(data.headers || {}));
+      kvTable(data.headers || {}),
+    );
     if (a && a.rawHtml) {
-      out += section("Raw HTML source", { text: bytes(a.rawBytes) }, "The literal markup. View Source, basically.",
-        pre(a.rawHtml + (a.rawBytes > a.rawHtml.length ? "\n\n[... truncated, " + bytes(a.rawBytes) + " total]" : "")));
+      out += section(
+        "Raw HTML source",
+        { text: bytes(a.rawBytes) },
+        "The literal markup. View Source, basically.",
+        pre(a.rawHtml + (a.rawBytes > a.rawHtml.length ? "\n\n[... truncated, " + bytes(a.rawBytes) + " total]" : "")),
+      );
     }
     return out;
   }
@@ -1932,13 +2975,24 @@
     var out = "";
 
     var metaOrder = ["description", "keywords", "robots", "author", "generator", "viewport", "theme-color", "application-name"];
-    out += section("Meta tags", null, "The original machine-readable layer (1995). description + keywords were the first SEO surface.",
-      kvTable(s.meta || {}, metaOrder.concat(Object.keys(s.meta || {}).filter((k) => { return metaOrder.indexOf(k) < 0; }))));
+    out += section(
+      "Meta tags",
+      null,
+      "The original machine-readable layer (1995). description + keywords were the first SEO surface.",
+      kvTable(
+        s.meta || {},
+        metaOrder.concat(
+          Object.keys(s.meta || {}).filter((k) => {
+            return metaOrder.indexOf(k) < 0;
+          }),
+        ),
+      ),
+    );
 
     if (has(s.og)) {
       var card = '<div class="lx-ogcard">';
       if (s.og.image) card += '<img src="' + esc(s.og.image) + '" alt="" onerror="this.style.display=\'none\'">';
-      card += "<div><div class=\"t\">" + esc(s.og.title || s.title || "") + "</div>";
+      card += '<div><div class="t">' + esc(s.og.title || s.title || "") + "</div>";
       if (s.og.description) card += '<div class="d">' + esc(s.og.description) + "</div>";
       card += '<div class="u">' + esc(s.og.url || data.finalUrl) + (s.og.type ? "  &middot;  " + esc(s.og.type) : "") + "</div></div></div>";
       out += section("Open Graph", { text: "og:", kind: "ok" }, "Facebook, 2010. What every link-preview bot reads to build a card.", card);
@@ -1950,34 +3004,63 @@
     }
 
     if (s.jsonld && s.jsonld.length) {
-      var blocks = s.jsonld.map((b) => {
-        if (b.valid) {
-          var types = b.types && b.types.length ? '<div class="lx-tags">' + b.types.map((t) => { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "";
-          return types + pre(b.json, true);
-        }
-        return '<div class="lx-badge warn">invalid JSON</div> ' + esc(b.error) + pre(b.raw, true);
-      }).join('<div style="height:8px"></div>');
-      out += section("JSON-LD", { text: s.jsonld.length + " block" + (s.jsonld.length > 1 ? "s" : ""), kind: "ok" },
-        "Schema.org as JSON, 2011 onward. The structured data Google reads for rich results, and the cleanest signal for any agent.", blocks);
+      var blocks = s.jsonld
+        .map((b) => {
+          if (b.valid) {
+            var types =
+              b.types && b.types.length
+                ? '<div class="lx-tags">' +
+                  b.types
+                    .map((t) => {
+                      return '<span class="lx-tag">' + esc(t) + "</span>";
+                    })
+                    .join("") +
+                  "</div>"
+                : "";
+            return types + pre(b.json, true);
+          }
+          return '<div class="lx-badge warn">invalid JSON</div> ' + esc(b.error) + pre(b.raw, true);
+        })
+        .join('<div style="height:8px"></div>');
+      out += section(
+        "JSON-LD",
+        { text: s.jsonld.length + " block" + (s.jsonld.length > 1 ? "s" : ""), kind: "ok" },
+        "Schema.org as JSON, 2011 onward. The structured data Google reads for rich results, and the cleanest signal for any agent.",
+        blocks,
+      );
     } else {
-      out += section("JSON-LD", { text: "absent", kind: "off" }, "Schema.org as JSON, 2011 onward. Google's rich-results format.", '<div class="lx-none">no JSON-LD blocks</div>');
+      out += section(
+        "JSON-LD",
+        { text: "absent", kind: "off" },
+        "Schema.org as JSON, 2011 onward. Google's rich-results format.",
+        '<div class="lx-none">no JSON-LD blocks</div>',
+      );
     }
 
-    out += section("Microdata", s.microdata && s.microdata.itemtypes.length ? { text: s.microdata.itemtypes.length + " types" } : { text: "absent", kind: "off" },
+    out += section(
+      "Microdata",
+      s.microdata && s.microdata.itemtypes.length ? { text: s.microdata.itemtypes.length + " types" } : { text: "absent", kind: "off" },
       "HTML microdata, 2009 W3C. Schema.org expressed inline as itemscope/itemprop attributes.",
-      (s.microdata && (s.microdata.itemtypes.length || s.microdata.props.length))
+      s.microdata && (s.microdata.itemtypes.length || s.microdata.props.length)
         ? tags(s.microdata.itemtypes) + (s.microdata.props.length ? '<div style="height:5px"></div>' + tags(s.microdata.props.slice(0, 40)) : "")
-        : '<div class="lx-none">none</div>');
+        : '<div class="lx-none">none</div>',
+    );
 
-    out += section("RDFa", s.rdfa && s.rdfa.typeof.length ? { text: s.rdfa.typeof.length + " types" } : { text: "absent", kind: "off" },
+    out += section(
+      "RDFa",
+      s.rdfa && s.rdfa.typeof.length ? { text: s.rdfa.typeof.length + " types" } : { text: "absent", kind: "off" },
       "RDFa, 2008 W3C. The semantic-web vision of embedding RDF triples in any tag.",
-      (s.rdfa && (s.rdfa.typeof.length || s.rdfa.properties.length))
+      s.rdfa && (s.rdfa.typeof.length || s.rdfa.properties.length)
         ? tags(s.rdfa.typeof) + (s.rdfa.properties.length ? '<div style="height:5px"></div>' + tags(s.rdfa.properties.slice(0, 40)) : "")
-        : '<div class="lx-none">none</div>');
+        : '<div class="lx-none">none</div>',
+    );
 
-    out += section("Microformats", s.microformats && s.microformats.length ? { text: s.microformats.length + " classes" } : { text: "absent", kind: "off" },
+    out += section(
+      "Microformats",
+      s.microformats && s.microformats.length ? { text: s.microformats.length + " classes" } : { text: "absent", kind: "off" },
       "microformats, 2005 IndieWeb. People and posts marked up in plain class names (h-card, h-entry).",
-      tags(s.microformats));
+      tags(s.microformats),
+    );
 
     return out;
   }
@@ -1990,27 +3073,68 @@
     if (!c || !c.tiers || !c.tiers.length) return "";
     var rate = (c.rates && c.rates[0]) || { model: "reference", usdPerMtok: 3 };
     var base = c.tiers[0];
-    var rows = '<tr><th>representation</th><th class="num">size</th><th class="num">~tokens</th><th class="num">1 read</th><th class="num">1,000 reads</th><th></th></tr>';
+    var rows =
+      '<tr><th>representation</th><th class="num">size</th><th class="num">~tokens</th><th class="num">1 read</th><th class="num">1,000 reads</th><th></th></tr>';
     c.tiers.forEach((t) => {
-      var usd = t.tokens / 1e6 * rate.usdPerMtok;
-      var mult = (t !== base && t.tokens > 0) ? Math.round(base.tokens / t.tokens) : 0;
-      rows += "<tr><td>" + esc(t.label) + '<br><span class="who">' + esc(t.note) + '</span></td><td class="num">' + bytes(t.chars) +
-        '</td><td class="num">' + fmtTok(t.tokens) + '</td><td class="num">' + fmtUsd(usd) + '</td><td class="num">' + fmtUsd(usd * 1000) +
-        "</td><td>" + (mult > 1 ? '<span class="lx-mult">&times;' + mult + " cheaper</span>" : "") + "</td></tr>";
+      var usd = (t.tokens / 1e6) * rate.usdPerMtok;
+      var mult = t !== base && t.tokens > 0 ? Math.round(base.tokens / t.tokens) : 0;
+      rows +=
+        "<tr><td>" +
+        esc(t.label) +
+        '<br><span class="who">' +
+        esc(t.note) +
+        '</span></td><td class="num">' +
+        bytes(t.chars) +
+        '</td><td class="num">' +
+        fmtTok(t.tokens) +
+        '</td><td class="num">' +
+        fmtUsd(usd) +
+        '</td><td class="num">' +
+        fmtUsd(usd * 1000) +
+        "</td><td>" +
+        (mult > 1 ? '<span class="lx-mult">&times;' + mult + " cheaper</span>" : "") +
+        "</td></tr>";
     });
     var summary = "";
     if (c.tiers.length > 1) {
       var cheapest = c.tiers[c.tiers.length - 1];
       var multAll = cheapest.tokens ? Math.round(base.tokens / cheapest.tokens) : 0;
-      var per1k = fmtUsd(base.tokens / 1e6 * rate.usdPerMtok * 1000);
-      summary = '<div class="lx-cap" style="margin-top:6px">' +
-        (multAll > 1 ? "A naive read pays &times;" + multAll + " what the " + esc(cheapest.label) + " costs. The semantic web asked publishers to do this work up front; models just pay the difference on every read. " : "") +
-        '1,000 naive reads of this page &asymp; <b>' + per1k + "</b> of inference; the publisher collects $0.00 (<a href=\"/ledger\">the ledger</a>).</div>";
+      var per1k = fmtUsd((base.tokens / 1e6) * rate.usdPerMtok * 1000);
+      summary =
+        '<div class="lx-cap" style="margin-top:6px">' +
+        (multAll > 1
+          ? "A naive read pays &times;" +
+            multAll +
+            " what the " +
+            esc(cheapest.label) +
+            " costs. The semantic web asked publishers to do this work up front; models just pay the difference on every read. "
+          : "") +
+        "1,000 naive reads of this page &asymp; <b>" +
+        per1k +
+        '</b> of inference; the publisher collects $0.00 (<a href="/ledger">the ledger</a>).</div>';
     }
-    var others = (c.rates || []).slice(1).map((r) => { return r.model + " $" + r.usdPerMtok; }).join(", ");
-    return section("Context economics", { text: "~" + fmtTok(base.tokens) + " tok" },
-      "What reading this page costs a machine. Priced at " + rate.model + " input, $" + rate.usdPerMtok + "/Mtok (" + others + " — checked " + (c.checked || "") + "); tokens are " + c.tokenizer + ".",
-      '<table class="lx-bots">' + rows + "</table>" + summary);
+    var others = (c.rates || [])
+      .slice(1)
+      .map((r) => {
+        return r.model + " $" + r.usdPerMtok;
+      })
+      .join(", ");
+    return section(
+      "Context economics",
+      { text: "~" + fmtTok(base.tokens) + " tok" },
+      "What reading this page costs a machine. Priced at " +
+        rate.model +
+        " input, $" +
+        rate.usdPerMtok +
+        "/Mtok (" +
+        others +
+        " — checked " +
+        (c.checked || "") +
+        "); tokens are " +
+        c.tokenizer +
+        ".",
+      '<table class="lx-bots">' + rows + "</table>" + summary,
+    );
   }
 
   function lensAI() {
@@ -2022,13 +3146,19 @@
       "X-Robots-Tag": d.xRobotsTag || "(none)",
       "robots.txt names AI crawlers": d.namesAiCrawlers ? "yes (GPTBot / ClaudeBot / etc.)" : "no",
     };
-    out += section("Crawler & model directives", null,
+    out += section(
+      "Crawler & model directives",
+      null,
       "Today's frontier: llms.txt (2024) plus the AI-crawler controls sites are bolting onto robots rules.",
-      kvTable(dir));
+      kvTable(dir),
+    );
     var md = data.ai && data.ai.markdown ? data.ai.markdown : "(no markdown — non-HTML or empty body)";
-    out += section("Markdown rendering", { text: bytes(md.length) },
+    out += section(
+      "Markdown rendering",
+      { text: bytes(md.length) },
       "Best-effort HTML to Markdown, roughly what a basic LLM scraper ingests. The clean signal under the markup.",
-      pre(md, true));
+      pre(md, true),
+    );
     return out;
   }
 
@@ -2041,77 +3171,157 @@
     var out = "";
 
     var TIERS = [
-      { k: "open",     label: "Open",     sub: "no terms set" },
+      { k: "open", label: "Open", sub: "no terms set" },
       { k: "signaled", label: "Signaled", sub: "asks, via robots" },
       { k: "enforced", label: "Enforced", sub: "blocks at the edge" },
-      { k: "paid",     label: "Paid",     sub: "charges for access" },
+      { k: "paid", label: "Paid", sub: "charges for access" },
     ];
-    var strip = '<div class="lx-spectrum">' + TIERS.map((x) => {
-      return '<div class="lx-spec' + (t.spectrum.tier === x.k ? " is-here" : "") + '"><b>' + x.label + "</b><span>" + x.sub + "</span></div>";
-    }).join("") + "</div>";
-    var why = '<ul class="lx-why">' + (t.spectrum.reasons || []).map((r) => { return "<li>" + esc(r) + "</li>"; }).join("") + "</ul>";
-    out += section("Where this site sits", { text: t.spectrum.tier, kind: t.spectrum.tier === "open" ? "ok" : t.spectrum.tier === "signaled" ? "" : "warn" },
+    var strip =
+      '<div class="lx-spectrum">' +
+      TIERS.map((x) => {
+        return '<div class="lx-spec' + (t.spectrum.tier === x.k ? " is-here" : "") + '"><b>' + x.label + "</b><span>" + x.sub + "</span></div>";
+      }).join("") +
+      "</div>";
+    var why =
+      '<ul class="lx-why">' +
+      (t.spectrum.reasons || [])
+        .map((r) => {
+          return "<li>" + esc(r) + "</li>";
+        })
+        .join("") +
+      "</ul>";
+    out += section(
+      "Where this site sits",
+      { text: t.spectrum.tier, kind: t.spectrum.tier === "open" ? "ok" : t.spectrum.tier === "signaled" ? "" : "warn" },
       "Open to any bot, gated behind payment, or anywhere in between. The agentic web's actual terms of service.",
-      strip + why);
+      strip + why,
+    );
 
     var KIND = { search: "Search engines", train: "AI training crawlers", answers: "AI answer engines (live retrieval)" };
-    var blocked = (t.scoreboard || []).filter((b) => { return b.verdict === "block"; }).length;
+    var blocked = (t.scoreboard || []).filter((b) => {
+      return b.verdict === "block";
+    }).length;
     var rows = "<tr><th>crawler</th><th>runs it</th><th>verdict</th><th>why</th></tr>";
     var lastKind: any = null;
     (t.scoreboard || []).forEach((b) => {
-      if (b.kind !== lastKind) { rows += '<tr class="lx-kindrow"><td colspan="4">' + KIND[b.kind] + "</td></tr>"; lastKind = b.kind; }
+      if (b.kind !== lastKind) {
+        rows += '<tr class="lx-kindrow"><td colspan="4">' + KIND[b.kind] + "</td></tr>";
+        lastKind = b.kind;
+      }
       var badge, why2;
-      if (t.robotsUnknown) { badge = '<span class="lx-badge warn">unknown</span>'; why2 = "robots.txt unreachable: " + (t.robotsError || "no answer"); }
-      else if (!t.robotsPresent) { badge = '<span class="lx-badge off">no robots.txt</span>'; why2 = "nothing to obey"; }
-      else if (b.verdict === "block") { badge = '<span class="lx-badge no">blocked</span>'; why2 = (b.rule || "") + " (as " + b.matchedUa + ")"; }
-      else if (b.matchedUa && b.matchedUa !== "*") { badge = '<span class="lx-badge ok">allowed</span>'; why2 = (b.rule || "no matching rule") + " (named as " + b.matchedUa + ")"; }
-      else if (b.matchedUa === "*") { badge = '<span class="lx-badge ok">allowed</span>'; why2 = (b.rule || "no matching rule") + " (under *)"; }
-      else { badge = '<span class="lx-badge off">unmentioned</span>'; why2 = "no group matches, so allowed by default"; }
-      rows += '<tr><td class="ua">' + esc(b.ua) + '</td><td>' + esc(b.owner) + '<br><span class="who">' + esc(b.note) + "</span></td><td>" + badge + '</td><td class="rule">' + esc(why2) + "</td></tr>";
+      if (t.robotsUnknown) {
+        badge = '<span class="lx-badge warn">unknown</span>';
+        why2 = "robots.txt unreachable: " + (t.robotsError || "no answer");
+      } else if (!t.robotsPresent) {
+        badge = '<span class="lx-badge off">no robots.txt</span>';
+        why2 = "nothing to obey";
+      } else if (b.verdict === "block") {
+        badge = '<span class="lx-badge no">blocked</span>';
+        why2 = (b.rule || "") + " (as " + b.matchedUa + ")";
+      } else if (b.matchedUa && b.matchedUa !== "*") {
+        badge = '<span class="lx-badge ok">allowed</span>';
+        why2 = (b.rule || "no matching rule") + " (named as " + b.matchedUa + ")";
+      } else if (b.matchedUa === "*") {
+        badge = '<span class="lx-badge ok">allowed</span>';
+        why2 = (b.rule || "no matching rule") + " (under *)";
+      } else {
+        badge = '<span class="lx-badge off">unmentioned</span>';
+        why2 = "no group matches, so allowed by default";
+      }
+      rows +=
+        '<tr><td class="ua">' +
+        esc(b.ua) +
+        "</td><td>" +
+        esc(b.owner) +
+        '<br><span class="who">' +
+        esc(b.note) +
+        "</span></td><td>" +
+        badge +
+        '</td><td class="rule">' +
+        esc(why2) +
+        "</td></tr>";
     });
-    var sbBadge = t.robotsUnknown ? { text: "unknown", kind: "warn" }
-      : !t.robotsPresent ? { text: "no robots.txt", kind: "off" }
-      : blocked ? { text: blocked + " blocked", kind: "warn" } : { text: "all allowed", kind: "ok" };
-    out += section("The bot scoreboard", sbBadge,
+    var sbBadge = t.robotsUnknown
+      ? { text: "unknown", kind: "warn" }
+      : !t.robotsPresent
+        ? { text: "no robots.txt", kind: "off" }
+        : blocked
+          ? { text: blocked + " blocked", kind: "warn" }
+          : { text: "all allowed", kind: "ok" };
+    out += section(
+      "The bot scoreboard",
+      sbBadge,
       "robots.txt evaluated per crawler (RFC 9309 longest-match) for " + t.path + ". This is policy, not enforcement — obeying it is voluntary.",
-      '<table class="lx-bots">' + rows + "</table>");
+      '<table class="lx-bots">' + rows + "</table>",
+    );
 
     var sig;
     if (t.signals && t.signals.length) {
-      sig = t.signals.map((s) => {
-        var chips = ["search", "ai-input", "ai-train"].map((k) => {
-          var v = s.parsed[k];
-          var kind = v === "yes" ? "ok" : v === "no" ? "no" : "off";
-          return '<span class="lx-badge ' + kind + '">' + k + "=" + esc(v || "unset") + "</span>";
-        }).join(" ");
-        return '<div style="margin:0 0 7px"><span class="lx-tag">User-agent: ' + esc(s.agents.join(", ")) + '</span><div style="height:4px"></div>' + chips + "</div>";
-      }).join("");
+      sig = t.signals
+        .map((s) => {
+          var chips = ["search", "ai-input", "ai-train"]
+            .map((k) => {
+              var v = s.parsed[k];
+              var kind = v === "yes" ? "ok" : v === "no" ? "no" : "off";
+              return '<span class="lx-badge ' + kind + '">' + k + "=" + esc(v || "unset") + "</span>";
+            })
+            .join(" ");
+          return (
+            '<div style="margin:0 0 7px"><span class="lx-tag">User-agent: ' +
+            esc(s.agents.join(", ")) +
+            '</span><div style="height:4px"></div>' +
+            chips +
+            "</div>"
+          );
+        })
+        .join("");
     } else {
       sig = '<div class="lx-none">no Content-Signal lines in robots.txt</div>';
     }
-    out += section("Content Signals", { text: t.signals && t.signals.length ? "declared" : "absent", kind: t.signals && t.signals.length ? "ok" : "off" },
+    out += section(
+      "Content Signals",
+      { text: t.signals && t.signals.length ? "declared" : "absent", kind: t.signals && t.signals.length ? "ok" : "off" },
       "contentsignals.org, 2025 (Cloudflare). Three consent bits a site can attach to a robots group: search, ai-input (grounding answers), ai-train.",
-      sig);
+      sig,
+    );
 
     var paid = t.paid || {};
     var paidInner = "";
-    if (paid.http402) paidInner += '<div class="lx-fallback-note">This URL answered <b>402 Payment Required</b>' + (paid.x402 ? " with an x402 envelope — a machine-readable invoice." : ".") + "</div>";
+    if (paid.http402)
+      paidInner +=
+        '<div class="lx-fallback-note">This URL answered <b>402 Payment Required</b>' +
+        (paid.x402 ? " with an x402 envelope — a machine-readable invoice." : ".") +
+        "</div>";
     if (paid.x402) paidInner += pre(paid.x402, true);
     if (has(paid.crawlerHeaders)) paidInner += kvTable(paid.crawlerHeaders);
-    if (!paidInner) paidInner = '<div class="lx-none">no price signals: no 402, no pay-per-crawl headers. (Almost nobody sets these yet — that is the frontier.)</div>';
-    out += section("Price", { text: paid.http402 ? "402" : "free", kind: paid.http402 ? "warn" : "off" },
+    if (!paidInner)
+      paidInner = '<div class="lx-none">no price signals: no 402, no pay-per-crawl headers. (Almost nobody sets these yet — that is the frontier.)</div>';
+    out += section(
+      "Price",
+      { text: paid.http402 ? "402" : "free", kind: paid.http402 ? "warn" : "off" },
       "HTTP 402, Cloudflare pay-per-crawl headers, x402 envelopes: content gated behind machine payment.",
-      paidInner);
+      paidInner,
+    );
 
     var enf = t.enforcement || {};
     var enfInner;
-    if (enf.challenged) enfInner = '<div class="lx-fallback-note">Our fetch hit a bot challenge (the &quot;verify you are human&quot; wall). The policy above is backed by active enforcement.</div>';
-    else if (enf.blocked) enfInner = '<div class="lx-fallback-note">Our identified fetch was refused with HTTP ' + enf.status + ". Policy here is enforced, at least against bots that announce themselves.</div>";
+    if (enf.challenged)
+      enfInner =
+        '<div class="lx-fallback-note">Our fetch hit a bot challenge (the &quot;verify you are human&quot; wall). The policy above is backed by active enforcement.</div>';
+    else if (enf.blocked)
+      enfInner =
+        '<div class="lx-fallback-note">Our identified fetch was refused with HTTP ' +
+        enf.status +
+        ". Policy here is enforced, at least against bots that announce themselves.</div>";
     else enfInner = '<div class="lx-none">our identified fetch went through (HTTP ' + enf.status + ") — no wall between the policy and the content</div>";
-    enfInner += '<div class="lx-cap" style="margin-top:6px">Honesty note: this enforcement verdict reports only what happened to AadharshBot\'s own signed fetch. The Readiness lens does send six representative crawler user-agents for read-only GET sampling (to observe response differences), but Lens never impersonates a bot to defeat a wall, and the scoreboard above reports published policy, not spoofed probes.</div>';
-    out += section("Enforcement", { text: enf.challenged ? "challenge" : enf.blocked ? "blocked" : "none seen", kind: enf.challenged || enf.blocked ? "warn" : "off" },
+    enfInner +=
+      '<div class="lx-cap" style="margin-top:6px">Honesty note: this enforcement verdict reports only what happened to AadharshBot\'s own signed fetch. The Readiness lens does send six representative crawler user-agents for read-only GET sampling (to observe response differences), but Lens never impersonates a bot to defeat a wall, and the scoreboard above reports published policy, not spoofed probes.</div>';
+    out += section(
+      "Enforcement",
+      { text: enf.challenged ? "challenge" : enf.blocked ? "blocked" : "none seen", kind: enf.challenged || enf.blocked ? "warn" : "off" },
       "robots.txt is a request. Edges like Cloudflare can make it a wall.",
-      enfInner);
+      enfInner,
+    );
 
     // TDMRep. A manifest can grant as well as reserve (tdm-reservation 0 says
     // rights are NOT reserved), so the badge carries lensTdmrep's verdict for
@@ -2127,9 +3337,12 @@
         tdmBadge = { text: "not reserved", kind: "ok" };
         tdmInner = '<div class="lx-fallback-note">TDM rights not reserved (mining permitted)' + where + ".</div>";
       } else if (tdm.reserved === true) {
-        var pol = tdm.policy && /^https?:\/\//i.test(tdm.policy)
-          ? ', with a <a href="' + esc(tdm.policy) + '" target="_blank" rel="noopener noreferrer">TDM policy</a>'
-          : tdm.policy ? ", with a TDM policy: " + esc(tdm.policy) : "";
+        var pol =
+          tdm.policy && /^https?:\/\//i.test(tdm.policy)
+            ? ', with a <a href="' + esc(tdm.policy) + '" target="_blank" rel="noopener noreferrer">TDM policy</a>'
+            : tdm.policy
+              ? ", with a TDM policy: " + esc(tdm.policy)
+              : "";
         tdmBadge = { text: "reserved", kind: "warn" };
         tdmInner = '<div class="lx-fallback-note">TDM rights reserved for this path' + where + pol + ".</div>";
       } else {
@@ -2138,9 +3351,7 @@
       }
       tdmInner += pre(tdm.body, true);
     }
-    out += section("TDM Reservation Protocol", tdmBadge,
-      "W3C community spec: the EU text-and-data-mining opt-out, at /.well-known/tdmrep.json.",
-      tdmInner);
+    out += section("TDM Reservation Protocol", tdmBadge, "W3C community spec: the EU text-and-data-mining opt-out, at /.well-known/tdmrep.json.", tdmInner);
 
     return out;
   }
@@ -2153,12 +3364,35 @@
     if (!ag) return "";
     var rows = "";
     function row(name, note, badge, kind, detail) {
-      rows += '<tr><td class="ua">' + esc(name) + '</td><td>' + esc(note) + "</td><td><span class=\"lx-badge " + kind + '">' + esc(badge) + '</span></td><td class="rule">' + esc(detail || "") + "</td></tr>";
+      rows +=
+        '<tr><td class="ua">' +
+        esc(name) +
+        "</td><td>" +
+        esc(note) +
+        '</td><td><span class="lx-badge ' +
+        kind +
+        '">' +
+        esc(badge) +
+        '</span></td><td class="rule">' +
+        esc(detail || "") +
+        "</td></tr>";
     }
     var mcp = ag.mcp || {};
-    row("/mcp", "MCP endpoint (2024) — tools for models, at run time",
-      mcp.verdict === "yes" ? "found" : mcp.verdict === "likely" ? "likely" : mcp.verdict === "maybe" ? "maybe" : mcp.verdict === "unknown" ? "no answer" : "absent",
-      mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" || mcp.verdict === "unknown" ? "warn" : "off", mcp.detail);
+    row(
+      "/mcp",
+      "MCP endpoint (2024) — tools for models, at run time",
+      mcp.verdict === "yes"
+        ? "found"
+        : mcp.verdict === "likely"
+          ? "likely"
+          : mcp.verdict === "maybe"
+            ? "maybe"
+            : mcp.verdict === "unknown"
+              ? "no answer"
+              : "absent",
+      mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" || mcp.verdict === "unknown" ? "warn" : "off",
+      mcp.detail,
+    );
     var nl = ag.nlweb || {};
     // Four verdicts, four readings. This row printed "absent" for everything
     // that was not "maybe", which folded an auth-gated door AND a probe that
@@ -2167,37 +3401,73 @@
     // unreadable apart for exactly this reason, and the /mcp row above already
     // reads all four). "What it answers" is the tab that settles it, since a
     // knock cannot tell NLWeb-shaped from NLWeb.
-    row("/ask", "NLWeb (Microsoft, 2025) — the site as a natural-language endpoint",
+    row(
+      "/ask",
+      "NLWeb (Microsoft, 2025) — the site as a natural-language endpoint",
       nl.verdict === "likely" ? "likely" : nl.verdict === "maybe" ? "NLWeb-shaped" : nl.verdict === "unknown" ? "no answer" : "absent",
-      nl.verdict === "likely" ? "ok" : nl.verdict === "maybe" || nl.verdict === "unknown" ? "warn" : "off", nl.detail);
+      nl.verdict === "likely" ? "ok" : nl.verdict === "maybe" || nl.verdict === "unknown" ? "warn" : "off",
+      nl.detail,
+    );
     var wm = ag.webmcp || {};
-    row("WebMCP", "in-page tools for browser agents (Chrome/W3C draft)",
+    row(
+      "WebMCP",
+      "in-page tools for browser agents (Chrome/W3C draft)",
       wm.found ? (wm.kind === "bridge" ? "CDN bridge" : "markers found") : "absent",
       wm.found ? "ok" : "off",
-      wm.kind === "bridge" ? "an injected loader proxies this origin's MCP server into the page — " + wm.marker : wm.marker);
+      wm.kind === "bridge" ? "an injected loader proxies this origin's MCP server into the page — " + wm.marker : wm.marker,
+    );
     var card = ag.agentCard || {};
-    row(".well-known/agent-card.json", "A2A agent card — who this agent is, what it offers",
-      card.present ? "found" : card.unknown ? "no answer" : "absent", card.present ? "ok" : card.unknown ? "warn" : "off", card.detail || card.note);
+    row(
+      ".well-known/agent-card.json",
+      "A2A agent card — who this agent is, what it offers",
+      card.present ? "found" : card.unknown ? "no answer" : "absent",
+      card.present ? "ok" : card.unknown ? "warn" : "off",
+      card.detail || card.note,
+    );
     var mn = ag.mdNegotiation || {};
-    row("Accept: text/markdown", "content negotiation — the same URL, re-served for machines",
-      mn.supported ? "supported" : mn.error ? "no answer" : "no", mn.supported ? "ok" : mn.error ? "warn" : "off",
-      mn.supported ? "content-type flips to " + mn.contentType : (mn.note || (mn.contentType ? "stays " + mn.contentType : "")));
+    row(
+      "Accept: text/markdown",
+      "content negotiation — the same URL, re-served for machines",
+      mn.supported ? "supported" : mn.error ? "no answer" : "no",
+      mn.supported ? "ok" : mn.error ? "warn" : "off",
+      mn.supported ? "content-type flips to " + mn.contentType : mn.note || (mn.contentType ? "stays " + mn.contentType : ""),
+    );
     var oa = ag.openapi || {};
-    row("/openapi.json", "OpenAPI — the build-time API contract",
-      oa.present ? "found" : oa.unknown ? "no answer" : "absent", oa.present ? "ok" : oa.unknown ? "warn" : "off", oa.detail || oa.note);
+    row(
+      "/openapi.json",
+      "OpenAPI — the build-time API contract",
+      oa.present ? "found" : oa.unknown ? "no answer" : "absent",
+      oa.present ? "ok" : oa.unknown ? "warn" : "off",
+      oa.detail || oa.note,
+    );
     var cat = ag.apiCatalog || {};
-    row(".well-known/api-catalog", "RFC 9264 linkset — a catalog of the site's APIs",
-      cat.present ? "found" : cat.unknown ? "no answer" : "absent", cat.present ? "ok" : cat.unknown ? "warn" : "off", cat.detail || cat.note);
+    row(
+      ".well-known/api-catalog",
+      "RFC 9264 linkset — a catalog of the site's APIs",
+      cat.present ? "found" : cat.unknown ? "no answer" : "absent",
+      cat.present ? "ok" : cat.unknown ? "warn" : "off",
+      cat.detail || cat.note,
+    );
     if (ag.aiPlugin && ag.aiPlugin.present) {
       row(".well-known/ai-plugin.json", "OpenAI plugin manifest (2023, retired) — the fossil record", "found", "ok", ag.aiPlugin.detail);
     }
     var st = ag.strategy || {};
-    var stBadge = st.verdict === "agent-native" ? { text: "agent-native", kind: "ok" }
-      : st.verdict === "agent-readable" ? { text: "agent-readable", kind: "" }
-      : { text: "human-only", kind: "warn" };
-    return section("Agent doors", stBadge,
+    var stBadge =
+      st.verdict === "agent-native"
+        ? { text: "agent-native", kind: "ok" }
+        : st.verdict === "agent-readable"
+          ? { text: "agent-readable", kind: "" }
+          : { text: "human-only", kind: "warn" };
+    return section(
+      "Agent doors",
+      stBadge,
       "Does this site publish surfaces for agents, or must they drive the human page? The semantic web's open question, asked live.",
-      '<div class="lx-cap" style="margin:0 0 6px">' + esc(st.note || "") + '</div><table class="lx-bots"><tr><th>door</th><th>what it is</th><th>status</th><th>evidence</th></tr>' + rows + "</table>");
+      '<div class="lx-cap" style="margin:0 0 6px">' +
+        esc(st.note || "") +
+        '</div><table class="lx-bots"><tr><th>door</th><th>what it is</th><th>status</th><th>evidence</th></tr>' +
+        rows +
+        "</table>",
+    );
   }
 
   function lensDiscovery() {
@@ -2207,7 +3477,7 @@
     out += doorsSection();
 
     function file(label, obj, caption, extra?: any) {
-      var badge = obj && obj.ok ? { text: "found", kind: "ok" } : { text: (obj && obj.status ? obj.status : "absent"), kind: "off" };
+      var badge = obj && obj.ok ? { text: "found", kind: "ok" } : { text: obj && obj.status ? obj.status : "absent", kind: "off" };
       var inner;
       if (obj && obj.ok) {
         inner = (extra || "") + pre((obj.body || "").slice(0, 12000) + (obj.truncated ? "\n\n[... truncated]" : ""), true);
@@ -2234,26 +3504,45 @@
     var am = dsc.agentsMd || {};
     var amCaption = "2025. Plain-Markdown instructions for an agent working with this service — the CLI era's answer to “where's the contract.”";
     if (am.present) {
-      out += section("AGENTS.md", { text: "found" + (am.variant ? " (" + am.variant + ")" : ""), kind: "ok" }, amCaption, pre((am.body || "").slice(0, 12000) + (am.truncated ? "\n\n[... truncated]" : ""), true));
+      out += section(
+        "AGENTS.md",
+        { text: "found" + (am.variant ? " (" + am.variant + ")" : ""), kind: "ok" },
+        amCaption,
+        pre((am.body || "").slice(0, 12000) + (am.truncated ? "\n\n[... truncated]" : ""), true),
+      );
     } else {
-      out += section("AGENTS.md", { text: "absent", kind: "off" }, amCaption, '<div class="lx-none">' + esc(am.note || "no /agents.md or /AGENTS.md found") + "</div>");
+      out += section(
+        "AGENTS.md",
+        { text: "absent", kind: "off" },
+        amCaption,
+        '<div class="lx-none">' + esc(am.note || "no /agents.md or /AGENTS.md found") + "</div>",
+      );
     }
     if (dsc.aiTxt && dsc.aiTxt.ok) out += file("ai.txt", dsc.aiTxt, "AI-training opt-out manifest, a Spawning.ai convention.");
     if (dsc.securityTxt && dsc.securityTxt.ok) out += file(".well-known/security.txt", dsc.securityTxt, "RFC 9116. Where to report vulnerabilities.");
 
     var feeds = dsc.feeds || [];
     var feedsInner = feeds.length
-      ? '<div class="lx-tags">' + feeds.map((f) => { return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>"; }).join("") + "</div>"
+      ? '<div class="lx-tags">' +
+        feeds
+          .map((f) => {
+            return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>";
+          })
+          .join("") +
+        "</div>"
       : '<div class="lx-none">none advertised in &lt;head&gt;</div>';
-    out += section("Feeds (RSS / Atom)", feeds.length ? { text: feeds.length, kind: "ok" } : { text: "none", kind: "off" },
-      "The 2000s syndication web. Declared via <link rel=\"alternate\">.", feedsInner);
+    out += section(
+      "Feeds (RSS / Atom)",
+      feeds.length ? { text: feeds.length, kind: "ok" } : { text: "none", kind: "off" },
+      'The 2000s syndication web. Declared via <link rel="alternate">.',
+      feedsInner,
+    );
 
     return out;
   }
 
   // ---- status bar -------------------------------------------------------
   function renderStatus() {
-
     var parts: string[] = [];
     parts.push("<span><b>" + data.status + "</b> " + esc(httpText(data.status)) + "</span>");
     parts.push("<span>" + esc(view === "both" ? "Compare" : view.charAt(0).toUpperCase() + view.slice(1)) + "</span>");
@@ -2275,22 +3564,30 @@
       readiness: {
         title: "Readiness",
         note: "Three opinions, kept separate until the arithmetic: standards, observed access, and recovered content.",
-        rows: ["Cloudflare's independent Agent Readiness level", "Lens field evidence from an identified fetch and six named bot samples", "Lens's transparent content-recovery checks over Readability output"]
+        rows: [
+          "Cloudflare's independent Agent Readiness level",
+          "Lens field evidence from an identified fetch and six named bot samples",
+          "Lens's transparent content-recovery checks over Readability output",
+        ],
       },
       anatomy: {
         title: "Anatomy",
         note: "The response surface a machine can read without interpreting the page.",
-        rows: ["status, content type, and payload size", "headings, links, images, and readable text", "headers and accessibility clues"]
+        rows: ["status, content type, and payload size", "headings, links, images, and readable text", "headers and accessibility clues"],
       },
       reader: {
         title: "Reader's guess",
         note: "What a reader-mode extractor thinks this page is, and how much of it that costs.",
-        rows: ["Readability's extraction, from its own Worker", "the gap: words as served against words kept", "control labels that survived, which read as prose to an agent"]
+        rows: [
+          "Readability's extraction, from its own Worker",
+          "the gap: words as served against words kept",
+          "control labels that survived, which read as prose to an agent",
+        ],
       },
       wire: {
         title: "What it costs",
         note: "Every request the page makes, and how much of the weight belongs to somebody else.",
-        rows: ["the third-party share of transfer bytes", "every host that received a request", "the load in order, recorded over CDP"]
+        rows: ["the third-party share of transfer bytes", "every host that received a request", "the load in order, recorded over CDP"],
       },
       structured: {
         title: "Structured",
@@ -2300,35 +3597,44 @@
         // Readiness" from being wrapped as the generic "agent"), so a lowercase
         // label sitting first in a row silently loses its definition while its
         // siblings keep theirs. Put the capitalized spellings first.
-        rows: ["JSON-LD and Schema.org entities", "RDFa, microdata, and microformats", "Open Graph and Twitter preview fields"]
+        rows: ["JSON-LD and Schema.org entities", "RDFa, microdata, and microformats", "Open Graph and Twitter preview fields"],
       },
       ai: {
         title: "AI view",
         note: "The compact representation and crawler signals available to a model.",
-        rows: ["best-effort Markdown rendering", "robots and AI-specific directives", "token cost and a cleaner alternate surface"]
+        rows: ["best-effort Markdown rendering", "robots and AI-specific directives", "token cost and a cleaner alternate surface"],
       },
       terms: {
         title: "Terms",
         note: "What a site asks of crawlers, what it enforces, and whether access is priced.",
-        rows: ["per-bot robots.txt verdicts", "Content-Signal and TDM reservations", "the observed AadharshBot fetch and any wall"]
+        rows: ["per-bot robots.txt verdicts", "Content-Signal and TDM reservations", "the observed AadharshBot fetch and any wall"],
       },
       discovery: {
         title: "Discovery",
         note: "The doors an agent can find before it has to drive the human page.",
-        rows: ["robots.txt, sitemap.xml, and llms.txt", "feeds and API/action descriptions", "MCP, NLWeb, WebMCP, and agent-card hints"]
-      }
+        rows: ["robots.txt, sitemap.xml, and llms.txt", "feeds and API/action descriptions", "MCP, NLWeb, WebMCP, and agent-card hints"],
+      },
     };
     var p = primers[lens] || primers.anatomy;
     // No scan, no verdict: the slot above the tabs must not outlive its data.
     if (machineTop) machineTop.innerHTML = "";
-    machineBody.innerHTML = '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
+    machineBody.innerHTML =
+      '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
       // The primer is the FIRST prose a cold visitor reads on a tab, and it was
       // the one author-written surface still shipping bare: "the entities and
       // relationships a parser can lift from the markup" is three unexplained
       // terms in eleven words. Same rule as section() captions, which is that
       // our own sentences carry their own definitions.
-      '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + glossify(esc(p.note)) + '</p><ul>' +
-      p.rows.map((row) => { return '<li>' + glossify(esc(row)) + '</li>'; }).join("") +
+      "<h3>" +
+      esc(LENS_LABEL[lens] || p.title) +
+      "</h3><p>" +
+      glossify(esc(p.note)) +
+      "</p><ul>" +
+      p.rows
+        .map((row) => {
+          return "<li>" + glossify(esc(row)) + "</li>";
+        })
+        .join("") +
       '</ul><div class="lx-idle-cta">Choose an example above or paste a URL, then press <b>Go</b> to replace this primer with observed evidence.</div></div>';
   }
 
@@ -2349,7 +3655,9 @@
   function updateDeltaCount() {
     var el = document.getElementById("lx-delta-n");
     if (!el) return;
-    var n = Object.keys(counterfactuals).filter((key) => { return counterfactuals[key]; }).length;
+    var n = Object.keys(counterfactuals).filter((key) => {
+      return counterfactuals[key];
+    }).length;
     el.textContent = n ? String(n) : "";
     el.hidden = !n;
   }
@@ -2384,7 +3692,9 @@
   function setView(v, animate?: any, writeHistory?: any) {
     if (["both", "human", "machine", "browser", "delta"].indexOf(v) < 0) v = "both";
     view = v;
-    try { localStorage.setItem("lx-mode", v); } catch (e) {}
+    try {
+      localStorage.setItem("lx-mode", v);
+    } catch (e) {}
     if (writeHistory !== false) syncUrl(true);
     panes.className = "lx-panes is-" + v;
     updateModeUi();
@@ -2392,7 +3702,10 @@
       renderMachine();
       renderBrowser();
       renderStatus();
-    } else { renderIdleLens(); renderBrowser(); }
+    } else {
+      renderIdleLens();
+      renderBrowser();
+    }
   }
   function setLens(l, animate?: any, writeHistory?: any) {
     lens = l;
@@ -2402,7 +3715,11 @@
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-selected", active ? "true" : "false");
     });
-    if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
+    if (data) renderMachine();
+    else {
+      updateModeUi();
+      renderIdleLens();
+    }
   }
 
   form.addEventListener("submit", (e) => {
@@ -2416,19 +3733,28 @@
   [].forEach.call(document.querySelectorAll(".lx-chip"), (c) => {
     c.addEventListener("click", () => {
       var pair = c.getAttribute("data-vs-pair");
-      if (pair && pair.indexOf("|") > 0) { runVs(pair.split("|")[0], pair.split("|")[1]); return; }
+      if (pair && pair.indexOf("|") > 0) {
+        runVs(pair.split("|")[0], pair.split("|")[1]);
+        return;
+      }
       if (c.getAttribute("data-url")) run(c.getAttribute("data-url"));
     });
   });
-  if (vsToggle) vsToggle.addEventListener("click", () => {
-    if (!vsRow) return;
-    var hidden = vsRow.classList.toggle("lx-off");
-    vsToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
-    if (!hidden && vsInput) vsInput.focus();
-  });
-  if (vsCloseBtn) vsCloseBtn.addEventListener("click", () => { exitVs(true); });
+  if (vsToggle)
+    vsToggle.addEventListener("click", () => {
+      if (!vsRow) return;
+      var hidden = vsRow.classList.toggle("lx-off");
+      vsToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+      if (!hidden && vsInput) vsInput.focus();
+    });
+  if (vsCloseBtn)
+    vsCloseBtn.addEventListener("click", () => {
+      exitVs(true);
+    });
   [].forEach.call(document.querySelectorAll(".lx-seg"), (b) => {
-    b.addEventListener("click", () => { setView(b.getAttribute("data-view")); });
+    b.addEventListener("click", () => {
+      setView(b.getAttribute("data-view"));
+    });
   });
   [].forEach.call(document.querySelectorAll(".lx-tab"), (b) => {
     b.addEventListener("click", () => {
@@ -2443,11 +3769,16 @@
   // "state of the machine web" dialog: close button, backdrop light-dismiss, and
   // every [data-sow-open] trigger (the rail's "?" and the footer link). The
   // backdrop listener is the fallback for browsers without dialog closedby="any".
-  var sowDialog = (document.getElementById("lx-sow-dialog") as HTMLDialogElement);
+  var sowDialog = document.getElementById("lx-sow-dialog") as HTMLDialogElement;
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
-    if (sowClose) sowClose.addEventListener("click", () => { sowDialog.close(); });
-    sowDialog.addEventListener("click", (e) => { if (e.target === sowDialog) sowDialog.close(); });
+    if (sowClose)
+      sowClose.addEventListener("click", () => {
+        sowDialog.close();
+      });
+    sowDialog.addEventListener("click", (e) => {
+      if (e.target === sowDialog) sowDialog.close();
+    });
   }
   [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
     b.addEventListener("click", openStateWeb);
@@ -2457,15 +3788,24 @@
   // Its era cards carry .lx-goto jump buttons, which close the dialog and land
   // on the lens that proves the era live — via Compare when the current view
   // hides the lens tabs, mirroring what clicking a tab from Delta does.
-  var abtDialog = (document.getElementById("lx-abt-dialog") as HTMLDialogElement);
+  var abtDialog = document.getElementById("lx-abt-dialog") as HTMLDialogElement;
   if (abtDialog) {
     var abtClose = document.getElementById("lx-abt-close");
-    if (abtClose) abtClose.addEventListener("click", () => { abtDialog.close(); });
-    abtDialog.addEventListener("click", (e) => { if (e.target === abtDialog) abtDialog.close(); });
+    if (abtClose)
+      abtClose.addEventListener("click", () => {
+        abtDialog.close();
+      });
+    abtDialog.addEventListener("click", (e) => {
+      if (e.target === abtDialog) abtDialog.close();
+    });
   }
   [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
     b.addEventListener("click", () => {
-      if (abtDialog && !abtDialog.open && abtDialog.showModal) { try { abtDialog.showModal(); } catch (e) {} }
+      if (abtDialog && !abtDialog.open && abtDialog.showModal) {
+        try {
+          abtDialog.showModal();
+        } catch (e) {}
+      }
     });
   });
   [].forEach.call(document.querySelectorAll(".lx-goto"), (b) => {
@@ -2488,7 +3828,7 @@
     if (["both", "human", "machine", "browser", "delta"].indexOf(savedView) >= 0) view = savedView;
   } catch (e) {}
   if (urlState.view !== "both") view = urlState.view;
-    if (urlState.lens !== "anatomy") lens = urlState.lens;
+  if (urlState.lens !== "anatomy") lens = urlState.lens;
   counterfactuals = urlState.counterfactuals;
   setView(view, false, false);
   setLens(lens, false, false);
@@ -2519,10 +3859,11 @@
       readerBusy = false;
       cloudflareBusy = false;
       wireBusy = false;
-      humanBody.innerHTML = '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
+      humanBody.innerHTML =
+        '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();
-      statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
+      statusBar.innerHTML = "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>";
     }
     setView(view, true, false);
     setLens(lens, false, false);
@@ -2552,7 +3893,13 @@
       }
     } else if (qp) {
       if ((document as any).prerendering) {
-        document.addEventListener("prerenderingchange", () => { run(qp); }, { once: true });
+        document.addEventListener(
+          "prerenderingchange",
+          () => {
+            run(qp);
+          },
+          { once: true },
+        );
       } else {
         run(qp);
       }
@@ -2600,23 +3947,27 @@
   function wmScreen() {
     var field = data && data.readiness && data.readiness.field;
     return {
-      scanned: data ? (data.finalUrl || data.url || null) : null,
+      scanned: data ? data.finalUrl || data.url || null : null,
       httpStatus: data && data.status != null ? data.status : null,
-      contentType: data ? (data.contentType || null) : null,
+      contentType: data ? data.contentType || null : null,
       pane: view,
       machineTab: lens,
       machineTabAnswers: LENS_LABEL[lens] || lens,
       agentReadyScore: field && field.overall != null ? field.overall : null,
-      comparing: vsMode
-        ? { left: urlInput.value || null, right: vsInput ? vsInput.value : null, loaded: !!vsData }
-        : null,
-      deltaSwitchesOn: Object.keys(counterfactuals).filter((k) => { return counterfactuals[k]; }),
+      comparing: vsMode ? { left: urlInput.value || null, right: vsInput ? vsInput.value : null, loaded: !!vsData } : null,
+      deltaSwitchesOn: Object.keys(counterfactuals).filter((k) => {
+        return counterfactuals[k];
+      }),
       // Which opt-in panes actually hold a result. An agent that skips this asks
       // for a reading the person has not paid for yet.
       tabsWithData: {
-        reader: !!readerData, wire: !!wireData, tools: !!toolsData,
-        nlweb: !!nlwebData, markdown: !!markdownData,
-        browser: !!browserData, cloudflare: !!cloudflareData,
+        reader: !!readerData,
+        wire: !!wireData,
+        tools: !!toolsData,
+        nlweb: !!nlwebData,
+        markdown: !!markdownData,
+        browser: !!browserData,
+        cloudflare: !!cloudflareData,
       },
       busy: busy || vsBusy,
     };
@@ -2636,7 +3987,9 @@
       var before = data;
       run(url);
       if (!busy) return wmErr("Lens refused that URL. It has to be an absolute http(s) address.");
-      return wmSettle(() => { return busy; }, 60000).then(() => {
+      return wmSettle(() => {
+        return busy;
+      }, 60000).then(() => {
         if (!data || data === before) {
           return wmErr("The scan did not complete. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
         }
@@ -2650,9 +4003,14 @@
       if (busy || vsBusy) return wmErr("The Lens window is already fetching.");
       runVs(left, right);
       if (!vsBusy) return wmErr("Lens refused that pair. Both have to be absolute http(s) addresses.");
-      return wmSettle(() => { return vsBusy; }, 60000).then(() => {
+      return wmSettle(() => {
+        return vsBusy;
+      }, 60000).then(() => {
         if (!vsData || !vsData.ok) {
-          return wmErr("The comparison did not complete. Lens reported: " + ((vsData && vsData.error) || (statusBar.textContent || "no reason given")).replace(/\s+/g, " ").trim());
+          return wmErr(
+            "The comparison did not complete. Lens reported: " +
+              ((vsData && vsData.error) || statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim(),
+          );
         }
         return wmOk({ screen: wmScreen(), comparison: vsData });
       });
@@ -2683,19 +4041,38 @@
         // the person last typed. Write both, and let the box win if it holds
         // something a human put there.
         nlwebQuery = String(args.query).slice(0, 200);
-        var box = (machineBody.querySelector("#lx-nlweb-q") as HTMLInputElement | null);
+        var box = machineBody.querySelector("#lx-nlweb-q") as HTMLInputElement | null;
         if (box) box.value = nlwebQuery;
       }
       setLens(tab);
       starter();
-      var pending = { reader: () => { return readerBusy; }, wire: () => { return wireBusy; }, tools: () => { return toolsBusy; }, nlweb: () => { return nlwebBusy; }, markdown: () => { return markdownBusy; } }[tab];
+      var pending = {
+        reader: () => {
+          return readerBusy;
+        },
+        wire: () => {
+          return wireBusy;
+        },
+        tools: () => {
+          return toolsBusy;
+        },
+        nlweb: () => {
+          return nlwebBusy;
+        },
+        markdown: () => {
+          return markdownBusy;
+        },
+      }[tab];
       return wmSettle(pending, 90000).then(() => {
         var got = { reader: readerData, wire: wireData, tools: toolsData, nlweb: nlwebData, markdown: markdownData }[tab];
-        if (!got) return wmErr("The " + tab + " pane came back empty. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
+        if (!got)
+          return wmErr("The " + tab + " pane came back empty. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
         return wmOk({ screen: wmScreen(), tab: tab, result: got });
       });
     },
-    lens_read_screen: () => { return wmOk(wmScreen()); },
+    lens_read_screen: () => {
+      return wmOk(wmScreen());
+    },
     lens_delta: (args) => {
       var key = String((args && args["switch"]) || "");
       if (WM_SWITCHES.indexOf(key) < 0 || !Object.prototype.hasOwnProperty.call(counterfactuals, key)) {
@@ -2710,5 +4087,4 @@
       return wmOk(wmScreen());
     },
   });
-
 })();

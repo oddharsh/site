@@ -21,16 +21,33 @@ async function fixture(run) {
     await writeFile(path.join(root, file), body);
   };
   const read = (file) => readFile(path.join(root, file), "utf8");
-  const cli = (file, ...args: any[]) => spawnSync(process.execPath, [path.join(root, file), ...args],
-    { cwd: tmpdir(), encoding: "utf8" });
-  const files = ["pipelines/garage/generate.ts", "pipelines/lwe/generate.ts", "pipelines/lwe/concepts.json",
-    "pipelines/content/page-contract.ts", "tools/lib/browser-source.ts", "tools/lib/browser-source-node.ts", "tools/gen-manifest.ts", "tools/photos/shell-data.ts", "tools/lib/html-raw-text.ts",
-    "src/worker/lib/desktop.ts", "src/worker/lib/window.ts", "src/worker/lib/html.ts", "src/worker/lib/site-manifest.ts", "src/client/nav-run.ts",
-    "config/site-manifest.json", "public/sitemap.xml", "src/pages/lwe/index.html", "src/client/lwe/ask.ts"];
+  const cli = (file, ...args: any[]) => spawnSync(process.execPath, [path.join(root, file), ...args], { cwd: tmpdir(), encoding: "utf8" });
+  const files = [
+    "pipelines/garage/generate.ts",
+    "pipelines/lwe/generate.ts",
+    "pipelines/lwe/concepts.json",
+    "pipelines/content/page-contract.ts",
+    "tools/lib/browser-source.ts",
+    "tools/lib/browser-source-node.ts",
+    "tools/gen-manifest.ts",
+    "tools/photos/shell-data.ts",
+    "tools/lib/html-raw-text.ts",
+    "src/worker/lib/desktop.ts",
+    "src/worker/lib/window.ts",
+    "src/worker/lib/html.ts",
+    "src/worker/lib/site-manifest.ts",
+    "src/client/nav-run.ts",
+    "config/site-manifest.json",
+    "public/sitemap.xml",
+    "src/pages/lwe/index.html",
+    "src/client/lwe/ask.ts",
+  ];
   try {
     for (const file of files) await put(file, await readFile(new URL(file, ROOT), "utf8"));
     await run({ root, put, read, cli });
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 }
 
 test("LWE wiring uses the manifest for navigation and agent discovery", async () => {

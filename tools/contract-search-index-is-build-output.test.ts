@@ -1,22 +1,25 @@
 // ── the search corpus ────────────────────────────────────────────────
-import {
-  assert,
-  existsSync,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, existsSync, readFileSync, test } from "./contract-shared.ts";
 import { execFileSync } from "node:child_process";
 
 // The production cache lives for the isolate. Bun shares modules across test
 // files (and ignores import query strings), so each cache scenario needs a new
 // process rather than a reset hook in production code.
 function isolatedSearch(check) {
-  execFileSync(process.execPath, ["--input-type=module", "--eval", `
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `
     import assert from 'node:assert/strict';
     import { searchSite, searchSiteRanked } from ${JSON.stringify(new URL("../src/worker/search.ts", import.meta.url).href)};
     import { buildSearchIndex } from ${JSON.stringify(new URL("./generate-search-index.ts", import.meta.url).href)};
     await (${check.toString()})({ searchSite, searchSiteRanked, buildSearchIndex });
-  `], { stdio: "pipe", timeout: 5000 });
+  `,
+    ],
+    { stdio: "pipe", timeout: 5000 },
+  );
 }
 
 // The index behind /search and /ask is BUILD OUTPUT (tools/generate-search-index.ts),
@@ -36,7 +39,7 @@ test("no committed copy of the index exists to fall behind", () => {
   assert.ok(
     !existsSync("public/search-index.json"),
     "public/search-index.json is back in the source tree. It is generated into .build/ by build.ts step 1i; " +
-    "a committed copy is the exact artifact that froze twice, because nothing diffs it against the source it derives from.",
+      "a committed copy is the exact artifact that froze twice, because nothing diffs it against the source it derives from.",
   );
 });
 
@@ -50,11 +53,7 @@ test("the build still generates it, with both floors intact", () => {
     /await import\("\.\/generate-search-index\.ts"\)/,
     "build.ts no longer imports the generator — the index would silently stop being staged",
   );
-  assert.match(
-    build,
-    /public\/search-index\.json/,
-    "build.ts no longer writes public/search-index.json into the staged tree",
-  );
+  assert.match(build, /public\/search-index\.json/, "build.ts no longer writes public/search-index.json into the staged tree");
   // A generator wired in with its tripwires deleted is the freeze wearing a
   // different hat: the step runs, writes an empty corpus, and passes.
   // The conditions, as well as the messages: a floor lowered to `< 1` keeps its
@@ -83,8 +82,7 @@ test("the corpus covers every static document and every flagged surface", async 
   // find, and the freeze was precisely a set of documents the corpus omitted.
   // /search is excluded by the generator on purpose (it would index itself).
   const { readdirSync } = await import("node:fs");
-  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]);
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]));
   const documents = walk("src/pages")
     .filter((f) => f.endsWith(".html"))
     .map((f) => f.slice("src/pages".length, -".html".length))
@@ -123,14 +121,17 @@ test("search retains late article text and uses authored metadata without indexi
       await mkdir(join(root, dir), { recursive: true });
     }
     await writeFile(join(root, "config/site-manifest.json"), JSON.stringify({ surfaces: [] }));
-    await writeFile(join(root, "src/pages/deep.html"), `<html><head>
+    await writeFile(
+      join(root, "src/pages/deep.html"),
+      `<html><head>
       <title>Deep article</title><meta content='An authored &amp; precise description' name=description>
       </head><body><div class=title-bar>WINDOWCHROME</div><main>
       <h1>Deep article</h1><p>${"Opening prose. ".repeat(200)}</p>
       <h2>Late discovery</h2><p>A micro<em>scope</em> finds raretailword. <code>x &lt; y</code></p>
       <script>ANSWERKEY</script ><style>STYLELEAK</style/>
       <button>CONTROLLEAK</button><span aria-hidden=true>ORNAMENT</span>
-      <img src=x alt='A lunar crater'><p>Last paragraph.</p></main></body></html>`);
+      <img src=x alt='A lunar crater'><p>Last paragraph.</p></main></body></html>`,
+    );
     await writeFile(join(root, "src/content/writing/long.txt"), `${"Opening prose. ".repeat(200)}writingtailword`);
     const { records } = await buildSearchIndex(root);
     const article = records.find((r) => r.url === "/deep");
@@ -148,52 +149,81 @@ test("search retains late article text and uses authored metadata without indexi
   }
 });
 
-test("the corpus retains documented topics beyond Horizon's opening screen", () => isolatedSearch(async ({ buildSearchIndex, searchSite }) => {
-  const { records } = await buildSearchIndex(".");
-  const env = { ASSETS: { fetch: async () => Response.json({ records }) } };
-  const horizon = records.find((r) => r.url === "/garage/horizon");
-  assert.ok(horizon);
-  for (const topic of ["scheduler.yield", "field-sizing", "text-box-trim"]) {
-    assert.ok(horizon.text.includes(topic), `Horizon documents ${topic}, but search cannot retrieve it`);
-    const result = await searchSite(env, topic, 5);
-    assert.ok(result.results.some((r) => r.url === horizon.url), `${topic} must retrieve Horizon in its first five results`);
-  }
-}));
+test("the corpus retains documented topics beyond Horizon's opening screen", () =>
+  isolatedSearch(async ({ buildSearchIndex, searchSite }) => {
+    const { records } = await buildSearchIndex(".");
+    const env = { ASSETS: { fetch: async () => Response.json({ records }) } };
+    const horizon = records.find((r) => r.url === "/garage/horizon");
+    assert.ok(horizon);
+    for (const topic of ["scheduler.yield", "field-sizing", "text-box-trim"]) {
+      assert.ok(horizon.text.includes(topic), `Horizon documents ${topic}, but search cannot retrieve it`);
+      const result = await searchSite(env, topic, 5);
+      assert.ok(
+        result.results.some((r) => r.url === horizon.url),
+        `${topic} must retrieve Horizon in its first five results`,
+      );
+    }
+  }));
 
-test("prepared search preserves weights, ties, excerpt normalization, and limits", () => isolatedSearch(async ({ searchSiteRanked }) => {
-  const records = [
-    { url: "/title", title: "Needle", description: "Title match", text: "", kind: "page" },
-    { url: "/description", title: "Description", description: "Needle", text: "", kind: "page" },
-    ...Array.from({ length: 60 }, (_, i) => ({ url: `/body-${String(i).padStart(2, "0")}`,
-      title: "Body", description: "Body match", text: "Prefix  NEEDLE\n\t tail", kind: "page" })),
-  ];
-  let reads = 0;
-  const env = { ASSETS: { fetch: async () => { reads++; return Response.json({ records }); } } };
-  const first = await searchSiteRanked(env, "needle", 3);
-  assert.equal(first.total, 62);
-  assert.equal(first.returned, 3);
-  assert.deepEqual(first.results.map((r) => [r.url, r.score]), [["/title", 8], ["/description", 4], ["/body-00", 1]]);
-  assert.equal(first.results[1].snippet, "Needle", "a metadata-only record uses its description");
-  assert.equal(first.results[2].snippet, "Prefix NEEDLE tail");
-  assert.equal((await searchSiteRanked(env, "needle", 100)).returned, 50);
-  assert.equal((await searchSiteRanked(env, "missingword")).total, 0);
-  assert.equal(reads, 1, "completed corpus data is reused across queries");
-}));
+test("prepared search preserves weights, ties, excerpt normalization, and limits", () =>
+  isolatedSearch(async ({ searchSiteRanked }) => {
+    const records = [
+      { url: "/title", title: "Needle", description: "Title match", text: "", kind: "page" },
+      { url: "/description", title: "Description", description: "Needle", text: "", kind: "page" },
+      ...Array.from({ length: 60 }, (_, i) => ({
+        url: `/body-${String(i).padStart(2, "0")}`,
+        title: "Body",
+        description: "Body match",
+        text: "Prefix  NEEDLE\n\t tail",
+        kind: "page",
+      })),
+    ];
+    let reads = 0;
+    const env = {
+      ASSETS: {
+        fetch: async () => {
+          reads++;
+          return Response.json({ records });
+        },
+      },
+    };
+    const first = await searchSiteRanked(env, "needle", 3);
+    assert.equal(first.total, 62);
+    assert.equal(first.returned, 3);
+    assert.deepEqual(
+      first.results.map((r) => [r.url, r.score]),
+      [
+        ["/title", 8],
+        ["/description", 4],
+        ["/body-00", 1],
+      ],
+    );
+    assert.equal(first.results[1].snippet, "Needle", "a metadata-only record uses its description");
+    assert.equal(first.results[2].snippet, "Prefix NEEDLE tail");
+    assert.equal((await searchSiteRanked(env, "needle", 100)).returned, 50);
+    assert.equal((await searchSiteRanked(env, "missingword")).total, 0);
+    assert.equal(reads, 1, "completed corpus data is reused across queries");
+  }));
 
-test("a failed corpus load can recover on the next request", () => isolatedSearch(async ({ searchSite }) => {
-  let reads = 0;
-  const env = { ASSETS: { fetch: async () => {
-    reads++;
-    if (reads === 1) throw new Error("temporary asset failure");
-    if (reads === 2) return new Response("invalid JSON");
-    if (reads === 3) return Response.json({ records: null });
-    if (reads === 4) return new Response("unavailable", { status: 503 });
-    return Response.json({ records: [{ url: "/recovered", title: "Recovered", description: "", text: "", kind: "page" }] });
-  } } };
-  for (let i = 0; i < 4; i++) assert.equal((await searchSite(env, "recovered")).total, 0);
-  assert.equal((await searchSite(env, "recovered")).results[0].url, "/recovered");
-  assert.equal(reads, 5);
-}));
+test("a failed corpus load can recover on the next request", () =>
+  isolatedSearch(async ({ searchSite }) => {
+    let reads = 0;
+    const env = {
+      ASSETS: {
+        fetch: async () => {
+          reads++;
+          if (reads === 1) throw new Error("temporary asset failure");
+          if (reads === 2) return new Response("invalid JSON");
+          if (reads === 3) return Response.json({ records: null });
+          if (reads === 4) return new Response("unavailable", { status: 503 });
+          return Response.json({ records: [{ url: "/recovered", title: "Recovered", description: "", text: "", kind: "page" }] });
+        },
+      },
+    };
+    for (let i = 0; i < 4; i++) assert.equal((await searchSite(env, "recovered")).total, 0);
+    assert.equal((await searchSite(env, "recovered")).results[0].url, "/recovered");
+    assert.equal(reads, 5);
+  }));
 
 // The dev farm is built from symlinks and one of them outlives the file: the
 // farm stages .dev-assets/search-index.json -> ../public/search-index.json, and

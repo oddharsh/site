@@ -89,7 +89,9 @@ test("sudo asks once at the top, and a Terminal without Full Disk Access does no
   // set -e ends the script on the first failed write, so every line of an
   // fda row must carry the guard and the tail must report it.
   for (const o of data.options.filter((x) => x.fullDiskAccess)) {
-    const lines = renderScript(data, new Set([o.id])).split("\n").filter((l) => l.startsWith("defaults "));
+    const lines = renderScript(data, new Set([o.id]))
+      .split("\n")
+      .filter((l) => l.startsWith("defaults "));
     assert.ok(lines.length > 0 && lines.every((l) => l.endsWith(" || no_fda=1")), `${o.id}: unguarded write`);
   }
   assert.match(script, /^\[ -z "\$\{no_fda:-\}" \] \|\| echo /m, "the tail names the Full Disk Access miss");

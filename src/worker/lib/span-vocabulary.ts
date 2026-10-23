@@ -88,11 +88,9 @@ export type SpanName =
   | "around.robots_gate"
   | "around.publish"
   | "around.persist_history"
-
   | "census.sweep"
   | "census.host"
   | "census.ensure_table"
-
   | "webmention.send"
   | "webmention.discover"
   | "webmention.own_pages"
@@ -108,7 +106,6 @@ export type SpanName =
   // `serendipity.session` are what tell them apart (and a semicolon anywhere
   // in this union ends the registry parse in contract-the-span-vocabulary).
   | "serendipity.sync"
-
   | "nlweb.ask"
   | "dyno.fetch"
 
@@ -133,10 +130,7 @@ export type SpanName =
  * `route <template>` is the one span shape that is not dotted, so it is matched
  * first and mapped to `route` by hand.
  */
-export type SpanSurface<N extends string> =
-  N extends `route ${string}` ? "route"
-  : N extends `${infer S}.${string}` ? S
-  : N;
+export type SpanSurface<N extends string> = N extends `route ${string}` ? "route" : N extends `${infer S}.${string}` ? S : N;
 
 /**
  * Attribute keys any span may set, whatever its surface.
@@ -178,9 +172,7 @@ export type SharedSpanAttr =
  * makes a vocabulary navigable: an attribute lives under the surface that
  * emitted it, so `lens.*` in a trace is all of and only /lens.
  */
-export type SpanAttrs<N extends string> = Partial<
-  Record<`${SpanSurface<N>}.${string}` | SharedSpanAttr, SpanAttrValue>
->;
+export type SpanAttrs<N extends string> = Partial<Record<`${SpanSurface<N>}.${string}` | SharedSpanAttr, SpanAttrValue>>;
 
 /**
  * The span handle a callback receives. Cloudflare's own object carries more

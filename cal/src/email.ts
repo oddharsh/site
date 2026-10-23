@@ -44,20 +44,24 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl, 
       <a href="${declineUrl}" style="display:inline-block;padding:8px 14px;background:#900;color:#fff;text-decoration:none;border-radius:3px">decline</a>
     </p>
     <p style="color:#888;font-size:12px">one-click. signed url; only you can use these.</p>
-    ${locationUrl ? `<p style="font-size:13px">
+    ${
+      locationUrl
+        ? `<p style="font-size:13px">
       <a href="${locationUrl}">set the spot</a> — works before or after you approve,
       and after approval it mails the guest a calendar update in place.
-    </p>` : ""}
+    </p>`
+        : ""
+    }
   `;
   return resendSend(env, {
-    from:    `cal.aadhar.sh <noreply@aadhar.sh>`,
-    to:      [env.HOST_EMAIL],
+    from: `cal.aadhar.sh <noreply@aadhar.sh>`,
+    to: [env.HOST_EMAIL],
     // "coffee request" rather than a bare emoji + name: the emoji is scannable
     // in a list and is not a search term, so the request mail was the one piece
     // of this flow `subject:coffee` could never find.
     subject: `☕ coffee request: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
-    reply_to: email,   // hitting Reply goes to the requester directly
+    reply_to: email, // hitting Reply goes to the requester directly
     headers: { "List-Id": LIST_ID, "X-Coffee-Booking": booking.id },
   });
 }
@@ -69,22 +73,26 @@ export async function sendInvite(env, booking) {
   const html = `
     <p>hi ${esc(name.split(" ")[0] || name)} —</p>
     <p>confirmed for <strong>${esc(when)}</strong>${booking.location ? `, at <strong>${esc(booking.location)}</strong>` : ""}.</p>
-    <p>${booking.location
-          ? "the attached .ics file should add this to your calendar in one click. if the spot moves i'll send an update to that same entry."
-          : "i'll send an address closer to the day. meantime: the attached .ics file should add this to your calendar in one click."}</p>
+    <p>${
+      booking.location
+        ? "the attached .ics file should add this to your calendar in one click. if the spot moves i'll send an update to that same entry."
+        : "i'll send an address closer to the day. meantime: the attached .ics file should add this to your calendar in one click."
+    }</p>
     <p>see you soon.<br>${esc(env.HOST_NAME)}</p>
   `;
   return resendSend(env, {
-    from:    `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to:      [email],
-    cc:      [env.HOST_EMAIL],
+    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
+    to: [email],
+    cc: [env.HOST_EMAIL],
     subject: `confirmed: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
-    attachments: [{
-      filename:    "coffee.ics",
-      content:     utf8ToBase64(ics),
-      content_type: "text/calendar; method=REQUEST",
-    }],
+    attachments: [
+      {
+        filename: "coffee.ics",
+        content: utf8ToBase64(ics),
+        content_type: "text/calendar; method=REQUEST",
+      },
+    ],
     headers: { "X-Coffee-Booking": booking.id },
   });
 }
@@ -108,16 +116,18 @@ export async function sendUpdate(env, booking) {
     <p>see you there.<br>${esc(env.HOST_NAME)}</p>
   `;
   return resendSend(env, {
-    from:    `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to:      [email],
-    cc:      [env.HOST_EMAIL],
+    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
+    to: [email],
+    cc: [env.HOST_EMAIL],
     subject: `updated: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
-    attachments: [{
-      filename:    "coffee.ics",
-      content:     utf8ToBase64(ics),
-      content_type: "text/calendar; method=REQUEST",
-    }],
+    attachments: [
+      {
+        filename: "coffee.ics",
+        content: utf8ToBase64(ics),
+        content_type: "text/calendar; method=REQUEST",
+      },
+    ],
     headers: { "X-Coffee-Booking": booking.id },
   });
 }
@@ -127,7 +137,7 @@ export async function sendUpdate(env, booking) {
 // than a bare `= {}`, which infers `{}` and makes every property access an error
 // under strictNullChecks (gotcha 42's lesson from the other side: a type that is
 // merely implied is a type nobody checked).
-type HostLinks = { location?: string, reschedule?: string, cancel?: string };
+type HostLinks = { location?: string; reschedule?: string; cancel?: string };
 
 // The host's own copy of a confirmed booking, sent as its own mail rather than
 // bolted onto the guest's. Two attachments on one message would hand the guest a
@@ -143,8 +153,7 @@ type HostLinks = { location?: string, reschedule?: string, cancel?: string };
 export async function sendHostCopy(
   env,
   booking,
-  { updated = false, cancelled = false, links = {} }:
-    { updated?: boolean, cancelled?: boolean, links?: HostLinks } = {},
+  { updated = false, cancelled = false, links = {} }: { updated?: boolean; cancelled?: boolean; links?: HostLinks } = {},
 ) {
   const { name, email, topic, start, end, location } = booking;
   const ics = buildICS(env, booking, { audience: "host", cancel: cancelled });
@@ -153,11 +162,13 @@ export async function sendHostCopy(
   // are the ONLY route a change takes to the guest: editing the attached event
   // moves the host's own calendar and tells nobody, which is the whole reason
   // this footer exists rather than being left implied.
-  const manage = cancelled ? "" : `
+  const manage = cancelled
+    ? ""
+    : `
     <p style="color:#888;font-size:12px">
-      ${links.location   ? `<a href="${esc(links.location)}">set the spot</a> &nbsp;·&nbsp; `   : ""}
+      ${links.location ? `<a href="${esc(links.location)}">set the spot</a> &nbsp;·&nbsp; ` : ""}
       ${links.reschedule ? `<a href="${esc(links.reschedule)}">move it</a> &nbsp;·&nbsp; ` : ""}
-      ${links.cancel     ? `<a href="${esc(links.cancel)}">cancel</a><br>` : ""}
+      ${links.cancel ? `<a href="${esc(links.cancel)}">cancel</a><br>` : ""}
       these mail ${esc(name.split(" ")[0] || name)}. editing the calendar entry
       above does not.
     </p>`;
@@ -168,29 +179,33 @@ export async function sendHostCopy(
     <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
-    ${cancelled
-      ? `<p>cancelled. ${esc(name.split(" ")[0] || name)} has been told and the
+    ${
+      cancelled
+        ? `<p>cancelled. ${esc(name.split(" ")[0] || name)} has been told and the
            slot is open again.</p>
          <p>the attachment withdraws the entry, and it is best-effort here
             because the copy on your calendar is <em>yours</em>: a client is
             free to ignore a withdrawal from an outside organiser. if it is
             still sitting there, delete it.</p>`
-      : `<p>the attached .ics adds this to your calendar as <em>your</em> event:
+        : `<p>the attached .ics adds this to your calendar as <em>your</em> event:
            you can move it, rename it or invite someone else, and none of that
            touches what ${esc(name.split(" ")[0] || name)} is holding.
-           ${updated ? "adding it again updates the entry in place." : ""}</p>`}
+           ${updated ? "adding it again updates the entry in place." : ""}</p>`
+    }
     ${manage}
   `;
   return resendSend(env, {
-    from:    `cal.aadhar.sh <noreply@aadhar.sh>`,
-    to:      [env.HOST_EMAIL],
+    from: `cal.aadhar.sh <noreply@aadhar.sh>`,
+    to: [env.HOST_EMAIL],
     subject: `${cancelled ? "cancelled" : updated ? "updated" : "your copy"}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
-    attachments: [{
-      filename:    "coffee-host.ics",
-      content:     utf8ToBase64(ics),
-      content_type: `text/calendar; method=${cancelled ? "CANCEL" : "PUBLISH"}`,
-    }],
+    attachments: [
+      {
+        filename: "coffee-host.ics",
+        content: utf8ToBase64(ics),
+        content_type: `text/calendar; method=${cancelled ? "CANCEL" : "PUBLISH"}`,
+      },
+    ],
     headers: { "List-Id": LIST_ID, "X-Coffee-Booking": booking.id },
   });
 }
@@ -214,16 +229,18 @@ export async function sendCancel(env, booking) {
     <p>${esc(env.HOST_NAME)}</p>
   `;
   return resendSend(env, {
-    from:    `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to:      [email],
-    cc:      [env.HOST_EMAIL],
+    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
+    to: [email],
+    cc: [env.HOST_EMAIL],
     subject: `cancelled: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
-    attachments: [{
-      filename:    "coffee.ics",
-      content:     utf8ToBase64(ics),
-      content_type: "text/calendar; method=CANCEL",
-    }],
+    attachments: [
+      {
+        filename: "coffee.ics",
+        content: utf8ToBase64(ics),
+        content_type: "text/calendar; method=CANCEL",
+      },
+    ],
     headers: { "X-Coffee-Booking": booking.id },
   });
 }
@@ -238,8 +255,8 @@ export async function sendDecline(env, booking) {
     <p>best,<br>${esc(env.HOST_NAME)}</p>
   `;
   return resendSend(env, {
-    from:    `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to:      [email],
+    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
+    to: [email],
     subject: `re: ${env.EVENT_TITLE}`,
     html,
     headers: { "X-Coffee-Booking": booking.id },
@@ -295,7 +312,11 @@ export async function resendSend(env, payload) {
 // within its rights to ignore this and leave them to delete it.
 function buildICS(env, booking, { audience = "guest", cancel = false } = {}) {
   const { id, name, email, topic, area, location, start, end } = booking;
-  const fmt = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const fmt = (ms) =>
+    new Date(ms)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
   const host = audience === "host";
   // A distinct UID keeps the host's own event clear of the invite they are cc'd
   // on, so nothing in their calendar can treat the two as one object. It is
@@ -328,10 +349,7 @@ function buildICS(env, booking, { audience = "guest", cancel = false } = {}) {
       // The host copy has no attendee line to carry the guest, so the address
       // goes here, where it is also the thing that makes the entry actionable
       // from the calendar itself.
-      (host ? `${name} <${email}>\n\n` : "") +
-      `requested: ${topic}` +
-      (area ? `\n\nthey're around: ${area}` : "") +
-      `\n\nbooked via cal.aadhar.sh`
+      (host ? `${name} <${email}>\n\n` : "") + `requested: ${topic}` + (area ? `\n\nthey're around: ${area}` : "") + `\n\nbooked via cal.aadhar.sh`,
     )}`,
     host ? null : `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
     // RSVP goes FALSE on a cancellation: there is nothing left to answer, and a
@@ -352,16 +370,21 @@ function foldLine(line) {
   const enc = new TextEncoder();
   if (enc.encode(line).length <= 75) return [line];
   const out: string[] = [];
-  let cur = "", curBytes = 0, first = true;
-  for (const ch of line) {                 // iterate by code point, not UTF-16 unit
+  let cur = "",
+    curBytes = 0,
+    first = true;
+  for (const ch of line) {
+    // iterate by code point, not UTF-16 unit
     const chBytes = enc.encode(ch).length;
-    const limit = first ? 75 : 74;          // continuation lines lead with a space (1 octet)
+    const limit = first ? 75 : 74; // continuation lines lead with a space (1 octet)
     if (curBytes + chBytes > limit) {
       out.push(first ? cur : " " + cur);
       first = false;
-      cur = ch; curBytes = chBytes;
+      cur = ch;
+      curBytes = chBytes;
     } else {
-      cur += ch; curBytes += chBytes;
+      cur += ch;
+      curBytes += chBytes;
     }
   }
   out.push(first ? cur : " " + cur);
@@ -375,24 +398,38 @@ function utf8ToBase64(str) {
   return new TextEncoder().encode(str).toBase64();
 }
 function escICS(s) {
-  return String(s).replace(/[\\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");
+  return String(s)
+    .replace(/[\\;,]/g, (m) => "\\" + m)
+    .replace(/\n/g, "\\n");
 }
 
 // ── formatting helpers ───────────────────────────────────────────────────
 function fmtRange(start, end, tz) {
-  const d = (ms) => new Date(ms).toLocaleString("en-US", {
-    timeZone: tz, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
-  });
-  const t = (ms) => new Date(ms).toLocaleString("en-US", {
-    timeZone: tz, hour: "numeric", minute: "2-digit",
-  });
+  const d = (ms) =>
+    new Date(ms).toLocaleString("en-US", {
+      timeZone: tz,
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+  const t = (ms) =>
+    new Date(ms).toLocaleString("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+    });
   // "Tuesday, May 14, 3:00 PM – 3:30 PM EDT"
   return `${d(start)} – ${t(end)}`;
 }
 function shortWhen(ms, tz) {
   return new Date(ms).toLocaleString("en-US", {
-    timeZone: tz, month: "short", day: "numeric",
-    hour: "numeric", minute: "2-digit",
+    timeZone: tz,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }

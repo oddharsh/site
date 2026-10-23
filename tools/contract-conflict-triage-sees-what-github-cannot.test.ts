@@ -160,9 +160,15 @@ test("each side of a hunk is attributed to the commit that wrote it, and only th
     const { report } = run(dir);
     const hunk = report.files.find((f) => f.path === "notes.txt").hunks[0];
     assert.deepEqual(hunk.sides, { main: ["two, as main has it"], base: ["two"], pr: ["two, as the feature has it"] });
-    assert.deepEqual(hunk.why.main.map((o) => o.subject), ["main"]);
+    assert.deepEqual(
+      hunk.why.main.map((o) => o.subject),
+      ["main"],
+    );
     // The control: "unrelated edit" touched notes.txt and none of this hunk.
-    assert.deepEqual(hunk.why.pr.map((o) => o.subject), ["feature"]);
+    assert.deepEqual(
+      hunk.why.pr.map((o) => o.subject),
+      ["feature"],
+    );
     assert.equal(hunk.why.pr[0].lines, 2, "the added line and the base line it replaced");
 
     // A modify/delete has no hunk to attribute, so the file carries its history:

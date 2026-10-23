@@ -151,7 +151,9 @@ const report = {
 if (asJson) {
   console.log(JSON.stringify(report, null, 2));
 } else {
-  console.log(`.node-version: ${pinnedMajor}  (${phase})${pretend ? "   [--pretend, the tree says " + readFileSync(join(ROOT, ".node-version"), "utf8").trim() + "]" : ""}`);
+  console.log(
+    `.node-version: ${pinnedMajor}  (${phase})${pretend ? "   [--pretend, the tree says " + readFileSync(join(ROOT, ".node-version"), "utf8").trim() + "]" : ""}`,
+  );
   if (phase === "current" && lts) console.log(`  enters Active LTS ${entry.lts}, in ${daysBetween(today, lts)} days`);
   if (phase === "active-lts" && maintenance) console.log(`  Active LTS until ${entry.maintenance}, ${daysBetween(today, maintenance)} days`);
   if (phase === "maintenance") console.log(`  security fixes only since ${entry.maintenance}`);

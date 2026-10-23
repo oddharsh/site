@@ -61,9 +61,7 @@ import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetc
 //                   it to ask what a named crawler token receives. It still
 //                   obeys AadharshBot's robots opt-out, because a diagnostic
 //                   identity cannot be a back door around our own.
-export type OutboundIdentity =
-  | { as: "aadharshbot"; postQuantum?: boolean }
-  | { as: "unsigned-probe" };
+export type OutboundIdentity = { as: "aadharshbot"; postQuantum?: boolean } | { as: "unsigned-probe" };
 
 export type OutboundRequest = {
   method: "GET" | "POST";
@@ -85,9 +83,7 @@ export type OutboundRefusal =
   // `cause` is the BotPolicyError a throwing caller would have seen.
   | { ok: false; reason: "robots"; error: string; cause: BotPolicyError };
 
-export type OutboundRead =
-  | { ok: true; via: "self" | "network"; response: Response; finalUrl: string; hops: number }
-  | OutboundRefusal;
+export type OutboundRead = { ok: true; via: "self" | "network"; response: Response; finalUrl: string; hops: number } | OutboundRefusal;
 
 // The self adapter, or null when this env has no way to dispatch in-process.
 // SELF_FETCH is route() itself; ASSETS is the pre-enhancement static tree.
@@ -112,13 +108,15 @@ export async function outboundRead(url: string, env, request: OutboundRequest): 
   // An unparseable URL is not ours. It falls through to the network adapter,
   // whose hop-0 check refuses it as a value before any request.
   let hostname = "";
-  try { hostname = new URL(url).hostname; } catch { /* not self */ }
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    /* not self */
+  }
 
   const self = dispatchesToSelf(hostname, env) ? selfAdapter(env) : null;
   if (self) {
-    const selfHeaders = identity.as === "aadharshbot"
-      ? await botHeaders(url, env, { headers, sign: false })
-      : headers;
+    const selfHeaders = identity.as === "aadharshbot" ? await botHeaders(url, env, { headers, sign: false }) : headers;
     const response = await self(new Request(url, { method, headers: selfHeaders, ...withBody }));
     return { ok: true, via: "self", response, finalUrl: url, hops: 0 };
   }

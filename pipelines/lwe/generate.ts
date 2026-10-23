@@ -38,7 +38,7 @@ import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { titleBar } from "../../src/worker/lib/window.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
+const ROOT = join(HERE, "..", ".."); // pipelines/<name>/ -> repo root
 const PAGES = join(ROOT, "src/pages");
 const REGISTRY = JSON.parse(readFileSync(join(HERE, "concepts.json"), "utf8")).concepts;
 const byId = (id) => REGISTRY.find((c) => c.id === id);
@@ -64,7 +64,7 @@ function renderMsg(m, c) {
     const d = m.demo;
     return `      <div class="demo"${d.id ? ` id="${d.id}"` : ""}>\n        <div class="bar">${d.bar || "live demo"}</div>\n        <div class="pad">${d.html}</div>\n      </div>`;
   }
-  const who = m.who === "you" ? "aadharsh" : (c.buddyName || c.title);
+  const who = m.who === "you" ? "aadharsh" : c.buddyName || c.title;
   const cite = m.cite ? ` <a href="${m.cite.url}" rel="external" title="${m.cite.title || "source"}">[src]</a>` : "";
   return `      <div class="msg ${m.who}"><div class="pic"></div><div><div class="who"><b>${who}</b>${m.time ? `<time>${m.time}</time>` : ""}</div>\n        <div class="bubble">${m.html}${cite}</div></div></div>`;
 }
@@ -155,7 +155,10 @@ ${demoJs}${understanding}${askScript}
 // ---- registry-driven wiring ----
 function sitemapBlock(concepts) {
   const online = concepts.filter((c) => c.status === "online");
-  const rows = online.map((c) => `  <url>\n    <loc>https://aadhar.sh${c.path}</loc>\n    <lastmod>${c.lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.3</priority>\n  </url>`);
+  const rows = online.map(
+    (c) =>
+      `  <url>\n    <loc>https://aadhar.sh${c.path}</loc>\n    <lastmod>${c.lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.3</priority>\n  </url>`,
+  );
   return rows.join("\n");
 }
 // The buddy list (src/pages/lwe/index.html): the full Online group, count + list,
@@ -170,22 +173,30 @@ function buddyGroup(concepts) {
   // appended an entry is the drift this exists to prevent. `lastmod` is the only
   // date the registry carries; git cannot stand in for it, since the whole
   // section arrived in one 2026-06-30 recovery commit. Ties keep registry order.
-  const online = concepts.filter((c) => c.status === "online")
+  const online = concepts
+    .filter((c) => c.status === "online")
     .map((c, i) => ({ c, i }))
-    .sort((x, y) => (x.c.lastmod === y.c.lastmod ? x.i - y.i : (x.c.lastmod < y.c.lastmod ? 1 : -1)))
+    .sort((x, y) => (x.c.lastmod === y.c.lastmod ? x.i - y.i : x.c.lastmod < y.c.lastmod ? 1 : -1))
     .map(({ c }) => c);
-  const items = online.map((c) =>
-`      <li><a class="buddy ${c.buddyClass}" href="${c.path}">
+  const items = online
+    .map(
+      (c) =>
+        `      <li><a class="buddy ${c.buddyClass}" href="${c.path}">
         <span class="pic" aria-hidden="true"></span>
         <span class="nm"><b>${c.buddyName}</b><span class="pm">${c.pm}</span></span>
         <span class="st on">${c.badge}</span>
-      </a></li>`).join("\n");
+      </a></li>`,
+    )
+    .join("\n");
   return `    <div class="grp">Online <span class="n">· ${online.length}</span></div>\n    <ul class="buddies">\n${items}\n    </ul>`;
 }
 // The ask.js CONCEPTS allow-list: only concepts with hasAsk + a grounded corpus.
 // Keeps the include set from drifting (a page ships ask.js only when hasAsk is true).
 function conceptsBlock(concepts) {
-  const entries = concepts.filter((c) => c.hasAsk).map((c) => `"${c.path}": "${c.id}"`).join(", ");
+  const entries = concepts
+    .filter((c) => c.hasAsk)
+    .map((c) => `"${c.path}": "${c.id}"`)
+    .join(", ");
   return `  var CONCEPTS = { ${entries} };`;
 }
 
@@ -200,8 +211,12 @@ function conceptsBlock(concepts) {
 function injectBetween(file, start, end, content) {
   const path = join(ROOT, file);
   const src = readFileSync(path, "utf8");
-  const i = src.indexOf(start), j = src.indexOf(end);
-  if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, SKIPPED (${start})`); return false; }
+  const i = src.indexOf(start),
+    j = src.indexOf(end);
+  if (i === -1 || j === -1) {
+    console.log(`  · ${file}: markers not found, SKIPPED (${start})`);
+    return false;
+  }
   const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
   writeFileSync(path, next);
   console.log(`  · ${file}: rewrote ${start.replace(/[^\w:-]+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "")} region`);

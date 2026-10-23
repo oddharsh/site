@@ -87,7 +87,13 @@ if (format) process.stdout.write(String(status));
 `;
 
 const API_SCENARIOS = ["valid", "valid Linux", "checksum mismatch", "revision mismatch", "no checker", "wrong download host", "missing digest"];
-const PAGE_SCENARIOS = ["rate limited", "rate limited with a token", "forced to pages", "rate limited, page digest mismatch", "rate limited, page markup drifted"];
+const PAGE_SCENARIOS = [
+  "rate limited",
+  "rate limited with a token",
+  "forced to pages",
+  "rate limited, page digest mismatch",
+  "rate limited, page markup drifted",
+];
 
 for (const scenario of [...API_SCENARIOS, ...PAGE_SCENARIOS]) {
   test(`rolling installer: ${scenario}`, (t) => {
@@ -96,32 +102,60 @@ for (const scenario of [...API_SCENARIOS, ...PAGE_SCENARIOS]) {
     const platform = linux ? "bun-linux-x64" : "bun-darwin-aarch64";
     write("config/bun-pin.json", { bun: "canary" });
     write("bin/uname", `#!/bin/sh\ncase "$1" in -s) echo ${linux ? "Linux" : "Darwin"};; -m) echo ${linux ? "x86_64" : "arm64"};; *) exit 1;; esac\n`, 0o755);
-    write(`archive/${platform}/bun`, `#!/bin/sh\ncase "$1" in\n -p) echo '${scenario === "revision mismatch" ? "f".repeat(40) : REVISION}';;\n --version) echo '1.4.3';;\n --revision) echo '1.4.3-canary.1+bbdc5a519';;\n check) exit ${scenario === "no checker" ? 1 : 0};;\n *) exit 1;;\nesac\n`, 0o755);
+    write(
+      `archive/${platform}/bun`,
+      `#!/bin/sh\ncase "$1" in\n -p) echo '${scenario === "revision mismatch" ? "f".repeat(40) : REVISION}';;\n --version) echo '1.4.3';;\n --revision) echo '1.4.3-canary.1+bbdc5a519';;\n check) exit ${scenario === "no checker" ? 1 : 0};;\n *) exit 1;;\nesac\n`,
+      0o755,
+    );
     const zipped = spawnSync("zip", ["-qr", join(root, "bun.zip"), platform], { cwd: join(root, "archive"), encoding: "utf8" });
     assert.equal(zipped.status, 0, zipped.stderr);
-    const digest = createHash("sha256").update(readFileSync(join(root, "bun.zip"))).digest("hex");
+    const digest = createHash("sha256")
+      .update(readFileSync(join(root, "bun.zip")))
+      .digest("hex");
     write("release.json", {
-      tag_name: "canary", body: `This release corresponds to the commit: ${REVISION}`,
-      assets: [{ name: `${platform}.zip`, browser_download_url: scenario === "wrong download host" ? `https://example.com/${platform}.zip` : `https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`,
-        digest: scenario === "missing digest" ? undefined : `sha256:${scenario === "checksum mismatch" ? "0".repeat(64) : digest}` }],
+      tag_name: "canary",
+      body: `This release corresponds to the commit: ${REVISION}`,
+      assets: [
+        {
+          name: `${platform}.zip`,
+          browser_download_url:
+            scenario === "wrong download host"
+              ? `https://example.com/${platform}.zip`
+              : `https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`,
+          digest: scenario === "missing digest" ? undefined : `sha256:${scenario === "checksum mismatch" ? "0".repeat(64) : digest}`,
+        },
+      ],
     });
     // The same release as github.com renders it, trimmed from the 2026-10-08
     // pages: the body's commit link, and a copy button per asset whose label
     // names the file. The decoy asset proves the digest is chosen by name.
     const pageDigest = scenario === "rate limited, page digest mismatch" ? "0".repeat(64) : digest;
-    write("release.html", scenario === "rate limited, page markup drifted"
-      ? `<p>Built from <a href="https://github.com/oven-sh/bun/commit/${REVISION}">${REVISION.slice(0, 7)}</a></p>`
-      : `<p>This release of Bun corresponds to the commit: <a class="commit-link" data-hovercard-type="commit" data-hovercard-url="https://github.com/oven-sh/bun/commit/${REVISION}/hovercard" href="https://github.com/oven-sh/bun/commit/${REVISION}"><tt>${REVISION.slice(0, 7)}</tt></a></p>`);
-    write("assets.html", ["bun-windows-x64", platform].map((name) => {
-      const value = `sha256:${name === platform ? pageDigest : "e".repeat(64)}`;
-      return `<a href="/oven-sh/bun/releases/download/canary/${name}.zip" rel="nofollow" data-turbo="false" class="wb-break-all"><span class="text-bold">${name}.zip</span></a>
+    write(
+      "release.html",
+      scenario === "rate limited, page markup drifted"
+        ? `<p>Built from <a href="https://github.com/oven-sh/bun/commit/${REVISION}">${REVISION.slice(0, 7)}</a></p>`
+        : `<p>This release of Bun corresponds to the commit: <a class="commit-link" data-hovercard-type="commit" data-hovercard-url="https://github.com/oven-sh/bun/commit/${REVISION}/hovercard" href="https://github.com/oven-sh/bun/commit/${REVISION}"><tt>${REVISION.slice(0, 7)}</tt></a></p>`,
+    );
+    write(
+      "assets.html",
+      ["bun-windows-x64", platform]
+        .map((name) => {
+          const value = `sha256:${name === platform ? pageDigest : "e".repeat(64)}`;
+          return `<a href="/oven-sh/bun/releases/download/canary/${name}.zip" rel="nofollow" data-turbo="false" class="wb-break-all"><span class="text-bold">${name}.zip</span></a>
 <span class="Truncate-text">${value}</span><clipboard-copy id="clipboard-button-${value}" aria-label="Copy to clipboard digest for ${name}.zip" type="button" value="${value}" class="Button--invisible"></clipboard-copy>`;
-    }).join("\n"));
+        })
+        .join("\n"),
+    );
     write("bin/curl", CURL, 0o755);
     write("installed/bun", "previous binary", 0o755);
     const { GITHUB_TOKEN: _github, GH_TOKEN: _gh, ...inherited } = process.env;
 
-    const env: Record<string, string | undefined> = { ...inherited, PATH: `${join(root, "bin")}:${process.env.PATH}`, ROLLING_FIXTURE: root, ROLLING_PLATFORM: platform };
+    const env: Record<string, string | undefined> = {
+      ...inherited,
+      PATH: `${join(root, "bin")}:${process.env.PATH}`,
+      ROLLING_FIXTURE: root,
+      ROLLING_PLATFORM: platform,
+    };
     if (scenario.startsWith("rate limited")) env.ROLLING_API = "ratelimit";
     if (scenario === "rate limited with a token") env.GITHUB_TOKEN = "test-token";
     if (scenario === "forced to pages") env.INSTALL_BUN_METADATA = "pages";
@@ -130,11 +164,12 @@ for (const scenario of [...API_SCENARIOS, ...PAGE_SCENARIOS]) {
     const zip = `anon https://github.com/oven-sh/bun/releases/download/canary/${platform}.zip`;
     const api = "https://api.github.com/repos/oven-sh/bun/releases/tags/canary";
     const pages = ["anon https://github.com/oven-sh/bun/releases/tag/canary", "anon https://github.com/oven-sh/bun/releases/expanded_assets/canary"];
-    const expected = {
-      "rate limited": { metadata: "pages", requests: [`anon ${api}`, ...pages, zip] },
-      "rate limited with a token": { metadata: "api", requests: [`auth ${api}`, zip] },
-      "forced to pages": { metadata: "pages", requests: [...pages, zip] },
-    }[scenario] ?? (scenario.startsWith("valid") ? { metadata: "api", requests: [`anon ${api}`, zip] } : undefined);
+    const expected =
+      {
+        "rate limited": { metadata: "pages", requests: [`anon ${api}`, ...pages, zip] },
+        "rate limited with a token": { metadata: "api", requests: [`auth ${api}`, zip] },
+        "forced to pages": { metadata: "pages", requests: [...pages, zip] },
+      }[scenario] ?? (scenario.startsWith("valid") ? { metadata: "api", requests: [`anon ${api}`, zip] } : undefined);
     if (expected) {
       assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
       const receipt = JSON.parse(readFileSync(join(root, "installed/bun.install.json"), "utf8"));

@@ -39,7 +39,11 @@ export function truncatingDecodes(src) {
 
 test("the scan finds a truncating decode when one is there (control)", () => {
   assert.equal(truncatingDecodes('run([fmt === "av2" ? AVIFDEC_AV2 : AVIFDEC as string, "-d", "8", file, png]);').length, 1);
-  assert.equal(truncatingDecodes('spawnSync(AVIFDEC_AVM, [\n  "-d",\n  "8",\n  file,\n  png,\n]);').length, 1, "the list passed right after the name counts too (codec-knob-probe.ts's form)");
+  assert.equal(
+    truncatingDecodes('spawnSync(AVIFDEC_AVM, [\n  "-d",\n  "8",\n  file,\n  png,\n]);').length,
+    1,
+    "the list passed right after the name counts too (codec-knob-probe.ts's form)",
+  );
   assert.equal(truncatingDecodes('spawnSync(AVIFDEC_AVM, ["-d", "16", file, png]);').length, 0, "a 16-bit decode is the fix, not a hit");
   assert.equal(truncatingDecodes('run([AVIFDEC_AVM,\n  "-d",\n  "8", file, png])').length, 1, "a wrapped list still counts");
   assert.equal(truncatingDecodes('run([AVIFENC, "-l", "-d", "8", png, avif])').length, 0, "an encode at 8 bits is not a decode");
@@ -58,7 +62,11 @@ test("no tool decodes an AVIF or AV2 file for scoring with -d 8", () => {
 
 test("the format axis decodes AVIF and AV2 through avifToPng8, at 16 bits", () => {
   const gen = readFileSync(new URL("photos/gen-pixel-peeper.ts", import.meta.url), "utf8");
-  const body = (name) => { const i = gen.indexOf(`export function ${name}(`); assert.ok(i >= 0, `${name} is gone`); return gen.slice(i, gen.indexOf("\n}\n", i)); };
+  const body = (name) => {
+    const i = gen.indexOf(`export function ${name}(`);
+    assert.ok(i >= 0, `${name} is gone`);
+    return gen.slice(i, gen.indexOf("\n}\n", i));
+  };
   assert.match(body("avifToPng8"), /["']-d["']\s*,\s*["']16["']/, "avifToPng8 must decode at 16 bits");
   assert.match(body("avifToPng8"), /zenc\(\s*\[\s*["']frame["']/, "avifToPng8 must round the 16-bit decode with zenc frame");
   assert.match(body("decodeFmt"), /fmt !== "jxl"\) return avifToPng8\(/, "decodeFmt must hand every AVIF-family file to avifToPng8");

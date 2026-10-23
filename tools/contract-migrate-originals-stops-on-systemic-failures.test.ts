@@ -35,16 +35,22 @@ async function migrate(script) {
   await put("src/worker/photo-index.json", JSON.stringify(index, null, 2) + "\n");
   await put("script", script.join("\n") + "\n");
   // Every call fails; wrangler's last stderr line is its log path, as in production.
-  await put("node_modules/.bin/wrangler", `#!/bin/bash
+  await put(
+    "node_modules/.bin/wrangler",
+    `#!/bin/bash
 n=$(( $(wc -l < "$FIXTURE_ROOT/calls" 2>/dev/null || echo 0) + 1 ))
 echo "$*" >> "$FIXTURE_ROOT/calls"
 line=$(sed -n "\${n}p" "$FIXTURE_ROOT/script"); [ -n "$line" ] || line=$(tail -n 1 "$FIXTURE_ROOT/script")
 printf '%s\\n🪵  Logs were written to "/tmp/wrangler.log"\\n' "$line" >&2
 exit 1
-`, 0o755);
+`,
+    0o755,
+  );
   for (const bin of ["cjxl", "djxl"]) await put(`bin/${bin}`, "#!/bin/bash\nexit 0\n", 0o755);
   const r = spawnSync(BUN, ["tools/photos/migrate-originals.ts", "--jobs", "1"], {
-    cwd: root, encoding: "utf8", timeout: 30_000,
+    cwd: root,
+    encoding: "utf8",
+    timeout: 30_000,
     env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, FIXTURE_ROOT: root, PHOTO_SOURCE_ORIGIN: "http://127.0.0.1:9" },
   });
   const calls = (await readFile(path.join(root, "calls"), "utf8").catch(() => "")).split("\n").filter(Boolean);

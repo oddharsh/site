@@ -46,7 +46,9 @@ function check(root: string, config: string, flags: string[], executable: string
   // --no-pretty output listed all 80 of 80 without it (measured 2026-10-06 on
   // bbdc5a519), but the baseline counts lines, so it must not depend on that.
   const result = spawnSync(executable, ["check", "-p", config, "--no-pretty", "--all", ...flags], {
-    encoding: "utf8", cwd: root, maxBuffer: 64 << 20,
+    encoding: "utf8",
+    cwd: root,
+    maxBuffer: 64 << 20,
   });
   const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
   // A Bun that predates the checker reads `check` as a package.json script.
@@ -54,15 +56,26 @@ function check(root: string, config: string, flags: string[], executable: string
     throw new Error(`${executable} has no \`bun check\` (gotcha 52); install the pinned Bun with \`bash .github/install-bun.sh ~/.bun/bin\``);
   }
   const diagnostics = (result.stdout ?? "").split("\n").filter((line) => /^.+?\(\d+,\d+\): error TS\d+:/.test(line));
-  if (result.error || result.signal || result.status === null ||
-      (result.status !== 0 && (result.status !== 1 || diagnostics.length === 0)) ||
-      diagnostics.some((line) => /\.json\(\d+,\d+\): error TS\d+:/.test(line)) ||
-      /Stopped before type checking|error TS\d+:/.test((result.stdout ?? "").split("\n").filter((line) => !diagnostics.includes(line)).join("\n")) ||
-      /Stopped before type checking/.test(result.stderr ?? "")) {
+  if (
+    result.error ||
+    result.signal ||
+    result.status === null ||
+    (result.status !== 0 && (result.status !== 1 || diagnostics.length === 0)) ||
+    diagnostics.some((line) => /\.json\(\d+,\d+\): error TS\d+:/.test(line)) ||
+    /Stopped before type checking|error TS\d+:/.test(
+      (result.stdout ?? "")
+        .split("\n")
+        .filter((line) => !diagnostics.includes(line))
+        .join("\n"),
+    ) ||
+    /Stopped before type checking/.test(result.stderr ?? "")
+  ) {
     throw new Error(`bun check could not complete ${config}:\n${result.error?.message ?? output.trim().slice(-1200)}`);
   }
-  const files = (result.stdout ?? "").split("\n")
-    .filter((line) => line.startsWith(`${root}/`)).map((line) => line.slice(root.length + 1));
+  const files = (result.stdout ?? "")
+    .split("\n")
+    .filter((line) => line.startsWith(`${root}/`))
+    .map((line) => line.slice(root.length + 1));
   if (files.length === 0) throw new Error(`${config} holds no files; bun check did not read the program:\n${output.trim().slice(-600)}`);
   return { files, diagnostics };
 }
@@ -180,7 +193,9 @@ function main() {
 }
 
 if (import.meta.main) {
-  try { main(); } catch (error) {
+  try {
+    main();
+  } catch (error) {
     console.error(`typecheck: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   }

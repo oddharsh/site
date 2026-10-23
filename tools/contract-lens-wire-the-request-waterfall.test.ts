@@ -1,9 +1,5 @@
 // ── /lens/wire — the request waterfall ──────────────────────────────────────
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 // The Wire lens is the only surface here that opens a real CDP browser session,
 // so its tests split the way the module does: the summariser is a pure function
@@ -15,14 +11,27 @@ import {
 function wireEvents(specs) {
   const out: any[] = [];
   for (const s of specs) {
-    out.push({ method: "Network.requestWillBeSent", params: { requestId: s.id, request: { url: s.url, method: "GET" }, type: s.type || "Script", timestamp: s.t ?? 1 } });
+    out.push({
+      method: "Network.requestWillBeSent",
+      params: { requestId: s.id, request: { url: s.url, method: "GET" }, type: s.type || "Script", timestamp: s.t ?? 1 },
+    });
     if (s.redirectTo) {
-      out.push({ method: "Network.requestWillBeSent", params: { requestId: s.id, request: { url: s.redirectTo }, type: s.type || "Script", timestamp: (s.t ?? 1) + 0.01, redirectResponse: { status: 301 } } });
+      out.push({
+        method: "Network.requestWillBeSent",
+        params: { requestId: s.id, request: { url: s.redirectTo }, type: s.type || "Script", timestamp: (s.t ?? 1) + 0.01, redirectResponse: { status: 301 } },
+      });
     }
     if (s.failed) {
       out.push({ method: "Network.loadingFailed", params: { requestId: s.id, errorText: "net::ERR_FAILED", timestamp: (s.t ?? 1) + 0.5 } });
     } else {
-      out.push({ method: "Network.responseReceived", params: { requestId: s.id, type: s.type || "Script", response: { status: s.status ?? 200, mimeType: "text/plain", protocol: "h2", encodedDataLength: 120, fromDiskCache: !!s.cached } } });
+      out.push({
+        method: "Network.responseReceived",
+        params: {
+          requestId: s.id,
+          type: s.type || "Script",
+          response: { status: s.status ?? 200, mimeType: "text/plain", protocol: "h2", encodedDataLength: 120, fromDiskCache: !!s.cached },
+        },
+      });
       out.push({ method: "Network.loadingFinished", params: { requestId: s.id, encodedDataLength: s.bytes ?? 0, timestamp: (s.t ?? 1) + 0.5 } });
     }
   }
@@ -32,7 +41,8 @@ function wireEvents(specs) {
 test("the wire lens overlaps independent CDP domain enables", async () => {
   const { enableWireDomains } = await import("../src/worker/lens-wire.ts");
   const calls: any[] = [];
-  let active = 0, peak = 0;
+  let active = 0,
+    peak = 0;
   const send = async (method) => {
     calls.push(method);
     active++;
@@ -46,16 +56,24 @@ test("the wire lens overlaps independent CDP domain enables", async () => {
   assert.deepEqual(calls, ["Network.enable", "Page.enable", "Runtime.enable", "Log.enable"]);
 
   const optional: any[] = [];
-  assert.equal(await enableWireDomains(async (method) => {
-    optional.push(method);
-    if (method === "Runtime.enable") throw new Error("unsupported");
-    return {};
-  }), false, "an unsupported execution domain should leave execution evidence neutral");
+  assert.equal(
+    await enableWireDomains(async (method) => {
+      optional.push(method);
+      if (method === "Runtime.enable") throw new Error("unsupported");
+      return {};
+    }),
+    false,
+    "an unsupported execution domain should leave execution evidence neutral",
+  );
   assert.ok(optional.includes("Log.enable"), "both optional domains should still be attempted");
-  await assert.rejects(enableWireDomains(async (method) => {
-    if (method === "Network.enable") throw new Error("required");
-    return {};
-  }), /required/, "a required Network/Page failure must still reject the run");
+  await assert.rejects(
+    enableWireDomains(async (method) => {
+      if (method === "Network.enable") throw new Error("required");
+      return {};
+    }),
+    /required/,
+    "a required Network/Page failure must still reject the run",
+  );
 });
 
 test("the wire lens counts bytes on the wire, not the header preamble", async () => {
@@ -64,10 +82,13 @@ test("the wire lens counts bytes on the wire, not the header preamble", async ()
   // instead of loadingFinished's would report a 400 KB image as 120 bytes, which
   // is the easiest way to get this lens quietly wrong: every number still
   // renders and the page just looks cheap.
-  const d = summariseWire(wireEvents([
-    { id: "1", url: "https://site.test/", type: "Document", bytes: 4_000 },
-    { id: "2", url: "https://site.test/big.jpg", type: "Image", bytes: 400_000 },
-  ]), "https://site.test/");
+  const d = summariseWire(
+    wireEvents([
+      { id: "1", url: "https://site.test/", type: "Document", bytes: 4_000 },
+      { id: "2", url: "https://site.test/big.jpg", type: "Image", bytes: 400_000 },
+    ]),
+    "https://site.test/",
+  );
   assert.equal(d.bytes, 404_000, "totals must come from loadingFinished, not responseReceived");
   assert.equal(d.byType.image.bytes, 400_000);
   assert.equal(d.requests, 2);
@@ -78,9 +99,7 @@ test("a redirect is counted as a hop rather than losing the request", async () =
   // Chrome re-uses the requestId and sends a SECOND requestWillBeSent carrying
   // redirectResponse. Overwriting the row blindly loses the first hop; ignoring
   // the second loses the destination. One row, one hop recorded, final URL kept.
-  const d = summariseWire(wireEvents([
-    { id: "1", url: "https://site.test/old", redirectTo: "https://site.test/new", bytes: 900 },
-  ]), "https://site.test/");
+  const d = summariseWire(wireEvents([{ id: "1", url: "https://site.test/old", redirectTo: "https://site.test/new", bytes: 900 }]), "https://site.test/");
   assert.equal(d.requests, 1);
   assert.equal(d.rows[0].url, "https://site.test/new");
   assert.equal(d.rows[0].redirects, 1);
@@ -88,12 +107,15 @@ test("a redirect is counted as a hop rather than losing the request", async () =
 
 test("the third-party share is the headline and is computed from bytes", async () => {
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
-  const d = summariseWire(wireEvents([
-    { id: "1", url: "https://news.test/", type: "Document", bytes: 10_000 },
-    { id: "2", url: "https://cdn.news.test/app.js", bytes: 10_000 },   // same site, subdomain
-    { id: "3", url: "https://ads.example/t.js", bytes: 60_000 },
-    { id: "4", url: "https://track.other/p.gif", type: "Image", bytes: 20_000 },
-  ]), "https://news.test/");
+  const d = summariseWire(
+    wireEvents([
+      { id: "1", url: "https://news.test/", type: "Document", bytes: 10_000 },
+      { id: "2", url: "https://cdn.news.test/app.js", bytes: 10_000 }, // same site, subdomain
+      { id: "3", url: "https://ads.example/t.js", bytes: 60_000 },
+      { id: "4", url: "https://track.other/p.gif", type: "Image", bytes: 20_000 },
+    ]),
+    "https://news.test/",
+  );
   assert.equal(d.bytes, 100_000);
   // A subdomain of the page's own site is FIRST party. Getting this wrong
   // inflates the headline on exactly the sites that self-host their assets.
@@ -138,19 +160,25 @@ test("a beacon cancelled after its response is not reported as a failure", async
 
   // A request that never got a response IS a failure, so the discriminator has
   // to be the presence of a status rather than the mere existence of the event.
-  const dead = summariseWire([
-    { method: "Network.requestWillBeSent", params: { requestId: "2", request: { url: "https://gone.test/x" }, type: "Script", timestamp: 1 } },
-    { method: "Network.loadingFailed", params: { requestId: "2", errorText: "net::ERR_NAME_NOT_RESOLVED", timestamp: 1.1 } },
-  ], "https://site.test/");
+  const dead = summariseWire(
+    [
+      { method: "Network.requestWillBeSent", params: { requestId: "2", request: { url: "https://gone.test/x" }, type: "Script", timestamp: 1 } },
+      { method: "Network.loadingFailed", params: { requestId: "2", errorText: "net::ERR_NAME_NOT_RESOLVED", timestamp: 1.1 } },
+    ],
+    "https://site.test/",
+  );
   assert.equal(dead.failed, 1);
   assert.equal(dead.aborted, 0);
 
   // A CSP or client blocker refusing a tracker is the interesting case, and the
   // reason it names the blockedReason instead of a generic error string.
-  const blocked = summariseWire([
-    { method: "Network.requestWillBeSent", params: { requestId: "3", request: { url: "https://ads.test/t.js" }, type: "Script", timestamp: 1 } },
-    { method: "Network.loadingFailed", params: { requestId: "3", errorText: "net::ERR_BLOCKED_BY_CLIENT", blockedReason: "csp", timestamp: 1.1 } },
-  ], "https://site.test/");
+  const blocked = summariseWire(
+    [
+      { method: "Network.requestWillBeSent", params: { requestId: "3", request: { url: "https://ads.test/t.js" }, type: "Script", timestamp: 1 } },
+      { method: "Network.loadingFailed", params: { requestId: "3", errorText: "net::ERR_BLOCKED_BY_CLIENT", blockedReason: "csp", timestamp: 1.1 } },
+    ],
+    "https://site.test/",
+  );
   assert.equal(blocked.rows[0].error, "blocked: csp");
 });
 
@@ -159,13 +187,19 @@ test("data: URIs are counted but kept out of the host roll call", async () => {
   // An inline data: URI is a request in Chrome's event stream and is not a
   // request on the wire. Leaving them in puts a blank host in the list that
   // reads as a tracker; dropping them silently understates the count.
-  const d = summariseWire(wireEvents([
-    { id: "1", url: "https://site.test/", type: "Document", bytes: 1_000 },
-    { id: "2", url: "data:image/svg+xml,%3Csvg%3E", type: "Image", bytes: 0 },
-  ]), "https://site.test/");
+  const d = summariseWire(
+    wireEvents([
+      { id: "1", url: "https://site.test/", type: "Document", bytes: 1_000 },
+      { id: "2", url: "data:image/svg+xml,%3Csvg%3E", type: "Image", bytes: 0 },
+    ]),
+    "https://site.test/",
+  );
   assert.equal(d.requests, 1, "a data: URI is not a request on the wire");
   assert.equal(d.dataUris, 1, "...but it is still reported rather than vanishing");
-  assert.ok(d.hosts.every((h) => h.host), "no blank host may reach the roll call");
+  assert.ok(
+    d.hosts.every((h) => h.host),
+    "no blank host may reach the roll call",
+  );
 });
 
 test("the KV-hit flag does not collide with the target's own cache count", async () => {
@@ -176,11 +210,14 @@ test("the KV-hit flag does not collide with the target's own cache count", async
   // The summary owns `cached` — how many of the TARGET's requests came from the
   // browser's own cache — and the KV-hit path was spreading `cached: true` over
   // the same key, replacing a count with a boolean. Two subjects, two keys.
-  const d = summariseWire([
-    { method: "Network.requestWillBeSent", params: { requestId: "1", request: { url: "https://site.test/a.js" }, type: "Script", timestamp: 1 } },
-    { method: "Network.requestServedFromCache", params: { requestId: "1" } },
-    { method: "Network.loadingFinished", params: { requestId: "1", encodedDataLength: 10, timestamp: 1.1 } },
-  ], "https://site.test/");
+  const d = summariseWire(
+    [
+      { method: "Network.requestWillBeSent", params: { requestId: "1", request: { url: "https://site.test/a.js" }, type: "Script", timestamp: 1 } },
+      { method: "Network.requestServedFromCache", params: { requestId: "1" } },
+      { method: "Network.loadingFinished", params: { requestId: "1", encodedDataLength: 10, timestamp: 1.1 } },
+    ],
+    "https://site.test/",
+  );
   assert.equal(d.cached, 1, "`cached` is a COUNT of the target's cache-served requests");
   assert.equal(typeof d.cached, "number");
   // The hit flag is the pipeline's to write (lens-pipeline.ts's lensJson, held
@@ -215,10 +252,12 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
   // Validation happens in the pipeline, which imports the shared guard. The
   // route only says which parameter is the target.
   assert.match(src, /from "\.\/lens-pipeline\.ts"/, "must run through the lens pipeline");
-  assert.match(readFileSync("./src/worker/lens-pipeline.ts", "utf8"), /from "\.\/lib\/public-fetch\.ts"/,
-    "the pipeline must import the shared guard, not reimplement it");
-  assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
-    "lens-wire.js redefines a guard it is supposed to be importing");
+  assert.match(
+    readFileSync("./src/worker/lens-pipeline.ts", "utf8"),
+    /from "\.\/lib\/public-fetch\.ts"/,
+    "the pipeline must import the shared guard, not reimplement it",
+  );
+  assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/, "lens-wire.js redefines a guard it is supposed to be importing");
   // Exactly one searchParams read, and it is the url. A second one is how a
   // `js=` or `selector=` parameter would arrive, which is the hole the recipe
   // allowlist exists to refuse. If a future parameter is genuinely wanted, this
@@ -243,7 +282,8 @@ test("a CDP session is deleted on every exit path", () => {
   // the try — deleting a session that was never minted is a wasted subrequest on
   // the exact path where the budget is already exhausted.
   // Both must exist first: a deleted bail answers -1, which sorts before the try.
-  const bail = body.indexOf("if (created.status === 429)"), enter = body.indexOf("try {");
+  const bail = body.indexOf("if (created.status === 429)"),
+    enter = body.indexOf("try {");
   assert.ok(bail >= 0, "runWireSession lost its budget bail on the create's 429");
   assert.ok(enter >= 0, "runWireSession lost its try block");
   assert.ok(bail < enter, "the budget bail must return before the session is entered");
@@ -259,6 +299,5 @@ test("the wire lens reports a spent browser budget as ours, not as the target fa
   assert.match(src, /browser_budget_spent/, "a refused session needs its own span outcome");
   const budgetBranch = src.slice(src.indexOf("if (out.budget)"), src.indexOf("if (out.error)"));
   assert.match(budgetBranch, /status: 429/, "a spent budget is a 429, never a 502");
-  assert.match(budgetBranch, /Every other lens still works/,
-    "the message must tell the visitor what they can still do");
+  assert.match(budgetBranch, /Every other lens still works/, "the message must tell the visitor what they can still do");
 });

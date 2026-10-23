@@ -48,18 +48,22 @@ test("the engines floor sits between the zstd floor and the pin", async () => {
   assert.ok(zstdMatch, "tools/build.ts declares no ZSTD_DICTIONARY_NODE_FLOOR");
   const zstdFloor = Number(zstdMatch[1]);
 
-  assert.ok(zstdFloor <= floor,
-    `engines.node floors at ${floor}, below the zstd dictionary floor of ${zstdFloor}; the build would throw on a runtime this repo says it supports`);
-  assert.ok(floor <= pinned,
-    `engines.node floors at ${floor} while .node-version pins ${pinned}`);
+  assert.ok(
+    zstdFloor <= floor,
+    `engines.node floors at ${floor}, below the zstd dictionary floor of ${zstdFloor}; the build would throw on a runtime this repo says it supports`,
+  );
+  assert.ok(floor <= pinned, `engines.node floors at ${floor} while .node-version pins ${pinned}`);
 
   // The tripwire must INTERPOLATE its own constant rather than repeat the
   // number. A literal is how the old weld failed in the first place: two copies
   // of one fact, and only a test standing between them. With the constant
   // interpolated there is one copy, and this assertion is what stops somebody
   // hardcoding it back.
-  assert.match(build, /Node \$\{ZSTD_DICTIONARY_NODE_FLOOR\}\+ is required/,
-    "build.ts's zstd tripwire hardcodes a version instead of interpolating ZSTD_DICTIONARY_NODE_FLOOR");
+  assert.match(
+    build,
+    /Node \$\{ZSTD_DICTIONARY_NODE_FLOOR\}\+ is required/,
+    "build.ts's zstd tripwire hardcodes a version instead of interpolating ZSTD_DICTIONARY_NODE_FLOOR",
+  );
 });
 
 test("every workflow reads .node-version rather than naming a version", async () => {
@@ -75,10 +79,8 @@ test("every workflow reads .node-version rather than naming a version", async ()
   for (const file of files) {
     const body = await readFile(new URL(file, dir), "utf8");
     if (!/uses: actions\/setup-node@/.test(body)) continue;
-    assert.match(body, /node-version-file: \.node-version/,
-      `.github/workflows/${file} sets up node without reading .node-version`);
-    assert.ok(!/^\s*node-version: *['"]?\d/m.test(body),
-      `.github/workflows/${file} names a node version inline instead of reading .node-version`);
+    assert.match(body, /node-version-file: \.node-version/, `.github/workflows/${file} sets up node without reading .node-version`);
+    assert.ok(!/^\s*node-version: *['"]?\d/m.test(body), `.github/workflows/${file} names a node version inline instead of reading .node-version`);
     checked++;
   }
   // A FLOOR, because a scanner that matched nothing would report a pass. Same
@@ -126,7 +128,10 @@ test("the job splitter is per job, which is what the node check rests on", () =>
   // The control: node set up in one job, the suite run in another.
   const body = "on: push\njobs:\n  a:\n    steps:\n      - uses: actions/setup-node@x\n  b:\n    steps:\n      - run: bun run canary:bun\n";
   const jobs = workflowJobs(body);
-  assert.deepEqual(jobs.map((j) => j.name), ["a", "b"]);
+  assert.deepEqual(
+    jobs.map((j) => j.name),
+    ["a", "b"],
+  );
   const b = jobs[1];
   assert.ok(RUNS_THE_SUITE.test(b.body) && !/setup-node/.test(b.body), "job b must read as running the suite without node");
 });

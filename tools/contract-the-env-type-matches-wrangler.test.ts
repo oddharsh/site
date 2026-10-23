@@ -1,10 +1,5 @@
 // ── the Env type matches cloudflare.config.ts ─────────────────────────────
-import {
-  configText,
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { configText, assert, readFileSync, test } from "./contract-shared.ts";
 
 // src/worker/lib/env.ts is a DECLARATION of the Worker's binding surface, and a
 // declaration nothing diffs is a comment with extra syntax. This is the diff.
@@ -57,16 +52,28 @@ const BINDING_SOURCES = [
 // or `/*` inside a string literal from eating the rest of the file.
 function stripComments(src) {
   let out = "";
-  for (let i = 0; i < src.length; ) {
-    const c = src[i], d = src[i + 1];
-    if (c === "/" && d === "/") { while (i < src.length && src[i] !== "\n") i++; continue; }
-    if (c === "/" && d === "*") { i += 2; while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++; i += 2; continue; }
+  for (let i = 0; i < src.length;) {
+    const c = src[i],
+      d = src[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < src.length && src[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && d === "*") {
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i += 2;
+      continue;
+    }
     if (c === '"' || c === "'" || c === "`") {
       out += c;
       for (i++; i < src.length && src[i] !== c; i++) if (src[i] === "\\") i++;
-      out += c; i++; continue;
+      out += c;
+      i++;
+      continue;
     }
-    out += c; i++;
+    out += c;
+    i++;
   }
   return out;
 }
@@ -75,12 +82,24 @@ function stripComments(src) {
 // object or function type cannot contribute one.
 function bodyMembers(body) {
   const found: any[] = [];
-  let depth = 0, lineStart = true;
+  let depth = 0,
+    lineStart = true;
   for (let i = 0; i < body.length; i++) {
     const c = body[i];
-    if (c === "{" || c === "(" || c === "[") { depth++; lineStart = false; continue; }
-    if (c === "}" || c === ")" || c === "]") { depth--; lineStart = false; continue; }
-    if (c === "\n") { lineStart = true; continue; }
+    if (c === "{" || c === "(" || c === "[") {
+      depth++;
+      lineStart = false;
+      continue;
+    }
+    if (c === "}" || c === ")" || c === "]") {
+      depth--;
+      lineStart = false;
+      continue;
+    }
+    if (c === "\n") {
+      lineStart = true;
+      continue;
+    }
     if (c === " " || c === "\t") continue;
     if (lineStart && depth === 0) {
       const m = /^([A-Za-z_$][\w$]*)(\??)\s*:/.exec(body.slice(i));
@@ -95,9 +114,10 @@ async function members() {
   const src = stripComments(readFileSync(ENV_TS, "utf8"));
   const byInterface = new Map();
   const re = /\binterface\s+([A-Za-z0-9_$]+)[^{]*\{/g;
-  for (let m; (m = re.exec(src)); ) {
+  for (let m; (m = re.exec(src));) {
     const open = m.index + m[0].length;
-    let depth = 1, j = open;
+    let depth = 1,
+      j = open;
     for (; j < src.length && depth > 0; j++) {
       if (src[j] === "{") depth++;
       else if (src[j] === "}") depth--;
@@ -154,11 +174,19 @@ test("every site config binding, var and required secret has an Env member, and 
   // Tier 2 and tier 3, both directions.
   const declaredVars = new Set<string>(Object.keys(cfg.vars ?? {}));
   assert.ok(declaredVars.size >= 10, `cloudflare.config.ts parsed to ${declaredVars.size} vars — the parse broke`);
-  assert.deepEqual([...vars].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0), [...declaredVars].sort(), "EnvVars and cloudflare.config.ts vars disagree");
+  assert.deepEqual(
+    [...vars].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+    [...declaredVars].sort(),
+    "EnvVars and cloudflare.config.ts vars disagree",
+  );
 
   const declaredSecrets = new Set<string>(cfg.secrets?.required ?? []);
   assert.ok(declaredSecrets.size >= 5, `cloudflare.config.ts parsed to ${declaredSecrets.size} required secrets — the parse broke`);
-  assert.deepEqual([...secrets].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0), [...declaredSecrets].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0), "EnvSecrets and cloudflare.config.ts secrets.required disagree");
+  assert.deepEqual(
+    [...secrets].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+    [...declaredSecrets].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+    "EnvSecrets and cloudflare.config.ts secrets.required disagree",
+  );
 });
 
 test("required Env members are non-optional and degrading ones are optional", async () => {
@@ -200,10 +228,7 @@ test("no degrading or injected Env member is declared in the site config", async
   // member moves tiers with it, which is the whole point.
   for (const iface of ["EnvOptionalSecrets", "EnvInjected"]) {
     for (const { name } of byInterface.get(iface) ?? []) {
-      assert.ok(
-        !configured.has(name),
-        `${name} is in ${iface} but cloudflare.config.ts configures it — promote it to the matching required tier`,
-      );
+      assert.ok(!configured.has(name), `${name} is in ${iface} but cloudflare.config.ts configures it — promote it to the matching required tier`);
     }
   }
 });

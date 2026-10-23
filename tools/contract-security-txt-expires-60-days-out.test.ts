@@ -36,8 +36,7 @@ test(`${FILE} Expires is at least ${LEAD_DAYS} days out and under a year`, () =>
   // §2.5.5 wants the Internet Date/Time Format (RFC 3339), which Date.parse reads.
   assert.match(expires[0], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/);
   const days = (Date.parse(expires[0]) - Date.now()) / DAY_MS;
-  assert.ok(days >= LEAD_DAYS,
-    `${FILE} expires ${expires[0]}, ${Math.floor(days)} day(s) from now. Bump Expires (keep it under a year out) and deploy`);
+  assert.ok(days >= LEAD_DAYS, `${FILE} expires ${expires[0]}, ${Math.floor(days)} day(s) from now. Bump Expires (keep it under a year out) and deploy`);
   // §2.5.5 recommends under a year, so a far-future date cannot stand in for
   // the review this test exists to force.
   assert.ok(days <= 366, `${FILE} expires ${expires[0]}, more than a year out; RFC 9116 recommends less`);

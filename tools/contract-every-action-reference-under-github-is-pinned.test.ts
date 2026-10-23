@@ -40,7 +40,10 @@ function memoryIo(files: Record<string, string>) {
 function diskIo() {
   const io = {
     async read(rel) {
-      return readFile(join(root, rel), "utf8").then((s) => s, () => null);
+      return readFile(join(root, rel), "utf8").then(
+        (s) => s,
+        () => null,
+      );
     },
     async list(dir) {
       const out: any[] = [];
@@ -51,7 +54,7 @@ function diskIo() {
         return out;
       }
       for (const e of entries) {
-        if (e.isDirectory()) out.push(...await io.list(`${dir}/${e.name}`));
+        if (e.isDirectory()) out.push(...(await io.list(`${dir}/${e.name}`)));
         else if (e.isFile()) out.push(`${dir}/${e.name}`);
       }
       return out;
@@ -112,8 +115,14 @@ test("a `uses:` whose value sits on the next line FAILS rather than reading as a
   const audit = await auditActionPins(io);
   // Two findings, and both are correct: the key pass refuses the shape it
   // cannot read, and the shape pass catches the ref sitting below it.
-  assert.ok(audit.problems.some((p) => p.kind === "unreadable"), "the dangling `uses:` must fail closed");
-  assert.ok(audit.problems.some((p) => p.ref === "actions/setup-python@v7"), "the scalar on the next line must still be seen");
+  assert.ok(
+    audit.problems.some((p) => p.kind === "unreadable"),
+    "the dangling `uses:` must fail closed",
+  );
+  assert.ok(
+    audit.problems.some((p) => p.ref === "actions/setup-python@v7"),
+    "the scalar on the next line must still be seen",
+  );
 });
 
 test("a local ref is followed into a NESTED composite, at any depth", async () => {
@@ -173,7 +182,11 @@ test("a repository with no .github/actions scans clean rather than throwing", as
 test("classifyRef fails closed on anything it does not recognise", () => {
   assert.equal(classifyRef(OK).kind, "pinned");
   assert.equal(classifyRef("actions/checkout@v7").kind, "unpinned");
-  assert.equal(classifyRef("github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938").kind, "pinned", "a sub-path is part of the ref, so codeql-action/init pins like any other");
+  assert.equal(
+    classifyRef("github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938").kind,
+    "pinned",
+    "a sub-path is part of the ref, so codeql-action/init pins like any other",
+  );
   assert.equal(classifyRef(`actions/checkout@${"a".repeat(39)}`).kind, "unpinned", "40 hex means forty, not roughly forty");
   assert.equal(classifyRef(`actions/checkout@${"A".repeat(40)}`).kind, "unpinned", "git prints a sha in lower case, so upper case is a shape nobody writes");
   assert.equal(classifyRef("./.github/actions/setup-bun").kind, "local");
@@ -186,15 +199,18 @@ test("classifyRef fails closed on anything it does not recognise", () => {
 
 test("the key matcher reads `uses:` wherever it sits, quoted or not", () => {
   const rows = [
-    ['      - uses: actions/checkout@v7', "actions/checkout@v7"],
-    ['      - {uses: actions/checkout@v7}', "actions/checkout@v7"],
+    ["      - uses: actions/checkout@v7", "actions/checkout@v7"],
+    ["      - {uses: actions/checkout@v7}", "actions/checkout@v7"],
     ['      - {"uses": "actions/checkout@v7"}', "actions/checkout@v7"],
     ["      - uses: 'actions/checkout@v7'", "actions/checkout@v7"],
     [`      - uses: ${OK} # v7.0.1`, OK],
   ];
   for (const [line, want] of rows) {
     const found = scanActionRefs("f.yml", line);
-    assert.ok(found.some((r) => r.ref === want), `${line} read as ${JSON.stringify(found.map((r) => r.ref))}`);
+    assert.ok(
+      found.some((r) => r.ref === want),
+      `${line} read as ${JSON.stringify(found.map((r) => r.ref))}`,
+    );
   }
 });
 

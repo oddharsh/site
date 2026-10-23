@@ -75,11 +75,7 @@ for (const [label, extra] of Object.entries(EDITS)) {
     const after = render(tree(extra), SHELL);
     assert.equal(before.out.get("public/luna.css"), LUNA_RENAMED);
     assert.equal(after.out.get("public/luna.css"), LUNA_RENAMED, "the /a/ bytes, and so the /a/ URL, must not move");
-    assert.equal(
-      after.out.get("public/access/index.html"),
-      before.out.get("public/access/index.html"),
-      "a page sharing the local name is untouched too",
-    );
+    assert.equal(after.out.get("public/access/index.html"), before.out.get("public/access/index.html"), "a page sharing the local name is untouched too");
   });
 }
 
@@ -107,7 +103,13 @@ test("page-local names come from the two-character tier and never shadow a shell
       assert.ok(!shellNames.has(short), `${local} took a shell name`);
     }
   }
-  const longLocal = planNames(new Map([["public/luna.css", luna], ["p.html", "<style>:root{--local-accent:red}.k{color:var(--local-accent)}</style>"]]), SHELL);
+  const longLocal = planNames(
+    new Map([
+      ["public/luna.css", luna],
+      ["p.html", "<style>:root{--local-accent:red}.k{color:var(--local-accent)}</style>"],
+    ]),
+    SHELL,
+  );
   assert.equal(longLocal.get("--local-accent")?.length, 4, "a long page-local name is placed in the two-character tier");
 });
 
@@ -139,15 +141,28 @@ test("step 5c plans with the registry's shell tier, which is every hashed file m
 
   const shell = shellRankedFiles();
   const hashed = contentHashedFiles();
-  const pageScoped = ["serendipity.js", "lwe/ask.js", "garage/pretext.lib.js", "garage/md-to-html.js", "garage/av2-decode.js", "dotfiles.js", "pixel-peeper/manifest.json", "quiz.css", "prose.css"].map((f) => `public/${f}`);
+  const pageScoped = [
+    "serendipity.js",
+    "lwe/ask.js",
+    "garage/pretext.lib.js",
+    "garage/md-to-html.js",
+    "garage/av2-decode.js",
+    "dotfiles.js",
+    "pixel-peeper/manifest.json",
+    "quiz.css",
+    "prose.css",
+  ].map((f) => `public/${f}`);
   assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these nine are hashed and ranked as pages");
-  assert.ok([...shell].every((f) => hashed.has(f)), "the shell tier is a subset of what step 6 hashes");
+  assert.ok(
+    [...shell].every((f) => hashed.has(f)),
+    "the shell tier is a subset of what step 6 hashes",
+  );
   assert.ok(shell.has("public/luna.css") && shell.has("public/nav.js"), "the two files every page links are shell");
   assert.equal(hashed.size, CLIENT_ASSETS.length, "every registered asset is hashed");
 });
 
 test("CONTROL: an asset declared shell-scoped joins the shell tier, so the scope field is what decides it", () => {
-  const moved = CLIENT_ASSETS.map((a) => (a.file === "lwe/ask.js" ? { ...a, scope:  ("shell" as const) } : a));
+  const moved = CLIENT_ASSETS.map((a) => (a.file === "lwe/ask.js" ? { ...a, scope: "shell" as const } : a));
   assert.ok(shellRankedFiles(moved).has("public/lwe/ask.js"));
   assert.ok(!shellRankedFiles().has("public/lwe/ask.js"));
 });

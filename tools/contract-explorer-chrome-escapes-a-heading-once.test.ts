@@ -55,8 +55,7 @@ const BUILT = new URL(".build/public/", ROOT);
 const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 
 test("no staged page's Explorer chrome carries a double escape", { skip: needsBuild }, async () => {
-  const pages = (await readdir(BUILT, { recursive: true }))
-    .filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
+  const pages = (await readdir(BUILT, { recursive: true })).filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
   let checked = 0;
   const offenders: any[] = [];
   for (const rel of pages) {
@@ -73,8 +72,7 @@ test("no staged page's Explorer chrome carries a double escape", { skip: needsBu
 });
 
 test("no staged page's address bar carries its heading's pill", { skip: needsBuild }, async () => {
-  const pages = (await readdir(BUILT, { recursive: true }))
-    .filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
+  const pages = (await readdir(BUILT, { recursive: true })).filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
   let pilled = 0;
   const offenders: any[] = [];
   for (const rel of pages) {

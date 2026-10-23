@@ -23,13 +23,12 @@ const booking = {
   name: "Jordan Lee",
   email: "jordan@example.com",
   topic: "chat about workers",
-  start: Date.UTC(2026, 4, 14, 19, 0, 0),  // 2026-05-14 19:00Z
-  end:   Date.UTC(2026, 4, 14, 19, 30, 0),
+  start: Date.UTC(2026, 4, 14, 19, 0, 0), // 2026-05-14 19:00Z
+  end: Date.UTC(2026, 4, 14, 19, 30, 0),
 };
 
 // decode a UTF-8 base64 string (the .ics attachment) back to text
-const b64ToUtf8 = (b64) =>
-  new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+const b64ToUtf8 = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 
 let calls;
 let restoreFetch = () => {};
@@ -38,7 +37,8 @@ beforeEach(() => {
   restoreFetch = stubFetch(async (url, init) => {
     calls.push({ url: String(url as string | URL), init, body: JSON.parse(String(init?.body as string)) });
     return new Response(JSON.stringify({ id: "resend-msg-id" }), {
-      status: 200, headers: { "content-type": "application/json" },
+      status: 200,
+      headers: { "content-type": "application/json" },
     });
   });
 });
@@ -54,7 +54,7 @@ describe("sendApprovalRequest → Resend", () => {
     expect(init.headers.authorization).toBe("Bearer test-resend-key");
     expect(init.headers["content-type"]).toBe("application/json");
     expect(body.to).toEqual(["coffee@aadhar.sh"]);
-    expect(body.reply_to).toBe("jordan@example.com");      // hit Reply → goes to requester
+    expect(body.reply_to).toBe("jordan@example.com"); // hit Reply → goes to requester
     expect(body.html).toContain("https://c/approve?t=1&sig=A");
     expect(body.html).toContain("https://c/decline?t=1&sig=B");
     expect(body.html).toContain("chat about workers");
@@ -226,7 +226,7 @@ describe("sendInvite → .ics attachment", () => {
     // the public booking address on ORGANIZER.
     expect(ics.match(/^ATTENDEE/gm)).toHaveLength(1);
     expect(ics).toContain("METHOD:REQUEST");
-    expect(ics).toContain("\r\n");                          // CRLF line endings
+    expect(ics).toContain("\r\n"); // CRLF line endings
     expect(ics.trim().endsWith("END:VCALENDAR")).toBe(true);
   });
 

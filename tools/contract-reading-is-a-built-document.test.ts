@@ -14,16 +14,28 @@ import { ISLAND_MARKER, islandPreload, islandScript } from "../src/worker/lib/is
 import { handleReadingList, LIST_URL, refreshReadingList, renderReadingList, renderReadingPage } from "../src/worker/reading.ts";
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
-const NO_BINDINGS = (({} as unknown) as import("../src/worker/lib/env.ts").Env);
+const NO_BINDINGS = {} as unknown as import("../src/worker/lib/env.ts").Env;
 
 // cachedRender reads and writes caches.default, which neither test runtime
 // provides. A cache that never hits is the cold-miss path every colo takes once.
 async function withColdCache(fn) {
   const real = globalThis.caches;
   const puts: any[] = [];
-  const fake = { default: { match: async () => undefined, put: async (k, v) => { puts.push([k, v]); }, delete: async () => false } };
-  globalThis.caches = ((fake as unknown) as CacheStorage);
-  try { return await fn(puts); } finally { globalThis.caches = real; }
+  const fake = {
+    default: {
+      match: async () => undefined,
+      put: async (k, v) => {
+        puts.push([k, v]);
+      },
+      delete: async () => false,
+    },
+  };
+  globalThis.caches = fake as unknown as CacheStorage;
+  try {
+    return await fn(puts);
+  } finally {
+    globalThis.caches = real;
+  }
 }
 
 const ITEMS = [
@@ -71,7 +83,11 @@ test("the placeholder is the list's own markup, and nothing visible follows the 
 test("/reading/list.html is an island, and an empty read is cached briefly", async () => {
   await withColdCache(async (puts) => {
     const waits: any[] = [];
-    const res = await handleReadingList(new Request("https://aadhar.sh" + LIST_URL), NO_BINDINGS, { waitUntil(p) { waits.push(p); } });
+    const res = await handleReadingList(new Request("https://aadhar.sh" + LIST_URL), NO_BINDINGS, {
+      waitUntil(p) {
+        waits.push(p);
+      },
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     assert.equal(res.headers.get("x-robots-tag"), "noindex");
@@ -89,5 +105,9 @@ test("the owner's bust refuses a wrong or unconfigured secret", async () => {
   const env = { RN_BUST_SECRET: "right" };
   const ctx = { waitUntil() {} };
   assert.equal(await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=wrong"), env, ctx), null);
-  assert.equal(await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=right"), NO_BINDINGS, ctx), null, "no secret configured means no bust");
+  assert.equal(
+    await refreshReadingList(new Request("https://aadhar.sh" + LIST_URL + "?bust=right"), NO_BINDINGS, ctx),
+    null,
+    "no secret configured means no bust",
+  );
 });

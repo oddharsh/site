@@ -24,10 +24,7 @@ async function filesIn(dir) {
 // `</script >`, `</script\t\n bar>` and `</script/>` as closes while `</scriptfoo>`
 // is a different element. The close comes from tools/lib/html-raw-text.ts so
 // every tool that answers this question answers it the same way.
-const LUQ_BLOCK = new RegExp(
-  `<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`,
-  "gi",
-);
+const LUQ_BLOCK = new RegExp(`<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`, "gi");
 
 function payload(html, file) {
   // The CAPTURE GROUP is the payload. Re-stripping the delimiters off the whole
@@ -57,9 +54,7 @@ async function checkPublishedPages(family, skip = new Set()) {
 
 // Rendering every structured LWE spec catches a future schema omission before
 // it can overwrite a page. The manually authored LWE pages are checked below.
-const lweSpecFiles = (await readdir(join(ROOT, "pipelines/lwe/specs")))
-  .filter((file) => file.endsWith(".json"))
-  .sort();
+const lweSpecFiles = (await readdir(join(ROOT, "pipelines/lwe/specs"))).filter((file) => file.endsWith(".json")).sort();
 for (const file of lweSpecFiles) {
   const spec = JSON.parse(await readFile(join(ROOT, "pipelines/lwe/specs", file), "utf8"));
   const html = renderLwePage(spec);
@@ -67,13 +62,20 @@ for (const file of lweSpecFiles) {
   assert.match(html, /<script src="\/quiz\.js" defer><\/script>/, `pipelines/lwe/specs/${file}: generator omitted quiz runtime`);
   assert.match(html, /id="axp-desktop"/, `pipelines/lwe/specs/${file}: generator omitted static desktop shell`);
   assert.match(html, /id="axp-taskbar"/, `pipelines/lwe/specs/${file}: generator omitted static taskbar shell`);
-  assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted shared LWE CSS`);
-  assert.equal((html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted parse-time Luna shell CSS`);
+  assert.equal(
+    (html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length,
+    1,
+    `pipelines/lwe/specs/${file}: generator omitted shared LWE CSS`,
+  );
+  assert.equal(
+    (html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length,
+    1,
+    `pipelines/lwe/specs/${file}: generator omitted parse-time Luna shell CSS`,
+  );
   assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `pipelines/lwe/specs/${file}: generator re-inlined shared LWE structure`);
   if (spec.demoJsFile) {
     const demo = browserJavaScript(await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8"), spec.demoJsFile).trimEnd();
-    assert.ok(html.includes(`<script>\n${demo}\n</script>`),
-      `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
+    assert.ok(html.includes(`<script>\n${demo}\n</script>`), `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
   }
   // Every LWE spec page is its generator's output byte for byte, the same pin
   // Garage carries.
@@ -81,9 +83,7 @@ for (const file of lweSpecFiles) {
   assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.ts page ${spec.id}`);
 }
 
-const garageSpecFiles = (await readdir(join(ROOT, "pipelines/garage/specs")))
-  .filter((file) => file.endsWith(".json"))
-  .sort();
+const garageSpecFiles = (await readdir(join(ROOT, "pipelines/garage/specs"))).filter((file) => file.endsWith(".json")).sort();
 assert.ok(garageSpecFiles.length > 0, "discover Garage specs before checking them");
 for (const file of garageSpecFiles) {
   const spec = JSON.parse(await readFile(join(ROOT, "pipelines/garage/specs", file), "utf8"));
@@ -109,33 +109,41 @@ const garageFixture = {
     problem: "The builder needs proof that the scaffold carries the page's model.",
     thesis: "The scaffold should make the model testable before the page ships.",
     evidence: ["The generated document contains the quiz payload and runtime."],
-    uncertainty: "The fixture tests wiring; it does not test a production experiment."
+    uncertainty: "The fixture tests wiring; it does not test a production experiment.",
   },
   understanding: {
     intro: "Reconstruct the scaffold before you close the hood.",
-    questions: [{
-      q: "What does this fixture prove?",
-      options: [
-        { t: "That the generator emits the shared page contract.", ok: true, why: "Right. The fixture checks the generated wiring." },
-        { t: "That every experiment on a generated page is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
-        { t: "That a quiz can replace the page body.", why: "The body and the check serve different jobs." }
-      ]
-    }, {
-      q: "What should a real Garage page add?",
-      options: [
-        { t: "A concrete mechanism, evidence, and a stated uncertainty.", ok: true, why: "Right. The scaffold carries the shell; the author carries the experiment." },
-        { t: "A longer title and a status badge in the header.", why: "A title or a badge cannot explain a mechanism." },
-        { t: "A score gate that blocks the page until the reader passes.", why: "The check diagnoses a second read and never blocks the page." }
-      ]
-    }, {
-      q: "What would falsify the scaffold contract?",
-      options: [
-        { t: "The generated page lacks its quiz payload or runtime.", ok: true, why: "Right. The generator promises both pieces." },
-        { t: "The reader misses a question on the generated page.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
-        { t: "The page has custom experiment CSS.", why: "Custom CSS is an explicit part of the Garage boundary." }
-      ]
-    }]
-  }
+    questions: [
+      {
+        q: "What does this fixture prove?",
+        options: [
+          { t: "That the generator emits the shared page contract.", ok: true, why: "Right. The fixture checks the generated wiring." },
+          { t: "That every experiment on a generated page is correct.", why: "The fixture tests wiring, not the truth of an experiment." },
+          { t: "That a quiz can replace the page body.", why: "The body and the check serve different jobs." },
+        ],
+      },
+      {
+        q: "What should a real Garage page add?",
+        options: [
+          {
+            t: "A concrete mechanism, evidence, and a stated uncertainty.",
+            ok: true,
+            why: "Right. The scaffold carries the shell; the author carries the experiment.",
+          },
+          { t: "A longer title and a status badge in the header.", why: "A title or a badge cannot explain a mechanism." },
+          { t: "A score gate that blocks the page until the reader passes.", why: "The check diagnoses a second read and never blocks the page." },
+        ],
+      },
+      {
+        q: "What would falsify the scaffold contract?",
+        options: [
+          { t: "The generated page lacks its quiz payload or runtime.", ok: true, why: "Right. The generator promises both pieces." },
+          { t: "The reader misses a question on the generated page.", why: "A miss points the reader back to the page; it does not falsify the scaffold." },
+          { t: "The page has custom experiment CSS.", why: "Custom CSS is an explicit part of the Garage boundary." },
+        ],
+      },
+    ],
+  },
 };
 const garageHtml = renderGaragePage(garageFixture);
 assert.match(garageHtml, /id="luq-data"/, "Garage scaffold omitted quiz data");
@@ -157,9 +165,17 @@ assert.doesNotMatch(garageCss, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{
 // than pasting them. vt-b and vt-check are windowless view-transition fixtures.
 for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) => f.endsWith(".html") && !f.startsWith("vt-"))) {
   const page = await readFile(join(ROOT, "src/pages/garage", file), "utf8");
-  assert.equal((page.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length, 1, `src/pages/garage/${file}: link /prose.css before the page's <style>`);
+  assert.equal(
+    (page.match(/<link rel="stylesheet" href="\/prose\.css">/g) || []).length,
+    1,
+    `src/pages/garage/${file}: link /prose.css before the page's <style>`,
+  );
   const inline = page.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? "";
-  assert.doesNotMatch(inline, /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/, `src/pages/garage/${file}: page defaults belong to luna.css and prose.css, not the page`);
+  assert.doesNotMatch(
+    inline,
+    /(^|[}\s])\*\s*\{\s*box-sizing|(^|[}\s])body\s*\{/,
+    `src/pages/garage/${file}: page defaults belong to luna.css and prose.css, not the page`,
+  );
 }
 
 // The same holds outside Garage: every page that links luna.css render-blocking
@@ -167,8 +183,9 @@ for (const file of (await readdir(join(ROOT, "src/pages/garage"))).filter((f) =>
 // The homepage is the exception: it loads luna.css non-blocking, so it keeps its
 // own copy for first paint.
 const restatesDefaults = /(^|[}\s])\*\s*\{\s*box-sizing|\.window\s*\{[^}]*[{;\s]max-width:\s*var\(--axp-maxw\)/;
-const pageFiles = (await readdir(join(ROOT, "src/pages"), { recursive: true }))
-  .filter((f) => f.endsWith(".html") && f !== "index.html" && !f.startsWith("garage/vt-"));
+const pageFiles = (await readdir(join(ROOT, "src/pages"), { recursive: true })).filter(
+  (f) => f.endsWith(".html") && f !== "index.html" && !f.startsWith("garage/vt-"),
+);
 for (const file of pageFiles) {
   const page = await readFile(join(ROOT, "src/pages", file), "utf8");
   const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
@@ -182,7 +199,9 @@ const lunaTokens = new Set([...(await readFile(join(ROOT, "src/styles/luna.css")
 for (const file of pageFiles) {
   const page = await readFile(join(ROOT, "src/pages", file), "utf8");
   const inline = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
-  const shadowed = [...inline.matchAll(/:root\s*\{([^}]*)\}/g)].flatMap((m) => [...m[1].matchAll(/(--[a-z0-9-]+)\s*:/g)].map((d) => d[1])).filter((t) => lunaTokens.has(t));
+  const shadowed = [...inline.matchAll(/:root\s*\{([^}]*)\}/g)]
+    .flatMap((m) => [...m[1].matchAll(/(--[a-z0-9-]+)\s*:/g)].map((d) => d[1]))
+    .filter((t) => lunaTokens.has(t));
   assert.deepEqual(shadowed, [], `src/pages/${file}: :root redeclares luna.css tokens; use luna's or give the page color its own name`);
 }
 assert.doesNotMatch(await readFile(join(ROOT, "src/styles/lwe-base.css"), "utf8"), restatesDefaults, "lwe-base.css restates page defaults luna.css owns");

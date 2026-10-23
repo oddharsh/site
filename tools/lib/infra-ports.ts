@@ -18,9 +18,17 @@
 // recorded response in for the network. That second adapter is what makes
 // these seams real.
 import type {
-  AgentAnswer, DnsObservation, DnsObservations, EarlyDataResult, EdgeObservation, Read,
-  RepositoryObservation, RulesetsObservation, VersionAffinityObservation,
-  WorkersBuildsObservation, ZoneSettingObservation,
+  AgentAnswer,
+  DnsObservation,
+  DnsObservations,
+  EarlyDataResult,
+  EdgeObservation,
+  Read,
+  RepositoryObservation,
+  RulesetsObservation,
+  VersionAffinityObservation,
+  WorkersBuildsObservation,
+  ZoneSettingObservation,
 } from "./infra-compare.ts";
 import { dnsKey } from "./infra-compare.ts";
 
@@ -63,16 +71,24 @@ export function decodeSvcb(generic: string) {
   const hex = generic.replace(/^\\#\s*\d+\s*/, "").replace(/\s+/g, "");
   const b = Buffer.from(hex, "hex");
   let i = 0;
-  const priority = b.readUInt16BE(i); i += 2;
+  const priority = b.readUInt16BE(i);
+  i += 2;
   const labels: string[] = [];
-  while (b[i] !== 0) { const len = b[i]; labels.push(b.subarray(i + 1, i + 1 + len).toString("ascii")); i += 1 + len; }
+  while (b[i] !== 0) {
+    const len = b[i];
+    labels.push(b.subarray(i + 1, i + 1 + len).toString("ascii"));
+    i += 1 + len;
+  }
   i += 1;
   const target = labels.length ? `${labels.join(".")}.` : ".";
   const params: string[] = [];
   while (i < b.length) {
-    const key = b.readUInt16BE(i); i += 2;
-    const len = b.readUInt16BE(i); i += 2;
-    const val = b.subarray(i, i + len); i += len;
+    const key = b.readUInt16BE(i);
+    i += 2;
+    const len = b.readUInt16BE(i);
+    i += 2;
+    const val = b.subarray(i, i + len);
+    i += len;
     const name = SVCB_KEYS[key] ?? `key${key}`;
     if (name === "mandatory") {
       const keys: string[] = [];
@@ -80,7 +96,11 @@ export function decodeSvcb(generic: string) {
       params.push(`mandatory=${keys.join(",")}`);
     } else if (name === "alpn") {
       const alpns: string[] = [];
-      for (let j = 0; j < val.length;) { const len2 = val[j]; alpns.push(val.subarray(j + 1, j + 1 + len2).toString("ascii")); j += 1 + len2; }
+      for (let j = 0; j < val.length;) {
+        const len2 = val[j];
+        alpns.push(val.subarray(j + 1, j + 1 + len2).toString("ascii"));
+        j += 1 + len2;
+      }
       params.push(`alpn=${alpns.join(",")}`);
     } else if (name === "port") {
       params.push(`port=${val.readUInt16BE(0)}`);
@@ -97,7 +117,10 @@ export function decodeSvcb(generic: string) {
 // the quoting so the declared value can read as the plain string it is.
 function normalizeTxt(data: string) {
   if (!data.startsWith('"')) return data.trim();
-  return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join("").trim();
+  return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)]
+    .map((m) => m[1])
+    .join("")
+    .trim();
 }
 
 export function normalizeRecord(type: string, data: string) {
@@ -115,9 +138,7 @@ async function query(fetchImpl: Fetch, resolver, name: string, type: string) {
   if (body.Status !== 0 && body.Status !== 3) throw new Error(`${resolver.name} returned DNS status ${body.Status}`);
   // Filter by the type we asked for: with DNSSEC in play the Answer section
   // also carries RRSIG (46), and A queries can carry the CNAME that led there.
-  const answers: string[] = (body.Answer || [])
-    .filter((a) => a.type === RRTYPE[type])
-    .map((a) => normalizeRecord(type, a.data));
+  const answers: string[] = (body.Answer || []).filter((a) => a.type === RRTYPE[type]).map((a) => normalizeRecord(type, a.data));
   return { answers: answers.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), authenticated: body.AD === true };
 }
 
@@ -148,11 +169,12 @@ export async function readDns(queries: { name: string; type: string }[], fetchIm
 export type EdgeFetch = (url: string, headers?: Record<string, string>, opts?: { redirect?: RequestRedirect }) => Promise<Response>;
 
 export function edgeFetcher(fetchImpl: Fetch = globalFetch): EdgeFetch {
-  return (url, headers = {}, opts = {}) => fetchImpl(url, {
-    headers: { "user-agent": `${BOT_UA}`, ...headers },
-    redirect: opts.redirect || "follow",
-    signal: AbortSignal.timeout(12000),
-  });
+  return (url, headers = {}, opts = {}) =>
+    fetchImpl(url, {
+      headers: { "user-agent": `${BOT_UA}`, ...headers },
+      redirect: opts.redirect || "follow",
+      signal: AbortSignal.timeout(12000),
+    });
 }
 
 /** Only an answer Cloudflare's edge served says anything about the zone, and
@@ -279,7 +301,8 @@ export async function readAgentAnswers(origin: string, pages: { path: string }[]
       // (text/html)" and sent a reader looking for a page that does not exist.
       const res = await fetchEdge(`${origin}${p.path}`, { accept: "text/markdown" }, { redirect: "manual" });
       if (!servedByEdge(res)) answers.set(p.path, { kind: "unmeasured", reason: `HTTP ${res.status} without cf-ray` });
-      else if (res.status >= 300 && res.status < 400) answers.set(p.path, { kind: "redirect", status: res.status, location: res.headers.get("location") || "" });
+      else if (res.status >= 300 && res.status < 400)
+        answers.set(p.path, { kind: "redirect", status: res.status, location: res.headers.get("location") || "" });
       else answers.set(p.path, { kind: "answer", contentType: (res.headers.get("content-type") || "").split(";")[0].trim() });
     } catch (e) {
       answers.set(p.path, { kind: "unmeasured", reason: `${e.message}` });
@@ -312,20 +335,15 @@ export function cloudflareReader(token: string, fetchImpl: Fetch = globalFetch):
   };
 }
 
-export const readKvNamespaces = (cf: CloudflareGet, accountId: string) =>
-  attempt<any[]>(() => cf(`/accounts/${accountId}/storage/kv/namespaces?per_page=100`));
+export const readKvNamespaces = (cf: CloudflareGet, accountId: string) => attempt<any[]>(() => cf(`/accounts/${accountId}/storage/kv/namespaces?per_page=100`));
 
-export const readR2Buckets = (cf: CloudflareGet, accountId: string) =>
-  attempt<any>(() => cf(`/accounts/${accountId}/r2/buckets`));
+export const readR2Buckets = (cf: CloudflareGet, accountId: string) => attempt<any>(() => cf(`/accounts/${accountId}/r2/buckets`));
 
-export const readD1Databases = (cf: CloudflareGet, accountId: string) =>
-  attempt<any[]>(() => cf(`/accounts/${accountId}/d1/database?per_page=100`));
+export const readD1Databases = (cf: CloudflareGet, accountId: string) => attempt<any[]>(() => cf(`/accounts/${accountId}/d1/database?per_page=100`));
 
-export const readWorkerScripts = (cf: CloudflareGet, accountId: string) =>
-  attempt<any[]>(() => cf(`/accounts/${accountId}/workers/scripts`));
+export const readWorkerScripts = (cf: CloudflareGet, accountId: string) => attempt<any[]>(() => cf(`/accounts/${accountId}/workers/scripts`));
 
-export const readTokens = (cf: CloudflareGet, accountId: string) =>
-  attempt<any[]>(() => cf(`/accounts/${accountId}/tokens?per_page=100`));
+export const readTokens = (cf: CloudflareGet, accountId: string) => attempt<any[]>(() => cf(`/accounts/${accountId}/tokens?per_page=100`));
 
 /** The Workers Builds triggers for one Worker. Two reads: the script listing
  *  carries the build tag, and the tag names the triggers endpoint. */
@@ -389,11 +407,7 @@ export function githubReader(token: string | undefined, fetchImpl: Fetch = globa
     });
     if (res.status === 403 || res.status === 429) {
       const remaining = res.headers.get("x-ratelimit-remaining");
-      throw new Error(
-        remaining === "0"
-          ? "GitHub API rate limit exhausted (set GITHUB_TOKEN for headroom)"
-          : `GitHub API returned HTTP ${res.status}`,
-      );
+      throw new Error(remaining === "0" ? "GitHub API rate limit exhausted (set GITHUB_TOKEN for headroom)" : `GitHub API returned HTTP ${res.status}`);
     }
     if (!res.ok) throw new Error(`GitHub API returned HTTP ${res.status} for ${path}`);
     return res.json();

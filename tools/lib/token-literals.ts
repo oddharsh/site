@@ -24,7 +24,6 @@
 // distance in OKLab (see COPY_DE).
 import { readFileSync, readdirSync } from "node:fs";
 
-
 /**
  * Spelling variants collapse so `0.150`, `0.15` and `.15` compare equal, and so
  * does `100.00%` against `100%`. The bare `.15` form is what the garage
@@ -281,7 +280,8 @@ export function cssSources(root: URL): CssSource[] {
   // the swap because a TS file holds CSS beside things that are not CSS.
   for (const dir of ["src/worker", "cal/src", "serendipity"]) {
     for (const f of ls(dir, true)) {
-      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts") && !EMAIL_TEMPLATES.has(`${dir}/${f}`)) out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
+      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts") && !EMAIL_TEMPLATES.has(`${dir}/${f}`))
+        out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
     }
   }
   // luna.css after its verbatim token blocks: the definitions themselves are literals by nature.

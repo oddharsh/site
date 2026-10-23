@@ -20,7 +20,13 @@ test("a parked screenshot request never starts a browser", async () => {
   let called = false;
   const response = await worker.fetch(
     new Request("https://aadhar.sh/garage/cf/screenshot"),
-    { BROWSER: { async quickAction() { called = true; } } },
+    {
+      BROWSER: {
+        async quickAction() {
+          called = true;
+        },
+      },
+    },
     context(),
   );
 
@@ -75,7 +81,9 @@ test("the size of a successful screenshot reaches the log", async () => {
       new Request("https://aadhar.sh/garage/cf/screenshot?go=1"),
       {
         BROWSER: {
-          async quickAction() { return new Response(png, { headers: { "content-type": "image/png" } }); },
+          async quickAction() {
+            return new Response(png, { headers: { "content-type": "image/png" } });
+          },
         },
       },
       context(),
@@ -84,7 +92,13 @@ test("the size of a successful screenshot reaches the log", async () => {
     console.log = original;
   }
 
-  const logged = lines.map((line) => { try { return JSON.parse(line); } catch { return {}; } });
+  const logged = lines.map((line) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return {};
+    }
+  });
   const success = logged.find((entry) => entry.feature === "browser-rendering" && entry.bytes !== undefined);
   assert.ok(success, `no browser-rendering log line carried a byte count: ${JSON.stringify(lines)}`);
   assert.equal(success.bytes, png.byteLength);
@@ -111,11 +125,18 @@ test("the screenshot endpoint clamps foreign targets before invoking Browser Run
 // The three failure shapes are deliberately three different answers. Browser
 // Run refusing us on a spent budget is the most likely one on the free plan,
 // and it is a fact about this account rather than about the demo.
-const refuse = (body, init?: ResponseInit) => worker.fetch(
-  new Request("https://aadhar.sh/garage/cf/screenshot?go=1"),
-  { BROWSER: { async quickAction() { return body instanceof Response ? body : Response.json(body, init); } } },
-  context(),
-);
+const refuse = (body, init?: ResponseInit) =>
+  worker.fetch(
+    new Request("https://aadhar.sh/garage/cf/screenshot?go=1"),
+    {
+      BROWSER: {
+        async quickAction() {
+          return body instanceof Response ? body : Response.json(body, init);
+        },
+      },
+    },
+    context(),
+  );
 
 test("a spent Browser Run budget is reported as OUR limit, not an upstream fault", async () => {
   const response = await refuse({ errors: [{ code: 2001 }] }, { status: 429 });
@@ -137,9 +158,12 @@ test("any other Browser Run failure names its status and stays a 502", async () 
 test("a 200 that is not an image never ships as one", async () => {
   // The old code trusted `ok` and defaulted the type to image/png, so a JSON
   // body could reach an <img> as a broken picture with no reason attached.
-  const response = await refuse(new Response('{"success":false}', {
-    status: 200, headers: { "content-type": "application/json" },
-  }));
+  const response = await refuse(
+    new Response('{"success":false}', {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
 
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { ok: false, error: "Browser Run returned 200." });
@@ -148,7 +172,13 @@ test("a 200 that is not an image never ships as one", async () => {
 test("a binding that throws publishes no platform text", async () => {
   const response = await worker.fetch(
     new Request("https://aadhar.sh/garage/cf/screenshot?go=1"),
-    { BROWSER: { async quickAction() { throw new Error("internal detail nobody outside should read"); } } },
+    {
+      BROWSER: {
+        async quickAction() {
+          throw new Error("internal detail nobody outside should read");
+        },
+      },
+    },
     context(),
   );
 

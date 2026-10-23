@@ -110,26 +110,36 @@ if (unchanged && !jsonPath) {
 const scratch = mkdtempSync(join(tmpdir(), "wrangler-pin-"));
 const reportPath = join(scratch, "report.json");
 const run = spawnSync(process.execPath, ["tools/canary-wrangler.ts", "--ref", full, "--json", reportPath], {
-  cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20 * 60_000,
+  cwd: ROOT,
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"],
+  timeout: 20 * 60_000,
 });
 process.stdout.write(run.stdout || "");
-let report: { leg: string; verdict: string; gates: { name: string; ok: boolean; hard: boolean; detail: string }[]; subject: Record<string, string> } | undefined;
+let report:
+  { leg: string; verdict: string; gates: { name: string; ok: boolean; hard: boolean; detail: string }[]; subject: Record<string, string> } | undefined;
 let reportError = "";
 try {
   const text = readFileSync(reportPath, "utf8");
   report = JSON.parse(text);
-  if (!report || report.leg !== "wrangler" || report.subject?.ref !== full || report.subject.pin !== current || !Array.isArray(report.gates)
-    || !["green", "changed", "red", "instrument"].includes(report.verdict)) {
+  if (
+    !report ||
+    report.leg !== "wrangler" ||
+    report.subject?.ref !== full ||
+    report.subject.pin !== current ||
+    !Array.isArray(report.gates) ||
+    !["green", "changed", "red", "instrument"].includes(report.verdict)
+  ) {
     throw new Error("report does not describe the evaluated Wrangler SHA and baseline pin");
   }
-  if ((report.verdict !== "instrument" && report.gates.length === 0)
-    || report.gates.some((value) => {
+  if (
+    (report.verdict !== "instrument" && report.gates.length === 0) ||
+    report.gates.some((value) => {
       const gate = asRecord(value);
-      return !gate || !asText(gate.name)
-        || (gate.ok !== true && gate.ok !== false)
-        || (gate.hard !== true && gate.hard !== false);
-    })
-    || (["green", "changed"].includes(report.verdict) && report.gates.some((gate) => gate.hard && !gate.ok))) {
+      return !gate || !asText(gate.name) || (gate.ok !== true && gate.ok !== false) || (gate.hard !== true && gate.hard !== false);
+    }) ||
+    (["green", "changed"].includes(report.verdict) && report.gates.some((gate) => gate.hard && !gate.ok))
+  ) {
     throw new Error("report does not contain successful hard gates for a proposable candidate");
   }
   const expectedStatus = report.verdict === "green" ? 0 : report.verdict === "instrument" ? 2 : 1;
@@ -151,12 +161,19 @@ if (report.verdict === "instrument") {
   process.exit(2);
 }
 if (report.verdict === "red") {
-  console.log(`\nwrangler:pin: ${target} is NOT proposable — ${report.gates.filter((g) => !g.ok).map((g) => g.name).join("; ")}`);
+  console.log(
+    `\nwrangler:pin: ${target} is NOT proposable — ${report.gates
+      .filter((g) => !g.ok)
+      .map((g) => g.name)
+      .join("; ")}`,
+  );
   process.exit(1);
 }
 
 const bundle = report.gates.find((g) => !g.hard);
-console.log(`\nwrangler:pin: ${target} (wrangler ${report.subject.wrangler}, ${report.subject.miniflare}, workerd ${report.subject.workerd}) clears every gate${bundle && !bundle.ok ? `; the bundle CHANGED (${bundle.detail})` : " and bundles the same bytes"}.`);
+console.log(
+  `\nwrangler:pin: ${target} (wrangler ${report.subject.wrangler}, ${report.subject.miniflare}, workerd ${report.subject.workerd}) clears every gate${bundle && !bundle.ok ? `; the bundle CHANGED (${bundle.detail})` : " and bundles the same bytes"}.`,
+);
 
 if (unchanged) {
   console.log("wrangler:pin: the pin is already there; its nightly report is current.");
@@ -187,7 +204,8 @@ writeFileSync(join(ROOT, "package.json"), next);
 // every tracked manifest carrying the OLD pin moves with the root in the same
 // write, or this job would red its own PR every night.
 const manifests = spawnSync("git", ["ls-files", "-z", "--", ":(glob)**/package.json"], { cwd: ROOT, encoding: "utf8" })
-  .stdout.split("\0").filter((name) => name && name !== "package.json");
+  .stdout.split("\0")
+  .filter((name) => name && name !== "package.json");
 for (const manifest of manifests) {
   const body = readFileSync(join(ROOT, manifest), "utf8");
   const moved = body.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);

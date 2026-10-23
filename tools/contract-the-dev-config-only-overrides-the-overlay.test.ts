@@ -22,23 +22,28 @@ import { parseJsonc } from "./lib/jsonc.ts";
 // The overlay's whole vocabulary. A key outside this list that differs between
 // the two projections is dev forking production, and it fails by name.
 const OVERLAY = [
-  /^main$/,                          // readable source, not the build-staged copy
-  /^build\./,                        // no build in the dev loop
-  /^minify$/, /^upload_source_maps$/, /^keep_names$/,
-  /^assets\.directory$/,             // the .dev-assets farm
-  /^cache\.enabled$/,                // Workers Cache off ...
+  /^main$/, // readable source, not the build-staged copy
+  /^build\./, // no build in the dev loop
+  /^minify$/,
+  /^upload_source_maps$/,
+  /^keep_names$/,
+  /^assets\.directory$/, // the .dev-assets farm
+  /^cache\.enabled$/, // Workers Cache off ...
   /^exports\.[^.]+\.cache\.enabled$/, // ... on every entrypoint
-  /^(browser|images|ai)\.remote$/,   // dev: { remote: true } on the binding
+  /^(browser|images|ai)\.remote$/, // dev: { remote: true } on the binding
 ];
 
 // Leaves as dotted paths. Arrays of named records (ratelimits, d1_databases,
 // workflows, ...) are keyed by name rather than position, so a reorder is not a
 // difference and a renamed binding is.
 const leaves = (config) => {
-  const keyed = JSON.parse(JSON.stringify(config, (_, v) =>
-    Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object" && (x.binding || x.name))
-      ? Object.fromEntries(v.map((x) => [x.binding || x.name, x]))
-      : v));
+  const keyed = JSON.parse(
+    JSON.stringify(config, (_, v) =>
+      Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object" && (x.binding || x.name))
+        ? Object.fromEntries(v.map((x) => [x.binding || x.name, x]))
+        : v,
+    ),
+  );
   const out = new Map();
   const walk = (v, path) => {
     if (v && typeof v === "object") for (const [k, child] of Object.entries(v)) walk(child, path ? `${path}.${k}` : k);
@@ -49,9 +54,15 @@ const leaves = (config) => {
 };
 
 const forks = (prod, dev) => {
-  const p = leaves(prod), d = leaves(dev);
+  const p = leaves(prod),
+    d = leaves(dev);
   const paths = new Set([...p.keys(), ...d.keys()]);
-  return { compared: paths.size, forked: [...paths].filter((k) => p.get(k) !== d.get(k) && !OVERLAY.some((re) => re.test(k))).sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0) };
+  return {
+    compared: paths.size,
+    forked: [...paths]
+      .filter((k) => p.get(k) !== d.get(k) && !OVERLAY.some((re) => re.test(k)))
+      .sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+  };
 };
 
 const load = async () => ({
@@ -64,7 +75,11 @@ test("the dev config differs from production only in the overlay's keys", async 
   const { compared, forked } = forks(prod, dev);
   // 260 leaves on 2026-10-01; most of them are the 96 run_worker_first rows.
   assert.ok(compared >= 200, `compared only ${compared} leaves; a projection has lost a block`);
-  assert.deepEqual(forked, [], "config/dev/ overrides keys outside the overlay, so local dev is no longer production; move the change to cloudflare.config.ts or add the key to OVERLAY with its reason");
+  assert.deepEqual(
+    forked,
+    [],
+    "config/dev/ overrides keys outside the overlay, so local dev is no longer production; move the change to cloudflare.config.ts or add the key to OVERLAY with its reason",
+  );
   // run_worker_first is ORDER-sensitive (first match wins), which the leaf walk
   // only sees by index; say it in its own words.
   assert.deepEqual(dev.assets.run_worker_first, prod.assets.run_worker_first);
@@ -79,7 +94,10 @@ test("the fork check can see dev forking production, which is what it exists for
   const added = (config) => forks(prod, config).forked.filter((k) => !baseline.has(k));
   const crons = structuredClone(dev);
   crons.triggers.crons = crons.triggers.crons.slice(1);
-  assert.ok(added(crons).some((k) => k.startsWith("triggers.crons")), "dropping a cron must read as a fork");
+  assert.ok(
+    added(crons).some((k) => k.startsWith("triggers.crons")),
+    "dropping a cron must read as a fork",
+  );
   const limit = structuredClone(dev);
   limit.ratelimits.find((r) => r.name === "LENS_RL_SHOT").simple.limit = 99;
   assert.deepEqual(added(limit), ["ratelimits.LENS_RL_SHOT.simple.limit"]);

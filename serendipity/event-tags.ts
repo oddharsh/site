@@ -90,7 +90,7 @@ export const TAG_MIN_CONFIDENCE = 0.5;
 // event says what it is.
 const DESCRIPTION_CHARS = 2000;
 
-export type TagInput = { name: string, description?: string | null, location?: string | null };
+export type TagInput = { name: string; description?: string | null; location?: string | null };
 
 /** ONE event per request. Batching several events into one state would save
  *  subrequests and put every other event in front of each question as exactly
@@ -108,7 +108,8 @@ export function buildTagRequest(ev: TagInput) {
     questions: {
       topic: {
         type: "choice",
-        instructions: "What is this event mainly about? Judge the event's own subject from its `name` and `description`, not sponsors, venues or passing mentions.",
+        instructions:
+          "What is this event mainly about? Judge the event's own subject from its `name` and `description`, not sponsors, venues or passing mentions.",
         criteria: TOPIC_CRITERIA,
       },
       format: {
@@ -131,9 +132,12 @@ export async function tagInputHash(request: ReturnType<typeof buildTagRequest>):
 }
 
 export type EventTag = {
-  topic: EventTopic, topic_confidence: number,
-  format: EventFormat, format_confidence: number,
-  model: string, probabilities: { topic: Record<string, number>, format: Record<string, number> },
+  topic: EventTopic;
+  topic_confidence: number;
+  format: EventFormat;
+  format_confidence: number;
+  model: string;
+  probabilities: { topic: Record<string, number>; format: Record<string, number> };
 };
 
 /** One Choice answer, or null when it names an option outside `valid` or carries
@@ -158,8 +162,10 @@ export function parseTagAnswers(body: any): EventTag | null {
   const format = readChoice(body?.answers?.format, EVENT_FORMATS);
   if (!topic || !format) return null;
   return {
-    topic: topic.choice, topic_confidence: topic.confidence,
-    format: format.choice, format_confidence: format.confidence,
+    topic: topic.choice,
+    topic_confidence: topic.confidence,
+    format: format.choice,
+    format_confidence: format.confidence,
     model: asText(body.model) || TAG_MODEL,
     probabilities: { topic: topic.probabilities, format: format.probabilities },
   };
@@ -173,8 +179,7 @@ const CLEF_TIMEOUT_MS = 5000;
 /** One call. Never throws: the caller counts outcomes by cause. The transport
  *  (gateway, deadline, error codes) is src/worker/lib/clef.ts, shared with the
  *  /lens wall check. */
-export async function askClef(request: ReturnType<typeof buildTagRequest>, env: ClefEnv):
-  Promise<{ tag: EventTag } | { error: string }> {
+export async function askClef(request: ReturnType<typeof buildTagRequest>, env: ClefEnv): Promise<{ tag: EventTag } | { error: string }> {
   const r = await runClef(env, TAG_MODEL, request, CLEF_TIMEOUT_MS);
   if ("error" in r) return r;
   const tag = parseTagAnswers(r.body);
@@ -186,4 +191,5 @@ export async function askClef(request: ReturnType<typeof buildTagRequest>, env: 
 // a database this repo has no automated migration step for. ONE LINE on
 // purpose: D1's exec() splits on newlines (contract-d1-exec-takes-one-line-
 // statements), and a contract test holds this string equal to the migration.
-export const EVENT_TAGS_DDL = "CREATE TABLE IF NOT EXISTS event_tags (event_id TEXT PRIMARY KEY REFERENCES events(id), topic TEXT NOT NULL, topic_confidence REAL NOT NULL, format TEXT NOT NULL, format_confidence REAL NOT NULL, model TEXT NOT NULL, input_hash TEXT NOT NULL, probabilities TEXT, tagged_at TEXT NOT NULL DEFAULT (datetime('now')))";
+export const EVENT_TAGS_DDL =
+  "CREATE TABLE IF NOT EXISTS event_tags (event_id TEXT PRIMARY KEY REFERENCES events(id), topic TEXT NOT NULL, topic_confidence REAL NOT NULL, format TEXT NOT NULL, format_confidence REAL NOT NULL, model TEXT NOT NULL, input_hash TEXT NOT NULL, probabilities TEXT, tagged_at TEXT NOT NULL DEFAULT (datetime('now')))";

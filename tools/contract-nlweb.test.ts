@@ -1,11 +1,5 @@
 // ── NLWeb ───────────────────────────────────────────────────────────────────
-import {
-  testGlobals,
-  assert,
-  readFile,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { testGlobals, assert, readFile, readFileSync, test } from "./contract-shared.ts";
 import { _resetSearchIndex } from "../src/worker/search.ts";
 
 // The endpoint half. These drive the real handler; where a specific record
@@ -15,9 +9,20 @@ import { _resetSearchIndex } from "../src/worker/search.ts";
 // worker, and on 2026-09-29 this file read another file's corpus and found
 // nothing. So every stubbed env resets it first (_resetSearchIndex, the test
 // seam), which makes this file's corpus the one it asserts against.
-const nlwebEnv = () => (_resetSearchIndex(), { ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: [
-  { url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" },
-] })) } });
+const nlwebEnv = () => (
+  _resetSearchIndex(),
+  {
+    ASSETS: {
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            version: 1,
+            records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }],
+          }),
+        ),
+    },
+  }
+);
 const NLWEB_HIT = "cloudflare";
 const askGet = async (query) => {
   const { handleAsk } = await import("../src/worker/nlweb.ts");
@@ -157,10 +162,14 @@ test("/ask accepts the v0.55 structured body and answers in named SSE events", a
   // legacy caller is talking to nobody, so the two must not be reachable from
   // the same request shape.
   const { handleAsk } = await import("../src/worker/nlweb.ts");
-  const res = await handleAsk(new Request("https://aadhar.sh/ask", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query: { text: NLWEB_HIT, site: "aadhar.sh" }, prefer: { mode: "list" }, meta: { version: "0.55" } }),
-  }), nlwebEnv());
+  const res = await handleAsk(
+    new Request("https://aadhar.sh/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: { text: NLWEB_HIT, site: "aadhar.sh" }, prefer: { mode: "list" }, meta: { version: "0.55" } }),
+    }),
+    nlwebEnv(),
+  );
   const body = await res.text();
   assert.match(body, /^event: start\n/);
   assert.match(body, /\nevent: result\ndata: \{"index":0,"item":\{/);
@@ -210,26 +219,37 @@ const lensNlweb = async (env, url = "https://aadhar.sh/lens/nlweb?url=https://aa
 const sseEnv = (body) => ({ SELF_FETCH: async () => new Response(body, { headers: { "content-type": "text/event-stream" } }) });
 const jsonEnv = (payload) => ({ SELF_FETCH: async () => new Response(JSON.stringify(payload), { headers: { "content-type": "application/json" } }) });
 const askItem = (url, extra: Record<string, any> = {}) => ({
-  url, name: "N", site: "example.com", score: 71, description: "d",
-  schema_object: { "@context": "https://schema.org", "@type": "Recipe", name: "R" }, ...extra,
+  url,
+  name: "N",
+  site: "example.com",
+  score: 71,
+  description: "d",
+  schema_object: { "@context": "https://schema.org", "@type": "Recipe", name: "R" },
+  ...extra,
 });
 
 test("the NLWeb lens reads both streaming dialects and names which one it got", async () => {
-  const legacy = await lensNlweb(sseEnv(
-    `data: ${JSON.stringify({ message_type: "begin-nlweb-response", conversation_id: "c1" })}\n\n` +
-    `data: ${JSON.stringify({ message_type: "result", query_id: "c1", content: [askItem("/a"), askItem("/b")] })}\n\n` +
-    `data: ${JSON.stringify({ message_type: "end-nlweb-response", conversation_id: "c1" })}\n\n`));
+  const legacy = await lensNlweb(
+    sseEnv(
+      `data: ${JSON.stringify({ message_type: "begin-nlweb-response", conversation_id: "c1" })}\n\n` +
+        `data: ${JSON.stringify({ message_type: "result", query_id: "c1", content: [askItem("/a"), askItem("/b")] })}\n\n` +
+        `data: ${JSON.stringify({ message_type: "end-nlweb-response", conversation_id: "c1" })}\n\n`,
+    ),
+  );
   assert.equal(legacy.ok, true);
   assert.equal(legacy.framing, "sse");
   assert.equal(legacy.dialect, "legacy");
   assert.equal(legacy.total, 2);
   assert.equal(legacy.conformant, true);
 
-  const modern = await lensNlweb(sseEnv(
-    `event: start\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n` +
-    `event: result\ndata: ${JSON.stringify({ index: 0, item: askItem("/x") })}\n\n` +
-    `event: result\ndata: ${JSON.stringify({ index: 1, item: { url: "/y", name: "bare" } })}\n\n` +
-    `event: complete\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n`));
+  const modern = await lensNlweb(
+    sseEnv(
+      `event: start\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n` +
+        `event: result\ndata: ${JSON.stringify({ index: 0, item: askItem("/x") })}\n\n` +
+        `event: result\ndata: ${JSON.stringify({ index: 1, item: { url: "/y", name: "bare" } })}\n\n` +
+        `event: complete\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n`,
+    ),
+  );
   assert.equal(modern.dialect, "v0.55");
   assert.deepEqual(modern.events, ["start", "result", "complete"]);
   // The whole point of this lens: partial conformance is reported per FIELD
@@ -244,8 +264,13 @@ test("the NLWeb lens reads both streaming dialects and names which one it got", 
 
 test("NLWeb reads complete SSE events across line endings without joining JSON tokens", async () => {
   const item = askItem("/framed");
-  const frame = "event: ignored\nevent: result\n" + JSON.stringify({ item }, null, 2)
-    .split("\n").map((line) => `data: ${line}\n`).join("") + "\n";
+  const frame =
+    "event: ignored\nevent: result\n" +
+    JSON.stringify({ item }, null, 2)
+      .split("\n")
+      .map((line) => `data: ${line}\n`)
+      .join("") +
+    "\n";
   for (const ending of ["\n", "\r\n", "\r"]) {
     const out = await lensNlweb(sseEnv("\uFEFF" + (frame + frame.trimEnd()).replace(/\n/g, ending)));
     assert.equal(out.total, 1, "the incomplete final event must not be dispatched");
@@ -256,7 +281,7 @@ test("NLWeb reads complete SSE events across line endings without joining JSON t
   const malformed = 'event: result\ndata: {"item":{"score":1\ndata: 2}}\n\n';
   const bad = await lensNlweb(sseEnv(malformed));
   assert.equal(bad.ok, false, "a data-line break is a newline, not permission to manufacture the number 12");
-  const reset = await lensNlweb(sseEnv('event: result\nevent\ndata: ' + JSON.stringify({ message_type: "result", content: [item] }) + '\n\n'));
+  const reset = await lensNlweb(sseEnv("event: result\nevent\ndata: " + JSON.stringify({ message_type: "result", content: [item] }) + "\n\n"));
   assert.equal(reset.total, 1);
   assert.equal(reset.dialect, "legacy", "an empty event field resets the event name");
 });
@@ -274,11 +299,17 @@ test("the NLWeb lens keeps a shut door, an unreadable one and a locked one apart
   assert.equal(page.unreadable, false);
   assert.match(page.error, /a page, not an endpoint/);
 
-  const locked = await lensNlweb({ SELF_FETCH: async () => new Response("", { status: 401, headers: { "www-authenticate": 'Bearer resource_metadata="x"' } }) });
+  const locked = await lensNlweb({
+    SELF_FETCH: async () => new Response("", { status: 401, headers: { "www-authenticate": 'Bearer resource_metadata="x"' } }),
+  });
   assert.equal(locked.gated, true);
   assert.equal(locked.unreadable, true, "a locked door is one we never got to look through");
 
-  const broken = await lensNlweb({ SELF_FETCH: async () => { throw new Error("connection reset"); } });
+  const broken = await lensNlweb({
+    SELF_FETCH: async () => {
+      throw new Error("connection reset");
+    },
+  });
   assert.equal(broken.unreadable, true, "a transport failure says nothing about whether the endpoint exists");
 });
 
@@ -310,8 +341,14 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
   // than left to whatever their default happens to be.
   let seen;
   await lensNlweb(
-    { SELF_FETCH: async (req) => { seen = req.url; return new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } }); } },
-    "https://aadhar.sh/lens/nlweb?url=https://aadhar.sh&q=" + encodeURIComponent("what is this"));
+    {
+      SELF_FETCH: async (req) => {
+        seen = req.url;
+        return new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } });
+      },
+    },
+    "https://aadhar.sh/lens/nlweb?url=https://aadhar.sh&q=" + encodeURIComponent("what is this"),
+  );
   const sent = new URL(seen);
   assert.equal(sent.pathname, "/ask");
   assert.equal(sent.searchParams.get("mode"), "list");
@@ -324,7 +361,6 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
   const source = await readFile(new URL("../src/worker/lens-nlweb.ts", import.meta.url), "utf8");
   assert.equal((source.match(/params\.get\(/g) || []).length, 2, "only `url` and `q` may be read from the caller");
 });
-
 
 test("discovery caching is scoped by Worker version for THIS origin only", async () => {
   // Pure and tested directly, the way classifyDoor (lib/doors.ts) is. The whole claim is which
@@ -359,9 +395,11 @@ test("discovery caching is scoped by Worker version for THIS origin only", async
   // And the other half, which is the one a regression would silently break: a
   // FOREIGN origin must keep its entry across our deploys. Busting it on every
   // release means re-asking a stranger 23 questions for no reason.
-  assert.equal(discoveryScope("https://example.com", otherVersion).scope,
+  assert.equal(
+    discoveryScope("https://example.com", otherVersion).scope,
     discoveryScope("https://example.com", withVersion).scope,
-    "a deploy must not invalidate a foreign origin's discovery cache");
+    "a deploy must not invalidate a foreign origin's discovery cache",
+  );
 
   // No version to key on means no safe cache: that is exactly the state where a
   // stale entry outlives the change that should have invalidated it.
@@ -394,8 +432,10 @@ test("the /ask door probe reads a real NLWeb server as present", async () => {
 
   // 2. `query` is REQUIRED, so a conforming server must refuse a bare knock.
   // Ours answers exactly this, and its own lens called it no endpoint at all.
-  const asks = await probe(JSON.stringify({ error: "query is required", parameter: "query", endpoint: "/ask", results: [] }),
-    { status: 400, headers: { "content-type": "application/json" } });
+  const asks = await probe(JSON.stringify({ error: "query is required", parameter: "query", endpoint: "/ask", results: [] }), {
+    status: 400,
+    headers: { "content-type": "application/json" },
+  });
   assert.equal(asks.verdict, "likely");
   assert.match(asks.detail, /asking for `query` by name/);
 
@@ -445,13 +485,14 @@ test("the MCP client sends Mcp-Method, and it agrees with the body", async () =>
   const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
 
   let seen: any = null;
-  const env = { SELF_FETCH: (req) => {
-    seen = req;
-    return new Response(
-      'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"now_playing","description":"d"}]}}\n\n',
-      { headers: { "content-type": "text/event-stream" } },
-    );
-  } };
+  const env = {
+    SELF_FETCH: (req) => {
+      seen = req;
+      return new Response('event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"now_playing","description":"d"}]}}\n\n', {
+        headers: { "content-type": "text/event-stream" },
+      });
+    },
+  };
   const out = await foreignMcpTools("https://aadhar.sh", env);
 
   assert.equal(seen.headers.get("mcp-method"), "tools/list");
@@ -477,10 +518,13 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
   const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
 
-  const refused = await foreignMcpTools("https://aadhar.sh", answer(
-    '{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"the request headers and body disagree"}}',
-    { status: 400, headers: { "content-type": "application/json" } },
-  ));
+  const refused = await foreignMcpTools(
+    "https://aadhar.sh",
+    answer('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"the request headers and body disagree"}}', {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    }),
+  );
   assert.equal(refused.ok, false);
   assert.match(refused.detail, /-32020: the request headers and body disagree/);
   assert.ok(!refused.unreadable, "a server that answered is not an unread door");
@@ -488,10 +532,13 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   // Not every refusal is JSON-RPC shaped. mcp.stripe.com answers a 400 carrying
   // {error:{message}} with no code, which the old renderer printed as
   // "undefined: Unrecognized request URL". Measured 2026-08-14.
-  const vendor = await foreignMcpTools("https://aadhar.sh", answer(
-    '{"error":{"message":"Unrecognized request URL (POST: /mcp)","type":"invalid_request_error"}}',
-    { status: 400, headers: { "content-type": "application/json" } },
-  ));
+  const vendor = await foreignMcpTools(
+    "https://aadhar.sh",
+    answer('{"error":{"message":"Unrecognized request URL (POST: /mcp)","type":"invalid_request_error"}}', {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    }),
+  );
   assert.equal(vendor.ok, false);
   assert.equal(vendor.detail, "Unrecognized request URL (POST: /mcp)");
   assert.ok(!/undefined/.test(vendor.detail), "the reader printed its own undefined into the frame");
@@ -503,7 +550,11 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   assert.equal(shell.ok, false);
   assert.ok(!shell.unreadable, "a 200 that is not JSON-RPC is a shut door, not an unreadable one");
 
-  const dead = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => { throw new Error("connection reset"); } });
+  const dead = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: () => {
+      throw new Error("connection reset");
+    },
+  });
   assert.equal(dead.ok, false);
   assert.equal(dead.unreadable, true, "a failed check was reported as a negative result");
 });
@@ -516,11 +567,20 @@ test("a foreign catalogue is read from the stream with a ceiling, and the ceilin
 
   // The cap is well clear of anything real: this site's own 24-tool catalogue
   // measured 28,471 bytes on 2026-08-14, the largest on hand.
-  const wide = { jsonrpc: "2.0", id: 1, result: { tools: Array.from({ length: 40 }, (_, i) => ({
-    name: `tool_${i}`, description: "d".repeat(400), inputSchema: { type: "object" },
-  })) } };
-  const ordinary = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
-    JSON.stringify(wide), { headers: { "content-type": "application/json" } }) });
+  const wide = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      tools: Array.from({ length: 40 }, (_, i) => ({
+        name: `tool_${i}`,
+        description: "d".repeat(400),
+        inputSchema: { type: "object" },
+      })),
+    },
+  };
+  const ordinary = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: () => new Response(JSON.stringify(wide), { headers: { "content-type": "application/json" } }),
+  });
   assert.equal(ordinary.ok, true);
   assert.equal(ordinary.count, 40);
 
@@ -530,9 +590,10 @@ test("a foreign catalogue is read from the stream with a ceiling, and the ceilin
   // declined to read. Same rule as the browser lens reporting a spent render
   // budget as our own budget rather than as the target failing.
   const flood = "x".repeat(300 * 1024);
-  const huge = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
-    `{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"a","description":"${flood}"}]}}`,
-    { headers: { "content-type": "application/json" } }) });
+  const huge = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: () =>
+      new Response(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"a","description":"${flood}"}]}}`, { headers: { "content-type": "application/json" } }),
+  });
   assert.equal(huge.ok, false);
   assert.equal(huge.unreadable, true, "our own ceiling was reported as the server's failure");
   assert.match(huge.detail, /256 KB/);
@@ -554,7 +615,7 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   // A real key, because every external probe signs before it fetches and the
   // whole external branch is unreachable without one.
   const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-  const env = { RN_SIGNING_KEY_JWK: JSON.stringify({ ...await crypto.subtle.exportKey("jwk", pair.privateKey), kid: "test" }) };
+  const env = { RN_SIGNING_KEY_JWK: JSON.stringify({ ...(await crypto.subtle.exportKey("jwk", pair.privateKey)), kid: "test" }) };
 
   const realFetch = globalThis.fetch;
   const run = async (location, second) => {
@@ -563,16 +624,19 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
       // The content redirect probe runs only after its origin allows crawling.
       if (new URL(String(url)).pathname === "/robots.txt") return new Response(null, { status: 404 });
       hops.push(String(url));
-      return hops.length === 1
-        ? new Response(null, { status: 302, headers: { location } })
-        : second();
+      return hops.length === 1 ? new Response(null, { status: 302, headers: { location } }) : second();
     };
-    try { return { out: await foreignMcpTools("https://example.com", env), hops }; }
-    finally { testGlobals.fetch = realFetch; }
+    try {
+      return { out: await foreignMcpTools("https://example.com", env), hops };
+    } finally {
+      testGlobals.fetch = realFetch;
+    }
   };
 
-  const blocked = await run("http://169.254.169.254/mcp", () => new Response(
-    '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }));
+  const blocked = await run(
+    "http://169.254.169.254/mcp",
+    () => new Response('{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }),
+  );
   assert.deepEqual(blocked.hops, ["https://example.com/mcp"], "the blocked hop was requested anyway");
   assert.equal(blocked.out.ok, false);
   // Ours, not theirs: we declined to look, which is not the same as finding
@@ -582,8 +646,10 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
 
   // And a redirect to another PUBLIC host is still followed, so this is a guard
   // rather than a blanket refusal to move.
-  const moved = await run("https://elsewhere.example/mcp", () => new Response(
-    '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }));
+  const moved = await run(
+    "https://elsewhere.example/mcp",
+    () => new Response('{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }),
+  );
   assert.deepEqual(moved.hops, ["https://example.com/mcp", "https://elsewhere.example/mcp"]);
   assert.equal(moved.out.ok, true);
   assert.equal(moved.out.tools[0].name, "moved");
@@ -602,17 +668,28 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
   const { rpcErrorDetail } = await import("../src/worker/lib/mcp-protocol.ts");
   const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
 
-  const empty = await foreignMcpTools("https://aadhar.sh", answer(null, { status: 401, headers: {
-    "www-authenticate": 'Bearer realm="OAuth", resource_metadata="https://x/.well-known/oauth-protected-resource"' } }));
+  const empty = await foreignMcpTools(
+    "https://aadhar.sh",
+    answer(null, {
+      status: 401,
+      headers: {
+        "www-authenticate": 'Bearer realm="OAuth", resource_metadata="https://x/.well-known/oauth-protected-resource"',
+      },
+    }),
+  );
   assert.equal(empty.ok, false);
   assert.equal(empty.gated, true);
   assert.equal(empty.unreadable, true, "a door we were not let through is not a door that is shut");
   assert.match(empty.detail, /needs OAuth \(HTTP 401\)/);
 
   // The OAuth challenge BODY, which is not JSON-RPC and never was.
-  const challenge = await foreignMcpTools("https://aadhar.sh", answer(
-    '{"error":"invalid_token","error_description":"Missing or invalid access token"}',
-    { status: 401, headers: { "content-type": "application/json", "www-authenticate": 'Bearer realm="OAuth"' } }));
+  const challenge = await foreignMcpTools(
+    "https://aadhar.sh",
+    answer('{"error":"invalid_token","error_description":"Missing or invalid access token"}', {
+      status: 401,
+      headers: { "content-type": "application/json", "www-authenticate": 'Bearer realm="OAuth"' },
+    }),
+  );
   assert.equal(challenge.gated, true);
   assert.ok(!/undefined/.test(challenge.detail), "the reader printed its own undefined into the frame");
 
@@ -624,8 +701,7 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
   // The renderer reads .error off a JSON-RPC error, and plenty of things that
   // answer an MCP endpoint speak their own dialect instead.
   assert.equal(rpcErrorDetail({ error: { code: -32020, message: "header mismatch" } }), "-32020: header mismatch");
-  assert.equal(rpcErrorDetail({ error: "invalid_token", error_description: "Missing or invalid access token" }),
-    "Missing or invalid access token");
+  assert.equal(rpcErrorDetail({ error: "invalid_token", error_description: "Missing or invalid access token" }), "Missing or invalid access token");
   // Stripe's shape: a message, no code. It used to print "undefined: <message>".
   assert.equal(rpcErrorDetail({ error: { message: "Unrecognized request URL" } }), "Unrecognized request URL");
   for (const odd of [{ error: {} }, { error: [] }, { error: 7 }, { error: true }]) {
@@ -648,10 +724,12 @@ test("the version header goes only to a server that asked for one", async () => 
   // regression guard: sending it unconditionally reads MORE servers in a naive
   // count and BREAKS two that already worked.
   const easy: any[] = [];
-  const openOut = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: (req) => {
-    easy.push(req.headers.get("mcp-protocol-version"));
-    return new Response(CATALOGUE, { headers: { "content-type": "application/json" } });
-  } });
+  const openOut = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: (req) => {
+      easy.push(req.headers.get("mcp-protocol-version"));
+      return new Response(CATALOGUE, { headers: { "content-type": "application/json" } });
+    },
+  });
   assert.equal(openOut.ok, true);
   assert.deepEqual(easy, [null], "a server that never asked was sent a version header anyway");
 
@@ -659,14 +737,18 @@ test("the version header goes only to a server that asked for one", async () => 
   // body declares — a header disagreeing with the body is the other half of
   // what -32020 refuses.
   const strict: any[] = [];
-  const strictOut = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: async (req) => {
-    const sent = req.headers.get("mcp-protocol-version");
-    strict.push({ sent, body: JSON.parse(await req.text()) });
-    return sent
-      ? new Response(CATALOGUE, { headers: { "content-type": "application/json" } })
-      : new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP error -32020: Header mismatch: MCP-Protocol-Version is required"}}',
-        { status: 400, headers: { "content-type": "application/json" } });
-  } });
+  const strictOut = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: async (req) => {
+      const sent = req.headers.get("mcp-protocol-version");
+      strict.push({ sent, body: JSON.parse(await req.text()) });
+      return sent
+        ? new Response(CATALOGUE, { headers: { "content-type": "application/json" } })
+        : new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP error -32020: Header mismatch: MCP-Protocol-Version is required"}}', {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          });
+    },
+  });
   assert.equal(strict.length, 2, "the refusal that names the header should be answered exactly once");
   assert.equal(strict[0].sent, null);
   assert.equal(strict[1].sent, strict[1].body.params._meta["io.modelcontextprotocol/protocolVersion"]);
@@ -676,17 +758,24 @@ test("the version header goes only to a server that asked for one", async () => 
   // Narrow on purpose: a refusal that is an ANSWER rather than an instruction
   // gets no retry, because the second request would be identical to the first.
   assert.equal(wantsProtocolHeader({ error: { code: -32020, message: "MCP-Protocol-Version is required" } }), true);
-  assert.equal(wantsProtocolHeader({ error: { code: -32020, message: "the body names method tools/list but the required Mcp-Method header is absent" } }), false);
+  assert.equal(
+    wantsProtocolHeader({ error: { code: -32020, message: "the body names method tools/list but the required Mcp-Method header is absent" } }),
+    false,
+  );
   assert.equal(wantsProtocolHeader({ error: { code: -32022, message: "Unsupported protocol version: 2026-07-28" } }), false);
   assert.equal(wantsProtocolHeader({ result: { tools: [] } }), false);
 
   // And a server that keeps refusing is reported, not retried again.
   let calls = 0;
-  const stubborn = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => {
-    calls++;
-    return new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP-Protocol-Version is required"}}',
-      { status: 400, headers: { "content-type": "application/json" } });
-  } });
+  const stubborn = await foreignMcpTools("https://aadhar.sh", {
+    SELF_FETCH: () => {
+      calls++;
+      return new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP-Protocol-Version is required"}}', {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
   assert.equal(calls, 2, "one retry, not a loop");
   assert.equal(stubborn.ok, false);
   assert.match(stubborn.detail, /-32020/);

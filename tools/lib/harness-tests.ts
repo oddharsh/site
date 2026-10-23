@@ -34,7 +34,10 @@ const BOOTS_HARNESS = /^[^'"`\n]*\bcreateTestHarness\s*\(/m;
 
 /** True when `source` imports wrangler AND boots its harness outside a comment. */
 export function bootsHarness(source: string): boolean {
-  const code = source.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  const code = source
+    .split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join("\n");
   return IMPORTS_WRANGLER.test(code) && BOOTS_HARNESS.test(code);
 }
 

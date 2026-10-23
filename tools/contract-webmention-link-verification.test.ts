@@ -1,10 +1,5 @@
 // ── webmention link verification ────────────────────────────────────
-import {
-  assert,
-  documentContent,
-  linksTo,
-  test,
-} from "./contract-shared.ts";
+import { assert, documentContent, linksTo, test } from "./contract-shared.ts";
 
 // The verify step is the ONLY thing standing between "someone sent a POST" and
 // "someone's page appears on my site", so what counts as a link is the whole
@@ -46,8 +41,7 @@ test("a link that is not really a link does not verify a mention", () => {
   // Still refused, and must stay refused: naming a URL is not linking to it.
   assert.equal(linksTo(`<p>I read https://aadhar.sh/writing/in-flux today</p>`, target, source), false);
   assert.equal(linksTo(`<a href="https://aadhar.sh/writing/other">x</a>`, target, source), false);
-  assert.equal(linksTo(`<a href="https://aadhar.sh.evil.example/writing/in-flux">x</a>`, target, source),
-    false, "a lookalike host must not verify");
+  assert.equal(linksTo(`<a href="https://aadhar.sh.evil.example/writing/in-flux">x</a>`, target, source), false, "a lookalike host must not verify");
 });
 
 // Stripping too much loses a link and refuses a real mention; stripping too

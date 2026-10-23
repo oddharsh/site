@@ -11,8 +11,13 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 // module's top level to definitions, as the gotcha says.
 
 const WORKER_SOURCES = [
-  "src/worker/**.ts", "serendipity/**.ts", "cal/src/**.ts", "counter/src/**.ts",
-  "cf-garage/src/**.ts", "lwe-ask/src/**.ts", "lens-reader/src/**.ts",
+  "src/worker/**.ts",
+  "serendipity/**.ts",
+  "cal/src/**.ts",
+  "counter/src/**.ts",
+  "cf-garage/src/**.ts",
+  "lwe-ask/src/**.ts",
+  "lens-reader/src/**.ts",
 ];
 
 /** Lines that call `import()`, skipping comments and `typeof import()` types. */
@@ -34,8 +39,11 @@ test("the lazy-import matcher finds a lazy import and nothing else", () => {
 
 test("no Worker module imports another lazily", async () => {
   const files = execFileSync("git", ["ls-files", ...WORKER_SOURCES], {
-    cwd: new URL(".", ROOT), encoding: "utf8",
-  }).split("\n").filter(Boolean);
+    cwd: new URL(".", ROOT),
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean);
   // 127 on 2026-10-14; a glob that stopped matching would pass over nothing.
   assert.ok(files.length >= 80, `only ${files.length} Worker sources found; the globs have stopped matching`);
 
@@ -43,6 +51,9 @@ test("no Worker module imports another lazily", async () => {
   for (const file of files) {
     for (const line of lazyImports(await readFile(new URL(file, ROOT), "utf8"))) found.push(`${file}:${line}`);
   }
-  assert.deepEqual(found, [],
-    "lazy import() in a Worker (gotcha 56): import it statically, or keep that module's top level to definitions and delete this test");
+  assert.deepEqual(
+    found,
+    [],
+    "lazy import() in a Worker (gotcha 56): import it statically, or keep that module's top level to definitions and delete this test",
+  );
 });

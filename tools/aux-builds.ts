@@ -33,8 +33,7 @@ async function tagOf(name: string): Promise<string> {
   return hit.id ?? hit.tag;
 }
 
-const triggersOf = async (tag: string): Promise<any[]> =>
-  (await cf(["builds", "triggers", "list", "--external-script-id", tag])) ?? [];
+const triggersOf = async (tag: string): Promise<any[]> => (await cf(["builds", "triggers", "list", "--external-script-id", tag])) ?? [];
 
 const site = (await triggersOf(await tagOf("aadhar-sh"))).find((t) => t.branch_includes?.includes("production"));
 const repoConnection = site?.repo_connection_uuid ?? site?.repo_connection?.repo_connection_uuid;
@@ -50,17 +49,28 @@ for (const w of WORKERS) {
     continue;
   }
   const create = [
-    "builds", "triggers", "create",
-    "--trigger-name", `${w.name} production`,
-    "--external-script-id", tag,
-    "--repo-connection-uuid", repoConnection,
-    "--build-token-uuid", buildToken,
-    "--root-directory", ".",
-    "--build-command", "",
-    "--deploy-command", DEPLOY,
-    "--branch-includes", "production",
+    "builds",
+    "triggers",
+    "create",
+    "--trigger-name",
+    `${w.name} production`,
+    "--external-script-id",
+    tag,
+    "--repo-connection-uuid",
+    repoConnection,
+    "--build-token-uuid",
+    buildToken,
+    "--root-directory",
+    ".",
+    "--build-command",
+    "",
+    "--deploy-command",
+    DEPLOY,
+    "--branch-includes",
+    "production",
     "--branch-excludes",
-    "--path-includes", ...w.paths,
+    "--path-includes",
+    ...w.paths,
     "--path-excludes",
   ];
   const vars = JSON.stringify({

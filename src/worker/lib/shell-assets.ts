@@ -53,6 +53,4 @@ export const HASHED_ASSETS: Record<string, string> = {}; // build:hashed-assets
 // luna.css first: it is render-blocking style, so it outranks the deferred
 // nav.js script. Browsers dedupe a preload against the in-document <link
 // rel=preload> + the eventual request by URL, so this never double-fetches.
-export const SHELL_PRELOAD_LINK =
-  `<${SHELL_ASSETS.luna}>; rel="preload"; as="style", ` +
-  `<${SHELL_ASSETS.nav}>; rel="preload"; as="script"`;
+export const SHELL_PRELOAD_LINK = `<${SHELL_ASSETS.luna}>; rel="preload"; as="style", ` + `<${SHELL_ASSETS.nav}>; rel="preload"; as="script"`;

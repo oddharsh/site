@@ -140,12 +140,9 @@ export function cargoLockViolations(lock: string, crates: string[]): string[] {
 // ones; left wide they can also match a comment quoting one. That direction
 // FAILS CLOSED, the same trade the shell half of the writer census takes, and a
 // false fire is a sentence to rewrite rather than a dependency to re-add.
-const JS_STATIC = (spec: string) =>
-  new RegExp(String.raw`^\s*(?:import|export)\b[^\n]*["']${escapeRe(spec)}(?:/[^"']*)?["']`, "m");
-const JS_CALL = (spec: string) =>
-  new RegExp(String.raw`\b(?:require|import)\(\s*["']${escapeRe(spec)}(?:/[^"']*)?["']\s*\)`);
-const PY_IMPORT = (spec: string) =>
-  new RegExp(String.raw`^\s*(?:import\s+${escapeRe(spec)}\b|from\s+${escapeRe(spec)}[\s.])`, "m");
+const JS_STATIC = (spec: string) => new RegExp(String.raw`^\s*(?:import|export)\b[^\n]*["']${escapeRe(spec)}(?:/[^"']*)?["']`, "m");
+const JS_CALL = (spec: string) => new RegExp(String.raw`\b(?:require|import)\(\s*["']${escapeRe(spec)}(?:/[^"']*)?["']\s*\)`);
+const PY_IMPORT = (spec: string) => new RegExp(String.raw`^\s*(?:import\s+${escapeRe(spec)}\b|from\s+${escapeRe(spec)}[\s.])`, "m");
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

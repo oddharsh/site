@@ -36,7 +36,14 @@ test("with neither door, it still says Browser Run is not configured", async () 
 
 test("the binding is asked for Chromium, never Kitesurf, since this is the human picture", async () => {
   let payload;
-  const env = { BROWSER: { async quickAction(_name, input) { payload = input; return new Response(PNG, { headers: { "content-type": "image/png" } }); } } };
+  const env = {
+    BROWSER: {
+      async quickAction(_name, input) {
+        payload = input;
+        return new Response(PNG, { headers: { "content-type": "image/png" } });
+      },
+    },
+  };
   const res = await handleLensShot(new Request(SHOT), env, context());
   assert.equal(res.status, 200);
   assert.equal(payload.browser, undefined, "a Kitesurf selector would draw the page without its fonts and icons");

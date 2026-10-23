@@ -1,15 +1,5 @@
 // ── Workers preview URLs ────────────────────────────────────────────
-import {
-  MODERN_META,
-  ROOT,
-  SITE_MCP_TOOLS,
-  assert,
-  context,
-  handleSiteMcp,
-  readFile,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { MODERN_META, ROOT, SITE_MCP_TOOLS, assert, context, handleSiteMcp, readFile, readFileSync, test } from "./contract-shared.ts";
 
 // A preview version runs PRODUCTION bindings and secrets (lib/preview.ts says
 // why at length), so these tests are the difference between a preview URL and
@@ -21,7 +11,7 @@ test("the preview host test matches workers.dev and nothing that merely looks li
 
   for (const host of [
     "abc12345-aadhar-sh.oddharsh.workers.dev",
-    "AADHAR-SH.ODDHARSH.WORKERS.DEV",          // hostnames are case-insensitive
+    "AADHAR-SH.ODDHARSH.WORKERS.DEV", // hostnames are case-insensitive
     "aadhar-sh.workers.dev",
   ]) {
     assert.equal(isPreviewHost(host), true, `${host} is a preview host`);
@@ -30,9 +20,9 @@ test("the preview host test matches workers.dev and nothing that merely looks li
   for (const host of [
     "aadhar.sh",
     "cal.aadhar.sh",
-    "aadhar-sh.workers.dev.evil.example",      // suffix match, not substring
-    "notworkers.dev",                          // ".workers.dev" must not match "notworkers.dev"
-    "workers.dev",                             // the bare apex is not a subdomain of itself
+    "aadhar-sh.workers.dev.evil.example", // suffix match, not substring
+    "notworkers.dev", // ".workers.dev" must not match "notworkers.dev"
+    "workers.dev", // the bare apex is not a subdomain of itself
     undefined,
   ]) {
     assert.equal(isPreviewHost(host), false, `${host} is NOT a preview host`);
@@ -111,10 +101,7 @@ test("every preview-guarded GET write names a path the site really routes", asyn
   assert.ok(routed.has("/coffee/approve"), "the cal scan must actually find cal's routes");
 
   for (const path of PREVIEW_GET_WRITES) {
-    assert.ok(
-      routed.has(path),
-      `${path} is guarded as a GET-shaped write, but no route table serves it — the guard is protecting a dead path`,
-    );
+    assert.ok(routed.has(path), `${path} is guarded as a GET-shaped write, but no route table serves it — the guard is protecting a dead path`);
   }
 });
 
@@ -134,11 +121,14 @@ test("MCP tools that write are refused on a preview host, and reads still run", 
 
   let writesChecked = 0;
   for (const server of servers) {
-    const call = (host, name) => server.handle(new Request(`https://${host}${server.path}`, {
-      method: "POST",
-      body: JSON.stringify({ jsonrpc: "2.0", id: "preview", method: "tools/call", params: { name, arguments: {}, ...MODERN_META } }),
-      headers: { "content-type": "application/json" },
-    }));
+    const call = (host, name) =>
+      server.handle(
+        new Request(`https://${host}${server.path}`, {
+          method: "POST",
+          body: JSON.stringify({ jsonrpc: "2.0", id: "preview", method: "tools/call", params: { name, arguments: {}, ...MODERN_META } }),
+          headers: { "content-type": "application/json" },
+        }),
+      );
 
     for (const tool of server.tools) {
       if (tool.annotations.readOnlyHint !== false) continue;
@@ -181,9 +171,9 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
   // read. The assertions here are about headers, so the leniency was never load
   // bearing; it just made the suite depend on which runtime ran it.
   const makeCases = (): [string, Response][] => [
-    ["a redirect",  new Response(null, { status: 301, headers: { location: "https://aadhar.sh/photos" } })],
-    ["an image",    new Response("jpegbytes", { headers: { "content-type": "image/jpeg" } })],
-    ["a document",  new Response("<!doctype html><title>x</title>", { headers: { "content-type": "text/html; charset=utf-8" } })],
+    ["a redirect", new Response(null, { status: 301, headers: { location: "https://aadhar.sh/photos" } })],
+    ["an image", new Response("jpegbytes", { headers: { "content-type": "image/jpeg" } })],
+    ["a document", new Response("<!doctype html><title>x</title>", { headers: { "content-type": "text/html; charset=utf-8" } })],
     ["a json feed", new Response("{}", { headers: { "content-type": "application/json" } })],
   ];
   for (const [what, response] of makeCases()) {
@@ -238,7 +228,9 @@ test("every /access device previews a cost, and the clause order its parser depe
   assert.ok(rows.length >= 60, `expected the full device table, saw ${rows.length} rows`);
 
   const ids = new Set(rows.map(([, id]) => id));
-  let withCost = 0, withBet = 0, rivalEnds = 0;
+  let withCost = 0,
+    withBet = 0,
+    rivalEnds = 0;
 
   for (const [, id, attrs, body] of rows) {
     const status = (attrs.match(/data-status="([^"]+)"/) || [])[1];

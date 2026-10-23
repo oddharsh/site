@@ -57,8 +57,10 @@ test("each outbound job has a tick of its own and fits one invocation", async ()
     assert.ok(ceiling <= SUBREQUEST_CAP_FREE, `${job} can spend ${ceiling} subrequests, over Workers Free's ${SUBREQUEST_CAP_FREE}`);
   }
   // The arithmetic the shared tick failed, kept as a number a reader can check.
-  assert.ok(OUTBOUND_CEILING.around + OUTBOUND_CEILING.webmention_send > SUBREQUEST_CAP_FREE,
-    "if the two ever fit one invocation together, this file's premise has changed");
+  assert.ok(
+    OUTBOUND_CEILING.around + OUTBOUND_CEILING.webmention_send > SUBREQUEST_CAP_FREE,
+    "if the two ever fit one invocation together, this file's premise has changed",
+  );
 });
 
 async function signingKey() {
@@ -95,14 +97,24 @@ test("the /around crawl stays inside its ledger and still writes its history", a
   const env = withBotPolicyCache({
     RN_SIGNING_KEY_JWK: await signingKey(),
     OUTBOUND_TRANSPORT: net.transport,
-    RN_KV: { get: async () => null, put: async (k, v) => { kv.set(k, v); } },
-    RESTORE_DB: { prepare: statement, batch: async (stmts) => { batches.push(stmts); return []; } },
+    RN_KV: {
+      get: async () => null,
+      put: async (k, v) => {
+        kv.set(k, v);
+      },
+    },
+    RESTORE_DB: {
+      prepare: statement,
+      batch: async (stmts) => {
+        batches.push(stmts);
+        return [];
+      },
+    },
   });
 
   await cronAround(env); // resolving at all is half the point: it used to reject
 
-  assert.ok(net.seen.length <= AROUND_SUBREQUEST_LIMIT,
-    `the crawl made ${net.seen.length} requests against a ledger of ${AROUND_SUBREQUEST_LIMIT}`);
+  assert.ok(net.seen.length <= AROUND_SUBREQUEST_LIMIT, `the crawl made ${net.seen.length} requests against a ledger of ${AROUND_SUBREQUEST_LIMIT}`);
   // The control: this network really does ask for more than the ledger holds,
   // so a pass above is the ledger refusing rather than the fixture being cheap.
   assert.equal(net.seen.length, AROUND_SUBREQUEST_LIMIT, "the endless redirects should spend the whole ledger");
@@ -112,9 +124,14 @@ test("the /around crawl stays inside its ledger and still writes its history", a
   const report = JSON.parse(kv.get("around:report") ?? "null");
   assert.ok(report, "the snapshot was not published, though some neighbors answered at once");
   assert.equal(report.results.length, NEIGHBORS.length, "every neighbor gets a row, refused or not");
-  assert.ok(report.results.some((r) => r.error === "subrequest budget spent, not crawled"),
-    "a neighbor the ledger refused should say so on its row");
-  assert.ok(report.results.some((r) => !r.error && !r.skipped), "no neighbor was crawled");
+  assert.ok(
+    report.results.some((r) => r.error === "subrequest budget spent, not crawled"),
+    "a neighbor the ledger refused should say so on its row",
+  );
+  assert.ok(
+    report.results.some((r) => !r.error && !r.skipped),
+    "no neighbor was crawled",
+  );
 
   assert.equal(batches.length, 1, "the history batch did not run");
   const inserts = batches[0].filter((s) => /^\s*INSERT/i.test(s.sql));
@@ -138,7 +155,14 @@ function sentTable() {
     rows,
     prepare(sql) {
       let bound: any[] = [];
-      const api = { bind: (...a: any[]) => { bound = a; return api; }, run: async () => exec(sql, bound), all: async () => exec(sql, bound) };
+      const api = {
+        bind: (...a: any[]) => {
+          bound = a;
+          return api;
+        },
+        run: async () => exec(sql, bound),
+        all: async () => exec(sql, bound),
+      };
       return api;
     },
   };
@@ -169,6 +193,5 @@ test("webmention-send stays inside its budget and never records a refused probe"
   const asked = new Set(net.seen.map((s) => `${new URL(s.url).origin}/post`));
   const refused = [...asked].filter((t) => !probed.has(t));
   assert.equal(refused.length, 1, `expected exactly one refused target, got ${refused.join(", ") || "none"}`);
-  assert.equal(db.rows.filter((r) => r.source === r.target).length, 0,
-    "a page the ledger cut off mid-way must stay unmarked so tomorrow's run starts there");
+  assert.equal(db.rows.filter((r) => r.source === r.target).length, 0, "a page the ledger cut off mid-way must stay unmarked so tomorrow's run starts there");
 });

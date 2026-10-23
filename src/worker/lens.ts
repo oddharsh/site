@@ -45,7 +45,7 @@ export const LENS_GLOSSARY = {
   x402: {
     label: "x402",
     plain: "A way for software to pay software, a few cents at a time.",
-    more: "It revives an unused \"payment required\" code from the early web, so a bot can pay for a page instead of being blocked.",
+    more: 'It revives an unused "payment required" code from the early web, so a bot can pay for a page instead of being blocked.',
   },
   "robots-txt": {
     label: "robots.txt",
@@ -64,7 +64,7 @@ export const LENS_GLOSSARY = {
   "link-headers": {
     label: "Link headers",
     alt: ["Link relations"],
-    plain: "Pointers a server attaches to a response saying \"the site map is here, the docs are there.\"",
+    plain: 'Pointers a server attaches to a response saying "the site map is here, the docs are there."',
     more: "A machine reads them without downloading or parsing the page itself.",
   },
   "md-nego": {
@@ -130,7 +130,7 @@ export const LENS_GLOSSARY = {
     label: "RDF",
     alt: ["RDF triples", "triples"],
     plain: "A way of writing every fact as three parts: a thing, one of its properties, and the value.",
-    more: "\"This page, author, Ada\" is one triple. Chain enough of them and the result is something software can query.",
+    more: '"This page, author, Ada" is one triple. Chain enough of them and the result is something software can query.',
   },
   markup: {
     label: "markup",
@@ -234,7 +234,7 @@ export const LENS_GLOSSARY = {
   oauth: {
     label: "OAuth",
     plain: "The sign-in handoff where you approve one app to do specific things on your behalf, and can withdraw that later.",
-    more: "It is what turns \"this software can act as me\" into a decision somebody made on purpose.",
+    more: 'It is what turns "this software can act as me" into a decision somebody made on purpose.',
   },
   "web-bot-auth": {
     label: "Web Bot Auth",
@@ -320,16 +320,14 @@ const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
 // longer one claims the position before the shorter one is tried).
 export function glossify(escaped, only?) {
   const src = String(escaped);
-  const pairs = only
-    ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1)
-    : LENS_SPELLINGS;
+  const pairs = only ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1) : LENS_SPELLINGS;
   const seen = new Set();
   let out = "";
   let pos = 0;
   for (;;) {
-    let best: { key: any, spelling: string, index: number, m: RegExpMatchArray } | null = null;
+    let best: { key: any; spelling: string; index: number; m: RegExpMatchArray } | null = null;
     for (const [key, spelling] of pairs) {
-      if (seen.has(key)) continue;       // one definition per string, not one per spelling
+      if (seen.has(key)) continue; // one definition per string, not one per spelling
       const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
       const m = src.slice(pos).match(re);
       if (!m) continue;
@@ -341,8 +339,15 @@ export function glossify(escaped, only?) {
     // The title is the no-JS / touch fallback and what a screen reader reads.
     // On a hover-capable pointer the client strips it the moment the richer
     // surface is live, so the two tips never stack on one word.
-    out += src.slice(pos, best.at) +
-      '<abbr class="lx-term" data-t="' + escAttr(best.key) + '" title="' + escAttr(LENS_GLOSSARY[best.key].plain) + '">' + best.text + "</abbr>";
+    out +=
+      src.slice(pos, best.at) +
+      '<abbr class="lx-term" data-t="' +
+      escAttr(best.key) +
+      '" title="' +
+      escAttr(LENS_GLOSSARY[best.key].plain) +
+      '">' +
+      best.text +
+      "</abbr>";
     pos = best.at + best.text.length;
   }
   return out + src.slice(pos);
@@ -513,7 +518,7 @@ function lensScriptJson(value) {
 function lensHttpText(status) {
   if (status >= 200 && status < 300) return "OK";
   if (status >= 300 && status < 400) return "redirect";
-  if (status === 402) return "Payment Required";   // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
+  if (status === 402) return "Payment Required"; // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
   if (status === 404) return "Not Found";
   if (status >= 400 && status < 500) return "client error";
   if (status >= 500) return "server error";
@@ -525,12 +530,12 @@ function lensReaderFragment(data, note?) {
   const a = data.anatomy;
   let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
   if (!a) return out + '<div class="lx-empty">No readable text either.</div>';
-  const title = data.structured && data.structured.title || "";
+  const title = (data.structured && data.structured.title) || "";
   if (title) out += '<div class="lx-h-title">' + escHtml(title) + "</div>";
   if (a.headings && a.headings.length) {
     out += '<div class="lx-h-outline"><b>Document outline</b><br>';
     for (const h of a.headings.slice(0, 60)) {
-      out += '<div style="padding-left:' + ((h.level - 1) * 12) + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
+      out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
     }
     out += "</div>";
   }
@@ -540,11 +545,18 @@ function lensReaderFragment(data, note?) {
 function lensHumanFragment(data) {
   if (!data || !data.ok) return lensReaderFragment(data);
   if (data.framable) {
-    return '<iframe class="lx-frame" src="' + escAttr(data.finalUrl) +
+    return (
+      '<iframe class="lx-frame" src="' +
+      escAttr(data.finalUrl) +
       '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
-      ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
+      ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>'
+    );
   }
-  return lensReaderFragment(data, (data.frameReason ? "Framing refused (" + data.frameReason + ")." : "Embedding is blocked.") + " JavaScript can request a machine's render to stand in; this is the readable fallback.");
+  return lensReaderFragment(
+    data,
+    (data.frameReason ? "Framing refused (" + data.frameReason + ")." : "Embedding is blocked.") +
+      " JavaScript can request a machine's render to stand in; this is the readable fallback.",
+  );
 }
 
 function lensMachineFragment(data, state) {
@@ -563,8 +575,10 @@ function lensMachineFragment(data, state) {
     ["payload", (a.rawBytes || 0) + " B" + (data.truncated ? " (capped)" : "")],
     ["headings", a.headings ? a.headings.length : 0],
     ["fetched as", data.fetchedBy || "identified bot"],
-  ].map(row => '<tr><td>' + escHtml(row[0]) + '</td><td>' + escHtml(row[1]) + "</td></tr>").join("");
-  const doors = ag.strategy && ag.strategy.verdict || "unknown";
+  ]
+    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + escHtml(row[1]) + "</td></tr>")
+    .join("");
+  const doors = (ag.strategy && ag.strategy.verdict) || "unknown";
   const files = [
     d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
     // Same rule the readiness check uses: an HTML page answering 200 at the
@@ -572,41 +586,71 @@ function lensMachineFragment(data, state) {
     lensSitemapVerdict(d.sitemapXml).valid ? "sitemap.xml" : lensSitemapVerdict(d.sitemapDeclared).valid ? "sitemap (declared in robots.txt)" : "",
     d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
   ].filter(Boolean);
-  return '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
+  return (
+    '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
     '<div class="lx-sec"><div class="lx-sec-h">Observed document <span class="lx-badge ok">observed</span></div>' +
-    '<div class="lx-cap">The minimum contract a machine can recover from this response.</div><table class="lx-kv">' + rows + "</table></div>" +
-    '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' + escHtml(doors) + "</span></div>" +
+    '<div class="lx-cap">The minimum contract a machine can recover from this response.</div><table class="lx-kv">' +
+    rows +
+    "</table></div>" +
+    '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' +
+    escHtml(doors) +
+    "</span></div>" +
     '<div class="lx-cap">Evidence found during the server-side inspection.</div><div class="lx-tags">' +
-    (files.length ? files.map(file => '<span class="lx-tag">' + escHtml(file) + "</span>").join("") : '<span class="lx-none">no discovery files found</span>') +
+    (files.length
+      ? files.map((file) => '<span class="lx-tag">' + escHtml(file) + "</span>").join("")
+      : '<span class="lx-none">no discovery files found</span>') +
     "</div></div>" +
-    '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' + escHtml(state.lens) + "</span></div>" +
-    '<div class="lx-cap">View: ' + escHtml(state.view) + ". The browser enhancement can open the complete lens without changing the URL.</div></div>";
+    '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' +
+    escHtml(state.lens) +
+    "</span></div>" +
+    '<div class="lx-cap">View: ' +
+    escHtml(state.view) +
+    ". The browser enhancement can open the complete lens without changing the URL.</div></div>"
+  );
 }
 
 function lensBrowserFragment(data) {
   if (!data || !data.ok) {
-    return '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
+    return (
+      '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
       '<div class="lx-cap">This is opt-in: browser execution is slower and can run page JavaScript. Runtime WebMCP discovery is reported separately and requires the Chrome-beta lab.</div>' +
-      '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>';
+      '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>'
+    );
   }
-  return '<div class="lx-browser-intro"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot\'s HTTP fetch and the visitor\'s Human view.' +
+  return (
+    "<div class=\"lx-browser-intro\"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot's HTTP fetch and the visitor's Human view." +
     '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div>' +
     // The floor states what it cannot do rather than omitting it. The chips are
     // buttons that fetch, so interaction genuinely needs JavaScript, and a
     // reader with it off should learn that from the page instead of from its
     // absence.
-    '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div></div>';
+    '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div></div>'
+  );
 }
 
 function lensStatusFragment(data, state) {
   if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
-  return '<span><b>' + data.status + "</b> " + lensHttpText(data.status) + "</span>" +
-    '<span>' + escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) + "</span>" +
-    '<span>' + escHtml(data.contentType || "?") + "</span>" +
-    (data.anatomy ? '<span>' + data.anatomy.rawBytes + " B</span>" : "") +
-    '<span>' + escHtml(String(data.elapsedMs || 0)) + " ms</span>" +
-    (data.redirected ? '<span>&rarr; ' + escHtml(data.finalUrl) + "</span>" : "") +
-    '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
+  return (
+    "<span><b>" +
+    data.status +
+    "</b> " +
+    lensHttpText(data.status) +
+    "</span>" +
+    "<span>" +
+    escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) +
+    "</span>" +
+    "<span>" +
+    escHtml(data.contentType || "?") +
+    "</span>" +
+    (data.anatomy ? "<span>" + data.anatomy.rawBytes + " B</span>" : "") +
+    "<span>" +
+    escHtml(String(data.elapsedMs || 0)) +
+    " ms</span>" +
+    (data.redirected ? "<span>&rarr; " + escHtml(data.finalUrl) + "</span>" : "") +
+    '<span style="margin-left:auto">fetched as ' +
+    escHtml(data.fetchedBy || "identified bot") +
+    "</span>"
+  );
 }
 
 // ── the head-to-head fragment ------------------------------------------------
@@ -617,12 +661,19 @@ function lensStatusFragment(data, state) {
 // is the no-JS floor for a shared ?url=&vs= link, the client copy is what the
 // vs form renders without a round-trip through this template.
 const LENS_VS_SURFACES = [
-  ["llms", "llms.txt"], ["markdown", "markdown negotiation"], ["mcp", "MCP"],
-  ["agentCard", "an agent card"], ["apiCatalog", "an API catalog"],
+  ["llms", "llms.txt"],
+  ["markdown", "markdown negotiation"],
+  ["mcp", "MCP"],
+  ["agentCard", "an agent card"],
+  ["apiCatalog", "an API catalog"],
 ];
 
 function lensVsHost(u) {
-  try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return String(u || ""); }
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return String(u || "");
+  }
 }
 
 function lensVsBytes(n) {
@@ -640,49 +691,99 @@ function lensVsColumn(s) {
   // facts about a site nobody asked.
   const measured = !(s.phases && s.phases.discovery === false);
   const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
-    .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>").join("");
-  const surfaces = pub || (measured
-    ? '<span class="lx-none">no machine surfaces published</span>'
-    : '<span class="lx-none">not measured in this comparison' + (s.phases && s.phases.discoveryDeferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") + "</span>");
+    .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>")
+    .join("");
+  const surfaces =
+    pub ||
+    (measured
+      ? '<span class="lx-none">no machine surfaces published</span>'
+      : '<span class="lx-none">not measured in this comparison' +
+        (s.phases && s.phases.discoveryDeferred ? ", deferred to stay under the subrequest cap; compare again to fill it in" : "") +
+        "</span>");
   const cost = s.cost
-    ? "~" + (s.cost.tokens >= 1000 ? (s.cost.tokens / 1000).toFixed(1) + "k" : s.cost.tokens) + " tokens &middot; $" + s.cost.usdPerRead.toFixed(s.cost.usdPerRead >= 0.1 ? 2 : 4) + "/read"
+    ? "~" +
+      (s.cost.tokens >= 1000 ? (s.cost.tokens / 1000).toFixed(1) + "k" : s.cost.tokens) +
+      " tokens &middot; $" +
+      s.cost.usdPerRead.toFixed(s.cost.usdPerRead >= 0.1 ? 2 : 4) +
+      "/read"
     : "no cost model (non-HTML)";
   const rows = [
     ["response", (s.status == null ? "?" : s.status) + " " + lensHttpText(s.status || 0)],
     ["terms", s.tier || "unknown"],
     ["agent doors", measured ? String(s.doors || 0) : "not measured"],
-    ["one model read", null],   // placeholder; cost carries markup, rendered below
+    ["one model read", null], // placeholder; cost carries markup, rendered below
     ["payload", lensVsBytes(s.bytes)],
     ["words", String(s.wordCount || 0)],
-  ].map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>").join("");
-  return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + escHtml(host) + '</span><a href="/lens?url=' + escAttr(encodeURIComponent(s.url)) + '">full scan &rarr;</a></div>' +
-    '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : escHtml(s.readiness)) + "<span>/100</span></b>" +
-    '<span class="lx-badge ' + levelKind + '"' + (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") + ">Level " + (s.level == null ? "?" : escHtml(s.level)) + "</span> <span>" + escHtml(s.levelName || "") + "</span></div>" +
-    '<table class="lx-kv">' + rows + "</table>" +
-    '<div class="lx-tags" style="margin-top:6px">' + surfaces + "</div></div></div>";
+  ]
+    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>")
+    .join("");
+  return (
+    '<div class="lx-vs-col"><div class="lx-vs-h"><span>' +
+    escHtml(host) +
+    '</span><a href="/lens?url=' +
+    escAttr(encodeURIComponent(s.url)) +
+    '">full scan &rarr;</a></div>' +
+    '<div class="lx-vs-body"><div class="lx-vs-score"><b>' +
+    (s.readiness == null ? "?" : escHtml(s.readiness)) +
+    "<span>/100</span></b>" +
+    '<span class="lx-badge ' +
+    levelKind +
+    '"' +
+    (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") +
+    ">Level " +
+    (s.level == null ? "?" : escHtml(s.level)) +
+    "</span> <span>" +
+    escHtml(s.levelName || "") +
+    "</span></div>" +
+    '<table class="lx-kv">' +
+    rows +
+    "</table>" +
+    '<div class="lx-tags" style="margin-top:6px">' +
+    surfaces +
+    "</div></div></div>"
+  );
 }
 
 export function lensVsFragment(payload) {
   if (!payload || !payload.ok) {
     return '<div class="lx-empty">' + escHtml((payload && payload.error) || "The comparison did not run.") + "</div>";
   }
-  const L = payload.left, R = payload.right;
+  const L = payload.left,
+    R = payload.right;
   let headline = "";
   if (L && R && L.readiness != null && R.readiness != null) {
     const win = L.readiness >= R.readiness ? L : R;
     const lose = win === L ? R : L;
     const extras = LENS_VS_SURFACES.filter(([key]) => win.surfaces && win.surfaces[key] && !(lose.surfaces && lose.surfaces[key])).map(([, label]) => label);
-    const spread = win.readiness === lose.readiness
-      ? "<b>" + escHtml(win.readiness) + " apiece.</b> Same score, one rubric."
-      : "<b>" + escHtml(lensVsHost(win.finalUrl || win.url)) + " " + escHtml(win.readiness) + ", " + escHtml(lensVsHost(lose.finalUrl || lose.url)) + " " + escHtml(lose.readiness) + ".</b>";
-    headline = '<div class="lx-vs-headline">' + spread +
-      (extras.length ? " The gap is published surfaces: " + escHtml(extras.join(", ")) + "." : " Both publish the same surfaces; the gap sits in the individual checks.") +
+    const spread =
+      win.readiness === lose.readiness
+        ? "<b>" + escHtml(win.readiness) + " apiece.</b> Same score, one rubric."
+        : "<b>" +
+          escHtml(lensVsHost(win.finalUrl || win.url)) +
+          " " +
+          escHtml(win.readiness) +
+          ", " +
+          escHtml(lensVsHost(lose.finalUrl || lose.url)) +
+          " " +
+          escHtml(lose.readiness) +
+          ".</b>";
+    headline =
+      '<div class="lx-vs-headline">' +
+      spread +
+      (extras.length
+        ? " The gap is published surfaces: " + escHtml(extras.join(", ")) + "."
+        : " Both publish the same surfaces; the gap sits in the individual checks.") +
       "</div>";
   }
-  return '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
-    '<div class="lx-vs-grid">' + lensVsColumn(L || {}) + lensVsColumn(R || {}) + "</div>" + headline;
+  return (
+    '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
+    '<div class="lx-vs-grid">' +
+    lensVsColumn(L || {}) +
+    lensVsColumn(R || {}) +
+    "</div>" +
+    headline
+  );
 }
-
 
 // One inspection, four doors: /lens/fetch and the SSR shell here, the
 // lens_inspect and lens_page MCP tools, and the terminal's lens frame. They
@@ -701,7 +802,10 @@ export const LENS_INSPECT = defineLens({
   run: async ({ target, args, env }) => ({ ok: true, value: await lensInspect(target, env, args) }),
   onThrow: (e) => ({
     status: 502,
-    payload: { ok: false, error: asRecord(e)?.name === "TimeoutError" ? `The site took too long to answer (${LENS_FETCH_TIMEOUT_MS / 1000}s timeout).` : lensErrorText(e) },
+    payload: {
+      ok: false,
+      error: asRecord(e)?.name === "TimeoutError" ? `The site took too long to answer (${LENS_FETCH_TIMEOUT_MS / 1000}s timeout).` : lensErrorText(e),
+    },
   }),
 });
 
@@ -730,39 +834,49 @@ const LENS_SOW_FACTS = [
   {
     stat: "56.0%",
     rail: "of HTML requests are bots",
-    claim: "Automated clients sent 56.0% of HTML page requests in Cloudflare's latest published window: 47.2% from non-AI bots, 5.8% from AI bots, and 3.0% from mixed-purpose bots.",
-    src: "Cloudflare Radar", href: "https://radar.cloudflare.com/ai-insights?dateStart=2026-04-10&dateEnd=2026-07-28",
+    claim:
+      "Automated clients sent 56.0% of HTML page requests in Cloudflare's latest published window: 47.2% from non-AI bots, 5.8% from AI bots, and 3.0% from mixed-purpose bots.",
+    src: "Cloudflare Radar",
+    href: "https://radar.cloudflare.com/ai-insights?dateStart=2026-04-10&dateEnd=2026-07-28",
   },
   {
     stat: "10.0% / 9.7%",
     railStat: "10.0%",
     rail: "of desktop pages have llms.txt",
-    claim: "HTTP Archive found an llms.txt file on 10.0% of desktop pages and 9.7% of mobile pages in June 2026. Both shares were about 4.7 times their July 2025 level.",
-    src: "HTTP Archive", href: "https://httparchive.org/reports/search-engine-optimization",
+    claim:
+      "HTTP Archive found an llms.txt file on 10.0% of desktop pages and 9.7% of mobile pages in June 2026. Both shares were about 4.7 times their July 2025 level.",
+    src: "HTTP Archive",
+    href: "https://httparchive.org/reports/search-engine-optimization",
   },
   {
     stat: ">10k servers",
     railStat: ">10k",
     rail: "public MCP servers",
     claim: "More than 10,000 MCP servers had been published when MCP joined the Linux Foundation's Agentic AI Foundation in December 2025.",
-    src: "Linux Foundation", href: "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation",
+    src: "Linux Foundation",
+    href: "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation",
   },
   {
     stat: "100+ agent skills",
-    claim: "Google Workspace's CLI ships more than 100 agent skills, returns structured JSON, and builds its command surface from Google's Discovery Service at runtime.",
-    src: "Google Workspace CLI", href: "https://github.com/googleworkspace/cli",
+    claim:
+      "Google Workspace's CLI ships more than 100 agent skills, returns structured JSON, and builds its command surface from Google's Discovery Service at runtime.",
+    src: "Google Workspace CLI",
+    href: "https://github.com/googleworkspace/cli",
   },
   {
     stat: "2 pay-per-use partners",
-    claim: "Cloudflare is testing pay per use with Ceramic.ai and You.com, tying payment to content appearing in results instead of the number of times a crawler fetches it.",
-    src: "Cloudflare", href: "https://blog.cloudflare.com/making-ai-search-smarter/",
+    claim:
+      "Cloudflare is testing pay per use with Ceramic.ai and You.com, tying payment to content appearing in results instead of the number of times a crawler fetches it.",
+    src: "Cloudflare",
+    href: "https://blog.cloudflare.com/making-ai-search-smarter/",
   },
   {
     stat: "$898.13K / 9.04M txns",
     railStat: "$898K",
     rail: "in x402 volume over 30 days",
     claim: "x402scan recorded $898.13K of volume across 9.04 million transactions over the past 30 days. That is about $0.10 per transaction on average.",
-    src: "x402scan", href: "https://www.x402scan.com/",
+    src: "x402scan",
+    href: "https://www.x402scan.com/",
   },
 ];
 
@@ -775,32 +889,55 @@ function lensStateOfWebRail() {
   // The rail is the first screen, and it opens on llms.txt / MCP / x402 — three
   // terms that lose a non-technical reader in the first four seconds. glossify
   // makes each one hoverable in place rather than rewriting the fact around it.
-  const items = LENS_SOW_FACTS.filter((f) => f.rail).map((f, i) =>
-    '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>"
-  ).join("");
-  return '<div class="lx-sow-rail">' +
+  const items = LENS_SOW_FACTS.filter((f) => f.rail)
+    .map(
+      (f, i) =>
+        '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>",
+    )
+    .join("");
+  return (
+    '<div class="lx-sow-rail">' +
     '<span class="lx-sow-facts">' +
-    '<span class="lx-sow-rail-k">The machine web, ' + LENS_SOW_MONTH + ":</span>" +
-    items + "</span>" +
+    '<span class="lx-sow-rail-k">The machine web, ' +
+    LENS_SOW_MONTH +
+    ":</span>" +
+    items +
+    "</span>" +
     '<button class="xp-button lx-sow-q" type="button" data-sow-open title="The state of the machine web" aria-label="The state of the machine web: six sourced facts">?</button>' +
-    "</div>";
+    "</div>"
+  );
 }
 
 function lensStateOfWebPanel() {
-  const cards = LENS_SOW_FACTS.map((f) =>
-    '<div class="lx-sow-card"><div class="lx-sow-stat">' + escHtml(f.stat) + "</div>" +
-    '<div class="lx-sow-claim">' + escHtml(f.claim) + "</div>" +
-    '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + LENS_SOW_CHECKED + "</div></div>"
+  const cards = LENS_SOW_FACTS.map(
+    (f) =>
+      '<div class="lx-sow-card"><div class="lx-sow-stat">' +
+      escHtml(f.stat) +
+      "</div>" +
+      '<div class="lx-sow-claim">' +
+      escHtml(f.claim) +
+      "</div>" +
+      '<div class="lx-sow-src"><a href="' +
+      escAttr(f.href) +
+      '" target="_blank" rel="noopener">' +
+      escHtml(f.src) +
+      "</a> &middot; " +
+      LENS_SOW_CHECKED +
+      "</div></div>",
   ).join("");
   // closedby="any" is the native light-dismiss (click-outside plus Esc) where it
   // exists; lens.js keeps a backdrop-click listener for browsers that lack it.
-  return '<dialog class="lx-sow-dialog" id="lx-sow-dialog" closedby="any" aria-labelledby="lx-sow-title">' +
+  return (
+    '<dialog class="lx-sow-dialog" id="lx-sow-dialog" closedby="any" aria-labelledby="lx-sow-title">' +
     '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-sow-title">The state of the machine web</span>' +
     '<button class="lx-sow-x" type="button" id="lx-sow-close" title="Close" aria-label="Close"></button></div>' +
     '<div class="lx-sow-inner">' +
-    '<div class="lx-sow-grid">' + cards + "</div>" +
+    '<div class="lx-sow-grid">' +
+    cards +
+    "</div>" +
     '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. The lenses here measure whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page once it has fetched it. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
-    "</div></dialog>";
+    "</div></dialog>"
+  );
 }
 
 // The About dialog: the page's argument, stated once, in order. Everything on
@@ -813,34 +950,63 @@ function lensStateOfWebPanel() {
 // from the footer's own self-description.
 const LENS_ERAS = [
   {
-    era: "Past", years: "1995-2011", label: "The semantic web asked first.",
-    claim: "Publishers marked meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), and JSON-LD (2011). These layers let machines read facts instead of guessing from prose. The ones that delivered visible traffic, especially link previews, survived; the rest mostly fossilized in place.",
+    era: "Past",
+    years: "1995-2011",
+    label: "The semantic web asked first.",
+    claim:
+      "Publishers marked meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), and JSON-LD (2011). These layers let machines read facts instead of guessing from prose. The ones that delivered visible traffic, especially link previews, survived; the rest mostly fossilized in place.",
     jumps: [{ lens: "structured" }, { lens: "anatomy" }],
   },
   {
-    era: "Present", years: "2022-now", label: "Models pay the difference.",
-    claim: "Models changed the bargain. They scrape pages built for people and pay the difference in tokens, so publishers no longer have to mark everything up first. Sites answer that appetite with crawler rules, AI-use signals, bot challenges, and pay-per-crawl.",
+    era: "Present",
+    years: "2022-now",
+    label: "Models pay the difference.",
+    claim:
+      "Models changed the bargain. They scrape pages built for people and pay the difference in tokens, so publishers no longer have to mark everything up first. Sites answer that appetite with crawler rules, AI-use signals, bot challenges, and pay-per-crawl.",
     jumps: [{ lens: "ai" }, { lens: "terms" }],
   },
   {
-    era: "Future", years: "2024-on", label: "From reading to acting.",
-    claim: "The next question is action. Can a site publish tools, identity, payment, and instructions that let an agent do something without driving a human interface? Lens probes those surfaces and lets you switch the missing ones on as counterfactuals.",
+    era: "Future",
+    years: "2024-on",
+    label: "From reading to acting.",
+    claim:
+      "The next question is action. Can a site publish tools, identity, payment, and instructions that let an agent do something without driving a human interface? Lens probes those surfaces and lets you switch the missing ones on as counterfactuals.",
     jumps: [{ lens: "discovery" }, { lens: "readiness" }, { view: "delta", label: "Delta" }],
   },
 ];
 
 function lensAboutPanel() {
   const eras = LENS_ERAS.map((e) => {
-    const jumps = e.jumps.map((j) => j.view
-      ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
-      : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' + escAttr(j.lens) + '">' + escHtml(LENS_TAB_LABELS[j.lens] || j.lens) + "</button>"
-    ).join(" ");
-    return '<div class="lx-abt-era"><div class="lx-abt-when"><b>' + escHtml(e.era) + "</b><span>" + escHtml(e.years) + "</span></div>" +
-      '<div><div class="lx-abt-label">' + escHtml(e.label) + "</div>" +
-      '<div class="lx-abt-claim">' + glossify(escHtml(e.claim)) + "</div>" +
-      '<div class="lx-abt-jumps"><span>See it live:</span> ' + jumps + "</div></div></div>";
+    const jumps = e.jumps
+      .map((j) =>
+        j.view
+          ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
+          : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' +
+            escAttr(j.lens) +
+            '">' +
+            escHtml(LENS_TAB_LABELS[j.lens] || j.lens) +
+            "</button>",
+      )
+      .join(" ");
+    return (
+      '<div class="lx-abt-era"><div class="lx-abt-when"><b>' +
+      escHtml(e.era) +
+      "</b><span>" +
+      escHtml(e.years) +
+      "</span></div>" +
+      '<div><div class="lx-abt-label">' +
+      escHtml(e.label) +
+      "</div>" +
+      '<div class="lx-abt-claim">' +
+      glossify(escHtml(e.claim)) +
+      "</div>" +
+      '<div class="lx-abt-jumps"><span>See it live:</span> ' +
+      jumps +
+      "</div></div></div>"
+    );
   }).join("");
-  return '<dialog class="lx-sow-dialog" id="lx-abt-dialog" closedby="any" aria-labelledby="lx-abt-title">' +
+  return (
+    '<dialog class="lx-sow-dialog" id="lx-abt-dialog" closedby="any" aria-labelledby="lx-abt-title">' +
     '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
     '<button class="lx-sow-x" type="button" id="lx-abt-close" title="Close" aria-label="Close"></button></div>' +
     '<div class="lx-sow-inner">' +
@@ -855,13 +1021,18 @@ function lensAboutPanel() {
     "<li>One fetch per ask, server-side, with no logging.</li>" +
     "</ul></div>" +
     '<div class="lx-cf-credit">Rubric after IsItAgentReady. Pedagogy after Seymour Papert\'s micro-worlds and <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck" target="_blank" rel="noopener">Geoffrey Litt</a>. Window chrome after Redmond, 2001.</div>' +
-    "</div></dialog>";
+    "</div></dialog>"
+  );
 }
 
 export function renderLensShell(initial?, state?, inputValue?, compare?) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
-  state = state || { view: "both", lens: "anatomy", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
+  state = state || {
+    view: "both",
+    lens: "anatomy",
+    counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false },
+  };
   const seeded = initial && initial.ok;
   // vs mode: the single-scan toolbar and panes stay in the DOM but hidden
   // (.lx-off), so the client can drop back to a normal scan without rebuilding
@@ -873,9 +1044,10 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
   // same span current via updateDeltaCount().
   const cfOn = Object.keys(state.counterfactuals || {}).filter((k) => state.counterfactuals[k]).length;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
-  const humanHeader = seeded && !initial.framable
-    ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
-    : "Human view &middot; the live page";
+  const humanHeader =
+    seeded && !initial.framable
+      ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
+      : "Human view &middot; the live page";
   // The header no longer repeats the lens name: the tab strip sits inside the
   // pane now, so the active tab IS the lens label. Must match renderMachine()
   // and updateModeUi() in src/client/lens.ts or the header rewrites on hydrate.
@@ -884,17 +1056,19 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
   // Mode notes coach, they don't caption: each one asks for a prediction the
   // pane will then confirm or correct. Keep the strings byte-identical to
   // MODE_NOTE in src/client/lens.ts or the note visibly rewrites on hydrate.
-  const modeNote = state.view === "human"
-    ? "Human is the page as a person receives it. Every other view subtracts the person."
-    : state.view === "machine"
-      ? "Machine is an evidence-first briefing. Read claims first, then check each against its evidence."
-      : state.view === "browser"
-        ? "Browser Run renders after JavaScript beside HTTP. Disagreement reveals a JS dependency."
-      : state.view === "delta"
-        ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
-        : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
+  const modeNote =
+    state.view === "human"
+      ? "Human is the page as a person receives it. Every other view subtracts the person."
+      : state.view === "machine"
+        ? "Machine is an evidence-first briefing. Read claims first, then check each against its evidence."
+        : state.view === "browser"
+          ? "Browser Run renders after JavaScript beside HTTP. Disagreement reveals a JS dependency."
+          : state.view === "delta"
+            ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
+            : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
-  const lensDescription = "Paste any URL and compare the human page with observed bot access, Cloudflare's standards level, Readability content recovery, raw HTML, structured data, machine terms, and agent doors.";
+  const lensDescription =
+    "Paste any URL and compare the human page with observed bot access, Cloudflare's standards level, Readability content recovery, raw HTML, structured data, machine terms, and agent doors.";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
@@ -1618,8 +1792,9 @@ footer a { color:var(--link); }
           <!-- The lens tabs live inside the pane they steer. Order is evidence to
                verdict: raw observation first (the default lens, so the first tab is
                the selected one on load), Agent-ready? last as the capstone. -->
-          <div class="lx-lenses" role="tablist" aria-label="machine lens">${LENS_TAB_ORDER.map((key) =>
-            `<button class="lx-tab${state.lens === key ? " is-on" : ""}" data-lens="${key}" role="tab" aria-selected="${state.lens === key ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS[key]}</button>`
+          <div class="lx-lenses" role="tablist" aria-label="machine lens">${LENS_TAB_ORDER.map(
+            (key) =>
+              `<button class="lx-tab${state.lens === key ? " is-on" : ""}" data-lens="${key}" role="tab" aria-selected="${state.lens === key ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS[key]}</button>`,
           ).join("")}</div>
           <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
         </div>
@@ -1630,11 +1805,19 @@ footer a { color:var(--link); }
       </section>
     </div>
 
-    <div class="lx-status" id="lx-status">${vsActive
-      ? (compare.payload && compare.payload.ok
-        ? '<span><b>Head-to-head</b></span><span>' + escHtml(lensVsHost(value)) + " vs " + escHtml(lensVsHost(vsValue)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
-        : '<span class="err">Comparison failed:</span> <span>' + escHtml((compare.payload && compare.payload.error) || "unknown error") + "</span>")
-      : seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
+    <div class="lx-status" id="lx-status">${
+      vsActive
+        ? compare.payload && compare.payload.ok
+          ? "<span><b>Head-to-head</b></span><span>" +
+            escHtml(lensVsHost(value)) +
+            " vs " +
+            escHtml(lensVsHost(vsValue)) +
+            '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
+          : '<span class="err">Comparison failed:</span> <span>' + escHtml((compare.payload && compare.payload.error) || "unknown error") + "</span>"
+        : seeded || (initial && !initial.ok)
+          ? lensStatusFragment(initial, state)
+          : "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>"
+    }</div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; <button type="button" class="lx-sow-open" data-abt-open>a research toy about how machines read the web</button> &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
     ${lensAboutPanel()}
@@ -1690,9 +1873,7 @@ export function lensParseCloudflareAgentScore(body, contentType = "") {
   const parsed = parseMcpBody(body, contentType, CLOUDFLARE_SCORE_REQUEST_ID);
   if (!parsed.ok || !parsed.payload.result || parsed.payload.result.isError) return null;
   const { result } = parsed.payload;
-  const text = Array.isArray(result.content)
-    ? result.content.map((item) => item && item.text || "").join("\n")
-    : JSON.stringify(result);
+  const text = Array.isArray(result.content) ? result.content.map((item) => (item && item.text) || "").join("\n") : JSON.stringify(result);
   const match = text.match(/\bLevel\s+([0-5])\s*\/\s*5(?:\s*(?:--|[-:\u2013\u2014])\s*\**\s*([^\n*]+))?/i);
   if (!match) return null;
   const level = Number(match[1]);
@@ -1700,7 +1881,10 @@ export function lensParseCloudflareAgentScore(body, contentType = "") {
     available: true,
     level,
     score: level * 20,
-    levelName: String(match[2] || "").trim().slice(0, 80) || null,
+    levelName:
+      String(match[2] || "")
+        .trim()
+        .slice(0, 80) || null,
     source: "Cloudflare Agent Readiness",
     sourceUrl: "https://isitagentready.com/",
   };
@@ -1730,7 +1914,9 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
         "user-agent": BOT_UA,
       },
       body: JSON.stringify({
-        jsonrpc: "2.0", id: CLOUDFLARE_SCORE_REQUEST_ID, method: "tools/call",
+        jsonrpc: "2.0",
+        id: CLOUDFLARE_SCORE_REQUEST_ID,
+        method: "tools/call",
         params: { name: "scan_site", arguments: { url: target, profile: "all" } },
       }),
       signal: AbortSignal.timeout(CLOUDFLARE_SCORE_TIMEOUT_MS),
@@ -1739,7 +1925,9 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
     const parsed = response.ok && !capped.truncated ? lensParseCloudflareAgentScore(capped.text, response.headers.get("content-type") || "") : null;
     if (!parsed) {
       return {
-        ok: false, status: 200, outcome: "unreadable",
+        ok: false,
+        status: 200,
+        outcome: "unreadable",
         payload: { ok: true, available: false, error: response.ok ? "Cloudflare's score could not be read." : "Cloudflare's scanner did not answer." },
       };
     }
@@ -1753,7 +1941,6 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
 export function handleLensCloudflareScore(request, env, ctx) {
   return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx);
 }
-
 
 // How long a render waits for the page to settle, shared by /lens/shot and
 // /lens/browser so the two cannot drift into disagreeing about what "rendered"
@@ -1839,13 +2026,20 @@ const LENS_SHOT = defineLens({
     // debugged it at the scanned site instead of at our own budget.
     if (r.status === 429) {
       return {
-        ok: false, status: 429, outcome: "browser_budget_spent",
-        payload: { ok: false, error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). The live frame and every machine lens still work.` },
+        ok: false,
+        status: 429,
+        outcome: "browser_budget_spent",
+        payload: {
+          ok: false,
+          error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). The live frame and every machine lens still work.`,
+        },
       };
     }
     if (!r.ok || !ctype.startsWith("image/")) {
       let detail = "";
-      try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
+      try {
+        detail = (await r.text()).slice(0, 300);
+      } catch (_e) {}
       s.setAttribute("http.response.status_code", r.status);
       return { ok: false, status: 502, outcome: "not_an_image", payload: { ok: false, error: "Browser Run returned " + r.status + ".", detail } };
     }
@@ -1875,7 +2069,9 @@ async function plainTally(env, plainKey) {
   try {
     const hit = await env.RN_KV.get(plainKey, "json");
     return hit && hit.ok && hit.tally ? hit.tally : null;
-  } catch (_e) { return null; }
+  } catch (_e) {
+    return null;
+  }
 }
 
 // Both sides of the comparison run through the SAME documentTally(), which is
@@ -1889,9 +2085,7 @@ function buildInteraction(recipe, receipt, before) {
   // expose no bypass. The client says so using the CSP it already scanned.
   if (!receipt) return { ...base, ran: false, acted: 0, scanned: 0, note: "no-receipt", outcome: "no-receipt" };
   if (receipt.note === "forged-receipt") return { ...base, ...receipt, outcome: "forged-receipt" };
-  const outcome = receipt.note === "threw" ? "threw"
-    : receipt.note === "none-found" ? "nothing-found"
-      : receipt.note === "acted" ? "ran" : receipt.note;
+  const outcome = receipt.note === "threw" ? "threw" : receipt.note === "none-found" ? "nothing-found" : receipt.note === "acted" ? "ran" : receipt.note;
   return { ...base, ...receipt, outcome };
 }
 
@@ -1899,7 +2093,9 @@ function buildInteraction(recipe, receipt, before) {
 // `lens.outcome` ("the render failed") so that "the render succeeded and the
 // recipe found nothing" is still a group-by rather than a filter. The response
 // carries `note` and does not need a second spelling of it.
-function interactionPayload({ outcome: _outcome, ...rest }) { return rest; }
+function interactionPayload({ outcome: _outcome, ...rest }) {
+  return rest;
+}
 
 // /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
 // This deliberately stays separate from /lens/fetch: the normal scan is an
@@ -1986,7 +2182,9 @@ const LENS_BROWSER = defineLens({
     // response here, so it is the one that most needs to be itself.
     if (response.status === 429) {
       return {
-        ok: false, status: 429, outcome: "browser_budget_spent",
+        ok: false,
+        status: 429,
+        outcome: "browser_budget_spent",
         payload: {
           ok: false,
           reason: "budget_spent",
@@ -1996,14 +2194,17 @@ const LENS_BROWSER = defineLens({
     }
     if (!response.ok) {
       let detail = "";
-      try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
+      try {
+        detail = (await response.text()).slice(0, 500);
+      } catch (_e) {}
       s.setAttribute("http.response.status_code", response.status);
       return { ok: false, status: 502, outcome: "upstream_not_ok", payload: { ok: false, error: "Browser Run returned " + response.status + ".", detail } };
     }
 
     let envelope;
-    try { envelope = await response.json(); }
-    catch (e) {
+    try {
+      envelope = await response.json();
+    } catch (e) {
       s.setAttribute("lens.error", lensErrorText(e));
       return { ok: false, status: 502, outcome: "invalid_json", payload: { ok: false, error: "Browser Run returned invalid JSON: " + lensErrorText(e) } };
     }
@@ -2014,15 +2215,11 @@ const LENS_BROWSER = defineLens({
     // carries our own injected node. Count before stripping and `shape` counts our
     // script; cap before stripping and the receipt falls off the end of a large
     // page and the run reports as "never happened".
-    const settled = recipe
-      ? lensRecipeReceipt(String(result.content || ""), nonce)
-      : { receipt: null, html: String(result.content || "") };
+    const settled = recipe ? lensRecipeReceipt(String(result.content || ""), nonce) : { receipt: null, html: String(result.content || "") };
     const rawContent = settled.html;
     // The "before" is read out of the PLAIN snapshot's cache entry, whose key is
     // this lens's own prefix over the bare URL.
-    const interaction = recipe
-      ? buildInteraction(recipe, settled.receipt, await plainTally(env, "lens:browser:" + (await lensSha256Hex(target))))
-      : null;
+    const interaction = recipe ? buildInteraction(recipe, settled.receipt, await plainTally(env, "lens:browser:" + (await lensSha256Hex(target)))) : null;
     if (recipe) s.setAttribute("lens.recipe_outcome", interaction.outcome);
     // Every other field on this snapshot is capped; the screenshot was not, and a
     // fullPage PNG has no natural ceiling. Measured 2026-08-04 against production:
@@ -2160,7 +2357,7 @@ export function lensObservationSummary(result) {
       const base = result?.cost?.tiers?.[0];
       const rate = result?.cost?.rates?.[0];
       if (!base || !rate) return null;
-      return { tokens: base.tokens, usdPerRead: +(base.tokens / 1e6 * rate.usdPerMtok).toFixed(4), model: rate.model };
+      return { tokens: base.tokens, usdPerRead: +((base.tokens / 1e6) * rate.usdPerMtok).toFixed(4), model: rate.model };
     })(),
     // Carried so a caller can tell a zero from an absence. Without it a
     // page-only scan reports `doors: 0` and `readiness: null`, which reads as a
@@ -2181,13 +2378,19 @@ export function lensObservationSummary(result) {
   // reader without re-minting a content-hashed asset.
   return {
     ...summary,
-    readiness: null, fieldScore: null, level: null, tier: null, doors: null, surfaces: null,
+    readiness: null,
+    fieldScore: null,
+    level: null,
+    tier: null,
+    doors: null,
+    surfaces: null,
     levelName: phases.discoveryDeferred ? "discovery deferred" : "discovery not run",
     levelNote: phases.discoveryDeferred ? LENS_DEFERRED_NOTE : null,
   };
 }
 
-const LENS_DEFERRED_NOTE = "This side's origin discovery was deferred so the comparison stays inside the 50 subrequests one Workers Free invocation allows. Compare again and it runs live or comes from cache.";
+const LENS_DEFERRED_NOTE =
+  "This side's origin discovery was deferred so the comparison stays inside the 50 subrequests one Workers Free invocation allows. Compare again and it runs live or comes from cache.";
 
 // The fields a side only has once its discovery ran. Comparing them across a
 // side that never measured them would report "doors 3 -> null" as a change.
@@ -2196,20 +2399,34 @@ const LENS_DISCOVERY_FIELDS = new Set(["readiness", "level", "tier", "doors"]);
 export function compareLensObservations(left, right) {
   const bothMeasured = left?.phases?.discovery !== false && right?.phases?.discovery !== false;
   const fields = [
-    ["status", "status"], ["finalUrl", "final URL"], ["contentType", "content type"],
-    ["title", "title"], ["wordCount", "word count"], ["bytes", "bytes"],
-    ["readiness", "readiness"], ["level", "readiness level"], ["tier", "spectrum tier"],
+    ["status", "status"],
+    ["finalUrl", "final URL"],
+    ["contentType", "content type"],
+    ["title", "title"],
+    ["wordCount", "word count"],
+    ["bytes", "bytes"],
+    ["readiness", "readiness"],
+    ["level", "readiness level"],
+    ["tier", "spectrum tier"],
     ["doors", "agent doors"],
   ].filter(([key]) => bothMeasured || !LENS_DISCOVERY_FIELDS.has(key));
-  const changes = fields.filter(([key]) => left?.[key] !== right?.[key]).map(([key, label]) => ({
-    field: key, label, before: left?.[key] ?? null, after: right?.[key] ?? null,
-  }));
+  const changes = fields
+    .filter(([key]) => left?.[key] !== right?.[key])
+    .map(([key, label]) => ({
+      field: key,
+      label,
+      before: left?.[key] ?? null,
+      after: right?.[key] ?? null,
+    }));
   if (!bothMeasured) return changes;
   for (const key of ["llms", "markdown", "mcp", "agentCard", "apiCatalog"]) {
-    if (left?.surfaces?.[key] !== right?.surfaces?.[key]) changes.push({
-      field: `surfaces.${key}`, label: `surface: ${key}`,
-      before: !!left?.surfaces?.[key], after: !!right?.surfaces?.[key],
-    });
+    if (left?.surfaces?.[key] !== right?.surfaces?.[key])
+      changes.push({
+        field: `surfaces.${key}`,
+        label: `surface: ${key}`,
+        before: !!left?.surfaces?.[key],
+        after: !!right?.surfaces?.[key],
+      });
   }
   return changes;
 }
@@ -2229,16 +2446,18 @@ function lensDiscoverySource(phases) {
 // that is still cold, so the second compare of a pair is complete.
 export async function compareLensTargets(leftUrl, rightUrl, env, opts: { skipBotViews?: boolean } = {}) {
   const board = discoveryBoard(["left", "right"]);
-  const inspect = (url, side) => lensInspect(url, env, { skipBotViews: opts.skipBotViews !== false, board, side })
-    // A side that ends before discovery (a fetch error, a non-HTML body, a
-    // blocked host) never reports on its own, and the other side would wait on
-    // it forever. Passing on settle releases the board on every exit path.
-    .finally(() => board.pass(side));
+  const inspect = (url, side) =>
+    lensInspect(url, env, { skipBotViews: opts.skipBotViews !== false, board, side })
+      // A side that ends before discovery (a fetch error, a non-HTML body, a
+      // blocked host) never reports on its own, and the other side would wait on
+      // it forever. Passing on settle releases the board on every exit path.
+      .finally(() => board.pass(side));
   const [left, right] = await Promise.all([inspect(leftUrl, "left"), inspect(rightUrl, "right")]);
   const leftSummary = lensObservationSummary(left);
   const rightSummary = lensObservationSummary(right);
   return {
-    left: leftSummary, right: rightSummary,
+    left: leftSummary,
+    right: rightSummary,
     changes: compareLensObservations(leftSummary, rightSummary),
     discovery: { left: lensDiscoverySource(leftSummary.phases), right: lensDiscoverySource(rightSummary.phases) },
   };
@@ -2297,13 +2516,23 @@ export async function lensInspect(targetUrl, env, opts) {
 // hostname only, never the full URL: a span attribute is the wrong place for a
 // third party's query string, which can carry their tokens and identifiers.
 function safeHost(raw) {
-  try { return new URL(raw).hostname.toLowerCase(); } catch { return undefined; }
+  try {
+    return new URL(raw).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
 }
 
 async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const started = Date.now();
   const deadline = AbortSignal.timeout(LENS_FETCH_TIMEOUT_MS);
-  let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false, undecodable = "";
+  let res,
+    body = "",
+    truncated = false,
+    ct = "",
+    isTextual = false,
+    isHtml = false,
+    undecodable = "";
   ({ res, body, truncated, ct, isTextual, isHtml, undecodable } = await span("lens.inspect.fetch", async (s) => {
     const r0 = await lensFetch(targetUrl, env, deadline);
     const ct0 = r0.headers.get("content-type") || "";
@@ -2324,12 +2553,20 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     const ct0Textual = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
     const isTextual0 = ct0Textual && !undecodable0;
     const isHtml0 = /html/i.test(ct0) && !undecodable0;
-    let body0 = "", truncated0 = false;
+    let body0 = "",
+      truncated0 = false;
     // read the body inside the same deadline. Clearing a timer before the read
     // (as this once did) left a slow-drip response unbounded in wall time, and
     // AbortSignal.timeout covers headers and body by construction.
-    if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
-    else if (undecodable0) { try { await r0.body?.cancel(); } catch (_e) {} }
+    if (isTextual0) {
+      const r = await lensReadCapped(r0, 2 * 1024 * 1024);
+      body0 = r.text;
+      truncated0 = r.truncated;
+    } else if (undecodable0) {
+      try {
+        await r0.body?.cancel();
+      } catch (_e) {}
+    }
     if (undecodable0) s.setAttribute("lens.undecodable_encoding", undecodable0);
     s.setAttribute("http.response.status_code", r0.status);
     s.setAttribute("lens.content_type", ct0 || undefined);
@@ -2354,9 +2591,17 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   // shapes live in the functions that produce them, which is a second copy that
   // rots; the alternative here is one honest boundary at the accumulator.
   const out: Record<string, any> = {
-    ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
-    status: res.status, contentType: ct, binary: !isTextual, truncated,
-    elapsedMs: Date.now() - started, fetchedBy: BOT_UA, headers,
+    ok: true,
+    url: targetUrl,
+    finalUrl,
+    redirected: finalUrl !== targetUrl,
+    status: res.status,
+    contentType: ct,
+    binary: !isTextual,
+    truncated,
+    elapsedMs: Date.now() - started,
+    fetchedBy: BOT_UA,
+    headers,
   };
   // Name the refusal in the payload, not just in a span. A consumer that sees an
   // empty anatomy deserves the reason, and "the body arrived br-encoded and this
@@ -2384,75 +2629,79 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   // work this phase was handed. For actual CPU, read `cpuTime` off the tail event.
   if (isHtml && body) {
     await span("lens.inspect.parse", async (s) => {
-    s.setAttribute("lens.body_bytes", body.length);
-    // ── the parse budget ─────────────────────────────────────────────────
-    // This is the one genuinely CPU-BOUND thing lens does, and it was bounded
-    // only by the 2MB fetch cap. lensText and lensMarkdown are regex chains —
-    // roughly thirty sequential global replaces, each allocating a new string —
-    // so cost is linear in bytes handed to them.
-    //
-    // MEASURED (node, same V8, synthetic HTML): ~32ms per MB.
-    //    64 KB → 3.2ms    256 KB →  8.0ms    752 KB → 24.2ms    2 MB → 64.2ms
-    // Serialization of the result is noise beside it (0.1–1.1ms).
-    //
-    // 2MB of parse cannot fit anywhere near the Workers FREE ceiling of 10ms
-    // CPU per invocation, and even on Paid it is 64ms spent on a page nobody
-    // reads past the first screen of. Capping the PARSE (not the fetch) bounds
-    // the worst case without changing the common one: the median page is far
-    // under this and is unaffected.
-    // Overridable per deployment through lensParseCap, so moving lens onto the
-    // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in
-    // cloudflare.config.ts.
-    //
-    // THE DEFAULT ARM HAS TO BE A REAL BRANCH. Written as a `||` fallback
-    // (`Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`),
-    // the unset var gives 8192, which is truthy, so the floor meant for a
-    // misconfigured override became the cap for everybody. It read as a text
-    // bug: 8 KB rarely reaches <body> and cuts mid-<style>, so the reader showed
-    // CSS and feature-flag JSON as the page's "text". Measured against production
-    // 2026-08-09: every target reported parsedBytes 8192, including a 1.3 MB
-    // cloudflare.com and a 572 KB github.com.
-    const cap = lensParseCap(env);
-    const parseable = body.length > cap ? body.slice(0, cap) : body;
-    const parseTruncated = parseable.length < body.length;
-    s.setAttribute("lens.parsed_bytes", parseable.length);
-    s.setAttribute("lens.parse_truncated", parseTruncated);
+      s.setAttribute("lens.body_bytes", body.length);
+      // ── the parse budget ─────────────────────────────────────────────────
+      // This is the one genuinely CPU-BOUND thing lens does, and it was bounded
+      // only by the 2MB fetch cap. lensText and lensMarkdown are regex chains —
+      // roughly thirty sequential global replaces, each allocating a new string —
+      // so cost is linear in bytes handed to them.
+      //
+      // MEASURED (node, same V8, synthetic HTML): ~32ms per MB.
+      //    64 KB → 3.2ms    256 KB →  8.0ms    752 KB → 24.2ms    2 MB → 64.2ms
+      // Serialization of the result is noise beside it (0.1–1.1ms).
+      //
+      // 2MB of parse cannot fit anywhere near the Workers FREE ceiling of 10ms
+      // CPU per invocation, and even on Paid it is 64ms spent on a page nobody
+      // reads past the first screen of. Capping the PARSE (not the fetch) bounds
+      // the worst case without changing the common one: the median page is far
+      // under this and is unaffected.
+      // Overridable per deployment through lensParseCap, so moving lens onto the
+      // free plan is a var flip: set LENS_PARSE_KB: bindings.text("64") in
+      // cloudflare.config.ts.
+      //
+      // THE DEFAULT ARM HAS TO BE A REAL BRANCH. Written as a `||` fallback
+      // (`Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`),
+      // the unset var gives 8192, which is truthy, so the floor meant for a
+      // misconfigured override became the cap for everybody. It read as a text
+      // bug: 8 KB rarely reaches <body> and cuts mid-<style>, so the reader showed
+      // CSS and feature-flag JSON as the page's "text". Measured against production
+      // 2026-08-09: every target reported parsedBytes 8192, including a 1.3 MB
+      // cloudflare.com and a 572 KB github.com.
+      const cap = lensParseCap(env);
+      const parseable = body.length > cap ? body.slice(0, cap) : body;
+      const parseTruncated = parseable.length < body.length;
+      s.setAttribute("lens.parsed_bytes", parseable.length);
+      s.setAttribute("lens.parse_truncated", parseTruncated);
 
-    const attrs = await lensExtractAttrs(parseable);
-    const jsonld = attrs.jsonld.map(lensParseJsonld);
-    const fullText = lensText(parseable);
-    out.anatomy = {
-      rawHtml: parseable.length > 80000 ? parseable.slice(0, 80000) : parseable,
-      // rawBytes stays the TRUE length. We know it from the fetch even when we
-      // decline to parse all of it, and reporting the prefix as the page's size
-      // would be a straightforward lie about the thing being measured.
-      rawBytes: body.length,
-      parsedBytes: parseable.length,
-      parseTruncated,
-      headings: lensHeadings(parseable),
-      text: fullText.slice(0, 24000),
-      imgTotal: attrs.imgTotal, imgNoAlt: attrs.imgNoAlt,
-    };
-    out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
-    out.structured = {
-      title: (parseable.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
-      meta: attrs.meta, og: attrs.og, twitter: attrs.twitter, jsonld,
-      microdata: { itemtypes: [...attrs.microItemtypes], props: [...attrs.microProps] },
-      rdfa: { typeof: [...attrs.rdfaTypeof], properties: [...attrs.rdfaProps] },
-      microformats: [...attrs.mf],
-      relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
-    };
-    out.ai = { markdown: lensMarkdown(parseable, finalUrl) };
-    // context economics: the same page, priced per representation an agent
-    // could ingest. Full (unsliced) lengths — the slices above are UI caps.
-    // Priced on what was actually parsed, and flagged when that is a prefix.
-    // Extrapolating to the full byte count would be inventing a number: token
-    // density is not uniform across a document, and the tail of a big page is
-    // usually markup rather than prose.
-    out.cost = lensCost({ html: parseable.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
-    if (parseTruncated) out.cost.partial = { parsedBytes: parseable.length, rawBytes: body.length };
-    s.setAttribute("lens.word_count", out.anatomy.wordCount);
-    s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
+      const attrs = await lensExtractAttrs(parseable);
+      const jsonld = attrs.jsonld.map(lensParseJsonld);
+      const fullText = lensText(parseable);
+      out.anatomy = {
+        rawHtml: parseable.length > 80000 ? parseable.slice(0, 80000) : parseable,
+        // rawBytes stays the TRUE length. We know it from the fetch even when we
+        // decline to parse all of it, and reporting the prefix as the page's size
+        // would be a straightforward lie about the thing being measured.
+        rawBytes: body.length,
+        parsedBytes: parseable.length,
+        parseTruncated,
+        headings: lensHeadings(parseable),
+        text: fullText.slice(0, 24000),
+        imgTotal: attrs.imgTotal,
+        imgNoAlt: attrs.imgNoAlt,
+      };
+      out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
+      out.structured = {
+        title: (parseable.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
+        meta: attrs.meta,
+        og: attrs.og,
+        twitter: attrs.twitter,
+        jsonld,
+        microdata: { itemtypes: [...attrs.microItemtypes], props: [...attrs.microProps] },
+        rdfa: { typeof: [...attrs.rdfaTypeof], properties: [...attrs.rdfaProps] },
+        microformats: [...attrs.mf],
+        relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
+      };
+      out.ai = { markdown: lensMarkdown(parseable, finalUrl) };
+      // context economics: the same page, priced per representation an agent
+      // could ingest. Full (unsliced) lengths — the slices above are UI caps.
+      // Priced on what was actually parsed, and flagged when that is a prefix.
+      // Extrapolating to the full byte count would be inventing a number: token
+      // density is not uniform across a document, and the tail of a big page is
+      // usually markup rather than prose.
+      out.cost = lensCost({ html: parseable.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+      if (parseTruncated) out.cost.partial = { parsedBytes: parseable.length, rawBytes: body.length };
+      s.setAttribute("lens.word_count", out.anatomy.wordCount);
+      s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
     });
   } else if (isTextual && body) {
     out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
@@ -2483,8 +2732,12 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   // vetted the url the user typed, but redirect:"follow" could have landed us on a
   // private/link-local host. a blocked final host skips discovery entirely.
   const origin = (() => {
-    try { const u = new URL(finalUrl); return privateHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
-    catch { return null; }
+    try {
+      const u = new URL(finalUrl);
+      return privateHostBlocked(u.hostname.toLowerCase()) ? null : u.origin;
+    } catch {
+      return null;
+    }
   })();
   if (origin) {
     // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
@@ -2497,7 +2750,9 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       try {
         const u = new URL(finalUrl);
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     })();
     // THE fan-out: 28 concurrent probes, and `botViews` is 10 fetches on its own,
     // so a full scan of an HTML target makes on the order of 37 outbound requests
@@ -2524,9 +2779,33 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       return out;
     }
     const {
-      robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
-      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
-      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+      robots,
+      sitemap,
+      sitemapDeclared,
+      llms,
+      llmsFull,
+      aiTxt,
+      secTxt,
+      tdmrep,
+      agentCard,
+      openapi,
+      aiPlugin,
+      apiCatalog,
+      mcp,
+      nlweb,
+      webBotAuth,
+      openidConfig,
+      oauthServer,
+      oauthResource,
+      authMd,
+      mcpServerCard,
+      agentSkills,
+      ucp,
+      acp,
+      ap2,
+      agentsMd,
+      dnsAid,
+      ech,
     } = disco;
 
     const [mdNego, botViews] = await span("lens.discovery.per_url", (s) => {
@@ -2540,9 +2819,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
         // whole roster. Its own span because it is the single heaviest entry
         // here and the only one that gets skipped — a scan missing it should
         // look different.
-        (selfLens || opts.skipBotViews)
-          ? Promise.resolve([])
-          : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
+        selfLens || opts.skipBotViews ? Promise.resolve([]) : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
       ]);
     });
 
@@ -2572,13 +2849,27 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // caller can tell "the site did not answer" from "we ran out of budget".
     if (disco.refused || subrequestLimitIn({ mdNego, botViews })) out.phases.subrequestCap = true;
 
-    const feeds = (out.structured?.relLinks || []).filter((l) =>
-      /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
+    const feeds = (out.structured?.relLinks || []).filter(
+      (l) => /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")),
+    );
     out.discovery = {
-      origin, robotsTxt: robots, sitemapXml: sitemap, sitemapDeclared, llmsTxt: llms, llmsFullTxt: llmsFull,
-      aiTxt, securityTxt: secTxt, feeds, dnsAid, agentsMd,
-      webBotAuth, oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
-      oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
+      origin,
+      robotsTxt: robots,
+      sitemapXml: sitemap,
+      sitemapDeclared,
+      llmsTxt: llms,
+      llmsFullTxt: llmsFull,
+      aiTxt,
+      securityTxt: secTxt,
+      feeds,
+      dnsAid,
+      agentsMd,
+      webBotAuth,
+      oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
+      oauthProtectedResource: oauthResource,
+      authMd,
+      mcpServerCard,
+      agentSkills,
       commerce: { ucp, acp, ap2 },
     };
     // The transport-layer counterfactuals: what the wire carries (a shared
@@ -2590,22 +2881,43 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.ai.directives = {
       metaRobots: out.structured?.meta?.robots || null,
       xRobotsTag: headers["x-robots-tag"] || null,
-      namesAiCrawlers: robots.ok ? /GPTBot|ClaudeBot|Claude-Web|Google-Extended|CCBot|PerplexityBot|anthropic-ai|OAI-SearchBot|Bytespider|Amazonbot/i.test(robots.body || "") : false,
+      namesAiCrawlers: robots.ok
+        ? /GPTBot|ClaudeBot|Claude-Web|Google-Extended|CCBot|PerplexityBot|anthropic-ai|OAI-SearchBot|Bytespider|Amazonbot/i.test(robots.body || "")
+        : false,
     };
     out.terms = lensTerms({
-      finalUrl, status: res.status, headers, body, robots, tdmrep,
+      finalUrl,
+      status: res.status,
+      headers,
+      body,
+      robots,
+      tdmrep,
       metaRobots: out.structured?.meta?.robots || null,
     });
     out.agent = lensAgentDoors({
-      llmsTxt: llms, mdNego, mcp, nlweb, agentCard, openapi, aiPlugin, apiCatalog,
+      llmsTxt: llms,
+      mdNego,
+      mcp,
+      nlweb,
+      agentCard,
+      openapi,
+      aiPlugin,
+      apiCatalog,
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
     });
     out.botViews = botViews;
     // Readiness is judged from the probe RESULTS, each of which carries its own
     // status and body, rather than from the page that prompted the fan-out.
     out.readiness = lensReadiness({
-      headers, robots, sitemap, sitemapDeclared, terms: out.terms,
-      discovery: out.discovery, agent: out.agent, openapi, botViews,
+      headers,
+      robots,
+      sitemap,
+      sitemapDeclared,
+      terms: out.terms,
+      discovery: out.discovery,
+      agent: out.agent,
+      openapi,
+      botViews,
       // Always null on the initial scan, and that is the design rather than a
       // gap: this pass is 28 cheap HTTP probes, while execution evidence needs a
       // real browser off a 10-minute-a-day account ceiling. The two checks come
@@ -2624,9 +2936,20 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // same evidence by what the site actually serves (lens-need.ts), and so
     // reads the mirror and field results rather than re-deriving them.
     out.readiness.need = lensNeed({
-      status: out.status, bodyUnreadable: out.bodyUnreadable, url: out.url, finalUrl: out.finalUrl, isHtml,
-      anatomy: out.anatomy, structured: out.structured, headers, cost: out.cost,
-      readiness: out.readiness, agent: out.agent, terms: out.terms, openapi, botViews,
+      status: out.status,
+      bodyUnreadable: out.bodyUnreadable,
+      url: out.url,
+      finalUrl: out.finalUrl,
+      isHtml,
+      anatomy: out.anatomy,
+      structured: out.structured,
+      headers,
+      cost: out.cost,
+      readiness: out.readiness,
+      agent: out.agent,
+      terms: out.terms,
+      openapi,
+      botViews,
     });
   }
   return out;
@@ -2686,8 +3009,8 @@ function lensDetectDictionary(headers) {
   const deltaCoded = ce === "dcb" || ce === "dcz";
   return {
     observed: !!offer || negotiates || deltaCoded,
-    offer: offer || null,               // the Use-As-Dictionary match/scope, verbatim
-    negotiates,                          // Vary advertises available-dictionary
+    offer: offer || null, // the Use-As-Dictionary match/scope, verbatim
+    negotiates, // Vary advertises available-dictionary
     activeEncoding: deltaCoded ? ce : null,
   };
 }
@@ -2707,19 +3030,27 @@ export function svcbHasEch(dataStr) {
   const m = s.match(/^\\#\s+\d+\s+([0-9a-fA-F\s]+)$/);
   if (!m) return { ech: false, parsed: false };
   let bytes;
-  try { bytes = Uint8Array.fromHex(m[1].replace(/\s+/g, "")); }
-  catch { return { ech: false, parsed: false }; }
-  let i = 2;                                   // skip 2-byte SvcPriority
-  while (i < bytes.length) {                    // skip the TargetName (length-prefixed labels, 0x00-terminated)
+  try {
+    bytes = Uint8Array.fromHex(m[1].replace(/\s+/g, ""));
+  } catch {
+    return { ech: false, parsed: false };
+  }
+  let i = 2; // skip 2-byte SvcPriority
+  while (i < bytes.length) {
+    // skip the TargetName (length-prefixed labels, 0x00-terminated)
     const l = bytes[i];
-    if (l === 0) { i += 1; break; }
+    if (l === 0) {
+      i += 1;
+      break;
+    }
     i += 1 + l;
   }
-  while (i + 4 <= bytes.length) {               // walk SvcParams: key(2) len(2) value(len)
+  while (i + 4 <= bytes.length) {
+    // walk SvcParams: key(2) len(2) value(len)
     const key = (bytes[i] << 8) | bytes[i + 1];
     const len = (bytes[i + 2] << 8) | bytes[i + 3];
     i += 4;
-    if (key === 5) return { ech: true, parsed: true };   // SvcParamKey 5 = ech
+    if (key === 5) return { ech: true, parsed: true }; // SvcParamKey 5 = ech
     i += len;
   }
   return { ech: false, parsed: true };
@@ -2729,13 +3060,13 @@ async function lensProbeEch(hostname) {
   try {
     const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
     const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-    const body = await res.json() as { Answer?: any[]; AD?: boolean };
+    const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
     const answers = Array.isArray(body.Answer) ? body.Answer : [];
     const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
     return {
       observed: https.some((r) => r.ech),
       recordPresent: https.length > 0,
-      parsed: https.length === 0 || https.some((r) => r.parsed),   // false only when a record exists but no answer parsed
+      parsed: https.length === 0 || https.some((r) => r.parsed), // false only when a record exists but no answer parsed
       dnssecValidated: body.AD === true,
     };
   } catch (e) {
@@ -2811,7 +3142,11 @@ const discoveryKey = (origin, scope) =>
  */
 export function discoveryScope(origin, env) {
   let host;
-  try { host = new URL(origin).hostname.toLowerCase(); } catch { return { scope: null, cacheable: true }; }
+  try {
+    host = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return { scope: null, cacheable: true };
+  }
   if (host !== CANONICAL_HOST) return { scope: null, cacheable: true };
   const version = env?.CF_VERSION_METADATA?.id;
   return version ? { scope: version, cacheable: true } : { scope: null, cacheable: false };
@@ -2841,11 +3176,33 @@ export function discoveryScope(origin, env) {
  * at three call sites that can drift apart.
  */
 export type DiscoveryPayload = {
-  robots: any; sitemap: any; sitemapDeclared: any; llms: any; llmsFull: any;
-  aiTxt: any; secTxt: any; tdmrep: any; agentCard: any; openapi: any; aiPlugin: any;
-  apiCatalog: any; mcp: any; nlweb: any; webBotAuth: any; openidConfig: any;
-  oauthServer: any; oauthResource: any; authMd: any; mcpServerCard: any;
-  agentSkills: any; ucp: any; acp: any; ap2: any; agentsMd: any; dnsAid: any; ech: any;
+  robots: any;
+  sitemap: any;
+  sitemapDeclared: any;
+  llms: any;
+  llmsFull: any;
+  aiTxt: any;
+  secTxt: any;
+  tdmrep: any;
+  agentCard: any;
+  openapi: any;
+  aiPlugin: any;
+  apiCatalog: any;
+  mcp: any;
+  nlweb: any;
+  webBotAuth: any;
+  openidConfig: any;
+  oauthServer: any;
+  oauthResource: any;
+  authMd: any;
+  mcpServerCard: any;
+  agentSkills: any;
+  ucp: any;
+  acp: any;
+  ap2: any;
+  agentsMd: any;
+  dnsAid: any;
+  ech: any;
 };
 
 // ── one live discovery per invocation, when two scans share one ────────────
@@ -2876,19 +3233,26 @@ export function discoveryBoard(sides: readonly string[]) {
   const reports = new Map<string, string | null>();
   const runs = new Map<string, { promise: Promise<any>; resolve: (value: any) => void }>();
   let decide: (modes: Map<string, DiscoveryMode>) => void = () => {};
-  const decided = new Promise<Map<string, DiscoveryMode>>((resolve) => { decide = resolve; });
+  const decided = new Promise<Map<string, DiscoveryMode>>((resolve) => {
+    decide = resolve;
+  });
   const settle = () => {
     if (!sides.every((side) => reports.has(side))) return;
     const modes = new Map<string, DiscoveryMode>();
     let liveKey: string | null = null;
     for (const side of sides) {
       const key = reports.get(side) ?? null;
-      if (key === null) { modes.set(side, "live"); continue; }
+      if (key === null) {
+        modes.set(side, "live");
+        continue;
+      }
       if (liveKey === null) {
         liveKey = key;
         modes.set(side, "live");
         let resolve: (value: any) => void = () => {};
-        const promise = new Promise((r) => { resolve = r; });
+        const promise = new Promise((r) => {
+          resolve = r;
+        });
         runs.set(key, { promise, resolve });
       } else {
         modes.set(side, key === liveKey ? "share" : "defer");
@@ -2903,15 +3267,21 @@ export function discoveryBoard(sides: readonly string[]) {
   };
   return {
     /** This side needs no live run: a cache hit, a free origin, or a scan that ended early. Idempotent. */
-    pass(side: string) { report(side, null); },
+    pass(side: string) {
+      report(side, null);
+    },
     /** This side missed the cache on `key`. Resolves once every side has reported. */
     async claim(side: string, key: string): Promise<DiscoveryMode> {
       report(side, key);
       return (await decided).get(side) || "defer";
     },
     /** The live side publishes its result, or null when it failed, for a sharer to reuse. */
-    publish(key: string, result: any) { runs.get(key)?.resolve(result); },
-    shared(key: string): Promise<any> { return runs.get(key)?.promise || Promise.resolve(null); },
+    publish(key: string, result: any) {
+      runs.get(key)?.resolve(result);
+    },
+    shared(key: string): Promise<any> {
+      return runs.get(key)?.promise || Promise.resolve(null);
+    },
   };
 }
 
@@ -2922,11 +3292,12 @@ type DiscoveryOpts = { fresh?: boolean; selfLens?: boolean };
 // board (doors.ts, the single scan) always gets a payload back, and the type
 // says so rather than making each of them handle a null they cannot receive.
 export async function originDiscovery(origin, hostname, env, opts?: DiscoveryOpts): Promise<OriginDiscovery>;
+export async function originDiscovery(origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string }): Promise<OriginDiscovery | null>;
 export async function originDiscovery(
-  origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string },
-): Promise<OriginDiscovery | null>;
-export async function originDiscovery(
-  origin, hostname, env, opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string } = {},
+  origin,
+  hostname,
+  env,
+  opts: DiscoveryOpts & { board?: DiscoveryBoard; side?: string } = {},
 ): Promise<OriginDiscovery | null> {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
@@ -2946,11 +3317,13 @@ export async function originDiscovery(
         // Cast rather than validated, and the cast is honest: this blob is
         // exactly `JSON.stringify(result)` from the live path below, written by
         // this same function. Nothing else writes this key.
-        const cached = await hit.json() as DiscoveryPayload;
+        const cached = (await hit.json()) as DiscoveryPayload;
         opts.board?.pass(opts.side || "");
         return { ...cached, cached: true };
       }
-    } catch { /* a cache read must never cost the scan */ }
+    } catch {
+      /* a cache read must never cost the scan */
+    }
   }
 
   // A miss under a board waits its turn (see discoveryBoard). Our own origin
@@ -2991,11 +3364,16 @@ export async function originDiscovery(
     try {
       const body = JSON.stringify(result);
       if (body.length <= DISCOVERY_MAX_BYTES) {
-        await cache.put(key, new Response(body, {
-          headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
-        }));
+        await cache.put(
+          key,
+          new Response(body, {
+            headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
+          }),
+        );
       }
-    } catch { /* a cache write must never cost the scan either */ }
+    } catch {
+      /* a cache write must never cost the scan either */
+    }
   }
   return refused ? { ...result, cached: false, refused: true } : { ...result, cached: false };
 }
@@ -3005,13 +3383,39 @@ async function discoveryFanOut(origin, hostname, env): Promise<DiscoveryPayload>
     s.setAttribute("lens.origin_host", safeHost(origin));
     s.setAttribute("lens.discovery_cached", false);
     const [
-      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
-      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
-      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+      robots,
+      sitemap,
+      llms,
+      llmsFull,
+      aiTxt,
+      secTxt,
+      tdmrep,
+      agentCard,
+      openapi,
+      aiPlugin,
+      apiCatalog,
+      mcp,
+      nlweb,
+      webBotAuth,
+      openidConfig,
+      oauthServer,
+      oauthResource,
+      authMd,
+      mcpServerCard,
+      agentSkills,
+      ucp,
+      acp,
+      ap2,
+      agentsMd,
+      dnsAid,
+      ech,
     ] = await Promise.all([
-      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
-      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
-      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
+      lensProbe(origin + "/robots.txt", env),
+      lensProbe(origin + "/sitemap.xml", env),
+      lensProbe(origin + "/llms.txt", env),
+      lensProbe(origin + "/llms-full.txt", env),
+      lensProbe(origin + "/ai.txt", env),
+      lensProbe(origin + "/.well-known/security.txt", env),
       lensProbe(origin + "/.well-known/tdmrep.json", env),
       lensProbe(origin + "/.well-known/agent-card.json", env),
       lensProbe(origin + "/openapi.json", env),
@@ -3057,9 +3461,33 @@ async function discoveryFanOut(origin, hostname, env): Promise<DiscoveryPayload>
       }
     }
     return {
-      robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
-      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
-      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+      robots,
+      sitemap,
+      sitemapDeclared,
+      llms,
+      llmsFull,
+      aiTxt,
+      secTxt,
+      tdmrep,
+      agentCard,
+      openapi,
+      aiPlugin,
+      apiCatalog,
+      mcp,
+      nlweb,
+      webBotAuth,
+      openidConfig,
+      oauthServer,
+      oauthResource,
+      authMd,
+      mcpServerCard,
+      agentSkills,
+      ucp,
+      acp,
+      ap2,
+      agentsMd,
+      dnsAid,
+      ech,
     };
   });
 }
@@ -3067,14 +3495,16 @@ async function discoveryFanOut(origin, hostname, env): Promise<DiscoveryPayload>
 export async function lensProbeDnsAid(hostname) {
   const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
   try {
-    const rows = await Promise.all(names.map(async (name) => {
-      const deadline = AbortSignal.timeout(4500);
-      const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
-      const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-      const body = await res.json() as { Answer?: any[]; AD?: boolean };
-      const answers = Array.isArray(body.Answer) ? body.Answer : [];
-      return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
-    }));
+    const rows = await Promise.all(
+      names.map(async (name) => {
+        const deadline = AbortSignal.timeout(4500);
+        const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
+        const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
+        const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
+        const answers = Array.isArray(body.Answer) ? body.Answer : [];
+        return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
+      }),
+    );
     const records = rows.filter((r) => r.answers > 0);
     return { ok: true, found: records.length > 0, dnssecValidated: records.some((r) => r.dnssecValidated), names, records: rows };
   } catch (e) {
@@ -3101,8 +3531,13 @@ export async function lensProbeDnsAid(hostname) {
 // an unblocked response would reward exactly the site that serves humans and
 // refuses every machine.
 const LENS_BOT_VIEWS = [
-  { key: "Chrome", label: "Chrome", owner: "a browser", role: "control",
-    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
+  {
+    key: "Chrome",
+    label: "Chrome",
+    owner: "a browser",
+    role: "control",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+  },
   { key: "curl", label: "curl", owner: "a plain HTTP client", role: "control", ua: "curl/8.7.1" },
 
   { key: "Googlebot", label: "Googlebot", owner: "Google", role: "search", ua: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
@@ -3121,7 +3556,13 @@ const LENS_BOT_VIEWS = [
 // the exact string a named agent client sends and reports which representation
 // came back. Both callers share this one function rather than growing a second
 // outbound path, for the reason the per-hop redirect check below exists.
-export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7") {
+export async function lensFetchAsBot(
+  targetUrl,
+  env,
+  signal,
+  userAgent,
+  accept = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+) {
   const headers = new Headers({
     "user-agent": userAgent,
     accept,
@@ -3153,9 +3594,16 @@ export async function lensProbeBotView(targetUrl, env, profile) {
     const cap = await lensReadCapped(res, 2048);
     const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
     const view = {
-      key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua,
-      status: res.status, contentType, sampleBytes: cap.text.length,
-      blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
+      key: profile.key,
+      label: profile.label,
+      owner: profile.owner,
+      role: profile.role || "train",
+      userAgent: profile.ua,
+      status: res.status,
+      contentType,
+      sampleBytes: cap.text.length,
+      blocked: challenge || [401, 403, 406, 429, 451].includes(res.status),
+      challenge,
       // res.url is "" for a same-origin response built inside the worker (SELF_FETCH /
       // ASSETS), so `res.url !== targetUrl` reported redirected:true for every bot on any
       // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
@@ -3166,7 +3614,19 @@ export async function lensProbeBotView(targetUrl, env, profile) {
     view[VIEW_SAMPLE] = cap.text;
     return view;
   } catch (e) {
-    return { key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
+    return {
+      key: profile.key,
+      label: profile.label,
+      owner: profile.owner,
+      role: profile.role || "train",
+      userAgent: profile.ua,
+      status: null,
+      contentType: "",
+      sampleBytes: 0,
+      blocked: false,
+      challenge: false,
+      error: (e && e.message) || String(e),
+    };
   }
 }
 
@@ -3187,7 +3647,9 @@ export async function lensProbe(url, env, accept?) {
     const deadline = AbortSignal.timeout(5000);
     const res = await lensFetch(url, env, deadline, accept, FAN_OUT);
     if (!res.ok) {
-      try { await res.body?.cancel(); } catch (_e) {}
+      try {
+        await res.body?.cancel();
+      } catch (_e) {}
       const headers = {};
       for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
       return { ok: false, status: res.status, url, headers };
@@ -3199,7 +3661,9 @@ export async function lensProbe(url, env, accept?) {
     const headers = {};
     for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
     return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", headers, body: cap.text, truncated: cap.truncated };
-  } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e), url };
+  }
 }
 
 // AGENTS.md / agents.md — the 2025 convention for telling an agent how to work
@@ -3215,14 +3679,27 @@ export async function lensProbeAgentsMd(origin, env) {
   let unanswered: { error?: string; status?: number } | null = null;
   for (const name of ["/agents.md", "/AGENTS.md"]) {
     const p = await lensProbe(origin + name, env);
-    const body = (p && p.body || "").trim();
+    const body = ((p && p.body) || "").trim();
     const looksMd = body.length > 40 && !/^\s*<(?:!doctype|html)/i.test(body);
     if (p && p.ok && looksMd) return { ok: true, present: true, variant: name, status: p.status, body, truncated: p.truncated };
-    if (p && p.ok && !looksMd) return { ok: true, present: false, variant: name, status: p.status, note: "answered, but the body looks like a catch-all HTML page, not Markdown instructions" };
+    if (p && p.ok && !looksMd)
+      return {
+        ok: true,
+        present: false,
+        variant: name,
+        status: p.status,
+        note: "answered, but the body looks like a catch-all HTML page, not Markdown instructions",
+      };
     if (!unanswered && lensProbeUnanswered(p)) unanswered = p;
   }
   if (unanswered) {
-    return { ok: false, present: false, unknown: true, note: "probe did not answer", ...(unanswered.error ? { error: unanswered.error } : { status: unanswered.status }) };
+    return {
+      ok: false,
+      present: false,
+      unknown: true,
+      note: "probe did not answer",
+      ...(unanswered.error ? { error: unanswered.error } : { status: unanswered.status }),
+    };
   }
   return { ok: false, present: false, note: "no /agents.md or /AGENTS.md found" };
 }
@@ -3232,39 +3709,104 @@ export async function lensProbeAgentsMd(origin, env) {
 // microdata, RDFa, and microformats class tokens.
 export async function lensExtractAttrs(html) {
   const acc = {
-    meta: {}, og: {}, twitter: {}, relLinks: [], jsonld: [],
-    microItemtypes: new Set(), microProps: new Set(), mf: new Set(),
-    rdfaTypeof: new Set(), rdfaProps: new Set(), imgTotal: 0, imgNoAlt: 0,
+    meta: {},
+    og: {},
+    twitter: {},
+    relLinks: [],
+    jsonld: [],
+    microItemtypes: new Set(),
+    microProps: new Set(),
+    mf: new Set(),
+    rdfaTypeof: new Set(),
+    rdfaProps: new Set(),
+    imgTotal: 0,
+    imgNoAlt: 0,
   };
   let jbuf: string[] | null = null;
   const MF = /^(h|p|u|dt|e)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
   const MF_CLASSIC = /^(vcard|hcard|hcalendar|hentry|hfeed|hreview|hrecipe|hatom|hresume|hproduct|adr|geo)$/;
   const rw = new HTMLRewriter()
-    .on("meta", { element(el) {
-      const name = (el.getAttribute("name") || "").toLowerCase();
-      const prop = (el.getAttribute("property") || "").toLowerCase();
-      const content = el.getAttribute("content") || "";
-      if (prop.startsWith("og:")) acc.og[prop.slice(3)] = content;
-      else if (/^(article|product|book|profile|video|music):/.test(prop)) acc.og[prop] = content;
-      else if (name.startsWith("twitter:")) acc.twitter[name.slice(8)] = content;
-      else if (name) acc.meta[name] = content;
-      else if (prop) acc.meta[prop] = content;
-    } })
-    .on("script", {
-      element(el) { jbuf = (el.getAttribute("type") || "").toLowerCase() === "application/ld+json" ? [] : null; },
-      text(t) { if (jbuf) { jbuf.push(t.text); if (t.lastInTextNode) { acc.jsonld.push(jbuf.join("")); jbuf = null; } } },
+    .on("meta", {
+      element(el) {
+        const name = (el.getAttribute("name") || "").toLowerCase();
+        const prop = (el.getAttribute("property") || "").toLowerCase();
+        const content = el.getAttribute("content") || "";
+        if (prop.startsWith("og:")) acc.og[prop.slice(3)] = content;
+        else if (/^(article|product|book|profile|video|music):/.test(prop)) acc.og[prop] = content;
+        else if (name.startsWith("twitter:")) acc.twitter[name.slice(8)] = content;
+        else if (name) acc.meta[name] = content;
+        else if (prop) acc.meta[prop] = content;
+      },
     })
-    .on("link", { element(el) {
-      const rel = (el.getAttribute("rel") || "").toLowerCase();
-      if (!rel || acc.relLinks.length >= 80) return;
-      acc.relLinks.push({ rel, href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", title: el.getAttribute("title") || "", hreflang: el.getAttribute("hreflang") || "" });
-    } })
-    .on("img", { element(el) { acc.imgTotal++; const alt = el.getAttribute("alt"); if (alt === null || alt.trim() === "") acc.imgNoAlt++; } })
-    .on("[itemtype]", { element(el) { const v = el.getAttribute("itemtype"); if (v && acc.microItemtypes.size < 100) acc.microItemtypes.add(v); } })
-    .on("[itemprop]", { element(el) { const v = el.getAttribute("itemprop"); if (v && acc.microProps.size < 200) v.split(/\s+/).forEach((x) => x && acc.microProps.add(x)); } })
-    .on("[typeof]", { element(el) { const v = el.getAttribute("typeof"); if (v && acc.rdfaTypeof.size < 100) v.split(/\s+/).forEach((x) => x && acc.rdfaTypeof.add(x)); } })
-    .on("[property]", { element(el) { const v = (el.getAttribute("property") || ""); if (acc.rdfaProps.size >= 200) return; v.split(/\s+/).forEach((x) => { if (x && !/^(og|twitter|article|product|book|profile|video|music):/.test(x)) acc.rdfaProps.add(x); }); } })
-    .on("[class]", { element(el) { if (acc.mf.size >= 60) return; (el.getAttribute("class") || "").split(/\s+/).forEach((tok) => { if (MF.test(tok) || MF_CLASSIC.test(tok)) acc.mf.add(tok); }); } });
+    .on("script", {
+      element(el) {
+        jbuf = (el.getAttribute("type") || "").toLowerCase() === "application/ld+json" ? [] : null;
+      },
+      text(t) {
+        if (jbuf) {
+          jbuf.push(t.text);
+          if (t.lastInTextNode) {
+            acc.jsonld.push(jbuf.join(""));
+            jbuf = null;
+          }
+        }
+      },
+    })
+    .on("link", {
+      element(el) {
+        const rel = (el.getAttribute("rel") || "").toLowerCase();
+        if (!rel || acc.relLinks.length >= 80) return;
+        acc.relLinks.push({
+          rel,
+          href: el.getAttribute("href") || "",
+          type: el.getAttribute("type") || "",
+          title: el.getAttribute("title") || "",
+          hreflang: el.getAttribute("hreflang") || "",
+        });
+      },
+    })
+    .on("img", {
+      element(el) {
+        acc.imgTotal++;
+        const alt = el.getAttribute("alt");
+        if (alt === null || alt.trim() === "") acc.imgNoAlt++;
+      },
+    })
+    .on("[itemtype]", {
+      element(el) {
+        const v = el.getAttribute("itemtype");
+        if (v && acc.microItemtypes.size < 100) acc.microItemtypes.add(v);
+      },
+    })
+    .on("[itemprop]", {
+      element(el) {
+        const v = el.getAttribute("itemprop");
+        if (v && acc.microProps.size < 200) v.split(/\s+/).forEach((x) => x && acc.microProps.add(x));
+      },
+    })
+    .on("[typeof]", {
+      element(el) {
+        const v = el.getAttribute("typeof");
+        if (v && acc.rdfaTypeof.size < 100) v.split(/\s+/).forEach((x) => x && acc.rdfaTypeof.add(x));
+      },
+    })
+    .on("[property]", {
+      element(el) {
+        const v = el.getAttribute("property") || "";
+        if (acc.rdfaProps.size >= 200) return;
+        v.split(/\s+/).forEach((x) => {
+          if (x && !/^(og|twitter|article|product|book|profile|video|music):/.test(x)) acc.rdfaProps.add(x);
+        });
+      },
+    })
+    .on("[class]", {
+      element(el) {
+        if (acc.mf.size >= 60) return;
+        (el.getAttribute("class") || "").split(/\s+/).forEach((tok) => {
+          if (MF.test(tok) || MF_CLASSIC.test(tok)) acc.mf.add(tok);
+        });
+      },
+    });
   await rw.transform(new Response(html)).arrayBuffer();
   return acc;
 }
@@ -3281,18 +3823,26 @@ export function lensParseJsonld(raw) {
       for (const k in o) walk(o[k]);
     })(obj);
     return { valid: true, types: [...types], json: JSON.stringify(obj, null, 2).slice(0, 12000) };
-  } catch (e) { return { valid: false, error: (e && e.message) || "parse error", raw: trimmed.slice(0, 3000) }; }
+  } catch (e) {
+    return { valid: false, error: (e && e.message) || "parse error", raw: trimmed.slice(0, 3000) };
+  }
 }
 
 export function lensHeadings(html) {
-  const out: { level: number, text: string }[] = []; const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi; let m;
-  while ((m = re.exec(html)) && out.length < 250) { const txt = lensStripInline(m[2]).trim(); if (txt) out.push({ level: +m[1], text: txt.slice(0, 300) }); }
+  const out: { level: number; text: string }[] = [];
+  const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
+  let m;
+  while ((m = re.exec(html)) && out.length < 250) {
+    const txt = lensStripInline(m[2]).trim();
+    if (txt) out.push({ level: +m[1], text: txt.slice(0, 300) });
+  }
   return out;
 }
 
 export function lensText(html) {
   let s = html;
-  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
+  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  if (b) s = b[1];
   s = s.replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ");
   return lensDecode(s).replace(/\s+/g, " ").trim();
 }
@@ -3327,7 +3877,8 @@ export function lensText(html) {
 // crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
-  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
+  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  if (b) s = b[1];
   s = s.replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
   s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\b[^>]*>/gi, "");
   s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(i.replace(/<[^>]+>/g, "")).replace(/\n+$/g, "") + "\n```\n\n");
@@ -3337,30 +3888,71 @@ export function lensMarkdown(html, baseUrl) {
   s = s.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (m, l, i) => "\n\n" + "#".repeat(+l) + " " + lensStripInline(i).trim() + "\n\n");
   s = s.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (m, i) => "\n\n> " + lensStripInline(i).trim().replace(/\n+/g, "\n> ") + "\n\n");
   s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (m, i) => "- " + lensStripInline(i).trim() + "\n");
-  s = s.replace(/<img\b[^>]*>/gi, (m) => { const alt = lensTagAttr(m, "alt"); const src = lensAbs(lensTagAttr(m, "src"), baseUrl); return src ? `![${alt}](${src})` : ""; });
-  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (m, i) => { const href = lensAbs(lensTagAttr(m, "href"), baseUrl); const txt = lensStripInline(i).trim(); if (!txt) return ""; return href ? `[${txt}](${href})` : txt; });
+  s = s.replace(/<img\b[^>]*>/gi, (m) => {
+    const alt = lensTagAttr(m, "alt");
+    const src = lensAbs(lensTagAttr(m, "src"), baseUrl);
+    return src ? `![${alt}](${src})` : "";
+  });
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (m, i) => {
+    const href = lensAbs(lensTagAttr(m, "href"), baseUrl);
+    const txt = lensStripInline(i).trim();
+    if (!txt) return "";
+    return href ? `[${txt}](${href})` : txt;
+  });
   s = s.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "**" + lensStripInline(i).trim() + "**");
   s = s.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "*" + lensStripInline(i).trim() + "*");
   s = s.replace(/<\/(p|div|section|article|header|main|ul|ol|table|tr|h[1-6])>/gi, "\n\n");
   s = s.replace(/<[^>]+>/g, "");
   s = lensDecode(s);
-  s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
+  s = s
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ");
   return s.trim();
 }
 
-export function lensStripInline(h) { return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " "); }
+export function lensStripInline(h) {
+  return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+}
 
-export function lensTagAttr(tag, name) { const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")); return m ? (m[2] ?? m[3] ?? m[4] ?? "") : ""; }
+export function lensTagAttr(tag, name) {
+  const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i"));
+  return m ? (m[2] ?? m[3] ?? m[4] ?? "") : "";
+}
 
-export function lensAbs(href, base) { if (!href) return href; try { return new URL(href, base).toString(); } catch { return href; } }
+export function lensAbs(href, base) {
+  if (!href) return href;
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return href;
+  }
+}
 
 export function lensDecode(s) {
   return String(s)
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/&#0*39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
-    .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&hellip;/g, "…")
-    .replace(/&#(\d+);/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return m; } })
-    .replace(/&#x([0-9a-f]+);/gi, (m, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return m; } })
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "…")
+    .replace(/&#(\d+);/g, (m, n) => {
+      try {
+        return String.fromCodePoint(+n);
+      } catch {
+        return m;
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => {
+      try {
+        return String.fromCodePoint(parseInt(n, 16));
+      } catch {
+        return m;
+      }
+    })
     .replace(/&amp;/g, "&");
 }
 
@@ -3375,21 +3967,21 @@ export function lensDecode(s) {
 // grouped by what they take (a search index / a training corpus / live
 // answers). Verdicts are evaluated per-bot against the exact fetched path.
 const LENS_BOTS = [
-  { ua: "Googlebot",          owner: "Google",       kind: "search",  note: "the classic search index" },
-  { ua: "Bingbot",            owner: "Microsoft",    kind: "search",  note: "Bing (and Copilot grounding)" },
-  { ua: "GPTBot",             owner: "OpenAI",       kind: "train",   note: "training corpus" },
-  { ua: "ClaudeBot",          owner: "Anthropic",    kind: "train",   note: "training corpus" },
-  { ua: "Google-Extended",    owner: "Google",       kind: "train",   note: "the Gemini-training consent token" },
-  { ua: "Applebot-Extended",  owner: "Apple",        kind: "train",   note: "Apple Intelligence consent token" },
-  { ua: "Meta-ExternalAgent", owner: "Meta",         kind: "train",   note: "Llama training + Meta AI" },
-  { ua: "CCBot",              owner: "Common Crawl", kind: "train",   note: "the open crawl most models started on" },
-  { ua: "Bytespider",         owner: "ByteDance",    kind: "train",   note: "famously robots-indifferent" },
-  { ua: "Amazonbot",          owner: "Amazon",       kind: "train",   note: "Alexa answers + training" },
-  { ua: "OAI-SearchBot",      owner: "OpenAI",       kind: "answers", note: "the ChatGPT Search index" },
-  { ua: "ChatGPT-User",       owner: "OpenAI",       kind: "answers", note: "live fetch for a user's chat" },
-  { ua: "Claude-User",        owner: "Anthropic",    kind: "answers", note: "live fetch for a user's chat" },
-  { ua: "PerplexityBot",      owner: "Perplexity",   kind: "answers", note: "answer-engine index" },
-  { ua: "AadharshBot",        owner: "aadhar.sh",    kind: "answers", note: "the bot that fetched this page" },
+  { ua: "Googlebot", owner: "Google", kind: "search", note: "the classic search index" },
+  { ua: "Bingbot", owner: "Microsoft", kind: "search", note: "Bing (and Copilot grounding)" },
+  { ua: "GPTBot", owner: "OpenAI", kind: "train", note: "training corpus" },
+  { ua: "ClaudeBot", owner: "Anthropic", kind: "train", note: "training corpus" },
+  { ua: "Google-Extended", owner: "Google", kind: "train", note: "the Gemini-training consent token" },
+  { ua: "Applebot-Extended", owner: "Apple", kind: "train", note: "Apple Intelligence consent token" },
+  { ua: "Meta-ExternalAgent", owner: "Meta", kind: "train", note: "Llama training + Meta AI" },
+  { ua: "CCBot", owner: "Common Crawl", kind: "train", note: "the open crawl most models started on" },
+  { ua: "Bytespider", owner: "ByteDance", kind: "train", note: "famously robots-indifferent" },
+  { ua: "Amazonbot", owner: "Amazon", kind: "train", note: "Alexa answers + training" },
+  { ua: "OAI-SearchBot", owner: "OpenAI", kind: "answers", note: "the ChatGPT Search index" },
+  { ua: "ChatGPT-User", owner: "OpenAI", kind: "answers", note: "live fetch for a user's chat" },
+  { ua: "Claude-User", owner: "Anthropic", kind: "answers", note: "live fetch for a user's chat" },
+  { ua: "PerplexityBot", owner: "Perplexity", kind: "answers", note: "answer-engine index" },
+  { ua: "AadharshBot", owner: "aadhar.sh", kind: "answers", note: "the bot that fetched this page" },
 ];
 
 // robots.txt parsing + RFC 9309 evaluation live in lib/robots.ts (a second caller,
@@ -3419,7 +4011,11 @@ export function lensTdmrep(probe, path) {
   if (!probe || !probe.ok) return { present: false };
   const body = String(probe.body || "");
   let rules;
-  try { rules = JSON.parse(body); } catch (_e) { return { present: false, invalid: "not JSON" }; }
+  try {
+    rules = JSON.parse(body);
+  } catch (_e) {
+    return { present: false, invalid: "not JSON" };
+  }
   if (!Array.isArray(rules)) return { present: false, invalid: "not a JSON array of rules" };
   const out: Record<string, any> = { present: true, body: body.slice(0, 4000), rules: rules.length, reserved: null, location: null, policy: null };
   const rule = rules.map(asRecord).find((r) => r && asText(r.location) !== null && lensPathMatch(r.location, path || "/"));
@@ -3437,7 +4033,10 @@ export function lensTdmrep(probe, path) {
 // + the open → signaled → enforced → paid spectrum.
 export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, metaRobots }) {
   let path = "/";
-  try { const u = new URL(finalUrl); path = u.pathname + u.search; } catch (_e) {}
+  try {
+    const u = new URL(finalUrl);
+    path = u.pathname + u.search;
+  } catch (_e) {}
   // The terms envelope is assembled tier by tier below (scoreboard, signals,
   // paid, enforcement, directives, tdmrep, spectrum), and each tier is skipped
   // when the site does not carry it. Same reason the inspect accumulator is
@@ -3449,7 +4048,7 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   // different claims — never report unknown terms as no terms.
   const robotsAbsent = !!(robots && !robots.ok && (robots.status === 404 || robots.status === 410));
   t.robotsUnknown = !t.robotsPresent && !robotsAbsent;
-  t.robotsError = t.robotsUnknown ? ((robots && (robots.error || (robots.status ? "HTTP " + robots.status : null))) || "unreachable") : null;
+  t.robotsError = t.robotsUnknown ? (robots && (robots.error || (robots.status ? "HTTP " + robots.status : null))) || "unreachable" : null;
 
   const parsed = t.robotsPresent ? lensParseRobots(robots.body || "") : { groups: [], sitemaps: [] };
   t.scoreboard = LENS_BOTS.map((b) => {
@@ -3465,7 +4064,10 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   for (const k in headers) if (/^crawler-/i.test(k)) crawlerHeaders[k] = headers[k];
   t.paid = { http402: status === 402, crawlerHeaders, x402: null };
   if (status === 402 && body) {
-    try { const j = JSON.parse(body); if (j && (j.x402Version != null || j.accepts)) t.paid.x402 = JSON.stringify(j, null, 2).slice(0, 6000); } catch (_e) {}
+    try {
+      const j = JSON.parse(body);
+      if (j && (j.x402Version != null || j.accepts)) t.paid.x402 = JSON.stringify(j, null, 2).slice(0, 6000);
+    } catch (_e) {}
   }
 
   // enforcement: what actually happened to our identified, signed fetch.
@@ -3484,17 +4086,34 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   const blocked = t.scoreboard.filter((b) => b.verdict === "block");
   const restrictiveSignals = t.signals.some((s) => Object.values(s.parsed).some((v) => v !== "yes"));
   if (t.paid.http402) reasons.push({ tier: "paid", why: "answered 402 Payment Required" + (t.paid.x402 ? " with an x402 payment envelope" : "") });
-  if (Object.keys(crawlerHeaders).length) reasons.push({ tier: "paid", why: "advertises pay-per-crawl price headers (" + Object.keys(crawlerHeaders).join(", ") + ")" });
+  if (Object.keys(crawlerHeaders).length)
+    reasons.push({ tier: "paid", why: "advertises pay-per-crawl price headers (" + Object.keys(crawlerHeaders).join(", ") + ")" });
   if (t.enforcement.challenged) reasons.push({ tier: "enforced", why: "served a bot challenge to our identified fetch" });
   else if (t.enforcement.blocked) reasons.push({ tier: "enforced", why: "refused our identified fetch with HTTP " + status });
-  if (blocked.length) reasons.push({ tier: "signaled", why: "robots.txt blocks " + blocked.length + " of " + t.scoreboard.length + " scoreboard crawlers for this path" });
-  if (named.length && !blocked.length) reasons.push({ tier: "open", why: "robots.txt names " + named.length + " scoreboard crawler" + (named.length > 1 ? "s" : "") + " explicitly, all allowed" });
-  if (t.signals.length) reasons.push(restrictiveSignals
-    ? { tier: "signaled", why: "declares restrictive Content-Signal preferences in robots.txt" }
-    : { tier: "open", why: "declares Content-Signal preferences, all yes — explicitly open, in writing" });
+  if (blocked.length)
+    reasons.push({ tier: "signaled", why: "robots.txt blocks " + blocked.length + " of " + t.scoreboard.length + " scoreboard crawlers for this path" });
+  if (named.length && !blocked.length)
+    reasons.push({
+      tier: "open",
+      why: "robots.txt names " + named.length + " scoreboard crawler" + (named.length > 1 ? "s" : "") + " explicitly, all allowed",
+    });
+  if (t.signals.length)
+    reasons.push(
+      restrictiveSignals
+        ? { tier: "signaled", why: "declares restrictive Content-Signal preferences in robots.txt" }
+        : { tier: "open", why: "declares Content-Signal preferences, all yes — explicitly open, in writing" },
+    );
   if (t.directives.noai) reasons.push({ tier: "signaled", why: "sets a noai directive (meta robots / X-Robots-Tag)" });
-  if (t.tdmrep.reserved === true) reasons.push({ tier: "signaled", why: "reserves text and data mining rights for this path (TDMRep tdm-reservation 1" + (t.tdmrep.policy ? ", with a TDM policy" : "") + ")" });
-  else if (t.tdmrep.reserved === false) reasons.push({ tier: "open", why: "declares text and data mining rights not reserved for this path (TDMRep tdm-reservation 0), explicitly open, in writing" });
+  if (t.tdmrep.reserved === true)
+    reasons.push({
+      tier: "signaled",
+      why: "reserves text and data mining rights for this path (TDMRep tdm-reservation 1" + (t.tdmrep.policy ? ", with a TDM policy" : "") + ")",
+    });
+  else if (t.tdmrep.reserved === false)
+    reasons.push({
+      tier: "open",
+      why: "declares text and data mining rights not reserved for this path (TDMRep tdm-reservation 0), explicitly open, in writing",
+    });
   else if (t.tdmrep.present) reasons.push({ tier: "open", why: "publishes a TDMRep manifest with no rule for this path, so TDM reservation is unset" });
   if (t.robotsUnknown) reasons.push({ tier: "open", why: "robots.txt could not be read (" + t.robotsError + ") — robots terms unknown, not absent" });
   const order = ["open", "signaled", "enforced", "paid"];
@@ -3532,10 +4151,20 @@ const LENS_RATES = [
  * Every tier is optional: an HTML page prices html/text/markdown/outline, a
  * non-HTML text body prices raw alone, and add() skips whatever is absent.
  */
-export function lensCost({ html, text, markdown, headings, raw }: {
-  html?: number; text?: number; markdown?: number; headings?: Array<{ level: number; text: string }>; raw?: number;
+export function lensCost({
+  html,
+  text,
+  markdown,
+  headings,
+  raw,
+}: {
+  html?: number;
+  text?: number;
+  markdown?: number;
+  headings?: Array<{ level: number; text: string }>;
+  raw?: number;
 }) {
-  const tiers: { key: any, label: any, note: any, chars: number, tokens: number }[] = [];
+  const tiers: { key: any; label: any; note: any; chars: number; tokens: number }[] = [];
   const add = (key, label, note, chars, cpt) => {
     if (chars > 0) tiers.push({ key, label, note, chars, tokens: Math.round(chars / cpt) });
   };
@@ -3578,9 +4207,12 @@ export async function lensProbeMcp(origin, env) {
     if (/^text\/event-stream$/i.test(ct)) return { verdict: "yes", detail: "SSE stream at /mcp" };
     if (/jsonrpc/i.test(head)) return { verdict: "yes", detail: "JSON-RPC answer at /mcp (HTTP " + res.status + ")" };
     if (res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /mcp (OAuth-protected server)" };
-    if ([400, 405, 406].includes(res.status) && /json/i.test(ct)) return { verdict: "maybe", detail: "HTTP " + res.status + " " + ct + " at /mcp (POST-only server?)" };
+    if ([400, 405, 406].includes(res.status) && /json/i.test(ct))
+      return { verdict: "maybe", detail: "HTTP " + res.status + " " + ct + " at /mcp (POST-only server?)" };
     return { verdict: "no", detail: res.status === 404 ? "no /mcp" : "HTTP " + res.status + (ct ? " " + ct : "") };
-  } catch (e) { return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) }; }
+  } catch (e) {
+    return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) };
+  }
 }
 
 // /ask — NLWeb's REST convention. A real instance answers JSON (usually an
@@ -3628,7 +4260,9 @@ export async function lensProbeNlweb(origin, env) {
     // `unknown` is what the doors tier already renders as "never answered".
     if (res.status >= 500) return { verdict: "unknown", detail: "HTTP " + res.status + " at /ask — origin did not answer" };
     return { verdict: "no", detail: "HTTP " + res.status + (ct ? " " + ct : "") };
-  } catch (e) { return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) }; }
+  } catch (e) {
+    return { verdict: "unknown", detail: "probe failed", error: probeErrorText(e) };
+  }
 }
 
 // Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
@@ -3638,9 +4272,13 @@ export async function lensProbeMdNego(pageUrl, env) {
     const deadline = AbortSignal.timeout(5000);
     const res = await lensFetch(pageUrl, env, deadline, "text/markdown", FAN_OUT);
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
-    try { await res.body?.cancel(); } catch (_e) {}
+    try {
+      await res.body?.cancel();
+    } catch (_e) {}
     return { supported: /^text\/markdown$/i.test(ct), contentType: ct, status: res.status };
-  } catch (e) { return { supported: false, note: "probe failed", error: probeErrorText(e) }; }
+  } catch (e) {
+    return { supported: false, note: "probe failed", error: probeErrorText(e) };
+  }
 }
 
 // WebMCP is a page-level JS API, so the marker lives in the HTML we already
@@ -3693,7 +4331,11 @@ function lensJsonDoor(probe, validate, label) {
     return { present: false, status: probe ? probe.status : null, unknown: lensProbeUnanswered(probe) };
   }
   let j: any = null;
-  try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
+  try {
+    j = JSON.parse(probe.body);
+  } catch (_e) {
+    return { present: false, note: "answered, but not JSON (SPA fallback?)" };
+  }
   if (!asRecord(j) || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
   return { present: true, json: j };
 }
@@ -3716,7 +4358,9 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.agentCard.present) doors.agentCard.detail = String(doors.agentCard.json.name || "").slice(0, 80);
   if (doors.openapi.present) doors.openapi.detail = "OpenAPI " + String(doors.openapi.json.openapi || doors.openapi.json.swagger).slice(0, 20);
   if (doors.aiPlugin.present) doors.aiPlugin.detail = String(doors.aiPlugin.json.name_for_model || "manifest").slice(0, 80);
-  if (doors.apiCatalog.present) doors.apiCatalog.detail = (doors.apiCatalog.json.linkset || []).length + " linkset entr" + ((doors.apiCatalog.json.linkset || []).length === 1 ? "y" : "ies");
+  if (doors.apiCatalog.present)
+    doors.apiCatalog.detail =
+      (doors.apiCatalog.json.linkset || []).length + " linkset entr" + ((doors.apiCatalog.json.linkset || []).length === 1 ? "y" : "ies");
   for (const k of ["agentCard", "openapi", "aiPlugin", "apiCatalog"]) delete doors[k].json;
 
   // the verdict: action surfaces beat readable ones beat nothing.
@@ -3737,7 +4381,12 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.mcp.verdict === "unknown") unknowns.push("/mcp");
   if (doors.nlweb.verdict === "unknown") unknowns.push("/ask");
   if (doors.mdNegotiation.note === "probe failed") unknowns.push("markdown negotiation");
-  for (const [k, label] of [["agentCard", "agent card"], ["openapi", "OpenAPI"], ["aiPlugin", "ai-plugin"], ["apiCatalog", "api-catalog"]]) {
+  for (const [k, label] of [
+    ["agentCard", "agent card"],
+    ["openapi", "OpenAPI"],
+    ["aiPlugin", "ai-plugin"],
+    ["apiCatalog", "api-catalog"],
+  ]) {
     if (doors[k].unknown) unknowns.push(label);
   }
 
@@ -3755,7 +4404,14 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
     note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface." + hedge;
   } else if (unknowns.length) {
     verdict = "human-only";
-    note = "No agent door answered, but " + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " (" + unknowns.join(", ") + ") never got a response — this verdict may undercount.";
+    note =
+      "No agent door answered, but " +
+      unknowns.length +
+      " probe" +
+      (unknowns.length > 1 ? "s" : "") +
+      " (" +
+      unknowns.join(", ") +
+      ") never got a response — this verdict may undercount.";
   } else {
     verdict = "human-only";
     note = "No agent door found. An agent here must brute-force the human page — the AI view prices exactly that.";
@@ -3791,7 +4447,10 @@ export function lensSitemapVerdict(probe) {
     return { valid: true, kind: "xml", entries: Number.isFinite(probe.entries) ? probe.entries : (body.match(/<url>|<sitemap>/gi) || []).length };
   }
   // sitemaps.org also blesses a plain-text file of one URL per line.
-  const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = body
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length && /text\/plain/.test(ct) && lines.every((l) => /^https?:\/\/\S+$/i.test(l))) {
     return { valid: true, kind: "text", entries: lines.length };
   }
@@ -3825,17 +4484,26 @@ export function lensSitemapDeclared(robots, origin) {
 // with neutral emerging-commerce checks excluded. A site can inspect exactly
 // why a point moved instead of receiving an opaque vendor verdict.
 const LENS_READINESS_META = {
-  robotsTxt: { category: "discoverability", label: "robots.txt" }, sitemap: { category: "discoverability", label: "Sitemap" },
-  linkHeaders: { category: "discoverability", label: "Link headers" }, dnsAid: { category: "discoverability", label: "DNS-AID" },
+  robotsTxt: { category: "discoverability", label: "robots.txt" },
+  sitemap: { category: "discoverability", label: "Sitemap" },
+  linkHeaders: { category: "discoverability", label: "Link headers" },
+  dnsAid: { category: "discoverability", label: "DNS-AID" },
   markdownNegotiation: { category: "contentAccessibility", label: "Markdown negotiation" },
-  robotsTxtAiRules: { category: "botAccessControl", label: "AI bot rules" }, contentSignals: { category: "botAccessControl", label: "Content Signals" },
-  webBotAuth: { category: "botAccessControl", label: "Web Bot Auth" }, apiCatalog: { category: "discovery", label: "API Catalog" },
-  oauthDiscovery: { category: "discovery", label: "OAuth discovery" }, oauthProtectedResource: { category: "discovery", label: "OAuth Protected Resource" },
-  authMd: { category: "discovery", label: "Auth.md" }, mcpServerCard: { category: "discovery", label: "MCP Server Card" },
+  robotsTxtAiRules: { category: "botAccessControl", label: "AI bot rules" },
+  contentSignals: { category: "botAccessControl", label: "Content Signals" },
+  webBotAuth: { category: "botAccessControl", label: "Web Bot Auth" },
+  apiCatalog: { category: "discovery", label: "API Catalog" },
+  oauthDiscovery: { category: "discovery", label: "OAuth discovery" },
+  oauthProtectedResource: { category: "discovery", label: "OAuth Protected Resource" },
+  authMd: { category: "discovery", label: "Auth.md" },
+  mcpServerCard: { category: "discovery", label: "MCP Server Card" },
   a2aAgentCard: { category: "discovery", label: "A2A Agent Card", optional: true, countInScore: false },
-  agentSkills: { category: "discovery", label: "Agent Skills" }, webMcp: { category: "discovery", label: "WebMCP" },
-  x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
-  ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
+  agentSkills: { category: "discovery", label: "Agent Skills" },
+  webMcp: { category: "discovery", label: "WebMCP" },
+  x402: { category: "commerce", label: "x402", optional: true, countInScore: false },
+  mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
+  ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false },
+  acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
   ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
   // The EXECUTION half, imported so the CLI check and this rubric cannot drift
   // into two different definitions of the same two questions.
@@ -3860,17 +4528,25 @@ function lensJsonVerdict(probe, validate) {
   // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
   // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
   // undercounting webBotAuth / the oauth checks that route through here).
-  if (lensProbeUnanswered(probe)) return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
+  if (lensProbeUnanswered(probe))
+    return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
   if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
   try {
     const json = JSON.parse(probe.body || "");
     return validate(json) ? { status: "pass", detail: "valid JSON shape" } : { status: "fail", detail: "JSON answered, but the expected fields were absent" };
-  } catch (_e) { return { status: "fail", detail: "answered, but was not valid JSON" }; }
+  } catch (_e) {
+    return { status: "fail", detail: "answered, but was not valid JSON" };
+  }
 }
 
 type LensReadinessCheck = {
-  key: string; category: string; label: string; status: string; detail: string;
-  optional: boolean; countInScore: boolean;
+  key: string;
+  category: string;
+  label: string;
+  status: string;
+  detail: string;
+  optional: boolean;
+  countInScore: boolean;
   /** Set only on a check the site has said does not apply to it, which the
    *  grid prints as "n/a" rather than "optional" (lensKeylessDeclaration). */
   notApplicable?: true;
@@ -3879,7 +4555,11 @@ type LensReadinessCheck = {
 function lensReadinessItem(key, status, detail, notApplicable = false): LensReadinessCheck {
   const meta = LENS_READINESS_META[key];
   const item: LensReadinessCheck = {
-    key, category: meta.category, label: meta.label, status, detail,
+    key,
+    category: meta.category,
+    label: meta.label,
+    status,
+    detail,
     optional: !!meta.optional,
     countInScore: meta.countInScore !== false && !meta.optional,
   };
@@ -3905,7 +4585,11 @@ export function lensKeylessDeclaration(openapi): string | null {
   // Parsed once at the boundary; every read below tolerates a wrong shape by
   // landing on the conservative answer (null), never on "keyless".
   let spec: any;
-  try { spec = JSON.parse(openapi.body || ""); } catch (_e) { return null; }
+  try {
+    spec = JSON.parse(openapi.body || "");
+  } catch (_e) {
+    return null;
+  }
   if (!spec?.openapi && !spec?.swagger) return null;
   if (!Array.isArray(spec.security) || spec.security.length !== 0) return null;
   if (Object.keys(spec.components?.securitySchemes ?? spec.securityDefinitions ?? {}).length) return null;
@@ -3923,17 +4607,31 @@ export function lensKeylessDeclaration(openapi): string | null {
 // behind a guard and a scan legitimately produces none of them when the body
 // could not be decoded. Required destructuring made a caller that supplies four
 // of five fail on the shape rather than the behaviour.
-export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }: {
-  status?: any; bodyUnreadable?: any; anatomy?: any; agent?: any; botViews?: any;
+export function lensFieldEvidence({
+  status,
+  bodyUnreadable,
+  anatomy,
+  agent,
+  botViews,
+}: {
+  status?: any;
+  bodyUnreadable?: any;
+  anatomy?: any;
+  agent?: any;
+  botViews?: any;
 }) {
-  const components: { key: any, label: any, score: any, detail: any }[] = [];
+  const components: { key: any; label: any; score: any; detail: any }[] = [];
   const add = (key, label, score, detail) => components.push({ key, label, score, detail });
 
   const identifiedOk = Number.isFinite(status) && status >= 200 && status < 400 && !bodyUnreadable;
   add(
-    "identifiedFetch", "identified fetch", Number.isFinite(status) ? (identifiedOk ? 100 : 0) : null,
+    "identifiedFetch",
+    "identified fetch",
+    Number.isFinite(status) ? (identifiedOk ? 100 : 0) : null,
     Number.isFinite(status)
-      ? (identifiedOk ? `HTTP ${status}; the AadharshBot response was readable` : `HTTP ${status}; no readable success response`)
+      ? identifiedOk
+        ? `HTTP ${status}; the AadharshBot response was readable`
+        : `HTTP ${status}; no readable success response`
       : "the identified fetch did not answer",
   );
 
@@ -3949,10 +4647,11 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   const fullSample = views.length === scoredTotal;
   // If no control got a readable response, a crawler 403 is not evidence about
   // crawler policy: nothing this instrument sent got through. Report unknown.
-  const controlsPassed = controls.length === 0 || controls.some(
-    (bot) => Number.isFinite(bot.status) && bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
+  const controlsPassed =
+    controls.length === 0 || controls.some((bot) => Number.isFinite(bot.status) && bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
   add(
-    "sampledBots", "sampled bot retrieval",
+    "sampledBots",
+    "sampled bot retrieval",
     fullSample && controlsPassed ? Math.round((successful.length / views.length) * 100) : null,
     !fullSample
       ? `${views.length} of ${scoredTotal} bot samples ran; this component stays unknown`
@@ -3964,7 +4663,9 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   const wordCount = anatomy && Number.isFinite(anatomy.wordCount) ? anatomy.wordCount : null;
   const bodyScore = wordCount == null ? null : wordCount >= 40 ? 100 : wordCount > 0 ? 50 : 0;
   add(
-    "usableBody", "usable response body", bodyScore,
+    "usableBody",
+    "usable response body",
+    bodyScore,
     wordCount == null ? "the response body was not parsed" : `${wordCount} words survived the bounded HTTP parse`,
   );
 
@@ -3974,15 +4675,21 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   const unknownDoors = !!(strategy && Array.isArray(strategy.unknowns) && strategy.unknowns.length);
   const doorScore = !strategy ? null : hasAction ? 100 : hasReadable ? 60 : unknownDoors ? null : 0;
   add(
-    "agentDoor", "machine door", doorScore,
-    hasAction ? strategy.action.join(", ") : hasReadable ? strategy.readable.join(", ") : unknownDoors ? "one or more door probes never answered" : "no readable or actionable machine door was found",
+    "agentDoor",
+    "machine door",
+    doorScore,
+    hasAction
+      ? strategy.action.join(", ")
+      : hasReadable
+        ? strategy.readable.join(", ")
+        : unknownDoors
+          ? "one or more door probes never answered"
+          : "no readable or actionable machine door was found",
   );
 
   const known = components.filter((component) => Number.isFinite(component.score));
   return {
-    overall: known.length === components.length
-      ? Math.round(known.reduce((sum, component) => sum + component.score, 0) / components.length)
-      : null,
+    overall: known.length === components.length ? Math.round(known.reduce((sum, component) => sum + component.score, 0) / components.length) : null,
     components,
     scoringNote: "Four equally weighted observations. Missing evidence leaves the field score unfinished; it is never reweighted.",
   };
@@ -3993,9 +4700,28 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
 // the browser budget was spent. Left to inference the destructure makes all ten
 // REQUIRED, so a caller that supplies nine (the rubric tests, which pass a base
 // object without sitemapDeclared) fails on the shape rather than the behaviour.
-export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms, discovery, agent, openapi, botViews, execution }: {
-  headers?: any; robots?: any; sitemap?: any; sitemapDeclared?: any; terms?: any;
-  discovery?: any; agent?: any; openapi?: any; botViews?: any; execution?: any;
+export function lensReadiness({
+  headers,
+  robots,
+  sitemap,
+  sitemapDeclared,
+  terms,
+  discovery,
+  agent,
+  openapi,
+  botViews,
+  execution,
+}: {
+  headers?: any;
+  robots?: any;
+  sitemap?: any;
+  sitemapDeclared?: any;
+  terms?: any;
+  discovery?: any;
+  agent?: any;
+  openapi?: any;
+  botViews?: any;
+  execution?: any;
 }) {
   // Keyed by check name, valued by whatever lensReadinessItem produces. Derived
   // from the producer rather than hand-written, so adding a field there cannot
@@ -4009,27 +4735,40 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   // nothing but `User-agent: *` on a check whose own fix copy says to declare
   // explicit GPTBot/ClaudeBot/CCBot rules — this site scored that unearned pass on
   // its own scan. The predicate already existed; it just lived in the detail string.
-  const namedAiRules = !!(robotsRules && robotsParsed.groups.some((g) =>
-    g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
+  const namedAiRules = !!(
+    robotsRules && robotsParsed.groups.some((g) => g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a)))
+  );
   const link = String((headers && headers.link) || "");
   const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
   const botAuth = lensJsonVerdict(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
-  const oauthOpen = lensJsonVerdict(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration, (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint));
-  const oauthServer = lensJsonVerdict(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer, (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint));
+  const oauthOpen = lensJsonVerdict(
+    discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration,
+    (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint),
+  );
+  const oauthServer = lensJsonVerdict(
+    discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer,
+    (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint),
+  );
   const oauthResource = lensJsonVerdict(discovery && discovery.oauthProtectedResource, (j) => !!(j.resource || j.authorization_servers || j.scopes_supported));
   const mcpCard = lensJsonVerdict(discovery && discovery.mcpServerCard, (j) => !!(j.serverInfo || j.server || j.name || j.capabilities));
   const skills = lensJsonVerdict(discovery && discovery.agentSkills, (j) => Array.isArray(j.skills));
   const ucp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
-  const acp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
+  const acp = lensJsonVerdict(
+    discovery && discovery.commerce && discovery.commerce.acp,
+    (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services),
+  );
   const ap2 = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
   // A pass is still a pass: a keyless site that publishes OAuth anyway gets
   // the credit. Anything else on a declared-keyless site is not applicable.
   const keyless = lensKeylessDeclaration(openapi);
-  const authorityItem = (key, status, detail) => keyless && status !== "pass"
-    ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true)
-    : lensReadinessItem(key, status, detail);
+  const authorityItem = (key, status, detail) =>
+    keyless && status !== "pass" ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true) : lensReadinessItem(key, status, detail);
 
-  items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
+  items.robotsTxt = lensReadinessItem(
+    "robotsTxt",
+    robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown",
+    robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200",
+  );
   // Two probes, best-of: the conventional /sitemap.xml and whatever robots.txt
   // DECLARED, which is the authoritative location and often a different path.
   // Each is validated rather than trusted for answering 200 — see
@@ -4045,15 +4784,27 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
     "sitemap",
     sitemapHit ? "pass" : sitemapCompressed || !sitemapAnswered ? "unknown" : "fail",
     sitemapHit
-      ? "sitemap answered with " + sitemapHit.verdict.entries + " URL entr" + (sitemapHit.verdict.entries === 1 ? "y" : "ies") + (sitemapHit.declared ? " (at the location robots.txt declares)" : "")
+      ? "sitemap answered with " +
+          sitemapHit.verdict.entries +
+          " URL entr" +
+          (sitemapHit.verdict.entries === 1 ? "y" : "ies") +
+          (sitemapHit.declared ? " (at the location robots.txt declares)" : "")
       : sitemapCompressed
         ? sitemapCompressed.verdict.reason
         : sitemapCandidates.length
           ? sitemapCandidates[sitemapCandidates.length - 1].verdict.reason
           : "sitemap.xml was not found or did not answer",
   );
-  items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
-  items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
+  items.linkHeaders = lensReadinessItem(
+    "linkHeaders",
+    usefulLinks ? "pass" : "fail",
+    usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response",
+  );
+  items.dnsAid = lensReadinessItem(
+    "dnsAid",
+    discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown",
+    discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names",
+  );
   // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
   // it produced no real answer ("probe failed", or "not probed (non-HTML target)");
   // a genuine negative carries contentType/status and no note. Keying on the exact
@@ -4061,30 +4812,99 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   // assert "Accept: text/markdown stayed non-markdown" about a request never sent —
   // the same fabrication the agent-doors tier already refuses to make.
   const mdNego = (agent && agent.mdNegotiation) || null;
-  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail", mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown");
-  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown", namedAiRules ? "named AI bot rules found" : robotsRules ? "wildcard rules apply to crawlers, no AI crawler is named" : "robots policy could not be evaluated");
-  items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
+  items.markdownNegotiation = lensReadinessItem(
+    "markdownNegotiation",
+    mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail",
+    mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown",
+  );
+  items.robotsTxtAiRules = lensReadinessItem(
+    "robotsTxtAiRules",
+    robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown",
+    namedAiRules
+      ? "named AI bot rules found"
+      : robotsRules
+        ? "wildcard rules apply to crawlers, no AI crawler is named"
+        : "robots policy could not be evaluated",
+  );
+  items.contentSignals = lensReadinessItem(
+    "contentSignals",
+    terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail",
+    terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found",
+  );
   items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
-  items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");
-  items.oauthDiscovery = authorityItem("oauthDiscovery", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "pass" : oauthOpen.status === "unknown" || oauthServer.status === "unknown" ? "unknown" : "fail", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document");
+  items.apiCatalog = lensReadinessItem(
+    "apiCatalog",
+    agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail",
+    agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset",
+  );
+  items.oauthDiscovery = authorityItem(
+    "oauthDiscovery",
+    oauthOpen.status === "pass" || oauthServer.status === "pass"
+      ? "pass"
+      : oauthOpen.status === "unknown" || oauthServer.status === "unknown"
+        ? "unknown"
+        : "fail",
+    oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document",
+  );
   items.oauthProtectedResource = authorityItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
-  items.authMd = authorityItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
+  items.authMd = authorityItem(
+    "authMd",
+    discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim()
+      ? "pass"
+      : discovery && discovery.authMd && discovery.authMd.error
+        ? "unknown"
+        : "fail",
+    discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide",
+  );
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
   // Same unknown arm as apiCatalog above. lensJsonDoor has always marked an
   // unanswered agent-card probe `unknown`, and this check read only `present`,
   // so a refused probe was graded as a site with no card.
-  items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : agent && agent.agentCard && agent.agentCard.unknown ? "unknown" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : agent && agent.agentCard && agent.agentCard.unknown ? "the agent card probe did not answer" : "no valid A2A Agent Card");
+  items.a2aAgentCard = lensReadinessItem(
+    "a2aAgentCard",
+    agent && agent.agentCard && agent.agentCard.present ? "pass" : agent && agent.agentCard && agent.agentCard.unknown ? "unknown" : "fail",
+    agent && agent.agentCard && agent.agentCard.present
+      ? agent.agentCard.detail
+      : agent && agent.agentCard && agent.agentCard.unknown
+        ? "the agent card probe did not answer"
+        : "no valid A2A Agent Card",
+  );
   items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
-  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
+  items.webMcp = lensReadinessItem(
+    "webMcp",
+    agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
     agent && agent.webmcp && agent.webmcp.found
-      ? (agent.webmcp.kind === "bridge" ? "a CDN-injected bridge loads this origin's MCP tools into the page" : "modelContext call sites in the page")
-      : "no WebMCP marker found in the fetched HTML");
-  items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
+      ? agent.webmcp.kind === "bridge"
+        ? "a CDN-injected bridge loads this origin's MCP tools into the page"
+        : "modelContext call sites in the page"
+      : "no WebMCP marker found in the fetched HTML",
+  );
+  items.x402 = lensReadinessItem(
+    "x402",
+    terms && terms.paid && terms.paid.http402 ? "pass" : "neutral",
+    terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)",
+  );
   const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
-  items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");
-  items.ucp = lensReadinessItem("ucp", ucp.status === "pass" ? "pass" : "neutral", ucp.status === "pass" ? "UCP-shaped discovery metadata found" : "not observed (optional; not scored)");
-  items.acp = lensReadinessItem("acp", acp.status === "pass" ? "pass" : "neutral", acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)");
-  items.ap2 = lensReadinessItem("ap2", ap2.status === "pass" ? "pass" : "neutral", ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)");
+  items.mpp = lensReadinessItem(
+    "mpp",
+    /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral",
+    /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)",
+  );
+  items.ucp = lensReadinessItem(
+    "ucp",
+    ucp.status === "pass" ? "pass" : "neutral",
+    ucp.status === "pass" ? "UCP-shaped discovery metadata found" : "not observed (optional; not scored)",
+  );
+  items.acp = lensReadinessItem(
+    "acp",
+    acp.status === "pass" ? "pass" : "neutral",
+    acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)",
+  );
+  items.ap2 = lensReadinessItem(
+    "ap2",
+    ap2.status === "pass" ? "pass" : "neutral",
+    ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)",
+  );
 
   // Execution rides whatever agent-browser evidence this scan happens to hold.
   // With none, both come back `neutral`: shown in the grid, excluded from the
@@ -4100,7 +4920,15 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const categories = LENS_READINESS_CATEGORIES.map((category) => {
     const values = Object.values(items).filter((item) => item.category === category.key && item.countInScore && item.status !== "neutral");
     const passed = values.filter((item) => item.status === "pass").length;
-    return { key: category.key, label: category.label, score: values.length ? Math.round((passed / values.length) * 100) : 0, passed, total: values.length, checkCount: Object.values(items).filter((item) => item.category === category.key).length, countInScore: category.countInScore };
+    return {
+      key: category.key,
+      label: category.label,
+      score: values.length ? Math.round((passed / values.length) * 100) : 0,
+      passed,
+      total: values.length,
+      checkCount: Object.values(items).filter((item) => item.category === category.key).length,
+      countInScore: category.countInScore,
+    };
   });
   const counted = Object.values(items).filter((item) => item.countInScore && item.status !== "neutral");
   const passed = counted.filter((item) => item.status === "pass").length;
@@ -4128,17 +4956,30 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
   const level = { number, name: LEVEL_NAMES[number] };
   // Say so when the cap bit, rather than quietly publishing a smaller number
   // than the evidence produced — the reader is owed the disagreement.
-  const levelNote = number < ladder
-    ? `one signal supports ${LEVEL_NAMES[ladder]}, but ${overall}/100 of the rubric passed, so the level is held at ${LEVEL_NAMES[number]}`
-    : null;
+  const levelNote =
+    number < ladder
+      ? `one signal supports ${LEVEL_NAMES[ladder]}, but ${overall}/100 of the rubric passed, so the level is held at ${LEVEL_NAMES[number]}`
+      : null;
   // ship the label with each action: LENS_READINESS_META already owns it, so the
   // client should render it off the envelope rather than keep a second copy that
   // silently wins and drifts when a label is renamed here.
-  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
+  const nextActions = Object.values(items)
+    .filter((item) => item.status === "fail" && item.countInScore)
+    .slice(0, 5)
+    .map((item) => ({ key: item.key, label: item.label }));
   return {
-    overall, level: level.number, levelName: level.name, levelNote,
-    categories, checks: items, counted: counted.length, passed, keyless,
-    scoringNote: "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points. The authority checks are neutral (not applicable) on a site whose OpenAPI document declares every operation keyless.",
-    nextActions, botViews: botViews || [],
+    overall,
+    level: level.number,
+    levelName: level.name,
+    levelNote,
+    categories,
+    checks: items,
+    counted: counted.length,
+    passed,
+    keyless,
+    scoringNote:
+      "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points. The authority checks are neutral (not applicable) on a site whose OpenAPI document declares every operation keyless.",
+    nextActions,
+    botViews: botViews || [],
   };
 }

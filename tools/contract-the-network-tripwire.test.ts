@@ -1,9 +1,5 @@
 // ── the network tripwire ─────────────────────────────────────────────────
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 import { escaped } from "./lib/no-network.ts";
 
 // `tools/lib/no-network.ts` is preloaded by both test scripts and fails the
@@ -26,7 +22,11 @@ test("a refused fetch is RECORDED, not merely thrown", async () => {
   try {
     let threw = false;
     // Swallowed exactly the way a real probe swallows it.
-    try { await fetch("https://example.invalid/tripwire-self-test"); } catch { threw = true; }
+    try {
+      await fetch("https://example.invalid/tripwire-self-test");
+    } catch {
+      threw = true;
+    }
     assert.ok(threw, "the tripwire let a request through");
     assert.equal(escaped.length, before + 1, "the refusal was thrown but never recorded");
     assert.match(escaped[escaped.length - 1], /example\.invalid/, "the record must name the URL somebody has to go fix");
@@ -47,10 +47,8 @@ test("both test scripts arm it, and neither can drop it quietly", async () => {
 
   // bun takes --preload, node takes --import. Asserting the FLAG and not just
   // the path is the point: the wrong flag for the runner is silently ignored.
-  assert.match(pkg.scripts.test, /--preload \.\/tools\/lib\/no-network\.ts/,
-    "`test` must preload the tripwire");
-  assert.match(pkg.scripts["test:node"], /--import \.\/tools\/lib\/no-network\.ts/,
-    "`test:node` must import the tripwire");
+  assert.match(pkg.scripts.test, /--preload \.\/tools\/lib\/no-network\.ts/, "`test` must preload the tripwire");
+  assert.match(pkg.scripts["test:node"], /--import \.\/tools\/lib\/no-network\.ts/, "`test:node` must import the tripwire");
   for (const script of ["test", "test:node"]) {
     assert.ok(pkg.scripts[script].includes(MODULE), `${script} no longer arms ${MODULE}`);
   }

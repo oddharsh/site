@@ -11,7 +11,7 @@ import { ROOT, assert, test } from "./contract-shared.ts";
 
 const src = readFileSync(new URL("src/client/nav.ts", ROOT), "utf8");
 const start = src.indexOf("function initDrag()");
-const drag = src.slice(start, src.indexOf("D.addEventListener(\"pointerdown\"", start));
+const drag = src.slice(start, src.indexOf('D.addEventListener("pointerdown"', start));
 
 /** nav.js's onGrid, evaluated against a stubbed devicePixelRatio. */
 function onGridAt(dpr) {

@@ -21,13 +21,16 @@ test("the check sees a #axp-tips selector and ignores one in a comment", () => {
 
 test("nav-tray.css styles the tip and nav-run.css does not", () => {
   assert.ok(namesTip(read("src/styles/nav-tray.css")), "nav-tray.css lost its #axp-tips rules");
-  assert.ok(!namesTip(read("src/styles/nav-run.css")), "nav-run.css styles #axp-tips again; the tip's look and position would depend on which sheet linked last");
+  assert.ok(
+    !namesTip(read("src/styles/nav-run.css")),
+    "nav-run.css styles #axp-tips again; the tip's look and position would depend on which sheet linked last",
+  );
 });
 
 test("the title-bar drag leaves the tip balloon alone", () => {
   const src = read("src/client/nav.ts");
   const start = src.indexOf("function initDrag()");
-  const grab = src.slice(start, src.indexOf("\"axp-max\"", start));
+  const grab = src.slice(start, src.indexOf('"axp-max"', start));
   assert.ok(start >= 0 && grab.includes("#axp-run .tb"), "initDrag moved; point this test at its selectors");
   assert.ok(!/#axp-tips/.test(grab), "initDrag drags #axp-tips again, which pulls the balloon's tail off the clock");
 });

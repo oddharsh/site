@@ -102,7 +102,8 @@ export function createDispatch(handlers: DispatchHandlers) {
   // alternating 1000-request in-process harness trials on 2026-09-01 moved the
   // median from 1674.83ms to 1594.44ms; the paired median saved 68.66ms (4.1%),
   // with the candidate winning five of seven pairs.
-  const withSelfFetchHandler = (handle: RouteHandler): RouteHandler =>
+  const withSelfFetchHandler =
+    (handle: RouteHandler): RouteHandler =>
     (request, env, ctx, url) =>
       handle(request, env.SELF_FETCH === null ? env : withSelfFetch(env, ctx), ctx, url);
 
@@ -135,8 +136,7 @@ export function createDispatch(handlers: DispatchHandlers) {
   function withSelfFetch(env: Env, ctx: ExecutionContext) {
     return {
       ...env,
-      SELF_FETCH: async (req) =>
-        withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
+      SELF_FETCH: async (req) => withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
     };
   }
 
@@ -167,7 +167,7 @@ export function createDispatch(handlers: DispatchHandlers) {
       return new Response(null, {
         status: 301,
         headers: {
-          "location":      target,
+          "location": target,
           "cache-control": "public, max-age=3600",
         },
       });
@@ -228,7 +228,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // logged error and a 5xx as well as an uncaught throw.
     let response: Response;
     try {
-      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? await route(request, env, ctx);
+      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? (await route(request, env, ctx));
     } catch (error) {
       console.error(`unhandled error on ${request.method} ${url.pathname}:`, error);
       response = serverError(request);
@@ -252,30 +252,32 @@ export function createDispatch(handlers: DispatchHandlers) {
     countSpeculativeLoad(env, request, response, url.pathname);
     const mcpEra = mcpEraOf(request);
     try {
-      console.log(JSON.stringify({
-        p: url.pathname,
-        m: request.method,
-        s: response.status,
-        ms: Date.now() - t0,
-        v: env.CF_VERSION_METADATA?.id?.slice(0, 8),
-        co: request.cf?.country,
-        bot: request.cf?.botManagement?.verifiedBot || undefined,
-        // `h` answers the SHARE question. infra:check asserts HTTP/3 is ON (alt-svc
-        // plus the HTTPS DNS record); nothing before 2026-09-21 said whether it was
-        // USED. Read it grouped over a tail. Expect a mix rather than a switch:
-        // Chrome learns h3 from Alt-Svc after the first response and keeps a healthy
-        // h2 connection, so a cold visit's document reads HTTP/2 by design and the
-        // assets it discovers a moment later read HTTP/3.
-        h: request.cf?.httpProtocol,
-        // The MCP era, set only on requests one of the two MCP servers parsed
-        // (lib/mcp-protocol.ts noteEra). `mcp` is modern, legacy or mixed; `mv`
-        // the revision it declared; `mc` the client a legacy `initialize` named.
-        // Group `mcp` over a window to see whether the legacy door still has
-        // callers, and `mv` to see which legacy revisions they speak.
-        mcp: mcpEra?.era,
-        mv: mcpEra?.version,
-        mc: mcpEra?.client,
-      }));
+      console.log(
+        JSON.stringify({
+          p: url.pathname,
+          m: request.method,
+          s: response.status,
+          ms: Date.now() - t0,
+          v: env.CF_VERSION_METADATA?.id?.slice(0, 8),
+          co: request.cf?.country,
+          bot: request.cf?.botManagement?.verifiedBot || undefined,
+          // `h` answers the SHARE question. infra:check asserts HTTP/3 is ON (alt-svc
+          // plus the HTTPS DNS record); nothing before 2026-09-21 said whether it was
+          // USED. Read it grouped over a tail. Expect a mix rather than a switch:
+          // Chrome learns h3 from Alt-Svc after the first response and keeps a healthy
+          // h2 connection, so a cold visit's document reads HTTP/2 by design and the
+          // assets it discovers a moment later read HTTP/3.
+          h: request.cf?.httpProtocol,
+          // The MCP era, set only on requests one of the two MCP servers parsed
+          // (lib/mcp-protocol.ts noteEra). `mcp` is modern, legacy or mixed; `mv`
+          // the revision it declared; `mc` the client a legacy `initialize` named.
+          // Group `mcp` over a window to see whether the legacy door still has
+          // callers, and `mv` to see which legacy revisions they speak.
+          mcp: mcpEra?.era,
+          mv: mcpEra?.version,
+          mc: mcpEra?.client,
+        }),
+      );
     } catch {}
     // noindex EVERY hostname that is not the canonical site, not just previews.
     // `cal.aadhar.sh` is a declared zone route that mostly 404s, but /coffee* really
@@ -348,7 +350,9 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
       const signal: AbortSignal | undefined = request.signal;
       const listening = signal instanceof EventTarget;
       let hungUp = false;
-      const onAbort = () => { hungUp = true; };
+      const onAbort = () => {
+        hungUp = true;
+      };
       // `once` so one signal cannot double-fire, and the removal below so the
       // listener cannot outlive the dispatch that registered it. A request
       // reaches here exactly once anyway (route() returns on its first match,

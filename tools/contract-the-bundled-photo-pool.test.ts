@@ -43,7 +43,11 @@ test("bundled photo pool derives one well-formed row per committed stem", async 
     if (p.heif !== null) assert.ok(p.heif.startsWith(`${p.stem}.`), `${p.stem}: heif must be the stem's own key`);
   }
   const fulls = pool.map((p) => p.full);
-  assert.deepEqual(fulls, [...fulls].sort((a, b) => a.localeCompare(b)), "pool keeps the manifest's sort order");
+  assert.deepEqual(
+    fulls,
+    [...fulls].sort((a, b) => a.localeCompare(b)),
+    "pool keeps the manifest's sort order",
+  );
   // an incomplete hash entry is SKIPPED, never rendered as /i/undefined
   assert.equal(derivePhotoPool({ X1: { full: "X1.jpg", size: 1, uploaded: null } }, { X1: { a: "aaaaaaaa" } }).length, 0);
 });
@@ -69,9 +73,11 @@ test("both homepage fragments are preloaded, and the reason that is free still h
   // "cors". The two would not dedupe and the page would fetch each fragment
   // TWICE, turning a latency win into an extra request for every visitor.
   for (const href of ["/photos/grid.html", "/rn/tracks.html"]) {
-    assert.match(page, new RegExp(
-      `<link rel="preload" as="fetch" href="${href}" crossorigin>`),
-      `${href} must be preloaded with crossorigin, or its hydrator fetch is made twice`);
+    assert.match(
+      page,
+      new RegExp(`<link rel="preload" as="fetch" href="${href}" crossorigin>`),
+      `${href} must be preloaded with crossorigin, or its hydrator fetch is made twice`,
+    );
   }
 
   // A preload can only ever be free while the fetch it names is UNCONDITIONAL.
@@ -81,12 +87,17 @@ test("both homepage fragments are preloaded, and the reason that is free still h
   // back and a mount disappears, a preload starts paying for a fragment nobody
   // fetches, so pin the premise rather than trust the comment: the last two
   // times this stopped being true, only the comments knew.
-  assert.match(page, /<section class="photos" aria-label="photographs" data-island="\/photos\/grid\.html" data-state="pending">/,
-    "the grid must ship as an island mount, or the preloaded fragment goes unfetched");
-  assert.match(page, /<ol class="np-list" id="np-list" data-island="\/rn\/tracks\.html" data-state="pending">/,
-    "the playlist must ship as an island mount, or the preloaded fragment goes unfetched");
-  assert.doesNotMatch(page, /data-ssr=|x-rn-fragment/,
-    "the homepage runs on the one island convention, with no second marker or guard");
+  assert.match(
+    page,
+    /<section class="photos" aria-label="photographs" data-island="\/photos\/grid\.html" data-state="pending">/,
+    "the grid must ship as an island mount, or the preloaded fragment goes unfetched",
+  );
+  assert.match(
+    page,
+    /<ol class="np-list" id="np-list" data-island="\/rn\/tracks\.html" data-state="pending">/,
+    "the playlist must ship as an island mount, or the preloaded fragment goes unfetched",
+  );
+  assert.doesNotMatch(page, /data-ssr=|x-rn-fragment/, "the homepage runs on the one island convention, with no second marker or guard");
   // The Worker became TypeScript in #460, and this loop kept filtering `.js`, so
   // it has read nothing since. The floor makes the next rename fail loudly.
   const workerDir = new URL("src/worker/", ROOT);
@@ -94,8 +105,11 @@ test("both homepage fragments are preloaded, and the reason that is free still h
   assert.ok(sources.length >= 30, `only ${sources.length} Worker sources found in src/worker/`);
   for (const file of sources) {
     const src = await readFile(new URL(file, workerDir), "utf8");
-    assert.doesNotMatch(src, /SSR_DEADLINE_MS|serveHomepageWithPrerenderedTracks/,
-      `${file} reintroduces homepage SSR; revisit the /rn/tracks.html preload and the comments that call the fetch unconditional`);
+    assert.doesNotMatch(
+      src,
+      /SSR_DEADLINE_MS|serveHomepageWithPrerenderedTracks/,
+      `${file} reintroduces homepage SSR; revisit the /rn/tracks.html preload and the comments that call the fetch unconditional`,
+    );
   }
 });
 
@@ -112,7 +126,18 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
   // The two renderings differ in exactly one way, so assert on the OUTPUT
   // rather than on the source that produces it.
-  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", thumb_xs: "/i/X1-200.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
+  const photo = [
+    {
+      stem: "X1",
+      full: "X1.jpg",
+      thumb_jpg: "/i/X1.aaaaaaaa.jpg",
+      thumb_avif: "/i/X1.aaaaaaaa.avif",
+      thumb_small: "/i/X1-400.aaaaaaaa.avif",
+      thumb_xs: "/i/X1-200.aaaaaaaa.avif",
+      size: 1,
+      uploaded: "2026-01-01",
+    },
+  ];
   // The renderer returns Html (lib/html.ts) so the fragment can go through
   // islandResponse; .html is the markup it carries.
   const baked = renderPhotoSlots(photo, {}).html;
@@ -122,21 +147,16 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
-  assert.match(baked, /data-srcset="[^"]*200w[^"]*400w[^"]*600w[^"]*"/,
-    "the baked tile's candidates ride in data-srcset, for the same reason its src does");
-  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrcset="/,
-    "a real srcset outside the twin selects and fetches before the hydrator can");
+  assert.match(baked, /data-srcset="[^"]*200w[^"]*400w[^"]*600w[^"]*"/, "the baked tile's candidates ride in data-srcset, for the same reason its src does");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrcset="/, "a real srcset outside the twin selects and fetches before the hydrator can");
   assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
   // ONE url in the twin too. <picture> here is safe but not free: 195 bytes a
   // tile against 130, to serve a client that must be no-JS AND no-AVIF at once,
   // when the engine this repair exists for runs JavaScript and takes the
   // onerror path instead. Tried and reverted 2026-08-12.
-  assert.doesNotMatch(baked, /<noscript>[\s\S]*?<(picture|source)/,
-    "the script-off twin names one image, like every other tile on this page");
-  assert.doesNotMatch(baked, /<noscript>[\s\S]*?\.jpg/,
-    "no JPEG ships to a browser that can decode the AVIF it is already being sent");
-  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
-    "a real src outside the noscript twin is a discarded download");
+  assert.doesNotMatch(baked, /<noscript>[\s\S]*?<(picture|source)/, "the script-off twin names one image, like every other tile on this page");
+  assert.doesNotMatch(baked, /<noscript>[\s\S]*?\.jpg/, "no JPEG ships to a browser that can decode the AVIF it is already being sent");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/, "a real src outside the noscript twin is a discarded download");
 
   // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
   // live URLs and start on innerHTML.
@@ -150,13 +170,14 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // at DPR 1 and 2: 0 image loads beyond the initial 12, identical to a
   // single-URL control. So the assertion now pins the invariant rather than the
   // proxy — no type selection, no JPEG, and every candidate the same format.
-  assert.doesNotMatch(fragment, /<picture|<source|\ssrc="[^"]+\.jpg"/,
-    "a grid tile must not select on TYPE: that is the fallback that churns on hover");
-  const cands = (/\ssrcset="([^"]+)"/.exec(fragment)?.[1] || "").split(",").map((c) => c.trim()).filter(Boolean);
+  assert.doesNotMatch(fragment, /<picture|<source|\ssrc="[^"]+\.jpg"/, "a grid tile must not select on TYPE: that is the fallback that churns on hover");
+  const cands = (/\ssrcset="([^"]+)"/.exec(fragment)?.[1] || "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
   assert.equal(cands.length, 3, "the fragment tile offers all three size candidates");
   for (const c of cands) assert.match(c, /\.avif \d+w$/, `every srcset candidate is one AVIF with a width descriptor: ${c}`);
-  assert.match(fragment, /\ssizes="184px"/,
-    "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
+  assert.match(fragment, /\ssizes="184px"/, "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
 
   // THE FIRST BARS RIDE ON THE TILE. Measured on production before this: a photo hover
   // stalled 135ms then 117ms waiting for /images/meta/<stem>.json, once per photo,
@@ -166,18 +187,27 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // the load. The first six tiles take that path; the lower-priority six keep the
   // per-photo fallback rather than making every fragment pay for every possible
   // first hover.
-  const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
+  const packed = "?".repeat(128) + "~".repeat(128); // 256 chars, both ends of the safe range
   const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } }).html;
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
-  assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }).html, /data-hist=/,
-    "the disposable baked grid must not carry histogram bytes a scripting browser replaces");
+  assert.doesNotMatch(
+    renderPhotoSlots(photo, {}, { histograms: { X1: packed } }).html,
+    /data-hist=/,
+    "the disposable baked grid must not carry histogram bytes a scripting browser replaces",
+  );
   // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
   // fetch, which is what a stem baked before this existed gets.
-  assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }).html, /data-hist=/,
-    "a tile with no known histogram omits the attribute rather than shipping an empty one");
-  assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
-    "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
+  assert.doesNotMatch(
+    renderPhotoSlots(photo, {}, { deferred: false }).html,
+    /data-hist=/,
+    "a tile with no known histogram omits the attribute rather than shipping an empty one",
+  );
+  assert.doesNotMatch(
+    fragment,
+    /data-photo-deferred|data-src=|data-srcset=/,
+    "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab",
+  );
 
   // The live tiles stay single-URL, so an engine that cannot decode AVIF needs a
   // RECOVERY path rather than a second candidate. Measured 2026-08-12: Kitesurf
@@ -215,17 +245,26 @@ test("homepage selects 12 photos and transfers all of them", async () => {
     [false, false, false, false, false, false, true, true, true, true, true, true],
     "the first six tiles ride the default urgency and the last six stay low; flattening that back to one bucket restores the fair-share interleave",
   );
-  const histogramGrid = renderPhotoSlots(twelve, {}, {
-    deferred: false,
-    histograms: Object.fromEntries(twelve.map((p) => [p.stem, packed])),
-  }).html.split("<a href=").slice(1);
+  const histogramGrid = renderPhotoSlots(
+    twelve,
+    {},
+    {
+      deferred: false,
+      histograms: Object.fromEntries(twelve.map((p) => [p.stem, packed])),
+    },
+  )
+    .html.split("<a href=")
+    .slice(1);
   assert.deepEqual(
     histogramGrid.map((tile) => /data-hist=/.test(tile)),
     [true, true, true, true, true, true, false, false, false, false, false, false],
     "only the immediately prioritised prefix carries bars; the low-priority half uses the metadata fallback",
   );
-  assert.doesNotMatch(grid12, /fetchpriority="high"/,
-    "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");
+  assert.doesNotMatch(
+    grid12,
+    /fetchpriority="high"/,
+    "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike",
+  );
 
   // A → B → A must move A's already-loaded nodes back into the shared surface,
   // not parse a third image element. The HAR that motivated this recorded up to
@@ -233,8 +272,11 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(hoist, /const rendered = new Map\(\)/);
   assert.match(hoist, /node\.replaceChildren\(\.\.\.children\)/);
   assert.doesNotMatch(hoist, /node\.innerHTML\s*=\s*html/);
-  assert.doesNotMatch(tooltip, /<picture><source type="image\/avif"|dataset\.(?:track|artist)Imageset/,
-    "album and artist cards must not reconstruct a picture fallback set");
+  assert.doesNotMatch(
+    tooltip,
+    /<picture><source type="image\/avif"|dataset\.(?:track|artist)Imageset/,
+    "album and artist cards must not reconstruct a picture fallback set",
+  );
 
   // The hover target includes the list padding and the grid gutters. Those used
   // to alternate auto/pointer under a moving cursor even though one hover system
@@ -249,8 +291,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const { islandScript, islandResponse, ISLAND_MARKER } = await import("../src/worker/lib/island.ts");
   assert.ok(page.includes(islandScript().html), "the homepage must carry islandScript() byte for byte");
   assert.equal(page.split(islandScript().html).length, 2, "one island script fills both mounts");
-  assert.ok(page.indexOf(islandScript().html) > page.indexOf('id="np-list"'),
-    "the island script must come after both mounts, or it finds neither");
+  assert.ok(page.indexOf(islandScript().html) > page.indexOf('id="np-list"'), "the island script must come after both mounts, or it finds neither");
   assert.match(page, /getAttribute\("data-state"\) === "failed"\) boot\(\)/, "a failed grid island must still hydrate the baked tiles");
   assert.match(worker, /islandResponse\(renderPhotoSlots\(/, "/photos/grid.html must answer through islandResponse, which carries the marker");
   const res = islandResponse(renderPhotoSlots(photo, {}, { deferred: false }));
@@ -261,11 +302,17 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // as white squares on the first scroll for no measurable gain.
   // Matches the construction, not the word, so the comment explaining why the
   // observer is gone does not trip its own tripwire.
-  assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
-    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB off the LCP path, and the urgency split is what orders it now");
+  assert.doesNotMatch(
+    page,
+    /new IntersectionObserver|rootMargin:/,
+    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB off the LCP path, and the urgency split is what orders it now",
+  );
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
-  assert.match(nav, /var bar = D\.getElementById\("axp-taskbar"\);\s*if \(!bar \|\| !D\.getElementById\("axp-desktop"\)\) return;/,
-    "every compiled shell must be present before nav.js enhances it");
+  assert.match(
+    nav,
+    /var bar = D\.getElementById\("axp-taskbar"\);\s*if \(!bar \|\| !D\.getElementById\("axp-desktop"\)\) return;/,
+    "every compiled shell must be present before nav.js enhances it",
+  );
   assert.match(nav, /prerenderDocument\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
   assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
   assert.ok(
@@ -275,7 +322,6 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
 });
-
 
 test("the packed histogram survives the round trip tooltip.js and build.ts do", async () => {
   const { packHistogram, unpackHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
@@ -295,7 +341,7 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
     for (let i = 0; i < BINS; i++) {
       const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
       const level = (previous + wire) % HIST_LEVELS;
-      decoded[ci][i] = Math.round(level * 100 / (HIST_LEVELS - 1));
+      decoded[ci][i] = Math.round((level * 100) / (HIST_LEVELS - 1));
       previous = level;
     }
   }
@@ -311,13 +357,15 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
     Object.fromEntries(CHANNELS.map((c, ci) => [c, decoded[ci]])),
     "the build-side fallback decoder matches the browser-side modulo accumulator",
   );
-  assert.equal(unpackHistogram("!".repeat(CHANNELS.length * BINS)), null,
-    "the build-side decoder refuses characters outside the wire alphabet");
+  assert.equal(unpackHistogram("!".repeat(CHANNELS.length * BINS)), null, "the build-side decoder refuses characters outside the wire alphabet");
   const flat = packHistogram(Object.fromEntries(CHANNELS.map((c) => [c, Array(BINS).fill(50)])));
   assert.ok(flat, "four complete flat channels pack");
   for (let ci = 0; ci < CHANNELS.length; ci++) {
-    assert.equal(flat.slice(ci * BINS + 1, (ci + 1) * BINS), "?".repeat(BINS - 1),
-      `${CHANNELS[ci]} flat tail becomes zero deltas rather than repeated absolutes`);
+    assert.equal(
+      flat.slice(ci * BINS + 1, (ci + 1) * BINS),
+      "?".repeat(BINS - 1),
+      `${CHANNELS[ci]} flat tail becomes zero deltas rather than repeated absolutes`,
+    );
   }
 
   // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
@@ -333,8 +381,7 @@ test("the packed histogram survives the round trip tooltip.js and build.ts do", 
     assert.doesNotMatch(v, /["&<>]/, `${stem} carries no character that would need escaping in an attribute`);
     for (let i = 0; i < v.length; i++) {
       const code = v.charCodeAt(i);
-      assert.ok(code >= HIST_BASE && code < HIST_BASE + HIST_LEVELS,
-        `${stem} character ${i} is inside the safe range`);
+      assert.ok(code >= HIST_BASE && code < HIST_BASE + HIST_LEVELS, `${stem} character ${i} is inside the safe range`);
     }
   }
 
@@ -358,9 +405,14 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   const read = (p) => readFile(new URL(p, ROOT), "utf8");
   const robots = await read("public/robots.txt");
 
-  const disallowed = [...new Set(
-    robots.split("\n").filter((l) => /^Disallow:/i.test(l)).map((l) => l.slice(9).trim()),
-  )];
+  const disallowed = [
+    ...new Set(
+      robots
+        .split("\n")
+        .filter((l) => /^Disallow:/i.test(l))
+        .map((l) => l.slice(9).trim()),
+    ),
+  ];
   assert.ok(disallowed.length, "robots.txt must still carry Disallow rules");
   // The action endpoints. Nothing advertises them and nothing should.
   assert.deepEqual(disallowed.sort(), ["/lwe/ask", "/rn/admin", "/rn/set"]);
@@ -368,10 +420,10 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.ts");
   const surfaces = {
     "the homepage Link header": HOMEPAGE_DISCOVERY_LINK,
-    "_headers":                 await read("public/_headers"),
-    ".well-known/api-catalog":  await read("public/.well-known/api-catalog"),
-    "agent-card.json":          await read("public/.well-known/agent-card.json"),
-    "llms.txt":                 await read("public/llms.txt"),
+    "_headers": await read("public/_headers"),
+    ".well-known/api-catalog": await read("public/.well-known/api-catalog"),
+    "agent-card.json": await read("public/.well-known/agent-card.json"),
+    "llms.txt": await read("public/llms.txt"),
   };
 
   for (const [name, text] of Object.entries(surfaces)) {
@@ -396,7 +448,8 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   // 2026-09-28): a RUM marker would be written into the source, not the projection.
   const wrangler = (await readFile(new URL("cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("wrangler.config.ts", ROOT), "utf8"));
   // Local dev's overlay is authored source too, so it is scanned as text.
-  const wranglerDev = (await readFile(new URL("config/dev/cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("config/dev/wrangler.config.ts", ROOT), "utf8"));
+  const wranglerDev =
+    (await readFile(new URL("config/dev/cloudflare.config.ts", ROOT), "utf8")) + (await readFile(new URL("config/dev/wrangler.config.ts", ROOT), "utf8"));
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.ts", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
@@ -413,8 +466,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   ]) {
     assert.doesNotMatch(source, /\/ledger\/rum|data-cf-beacon|cloudflareinsights\.com/, `${name} must carry no browser RUM wiring`);
   }
-  assert.equal(existsSync(new URL("src/worker/rum.js", ROOT)), false,
-    "the retired RUM proxy module must not remain reachable for a future import");
+  assert.equal(existsSync(new URL("src/worker/rum.js", ROOT)), false, "the retired RUM proxy module must not remain reachable for a future import");
 
   // The CSP must not permit the retired collector. _headers is matched as TEXT
   // (it is a literal header line). lib/security.ts is matched on the
@@ -424,7 +476,10 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   // map, so this is the fallback policy every live worker page still gets.
   const { cspHeadersFor } = await import("../src/worker/lib/security.ts");
   const assembled = cspHeadersFor("/unmapped-probe")["content-security-policy"];
-  for (const [name, text] of [["_headers", headers], ["lib/security.js", assembled]]) {
+  for (const [name, text] of [
+    ["_headers", headers],
+    ["lib/security.js", assembled],
+  ]) {
     const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
     assert.ok(policy, `${name} must still declare a CSP`);
     assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: keep the retired collector out of CSP`);
@@ -439,13 +494,15 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   }
 
   // Public disclosures must describe the new absence, not the former proxy.
-  for (const [name, source] of [["/whoareyou", whoareyou], ["/whoareyou.md", whoareyouMd]]) {
+  for (const [name, source] of [
+    ["/whoareyou", whoareyou],
+    ["/whoareyou.md", whoareyouMd],
+  ]) {
     assert.match(source, /No page loads a Web Analytics or RUM beacon/, `${name} must state that browser analytics is absent`);
     assert.match(source, /Page-load\s+timings are not\s+sent to Cloudflare/, `${name} must state the data consequence`);
     assert.doesNotMatch(source, /\/ledger\/rum|forwards those timings/, `${name} must not describe the retired proxy`);
   }
-  assert.match(securityPage, /no external script or connect origin/,
-    "/security must keep describing the browser-facing CSP accurately");
+  assert.match(securityPage, /no external script or connect origin/, "/security must keep describing the browser-facing CSP accurately");
 });
 
 // Local dev serves a SYMLINK FARM (tools/dev-stage.ts) because the served URL
@@ -462,11 +519,13 @@ test("local dev serves the staged farm, and stages it before wrangler boots", as
   const devConfig = parseJsonc(await configText("config/dev"));
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
 
-  assert.equal(ASSET_ROOTS, STAGED_ROOTS,
-    "dev-stage's roots must BE the plan's roots, never a copy of them");
+  assert.equal(ASSET_ROOTS, STAGED_ROOTS, "dev-stage's roots must BE the plan's roots, never a copy of them");
 
-  assert.equal(devConfig.assets.directory, FARM,
-    "local dev must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
+  assert.equal(
+    devConfig.assets.directory,
+    FARM,
+    "local dev must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)",
+  );
 
   // The farm is BUILD OUTPUT with no watcher: nothing regenerates it except the
   // dev scripts, so a script that skips the stager serves whatever the last run
@@ -491,14 +550,10 @@ test("production minifies the Worker without obscuring deployed stack traces", a
   const production = parseJsonc(await configText("cloudflare.config.ts"));
   const development = parseJsonc(await configText("config/dev"));
 
-  assert.equal(production.minify, true,
-    "production should upload the smaller minified Worker bundle");
-  assert.equal(production.upload_source_maps, true,
-    "production minification must keep original stack locations available to Workers Logs");
-  assert.ok(!development.minify,
-    "local development should keep readable code and its faster edit/reload loop");
-  assert.ok(!development.upload_source_maps,
-    "local source locations need no separately uploaded map");
+  assert.equal(production.minify, true, "production should upload the smaller minified Worker bundle");
+  assert.equal(production.upload_source_maps, true, "production minification must keep original stack locations available to Workers Logs");
+  assert.ok(!development.minify, "local development should keep readable code and its faster edit/reload loop");
+  assert.ok(!development.upload_source_maps, "local source locations need no separately uploaded map");
 
   // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the
   // code shrinking, which is the one way to turn that check green while every
@@ -506,28 +561,29 @@ test("production minifies the Worker without obscuring deployed stack traces", a
   // that a minifier cannot move, and it is asserted HERE, beside the setting
   // that made it necessary, so removing one while keeping the other fails.
   const budget = await readFile(new URL("tools/perf-budget.ts", ROOT), "utf8");
-  assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
-    "a minified production bundle needs a source-bytes baseline the minifier cannot move");
-  assert.match(budget, /worker source \$\{sourceKib/,
-    "the source-bytes total must be REPORTED, since a constant nothing prints guards nothing");
-  assert.match(budget, /input\.bytes/,
-    "the source-bytes total must read esbuild's per-input source sizes, not bytesInOutput");
-  assert.match(budget, /227\.67 KiB OBSERVED/,
-    "the baseline history must record the drop minification produced, or it reads as a real improvement");
+  assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/, "a minified production bundle needs a source-bytes baseline the minifier cannot move");
+  assert.match(budget, /worker source \$\{sourceKib/, "the source-bytes total must be REPORTED, since a constant nothing prints guards nothing");
+  assert.match(budget, /input\.bytes/, "the source-bytes total must read esbuild's per-input source sizes, not bytesInOutput");
+  assert.match(budget, /227\.67 KiB OBSERVED/, "the baseline history must record the drop minification produced, or it reads as a real improvement");
 });
 
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
-  const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
-    headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
-  }));
+  const tagged = await withWeakEtag(
+    new Response("<!doctype html><p>same</p>", {
+      headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
+    }),
+  );
   const etag = tagged.headers.get("etag");
   assert.match(etag, /^W\/"sha256-[0-9a-f]{64}"$/);
   assert.equal(etag, 'W/"sha256-0b377fbdcaf496540d0318db6c0d8062b81e92d5c7a13a37a18f35cee9bcfe16"');
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag } }), etag), true);
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag.replace(/^W\//, "") } }), etag), true);
-  const notModified = notModifiedIfFresh(new Request("https://aadhar.sh/x", {
-    headers: { "if-none-match": `"old", ${etag}` },
-  }), tagged);
+  const notModified = notModifiedIfFresh(
+    new Request("https://aadhar.sh/x", {
+      headers: { "if-none-match": `"old", ${etag}` },
+    }),
+    tagged,
+  );
   assert.equal(notModified.status, 304);
   assert.equal(notModified.headers.get("etag"), etag);
   assert.equal(notModified.headers.get("content-encoding"), null);
