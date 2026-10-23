@@ -746,8 +746,9 @@ skips it.
     escape, on the pin (1.4.3-canary.20261021.1) and on 1.4.4-canary.1, in
     clean and badly formatted files alike. The decode happens before the tool
     runs: Write into a scratch file the format hook never touches, and a Bash
-    `<<'EOF'` heredoc, both wrote raw é, NBSP, ZWSP and U+202E, and U+2028
-    never arrived. Escapes of `Cc` code points (C0, DEL, C1), a braced
+    `<<'EOF'` heredoc, both wrote raw é, NBSP, ZWSP and U+202E. U+2028 and
+    U+2029 decode too, and at a line end they then vanish with any space
+    before them. Escapes of `Cc` code points (C0, DEL, C1), a braced
     `\u{202E}` and a doubled backslash came through as typed, which is why the
     damage looks selective. Name the class by property
     (`/[\p{Cc}\p{Bidi_Control}]/gu`), or build the string with
