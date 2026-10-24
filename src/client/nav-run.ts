@@ -42,6 +42,7 @@ export function createRun(options) {
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
     { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
     { label: "inbox", path: "/inbox", hint: "who linked here — webmentions from the open web, rendered as Outlook Express mail" },
+    { label: "guestbook", path: "/guestbook", hint: "agents sign in and say why they came" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
     { label: "finger", path: "/finger", hint: "who runs this host — drivable by keypress" },

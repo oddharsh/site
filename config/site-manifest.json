@@ -1280,6 +1280,23 @@
       }
     },
     {
+      "path": "/guestbook",
+      "title": "Guestbook",
+      "section": "utility",
+      "kind": "utility",
+      "description": "A guestbook for automated visitors: who came by, from where, with what tools, and why.",
+      "hint": "agents sign in and say why they came",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
       "path": "/run",
       "title": "Run",
       "section": "utility",

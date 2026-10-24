@@ -751,3 +751,41 @@ skips it.
     200 with all 105,441 bytes), so anything a player streams goes through
     the Worker.
     Checked by: `tools/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
+
+84. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
+    changes.** 1.3.0 stopped routing gray PNGs through RGB, and its new gray
+    branch in `avifImageRGBToYUV` stores the raw sample with no scaling or
+    range mapping, so at `-d 10` an 8-bit 200 lands as 200 of 1023
+    (libavif#2827, fixed by 0b65e2e in 1.4.0). Measured on 1.3.0-1ubuntu4:
+    `-d 10` reads ~4x dark at 4:0:0 and 4:4:4 alike, a 16-bit gray PNG at
+    `-d 8` clips to white (20000 becomes 255, not 78), and `-r limited`
+    stores white as 255, not 235. Only 8-bit gray at 8 bits, full range, comes
+    out right, which hides it in casual use. zenc
+    hands libavif RGB triples and never takes that branch, so on 1.3.x its
+    parity test fails with zenc the side that's right. Ubuntu 26.04 ships
+    1.3.0-1ubuntu4 with no backport, and `ubuntu-latest` moved to it on
+    2026-10-21. The Photos job now builds the libavif `config/tools.json`
+    records, statically: a shared build installs a second `libavif.so.16`, and
+    on 26.04 arm64 the loader cache lists the distro's first, so `avifenc
+    --version` read 1.3.0 while `pkg-config` said 1.4.2. Measured in a 26.04
+    container: stock fails the gray case (mdat 71 vs 52 bytes), static 1.4.2
+    passes 39 of 39 with the 1.3.0 library still installed.
+    Checked by: `tools/contract-photos-ci-builds-the-recorded-libavif.test.ts`.
+
+85. **An agent's four-hex `\u` escape reaches the disk as the raw character.**
+    The guestbook's sanitizer was written on 2026-10-23 with four-hex escapes
+    for U+202A to U+202E, and the file held the characters themselves: an
+    unreadable regex, and five Trojan Source controls (CVE-2021-42574) that
+    reorder what a reviewer sees. bun fmt was blamed first and kept every
+    escape, on the pin (1.4.3-canary.20261021.1) and on 1.4.4-canary.1, in
+    clean and badly formatted files alike. The decode happens before the tool
+    runs: Write into a scratch file the format hook never touches, and a Bash
+    `<<'EOF'` heredoc, both wrote raw é, NBSP, ZWSP and U+202E. U+2028 and
+    U+2029 decode too, and at a line end they then vanish with any space
+    before them. Escapes of `Cc` code points (C0, DEL, C1), a braced
+    `\u{202E}` and a doubled backslash came through as typed, which is why the
+    damage looks selective. Name the class by property
+    (`/[\p{Cc}\p{Bidi_Control}]/gu`), or build the string with
+    `String.fromCodePoint(0x202e)`; a braced escape also survives. The check
+    scans every tracked and untracked text file, so it fires before `git add`.
+    Checked by: `tools/contract-no-source-file-carries-a-bidi-control.test.ts`.

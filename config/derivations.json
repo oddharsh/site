@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "7d1f98ef1efce943e2236b9d5e2da255aade832ee1b543147d42a969ccf41e9b",
+        "inputs": "81d519d10cdef920a2277d2e6e099878945cacbe5989ac7095672aadf4072833",
         "count": 2
       }
     },

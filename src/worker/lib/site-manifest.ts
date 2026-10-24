@@ -443,6 +443,12 @@ export const AGENT_SURFACES = [
     "title": "Crawl ledger",
     "mimeType": "text/html",
     "description": "A commentary ledger of identified AI-crawler visits."
+  },
+  {
+    "path": "/guestbook",
+    "title": "Guestbook",
+    "mimeType": "text/html",
+    "description": "A guestbook for automated visitors: who came by, from where, with what tools, and why."
   }
 ];
 
