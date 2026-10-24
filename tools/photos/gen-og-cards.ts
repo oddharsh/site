@@ -119,6 +119,7 @@ const HERO = {
   // ── lwe ─────────────────────────────────────────────────────────────────
   "lwe-dac": { hero: ["#demo-ladder", ".demo"] },
   "lwe-drivers": { hero: ["#demo-motion", ".demo"] },
+  "lwe-smoothing": { hero: ["#demo-dial", ".demo"] },
   "lwe-encoding": { hero: ["#demo-chroma", ".demo"] },
   "lwe-fhe": { hero: ["#demo-add", ".demo"] },
   "lwe-knots": { hero: ["#demo-knot", ".demo"] },

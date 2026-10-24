@@ -628,6 +628,23 @@
       }
     },
     {
+      "path": "/lwe/smoothing",
+      "title": "Font smoothing",
+      "section": "lwe",
+      "kind": "content",
+      "description": "AppleFontSmoothing 0 to 3 measured on macOS 27.2, subpixel versus greyscale antialiasing, ClearType, and why external monitors blur on a Mac.",
+      "hint": "macOS font smoothing: AppleFontSmoothing, subpixel vs greyscale, ClearType",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/garage/blueprint",
       "title": "Blueprint",
       "section": "garage",

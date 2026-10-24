@@ -217,6 +217,12 @@ export const AGENT_SURFACES = [
     "description": "eFuses and anti-rollback: why a signature cannot refuse yesterday's firmware, how a version floor kept in silicon becomes a one-way ratchet, and what that costs the owner."
   },
   {
+    "path": "/lwe/smoothing",
+    "title": "Font smoothing",
+    "mimeType": "text/html",
+    "description": "AppleFontSmoothing 0 to 3 measured on macOS 27.2, subpixel versus greyscale antialiasing, ClearType, and why external monitors blur on a Mac."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "mimeType": "text/html",
@@ -462,6 +468,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/knots",
   "/lwe/lean",
   "/lwe/fuse",
+  "/lwe/smoothing",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",
