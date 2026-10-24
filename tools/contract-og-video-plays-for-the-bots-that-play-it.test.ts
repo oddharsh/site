@@ -71,7 +71,7 @@ test("the rewrite makes the page a video and keeps it out of shared caches", { s
   const page = new Response(
     "<html><head><meta content=website property=og:type><meta property=og:image content=https://aadhar.sh/og/x.jpg><body>hi</body></html>",
     {
-      headers: { "content-type": "text/html; charset=utf-8", etag: '"abc"', "cache-control": "public, max-age=60" },
+      headers: { "content-type": "text/html; charset=utf-8", etag: '"abc"', "cache-control": "public, max-age=60", "cf-cache-status": "HIT", age: "12" },
     },
   );
   const v = ogVideoFor(PAGE, UA.discord);
@@ -88,6 +88,8 @@ test("the rewrite makes the page a video and keeps it out of shared caches", { s
   assert.equal(res.headers.get("cache-control"), "no-store");
   assert.equal(res.headers.get("vary"), "User-Agent");
   assert.equal(res.headers.get("etag"), null, "the asset's validator no longer names these bytes");
+  assert.equal(res.headers.get("cf-cache-status"), null, "the asset fetch's HIT would claim this copy came from a cache");
+  assert.equal(res.headers.get("age"), null);
 });
 
 test("parseRange reads the forms a player sends", () => {
