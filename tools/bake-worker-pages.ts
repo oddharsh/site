@@ -131,6 +131,8 @@ for (const page of [
   // /inbox and /lens/census, the same day. A mention row carries an id and a
   // ugc link, and a census row links a site through the lens.
   { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html", live: /id="m-\d|rel="noopener ugc external"/ },
+  // /guestbook, 2026-10-23. An entry row carries its id.
+  { module: "guestbook", render: "renderGuestbookPage", url: "ENTRIES_URL", out: "guestbook.html", live: /id="e-\d/ },
   { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html", live: /class="cx-site"><a |<span>\/100<\/span>/ },
   // /reading, 2026-09-29. The build has no Curius payload, so a linked title,
   // a real link count or a sync date in the bake could only be a fixture.
@@ -226,5 +228,5 @@ for (const post of posts) {
   await writeFile(`${PAGES}/writing/${post.slug}.html`, await response.text());
 }
 console.log(
-  `static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /coffee + /writing index + ${posts.length} notes staged from canonical Worker renderers, in a fresh process`,
+  `static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /guestbook + /lens/census + /reading + /coffee + /writing index + ${posts.length} notes staged from canonical Worker renderers, in a fresh process`,
 );
