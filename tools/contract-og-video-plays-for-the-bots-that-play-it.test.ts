@@ -18,6 +18,7 @@ import { assert, ROOT, test } from "./contract-shared.ts";
 import { shouldUseWorkersCache } from "../src/worker/lib/cache.ts";
 import { OG_VIDEOS, ogVideoFor, parseRange, serveOgVideo, withOgVideo } from "../src/worker/lib/og-video.ts";
 import { CACHEABLE_PATHS, claimedByWorker } from "../src/worker/routes.ts";
+import { OG_PAGE_DIRS } from "./photos/og-pages.ts";
 
 const read = (rel: string) => readFileSync(new URL(rel, ROOT));
 const PAGE = "/garage/encoding";
@@ -70,7 +71,7 @@ test("the rewrite makes the page a video and keeps it out of shared caches", { s
   const page = new Response(
     "<html><head><meta content=website property=og:type><meta property=og:image content=https://aadhar.sh/og/x.jpg><body>hi</body></html>",
     {
-      headers: { "content-type": "text/html; charset=utf-8", etag: '"abc"', "cache-control": "public, max-age=60" },
+      headers: { "content-type": "text/html; charset=utf-8", etag: '"abc"', "cache-control": "public, max-age=60", "cf-cache-status": "HIT", age: "12" },
     },
   );
   const v = ogVideoFor(PAGE, UA.discord);
@@ -87,6 +88,8 @@ test("the rewrite makes the page a video and keeps it out of shared caches", { s
   assert.equal(res.headers.get("cache-control"), "no-store");
   assert.equal(res.headers.get("vary"), "User-Agent");
   assert.equal(res.headers.get("etag"), null, "the asset's validator no longer names these bytes");
+  assert.equal(res.headers.get("cf-cache-status"), null, "the asset fetch's HIT would claim this copy came from a cache");
+  assert.equal(res.headers.get("age"), null);
 });
 
 test("parseRange reads the forms a player sends", () => {
@@ -152,4 +155,19 @@ test("Workers Cache lets a clip request by, and only that one", () => {
   // control: a person, and a bot that gets no clip, still take the cache
   assert.equal(shouldUseWorkersCache(req(UA.safari), CACHEABLE_PATHS), true);
   assert.equal(shouldUseWorkersCache(req(UA.slack), CACHEABLE_PATHS), true);
+});
+
+// The homepage's og:image is its clip's first frame, written by bake.ts. A
+// full og-cards run used to capture every page dir, and would put the live
+// homepage back over it without a word.
+test("a card the clip bakes is one og-cards never captures", () => {
+  const baked = OG_PAGE_DIRS.flatMap((p) => ("bakedBy" in p && typeof p.bakedBy === "string" ? [{ id: p.id, bakedBy: p.bakedBy }] : []));
+  assert.ok(
+    baked.some((p) => p.id === "home"),
+    "the homepage card is no longer the clip's frame; update this test with the reason",
+  );
+  for (const p of baked) assert.ok(existsSync(new URL(p.bakedBy, ROOT)), `${p.id}: bakedBy names ${p.bakedBy}, which is gone`);
+  const src = readFileSync(new URL("tools/photos/gen-og-cards.ts", ROOT), "utf8");
+  const walk = src.slice(src.indexOf("for (const p of OG_PAGE_DIRS)"), src.indexOf("async function capture("));
+  assert.ok(walk.includes('"bakedBy" in p') && walk.indexOf('"bakedBy" in p') < walk.indexOf("out.push("), "the page-dir walk captures baked cards again");
 });

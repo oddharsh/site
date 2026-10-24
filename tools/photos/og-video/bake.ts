@@ -8,7 +8,7 @@
 // encode.swift, which is also what an iPhone decodes it with. AV1 is aomenc.
 // To re-pick the knobs, record with record.ts and run compare.ts.
 import { $ } from "bun";
-import { copyFileSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CLIPS } from "./clips.ts";
@@ -17,6 +17,10 @@ import { recordClips } from "./record.ts";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const OUT = path.resolve(HERE, "../../../public/og/video");
+const CARDS = path.resolve(HERE, "../../../public/og");
+// The cards' own encoder and settings (gen-og-cards.ts writeCard has the
+// measurement behind q92 at 4:4:4).
+const ZENC = path.resolve(HERE, "../zenc/target/release/zenc");
 const only = process.argv[2] ? new Set(process.argv[2].split(",")) : null;
 const ship = CLIPS.flatMap((c) => (c.ship && (!only || only.has(c.id)) ? [{ ...c, ship: c.ship }] : []));
 if (!ship.length) throw new Error("no shipping clip matched");
@@ -40,7 +44,14 @@ try {
     await $`${path.join(tmp, "y4m")} ${frames} 30 > ${path.join(tmp, "clip.y4m")}`.quiet();
     await $`aomenc ${av1Flags(c.ship.av1)} -o ${av1} ${path.join(tmp, "clip.y4m")}`.quiet();
     const kb = (f: string) => `${Math.round(statSync(f).size / 1024)} KB`;
-    console.log(`  ${c.ship.card}  hevc ${kb(hevc)}  av1 ${kb(av1)}`);
+    let poster = "";
+    if (c.ship.poster) {
+      if (!existsSync(ZENC)) throw new Error("zenc is not built: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml");
+      const jpg = path.join(CARDS, `${c.ship.card}.jpg`);
+      await $`${ZENC} ${path.join(frames, "f0000.png")} ${jpg} -q 92 --yuv 444`.quiet();
+      poster = `  poster ${kb(jpg)}`;
+    }
+    console.log(`  ${c.ship.card}  hevc ${kb(hevc)}  av1 ${kb(av1)}${poster}`);
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true });
