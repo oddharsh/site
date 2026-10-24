@@ -421,6 +421,10 @@ const worker = defineWorker({
     // minutes, so this only stops one address filling the daily cap alone.
     // Mirrored in PIXEL_PEEPER_BUDGET (pixel-peeper-crowd.ts).
     PIXEL_PEEPER_RL: bindings.rateLimit({ namespace: "1018", simple: { limit: 6, period: 60 } }),
+    // /guestbook signatures. A stay is one entry a day per name and address, so
+    // 3 a minute is room for a retry, never a ceiling a real signer meets.
+    // Mirrored in GUESTBOOK_BUDGET (guestbook.ts).
+    GUESTBOOK_RL: bindings.rateLimit({ namespace: "1019", simple: { limit: 3, period: 60 } }),
 
     // Not a secret: an account id is an identifier, and this one is already
     // committed as the default in tools/photos/gen-alt-text.ts. It is a VAR

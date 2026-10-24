@@ -4,7 +4,7 @@
 // `--f-jxl:` shrinks to `--2u`, the reference is assembled at runtime as
 // `--f-jxl`, nothing defines that any more, and the colour is gone. Unbuilt,
 // the page looks right. /pixel-peeper's format ladder shipped that way to a
-// preview on 2026-10-23 (gotcha 85). These pin that the build now stops.
+// preview on 2026-10-23 (gotcha 86). These pin that the build now stops.
 import { assert, test } from "./contract-shared.ts";
 
 const { assertNoDynamicPropertyNames } = await import("./lib/mangle-custom-properties.ts");

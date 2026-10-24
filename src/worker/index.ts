@@ -9,6 +9,7 @@ import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCe
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
 import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
+import { handleGuestbook, handleGuestbookEntries, handleGuestbookJson } from "./guestbook.ts";
 import { handleInbox, handleInboxMail } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { handlePixelPeeperCrowd, handlePixelPeeperRun } from "./pixel-peeper-crowd.ts";
@@ -40,6 +41,7 @@ import {
   CAL_HOST,
   CENSUS_TABLE_URL,
   DYNO_PULLS_URL,
+  GUESTBOOK_ENTRIES_URL,
   INBOX_MAIL_URL,
   LEDGER_LINES_URL,
   READING_LIST_URL,
@@ -352,6 +354,11 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   // everyone's /pixel-peeper picks, pooled in SOCIAL_DB
   "/pixel-peeper/runs": handlePixelPeeperRun,
   "/pixel-peeper/crowd.json": handlePixelPeeperCrowd,
+
+  // automated visitors sign in, say why they came; SOCIAL_DB again
+  "/guestbook": handleGuestbook,
+  [GUESTBOOK_ENTRIES_URL]: handleGuestbookEntries,
+  "/guestbook.json": handleGuestbookJson,
 
   "/bot": routeBot,
   "/about": routeTrustPage(renderAboutPage),
