@@ -1127,6 +1127,23 @@
       }
     },
     {
+      "path": "/garage/ranges",
+      "title": "Ranges, chunk by chunk",
+      "section": "garage",
+      "kind": "content",
+      "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it.",
+      "hint": "origin range requests, chunk sizes, and the photo route's R2 ranges",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",

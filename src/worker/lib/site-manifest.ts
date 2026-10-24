@@ -391,6 +391,12 @@ export const AGENT_SURFACES = [
     "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
   },
   {
+    "path": "/garage/ranges",
+    "title": "Ranges, chunk by chunk",
+    "mimeType": "text/html",
+    "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -496,6 +502,7 @@ export const WEBMENTION_PATHS = [
   "/garage/dictionary",
   "/garage/av2",
   "/garage/round-trip",
+  "/garage/ranges",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

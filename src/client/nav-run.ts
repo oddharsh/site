@@ -98,6 +98,7 @@ export function createRun(options) {
     { label: "garage · dictionary", path: "/garage/dictionary", hint: "runtime dcz deltas, and the workerd fix they wait on" },
     { label: "garage · av2", path: "/garage/av2", hint: "AV2 stills vs shipped AVIF, and the picture fallback trap" },
     { label: "garage · round-trip", path: "/garage/round-trip", hint: "a parser for the twins, and the five bugs it found" },
+    { label: "garage · ranges", path: "/garage/ranges", hint: "origin range requests, chunk sizes, and the photo route's R2 ranges" },
     // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
     // user has these). kind "raycast" → location.href to the protocol URL: the OS
