@@ -64,6 +64,8 @@ cf-garage/node_modules/
 
 # zenc (JPEG thumbnail encoder) build artifacts — Cargo.lock is committed, target/ is not
 tools/photos/zenc/target/
+# zensim-score (measurement only, zensim-probe.ts): same split
+tools/photos/zensim-score/target/
 # photo-metrics (hif-archive.ts scorer): same split, Cargo.lock committed
 tools/photos/photo-metrics/target/
 
