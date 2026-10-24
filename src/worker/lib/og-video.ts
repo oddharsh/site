@@ -17,8 +17,10 @@
 //             directly, need og:type video.*, and keep og:image as the poster.
 //
 // Measured 2026-10-23 on nine recorded demos at SSIMULACRA2 80 with matched
-// 4:2:0 conversion: H.264 2017 KB, HEVC 1077 KB, AV1 406 KB in total. This
-// clip is 198 KB as HEVC and 78 KB as AV1 (tools/photos/og-video/).
+// 4:2:0 conversion: H.264 2017 KB, HEVC 1077 KB, AV1 406 KB in total. The
+// /garage/encoding clip is 197 KB as HEVC and 78 KB as AV1. The homepage's is
+// an XP-style boot screen looping on its progress bar, mostly black, so it
+// ships at SSIMULACRA2 88 for 32 KB and 11 KB (tools/photos/og-video/).
 //
 // The iMessage match is its whole LinkPresentation signature, not the
 // facebookexternalhit token alone: Facebook's own crawler sends that token too,
@@ -32,6 +34,7 @@ export type OgVideo = { hevc: string; av1: string; width: number; height: number
 /** Keyed by page path. Files are site-relative under public/og/video/
  *  (contract-og-videos-resolve), each with the page's og:image as its poster. */
 export const OG_VIDEOS: Readonly<Record<string, OgVideo>> = {
+  "/": { hevc: "/og/video/home.hevc.mp4", av1: "/og/video/home.av1.webm", width: 1200, height: 630 },
   "/garage/encoding": { hevc: "/og/video/garage-encoding.hevc.mp4", av1: "/og/video/garage-encoding.av1.webm", width: 1200, height: 630 },
 };
 

@@ -45,7 +45,14 @@ async function favicon(page, section) {
 
 // The card document, with the demo drawn from a viewport-sized frame through a
 // background crop so one screencast frame serves any clip box.
-function cardHtml({ bg, hypercam }, fav, clip, vw, vh) {
+function cardHtml({ bg, hypercam }, fav, clip, vw, vh, fullBleed = false) {
+  // A scene is already the whole card: scale its frame to 1200x630 and add nothing.
+  if (fullBleed) {
+    const s = CARD_W / clip.width;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>*{margin:0}html,body{width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;background:#000}
+    #s{width:${CARD_W}px;height:${CARD_H}px;background-repeat:no-repeat;background-size:${vw * s}px ${vh * s}px;background-position:${-clip.x * s}px ${-clip.y * s}px}
+    </style></head><body><div id="s"></div></body></html>`;
+  }
   const s = Math.min(1092 / clip.width, 500 / clip.height);
   const w = Math.round(clip.width * s),
     h = Math.round(clip.height * s);
@@ -83,7 +90,7 @@ async function cropBox(page, c: Clip) {
   }
   for (const sel of c.hero) {
     const b = await box(sel);
-    if (b && b.width >= 200 && b.height >= 100) return { ...b, height: c.maxH ? Math.min(b.height, c.maxH) : b.height };
+    if (b && b.width >= 200 && b.height >= 40) return { ...b, height: c.maxH ? Math.min(b.height, c.maxH) : b.height };
   }
   throw new Error(`${c.id}: no crop selector matched`);
 }
@@ -153,6 +160,9 @@ async function record(browser, cardPage, luna, c: Clip, out) {
   // every popover placed from clientX (the loupes, the balloon tips).
   const ctx = await browser.newContext({ deviceScaleFactor: DSF, viewport: { width: vw, height: vh } });
   // Pages that shuffle (masonry, pixel-peeper's trials) draw the same take every run.
+  // Requests the recording must not make: the homepage's /hit beacon ticks
+  // the real visitor count for any UA that isn't on its peek list.
+  for (const pattern of c.block ?? []) await ctx.route(pattern, (route) => route.abort());
   if (c.seed != null)
     await ctx.addInitScript((seed) => {
       let a = seed >>> 0;
@@ -164,7 +174,7 @@ async function record(browser, cardPage, luna, c: Clip, out) {
       };
     }, c.seed);
   const page = await ctx.newPage();
-  await page.goto(BASE + c.path, { waitUntil: "networkidle", timeout: 30000 });
+  await page.goto(c.url ?? BASE + c.path, { waitUntil: "networkidle", timeout: 30000 });
   await page.waitForTimeout(c.settle ?? 900);
   const fav = c.fav ?? (await favicon(page, c.section));
   for (const s of c.setup ?? []) await runStep(page, s);
@@ -230,7 +240,7 @@ async function record(browser, cardPage, luna, c: Clip, out) {
   const start = raw[0].t;
   const total = Math.min(c.maxMs ?? 8000, Math.max(wallMs, raw[raw.length - 1].t - start + 33));
   const n = Math.round((total / 1000) * FPS);
-  await cardPage.setContent(cardHtml(luna, fav, clip, vw, vh), { waitUntil: "load" });
+  await cardPage.setContent(cardHtml(c.hypercam === false ? { ...luna, hypercam: null } : luna, fav, clip, vw, vh, c.fullBleed), { waitUntil: "load" });
   const dir = path.join(out, c.id, "frames");
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });

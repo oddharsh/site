@@ -9,11 +9,15 @@
 //     on a minified page with no </head> (gotcha 83), and can't be cached
 //     for a person;
 //   - the clip route answers Range, which the asset layer ignores;
-//   - routeStaticPage asks before it takes the static path.
-import { existsSync, readFileSync } from "node:fs";
+//   - public/og/video holds the named clips and nothing else (AVFoundation's
+//     .sb- leftovers landed there once);
+//   - both page handlers ask before they take the static path, and Workers
+//     Cache, which answers `/` before any handler runs, lets these requests by.
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { assert, ROOT, test } from "./contract-shared.ts";
+import { shouldUseWorkersCache } from "../src/worker/lib/cache.ts";
 import { OG_VIDEOS, ogVideoFor, parseRange, serveOgVideo, withOgVideo } from "../src/worker/lib/og-video.ts";
-import { claimedByWorker } from "../src/worker/routes.ts";
+import { CACHEABLE_PATHS, claimedByWorker } from "../src/worker/routes.ts";
 
 const read = (rel: string) => readFileSync(new URL(rel, ROOT));
 const PAGE = "/garage/encoding";
@@ -51,8 +55,7 @@ test("every clip is on disk in the container and codec it claims", () => {
     assert.equal(webm.readUInt32BE(0), 0x1a45dfa3, `${v.av1} is not EBML`);
     assert.ok(webm.includes("V_AV1"), `${v.av1} is not AV1`);
     // the poster: Discord drops the player without og:image
-    const slug = page.replace(/^\//, "");
-    const html = readFileSync(new URL(`src/pages/${slug}.html`, ROOT), "utf8");
+    const html = readFileSync(new URL(`src/pages/${page === "/" ? "index" : page.slice(1)}.html`, ROOT), "utf8");
     const img = html.match(/<meta property="og:image" content="https:\/\/aadhar\.sh(\/og\/[^"]+)">/)?.[1];
     assert.ok(img && existsSync(new URL(`public${img}`, ROOT)), `${page} has no og:image on disk to be the clip's poster`);
   }
@@ -116,10 +119,37 @@ test("the clip route answers Range with 206 and the rest with 200", async () => 
   assert.ok(!claimedByWorker()("/og/garage-encoding.jpg"), "control: the still cards stay with the asset layer");
 });
 
-test("routeStaticPage asks for a clip before it takes the static path", () => {
+test("public/og/video holds the named clips and nothing else", () => {
+  const named = new Set(Object.values(OG_VIDEOS).flatMap((v) => [v.hevc, v.av1].map((f) => f.replace("/og/video/", ""))));
+  const onDisk = readdirSync(new URL("public/og/video/", ROOT));
+  assert.deepEqual(
+    onDisk.filter((f) => !named.has(f)),
+    [],
+    "a file nothing serves; bake.ts should leave only the clips",
+  );
+});
+
+test("both page handlers ask for a clip before they take the static path", () => {
   const src = readFileSync(new URL("src/worker/index.ts", ROOT), "utf8");
-  const fn = src.slice(src.indexOf("async function routeStaticPage("), src.indexOf("function routeShellAsset("));
-  const ask = fn.indexOf("ogVideoFor(");
-  assert.ok(ask > 0, "routeStaticPage no longer checks for a clip");
-  assert.ok(ask < fn.indexOf("serveStaticPage("), "the check has to come before the static path");
+  const body = (name: string) => {
+    const at = src.indexOf(`async function ${name}(`);
+    assert.ok(at > 0, `${name} is gone or no longer async`);
+    return src.slice(at, src.indexOf("\n}\n", at));
+  };
+  for (const name of ["routeStaticPage", "routeHomepage"]) {
+    const fn = body(name);
+    const ask = fn.indexOf("ogVideoPage(");
+    assert.ok(ask > 0, `${name} no longer checks for a clip`);
+    assert.ok(ask < fn.indexOf("serveStaticPage("), `${name}: the check has to come before the static path`);
+  }
+});
+
+test("Workers Cache lets a clip request by, and only that one", () => {
+  const req = (ua: string) => new Request("https://aadhar.sh/", { headers: { "user-agent": ua } });
+  assert.ok(CACHEABLE_PATHS.has("/"), "the homepage left the cache; this test can't see the bail any more");
+  assert.equal(shouldUseWorkersCache(req(UA.discord), CACHEABLE_PATHS), false, "a cache hit would hand Discord the plain page");
+  assert.equal(shouldUseWorkersCache(req(UA.iMessage), CACHEABLE_PATHS), false);
+  // control: a person, and a bot that gets no clip, still take the cache
+  assert.equal(shouldUseWorkersCache(req(UA.safari), CACHEABLE_PATHS), true);
+  assert.equal(shouldUseWorkersCache(req(UA.slack), CACHEABLE_PATHS), true);
 });

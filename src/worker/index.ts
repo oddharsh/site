@@ -908,18 +908,21 @@ function routeImagesMeta(request: SiteRequest, env: Env) {
 }
 
 // A page with an og:video clip answers the two preview fetchers that play one
-// with a rewritten copy of its plain asset (lib/og-video.ts). The plain asset,
-// because the dcz and q11 bodies below are already compressed and a rewriter
-// can't read them. Everyone else takes the static path untouched.
-async function routeStaticPage(request: SiteRequest, env: Env) {
+// with a rewritten copy of its plain asset (lib/og-video.ts), and null for
+// everyone else. The plain asset, because the dcz and q11 bodies
+// serveStaticPage hands back are already compressed and a rewriter can't read
+// them. Workers Cache never sees these requests (lib/cache.ts bails on them).
+async function ogVideoPage(request: SiteRequest, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   const video = request.method === "GET" ? ogVideoFor(url.pathname, request.headers.get("user-agent")) : null;
-  if (video) {
-    const page = await env.ASSETS.fetch(new Request(url.toString(), { headers: { "accept-encoding": "identity" } }));
-    if (page.ok && (page.headers.get("content-type") ?? "").startsWith("text/html")) return withOgVideo(page, url.origin, video);
-    return page;
-  }
-  return serveStaticPage(request, env);
+  if (!video) return null;
+  const page = await env.ASSETS.fetch(new Request(url.toString(), { headers: { "accept-encoding": "identity" } }));
+  if (page.ok && (page.headers.get("content-type") ?? "").startsWith("text/html")) return withOgVideo(page, url.origin, video);
+  return page;
+}
+
+async function routeStaticPage(request: SiteRequest, env: Env) {
+  return (await ogVideoPage(request, env)) ?? serveStaticPage(request, env);
 }
 
 function routeShellAsset(request: SiteRequest, env: Env) {
@@ -1026,8 +1029,10 @@ const HOMEPAGE_HEADERS = {
 // CACHEABLE_PATHS (routes.ts) and the predicate admits HEAD, so a plain HEAD is
 // answered from the stored GET entry; only the MARKDOWN head, which bails the
 // cache, ever reached the duplicate.
-function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+async function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
+  const video = await ogVideoPage(request, env);
+  if (video) return video;
   // warm the grid fragment's two memoised maps behind the document (home.ts says why)
   ctx.waitUntil(warmGridData(env));
   return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });

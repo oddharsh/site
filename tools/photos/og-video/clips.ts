@@ -29,6 +29,12 @@ export type Clip = {
   pad?: { top?: number; right?: number; bottom?: number; left?: number };
   seed?: number;
   experimental?: boolean;
+  block?: string[];
+  // A scene file instead of a site page (scenes/), recorded at card size and
+  // laid over the whole card rather than floated on Bliss.
+  url?: string;
+  fullBleed?: boolean;
+  hypercam?: boolean;
   viewport?: { width: number; height: number };
   settle?: number;
   setup?: Step[];
@@ -37,7 +43,8 @@ export type Clip = {
   maxMs?: number;
   // A clip that ships: bake.ts writes public/og/video/<card>.hevc.mp4 and
   // <card>.av1.webm at these knobs, the cheapest compare.ts found reaching
-  // SSIMULACRA2 80 (VideoToolbox quality 0..1, aomenc cq-level).
+  // SSIMULACRA2 80 unless the clip says otherwise (VideoToolbox quality 0..1,
+  // aomenc cq-level).
   ship?: { card: string; hevc: number; av1: number };
 };
 
@@ -69,7 +76,93 @@ const balloon = (n: number): Step[] => [
   wait(400),
 ];
 
+// The homepage's hover demos (src/client/tooltip.ts). Each prewarms its
+// hovers in setup, so the recorded pass shows loaded images rather than a
+// tooltip frame waiting on the network.
+const homePhoto = (n: number) => `.photos a >> nth=${n}`;
+const car = (n: number) => `.car-link >> nth=${n}`;
+const track = (n: number) => `#np-list li[data-track-title] >> nth=${n}`;
+// `ry` is where on the target the pointer rests: the photo tooltip is about
+// 330px tall and hangs below the cursor, so photos are toured near their top.
+const hoverTour = (sel: (n: number) => string, ns: number[], dwell: number, ry = 0.45): Step[] =>
+  ns.flatMap((n): Step[] => [
+    { do: "mouseTo", sel: sel(n), rx: 0.35, ry, steps: 10 },
+    { do: "mouseTo", sel: sel(n), rx: 0.6, ry: ry + 0.1, steps: 14 },
+    wait(dwell),
+  ]);
+const prewarm = (sel: (n: number) => string, ns: number[]): Step[] => [
+  ...ns.flatMap((n): Step[] => [{ do: "mouseTo", sel: sel(n), steps: 2 }, wait(700)]),
+  { do: "unhover" },
+  wait(400),
+];
+
+const scene = (name: string) => new URL(`./scenes/${name}.html`, import.meta.url).href;
+const play: Step[] = [{ do: "eval", fn: () => document.body.classList.add("go") }];
+
 export const CLIPS: Clip[] = [
+  {
+    // Loops on the boot screen alone (the owner's call, 2026-10-23): no card,
+    // no desktop. maxMs is exactly three 1.5 s sweeps, so frame 135 is frame 0.
+    id: "home-boot",
+    path: "/",
+    url: scene("boot"),
+    hero: ["#scene"],
+    viewport: { width: 1200, height: 630 },
+    fullBleed: true,
+    hypercam: false,
+    steps: [wait(4700)],
+    tail: 0,
+    maxMs: 4500,
+    // at SSIMULACRA2 88 rather than 80: mostly black, so near-ceiling costs 32 KB and 11 KB
+    ship: { card: "home", hevc: 0.63, av1: 50 },
+  },
+  {
+    id: "home-bsod",
+    path: "/",
+    url: scene("bsod"),
+    hero: ["#scene"],
+    viewport: { width: 1200, height: 630 },
+    fullBleed: true,
+    hypercam: false,
+    steps: [wait(200), ...play, wait(6600)],
+    tail: 0,
+  },
+  {
+    id: "home-photos",
+    path: "/",
+    block: ["**/hit*"],
+    hero: [".photos"],
+    pad: { top: 8, left: 8, right: 8, bottom: 8 },
+    maxH: 600,
+    settle: 2000,
+    setup: [{ do: "scroll", sel: ".photos" }, imgsReady(".photos a img", 12), ...prewarm(homePhoto, [0, 1, 3, 4])],
+    steps: [wait(300), ...hoverTour(homePhoto, [0, 1, 4, 3], 900, 0.18), { do: "unhover" }, wait(400)],
+  },
+  {
+    id: "home-cars",
+    path: "/",
+    block: ["**/hit*"],
+    hero: ["p:has(.car-link)"],
+    pad: { top: 8, left: 8, right: 8, bottom: 230 },
+    settle: 1500,
+    setup: [{ do: "scroll", sel: "p:has(.car-link)" }, ...prewarm(car, [0, 1, 2, 3])],
+    steps: [wait(300), ...hoverTour(car, [0, 1, 2, 3], 850), { do: "unhover" }, wait(400)],
+  },
+  {
+    id: "home-tracks",
+    path: "/",
+    block: ["**/hit*"],
+    hero: ["section.now-playing"],
+    pad: { top: 8, left: 8, right: 8, bottom: 8 },
+    maxH: 420,
+    settle: 2000,
+    setup: [
+      { do: "scroll", sel: "section.now-playing" },
+      { do: "waitFor", fn: () => document.querySelectorAll("#np-list li[data-track-title]").length >= 4, ms: 20000 },
+      ...prewarm(track, [0, 1, 2, 3]),
+    ],
+    steps: [wait(300), ...hoverTour(track, [0, 1, 2, 3], 850), { do: "unhover" }, wait(400)],
+  },
   {
     id: "encoding-loupe",
     path: "/garage/encoding",

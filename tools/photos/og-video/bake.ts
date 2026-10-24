@@ -8,7 +8,7 @@
 // encode.swift, which is also what an iPhone decodes it with. AV1 is aomenc.
 // To re-pick the knobs, record with record.ts and run compare.ts.
 import { $ } from "bun";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CLIPS } from "./clips.ts";
@@ -32,7 +32,11 @@ try {
     const frames = path.join(tmp, c.id, "frames");
     const hevc = path.join(OUT, `${c.ship.card}.hevc.mp4`);
     const av1 = path.join(OUT, `${c.ship.card}.av1.webm`);
-    await $`${path.join(tmp, "encode")} ${frames} ${hevc} hevc 30 ${c.ship.hevc}`.quiet();
+    // Encoded in tmp and copied out: shouldOptimizeForNetworkUse leaves its
+    // pre-rewrite copy beside the output as <name>.sb-<hex>, and it stays.
+    const staged = path.join(tmp, `${c.ship.card}.hevc.mp4`);
+    await $`${path.join(tmp, "encode")} ${frames} ${staged} hevc 30 ${c.ship.hevc}`.quiet();
+    copyFileSync(staged, hevc);
     await $`${path.join(tmp, "y4m")} ${frames} 30 > ${path.join(tmp, "clip.y4m")}`.quiet();
     await $`aomenc ${av1Flags(c.ship.av1)} -o ${av1} ${path.join(tmp, "clip.y4m")}`.quiet();
     const kb = (f: string) => `${Math.round(statSync(f).size / 1024)} KB`;

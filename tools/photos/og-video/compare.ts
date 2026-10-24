@@ -91,7 +91,10 @@ for (const id of readdirSync(out).filter((d) => existsSync(path.join(out, d, "fr
     r[codec] = b;
   }
   rows.push(r);
-  const fmt = (b) => (b.file ? `${(b.bytes / 1024).toFixed(0)} KB @${b.score.toFixed(1)} (k=${b.k})` : "never reached");
+  const fmt = (b) => (b?.file ? `${(b.bytes / 1024).toFixed(0)} KB @${b.score.toFixed(1)} (k=${b.k})` : b ? "never reached" : "not run");
   console.log(`${id.padEnd(16)} ctl ${r.ctl}  h264 ${fmt(r.h264)}  hevc ${fmt(r.hevc)}  av1 ${fmt(r.av1)}`);
 }
-await Bun.write(jsonPath, JSON.stringify(rows, null, 2));
+// Rows for clips this run didn't touch are kept, so a run over three clips
+// doesn't drop the other nine from the file.
+const ran = new Set(rows.map((r) => (r as { id: string }).id));
+await Bun.write(jsonPath, JSON.stringify([...Object.values(prev).filter((r) => !ran.has(r.id)), ...rows], null, 2));
