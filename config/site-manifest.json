@@ -109,8 +109,8 @@
       "title": "Around",
       "section": "around",
       "kind": "utility",
-      "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
-      "hint": "the crypto-VC neighborhood",
+      "description": "AadharshBot's scheduled crawl of the VC neighborhood.",
+      "hint": "the VC neighborhood",
       "flags": {
         "run": true,
         "taskbar": true,

@@ -1,9 +1,10 @@
 # aadhar.sh
 
 > Aadharsh Pannirselvam's corner of the web. Researching and investing at
-> Archetype, a crypto-native venture firm in New York, mostly in cryptography
-> and privacy tech (FHE, MPC, zero-knowledge proofs, TEEs). Building this site
-> by hand, always under construction. The root is a
+> Archetype, a NY based venture firm focused on all things programmable,
+> mostly in how machines access, browse, and learn from the internet, and in
+> applied cryptography and privacy tech (FHE, MPC, zero-knowledge proofs,
+> TEEs). Building this site by hand (and prompt), always under construction. The root is a
 > personal homepage styled after the 2003 Windows-XP era. Photographs (a
 > live photo grid) and longform writing (an editable Notepad at /writing)
 > are live. Sounds, dishes, and tinkering are still planned.
@@ -94,7 +95,7 @@ changing anything. Two MCP tools write, `representation_capture` and
 - [/bot](https://aadhar.sh/bot): Identity page for `AadharshBot`, the small
   branded crawler that this site operates. Documents the User-Agent,
   Signature-Agent URL, signing algorithm, and opt-out instructions.
-- [/around](https://aadhar.sh/around): A small dashboard of crypto-VC
+- [/around](https://aadhar.sh/around): A small dashboard of venture firm
   homepages I keep tabs on, crawled by AadharshBot on a 30-minute cron
   (your visit only reads the snapshot). Curious rather than competitive.
   Signed per Web Bot Auth so receiving sites can verify the requests came
@@ -254,9 +255,9 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   listener's own music service, its duration, a preview URL and an explicit
   flag. Cached for an hour.
 - [/around/json](https://aadhar.sh/around/json) (`getNeighborhood`): Read the
-  neighborhood crawl. The latest AadharshBot crawl of a small list of crypto
-  venture firm homepages: status, title, description and robots verdict for
-  each. The same data as the /around page.
+  neighborhood crawl. The latest AadharshBot crawl of a small list of venture
+  firm homepages: status, title, description and robots verdict for each. The
+  same data as the /around page.
 - [/around/changes.json](https://aadhar.sh/around/changes.json)
   (`getChangeRadar`): Read what changed in the neighborhood. A bounded history
   of changes between crawls of the neighborhood: status, title, description,
@@ -364,8 +365,8 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
 
 ## Optional
 
-- [Archetype](https://www.archetype.fund/): The crypto-native venture firm
-  where I research and invest.
+- [Archetype](https://www.archetype.fund/): The NY based venture firm, focused
+  on all things programmable, where I research and invest.
 - [song.link](https://song.link): The redirector used in `/rn/tracks` so
   music links work across Spotify, Apple Music, YouTube Music, Tidal, etc.
 

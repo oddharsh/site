@@ -86,8 +86,10 @@ export function renderAboutPage() {
     <h1>About</h1>
     <p class="lede">
       I'm Aadharsh Pannirselvam. I research and invest at
-      <a href="https://www.archetype.fund/" rel="external">Archetype</a>, a crypto-native
-      venture firm, and I build this site by hand in the meantime.
+      <a href="https://www.archetype.fund/" rel="external">Archetype</a>, a venture firm
+      focused on all things programmable, and I build this site by hand (and prompt) in
+      the meantime as a way of learning about web technologies and where engineering is
+      culturally heading.
     </p>
 
     <h2>Work</h2>

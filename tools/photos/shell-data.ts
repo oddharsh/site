@@ -83,7 +83,7 @@ export const TASKBAR = [
   { label: "writing", path: "/writing", hint: "notes, in flux: an editable notepad" },
   { label: "reading", path: "/reading", hint: "what I've been reading, from Curius" },
   { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
-  { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
+  { label: "around", path: "/around", hint: "the VC neighborhood" },
   { label: "lens", path: "/lens", hint: "the other web: how machines read a URL" },
   { label: "pixel peeper", path: "/pixel-peeper", hint: "a compression vision test — whose eye do you have?" },
   { label: "dotfiles", path: "/dotfiles", hint: "folder options for a mac: tick the defaults you want, get the script" },
