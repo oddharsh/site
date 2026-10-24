@@ -75,5 +75,5 @@ test("the WebMCP section never hands a visitor the owner's lab script", () => {
   const browser = readFileSync("./src/client/lens-browser.ts", "utf8");
   const worker = readFileSync("./src/worker/lens.ts", "utf8");
   assert.doesNotMatch(browser, /node tools\/lens-webmcp/);
-  assert.doesNotMatch(worker.match(/webmcp: \{ status: "lab-required", detail: "([^"]*)"/)?.[1] ?? "missing", /tools\/|missing/);
+  assert.doesNotMatch(worker.match(/webmcp: \{\s*status: "lab-required",\s*detail: "([^"]*)"/)?.[1] ?? "missing", /tools\/|missing/);
 });

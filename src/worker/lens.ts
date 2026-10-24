@@ -2242,7 +2242,10 @@ const LENS_BROWSER = defineLens({
       // Runtime WebMCP listing needs Browser Run's Chrome-beta lab pool, which
       // the Workers binding cannot reach; tools/lens-webmcp.ts is the owner's
       // probe. This field keeps that boundary explicit.
-      webmcp: { status: "lab-required", detail: "Listing runtime WebMCP tools needs Browser Run's Chrome-beta lab, which this snapshot cannot reach, so none were looked for." },
+      webmcp: {
+        status: "lab-required",
+        detail: "Listing runtime WebMCP tools needs Browser Run's Chrome-beta lab, which this snapshot cannot reach, so none were looked for.",
+      },
       fetchedBy: "Cloudflare Browser Run",
       // WHICH engine rendered this. A reader comparing two snapshots needs to know
       // whether they came from the same one, and "Browser Run" alone stopped being
