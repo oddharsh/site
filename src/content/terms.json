@@ -169,6 +169,11 @@
     "plain": "Compact low-level instructions run by a virtual machine. Compilers turn source code into it.",
     "src": "https://en.wikipedia.org/wiki/Bytecode"
   },
+  "cache-rules": {
+    "label": "Cache Rule",
+    "plain": "A Cloudflare zone setting that changes how the cache treats requests matching a filter, such as whether to cache them and for how long.",
+    "src": "https://developers.cloudflare.com/cache/how-to/cache-rules/"
+  },
   "canvas-api": {
     "label": "Canvas",
     "plain": "The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size.",
@@ -649,6 +654,11 @@
     "plain": "A standard way to sign parts of an HTTP request, so the receiver can check who sent it and that nobody altered it on the way.",
     "src": "https://www.rfc-editor.org/rfc/rfc9421.html"
   },
+  "http-range-requests": {
+    "label": "range request",
+    "plain": "An HTTP request with a Range header that asks for only some bytes of a file. The server answers 206 Partial Content with just those bytes.",
+    "src": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests"
+  },
   "huffman-coding": {
     "label": "Huffman coding",
     "plain": "A lossless coding method that gives short bit codes to common symbols and longer ones to rare symbols, shrinking the total.",
@@ -933,6 +943,11 @@
     "label": "percentile",
     "plain": "The value a given share of measurements fall at or under; p75 is the value 75 out of every 100 visits meet or beat.",
     "src": "https://en.wikipedia.org/wiki/Percentile"
+  },
+  "pingora": {
+    "label": "Pingora",
+    "plain": "Cloudflare's open-source Rust framework for building network proxies. Cloudflare's own cache is built on it.",
+    "src": "https://github.com/cloudflare/pingora"
   },
   "plaintext": {
     "label": "plaintext",
