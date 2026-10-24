@@ -367,6 +367,14 @@ export const PREFIX_ROUTES = [
     probe: "/images/XT500010.jpg",
     claim: ["/images/*.avif", "/images/*.jpg", "/images/*.jpeg", "/images/*.png", "/images/*.gif", "/images/*.heic", "/images/*.heif", "/images/*.hif"],
   },
+  {
+    // worker-first because the asset layer ignores Range and the og:video
+    // clips need it (lib/og-video.ts has the measurement)
+    label: "/og/video/<clip>",
+    match: (pathname: string) => pathname.startsWith("/og/video/"),
+    probe: "/og/video/garage-encoding.hevc.mp4",
+    claim: ["/og/video/*"],
+  },
   // The static sections, worker-first for the dcz delta and the q11 twin. The
   // bare path is claimed SEPARATELY because "/garage/*" does not match
   // "/garage"; without it the section indexes never reached the Worker and
