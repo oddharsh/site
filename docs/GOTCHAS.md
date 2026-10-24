@@ -737,3 +737,17 @@ skips it.
     window shell never scrolls, and `overflow: hidden` on a wrapper makes it
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
+
+83. **An HTMLRewriter append to `<head>` writes nothing on a built page.**
+    The minifier drops the optional `</head>`, and lol-html can't append to
+    an element whose end tag never arrives, so `.on("head", { element(e) {
+    e.append(...) } })` passes on a hand-written fixture and does nothing in
+    production. The first cut of og:video shipped its tags that way and the
+    built `/garage/encoding` carried none (route oracle, 2026-10-23). Anchor
+    the insertion on an element that is always there and use `after` or
+    `prepend`; `lib/og-video.ts` writes after `og:type`. A fixture for the
+    rewriter has to be the minified shape, without `</head>`. Related: the
+    asset layer ignores `Range` (a `bytes=0-99` on `/og/home.jpg` came back
+    200 with all 105,441 bytes), so anything a player streams goes through
+    the Worker.
+    Checked by: `tools/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
