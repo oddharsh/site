@@ -3821,7 +3821,16 @@
       if (i < 0) return;
       var n = items.length;
       var k = e.key;
-      var next = k === "ArrowRight" || k === "ArrowDown" ? (i + 1) % n : k === "ArrowLeft" || k === "ArrowUp" ? (i - 1 + n) % n : k === "Home" ? 0 : k === "End" ? n - 1 : -1;
+      var next =
+        k === "ArrowRight" || k === "ArrowDown"
+          ? (i + 1) % n
+          : k === "ArrowLeft" || k === "ArrowUp"
+            ? (i - 1 + n) % n
+            : k === "Home"
+              ? 0
+              : k === "End"
+                ? n - 1
+                : -1;
       if (next < 0) return;
       e.preventDefault();
       items[next].click();
@@ -3923,7 +3932,8 @@
       // bare /lens reads exactly like arriving at one
       humanBody.innerHTML =
         '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
-      machineBody.innerHTML = '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>';
+      machineBody.innerHTML =
+        '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>';
       if (machineTop) machineTop.innerHTML = "";
       renderBrowser();
       statusBar.innerHTML = "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>";
