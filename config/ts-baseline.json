@@ -4,7 +4,7 @@
     "src/client/hoist.ts": 6,
     "src/client/infotip.ts": 1,
     "src/client/lens-tools.ts": 1,
-    "src/client/lens.ts": 32,
+    "src/client/lens.ts": 27,
     "src/client/lwe/ask.ts": 8,
     "src/client/nav-run.ts": 8,
     "src/client/nav-tray.ts": 5,

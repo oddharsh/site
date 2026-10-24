@@ -73,7 +73,7 @@ type AgentRow = {
 };
 
 // The Accept header a mainstream browser sends, used as the control. Same string
-// lensFetchAsBot defaults to, restated here because this tab's whole argument
+// lensFetch defaults to, restated here because this tab's whole argument
 // rests on it being a BROWSER's header rather than a lens default that might
 // drift into something agent-flavoured later.
 export const BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7";

@@ -54,3 +54,26 @@ test("arrow keys, Home and End move through the views and the lens tabs", () => 
   assert.match(client, /b\.setAttribute\("tabindex", b\.classList\.contains\("is-on"\) \? "0" : "-1"\)/);
   assert.equal((client.match(/^\s+syncRoving\(\);$/gm) ?? []).length, 2, "updateModeUi() and setLens() keep the Tab order on the selection");
 });
+
+// The same pass folded five lazy-tab loaders into runLazyTab(). Each copy had
+// its own late-reply check and no test held any of them; now one does.
+test("a late lazy-tab reply never lands on the next scan", () => {
+  const body = client.match(/function runLazyTab\([\s\S]*?\n {2}\}\n/)?.[0];
+  assert.ok(body, "runLazyTab() is where this test reads it");
+  assert.equal((body.match(/if \(!live\(\)\) return;/g) ?? []).length, 2, "both the reply and the failure check the scan is still current");
+  assert.match(body, /if \(!sameScan\(\)\) return;/, "a script that loads after the next scan began does nothing");
+  for (const island of ["LensReader", "LensWire", "LensTools", "LensNlweb", "LensMarkdown"])
+    assert.match(client, new RegExp(`runLazyTab\\(\\{\\s+island: "${island}"`), `${island} loads through runLazyTab()`);
+});
+
+test("the Browser pane's no-JS floor says interaction needs JavaScript", async () => {
+  const html = await renderLensShell({}, { view: "both", lens: "anatomy" }).text();
+  assert.match(html, /<div class="lx-body" id="lx-browser-body">[\s\S]*?href="\/lens\/browser\?recipes=1"[\s\S]*?id="lx-browser-run"/);
+});
+
+test("the WebMCP section never hands a visitor the owner's lab script", () => {
+  const browser = readFileSync("./src/client/lens-browser.ts", "utf8");
+  const worker = readFileSync("./src/worker/lens.ts", "utf8");
+  assert.doesNotMatch(browser, /node tools\/lens-webmcp/);
+  assert.doesNotMatch(worker.match(/webmcp: \{ status: "lab-required", detail: "([^"]*)"/)?.[1] ?? "missing", /tools\/|missing/);
+});
