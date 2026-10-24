@@ -47,7 +47,11 @@ const env = {
   ASSETS: {
     fetch: async (url) => {
       const path = new URL(url).pathname;
-      try { return new Response(readFileSync(`src/content${path}`, "utf8")); } catch { return new Response("", { status: 404 }); }
+      try {
+        return new Response(readFileSync(`src/content${path}`, "utf8"));
+      } catch {
+        return new Response("", { status: 404 });
+      }
     },
   },
 };
@@ -55,7 +59,10 @@ const env = {
 test("/writing, each note and the missing-note page resolve #main once", async () => {
   const posts = JSON.parse(readFileSync("src/content/writing/posts.json", "utf8"));
   assert.ok(posts.length >= 1, "posts.json lists no notes");
-  const pages = [{ label: "/writing", response: await renderWritingIndex(env) }, { label: "/writing/no-such-note", response: await renderWritingPost("no-such-note", env) }];
+  const pages = [
+    { label: "/writing", response: await renderWritingIndex(env) },
+    { label: "/writing/no-such-note", response: await renderWritingPost("no-such-note", env) },
+  ];
   for (const post of posts) pages.push({ label: `/writing/${post.slug}`, response: await renderWritingPost(post.slug, env) });
   for (const { label, response } of pages) assert.ok(assertOneMain(await response.text(), label), `${label}: lost the skip link`);
 });

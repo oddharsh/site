@@ -19,14 +19,16 @@ import { dirname, join, basename } from "node:path";
 import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
+const ROOT = join(HERE, "..", ".."); // pipelines/<name>/ -> repo root
 const CORPUS_DIR = join(ROOT, "lwe-ask", "corpus");
 const PASSAGES_FILE = join(ROOT, "lwe-ask", "src", "passages.ts");
 const START = "// generated:corpus:start";
 const END = "// generated:corpus:end";
 
 const files = existsSync(CORPUS_DIR)
-  ? readdirSync(CORPUS_DIR).filter((f) => f.endsWith(".json")).sort()
+  ? readdirSync(CORPUS_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
   : [];
 
 let block = "";
@@ -46,7 +48,8 @@ for (const file of files) {
 }
 
 const src = readFileSync(PASSAGES_FILE, "utf8");
-const i = src.indexOf(START), j = src.indexOf(END);
+const i = src.indexOf(START),
+  j = src.indexOf(END);
 if (i === -1 || j === -1) {
   console.error("build-corpus: markers not found in passages.ts — add the generated:corpus markers first");
   process.exit(1);
@@ -58,7 +61,9 @@ const verRe = /(export const CORPUS_VERSION = ")[^"]*(";)/;
 const version = createHash("sha256").update(injected.replace(verRe, "$1$2")).digest("hex").slice(0, 10);
 const next = injected.replace(verRe, `$1${version}$2`);
 writeFileSync(PASSAGES_FILE, next);
-console.log(`build-corpus: injected ${total} passage(s) from ${files.length} concept file(s): ${files.map((f) => basename(f, ".json")).join(", ") || "(none)"}`);
+console.log(
+  `build-corpus: injected ${total} passage(s) from ${files.length} concept file(s): ${files.map((f) => basename(f, ".json")).join(", ") || "(none)"}`,
+);
 console.log(`build-corpus: corpus version -> ${version}`);
 console.log("  next: cd lwe-ask && bun run deploy, then embed the new passages with");
 console.log("        curl -w '\\nHTTP %{http_code}\\n' -X POST https://aadhar.sh/lwe/ask/reindex \\");

@@ -17,7 +17,9 @@ const SIG = createHmac("sha256", SECRET).update(RAW).digest("base64url");
 
 async function cover(routes) {
   const requested: any[] = [];
-  const realFetch = testGlobals.fetch, hadCaches = "caches" in globalThis, realCaches = testGlobals.caches;
+  const realFetch = testGlobals.fetch,
+    hadCaches = "caches" in globalThis,
+    realCaches = testGlobals.caches;
   const respond = async (url, init: Record<string, any> = {}) => {
     requested.push(url);
     const route = routes[url];
@@ -30,13 +32,16 @@ async function cover(routes) {
   testGlobals.fetch = (input, init) => respond(String(input instanceof Request ? input.url : input), init);
   testGlobals.caches = { default: { match: async () => undefined, put: async () => {} } };
   try {
-    const res = await handleSerendipity(new Request(
-      `https://aadhar.sh/serendipity/cover?u=${encodeURIComponent(RAW)}&s=${encodeURIComponent(SIG)}`),
-      { SERENDIPITY_DB: {}, COVER_SECRET: SECRET }, context());
+    const res = await handleSerendipity(
+      new Request(`https://aadhar.sh/serendipity/cover?u=${encodeURIComponent(RAW)}&s=${encodeURIComponent(SIG)}`),
+      { SERENDIPITY_DB: {}, COVER_SECRET: SECRET },
+      context(),
+    );
     return { res, requested };
   } finally {
     testGlobals.fetch = realFetch;
-    if (hadCaches) testGlobals.caches = realCaches; else delete testGlobals.caches;
+    if (hadCaches) testGlobals.caches = realCaches;
+    else delete testGlobals.caches;
   }
 }
 

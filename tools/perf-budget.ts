@@ -184,14 +184,22 @@ const HTML_ENVELOPE = {
 const fails = [];
 const warnings = [];
 const ok = (m) => console.log(`  ok    ${m}`);
-const bad = (m) => { console.log(`  FAIL  ${m}`); fails.push(m); };
-const warn = (m) => { console.log(`  warn  ${m}`); warnings.push(m); };
+const bad = (m) => {
+  console.log(`  FAIL  ${m}`);
+  fails.push(m);
+};
+const warn = (m) => {
+  console.log(`  warn  ${m}`);
+  warnings.push(m);
+};
 const kib = (bytes) => bytes / 1024;
 const compressedSizes = (bytes) => ({
   gzip: kib(gzipSync(bytes, { level: 9 }).length),
-  brotli: kib(brotliCompressSync(bytes, {
-    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
-  }).length),
+  brotli: kib(
+    brotliCompressSync(bytes, {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+    }).length,
+  ),
 });
 const fmt = (value) => `${value.toFixed(1)} KiB`;
 
@@ -214,7 +222,12 @@ try {
   // One dry-run writes index.js for the route harness's prebuiltWorkerDir and
   // the upload-format worker.bundle for `check startup`. They are different
   // formats; the profiler cannot consume the plain JavaScript entrypoint.
-  dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"])), { encoding: "utf8" });
+  dryOut = execFileSync(
+    ...wranglerCommand(
+      await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]),
+    ),
+    { encoding: "utf8" },
+  );
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
   dryRunFailed = true;
@@ -238,7 +251,10 @@ if (gz) {
   const kib = parseFloat(gz[1]);
   const alertAt = WORKER_BASELINE_GZIP_KIB * (1 + WORKER_ALERT_GROWTH);
   overBudget = kib > alertAt;
-  if (overBudget) warn(`worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`);
+  if (overBudget)
+    warn(
+      `worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`,
+    );
   else ok(`worker bundle ${kib.toFixed(2)} KiB gzip (advisory alert at ${alertAt.toFixed(2)} KiB)`);
 } else {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
@@ -257,17 +273,27 @@ if (gz) {
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync(...wranglerCommand(await siteWranglerArgs([
-    "check", "startup",
-    "--workerBundle", ".build/.perfbudget/worker.bundle",
-    "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
-  ])), { encoding: "utf8" });
+  const startOut = execFileSync(
+    ...wranglerCommand(
+      await siteWranglerArgs([
+        "check",
+        "startup",
+        "--workerBundle",
+        ".build/.perfbudget/worker.bundle",
+        "--outfile",
+        ".build/.perfbudget/worker-startup.cpuprofile",
+      ]),
+    ),
+    { encoding: "utf8" },
+  );
   // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {
     const ms = parseFloat(active[1]);
     ms > WORKER_STARTUP_ALERT_MS
-      ? warn(`worker startup ${ms.toFixed(1)} ms active CPU > ${WORKER_STARTUP_ALERT_MS} ms advisory alert — open .build/.perfbudget/worker-startup.cpuprofile in Chrome DevTools for the flamegraph`)
+      ? warn(
+          `worker startup ${ms.toFixed(1)} ms active CPU > ${WORKER_STARTUP_ALERT_MS} ms advisory alert — open .build/.perfbudget/worker-startup.cpuprofile in Chrome DevTools for the flamegraph`,
+        )
       : ok(`worker startup ${ms.toFixed(1)} ms active CPU (advisory alert at ${WORKER_STARTUP_ALERT_MS} ms, platform limit 400 ms)`);
   } else {
     warn("could not read active CPU from `wrangler check startup`; skipping the startup check");
@@ -283,8 +309,9 @@ try {
 // prints when the advisory fires: on a green run it is noise.
 try {
   const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
-  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
-    .find(([name]) => name.endsWith(".js") && !name.endsWith(".map"));
+  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][]).find(
+    ([name]) => name.endsWith(".js") && !name.endsWith(".map"),
+  );
   const inputs = Object.entries(entry?.[1]?.inputs ?? {})
     .map(([name, v]): [string, number] => [name, v.bytesInOutput ?? 0])
     .sort((a, b) => b[1] - a[1]);
@@ -303,14 +330,15 @@ try {
   // A collapsed count is the failure mode worth guarding: an empty or tiny
   // metafile would otherwise report a huge improvement. Floor it at 40 modules,
   // under half the 83 the bundle carried on 2026-08-16.
-  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[])
-    .reduce((sum, input) => sum + (input.bytes ?? 0), 0));
+  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[]).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
   const modules = Object.keys(meta.inputs ?? {}).length;
   if (modules < 40) {
     warn(`metafile listed only ${modules} source inputs, so the source-bytes total cannot be trusted (expected the whole Worker graph)`);
   } else if (sourceKib > sourceAlertAt) {
-    warn(`worker source ${sourceKib.toFixed(2)} KiB > ${sourceAlertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_SOURCE_KIB} KiB baseline, ${modules} modules). This one is minify-invariant, so it is real growth.`);
+    warn(
+      `worker source ${sourceKib.toFixed(2)} KiB > ${sourceAlertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_SOURCE_KIB} KiB baseline, ${modules} modules). This one is minify-invariant, so it is real growth.`,
+    );
   } else {
     ok(`worker source ${sourceKib.toFixed(2)} KiB across ${modules} modules (advisory alert at ${sourceAlertAt.toFixed(2)} KiB; minify-invariant)`);
   }
@@ -322,10 +350,18 @@ try {
 for (const { file, envelope } of ASSET_ENVELOPES) {
   const path = `.build/public/${file}`;
   let bytes;
-  try { bytes = await readFile(path); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  try {
+    bytes = await readFile(path);
+  } catch {
+    bad(`${file}: missing from build output (run build first)`);
+    continue;
+  }
   const text = bytes.toString("utf8");
   const banner = text.startsWith("/*!") && text.includes("minified at deploy");
-  if (!banner) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
+  if (!banner) {
+    bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`);
+    continue;
+  }
   const sizes = compressedSizes(bytes);
   const overGzip = sizes.gzip > envelope.gzipKiB;
   const overBrotli = sizes.brotli > envelope.brotliKiB;
@@ -338,29 +374,37 @@ for (const { file, envelope } of ASSET_ENVELOPES) {
 // decides a number.
 for (const file of UNBUDGETED) {
   let bytes;
-  try { bytes = await readFile(`.build/public/${file}`); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  try {
+    bytes = await readFile(`.build/public/${file}`);
+  } catch {
+    bad(`${file}: missing from build output (run build first)`);
+    continue;
+  }
   const text = bytes.toString("utf8");
-  if (!(text.startsWith("/*!") && text.includes("minified at deploy"))) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
+  if (!(text.startsWith("/*!") && text.includes("minified at deploy"))) {
+    bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`);
+    continue;
+  }
   const sizes = compressedSizes(bytes);
   ok(`${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (unbudgeted: no envelope declared)`);
 }
 
 // 4) readable twins present --------------------------------------------------
 for (const t of TWINS) {
-  try { await stat(`.build/public/${t}`); ok(`twin ${t} present`); }
-  catch { bad(`twin ${t} missing from build output`); }
+  try {
+    await stat(`.build/public/${t}`);
+    ok(`twin ${t} present`);
+  } catch {
+    bad(`twin ${t} missing from build output`);
+  }
 }
 
 // 4b) dictionary + generated-page pipeline ----------------------------------
 try {
-  const name = (await readdir(".build/public/a"))
-    .find((f) => parseFamilyDictionary(f));
+  const name = (await readdir(".build/public/a")).find((f) => parseFamilyDictionary(f));
   if (!name) bad("page-family.dict: content-hashed build asset missing");
   else {
-    const [dict, br] = await Promise.all([
-      readFile(`.build/public/a/${name}`),
-      readFile(`.build/public/a/${name}.br`),
-    ]);
+    const [dict, br] = await Promise.all([readFile(`.build/public/a/${name}`), readFile(`.build/public/a/${name}.br`)]);
     if (dict.length !== 65_536 || dict.readUInt32LE(0) === 0xec30a437) {
       bad("page-family.dict: expected an exact 64KB raw-content dictionary, not a trained zstd dictionary");
     } else if (br.length >= dict.length) {
@@ -374,21 +418,18 @@ try {
 }
 
 try {
-  const pages = (await readdir(".build/public", { recursive: true }))
-    .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
+  const pages = (await readdir(".build/public", { recursive: true })).filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
   const deltas = await readdir(".build/public/pd");
   // PAGE_FAMILY_MATCH makes this the dictionary Chrome selects whenever both the
   // family and an exact page snapshot are cached. Coverage by EITHER tier is no
   // longer an honest gate: a page with only an exact delta would still receive the
   // family hash and fall through to Brotli. Require the preferred family tag on
   // every deterministic page; exact snapshots remain a high-ratio cold-family path.
-  const familyName = (await readdir(".build/public/a"))
-    .find((name) => parseFamilyDictionary(name));
+  const familyName = (await readdir(".build/public/a")).find((name) => parseFamilyDictionary(name));
   if (!familyName) throw new Error("page-family dictionary is missing");
   const family = await readFile(`.build/public/a/${familyName}`);
   const familyTag = dictionaryTag(family);
-  const absent = pages
-    .filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
+  const absent = pages.filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
 
   // build.ts step 8 SKIPS a family delta that is not smaller than the page's q11
   // twin, and it is right to: Chrome sends the family hash either way, so with no
@@ -403,14 +444,20 @@ try {
   for (const path of absent) {
     const slug = pageSlug(path);
     const bytes = await readFile(`.build/public/${path}`);
-    const q11 = await readFile(`.build/public/${path}.br`).then((b) => b.length, () => Infinity);
+    const q11 = await readFile(`.build/public/${path}.br`).then(
+      (b) => b.length,
+      () => Infinity,
+    );
     const dcz = zstdDictionaryFrame(bytes, family).length + DCZ_HEADER_BYTES;
     if (dcz < q11) missing.push(slug);
     else notUseful.push(`${slug} (${dcz} B dcz >= ${q11} B q11)`);
   }
 
   if (missing.length) bad(`preferred site-page dictionary: missing useful family DCZ variants for ${missing.join(", ")}`);
-  else ok(`preferred site-page dictionary: ${pages.length - absent.length} of ${pages.length} static/deterministic pages have family DCZ variants${notUseful.length ? `; no variant where it loses to q11: ${notUseful.join(", ")}` : ""}`);
+  else
+    ok(
+      `preferred site-page dictionary: ${pages.length - absent.length} of ${pages.length} static/deterministic pages have family DCZ variants${notUseful.length ? `; no variant where it loses to q11: ${notUseful.join(", ")}` : ""}`,
+    );
 } catch (e) {
   bad(`site-page dictionary: generated DCZ set unreadable (${e.message})`);
 }
@@ -425,10 +472,7 @@ for (const path of [
   "pixel-peeper/index.html",
 ]) {
   try {
-    const [raw, br] = await Promise.all([
-      readFile(`.build/public/${path}`),
-      readFile(`.build/public/${path}.br`),
-    ]);
+    const [raw, br] = await Promise.all([readFile(`.build/public/${path}`), readFile(`.build/public/${path}.br`)]);
     if (br.length >= raw.length) bad(`${path}: q11 twin is not smaller than the generated page`);
     else ok(`${path}: deterministic renderer staged ${raw.length} B -> ${br.length} B q11`);
   } catch {
@@ -471,14 +515,20 @@ if (homepage) {
     const served = (await readdir(".build/public", { recursive: true }))
       .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
       .sort();
-    let missing = 0, unbannered = 0, unreadable = 0;
+    let missing = 0,
+      unbannered = 0,
+      unreadable = 0;
     for (const rel of served) {
       const page = (await readFile(`.build/public/${rel}`)).toString("utf8");
       const twinRel = rel.replace(/\.html$/, ".src.html");
       if (!page.startsWith(`<!-- minified at deploy; readable source: /${twinRel} -->`)) unbannered++;
       let twin;
-      try { twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8"); }
-      catch { missing++; continue; }
+      try {
+        twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8");
+      } catch {
+        missing++;
+        continue;
+      }
       // The claim is that the twin is the PRE-minification document, so the exact
       // test is that it does not itself carry the banner the minifier stamps on.
       //

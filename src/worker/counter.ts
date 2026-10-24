@@ -14,7 +14,8 @@ import { jsonResponse } from "./lib/http.ts";
 // count did not reset. A future move has to keep it too.
 
 // UAs that read the count without advancing it.
-const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;
+const PEEK_UA =
+  /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;
 
 // ── the KV mirror the homepage render reads ──────────────────────────
 // COUNT_KEY holds the value and never expires, so a reader always finds a
@@ -40,7 +41,7 @@ const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|
 // alone is not evidence. No KV floor binds it: the stamp lives in metadata,
 // which needs no expirationTtl.
 export const COUNT_KEY = "counter:n";
-const MIRROR_TTL = 60;   // seconds between mirror writes; priced above
+const MIRROR_TTL = 60; // seconds between mirror writes; priced above
 
 async function mirrorCount(env, n, force = false) {
   try {
@@ -53,7 +54,7 @@ async function mirrorCount(env, n, force = false) {
       if (Number.isFinite(written) && Date.now() - written < MIRROR_TTL * 1000) return;
     }
     await env.RN_KV.put(COUNT_KEY, String(n), { metadata: { t: Date.now() } });
-  } catch {}   // a missed mirror costs staleness, never the response
+  } catch {} // a missed mirror costs staleness, never the response
 }
 
 // ── GET /hit — the counter's tick endpoint, and an odometer if you ask for one ──
@@ -76,11 +77,12 @@ async function mirrorCount(env, n, force = false) {
 export async function handleHit(request, env, ctx) {
   const url = new URL(request.url);
   const ua = request.headers.get("user-agent") || "";
-  const peek = request.method === "HEAD"
-    || url.searchParams.has("peek")
-    || /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "")
-    || request.cf?.botManagement?.verifiedBot === true
-    || PEEK_UA.test(ua);
+  const peek =
+    request.method === "HEAD" ||
+    url.searchParams.has("peek") ||
+    /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "") ||
+    request.cf?.botManagement?.verifiedBot === true ||
+    PEEK_UA.test(ua);
 
   // The one DO round trip. A DO is a single global instance, so this costs a trip
   // to wherever it lives: 185-308ms measured from SJC, and 630ms on a cold
@@ -91,7 +93,9 @@ export async function handleHit(request, env, ctx) {
     try {
       const stub = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));
       return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   };
   // Mirror the fresh count into KV so nothing on the homepage's path has to ask
   // the DO. Awaiting the DO inside the homepage render suspended the HTML stream
@@ -110,8 +114,11 @@ export async function handleHit(request, env, ctx) {
   // the same pool the photo tiles are queued in. Without a ctx (tests, direct
   // calls) fall back to awaiting, so the tick can never be silently dropped.
   if (url.searchParams.has("tick")) {
-    const work = readCount().then(mirror).catch(() => {});
-    if (ctx) ctx.waitUntil(work); else await work;
+    const work = readCount()
+      .then(mirror)
+      .catch(() => {});
+    if (ctx) ctx.waitUntil(work);
+    else await work;
     if (!url.searchParams.has("n")) return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
 
@@ -131,7 +138,10 @@ export async function handleHit(request, env, ctx) {
   // minimum.
   if (url.searchParams.has("n")) {
     let n = null;
-    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY, { cacheTtl: MIRROR_TTL }); if (v != null) n = Number(v); } catch {}
+    try {
+      const v = env.RN_KV && (await env.RN_KV.get(COUNT_KEY, { cacheTtl: MIRROR_TTL }));
+      if (v != null) n = Number(v);
+    } catch {}
     return jsonResponse({ n: Number.isFinite(n) ? n : null }, 200, { "x-robots-tag": "noindex" }, { pretty: false });
   }
 
@@ -148,9 +158,9 @@ export async function handleHit(request, env, ctx) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="12" viewBox="0 0 52 12" role="img" aria-label="visitor ${digits}"><text x="0" y="10" font-family="'Courier New',Courier,monospace" font-size="12" font-weight="bold" letter-spacing="1.2" fill="oklch(86.52% 0.1768 90.38)">${digits}</text></svg>`;
   return new Response(svg, {
     headers: {
-      "content-type":  "image/svg+xml; charset=utf-8",
+      "content-type": "image/svg+xml; charset=utf-8",
       "cache-control": "no-store",
-      "x-robots-tag":  "noindex",
+      "x-robots-tag": "noindex",
     },
   });
 }

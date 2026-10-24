@@ -21,7 +21,8 @@
 import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { CLIENT_ASSETS, clientSourceFile, clientScriptProblems, minifiedScripts } from "./lib/client-assets.ts";
 
-const clientFiles = async () => (await readdir(new URL("src/client/", ROOT), { recursive: true })).filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts")).sort();
+const clientFiles = async () =>
+  (await readdir(new URL("src/client/", ROOT), { recursive: true })).filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts")).sort();
 
 test("every src/client script except sw.ts is a registry row, so it ships minified, twinned, and under a marker", async () => {
   const rows = minifiedScripts();
@@ -55,7 +56,11 @@ test("every script row carries a marker the minified output must keep, and the m
 
 test("build.ts runs the same completeness check as an invariant and minifies from the registry", async () => {
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
-  assert.match(build, /const problems = clientScriptProblems\(await readdir\("src\/client", \{ recursive: true \}\)\);\n\s*if \(problems\.length\) throw new Error/, "the build fails on what clientScriptProblems reports, reading src/client recursively");
+  assert.match(
+    build,
+    /const problems = clientScriptProblems\(await readdir\("src\/client", \{ recursive: true \}\)\);\n\s*if \(problems\.length\) throw new Error/,
+    "the build fails on what clientScriptProblems reports, reading src/client recursively",
+  );
   assert.match(build, /for \(const \{ file, twin: srcPath, marker, module \} of minifiedScripts\(\)\) \{/, "step 3 minifies the registry's rows");
   assert.match(build, /if \(marker && !min\.includes\(marker\)\) \{\n\s*throw new Error/, "and fails on a minified output that lost its marker");
 });

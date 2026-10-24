@@ -99,7 +99,9 @@ export async function bootCal(opts: { secrets?: Record<string, string> } = {}) {
 // supplied createExecutionContext / waitOnExecutionContext; on the host the
 // contract is two methods and a list of promises, so it is written out.
 const TASKS = Symbol("waitUntil tasks");
-interface TestContext extends ExecutionContext { [TASKS]: Promise<unknown>[] }
+interface TestContext extends ExecutionContext {
+  [TASKS]: Promise<unknown>[];
+}
 
 export function createExecutionContext(): TestContext {
   const tasks: Promise<unknown>[] = [];
@@ -109,7 +111,9 @@ export function createExecutionContext(): TestContext {
   // type: a partial stand-in installed as a whole one, said once here.
   const ctx = {
     [TASKS]: tasks,
-    waitUntil(p: Promise<unknown>) { tasks.push(p); },
+    waitUntil(p: Promise<unknown>) {
+      tasks.push(p);
+    },
     passThroughOnException() {},
     props: {},
   };
@@ -129,5 +133,7 @@ export function stubFetch(impl: (input: Parameters<typeof fetch>[0], init?: Requ
   const g = globalThis as { fetch: unknown };
   const previous = g.fetch;
   g.fetch = impl;
-  return () => { g.fetch = previous; };
+  return () => {
+    g.fetch = previous;
+  };
 }

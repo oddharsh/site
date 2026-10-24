@@ -1,13 +1,5 @@
 // ── around.ts ────────────────────────────────────────────────────────────────
-import {
-  NEIGHBORS,
-  assert,
-  diffAroundRows,
-  persistAroundHistory,
-  renderAroundPage,
-  renderAroundSnapshot,
-  test,
-} from "./contract-shared.ts";
+import { NEIGHBORS, assert, diffAroundRows, persistAroundHistory, renderAroundPage, renderAroundSnapshot, test } from "./contract-shared.ts";
 
 // Every degradation in the neighbourhood crawler is designed to be QUIET: a
 // disallowing robots.txt is a legitimate skip, and a neighbour that has gone
@@ -48,7 +40,10 @@ test("around a content change requires BOTH snapshots to be live", () => {
   const errored = { status: 200, error: "timeout", body_hash: "zzz" };
 
   const real = diffAroundRows(alsoLive, live);
-  assert.ok(real.some((c) => c.field === "content"), "two live snapshots with different bodies IS a content change");
+  assert.ok(
+    real.some((c) => c.field === "content"),
+    "two live snapshots with different bodies IS a content change",
+  );
 
   for (const [current, previous, label] of [
     [live, down, "recovering from an outage"],
@@ -57,8 +52,7 @@ test("around a content change requires BOTH snapshots to be live", () => {
     [errored, live, "hitting a fetch error"],
   ] as const) {
     const changes = diffAroundRows(current, previous);
-    assert.ok(!changes.some((c) => c.field === "content"),
-      `${label} must not be reported as a content change`);
+    assert.ok(!changes.some((c) => c.field === "content"), `${label} must not be reported as a content change`);
   }
 });
 
@@ -75,13 +69,14 @@ test("around the neighbour roster is well formed", () => {
 });
 
 test("around persists DDL, observations, and retention in one ordered D1 batch", async () => {
-
   const batches: Array<Array<{ sql: string }>> = [];
   const db = {
     prepare(sql) {
       return {
         sql,
-        bind() { return this; },
+        bind() {
+          return this;
+        },
       };
     },
     async batch(statements) {

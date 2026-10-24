@@ -32,7 +32,13 @@ function unmarked(html) {
   for (const m of src.matchAll(token)) {
     const [, close, tagName, attrs, text] = m;
     const tag = tagName?.toLowerCase();
-    if (raw) { if (close && tag === raw) { raw = null; stack.pop(); } continue; }
+    if (raw) {
+      if (close && tag === raw) {
+        raw = null;
+        stack.pop();
+      }
+      continue;
+    }
     if (text !== undefined) {
       const lang = stack.findLast((e) => e.lang)?.lang ?? "";
       for (const run of text.match(/[\p{Script=Han}\p{Script=Arabic}　-〿＀-￯]+/gu) ?? []) {
@@ -57,8 +63,11 @@ test("the walk flags unmarked CJK and Arabic and passes marked runs (control)", 
   assert.equal(unmarked('<html lang="en"><body><p>A is <code>中</code></p></body></html>').length, 1);
   assert.equal(unmarked('<html lang="en"><body><p>بدأت</p></body></html>').length, 1);
   assert.deepEqual(unmarked('<html lang="en"><body><p>A is <code lang="zh">中</code>, <bdi lang="ar">بدأت</bdi><br>ok</p></body></html>'), []);
-  assert.deepEqual(unmarked('<html lang="en"><body><input value="中"><script>"中"</script><style>:root{--g:"字"}</style></body></html>'), [],
-    "attribute values, script and style are not rendered text");
+  assert.deepEqual(
+    unmarked('<html lang="en"><body><input value="中"><script>"中"</script><style>:root{--g:"字"}</style></body></html>'),
+    [],
+    "attribute values, script and style are not rendered text",
+  );
 });
 
 test("no static page renders CJK or Arabic text without a matching lang", () => {

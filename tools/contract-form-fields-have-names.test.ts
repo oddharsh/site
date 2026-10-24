@@ -38,14 +38,19 @@ function unnamed(source) {
 test("the check flags a placeholder-only field and passes each kind of label (control)", () => {
   assert.equal(unnamed('<input id="q" placeholder="Search">').length, 1);
   assert.equal(unnamed('<textarea name="t" placeholder="x"></textarea>').length, 1);
-  assert.deepEqual(unnamed([
-    '<input aria-label="Search">',
-    '<label for="q">Search</label><input id="q">',
-    '<label>Search <input></label>',
-    '<input type="hidden" name="x">',
-    '<input type="file" hidden>',
-    '<input type="submit" value="Go">',
-  ].join("")), []);
+  assert.deepEqual(
+    unnamed(
+      [
+        '<input aria-label="Search">',
+        '<label for="q">Search</label><input id="q">',
+        "<label>Search <input></label>",
+        '<input type="hidden" name="x">',
+        '<input type="file" hidden>',
+        '<input type="submit" value="Go">',
+      ].join(""),
+    ),
+    [],
+  );
 });
 
 test("no static page ships a field without a name", () => {

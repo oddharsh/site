@@ -82,15 +82,18 @@ export const beats = (a: Score, base: Score) => a.s2 > base.s2 && a.ba3 < base.b
 /** The largest distance in [floor, hi] whose encode `wins`, by bisection, or
  *  null when not even the floor does. `wins` is called at most ~7 times. */
 export async function searchDistance(wins: (d: number) => Promise<boolean>, r = RANGE): Promise<number | null> {
-  let lo = r.lo, hi = r.hi;
+  let lo = r.lo,
+    hi = r.hi;
   if (!(await wins(lo))) {
     if (!(await wins(r.floor))) return null;
-    hi = lo; lo = r.floor;
+    hi = lo;
+    lo = r.floor;
   }
   if (await wins(hi)) return hi;
   while (hi - lo > r.tolerance) {
     const mid = Math.round(((lo + hi) / 2) * 1000) / 1000;
-    if (await wins(mid)) lo = mid; else hi = mid;
+    if (await wins(mid)) lo = mid;
+    else hi = mid;
   }
   return lo;
 }
@@ -109,7 +112,10 @@ export function stripJpegExif(src: string, dst: string) {
     if (b[i] !== 0xff) throw new Error(`${path.basename(src)}: no marker at byte ${i}`);
     const marker = b[i + 1];
     // Start of scan: the rest is entropy-coded data and the trailer.
-    if (marker === 0xda) { out.push(b.subarray(i)); break; }
+    if (marker === 0xda) {
+      out.push(b.subarray(i));
+      break;
+    }
     const end = i + 2 + b.readUInt16BE(i + 2);
     const exif = marker === 0xe1 && b.toString("latin1", i + 4, i + 10) === "Exif\0\0";
     if (!exif) out.push(b.subarray(i, end));
@@ -124,7 +130,9 @@ export function stripPng(src: string, dst: string) {
   const out = [b.subarray(0, 8)];
   let i = 8;
   while (i + 8 <= b.length) {
-    const len = b.readUInt32BE(i), type = b.toString("latin1", i + 4, i + 8), end = Math.min(i + 12 + len, b.length);
+    const len = b.readUInt32BE(i),
+      type = b.toString("latin1", i + 4, i + 8),
+      end = Math.min(i + 12 + len, b.length);
     const xmp = type === "iTXt" && b.toString("latin1", i + 8, i + 30).startsWith("XML:com.adobe.xmp");
     if (type !== "eXIf" && !xmp) out.push(b.subarray(i, end));
     i = end;
@@ -136,9 +144,11 @@ export function stripPng(src: string, dst: string) {
 export function codestreamBytes(file: string) {
   const b = fs.readFileSync(file);
   if (b[0] === 0xff && b[1] === 0x0a) return b.length;
-  let o = 0, n = 0;
+  let o = 0,
+    n = 0;
   while (o + 8 <= b.length) {
-    const size = b.readUInt32BE(o) || b.length - o, type = b.toString("latin1", o + 4, o + 8);
+    const size = b.readUInt32BE(o) || b.length - o,
+      type = b.toString("latin1", o + 4, o + 8);
     if (type === "jxlc" || type === "jxlp") n += size;
     o += size;
   }
@@ -150,7 +160,8 @@ export function codestreamBytes(file: string) {
 function sh(cmd: string[], tolerateExit = false): Promise<string> {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd[0], cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
-    let out = "", err = "";
+    let out = "",
+      err = "";
     p.stdout.on("data", (c) => (out += c));
     p.stderr.on("data", (c) => (err += c));
     p.on("error", reject);
@@ -174,8 +185,9 @@ let metricsBin: Promise<string> | undefined;
 function metrics(): Promise<string> {
   const pinned = process.env.PHOTO_METRICS_BIN;
   if (pinned) return Promise.resolve(pinned);
-  metricsBin ??= sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(METRICS, "Cargo.toml")])
-    .then(() => path.join(METRICS, "target/release/photo-metrics"));
+  metricsBin ??= sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(METRICS, "Cargo.toml")]).then(() =>
+    path.join(METRICS, "target/release/photo-metrics"),
+  );
   return metricsBin;
 }
 
@@ -197,12 +209,16 @@ export const DECODE = ["--bits_per_sample=8"];
 export async function hifArchive(hif: string, baseline: string, out: string) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "hif-archive-"));
   try {
-    const raw = path.join(work, "raw.png"), ref = path.join(work, "ref.png"), base = path.join(work, "base.png");
-    const bare = path.join(work, "bare.jpg"), repack = path.join(work, "bare.jxl");
+    const raw = path.join(work, "raw.png"),
+      ref = path.join(work, "ref.png"),
+      base = path.join(work, "base.png");
+    const bare = path.join(work, "bare.jpg"),
+      repack = path.join(work, "bare.jxl");
     await sh(["sips", "-s", "format", "png", hif, "--out", raw]);
     stripPng(raw, ref);
     const dims = await sh(["sips", "-g", "pixelWidth", "-g", "pixelHeight", ref]);
-    const w = Number(dims.match(/pixelWidth: (\d+)/)?.[1]), h = Number(dims.match(/pixelHeight: (\d+)/)?.[1]);
+    const w = Number(dims.match(/pixelWidth: (\d+)/)?.[1]),
+      h = Number(dims.match(/pixelHeight: (\d+)/)?.[1]);
     // Effort changes only the repack's size: the coefficients, and so the
     // decoded pixels, are the JPEG's either way.
     stripJpegExif(baseline, bare);
@@ -222,7 +238,8 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     const baseScore = await score(ref, base);
 
     const tried = new Map<number, Score & { bytes: number; codestream: number }>();
-    const cand = path.join(work, "cand.jxl"), dec = path.join(work, "cand.png");
+    const cand = path.join(work, "cand.jxl"),
+      dec = path.join(work, "cand.png");
     const d = await searchDistance(async (dist) => {
       await sh(["cjxl", "--quiet", "-d", String(dist), ...ARGS, ref, cand]);
       await sh(["djxl", cand, dec, ...DECODE]);
@@ -240,7 +257,8 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     // Winning on quality is not enough: against the browser-decoded bar, a
     // quarter of the photos first re-measured (6 of 24) beat it only with a
     // file larger than the repack it would replace.
-    const direct = fs.statSync(out).size, repacked = path.join(work, "repacked.jxl");
+    const direct = fs.statSync(out).size,
+      repacked = path.join(work, "repacked.jxl");
     const kept = await transcode("", repacked);
     if (direct >= kept.bytes) {
       fs.copyFileSync(repacked, out);

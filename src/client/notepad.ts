@@ -23,17 +23,23 @@
   "use strict";
   var D = document;
 
+  type MenuAction = { id: string; label: string; acc?: string; check?: () => boolean; fn: () => void };
 
-type MenuAction = { id: string, label: string, acc?: string, check?: () => boolean, fn: () => void };
+  type MenuDefinition = { name: string; items: (MenuAction | "sep")[] };
 
-type MenuDefinition = { name: string, items: (MenuAction | "sep")[] };
+  type OpenMenu = { btn: HTMLElement; drop: HTMLElement; rows: HTMLElement[] };
 
-type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
+  function el(h: string) {
+    var t = D.createElement("template");
+    t.innerHTML = h.trim();
+    return t.content.firstChild as HTMLElement;
+  }
 
-
-  function el(h: string) { var t = D.createElement("template"); t.innerHTML = h.trim(); return (t.content.firstChild as HTMLElement); }
-
-  function esc(s: string) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!; }); }
+  function esc(s: string) {
+    return String(s).replace(/[&<>"]/g, (c) => {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!;
+    });
+  }
   // Notepad's F5 stamp. Intl does the formatting and the two formatters are
   // built on the first F5 rather than per keystroke. ICU writes a narrow no-break
   // space before AM/PM, so whitespace is normalised to a plain space and the
@@ -46,7 +52,7 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
   function f5Stamp(d: Date) {
     f5Fmts = f5Fmts || [
       new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }),
-      new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" })
+      new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" }),
     ];
     return (f5Fmts[0].format(d) + " " + f5Fmts[1].format(d)).replace(/\s/g, " ");
   }
@@ -72,7 +78,6 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
   var HAS_POPOVER = "showPopover" in HTMLElement.prototype;
 
   function Menu(menubar: HTMLElement, definitions: MenuDefinition[]) {
-
     var opened: OpenMenu | null = null;
 
     var buttons: HTMLElement[] = [];
@@ -83,7 +88,6 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
 
     var pressedOpen: HTMLElement | null = null;
     menubar.replaceChildren();
-
 
     function settle(menu: OpenMenu) {
       if (opened !== menu) return;
@@ -103,30 +107,52 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
       if (HAS_POPOVER && previous.drop.matches(":popover-open")) previous.drop.hidePopover();
       previous.drop.remove();
     }
-    function outside() { close(); }
+    function outside() {
+      close();
+    }
 
     function focusButton(index: number) {
-      buttons.forEach((button, i) => { button.tabIndex = i === index ? 0 : -1; });
+      buttons.forEach((button, i) => {
+        button.tabIndex = i === index ? 0 : -1;
+      });
       buttons[index].focus();
     }
 
     function open(index: number, last?: boolean) {
       if (closeActiveMenu) closeActiveMenu();
-      var definition = definitions[index], btn = buttons[index];
+      var definition = definitions[index],
+        btn = buttons[index];
       var drop = el('<div class="np-drop" role="menu"></div>');
       drop.setAttribute("aria-label", definition.name);
 
       var rows: HTMLElement[] = [];
       definition.items.forEach((item) => {
-        if (item === "sep") { drop.appendChild(el('<div class="np-sep" role="separator"></div>')); return; }
+        if (item === "sep") {
+          drop.appendChild(el('<div class="np-sep" role="separator"></div>'));
+          return;
+        }
         var checked = item.check ? item.check() : null;
-        var row = el('<button type="button" class="np-item" tabindex="-1" role="' + (checked === null ? "menuitem" : "menuitemcheckbox") + '">' +
-          '<span class="np-chk" aria-hidden="true">' + (checked ? "✓" : "") + "</span>" +
-          '<span class="np-lbl">' + esc(item.label) + "</span>" +
-          '<span class="np-acc">' + (item.acc ? esc(item.acc) : "") + "</span></button>");
+        var row = el(
+          '<button type="button" class="np-item" tabindex="-1" role="' +
+            (checked === null ? "menuitem" : "menuitemcheckbox") +
+            '">' +
+            '<span class="np-chk" aria-hidden="true">' +
+            (checked ? "✓" : "") +
+            "</span>" +
+            '<span class="np-lbl">' +
+            esc(item.label) +
+            "</span>" +
+            '<span class="np-acc">' +
+            (item.acc ? esc(item.acc) : "") +
+            "</span></button>",
+        );
         row.dataset.npAction = item.id;
         if (checked !== null) row.setAttribute("aria-checked", String(checked));
-        row.addEventListener("click", (e) => { e.stopPropagation(); close(true); item.fn(); });
+        row.addEventListener("click", (e) => {
+          e.stopPropagation();
+          close(true);
+          item.fn();
+        });
         rows.push(row);
         drop.appendChild(row);
       });
@@ -143,9 +169,13 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
         drop.style.cssText = "position:fixed;inset:auto;margin:0;left:" + r.left + "px;top:" + menubar.getBoundingClientRect().bottom + "px";
         // Light dismiss and a native Esc both close from outside this code, so
         // the bookkeeping follows the popover rather than the other way round.
-        drop.addEventListener("beforetoggle", (e) => { if ((e as ToggleEvent).newState === "closed") settle(menu); });
-        drop.addEventListener("toggle", (e) => { if ((e as ToggleEvent).newState === "closed") drop.remove(); });
-        drop.showPopover(({ source: btn } as ShowPopoverOptions));
+        drop.addEventListener("beforetoggle", (e) => {
+          if ((e as ToggleEvent).newState === "closed") settle(menu);
+        });
+        drop.addEventListener("toggle", (e) => {
+          if ((e as ToggleEvent).newState === "closed") drop.remove();
+        });
+        drop.showPopover({ source: btn } as ShowPopoverOptions);
       } else {
         drop.style.left = btn.offsetLeft + "px";
       }
@@ -161,23 +191,31 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
         if (pressed === btn || (opened && opened.btn === btn)) close(true);
         else open(index);
       });
-      btn.addEventListener("mouseenter", () => { if (opened && opened.btn !== btn) open(index); });
+      btn.addEventListener("mouseenter", () => {
+        if (opened && opened.btn !== btn) open(index);
+      });
       buttons.push(btn);
       menubar.appendChild(btn);
     });
-    menubar.addEventListener("pointerdown", () => { pressedOpen = opened ? opened.btn : null; });
+    menubar.addEventListener("pointerdown", () => {
+      pressedOpen = opened ? opened.btn : null;
+    });
     menubar.addEventListener("focusout", (e) => {
-      if (!menubar.contains((e.relatedTarget as Node | null))) close();
+      if (!menubar.contains(e.relatedTarget as Node | null)) close();
     });
     menubar.addEventListener("keydown", (e) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       var active = D.activeElement;
-      var top = buttons.indexOf((active as HTMLElement));
+      var top = buttons.indexOf(active as HTMLElement);
       var rows = opened ? opened.rows : [];
-      var row = rows.indexOf((active as HTMLElement));
+      var row = rows.indexOf(active as HTMLElement);
       if (top < 0 && row < 0) return;
-      var key = e.key, index = top >= 0 ? top : buttons.indexOf((opened as OpenMenu).btn);
-      if (key === "Tab") { close(true); return; } // native Tab continues outside the composite
+      var key = e.key,
+        index = top >= 0 ? top : buttons.indexOf((opened as OpenMenu).btn);
+      if (key === "Tab") {
+        close(true);
+        return;
+      } // native Tab continues outside the composite
       if (key === "Escape") {
         if (!opened) return;
         close(true);
@@ -194,7 +232,8 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
       } else if ((key === "Enter" || key === " ") && top >= 0) {
         open(top);
       } else if (key.length === 1 && key !== " ") {
-        var candidates = top >= 0 ? buttons : rows, from = top >= 0 ? top : row;
+        var candidates = top >= 0 ? buttons : rows,
+          from = top >= 0 ? top : row;
         for (var offset = 1; offset <= candidates.length; offset++) {
           var match = (from + offset) % candidates.length;
           var label = candidates[match].querySelector(".np-lbl") || candidates[match];
@@ -215,7 +254,13 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
   // supplies a dialog with form method="dialog" controls and an autofocus target.
 
   function Dialog(box: HTMLDialogElement) {
-    box.addEventListener("close", () => { box.remove(); }, { once: true });
+    box.addEventListener(
+      "close",
+      () => {
+        box.remove();
+      },
+      { once: true },
+    );
     var pressedOutside = false;
 
     function outside(e: MouseEvent) {
@@ -224,8 +269,12 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
       return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
     }
     // A text-selection drag that starts inside must not become a backdrop click.
-    box.addEventListener("pointerdown", (e) => { pressedOutside = e.button === 0 && outside(e); });
-    box.addEventListener("pointercancel", () => { pressedOutside = false; });
+    box.addEventListener("pointerdown", (e) => {
+      pressedOutside = e.button === 0 && outside(e);
+    });
+    box.addEventListener("pointercancel", () => {
+      pressedOutside = false;
+    });
     box.addEventListener("click", (e) => {
       if (pressedOutside && outside(e)) box.close();
       pressedOutside = false;
@@ -236,7 +285,8 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
 
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
-    if (!win || win.__np) return; win.__np = true;
+    if (!win || win.__np) return;
+    win.__np = true;
     var ta = win.querySelector(".np-text");
     var menubar = win.querySelector(".np-menubar");
     var statusEl = win.querySelector(".np-status");
@@ -250,86 +300,166 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
         if (win.hidePopover) win.hidePopover();
       });
     }
-    if (!ta) return;   // folder index has no textarea — nothing more to wire
+    if (!ta) return; // folder index has no textarea — nothing more to wire
 
-    var wrap = ta.getAttribute("wrap") !== "off";   // default on (readable prose)
+    var wrap = ta.getAttribute("wrap") !== "off"; // default on (readable prose)
     var statusOn = true;
 
     // ── status bar: Ln/Col + word count (live) ────────────────────────────────
     function status() {
       if (posEl) {
-        var c = ta.selectionStart, before = ta.value.slice(0, c);
+        var c = ta.selectionStart,
+          before = ta.value.slice(0, c);
         var nl = before.lastIndexOf("\n");
-        posEl.textContent = "Ln " + (before.split("\n").length) + ", Col " + (c - nl);
+        posEl.textContent = "Ln " + before.split("\n").length + ", Col " + (c - nl);
       }
       if (wcEl) {
         var words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
         wcEl.textContent = words + (words === 1 ? " word" : " words");
       }
     }
-    ["keyup", "click", "input", "select", "focus"].forEach((e) => { ta.addEventListener(e, status); });
+    ["keyup", "click", "input", "select", "focus"].forEach((e) => {
+      ta.addEventListener(e, status);
+    });
 
     // ── actions ──────────────────────────────────────────────────────────────
-    function toggleWrap() { wrap = !wrap; ta.setAttribute("wrap", wrap ? "soft" : "off"); ta.classList.toggle("nowrap", !wrap); }
-    function toggleStatus() { statusOn = !statusOn; if (statusEl) statusEl.style.display = statusOn ? "" : "none"; }
-    function selectAll() { ta.focus(); ta.select(); }
+    function toggleWrap() {
+      wrap = !wrap;
+      ta.setAttribute("wrap", wrap ? "soft" : "off");
+      ta.classList.toggle("nowrap", !wrap);
+    }
+    function toggleStatus() {
+      statusOn = !statusOn;
+      if (statusEl) statusEl.style.display = statusOn ? "" : "none";
+    }
+    function selectAll() {
+      ta.focus();
+      ta.select();
+    }
     function insertDate() {
       // classic Notepad F5: "h:mm AM/PM M/D/YYYY", in en-US whatever the
       // visitor's locale, because that is the string Notepad typed.
       var stamp = f5Stamp(new Date());
-      var s = ta.selectionStart, e = ta.selectionEnd;
+      var s = ta.selectionStart,
+        e = ta.selectionEnd;
       ta.value = ta.value.slice(0, s) + stamp + ta.value.slice(e);
       ta.selectionStart = ta.selectionEnd = s + stamp.length;
-      ta.focus(); status();
+      ta.focus();
+      status();
     }
-    function newDoc() { ta.value = ""; ta.focus(); status(); }   // a fresh scratch (unsaved, like everything here)
+    function newDoc() {
+      ta.value = "";
+      ta.focus();
+      status();
+    } // a fresh scratch (unsaved, like everything here)
     function exit() {
       if (win.matches("[popover]") && win.hidePopover) win.hidePopover();
       else location.assign("/writing");
     }
     function about() {
       if (D.querySelector(".np-about")) return;
-      var box = (el(
+      var box = el(
         '<dialog class="np-about" aria-label="About Notepad"><form method="dialog">' +
           '<div class="np-titlebar"><span class="np-ico"></span><span class="np-title">About Notepad</span>' +
-            '<span class="np-controls"><button type="submit" class="close" aria-label="Close">✕</button></span></div>' +
+          '<span class="np-controls"><button type="submit" class="close" aria-label="Close">✕</button></span></div>' +
           '<div class="np-about-body"><p><b>Notepad</b>, a resto-mod of the Windows&nbsp;XP app.</p>' +
-          '<p>This is a real text field: edit it however you like. Nothing saves, so a reload restores my canonical version. The writing here is always in flux.</p>' +
-          '<div class="np-about-btns"><button type="submit" class="xp-button default" autofocus>OK</button></div></div></form></dialog>'
-      ) as HTMLDialogElement);
+          "<p>This is a real text field: edit it however you like. Nothing saves, so a reload restores my canonical version. The writing here is always in flux.</p>" +
+          '<div class="np-about-btns"><button type="submit" class="xp-button default" autofocus>OK</button></div></div></form></dialog>',
+      ) as HTMLDialogElement;
       Dialog(box);
     }
 
-
     var MENUS: MenuDefinition[] = [
-      { name: "File", items: [
-        { id: "new", label: "New", acc: "Ctrl+N", fn: newDoc },
-        { id: "open", label: "Open…", acc: "Ctrl+O", fn: () => { location.assign("/writing"); } },
-        "sep",
-        { id: "print", label: "Print…", acc: "Ctrl+P", fn: () => { window.print(); } },
-        { id: "exit", label: "Exit", fn: exit }
-      ] },
-      { name: "Edit", items: [
-        { id: "undo", label: "Undo", acc: "Ctrl+Z", fn: () => { ta.focus(); try { D.execCommand("undo"); } catch (e) {} } },
-        "sep",
-        { id: "select-all", label: "Select All", acc: "Ctrl+A", fn: selectAll },
-        { id: "insert-date", label: "Time/Date", acc: "F5", fn: insertDate }
-      ] },
-      { name: "Format", items: [ { id: "word-wrap", label: "Word Wrap", check: () => { return wrap; }, fn: toggleWrap } ] },
-      { name: "View", items: [ { id: "status-bar", label: "Status Bar", check: () => { return statusOn; }, fn: toggleStatus } ] },
-      { name: "Help", items: [ { id: "about", label: "About Notepad", fn: about } ] }
+      {
+        name: "File",
+        items: [
+          { id: "new", label: "New", acc: "Ctrl+N", fn: newDoc },
+          {
+            id: "open",
+            label: "Open…",
+            acc: "Ctrl+O",
+            fn: () => {
+              location.assign("/writing");
+            },
+          },
+          "sep",
+          {
+            id: "print",
+            label: "Print…",
+            acc: "Ctrl+P",
+            fn: () => {
+              window.print();
+            },
+          },
+          { id: "exit", label: "Exit", fn: exit },
+        ],
+      },
+      {
+        name: "Edit",
+        items: [
+          {
+            id: "undo",
+            label: "Undo",
+            acc: "Ctrl+Z",
+            fn: () => {
+              ta.focus();
+              try {
+                D.execCommand("undo");
+              } catch (e) {}
+            },
+          },
+          "sep",
+          { id: "select-all", label: "Select All", acc: "Ctrl+A", fn: selectAll },
+          { id: "insert-date", label: "Time/Date", acc: "F5", fn: insertDate },
+        ],
+      },
+      {
+        name: "Format",
+        items: [
+          {
+            id: "word-wrap",
+            label: "Word Wrap",
+            check: () => {
+              return wrap;
+            },
+            fn: toggleWrap,
+          },
+        ],
+      },
+      {
+        name: "View",
+        items: [
+          {
+            id: "status-bar",
+            label: "Status Bar",
+            check: () => {
+              return statusOn;
+            },
+            fn: toggleStatus,
+          },
+        ],
+      },
+      { name: "Help", items: [{ id: "about", label: "About Notepad", fn: about }] },
     ];
 
     // ── keyboard shortcuts (only while editing) ────────────────────────────────
     ta.addEventListener("keydown", (e) => {
-      if (e.key === "F5") { e.preventDefault(); insertDate(); }            // Notepad's date stamp (Ctrl+R still reloads)
-      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); window.print(); }
+      if (e.key === "F5") {
+        e.preventDefault();
+        insertDate();
+      } // Notepad's date stamp (Ctrl+R still reloads)
+      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        window.print();
+      }
     });
 
     if (menubar) {
       var closeMenu = Menu(menubar, MENUS);
       // A manually closed note must not retain a detached menu or document listener.
-      win.addEventListener("beforetoggle", (e) => { if (e.target === win && e.newState === "closed") closeMenu(); });
+      win.addEventListener("beforetoggle", (e) => {
+        if (e.target === win && e.newState === "closed") closeMenu();
+      });
     }
     status();
   }
@@ -340,14 +470,16 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
   // down-and-right so each new one is offset; close with ✕ or Esc (topmost first).
   function initFolder() {
     var files = D.querySelector(".np-files");
-    if (!files || !("showPopover" in HTMLElement.prototype)) return;   // no-JS / old → follow links
+    if (!files || !("showPopover" in HTMLElement.prototype)) return; // no-JS / old → follow links
 
-    files.addEventListener("click", ( e: MouseEvent) => {
+    files.addEventListener("click", (e: MouseEvent) => {
       // let a modified / non-primary click through so the real /writing/<slug>
       // permalink still opens (Cmd/Ctrl-click new tab, middle-click, etc.).
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-      var a = (e.target as Element).closest("a[data-note]"); if (!a) return;
-      var pop = D.getElementById("note-" +  (a as HTMLElement).dataset.note); if (!pop) return;
+      var a = (e.target as Element).closest("a[data-note]");
+      if (!a) return;
+      var pop = D.getElementById("note-" + (a as HTMLElement).dataset.note);
+      if (!pop) return;
       e.preventDefault();
       openNote(pop);
     });
@@ -356,15 +488,19 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
     // capture phase, so we see an open menu BEFORE its own bubble-phase Esc
     // handler removes it: if a .np-drop menu is open, that Escape belongs to the
     // menu, so leave the note alone (a second Escape then closes the note).
-    D.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      if (D.querySelector(".np-drop:popover-open, dialog:modal")) return;
-      var open = (D.querySelectorAll(".np-note:popover-open") as NodeListOf<HTMLElement>);
-      if (open.length) {
-        e.preventDefault();
-        open[open.length - 1].hidePopover();
-      }
-    }, true);
+    D.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key !== "Escape") return;
+        if (D.querySelector(".np-drop:popover-open, dialog:modal")) return;
+        var open = D.querySelectorAll(".np-note:popover-open") as NodeListOf<HTMLElement>;
+        if (open.length) {
+          e.preventDefault();
+          open[open.length - 1].hidePopover();
+        }
+      },
+      true,
+    );
   }
   function openNote(pop) {
     enhance(pop); // Hidden notes acquire actions/listeners only when first opened.
@@ -376,13 +512,21 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
     // it, so anything written outside the callback ran a frame early against a
     // hidden element and silently did nothing. With the transition gone the calls
     // simply run in order, which is the same guarantee without the indirection.
-    if (pop.matches(":popover-open")) {                 // already open → raise + focus
-      try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+    if (pop.matches(":popover-open")) {
+      // already open → raise + focus
+      try {
+        pop.hidePopover();
+        pop.showPopover();
+      } catch (_) {}
       if (ta) ta.focus();
       return;
     }
-    var n = D.querySelectorAll(".np-note:popover-open").length;   // # already open → cascade step
-    try { pop.showPopover(); } catch (_) { return; }
+    var n = D.querySelectorAll(".np-note:popover-open").length; // # already open → cascade step
+    try {
+      pop.showPopover();
+    } catch (_) {
+      return;
+    }
     var folder = D.querySelector(".np-folder");
     var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
     var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
@@ -391,7 +535,10 @@ type OpenMenu = { btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] };
     // the taskbar's real height (luna.css SAFE AREAS registers it as a <length>)
     var bar = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--taskbar-h")) || 30;
     var y = Math.max(8, Math.min(by + n * step, innerHeight - bar - 90));
-    pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+    pop.style.margin = "0";
+    pop.style.right = "auto";
+    pop.style.left = x + "px";
+    pop.style.top = y + "px";
     if (ta) ta.focus();
     window.dispatchEvent(new Event("resize"));
   }

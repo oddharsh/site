@@ -18,8 +18,9 @@
 // to a real destination; nothing decorative pretends to be interactive.
 (() => {
   "use strict";
-  var W = (window as Window & typeof globalThis & {__axpNav?: boolean, webkitAudioContext?: typeof AudioContext});
-  if (W.__axpNav) return; W.__axpNav = true;
+  var W = window as Window & typeof globalThis & { __axpNav?: boolean; webkitAudioContext?: typeof AudioContext };
+  if (W.__axpNav) return;
+  W.__axpNav = true;
   var D = document;
   // The speculation ledger's numerator (src/worker/speculation.ts, THE CLIENT
   // HALF); the header beacon the ledger was built around never shipped, so this
@@ -33,39 +34,57 @@
   // prerender event alone would never have seen.
   var activated = () => {
     try {
-      fetch("/ledger/prefetch?via=client&p=" + encodeURIComponent(location.pathname),
-        { method: "HEAD", keepalive: true, credentials: "omit" }).catch(() => {});
-    } catch { /* a metric must never break a page */ }
+      fetch("/ledger/prefetch?via=client&p=" + encodeURIComponent(location.pathname), { method: "HEAD", keepalive: true, credentials: "omit" }).catch(() => {});
+    } catch {
+      /* a metric must never break a page */
+    }
   };
-  if ((D as Document & {prerendering?: boolean}).prerendering) {
+  if ((D as Document & { prerendering?: boolean }).prerendering) {
     D.addEventListener("prerenderingchange", activated, { once: true });
   } else {
-    var navEntry = (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming & {deliveryType?: string} | undefined);
+    var navEntry = performance.getEntriesByType("navigation")[0] as (PerformanceNavigationTiming & { deliveryType?: string }) | undefined;
     if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated();
   }
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
   // Mac users see ⌘K and everyone else sees Ctrl K.
-  var uaData = (navigator as Navigator & {userAgentData?: {platform?: string}}).userAgentData;
+  var uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
   var IS_MAC = /Mac|iPhone|iPad|iPod/i.test((uaData && uaData.platform) || navigator.platform || navigator.userAgent || "");
   var KBD = IS_MAC ? "⌘K" : "Ctrl K";
 
   // Run destinations and profiles live in /nav-run.js, transferred only when
   // someone opens the palette. Section artwork lives only in shell-data.ts;
   // the compiler already projected it into each taskbar pin's sprite image.
-  var WRITING = (null as any[] | null);         // lazy: [{ label, path, hint, kind:'writing' }]
-  var photosPromise = (null as Promise<any> | null), writingPromise = (null as Promise<any> | null);
+  var WRITING = null as any[] | null; // lazy: [{ label, path, hint, kind:'writing' }]
+  var photosPromise = null as Promise<any> | null,
+    writingPromise = null as Promise<any> | null;
 
-  function tag(kind, o) { o.kind = kind; return o; }
+  function tag(kind, o) {
+    o.kind = kind;
+    return o;
+  }
 
   // pull the photo manifest (for /images/full/<file> paths) + alt captions (labels)
   function loadPhotos() {
     if (photosPromise) return photosPromise;
     photosPromise = Promise.all([
-      fetch("/images/manifest.json").then((r) => { return r.ok ? r.json() : null; }).catch(() => { return null; }),
-      fetch("/images/alt.json").then((r) => { return r.ok ? r.json() : {}; }).catch(() => { return {}; })
+      fetch("/images/manifest.json")
+        .then((r) => {
+          return r.ok ? r.json() : null;
+        })
+        .catch(() => {
+          return null;
+        }),
+      fetch("/images/alt.json")
+        .then((r) => {
+          return r.ok ? r.json() : {};
+        })
+        .catch(() => {
+          return {};
+        }),
     ]).then((res) => {
-      var man = res[0], alt = res[1] || {};
+      var man = res[0],
+        alt = res[1] || {};
       var photos = ((man && man.photos) || []).map((p) => {
         return tag("photo", {
           label: p.stem,
@@ -73,7 +92,7 @@
           hint: alt[p.stem] || "full-resolution photo",
           // the 400px AVIF tier the mobile grid already ships (~12KB), reused
           // by the Run preview card. Absolute + content-hashed in the manifest.
-          thumb: p.thumb_small || p.thumb_avif || ""
+          thumb: p.thumb_small || p.thumb_avif || "",
         });
       });
       return photos;
@@ -84,7 +103,13 @@
   // writing posts (for /writing/<slug> entries) — same lazy pattern as photos
   function loadWriting() {
     if (writingPromise) return writingPromise;
-    writingPromise = fetch("/writing/posts.json").then((r) => { return r.ok ? r.json() : []; }).catch(() => { return []; })
+    writingPromise = fetch("/writing/posts.json")
+      .then((r) => {
+        return r.ok ? r.json() : [];
+      })
+      .catch(() => {
+        return [];
+      })
       .then((posts) => {
         WRITING = (posts || []).map((p) => {
           return tag("writing", { label: p.title || p.slug, path: "/writing/" + p.slug, hint: p.date ? "note · " + p.date : "note" });
@@ -104,16 +129,20 @@
   // /a/luna.<hash>.css (substring "luna."), so a hashed page is never double-linked.
   function ensureLunaCss() {
     if (D.querySelector('link[href*="luna."]') || D.getElementById("axp-css")) return;
-    var l = D.createElement("link"); l.rel = "stylesheet"; l.href = "/luna.css";
+    var l = D.createElement("link");
+    l.rel = "stylesheet";
+    l.href = "/luna.css";
     (D.head || D.documentElement).appendChild(l);
   }
 
   // ── interaction islands + shared state ───────────────────────────────────────
-  var runPromise = (null as Promise<any> | null), runApi = (null as any);
+  var runPromise = null as Promise<any> | null,
+    runApi = null as any;
   // Shared readers back both the lazy tray island and the lazy infotips.
-  var sysData = (null as any), updData = (null as any);
-  var trayPromise = (null as Promise<any> | null), accZ = 40;
-
+  var sysData = null as any,
+    updData = null as any;
+  var trayPromise = null as Promise<any> | null,
+    accZ = 40;
 
   function el(html): HTMLElement {
     var t = D.createElement("template");
@@ -128,59 +157,118 @@
   // audio; the choice persists in localStorage. Navigation sounds are skipped on
   // purpose (page unload cuts them) — only in-page shell actions play.
   var AXP_SND = (() => {
-    var ctx: any = null, on = false;
-    try { on = localStorage.getItem("axp-sound") === "on"; } catch (e) {}
-    function ac() { if (!ctx) { try { var Audio = W.AudioContext || W.webkitAudioContext; if (!Audio) return null; ctx = new Audio(); } catch (e) { return null; } } if (ctx.state === "suspended" && ctx.resume) ctx.resume(); return ctx; }
+    var ctx: any = null,
+      on = false;
+    try {
+      on = localStorage.getItem("axp-sound") === "on";
+    } catch (e) {}
+    function ac() {
+      if (!ctx) {
+        try {
+          var Audio = W.AudioContext || W.webkitAudioContext;
+          if (!Audio) return null;
+          ctx = new Audio();
+        } catch (e) {
+          return null;
+        }
+      }
+      if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+      return ctx;
+    }
     // one decaying partial: fast attack, exponential tail (a struck note, not a beep).
     function partial(c, freq, t0, dur, peak, type) {
-      var o = c.createOscillator(), g = c.createGain();
-      o.type = type || "sine"; o.frequency.value = freq; o.connect(g); g.connect(c.destination);
-      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak || 0.1, t0 + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(t0); o.stop(t0 + dur + 0.02);
+      var o = c.createOscillator(),
+        g = c.createGain();
+      o.type = type || "sine";
+      o.frequency.value = freq;
+      o.connect(g);
+      g.connect(c.destination);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak || 0.1, t0 + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
     }
     // struck-bell timbre: fundamental + inharmonic overtones, the glassy chime
     // character XP's notification sounds have (a flat sine beep does not).
     function bell(c, base, t0, dur, peak) {
-      partial(c, base,        t0, dur,       peak,        "sine");
-      partial(c, base * 2.01, t0, dur * 0.7, peak * 0.5,  "sine");
-      partial(c, base * 2.76, t0, dur * 0.5, peak * 0.30, "sine");
+      partial(c, base, t0, dur, peak, "sine");
+      partial(c, base * 2.01, t0, dur * 0.7, peak * 0.5, "sine");
+      partial(c, base * 2.76, t0, dur * 0.5, peak * 0.3, "sine");
       partial(c, base * 5.18, t0, dur * 0.28, peak * 0.12, "triangle");
     }
     var voices = {
       // notification ding: a quick bright chime up a fourth
-      open:  (c, t) => { bell(c, 784, t, 0.45, 0.07); bell(c, 1047, t + 0.045, 0.6, 0.085); },
+      open: (c, t) => {
+        bell(c, 784, t, 0.45, 0.07);
+        bell(c, 1047, t + 0.045, 0.6, 0.085);
+      },
       // dismissal: a softer chime down
-      close: (c, t) => { bell(c, 659, t, 0.40, 0.06); bell(c, 494, t + 0.05, 0.5, 0.05); },
+      close: (c, t) => {
+        bell(c, 659, t, 0.4, 0.06);
+        bell(c, 494, t + 0.05, 0.5, 0.05);
+      },
       // critical-stop: a low dissonant pair with a little grit
-      error: (c, t) => { partial(c, 196, t, 0.30, 0.075, "sine"); partial(c, 207, t, 0.32, 0.05, "triangle"); partial(c, 98, t, 0.34, 0.05, "sine"); },
+      error: (c, t) => {
+        partial(c, 196, t, 0.3, 0.075, "sine");
+        partial(c, 207, t, 0.32, 0.05, "triangle");
+        partial(c, 98, t, 0.34, 0.05, "sine");
+      },
       // task-complete fanfare: a rising major arpeggio landing on a held octave
-      tada:  (c, t) => { [523, 659, 784].forEach((f, i) => { bell(c, f, t + i * 0.09, 0.32, 0.07); }); bell(c, 1047, t + 0.27, 0.85, 0.09); }
+      tada: (c, t) => {
+        [523, 659, 784].forEach((f, i) => {
+          bell(c, f, t + i * 0.09, 0.32, 0.07);
+        });
+        bell(c, 1047, t + 0.27, 0.85, 0.09);
+      },
     };
     return {
-      on: () => { return on; },
-      set: (v) => { on = !!v; try { localStorage.setItem("axp-sound", on ? "on" : "off"); } catch (e) {} },
-      play: (name) => { if (!on) return; var c = ac(); if (c && voices[name]) voices[name](c, c.currentTime); }
+      on: () => {
+        return on;
+      },
+      set: (v) => {
+        on = !!v;
+        try {
+          localStorage.setItem("axp-sound", on ? "on" : "off");
+        } catch (e) {}
+      },
+      play: (name) => {
+        if (!on) return;
+        var c = ac();
+        if (c && voices[name]) voices[name](c, c.currentTime);
+      },
     };
   })();
 
-  function front(win) { win.style.zIndex = ++accZ; }
+  function front(win) {
+    win.style.zIndex = ++accZ;
+  }
   // luna.css's SAFE AREAS insets in px: sa-t, sa-r, sa-b, sa-l, and taskbar-h (the bar
   // plus the home-indicator strip under it). They're registered as <length>, so the
   // computed value is resolved pixels; unregistered or absent reads 0, and the taskbar 30.
-  function inset(name) { var v = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--" + name)); return v > 0 ? v : 0; }
-  function taskbarH() { return inset("taskbar-h") || 30; }
+  function inset(name) {
+    var v = parseFloat(getComputedStyle(D.documentElement).getPropertyValue("--" + name));
+    return v > 0 ? v : 0;
+  }
+  function taskbarH() {
+    return inset("taskbar-h") || 30;
+  }
   function initRaise() {
-    D.addEventListener("pointerdown", (e) => {
-      var win = e.target instanceof Element && e.target.closest(".window,.np-window,.axp-acc");
-      if (!(win instanceof HTMLElement) || String(win.style.zIndex) === String(accZ)) return;
-      front(win);
-    }, true);
+    D.addEventListener(
+      "pointerdown",
+      (e) => {
+        var win = e.target instanceof Element && e.target.closest(".window,.np-window,.axp-acc");
+        if (!(win instanceof HTMLElement) || String(win.style.zIndex) === String(accZ)) return;
+        front(win);
+      },
+      true,
+    );
   }
 
   var STYLE_ASSETS = {
     "nav-run": "/nav-run.css",
     "nav-tray": "/nav-tray.css",
-    "infotip": "/infotip.css"
+    "infotip": "/infotip.css",
   };
   var stylePromises = Object.create(null);
   function loadStyle(name) {
@@ -190,7 +278,11 @@
       link.rel = "stylesheet";
       link.href = STYLE_ASSETS[name];
       link.onload = resolve;
-      link.onerror = () => { delete stylePromises[name]; link.remove(); reject(new Error(name + " styles failed")); };
+      link.onerror = () => {
+        delete stylePromises[name];
+        link.remove();
+        reject(new Error(name + " styles failed"));
+      };
       (D.head || D.documentElement).appendChild(link);
     });
     return stylePromises[name];
@@ -208,7 +300,9 @@
           front: front,
           inset: inset,
           saver: runSaver,
-          tips: () => { openTips(false).catch(() => {}); }
+          tips: () => {
+            openTips(false).catch(() => {});
+          },
         });
         return runApi;
       });
@@ -217,10 +311,13 @@
   }
   function toggleRun(viaKeyboard) {
     if (runApi) {
-      if (runApi.isOpen()) runApi.close(); else runApi.open(viaKeyboard);
+      if (runApi.isOpen()) runApi.close();
+      else runApi.open(viaKeyboard);
       return Promise.resolve();
     }
-    return loadRun().then((api) => { api.open(viaKeyboard); });
+    return loadRun().then((api) => {
+      api.open(viaKeyboard);
+    });
   }
 
   // Behavior for the compiled taskbar. Shell presence is a build invariant:
@@ -232,13 +329,15 @@
       // platform-correct shortcut hint + title (the static partial ships ⌘K;
       // non-Mac visitors get it rewritten here before they can notice)
       start.title = "Run — navigate the site (" + KBD + ")";
-      [].forEach.call(start.querySelectorAll(".axp-kbd"), (k) => { k.textContent = KBD; });
+      [].forEach.call(start.querySelectorAll(".axp-kbd"), (k) => {
+        k.textContent = KBD;
+      });
       start.addEventListener("click", (e) => {
-        e.preventDefault();   // the href is the JS-off floor; JS gets the palette
+        e.preventDefault(); // the href is the JS-off floor; JS gets the palette
         // detail === 0 means the click came from the keyboard (Enter/Space on the
         // focused orb) rather than a pointer, so the ring is still wanted here.
         toggleRun(e.detail === 0).catch(() => {
-          location.assign(startHref);   // preserve the real /run fallback
+          location.assign(startHref); // preserve the real /run fallback
         });
       });
       // Warm the island on hover intent, the same signal the homepage tooltip
@@ -251,9 +350,16 @@
       // is no hover on the keyboard path, and warming on modifier-keydown would
       // fire for every ⌘R/⌘T/⌘C. Touch fires a synthetic pointerover while
       // scrolling past the taskbar (gotcha 10), so only a real hover counts.
-      start.addEventListener("pointerover", (e) => {
-        if (e.pointerType !== "touch") loadRun().catch(() => { runPromise = null; });
-      }, { passive: true });
+      start.addEventListener(
+        "pointerover",
+        (e) => {
+          if (e.pointerType !== "touch")
+            loadRun().catch(() => {
+              runPromise = null;
+            });
+        },
+        { passive: true },
+      );
     }
     // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
     // current path's first segment against each pin's section (garage subpages
@@ -263,21 +369,31 @@
       var pinSeg = "/" + ((p.getAttribute("href") || "").split("/")[1] || "");
       var cur = seg !== "/" && pinSeg === seg;
       p.classList.toggle("cur", cur);
-      if (cur) p.setAttribute("aria-current", "page"); else p.removeAttribute("aria-current");
+      if (cur) p.setAttribute("aria-current", "page");
+      else p.removeAttribute("aria-current");
     });
-    var sndBtn = (D.getElementById("axp-sound") as HTMLElement);
-    if (sndBtn) sndBtn.hidden = false;   // the partial ships it hidden: sounds need JS
+    var sndBtn = D.getElementById("axp-sound") as HTMLElement;
+    if (sndBtn) sndBtn.hidden = false; // the partial ships it hidden: sounds need JS
     function paintSnd() {
       var on = AXP_SND.on();
       sndBtn.className = on ? "" : "muted";
       sndBtn.title = on ? "Sounds on (click to mute)" : "Sounds off (click to unmute)";
-      sndBtn.setAttribute("aria-label", sndBtn.title); sndBtn.setAttribute("aria-pressed", String(!on));
-      sndBtn.innerHTML = '<svg viewBox="0 0 24 24">' + (on
-        ? '<defs><filter id="sdSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="sdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbfb"></stop><stop offset=".5" stop-color="#cfcfcf"></stop><stop offset="1" stop-color="#9c9c9c"></stop></linearGradient></defs><g filter="url(#sdSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#sdC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><path d="M3.9 9.4 H6.1 L9.6 6 V8.6 Z" fill="#ffffff" opacity=".4"></path><g fill="none" stroke="#2e8fd6" stroke-linecap="round"><path d="M13.4 8 Q15.4 11 13.4 14" stroke-width="1.6"></path><path d="M15.7 6 Q19.2 11 15.7 16" stroke-width="1.5" opacity=".82"></path><path d="M18 4.3 Q22.4 11 18 17.7" stroke-width="1.4" opacity=".62"></path></g></g>'
-        : '<defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g>') + '</svg>';
+      sndBtn.setAttribute("aria-label", sndBtn.title);
+      sndBtn.setAttribute("aria-pressed", String(!on));
+      sndBtn.innerHTML =
+        '<svg viewBox="0 0 24 24">' +
+        (on
+          ? '<defs><filter id="sdSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="sdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbfb"></stop><stop offset=".5" stop-color="#cfcfcf"></stop><stop offset="1" stop-color="#9c9c9c"></stop></linearGradient></defs><g filter="url(#sdSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#sdC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><path d="M3.9 9.4 H6.1 L9.6 6 V8.6 Z" fill="#ffffff" opacity=".4"></path><g fill="none" stroke="#2e8fd6" stroke-linecap="round"><path d="M13.4 8 Q15.4 11 13.4 14" stroke-width="1.6"></path><path d="M15.7 6 Q19.2 11 15.7 16" stroke-width="1.5" opacity=".82"></path><path d="M18 4.3 Q22.4 11 18 17.7" stroke-width="1.4" opacity=".62"></path></g></g>'
+          : '<defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g>') +
+        "</svg>";
     }
     if (sndBtn) {
-      sndBtn.addEventListener("click", () => { var next = !AXP_SND.on(); AXP_SND.set(next); paintSnd(); if (next) AXP_SND.play("tada"); });
+      sndBtn.addEventListener("click", () => {
+        var next = !AXP_SND.on();
+        AXP_SND.set(next);
+        paintSnd();
+        if (next) AXP_SND.play("tada");
+      });
       paintSnd();
     }
     // each system-utility tray icon opens a brief XP balloon above itself. they stay
@@ -287,25 +403,33 @@
       ic.setAttribute("aria-haspopup", "dialog");
       ic.setAttribute("aria-expanded", "false");
       ic.addEventListener("click", (e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey) return;   // let the browser navigate
+        if (e.metaKey || e.ctrlKey || e.shiftKey) return; // let the browser navigate
         e.preventDefault();
         toggleTray(ic.getAttribute("data-kind"), ic).catch(() => {
-          location.assign(ic.href);   // a failed island load falls back to the real page
+          location.assign(ic.href); // a failed island load falls back to the real page
         });
       });
       // same hover warm as the Start orb, for the same reason. Unlike /run these
       // icons keep their page prerenders: each balloon carries a "full page"
       // link, so /security and /updates are destinations a visitor really reaches.
-      ic.addEventListener("pointerover", (e) => {
-        if (e.pointerType !== "touch") loadTray().catch(() => { trayPromise = null; });
-      }, { passive: true });
+      ic.addEventListener(
+        "pointerover",
+        (e) => {
+          if (e.pointerType !== "touch")
+            loadTray().catch(() => {
+              trayPromise = null;
+            });
+        },
+        { passive: true },
+      );
     });
     tickClock();
     // A hidden tab's timers are throttled, so the one pending for the next
     // minute can land late. Coming back into view re-reads the time at once.
-    D.addEventListener("visibilitychange", () => { if (!D.hidden) tickClock(); });
+    D.addEventListener("visibilitychange", () => {
+      if (!D.hidden) tickClock();
+    });
   }
-
 
   // Desktop icon positions are DELIBERATELY not persisted. The stored layout
   // was read back in states that couldn't honour it (luna hides #axp-icons
@@ -316,22 +440,35 @@
   // Shipped 2026-07-22; safe to delete once returning visitors have cycled
   // through (any time after ~2027-07), because a leftover key with no reader
   // is inert, it just wastes a slot in someone's localStorage.
-  try { localStorage.removeItem("axp-icons-pos"); } catch (_) {}
+  try {
+    localStorage.removeItem("axp-icons-pos");
+  } catch (_) {}
 
   // drag desktop icons around the wallpaper (transform-free: left/top).
   // a movement threshold distinguishes a drag from a click so links still open.
   function initIconDrag() {
-    var icons = D.getElementById("axp-icons"); if (!icons) return;
+    var icons = D.getElementById("axp-icons");
+    if (!icons) return;
     // ProMotion discipline: the gesture writes TRANSFORM only (pure compositor
     // move, promoted by .axp-dragging's will-change), and the final left/top is
     // committed once, on release. Writing left/top per pointermove forced a
     // layout every frame — visible as judder on 120Hz variable-refresh panels.
-    var cur = (null as HTMLElement | null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, maxY = 0, moved = false;
+    var cur = null as HTMLElement | null,
+      sx = 0,
+      sy = 0,
+      ox = 0,
+      oy = 0,
+      nx = 0,
+      ny = 0,
+      maxY = 0,
+      moved = false;
     function mv(e) {
       if (!cur) return;
-      var dx = e.clientX - sx, dy = e.clientY - sy;
+      var dx = e.clientX - sx,
+        dy = e.clientY - sy;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-      moved = true; cur.classList.add("axp-dragging");
+      moved = true;
+      cur.classList.add("axp-dragging");
       nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
       ny = Math.max(0, Math.min(oy + dy, maxY));
       cur.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
@@ -339,7 +476,8 @@
     function up() {
       D.removeEventListener("pointermove", mv);
       if (cur && moved) {
-        cur.style.left = nx + "px"; cur.style.top = ny + "px";
+        cur.style.left = nx + "px";
+        cur.style.top = ny + "px";
         cur.style.transform = "";
         cur.classList.remove("axp-dragging");
       }
@@ -349,19 +487,33 @@
       if (e.pointerType === "mouse" && e.button !== 0) return;
       var a = e.target instanceof Element && e.target.closest(".axp-ico");
       if (!(a instanceof HTMLElement)) return;
-      cur = a; moved = false; sx = e.clientX; sy = e.clientY;
+      cur = a;
+      moved = false;
+      sx = e.clientX;
+      sy = e.clientY;
       // the layer's height, not innerHeight: it starts below the HyperCam band
       maxY = (e.currentTarget as HTMLElement).clientHeight - taskbarH() - 72;
-      ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
-      try { a.setPointerCapture(e.pointerId); } catch (_) {}
+      ox = parseFloat(a.style.left) || 0;
+      oy = parseFloat(a.style.top) || 0;
+      try {
+        a.setPointerCapture(e.pointerId);
+      } catch (_) {}
       D.addEventListener("pointermove", mv);
       D.addEventListener("pointerup", up, { once: true });
       D.addEventListener("pointercancel", up, { once: true });
     });
     // swallow the click that follows a real drag so the link doesn't navigate
-    icons.addEventListener("click", (e) => {
-      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
-    }, true);
+    icons.addEventListener(
+      "click",
+      (e) => {
+        if (moved) {
+          e.preventDefault();
+          e.stopPropagation();
+          moved = false;
+        }
+      },
+      true,
+    );
   }
 
   // The taskbar clock. Intl owns the formatting, and the formatter is built once
@@ -375,9 +527,11 @@
   //
   // Scheduled for the next minute boundary instead of polled: a 15s interval let
   // the taskbar sit up to 15s behind the minute it was showing.
-  var clockFmt = (null as Intl.DateTimeFormat | null), clockTimer = 0;
+  var clockFmt = null as Intl.DateTimeFormat | null,
+    clockTimer = 0;
   function tickClock() {
-    var c = D.getElementById("axp-clock"); if (!c) return;
+    var c = D.getElementById("axp-clock");
+    if (!c) return;
     clockFmt = clockFmt || new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
     var now = new Date();
     c.textContent = clockFmt.format(now).replace(/\s/g, " ");
@@ -388,18 +542,38 @@
   // Data is cached per page load. Keeping these readers in the core lets a tray
   // click and a later live infotip share one fetch without shipping render code.
   function loadSys(cb) {
-    if (sysData) { cb(sysData); return; }
+    if (sysData) {
+      cb(sysData);
+      return;
+    }
     fetch("/whoareyou.json", { headers: { accept: "application/json" } })
-      .then((r) => { return r.ok ? r.json() : null; })
-      .then((j) => { if (j && j.groups) sysData = j; cb(sysData); })
-      .catch(() => { cb(null); });
+      .then((r) => {
+        return r.ok ? r.json() : null;
+      })
+      .then((j) => {
+        if (j && j.groups) sysData = j;
+        cb(sysData);
+      })
+      .catch(() => {
+        cb(null);
+      });
   }
   function loadUpd(cb) {
-    if (updData) { cb(updData); return; }
+    if (updData) {
+      cb(updData);
+      return;
+    }
     fetch("/updates.json", { headers: { accept: "application/json" } })
-      .then((r) => { return r.ok ? r.json() : null; })
-      .then((j) => { if (j && j.items) updData = j; cb(updData); })
-      .catch(() => { cb(null); });
+      .then((r) => {
+        return r.ok ? r.json() : null;
+      })
+      .then((j) => {
+        if (j && j.items) updData = j;
+        cb(updData);
+      })
+      .catch(() => {
+        cb(null);
+      });
   }
   // Is there ANY ModelContext to register into? Bare truthiness only, on both
   // hosts: `document` is where the spec and Chrome 152+ put it, `navigator` is
@@ -414,8 +588,18 @@
   // already holds. It resolves null when WebMCP never loaded, which is what the
   // balloon renders as "nothing has asked".
   function loadWebmcp(cb) {
-    if (!hasModelContext()) { cb(null); return; }
-    import("/webmcp.js").then((m) => { cb(m.summary()); }, () => { cb(null); });
+    if (!hasModelContext()) {
+      cb(null);
+      return;
+    }
+    import("/webmcp.js").then(
+      (m) => {
+        cb(m.summary());
+      },
+      () => {
+        cb(null);
+      },
+    );
   }
   function loadTray() {
     if (!trayPromise) {
@@ -427,7 +611,9 @@
     return trayPromise;
   }
   function toggleTray(kind, ic) {
-    return loadTray().then((tray) => { tray.toggle(kind, ic); });
+    return loadTray().then((tray) => {
+      tray.toggle(kind, ic);
+    });
   }
 
   // ── screen saver ────────────────────────────────────────────────────────────
@@ -440,25 +626,55 @@
   // /nav-pipes.js is fetched only when the wait actually runs out, so a visitor
   // who never goes idle pays for a timer and nothing else.
   var SAVER_WAIT = 60 * 1000;
-  var saverLast = 0, saverTimer = 0, saverOn = false;
-  var saverPromise = (null as Promise<any> | null);
-  function saverPoke() { saverLast = performance.now(); }
-  function saverArm(ms) { clearTimeout(saverTimer); saverTimer = W.setTimeout(saverCheck, Math.max(1000, ms)); }
+  var saverLast = 0,
+    saverTimer = 0,
+    saverOn = false;
+  var saverPromise = null as Promise<any> | null;
+  function saverPoke() {
+    saverLast = performance.now();
+  }
+  function saverArm(ms) {
+    clearTimeout(saverTimer);
+    saverTimer = W.setTimeout(saverCheck, Math.max(1000, ms));
+  }
   function saverCheck() {
     if (saverOn) return;
     var left = saverLast + SAVER_WAIT - performance.now();
-    if (left > 0) { saverArm(left); return; }
+    if (left > 0) {
+      saverArm(left);
+      return;
+    }
     // a background tab is not an idle desktop; coming back to it counts as input
-    if (D.hidden) { saverPoke(); saverArm(SAVER_WAIT); return; }
+    if (D.hidden) {
+      saverPoke();
+      saverArm(SAVER_WAIT);
+      return;
+    }
     runSaver();
   }
   function runSaver() {
     if (saverOn) return;
     saverOn = true;
-    if (!saverPromise) saverPromise = import("/nav-pipes.js").catch((e) => { saverPromise = null; throw e; });
-    saverPromise.then((m) => {
-      m.startPipes({ onExit: () => { saverOn = false; saverPoke(); saverArm(SAVER_WAIT); } });
-    }).catch(() => { saverOn = false; saverPoke(); saverArm(SAVER_WAIT); });
+    if (!saverPromise)
+      saverPromise = import("/nav-pipes.js").catch((e) => {
+        saverPromise = null;
+        throw e;
+      });
+    saverPromise
+      .then((m) => {
+        m.startPipes({
+          onExit: () => {
+            saverOn = false;
+            saverPoke();
+            saverArm(SAVER_WAIT);
+          },
+        });
+      })
+      .catch(() => {
+        saverOn = false;
+        saverPoke();
+        saverArm(SAVER_WAIT);
+      });
   }
   function initSaver() {
     ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"].forEach((t) => {
@@ -468,7 +684,8 @@
     // the capture phase to hear every scroller on the page
     D.addEventListener("scroll", saverPoke, { capture: true, passive: true });
     D.addEventListener("visibilitychange", saverPoke);
-    saverPoke(); saverArm(SAVER_WAIT);
+    saverPoke();
+    saverArm(SAVER_WAIT);
   }
 
   // ── Tip of the Day ──────────────────────────────────────────────────────────
@@ -479,27 +696,40 @@
   // stylesheet. Automation reports navigator.webdriver, so the OG card
   // captures and the perf probes never photograph a tip over the page.
   var TIPS_KEY = "axp-tips";
-  var tipsPromise = (null as Promise<any> | null);
+  var tipsPromise = null as Promise<any> | null;
   function openTips(auto) {
     if (!tipsPromise) {
       tipsPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tips.js")])
-        .then((loaded) => { return loaded[1].createTips({ key: TIPS_KEY, kbd: KBD, sound: AXP_SND }); })
-        .catch((e) => { tipsPromise = null; throw e; });
+        .then((loaded) => {
+          return loaded[1].createTips({ key: TIPS_KEY, kbd: KBD, sound: AXP_SND });
+        })
+        .catch((e) => {
+          tipsPromise = null;
+          throw e;
+        });
     }
-    return tipsPromise.then((tips) => { tips.open(auto); });
+    return tipsPromise.then((tips) => {
+      tips.open(auto);
+    });
   }
   function initTips() {
-    var seen = (null as string | null);
-    try { seen = localStorage.getItem(TIPS_KEY); } catch (_) { return; }   // no storage: it would open on every page
+    var seen = null as string | null;
+    try {
+      seen = localStorage.getItem(TIPS_KEY);
+    } catch (_) {
+      return;
+    } // no storage: it would open on every page
     if (seen === "off" || seen === new Date().toDateString() || navigator.webdriver) return;
     var show = () => {
       // a prerendered or background page is not a visit yet, and marking the
       // day seen there would spend the tip on a page nobody looked at
-      if ((D as Document & {prerendering?: boolean}).prerendering || D.hidden) {
+      if ((D as Document & { prerendering?: boolean }).prerendering || D.hidden) {
         D.addEventListener("visibilitychange", show, { once: true });
         return;
       }
-      var run = () => { if (!D.querySelector("dialog:modal")) openTips(true).catch(() => {}); };
+      var run = () => {
+        if (!D.querySelector("dialog:modal")) openTips(true).catch(() => {});
+      };
       if ("requestIdleCallback" in window) requestIdleCallback(run, { timeout: 3000 });
       else setTimeout(run, 1500);
     };
@@ -510,7 +740,9 @@
   D.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      toggleRun(true).catch(() => { location.assign("/run"); });
+      toggleRun(true).catch(() => {
+        location.assign("/run");
+      });
     }
   });
 
@@ -522,18 +754,27 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = (null as HTMLElement | null), sx = 0, sy = 0, base = "", r = (null as DOMRect | null), topLayer = false, ceil = 8, bar = 30;
+    var win = null as HTMLElement | null,
+      sx = 0,
+      sy = 0,
+      base = "",
+      r = null as DOMRect | null,
+      topLayer = false,
+      ceil = 8,
+      bar = 30;
     // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
     function move(e) {
       if (!win || !r) return;
-      var dx = e.clientX - sx, dy = e.clientY - sy;
-      var vw = innerWidth, vh = innerHeight;
+      var dx = e.clientX - sx,
+        dy = e.clientY - sy;
+      var vw = innerWidth,
+        vh = innerHeight;
       // Ordinary windows are clamped by their TITLE BAR and are free to let their
       // body slide under the taskbar, which is what XP does and what reads right:
       // the taskbar's z-index 99999 covers them.
-      var maxDy = (vh - bar - 24) - r.top;
+      var maxDy = vh - bar - 24 - r.top;
       // A /writing folder note is popover="manual", so it lives in the TOP LAYER,
       // and the top layer paints above every z-index there is — 99999 included.
       // Dragged down, it went OVER the taskbar instead of under it. No stacking
@@ -541,9 +782,9 @@
       // window at the taskbar: the note never crosses it, in either direction.
       // Always satisfiable — .np-note[popover] caps at 100dvh - 48 less both insets, which leaves
       // more room than the 38px (plus both insets) this needs, so maxDy never falls below the top wall.
-      if (topLayer) maxDy = Math.min(maxDy, (vh - bar) - r.bottom);
+      if (topLayer) maxDy = Math.min(maxDy, vh - bar - r.bottom);
       dy = Math.max(ceil - r.top, Math.min(dy, maxDy));
-      dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
+      dx = Math.max(60 - r.width - r.left, Math.min(dx, vw - 60 - r.left));
       // Land the window's corner on a device pixel. WebKit's PointerEvent.clientX
       // is a double, so a trackpad drag ends at offsets like 127.296875px, and the
       // transform outlives the drag. In Search (WKWebView, 2x) that left the whole
@@ -554,28 +795,42 @@
       dy = onGrid(r.top + dy) - r.top;
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
-    function onGrid(v) { var k = devicePixelRatio || 1; return Math.round(v * k) / k; }
-    function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
+    function onGrid(v) {
+      var k = devicePixelRatio || 1;
+      return Math.round(v * k) / k;
+    }
+    function up() {
+      if (win) {
+        win.classList.remove("axp-dragging");
+        D.removeEventListener("pointermove", move);
+        win = null;
+      }
+    }
     D.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
+      if (e.pointerType === "touch") return; // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
       var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
       if (!b || (e.target instanceof Element && e.target.closest("a,button,.controls,.np-controls,.x"))) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
-      if (w.classList.contains("axp-max")) return;   // a maximized window is pinned, not draggable
+      if (w.classList.contains("axp-max")) return; // a maximized window is pinned, not draggable
       var t = getComputedStyle(w).transform;
-      base = (t && t !== "none") ? t + " " : "";
+      base = t && t !== "none" ? t + " " : "";
       r = w.getBoundingClientRect();
       // :popover-open is the top-layer test — a popover only joins the top layer
       // while it is showing, and a hidden one can't be dragged anyway.
       topLayer = w.matches(":popover-open");
       // read the walls once per drag, not per pointermove: the top one clears the
       // status bar on a notched phone, the bottom one is the taskbar's real height.
-      ceil = 8 + inset("sa-t"); bar = taskbarH();
+      ceil = 8 + inset("sa-t");
+      bar = taskbarH();
       w.classList.add("axp-dragging");
-      win = w; sx = e.clientX; sy = e.clientY;
-      try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      win = w;
+      sx = e.clientX;
+      sy = e.clientY;
+      try {
+        b.setPointerCapture(e.pointerId);
+      } catch (_) {}
       e.preventDefault();
       D.addEventListener("pointermove", move);
       D.addEventListener("pointerup", up, { once: true });
@@ -596,9 +851,11 @@
     // the scrollbar), so that one is asked for first. A selector list alone
     // would not do: querySelector returns the first match in DOCUMENT order,
     // which is the .body around it.
-    var main = D.querySelector("body > .window > .body > .content") ||
-      D.querySelector("body > .window > .content, body > .window > .body");
-    if (!main) { var npw = D.querySelector("body > .np-window"); if (npw) main = npw.querySelector(".np-text"); }
+    var main = D.querySelector("body > .window > .body > .content") || D.querySelector("body > .window > .content, body > .window > .body");
+    if (!main) {
+      var npw = D.querySelector("body > .np-window");
+      if (npw) main = npw.querySelector(".np-text");
+    }
     if (main) rememberScroll(main);
   }
 
@@ -610,20 +867,38 @@
   // scrollend (or a throttle) to write, one read on boot.
   function rememberScroll(sc) {
     var key = "axp-scroll:" + location.pathname;
-    var save = () => { try { sessionStorage.setItem(key, String(sc.scrollTop)); } catch (e) {} };
-    var nav = (performance.getEntriesByType && performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming|undefined);
+    var save = () => {
+      try {
+        sessionStorage.setItem(key, String(sc.scrollTop));
+      } catch (e) {}
+    };
+    var nav = performance.getEntriesByType && (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined);
     if (nav && nav.type === "reload") {
       var y = parseInt(sessionStorage.getItem(key), 10);
       if (y > 0) {
         var done = false;
-        var restore = () => { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };
-        requestAnimationFrame(restore);                      // once the scroller is laid out
-        addEventListener("load", restore, { once: true });   // re-assert after images/fonts settle (scrollHeight final)
+        var restore = () => {
+          if (done) return;
+          sc.scrollTop = y;
+          if (sc.scrollTop > 0) done = true;
+        };
+        requestAnimationFrame(restore); // once the scroller is laid out
+        addEventListener("load", restore, { once: true }); // re-assert after images/fonts settle (scrollHeight final)
       }
     }
     if ("onscrollend" in sc) sc.addEventListener("scrollend", save, { passive: true });
-    else { var t; sc.addEventListener("scroll", () => { clearTimeout(t); t = setTimeout(save, 200); }, { passive: true }); }
-    addEventListener("pagehide", save);   // catch a reload/close before scrollend fires
+    else {
+      var t;
+      sc.addEventListener(
+        "scroll",
+        () => {
+          clearTimeout(t);
+          t = setTimeout(save, 200);
+        },
+        { passive: true },
+      );
+    }
+    addEventListener("pagehide", save); // catch a reload/close before scrollend fires
   }
 
   // ── resizable windows (bottom-right grip) ─────────────────────────────────────
@@ -635,7 +910,7 @@
     // design max-width/height, which native resize cannot exceed, so a
     // gesture starting in the corner lifts the clamps first.
     [].forEach.call(D.querySelectorAll(".window,.np-window"), (f) => {
-      if (f.classList.contains("np-folder")) return;   // folder hugs its content — not resizable
+      if (f.classList.contains("np-folder")) return; // folder hugs its content — not resizable
       if (f.querySelector(":scope > .axp-resize")) return;
       if (getComputedStyle(f).position === "static") f.style.position = "relative";
       f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
@@ -650,7 +925,7 @@
           // .np-note[popover]'s own max-height is !important, which is also why the
           // plain assignment below was already a no-op for these: the lift never
           // applied, yet a short note dragged down could still grow past the bar.
-          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, (innerHeight - taskbarH()) - r.top) + "px", "important");
+          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, innerHeight - taskbarH() - r.top) + "px", "important");
           else f.style.maxHeight = "none";
         }
       });
@@ -721,7 +996,11 @@
     // click to history.back() when you actually arrived from home (bfcache, no flash).
     if (!home) {
       var closeA = bar.querySelector("a.close");
-      if (closeA instanceof HTMLAnchorElement) { closeA.setAttribute("href", "/"); closeA.title = "close to aadhar.sh"; closeA.setAttribute("aria-label", "close to aadhar.sh"); }
+      if (closeA instanceof HTMLAnchorElement) {
+        closeA.setAttribute("href", "/");
+        closeA.title = "close to aadhar.sh";
+        closeA.setAttribute("aria-label", "close to aadhar.sh");
+      }
     }
 
     // back / forward, at the head of the title bar (excluded from title-bar drag
@@ -744,13 +1023,17 @@
     // window still wants — those are OS chrome, not browser chrome.
     var hn = bar.querySelector(":scope > .axp-histnav");
     if (!hn && !win.hasAttribute("data-no-histnav")) {
-      hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
+      hn = el(
+        '<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>',
+      );
       bar.insertBefore(hn, bar.firstChild);
     }
     if (hn) {
-      var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");
+      var bBtn = hn.querySelector(".axp-back"),
+        fBtn = hn.querySelector(".axp-fwd");
       if (!(bBtn instanceof HTMLButtonElement) || !(fBtn instanceof HTMLButtonElement)) return;
-      var backButton = bBtn, forwardButton = fBtn;
+      var backButton = bBtn,
+        forwardButton = fBtn;
       // Back's PARENT fallback: with no history behind this page (a cold
       // arrival, a shared link), Back walks UP the path instead of sitting
       // blank — /lwe/vigenere goes to /lwe/, /garage/wire to /garage/,
@@ -768,8 +1051,8 @@
       // control wired it on all six. Ask for the member each branch actually
       // uses, so a partial implementation degrades to the history fallback
       // rather than crashing past it.
-    // Same: feature detection on the Navigation API, which older engines omit.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // Same: feature detection on the Navigation API, which older engines omit.
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof
       var navApi = window.navigation && typeof navigation.canGoBack === "boolean" ? navigation : null;
       var realBack = () => {
         return navApi ? navApi.canGoBack : history.length > 1;
@@ -778,21 +1061,23 @@
         if (realBack()) history.back();
         else if (!atRoot) location.href = parentPath;
       });
-      forwardButton.addEventListener("click", () => { history.forward(); });
+      forwardButton.addEventListener("click", () => {
+        history.forward();
+      });
       var sync = () => {
-        if (!navApi) return;                            // no Navigation API -> leave both enabled
+        if (!navApi) return; // no Navigation API -> leave both enabled
         var rb = navApi.canGoBack;
-        backButton.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
+        backButton.disabled = !rb && atRoot; // parent fallback keeps it live elsewhere
         backButton.title = rb || atRoot ? "Back" : "Back to " + parentPath;
         backButton.setAttribute("aria-label", backButton.title);
         forwardButton.disabled = !navApi.canGoForward;
       };
       sync();
-    // Capability probe on a live browser object, not a wire value: there is no
-    // boundary to parse, only an API the engine either implements or does not.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // Capability probe on a live browser object, not a wire value: there is no
+      // boundary to parse, only an API the engine either implements or does not.
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (navApi && typeof navApi.addEventListener === "function") navApi.addEventListener("currententrychange", sync);
-      addEventListener("pageshow", sync);               // re-sync after a bfcache restore
+      addEventListener("pageshow", sync); // re-sync after a bfcache restore
     }
 
     // maximize / restore the page window. Every page and Worker renderer
@@ -837,9 +1122,14 @@
   // import runs during the wait, so a cold first infotip lands about when a
   // warm one would.
   var INFOTIP_TARGETS = [
-    "#axp-start", ".axp-pin", ".axp-trayico", "#axp-sound", "#axp-clock", ".axp-ico",
-    "[data-tip]",                                   // opt-in for a control with no native tip
-    "[title]"                                       // and everything the platform already tips
+    "#axp-start",
+    ".axp-pin",
+    ".axp-trayico",
+    "#axp-sound",
+    "#axp-clock",
+    ".axp-ico",
+    "[data-tip]", // opt-in for a control with no native tip
+    "[title]", // and everything the platform already tips
   ].join(",");
   // Four richer surfaces got here first, and each one already draws its own card
   // from the same engine: the photo/track/artist/car island (tooltip.js), the
@@ -851,7 +1141,8 @@
   var INFOTIP_SKIP = ".lx-term,.photos a,.np-list li,.np-artist-link,.car-link,.ev[data-cover],iframe";
   function initInfotips() {
     if (!window.matchMedia || matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
-    var mod = (null as any), pending = (null as Promise<any> | null);
+    var mod = null as any,
+      pending = null as Promise<any> | null;
     // ONE implementation of "what was hovered", handed to the module rather than
     // restated there. Two copies of a rule this shape is how a loader and its
     // module come to disagree about which elements have a tip — and the symptom
@@ -870,27 +1161,32 @@
       // module cache is what the static import hits, and on the homepage it is
       // usually already warm from tooltip.js.
       import("/hoist.js").catch(() => {});
-      mod = Promise.all([loadStyle("infotip"), import("/infotip.js")]).then((loaded) => {
-        var m = loaded[1];
-        // These are nav.js's own readers, so a tray infotip and its click-balloon
-        // share one fetch per page rather than race for it.
-        m.start({
-          find: targetFor,
-          initial: pending,
-          kbd: KBD,
-          load: { sys: loadSys, upd: loadUpd, writing: loadWriting }
+      mod = Promise.all([loadStyle("infotip"), import("/infotip.js")])
+        .then((loaded) => {
+          var m = loaded[1];
+          // These are nav.js's own readers, so a tray infotip and its click-balloon
+          // share one fetch per page rather than race for it.
+          m.start({
+            find: targetFor,
+            initial: pending,
+            kbd: KBD,
+            load: { sys: loadSys, upd: loadUpd, writing: loadWriting },
+          });
+          pending = null;
+          // These three exist only to catch the hover that arrives before the
+          // module does, and the module runs its own listeners now. Since the
+          // selector matches every titled element on the page, leaving them
+          // attached would run a second `closest()` walk per pointerover for the
+          // rest of the session, on a path that fires on every element boundary
+          // the cursor crosses. Retiring them is the whole reason they are named.
+          D.removeEventListener("pointerover", onOver);
+          D.removeEventListener("pointerout", onOut);
+          D.removeEventListener("focusin", onFocus);
+        })
+        .catch(() => {
+          mod = null;
+          pending = null;
         });
-        pending = null;
-        // These three exist only to catch the hover that arrives before the
-        // module does, and the module runs its own listeners now. Since the
-        // selector matches every titled element on the page, leaving them
-        // attached would run a second `closest()` walk per pointerover for the
-        // rest of the session, on a path that fires on every element boundary
-        // the cursor crosses. Retiring them is the whole reason they are named.
-        D.removeEventListener("pointerover", onOver);
-        D.removeEventListener("pointerout", onOut);
-        D.removeEventListener("focusin", onFocus);
-      }).catch(() => { mod = null; pending = null; });
     };
     function onOver(e) {
       var t = targetFor(e.target);
@@ -904,7 +1200,9 @@
     function onFocus(e) {
       var t = targetFor(e.target);
       if (!t) return;
-      try { if (!t.matches(":focus-visible")) return; } catch (_) {}
+      try {
+        if (!t.matches(":focus-visible")) return;
+      } catch (_) {}
       pending = { target: t, focus: true };
       load();
     }
@@ -924,12 +1222,18 @@
   // Tooltips render while the key may already be down, so the observer swaps
   // whatever appears mid-hold, and it only exists for the length of the hold.
   function initExact() {
-    var held = false, showed = false, mo = (null as MutationObserver | null);
+    var held = false,
+      showed = false,
+      mo = null as MutationObserver | null;
     var swap = (root) => {
       var list = root.querySelectorAll ? root.querySelectorAll("data[value]") : [];
       for (var i = 0; i < list.length; i++) {
-        var d = (list[i] as HTMLDataElement);
-        if (d.dataset.shown == null && d.value) { d.dataset.shown = d.textContent || ""; d.textContent = d.value; showed = true; }
+        var d = list[i] as HTMLDataElement;
+        if (d.dataset.shown == null && d.value) {
+          d.dataset.shown = d.textContent || "";
+          d.textContent = d.value;
+          showed = true;
+        }
       }
     };
     var set = (on) => {
@@ -940,15 +1244,22 @@
       if (on) {
         swap(D);
         mo = new MutationObserver((recs) => {
-          recs.forEach((r) => r.addedNodes.forEach((n) => { if (n.nodeType === 1) swap(n); }));
+          recs.forEach((r) =>
+            r.addedNodes.forEach((n) => {
+              if (n.nodeType === 1) swap(n);
+            }),
+          );
         });
         mo.observe(D.body, { childList: true, subtree: true });
         return;
       }
-      if (mo) { mo.disconnect(); mo = null; }
+      if (mo) {
+        mo.disconnect();
+        mo = null;
+      }
       var list = D.querySelectorAll("data[data-shown]");
       for (var i = 0; i < list.length; i++) {
-        var d = (list[i] as HTMLElement);
+        var d = list[i] as HTMLElement;
         d.textContent = d.dataset.shown || "";
         delete d.dataset.shown;
       }
@@ -972,7 +1283,19 @@
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver(); initTips(); initExact();
+    ensureLunaCss();
+    wireTaskbar(bar);
+    initDrag();
+    initRaise();
+    initIconDrag();
+    initScrollbars();
+    initResize();
+    initCloseBack();
+    initWindowControls();
+    initInfotips();
+    initSaver();
+    initTips();
+    initExact();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop
@@ -983,7 +1306,7 @@
     // already-SSR'd shell now, so activation inherits a fully wired desktop instead
     // of paying both frames on the click that activates the prerender.
 
-    var prerenderDocument: Document & {prerendering?: boolean} = D;
+    var prerenderDocument: Document & { prerendering?: boolean } = D;
     if (prerenderDocument.prerendering) return boot();
     requestAnimationFrame(() => requestAnimationFrame(boot));
   }
@@ -1000,42 +1323,47 @@
   // to the origin rather than to the desktop shell: a page with no taskbar still
   // has tools worth advertising.
   function bootWebmcp() {
-    if (!hasModelContext()) return;   // no WebMCP here; do not spend the fetch
-    import("/webmcp.js").then((m) => {
-      // The tray icon ships hidden (shell-data.ts says why). Showing it is the
-      // page telling the visitor, in the place XP puts running things, that an
-      // agent can drive this document. The badge then counts what one actually
-      // did, so the icon means "possible" and the number means "happened".
-      var ico = D.getElementById("axp-webmcp");
+    if (!hasModelContext()) return; // no WebMCP here; do not spend the fetch
+    import("/webmcp.js")
+      .then((m) => {
+        // The tray icon ships hidden (shell-data.ts says why). Showing it is the
+        // page telling the visitor, in the place XP puts running things, that an
+        // agent can drive this document. The badge then counts what one actually
+        // did, so the icon means "possible" and the number means "happened".
+        var ico = D.getElementById("axp-webmcp");
 
-      var badge: HTMLSpanElement | null = null;
-      function paint() {
-        var s = m.summary();
-        if (!ico || !s.registered) return;
-        ico.hidden = false;
-        if (!badge) {
-          // The badge's rules live in nav-tray.css, which is otherwise lazy and
-          // would not arrive until the first tray hover, so the count would sit
-          // there unstyled until somebody happened to touch the tray. Ask for the
-          // sheet here. It is ~30 lines, it is idempotent, and it only ever loads
-          // on a page that really has registered tools.
-          loadStyle("nav-tray").catch(() => {});
-          badge = D.createElement("span");
-          badge.className = "axp-traybadge";
-          ico.appendChild(badge);
+        var badge: HTMLSpanElement | null = null;
+        function paint() {
+          var s = m.summary();
+          if (!ico || !s.registered) return;
+          ico.hidden = false;
+          if (!badge) {
+            // The badge's rules live in nav-tray.css, which is otherwise lazy and
+            // would not arrive until the first tray hover, so the count would sit
+            // there unstyled until somebody happened to touch the tray. Ask for the
+            // sheet here. It is ~30 lines, it is idempotent, and it only ever loads
+            // on a page that really has registered tools.
+            loadStyle("nav-tray").catch(() => {});
+            badge = D.createElement("span");
+            badge.className = "axp-traybadge";
+            ico.appendChild(badge);
+          }
+          badge.hidden = !s.calls;
+          badge.textContent = String(s.calls);
+          // The refusal is the state worth colouring: it is the one moment the
+          // person overrode an agent, and it should still be visible afterwards.
+          badge.classList.toggle("no", s.refused > 0);
+          ico.setAttribute(
+            "title",
+            s.calls
+              ? "Agent activity \u00b7 " + s.calls + " tool call" + (s.calls === 1 ? "" : "s") + " this visit"
+              : "Agent activity \u00b7 " + s.registered + " tools an agent can use here",
+          );
         }
-        badge.hidden = !s.calls;
-        badge.textContent = String(s.calls);
-        // The refusal is the state worth colouring: it is the one moment the
-        // person overrode an agent, and it should still be visible afterwards.
-        badge.classList.toggle("no", s.refused > 0);
-        ico.setAttribute("title", s.calls
-          ? "Agent activity \u00b7 " + s.calls + " tool call" + (s.calls === 1 ? "" : "s") + " this visit"
-          : "Agent activity \u00b7 " + s.registered + " tools an agent can use here");
-      }
-      m.onActivity(paint);
-      return m.boot().then(paint, paint);
-    }).catch(() => {});
+        m.onActivity(paint);
+        return m.boot().then(paint, paint);
+      })
+      .catch(() => {});
   }
   // The idle timeout is the ceiling on how long a busy page can put this off,
   // and a readiness scanner reads the catalog about 4s after navigation

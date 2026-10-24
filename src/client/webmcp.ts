@@ -46,9 +46,8 @@
 // before, the whole /mcp catalog after. Native first, since a page holding both
 // should register where the browser will actually route an agent's call.
 
-const MC: ModelContext | null = (globalThis.document && globalThis.document.modelContext)
-  || (globalThis.navigator && globalThis.navigator.modelContext)
-  || null;
+const MC: ModelContext | null =
+  (globalThis.document && globalThis.document.modelContext) || (globalThis.navigator && globalThis.navigator.modelContext) || null;
 
 /**
  * A native ModelContext has getTools(); a shim may not. Read the catalog where
@@ -57,7 +56,11 @@ const MC: ModelContext | null = (globalThis.document && globalThis.document.mode
  * */
 async function listTools(): Promise<Array<{ name: string }>> {
   if (!MC || !MC.getTools) return [];
-  try { return await MC.getTools(); } catch (error) { return []; }
+  try {
+    return await MC.getTools();
+  } catch (error) {
+    return [];
+  }
 }
 
 const META = {
@@ -74,8 +77,7 @@ const META = {
 // an agent did to THIS page in front of THIS person rather than building a
 // profile of either.
 
-
-const audit: Array<{ name: string, at: number, ms: number, outcome: "ok" | "refused" | "failed", gated: boolean }> = [];
+const audit: Array<{ name: string; at: number; ms: number; outcome: "ok" | "refused" | "failed"; gated: boolean }> = [];
 
 const listeners: Set<() => void> = new Set();
 let registered = 0;
@@ -85,7 +87,11 @@ function notify() {
   for (const fn of listeners) {
     // A broken listener must never break registration or a tool call. The tray
     // is an observer of both, never part of either operation.
-    try { fn(); } catch (error) { /* ignored on purpose */ }
+    try {
+      fn();
+    } catch (error) {
+      /* ignored on purpose */
+    }
   }
 }
 
@@ -95,10 +101,14 @@ function record(name, started, outcome, gated) {
 }
 
 /** Is there a WebMCP implementation on this page at all? */
-export function available() { return MC !== null; }
+export function available() {
+  return MC !== null;
+}
 
 /** Every tool call this page has served this session, newest last. */
-export function callLog() { return audit.slice(); }
+export function callLog() {
+  return audit.slice();
+}
 
 /**
  * Subscribe to registration and to every tool call. Returns an unsubscribe.
@@ -170,9 +180,7 @@ function safetyNote(a: Record<string, unknown>, writes: boolean): string {
 // arguments are the entire question: "capture a representation" is fine and
 // "capture a representation of <someone else's URL>" may not be.
 
-
 let dialog: HTMLDialogElement | null = null;
-
 
 function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
   if (!globalThis.document || !document.body) return Promise.resolve(false);
@@ -180,13 +188,18 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
     dialog = document.createElement("dialog");
     dialog.id = "webmcp-consent";
     dialog.setAttribute("aria-labelledby", "webmcp-consent-h");
-    dialog.style.cssText = "padding:0;border:2px outset #d4d0c8;background:#ece9d8;color:#000;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);max-width:30rem;box-shadow:2px 2px 8px rgba(0,0,0,.4)";
+    dialog.style.cssText =
+      "padding:0;border:2px outset #d4d0c8;background:#ece9d8;color:#000;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);max-width:30rem;box-shadow:2px 2px 8px rgba(0,0,0,.4)";
     document.body.appendChild(dialog);
   }
   const d = dialog;
   let body = "";
-  // oxlint-disable-next-line typescript/no-base-to-string -- display fallback for an argument that JSON could not serialize
-  try { body = JSON.stringify(args, null, 1); } catch (e) { body = String(args); }
+  try {
+    body = JSON.stringify(args, null, 1);
+  } catch (e) {
+    // oxlint-disable-next-line typescript/no-base-to-string -- display fallback for an argument that JSON could not serialize
+    body = String(args);
+  }
   d.innerHTML = "";
   const wrap = document.createElement("div");
   const bar = document.createElement("div");
@@ -200,14 +213,17 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
   p.textContent = "The tool " + name + " writes data on aadhar.sh. WebMCP has no way to tell your agent that, so this page is asking you instead.";
   const pre = document.createElement("pre");
   pre.textContent = body;
-  pre.style.cssText = "margin:0 0 10px;padding:6px;background:#fff;border:1px solid #7f9db9;max-height:9rem;overflow:auto;font:11px var(--font-mono,\"Courier New\",monospace);white-space:pre-wrap;word-break:break-word";
+  pre.style.cssText =
+    'margin:0 0 10px;padding:6px;background:#fff;border:1px solid #7f9db9;max-height:9rem;overflow:auto;font:11px var(--font-mono,"Courier New",monospace);white-space:pre-wrap;word-break:break-word';
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:6px;justify-content:flex-end";
   const no = document.createElement("button");
   no.textContent = "Refuse";
   const yes = document.createElement("button");
   yes.textContent = "Allow once";
-  for (const b of [no, yes]) b.style.cssText = "min-width:5.5rem;padding:3px 10px;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);border:2px outset #d4d0c8;background:#ece9d8;cursor:pointer";
+  for (const b of [no, yes])
+    b.style.cssText =
+      "min-width:5.5rem;padding:3px 10px;font:11px var(--font-ui,Tahoma,Verdana,sans-serif);border:2px outset #d4d0c8;background:#ece9d8;cursor:pointer";
   row.append(no, yes);
   inner.append(p, pre, row);
   wrap.append(bar, inner);
@@ -245,8 +261,14 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
 //  - a throwing execute rejects the caller with a generic message, so a tool that
 //    wants to explain itself has to return isError instead of throwing.
 
-
-export async function registerTool(def: { name: string, description: string, inputSchema?: unknown, annotations?: Record<string, unknown>, writes?: boolean, execute: (args: any) => unknown }): Promise<"registered" | "taken" | "unsupported" | "failed"> {
+export async function registerTool(def: {
+  name: string;
+  description: string;
+  inputSchema?: unknown;
+  annotations?: Record<string, unknown>;
+  writes?: boolean;
+  execute: (args: any) => unknown;
+}): Promise<"registered" | "taken" | "unsupported" | "failed"> {
   if (!MC) return "unsupported";
   const annotations = def.annotations || { readOnlyHint: true };
   // Default to the server reading: a /mcp tool that is not read-only is one that
@@ -261,15 +283,18 @@ export async function registerTool(def: { name: string, description: string, inp
   if (typeof schema === "string") {
     // A schema read back out of getTools() is a JSON string. Re-registering one
     // without this throws "Failed to convert value to 'object'".
-    try { schema = JSON.parse(schema); } catch (e) { schema = undefined; }
+    try {
+      schema = JSON.parse(schema);
+    } catch (e) {
+      schema = undefined;
+    }
   }
-
 
   const tool: Record<string, unknown> = {
     name: def.name,
     description: def.description + safetyNote(annotations, writes),
     annotations: { readOnlyHint: annotations.readOnlyHint !== false },
-    execute: async ( args: any) => {
+    execute: async (args: any) => {
       const started = Date.now();
       let gated = false;
       try {
@@ -280,7 +305,10 @@ export async function registerTool(def: { name: string, description: string, inp
             record(def.name, started, "refused", gated);
             // isError rather than throw: a throw reaches the agent as "the script
             // function threw an error", which loses the one fact that matters.
-            return { content: [{ type: "text", text: "Refused by the person at the keyboard. This tool writes data, so it needs their consent and did not get it." }], isError: true };
+            return {
+              content: [{ type: "text", text: "Refused by the person at the keyboard. This tool writes data, so it needs their consent and did not get it." }],
+              isError: true,
+            };
           }
         }
         const out = await def.execute(args || {});
@@ -288,7 +316,7 @@ export async function registerTool(def: { name: string, description: string, inp
         return out;
       } catch (error) {
         record(def.name, started, "failed", gated);
-        const message = (error &&  (error as Error).message) || String(error);
+        const message = (error && (error as Error).message) || String(error);
         return { content: [{ type: "text", text: "Tool failed: " + message }], isError: true };
       }
     },
@@ -298,20 +326,19 @@ export async function registerTool(def: { name: string, description: string, inp
   try {
     const taken = (await listTools()).some((t) => t.name === def.name);
     if (taken) return "taken";
-    await MC.registerTool((tool as any));
+    await MC.registerTool(tool as any);
     registered += 1;
     notify();
     return "registered";
   } catch (error) {
     // The catalog is shared with whatever the edge injected, so losing a race
     // for a name is an expected outcome rather than a fault.
-    const message = (error &&  (error as Error).message) || "";
+    const message = (error && (error as Error).message) || "";
     return /Duplicate tool name/i.test(message) ? "taken" : "failed";
   }
 }
 
 // ---- the site's own /mcp tools ----------------------------------------------
-
 
 async function callSiteTool(name: string, args: Record<string, unknown>) {
   const response = await fetch("/mcp", {
@@ -336,9 +363,8 @@ async function callSiteTool(name: string, args: Record<string, unknown>) {
  * Register every tool `/mcp` advertises, carrying the annotations the browser
  * would otherwise drop. Returns a per-outcome tally.
  * */
-export async function registerSiteTools(): Promise<{ registered: string[], taken: string[], failed: string[] }> {
-
-  const out: { registered: string[], taken: string[], failed: string[] } = { registered: [], taken: [], failed: [] };
+export async function registerSiteTools(): Promise<{ registered: string[]; taken: string[]; failed: string[] }> {
+  const out: { registered: string[]; taken: string[]; failed: string[] } = { registered: [], taken: [], failed: [] };
   if (!MC) return out;
   let tools: any[] = [];
   try {

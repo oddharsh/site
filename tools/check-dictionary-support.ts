@@ -30,7 +30,10 @@ const get = (url, dict?, extra: Record<string, string> = {}) => {
 };
 
 let fail = 0;
-const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}  ${detail}`); if (!ok) fail++; };
+const report = (name, ok, detail) => {
+  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}  ${detail}`);
+  if (!ok) fail++;
+};
 
 // 1. shell js — nav delta against an a-dict candidate that is NOT the live hash
 {
@@ -90,8 +93,11 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const assetRefs = (buf) => shellAssetRefs(buf.toString("utf8"));
   const fetchLive = async (path) => {
     let r;
-    try { r = await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } }); }
-    catch { return null; }
+    try {
+      r = await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } });
+    } catch {
+      return null;
+    }
     return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
   };
 
@@ -103,7 +109,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   }
   // Only .js can name another asset, and the visited set is the termination proof: the
   // /a/ namespace is finite and each name is fetched at most once.
-  const queue = [...refs.keys()], walked = new Set();
+  const queue = [...refs.keys()],
+    walked = new Set();
   while (queue.length) {
     const name = queue.shift();
     if (!name.endsWith(".js") || walked.has(name)) continue;
@@ -111,28 +118,41 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     const buf = await fetchLive(`/a/${name}`);
     if (!buf) continue;
     body.set(name, buf);
-    for (const n of assetRefs(buf)) if (!refs.has(n)) { see(n); queue.push(n); }
+    for (const n of assetRefs(buf))
+      if (!refs.has(n)) {
+        see(n);
+        queue.push(n);
+      }
   }
 
   const tracked = [...refs].filter(([, base]) => bases.has(base));
   const missing = [];
   for (const [name] of tracked) {
-    if (!committed.includes(name)) { missing.push(name); continue; }
+    if (!committed.includes(name)) {
+      missing.push(name);
+      continue;
+    }
     // A matching FILENAME is not a matching dictionary. The hash is only 8 hex of a
     // sha256, and the browser keys on the full digest of the bytes it stored, so the
     // committed copy has to be those bytes exactly.
-    const served = body.get(name) ?? await fetchLive(`/a/${name}`);
-    if (!served) { missing.push(`${name} (could not be read from production)`); continue; }
+    const served = body.get(name) ?? (await fetchLive(`/a/${name}`));
+    if (!served) {
+      missing.push(`${name} (could not be read from production)`);
+      continue;
+    }
     if (!served.equals(await readFile(`src/dict/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
   }
   // An empty read means production is down or the ref shape moved, and reporting PASS on
   // nothing is exactly the false green this assertion exists to prevent.
   if (!refs.size) missing.push("no /a/ references found at aadhar.sh");
   const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
-  report("live shell is covered by a-dict", missing.length === 0,
-         missing.length
-           ? `run \`bun run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
-           : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`);
+  report(
+    "live shell is covered by a-dict",
+    missing.length === 0,
+    missing.length
+      ? `run \`bun run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
+      : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`,
+  );
 }
 
 // 1c. FAMILY dictionary: is the one production advertises the one that is COMMITTED?
@@ -146,19 +166,31 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // is a row here and not an error anywhere else. Advisory, like every row: it reads
 // production.
 {
-  let committed: CommittedFamily | null = null, problem: string | null = null;
-  try { committed = await readCommittedFamily(); } catch (e) { problem = e instanceof Error ? e.message : String(e); }
+  let committed: CommittedFamily | null = null,
+    problem: string | null = null;
+  try {
+    committed = await readCommittedFamily();
+  } catch (e) {
+    problem = e instanceof Error ? e.message : String(e);
+  }
   const home = await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } });
   const offered = home.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1] || null;
-  try { await home.body?.cancel(); } catch {}
+  try {
+    await home.body?.cancel();
+  } catch {}
   const liveHash = parseFamilyDictionary(offered?.split("/").pop() ?? "");
   if (problem) report("family dictionary is committed", false, problem);
   else if (!liveHash) report("family dictionary is committed", false, "production's homepage advertises no rel=compression-dictionary Link");
-  else if (!committed) report("family dictionary is committed", false, `${FAMILY_DICT_DIR} is empty while production serves ${liveHash}; run \`bun run dict:roll\``);
-  else report("family dictionary is committed", committed.hash8 === liveHash,
-              committed.hash8 === liveHash
-                ? `live and committed agree on ${liveHash}`
-                : `production serves ${liveHash}, ${FAMILY_DICT_DIR} holds ${committed.hash8}; run \`bun run dict:roll\` (or the last deploy re-minted on purpose and the roll has not run yet)`);
+  else if (!committed)
+    report("family dictionary is committed", false, `${FAMILY_DICT_DIR} is empty while production serves ${liveHash}; run \`bun run dict:roll\``);
+  else
+    report(
+      "family dictionary is committed",
+      committed.hash8 === liveHash,
+      committed.hash8 === liveHash
+        ? `live and committed agree on ${liveHash}`
+        : `production serves ${liveHash}, ${FAMILY_DICT_DIR} holds ${committed.hash8}; run \`bun run dict:roll\` (or the last deploy re-minted on purpose and the roll has not run yet)`,
+    );
 }
 
 // 2. page html — exercise both dictionary tiers. The family dictionary is read from
@@ -168,7 +200,9 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 {
   const page = await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } });
   const offered = page.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
-  try { await page.body?.cancel(); } catch {}
+  try {
+    await page.body?.cancel();
+  } catch {}
   if (!offered) {
     report("page html (pretext)", false, "no rel=compression-dictionary Link on the page — is PAGE_DICTIONARY populated?");
   } else {
@@ -184,18 +218,19 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     const res = await fetch(`https://aadhar.sh${offered}`, { headers: { "accept-encoding": "br" } });
     const body = Buffer.from(await res.arrayBuffer());
     let raw = body;
-    try { raw = brotliDecompressSync(body); } catch { /* already decoded upstream */ }
+    try {
+      raw = brotliDecompressSync(body);
+    } catch {
+      /* already decoded upstream */
+    }
     const uad = res.headers.get("use-as-dictionary") || "";
-    report("page dictionary offered", uad === `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`,
-           `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
+    report("page dictionary offered", uad === `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`, `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
     const r = await get("https://aadhar.sh/garage/pretext", b64(raw));
     const ce = r.headers.get("content-encoding");
-    report("page html (pretext)", ce === "dcz",
-           ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
+    report("page html (pretext)", ce === "dcz", ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
   }
 
-  const candidates = (await readdir("src/dict/p-dict").catch(() => []))
-    .filter((name) => name.startsWith("garage__pretext.") && name.endsWith(".html.br"));
+  const candidates = (await readdir("src/dict/p-dict").catch(() => [])).filter((name) => name.startsWith("garage__pretext.") && name.endsWith(".html.br"));
   if (!candidates.length) {
     report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
   } else {
@@ -212,10 +247,13 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
       tried.push(`${name}=${ce}`);
       if (ce === "dcz") break;
     }
-    report("page html per-page tier", tried.some((t) => t.endsWith("=dcz")),
-           tried.some((t) => t.endsWith("=dcz"))
-             ? `ce=dcz vs ${tried.at(-1).replace("=dcz", "")}`
-             : `no committed snapshot earned a delta (${tried.join(", ")}) — the deployed /pd/ deltas predate every one of them`);
+    report(
+      "page html per-page tier",
+      tried.some((t) => t.endsWith("=dcz")),
+      tried.some((t) => t.endsWith("=dcz"))
+        ? `ce=dcz vs ${tried.at(-1).replace("=dcz", "")}`
+        : `no committed snapshot earned a delta (${tried.join(", ")}) — the deployed /pd/ deltas predate every one of them`,
+    );
 
     // A snapshot is only a dictionary if a BROWSER holds those bytes, so it has to be
     // what the wire sent, not what the build produced. The tier above cannot see the
@@ -232,18 +270,18 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // scripts an EDGE feature can add behind the Worker's back. Fires either when
     // injection is newly on or when a roll read the build, and the remedy is the same
     // for both: re-roll from the wire.
-    const srcs = (html) => new Set(
-      [...String(html).matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)]
-        .map((m) => m[1].replace(/\.[0-9a-f]{8}\.(js|css)$/, ".$1")),
-    );
+    const srcs = (html) =>
+      new Set([...String(html).matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)].map((m) => m[1].replace(/\.[0-9a-f]{8}\.(js|css)$/, ".$1")));
     const liveDoc = await (await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } })).text();
-    const held = await Promise.all(candidates.map(async (name) =>
-      srcs(brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`)).toString("utf8"))));
+    const held = await Promise.all(candidates.map(async (name) => srcs(brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`)).toString("utf8"))));
     const unheld = [...srcs(liveDoc)].filter((src) => !held.some((set) => set.has(src)));
-    report("committed snapshots are WIRE bytes", unheld.length === 0,
-           unheld.length === 0
-             ? `every script the live page loads appears in a snapshot (${candidates.length} candidates)`
-             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`);
+    report(
+      "committed snapshots are WIRE bytes",
+      unheld.length === 0,
+      unheld.length === 0
+        ? `every script the live page loads appears in a snapshot (${candidates.length} candidates)`
+        : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`,
+    );
   }
 }
 // 3. svg: on the dictionary path for everyone since 2026-09-26. The offer must be
@@ -256,8 +294,11 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const url = `https://aadhar.sh/a/icons.${live}.svg`;
   const on = await get(url);
   const offer = on.headers.get("use-as-dictionary") || "";
-  report("svg offers (icons)", offer.includes('match-dest=("image")') && !/\bcookie\b/i.test(on.headers.get("vary") || ""),
-    `use-as-dictionary=${offer || "(none)"} vary=${on.headers.get("vary")}`);
+  report(
+    "svg offers (icons)",
+    offer.includes('match-dest=("image")') && !/\bcookie\b/i.test(on.headers.get("vary") || ""),
+    `use-as-dictionary=${offer || "(none)"} vary=${on.headers.get("vary")}`,
+  );
   // The delta row needs a sprite in a-dict that is NOT the live one, which exists only
   // after a roll has adopted a sprite and a later deploy re-minted it. Until then this
   // is a skip rather than a failure: there is nothing a returning browser could hold yet.
@@ -288,15 +329,16 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const cssHash = home.match(/\/a\/luna\.([0-9a-f]{8})\.css/)?.[1];
 
   const nav = (await get(`https://aadhar.sh/a/nav.${navHash}.js`)).headers.get("use-as-dictionary") || "";
-  report("shell js offer scoped", /match="\/a\/nav\.\*"/.test(nav) && /match-dest=\("script"\)/.test(nav),
-         `uad=${nav || "(absent)"}`);
+  report("shell js offer scoped", /match="\/a\/nav\.\*"/.test(nav) && /match-dest=\("script"\)/.test(nav), `uad=${nav || "(absent)"}`);
 
   const css = cssHash ? (await get(`https://aadhar.sh/a/luna.${cssHash}.css`)).headers.get("use-as-dictionary") || "" : "";
-  report("shell css offer scoped", /match="\/a\/luna\.\*"/.test(css) && /match-dest=\("style"\)/.test(css),
-         `uad=${css || "(absent)"}`);
+  report("shell css offer scoped", /match="\/a\/luna\.\*"/.test(css) && /match-dest=\("style"\)/.test(css), `uad=${css || "(absent)"}`);
 
-  report("shell offers are per-asset", nav !== "" && css !== "" && nav !== css,
-         `nav and css must not share one offer (nav=${nav || "(absent)"} css=${css || "(absent)"})`);
+  report(
+    "shell offers are per-asset",
+    nav !== "" && css !== "" && nav !== css,
+    `nav and css must not share one offer (nav=${nav || "(absent)"} css=${css || "(absent)"})`,
+  );
 
   // A page that offers ITSELF as a dictionary has to survive to the moment of use.
   // RFC 9842: "To be considered as a match, the dictionary resource MUST be either
@@ -338,20 +380,28 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const p = await get("https://aadhar.sh/garage/pretext");
   const puad = p.headers.get("use-as-dictionary");
   const pcc = p.headers.get("cache-control") || "";
-  try { await p.body?.cancel(); } catch {}
+  try {
+    await p.body?.cancel();
+  } catch {}
   // The offer and the policy have to agree in BOTH directions. Advertising a dictionary
   // no browser will keep is the bug this check was written for; silently dropping the
   // offer on a page whose policy WOULD have kept it is the per-page tier going dark
   // with nothing on the wire to say so.
-  report("page self-offer matches what the policy can keep", !!puad === canRegister(pcc),
-         puad
-           ? `offers itself (${puad}) under "${pcc}"${canRegister(pcc) ? "" : " — stale on arrival, so no browser can keep it"}`
-           : `no self-offer under "${pcc}"${canRegister(pcc) ? " — but this policy WOULD register; the tier is dark for nothing" : " (correct; the family dictionary carries the page tier)"}`);
+  report(
+    "page self-offer matches what the policy can keep",
+    !!puad === canRegister(pcc),
+    puad
+      ? `offers itself (${puad}) under "${pcc}"${canRegister(pcc) ? "" : " — stale on arrival, so no browser can keep it"}`
+      : `no self-offer under "${pcc}"${canRegister(pcc) ? " — but this policy WOULD register; the tier is dark for nothing" : " (correct; the family dictionary carries the page tier)"}`,
+  );
   // A short swr window registers a short-lived dictionary, which fails as a slow leak
   // rather than a hard error: the offer still looks right and simply stops matching.
   const swr = Number(pcc.match(/\bstale-while-revalidate=(\d+)/)?.[1] || 0);
-  report("page dictionary lifetime is useful", !puad || swr === 0 || swr >= 86400,
-         swr ? `stale-while-revalidate=${swr}s of dictionary lifetime` : "(freshness, not swr, carries the lifetime)");
+  report(
+    "page dictionary lifetime is useful",
+    !puad || swr === 0 || swr >= 86400,
+    swr ? `stale-while-revalidate=${swr}s of dictionary lifetime` : "(freshness, not swr, carries the lifetime)",
+  );
 }
 // 5. the cache key actually SEPARATES dictionaries. Everything above reads
 // `content-encoding` and stops there, which cannot see the one failure that would
@@ -389,14 +439,20 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   }
 
   if (deltas.length < 2) {
-    report("dcz cache key separates dictionaries", true,
-           `inconclusive: ${deltas.length} of the committed nav snapshots still have a deployed delta (needs 2). Not a failure — roll the dictionaries or deploy, then re-run.`);
+    report(
+      "dcz cache key separates dictionaries",
+      true,
+      `inconclusive: ${deltas.length} of the committed nav snapshots still have a deployed delta (needs 2). Not a failure — roll the dictionaries or deploy, then re-run.`,
+    );
   } else {
     const [a, b] = deltas;
-    report("dcz cache key separates dictionaries", a.sha !== b.sha,
-           a.sha === b.sha
-             ? `COLLAPSED: ${a.name} and ${b.name} both returned ${a.bytes} B / sha ${a.sha}. One of these clients cannot decode what it was handed.`
-             : `${a.name}=${a.bytes} B (${a.sha}) vs ${b.name}=${b.bytes} B (${b.sha})`);
+    report(
+      "dcz cache key separates dictionaries",
+      a.sha !== b.sha,
+      a.sha === b.sha
+        ? `COLLAPSED: ${a.name} and ${b.name} both returned ${a.bytes} B / sha ${a.sha}. One of these clients cannot decode what it was handed.`
+        : `${a.name}=${a.bytes} B (${a.sha}) vs ${b.name}=${b.bytes} B (${b.sha})`,
+    );
   }
 
   // The other half of the same key: a client that sends NO dictionary must never be
@@ -404,9 +460,12 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   // a returning one, so it is the more expensive of the two to get wrong.
   const plain = await get(url);
   const pce = plain.headers.get("content-encoding");
-  try { await plain.body?.cancel(); } catch {}
-  report("no dictionary gets no delta", pce !== "dcz",
-         pce === "dcz" ? "a request with no Available-Dictionary was served dcz — undecodable" : `ce=${pce}`);
+  try {
+    await plain.body?.cancel();
+  } catch {}
+  report("no dictionary gets no delta", pce !== "dcz", pce === "dcz" ? "a request with no Available-Dictionary was served dcz — undecodable" : `ce=${pce}`);
 }
-console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
+console.log(
+  "  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.",
+);
 process.exit(fail ? 1 : 0);

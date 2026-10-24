@@ -1,8 +1,5 @@
 // ── the CSP hash scanner ────────────────────────────────────────────────────
-import {
-  assert,
-  test,
-} from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 
 // build.ts step 7c reads documents with HTMLRewriter, a bun global. The suite
 // runs under bun, so this is a guard for `bun run test:node` rather than a real
@@ -31,7 +28,10 @@ test("only the scripts a browser would EXECUTE are hashed", needsParser, async (
   // 41 inline JSON blocks (2026-10-16), so a scanner that is wrong here is
   // wrong 41 times. The external one is covered by 'self'.
   assert.equal(hashes.length, 3, `expected 3 executable blocks, got ${hashes.length}`);
-  assert.ok(hashes.every((h) => /^[A-Za-z0-9+/]+=*$/.test(h)), "hashes are base64");
+  assert.ok(
+    hashes.every((h) => /^[A-Za-z0-9+/]+=*$/.test(h)),
+    "hashes are base64",
+  );
   assert.equal(new Set(hashes).size, 3, "three different bodies hash three different ways");
 });
 
@@ -83,7 +83,8 @@ test("an inline event handler is reported, and demo TEXT that looks like one is 
   // The trap, asserted rather than described, so it cannot quietly stop being
   // true of this fixture: the naive scanner finds THREE handlers in the same
   // bytes, and two of them are content.
-  const naive = `<input value="&lt;img src=x onerror=alert(1)&gt;">
+  const naive =
+    `<input value="&lt;img src=x onerror=alert(1)&gt;">
     <textarea>&lt;div onclick=boom()&gt;</textarea>
     <button onclick="boom()">go</button>`.match(/\son\w+=/g) || [];
   assert.equal(naive.length, 3, "the naive regex is supposed to be wrong here; if it is not, this fixture stopped testing anything");
@@ -98,8 +99,7 @@ test("a srcdoc document's scripts are hashed against the EMBEDDING page", needsP
   // enforcing without this froze it at 0 with nothing logged.
   const plain = await scan(`<script>tick()</script>`);
   const framed = await scan(`<iframe srcdoc="&lt;script&gt;tick()&lt;/script&gt;"></iframe>`);
-  assert.deepEqual(framed.hashes, plain.hashes,
-    "the srcdoc script must hash exactly as the same script would in the parent");
+  assert.deepEqual(framed.hashes, plain.hashes, "the srcdoc script must hash exactly as the same script would in the parent");
 });
 
 test("hashes come back in DOCUMENT ORDER", needsParser, async () => {

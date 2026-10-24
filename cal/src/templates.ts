@@ -424,11 +424,13 @@ ${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--fo
     <span class="title-text"><span class="icon" aria-hidden="true"></span>${esc(fullTitle)}</span>
     <span class="controls"
       ><span class="min" title="minimize" aria-hidden="true"></span
-      >${onShell
-        // nav.js wires max under /coffee; the standalone cal host loads no nav.js,
-        // so there it stays an inert decoration rather than a dead button
-        ? `<button type="button" class="max" title="maximize" aria-label="maximize"></button`
-        : `<span class="max" title="maximize" aria-hidden="true"></span`}
+      >${
+        onShell
+          ? // nav.js wires max under /coffee; the standalone cal host loads no nav.js,
+            // so there it stays an inert decoration rather than a dead button
+            `<button type="button" class="max" title="maximize" aria-label="maximize"></button`
+          : `<span class="max" title="maximize" aria-hidden="true"></span`
+      }
       ><a class="close" href="${esc(home)}" title="close" aria-label="close, up to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
@@ -440,8 +442,12 @@ ${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--fo
       <span>cloudflare workers · ${esc(env.HOST_TIMEZONE || "UTC").replace(/_/g, " ")}</span>
     </div>
   </main>
-</div>${onShell ? `${DESKTOP_CHROME}
-<script src="/nav.js" defer></script>` : ""}
+</div>${
+    onShell
+      ? `${DESKTOP_CHROME}
+<script src="/nav.js" defer></script>`
+      : ""
+  }
 </body>
 </html>`;
 }
@@ -500,7 +506,7 @@ export function slotLabels(tz: string | undefined) {
   let l = SLOT_LABELS.get(tz);
   if (!l) {
     l = {
-      day:  new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }),
+      day: new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }),
       time: new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }),
     };
     SLOT_LABELS.set(tz, l);
@@ -508,7 +514,7 @@ export function slotLabels(tz: string | undefined) {
   return l;
 }
 
-type SlotModel = { pending: true } | { slots: { start: number, end: number }[], picked?: number, invalid?: boolean };
+type SlotModel = { pending: true } | { slots: { start: number; end: number }[]; picked?: number; invalid?: boolean };
 
 /** The slot listing, live or placeholder. The island body, and the inline list
  *  on the no-script page. */
@@ -532,17 +538,23 @@ export function renderSlotList(model: SlotModel, env) {
   // A refused slot puts focus on the first radio, the way autofocus lands on
   // the first refused field in the form.
   let focus = "invalid" in model && model.invalid;
-  return Object.entries(groups).map(([day, list]) => `
+  return Object.entries(groups)
+    .map(
+      ([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
-        <ul class="slots">${list.map(s => {
-          const t = labels.time.format(s.start);
-          // `required` on the group is what the browser checks on submit; the
-          // aria-label names the day too, since the visible label is only the time.
-          const picked = "picked" in model && model.picked === s.start ? " checked" : "";
-          const invalid = "invalid" in model && model.invalid ? ` aria-invalid="true" aria-describedby="start-error"${focus ? " autofocus" : ""}` : "";
-          focus = false;
-          return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"${picked}${invalid}><span>${esc(t)}</span></label></li>`;
-        }).join("")}</ul>`).join("");
+        <ul class="slots">${list
+          .map((s) => {
+            const t = labels.time.format(s.start);
+            // `required` on the group is what the browser checks on submit; the
+            // aria-label names the day too, since the visible label is only the time.
+            const picked = "picked" in model && model.picked === s.start ? " checked" : "";
+            const invalid = "invalid" in model && model.invalid ? ` aria-invalid="true" aria-describedby="start-error"${focus ? " autofocus" : ""}` : "";
+            focus = false;
+            return `<li><label class="slot-btn"><input type="radio" name="start" value="${esc(s.start)}" form="bookform" required aria-label="${esc(day)}, ${esc(t)}"${picked}${invalid}><span>${esc(t)}</span></label></li>`;
+          })
+          .join("")}</ul>`,
+    )
+    .join("");
 }
 
 /** The island body at SLOTS_PATH: a fragment, never a document. */
@@ -555,12 +567,12 @@ export function slotsFragment(slots, env) {
 /** What a refused POST /book sends back: the fields as typed, and a message
  *  for each one that stopped it. `start` is the slot. */
 export type BookingAnswers = {
-  values: { name?: string, email?: string, area?: string, topic?: string, start?: number },
-  errors: Partial<Record<"name" | "email" | "topic" | "start", string>>,
+  values: { name?: string; email?: string; area?: string; topic?: string; start?: number };
+  errors: Partial<Record<"name" | "email" | "topic" | "start", string>>;
 };
 const FIELD_ORDER = ["start", "name", "email", "topic"] as const;
 
-export function bookingPage(env, opts: { slots?: { start: number, end: number }[], answers?: BookingAnswers } = {}) {
+export function bookingPage(env, opts: { slots?: { start: number; end: number }[]; answers?: BookingAnswers } = {}) {
   const base = env.BASE_PATH || "";
   const slotsUrl = `${base}${SLOTS_PATH}`;
   const pickUrl = `${base}${PICK_PATH}`;
@@ -575,14 +587,21 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
   const first = FIELD_ORDER.find((k) => errors[k]);
   const invalid = (key: keyof BookingAnswers["errors"]) =>
     errors[key] ? ` aria-invalid="true" aria-describedby="${key}-error"${first === key ? " autofocus" : ""}` : "";
-  const message = (key: keyof BookingAnswers["errors"]) =>
-    errors[key] ? `<p class="field-error" id="${key}-error">${esc(errors[key])}</p>` : "";
+  const message = (key: keyof BookingAnswers["errors"]) => (errors[key] ? `<p class="field-error" id="${key}-error">${esc(errors[key])}</p>` : "");
   const problems = FIELD_ORDER.filter((k) => errors[k]).length;
 
   const slotMarkup = slots
     ? `<div id="coffee-slots">${renderSlotList({ slots, picked: values.start, invalid: !!errors.start }, env)}</div>${message("start")}`
-    : `${islandMount("coffee-slots", slotsUrl, unsafeHtml(renderSlotList({ pending: true }, env)),
-        unsafeHtml(`<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`)).html}
+    : `${
+        islandMount(
+          "coffee-slots",
+          slotsUrl,
+          unsafeHtml(renderSlotList({ pending: true }, env)),
+          unsafeHtml(
+            `<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`,
+          ),
+        ).html
+      }
       <p class="slot-failed">couldn't load the open slots just now. <a href="${esc(pickUrl)}">see them on a plain page</a>, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
 
   const body = `
@@ -629,11 +648,30 @@ export function bookingPage(env, opts: { slots?: { start: number, end: number }[
                without refusing the ones a five-borough dropdown would have to
                drop; the field stays free text either way. -->
           <datalist id="nyc-areas">
-            ${["Lower East Side","East Village","West Village","SoHo","Tribeca","Chelsea",
-               "Flatiron","Midtown","Upper West Side","Upper East Side","Harlem",
-               "Williamsburg","Greenpoint","Bushwick","Bed-Stuy","Park Slope","Dumbo",
-               "Long Island City","Astoria","Jersey City"]
-              .map(a => `<option value="${esc(a)}"></option>`).join("")}
+            ${[
+              "Lower East Side",
+              "East Village",
+              "West Village",
+              "SoHo",
+              "Tribeca",
+              "Chelsea",
+              "Flatiron",
+              "Midtown",
+              "Upper West Side",
+              "Upper East Side",
+              "Harlem",
+              "Williamsburg",
+              "Greenpoint",
+              "Bushwick",
+              "Bed-Stuy",
+              "Park Slope",
+              "Dumbo",
+              "Long Island City",
+              "Astoria",
+              "Jersey City",
+            ]
+              .map((a) => `<option value="${esc(a)}"></option>`)
+              .join("")}
           </datalist>
         </div>
         <div class="row stacked">
@@ -697,10 +735,15 @@ export function successPage(env) {
   return shell("Request sent", body, env);
 }
 
-export function confirmedPage(booking, env, already, locationUrl?: string, manage: { reschedule?: string, cancel?: string } = {}) {
+export function confirmedPage(booking, env, already, locationUrl?: string, manage: { reschedule?: string; cancel?: string } = {}) {
   const when = new Date(booking.start).toLocaleString("en-US", {
-    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    timeZone: env.HOST_TIMEZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
   const title = already ? "Already confirmed" : "Confirmed";
   const body = `
@@ -714,15 +757,25 @@ export function confirmedPage(booking, env, already, locationUrl?: string, manag
     <div class="banner success">
       <div>${already ? "you've already approved this booking." : "invite sent to the requester. you've been cc'd."}</div>
     </div>
-    ${locationUrl ? `<p>${booking.location
-        ? `it's at <strong>${esc(booking.location)}</strong> — <a href="${esc(locationUrl)}">change the spot</a>.`
-        : `<a href="${esc(locationUrl)}">set the spot</a> whenever you know it. this same link keeps working afterwards.`}</p>` : ""}
-    ${manage.reschedule || manage.cancel ? `<p class="xp-meta">
+    ${
+      locationUrl
+        ? `<p>${
+            booking.location
+              ? `it's at <strong>${esc(booking.location)}</strong> — <a href="${esc(locationUrl)}">change the spot</a>.`
+              : `<a href="${esc(locationUrl)}">set the spot</a> whenever you know it. this same link keeps working afterwards.`
+          }</p>`
+        : ""
+    }
+    ${
+      manage.reschedule || manage.cancel
+        ? `<p class="xp-meta">
       ${manage.reschedule ? `<a href="${esc(manage.reschedule)}">move it</a>` : ""}
       ${manage.reschedule && manage.cancel ? " &middot; " : ""}
       ${manage.cancel ? `<a href="${esc(manage.cancel)}">cancel</a>` : ""}
       &mdash; both mail ${esc(booking.name)}. these links keep working.
-    </p>` : ""}
+    </p>`
+        : ""
+    }
     <!-- A plain link, NOT class="xp-button". The rule up in STYLES is qualified
          to the button ELEMENT, so an anchor carrying that class inherits none of
          the bevel and ships as unstyled blue text. Widening that selector is a
@@ -739,8 +792,13 @@ export function confirmedPage(booking, env, already, locationUrl?: string, manag
 // re-opens the negotiation.
 export function locationPage(booking, env, action, sig) {
   const when = new Date(booking.start).toLocaleString("en-US", {
-    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    timeZone: env.HOST_TIMEZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
   const live = booking.status === "confirmed";
   const body = `
@@ -769,9 +827,11 @@ export function locationPage(booking, env, action, sig) {
       </div>
     </form>
     <div class="banner ${live ? "" : "warn"}">
-      <div>${live
-        ? "this rewrites the calendar entry they already have, in place. no second invite, nothing to re-accept."
-        : "not approved yet, so nothing is mailed. this rides out on the invite when you approve."}</div>
+      <div>${
+        live
+          ? "this rewrites the calendar entry they already have, in place. no second invite, nothing to re-accept."
+          : "not approved yet, so nothing is mailed. this rides out on the invite when you approve."
+      }</div>
     </div>
   `;
   return shell(booking.location ? "Change the spot" : "Set the spot", body, env);
@@ -785,9 +845,11 @@ export function locationSavedPage(booking, env, mailed) {
       <p><strong>${esc(booking.location)}</strong></p>
     </div>
     <div class="banner success">
-      <div>${mailed
-        ? `update sent to ${esc(booking.email)}. their calendar entry moves itself; you've been cc'd.`
-        : "stored. it goes out with the invite when you approve this booking."}</div>
+      <div>${
+        mailed
+          ? `update sent to ${esc(booking.email)}. their calendar entry moves itself; you've been cc'd.`
+          : "stored. it goes out with the invite when you approve this booking."
+      }</div>
     </div>
   `;
   return shell("Saved", body, env);
@@ -799,8 +861,13 @@ export function locationSavedPage(booking, env, mailed) {
 // buttons in the one place the host is least able to debug it.
 export function reschedulePage(booking, env, action, sig, slots) {
   const when = new Date(booking.start).toLocaleString("en-US", {
-    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    timeZone: env.HOST_TIMEZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
   const live = booking.status === "confirmed";
 
@@ -813,19 +880,26 @@ export function reschedulePage(booking, env, action, sig, slots) {
 
   // The booking's CURRENT slot is held by this very booking, so it is absent
   // from the open list by construction and there is no same-slot no-op to guard.
-  const picker = Object.keys(groups).length === 0
-    ? `<p class="empty">nothing open in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. cancel instead, or wait for the window to roll forward.</p>`
-    : Object.entries(groups).map(([day, list]) => `
+  const picker =
+    Object.keys(groups).length === 0
+      ? `<p class="empty">nothing open in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. cancel instead, or wait for the window to roll forward.</p>`
+      : Object.entries(groups)
+          .map(
+            ([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
         <ul class="slots">
-          ${list.map(sl => {
-            const t = labels.time.format(sl.start);
-            return `<li><label class="slot-radio">
+          ${list
+            .map((sl) => {
+              const t = labels.time.format(sl.start);
+              return `<li><label class="slot-radio">
               <input type="radio" name="start" value="${sl.start}" required> ${esc(t)}
             </label></li>`;
-          }).join("")}
+            })
+            .join("")}
         </ul>
-      `).join("");
+      `,
+          )
+          .join("");
 
   const body = `
     <h1>Move it</h1>
@@ -842,15 +916,21 @@ export function reschedulePage(booking, env, action, sig, slots) {
         <span class="legend">New time</span>
         <p class="xp-meta">times shown in ${esc((env.HOST_TIMEZONE || "UTC").replace(/_/g, " "))}.</p>
         ${picker}
-        ${slots.length ? `<div class="actions">
+        ${
+          slots.length
+            ? `<div class="actions">
           <button type="submit" class="xp-button primary">${live ? "move it and send the update" : "move it"}</button>
-        </div>` : ""}
+        </div>`
+            : ""
+        }
       </div>
     </form>
     <div class="banner ${live ? "" : "warn"}">
-      <div>${live
-        ? "this rewrites the entry they already have, in place, at the new time. no second invite, nothing to re-accept."
-        : "not approved yet, so nothing is mailed. the new time rides out on the invite when you approve."}</div>
+      <div>${
+        live
+          ? "this rewrites the entry they already have, in place, at the new time. no second invite, nothing to re-accept."
+          : "not approved yet, so nothing is mailed. the new time rides out on the invite when you approve."
+      }</div>
     </div>
   `;
   return shell("Move it", body, env);
@@ -858,8 +938,13 @@ export function reschedulePage(booking, env, action, sig, slots) {
 
 export function rescheduledPage(booking, env, mailed) {
   const when = new Date(booking.start).toLocaleString("en-US", {
-    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    timeZone: env.HOST_TIMEZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
   const body = `
     <h1>Moved</h1>
@@ -868,9 +953,11 @@ export function rescheduledPage(booking, env, mailed) {
       <p><strong>${esc(when)}</strong></p>
     </div>
     <div class="banner success">
-      <div>${mailed
-        ? `update sent to ${esc(booking.email)}. their entry moves itself, and the old slot is open again.`
-        : "stored. it goes out with the invite when you approve this booking."}</div>
+      <div>${
+        mailed
+          ? `update sent to ${esc(booking.email)}. their entry moves itself, and the old slot is open again.`
+          : "stored. it goes out with the invite when you approve this booking."
+      }</div>
     </div>
   `;
   return shell("Moved", body, env);
@@ -882,8 +969,13 @@ export function rescheduledPage(booking, env, mailed) {
 // rather than decorative: opening the link is safe.
 export function cancelPage(booking, env, action, sig) {
   const when = new Date(booking.start).toLocaleString("en-US", {
-    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    timeZone: env.HOST_TIMEZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
   const body = `
     <h1>Cancel this?</h1>
@@ -948,4 +1040,3 @@ export function errorPage(message, env) {
   `;
   return shell("Error", body, env);
 }
-

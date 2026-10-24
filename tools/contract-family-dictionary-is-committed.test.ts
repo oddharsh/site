@@ -1,9 +1,5 @@
 // ── the family dictionary is committed, and stable until it drifts ────────────
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -109,7 +105,10 @@ test("the build, the roll and the nightly workflow all know the directory", () =
 
   const workflow = readFileSync(".github/workflows/dictionary-roll.yml", "utf8");
   const mentions = workflow.match(/src\/dict\/f-dict/g) || [];
-  assert.ok(mentions.length >= 4, `dictionary-roll.yml names src/dict/f-dict ${mentions.length} time(s); the status check, both counts and the git add all have to`);
+  assert.ok(
+    mentions.length >= 4,
+    `dictionary-roll.yml names src/dict/f-dict ${mentions.length} time(s); the status check, both counts and the git add all have to`,
+  );
 
   const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
   assert.equal(scripts["family:roll"], "bun tools/roll-shell-dictionary.ts --family");

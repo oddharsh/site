@@ -134,7 +134,13 @@ const HASHES = JSON.parse(fs.readFileSync(path.join(REPO, "public/images/hashes.
 const shippedAvif = (stem: string) => path.join(REPO, "public/i", `${stem}.${HASHES[stem]?.a}.avif`);
 // a 600px tile is 360,000 pixels, so bits per pixel is bytes * 8 / 360000
 const TILE_PX = 600 * 600;
-const BANDS: [number, number][] = [[0, 0.3], [0.3, 0.5], [0.5, 0.8], [0.8, 1.2], [1.2, 99]];
+const BANDS: [number, number][] = [
+  [0, 0.3],
+  [0.3, 0.5],
+  [0.5, 0.8],
+  [0.8, 1.2],
+  [1.2, 99],
+];
 const bandOf = (bpp: number) => BANDS.findIndex(([lo, hi]) => bpp >= lo && bpp < hi);
 const bandName = ([lo, hi]: [number, number]) => `${lo}-${hi === 99 ? "" : hi}`;
 /** Shipped 600px bits per pixel for every Fuji stem with an AVIF in public/i. */
@@ -220,7 +226,8 @@ async function tile(src: string, stem: string): Promise<string> {
     } else {
       // add-photos.sh's HEIF door: a lossless 16-bit TIFF, then zenc. The TIFF
       // is about 311 MB, so it goes as soon as the tile is cut.
-      const hif = path.join(src, `${stem}.HIF`), tif = path.join(WORK, `${stem}.tif`);
+      const hif = path.join(src, `${stem}.HIF`),
+        tif = path.join(WORK, `${stem}.tif`);
       await sh(["sips", "-s", "format", "tiff", hif, "--out", tif]);
       try {
         await sh([ZENC, "square", tif, "--orient", String(await orientation(hif)), "--filter", "box", "--size", "600", "--out", png]);
@@ -240,7 +247,8 @@ function straddle(a: Point, b: Point, budget: number): Result {
 }
 
 async function encodeAvm(ref: string, stem: string, cfg: string, qp: number): Promise<Point> {
-  const out = path.join(WORK, "enc", `${stem}.${cfg}.${qp}.avif`), png = out.replace(/\.avif$/, ".png");
+  const out = path.join(WORK, "enc", `${stem}.${cfg}.${qp}.avif`),
+    png = out.replace(/\.avif$/, ".png");
   await sh([path.join(BUILD, "avifenc"), ...AVM, ...AVM_CONFIGS[cfg], "-a", `qp=${qp}`, ref, out]);
   await sh([path.join(BUILD, "avifdec"), out, png]);
   return { knob: qp, bytes: fs.statSync(out).size, ...(await score(ref, png)) };
@@ -255,11 +263,21 @@ async function matchedAvm(ref: string, stem: string, cfg: string, budget: number
     seen.set(q, p);
     return p;
   };
-  let lo = hint, hi = hint, step = 4;
+  let lo = hint,
+    hi = hint,
+    step = 4;
   if ((await at(hint)).bytes > budget) {
-    while ((await at(hi)).bytes > budget && hi < 255) { lo = hi; hi = Math.min(255, hi + step); step *= 2; }
+    while ((await at(hi)).bytes > budget && hi < 255) {
+      lo = hi;
+      hi = Math.min(255, hi + step);
+      step *= 2;
+    }
   } else {
-    while ((await at(lo)).bytes <= budget && lo > 0) { hi = lo; lo = Math.max(0, lo - step); step *= 2; }
+    while ((await at(lo)).bytes <= budget && lo > 0) {
+      hi = lo;
+      lo = Math.max(0, lo - step);
+      step *= 2;
+    }
   }
   const [minP, maxP] = [await at(lo), await at(hi)];
   if (minP.bytes <= budget || maxP.bytes > budget) throw new Error(`${stem} ${cfg}: ${budget} B is outside AV2's qp range`);
@@ -272,7 +290,9 @@ async function matchedAvm(ref: string, stem: string, cfg: string, budget: number
 }
 
 async function encodeJxl(ref: string, stem: string, cfg: string, knob: number): Promise<Point> {
-  const base = path.join(WORK, "enc", `${stem}.${cfg}.${knob.toFixed(4)}`), jxl = `${base}.jxl`, png = `${base}.png`;
+  const base = path.join(WORK, "enc", `${stem}.${cfg}.${knob.toFixed(4)}`),
+    jxl = `${base}.jxl`,
+    png = `${base}.png`;
   if (REPACK.has(cfg)) {
     await sh([ZENC, ref, `${base}.jpg`, "-q", String(knob), "--yuv", "420"]);
     await sh(["cjxl", `${base}.jpg`, jxl, ...JXL_CONFIGS[cfg], "--quiet"]);
@@ -293,19 +313,22 @@ async function matchedJxl(ref: string, stem: string, cfg: string, budget: number
   const near: { above?: Point; below?: Point } = {};
   const at = async (k: number): Promise<number> => {
     const p = await encodeJxl(ref, stem, cfg, k);
-    if (p.bytes > budget) { if (!near.above || p.bytes < near.above.bytes) near.above = p; }
-    else if (!near.below || p.bytes > near.below.bytes) near.below = p;
+    if (p.bytes > budget) {
+      if (!near.above || p.bytes < near.above.bytes) near.above = p;
+    } else if (!near.below || p.bytes > near.below.bytes) near.below = p;
     return p.bytes;
   };
   if (REPACK.has(cfg)) {
-    let lo = 5, hi = 100;
+    let lo = 5,
+      hi = 100;
     while (lo <= hi) {
       const q = (lo + hi) >> 1;
       if ((await at(q)) > budget) hi = q - 1;
       else lo = q + 1;
     }
   } else {
-    let lo = Math.log(0.05), hi = Math.log(25);
+    let lo = Math.log(0.05),
+      hi = Math.log(25);
     for (let i = 0; i < 14; i++) {
       if (near.above && near.below && near.above.bytes - near.below.bytes < budget * 0.004) break;
       const mid = (lo + hi) / 2;
@@ -344,17 +367,32 @@ const signed = (x: number, d = 2) => `${x >= 0 ? "+" : ""}${x.toFixed(d)}`;
 async function main(): Promise<number> {
   const src = arg("src");
   const codec = (arg("codec") ?? "avm") as Codec;
-  if (!src || !CODECS[codec]) { console.error("usage: bun tools/photos/av2-tile-probe.ts --src <folder of originals> [--codec avm|jxl] [--stems a,b] [--configs base,qmseg12] [--json out]"); return 2; }
+  if (!src || !CODECS[codec]) {
+    console.error(
+      "usage: bun tools/photos/av2-tile-probe.ts --src <folder of originals> [--codec avm|jxl] [--stems a,b] [--configs base,qmseg12] [--json out]",
+    );
+    return 2;
+  }
   const known = CODECS[codec].configs;
   const configs = (arg("configs") ?? CODECS[codec].defaults).split(",");
-  for (const c of configs) if (!known[c]) { console.error(`unknown ${codec} config ${c}; have ${Object.keys(known).join(", ")}`); return 2; }
-  if (codec === "avm" && configs.some((c) => c !== "base") && BUILD !== AV2_TUNED_BUILD) console.error(`note: ${configs.join(",")} needs the tuned build (${AV2_BUILD_COMMAND}); using ${BUILD}`);
+  for (const c of configs)
+    if (!known[c]) {
+      console.error(`unknown ${codec} config ${c}; have ${Object.keys(known).join(", ")}`);
+      return 2;
+    }
+  if (codec === "avm" && configs.some((c) => c !== "base") && BUILD !== AV2_TUNED_BUILD)
+    console.error(`note: ${configs.join(",")} needs the tuned build (${AV2_BUILD_COMMAND}); using ${BUILD}`);
   const label = codec === "avm" ? `AV2 (${path.basename(BUILD)})` : `JPEG XL (${(await sh(["cjxl", "--version"])).split(" ")[1]})`;
   const ext = argv.includes("--hif") ? "HIF" : "JPG";
   const tier = shippedBpp();
-  let stems = arg("stems")?.split(",") ?? fs.readdirSync(src)
-    .filter((f) => f.startsWith("XT") && f.endsWith(`.${ext}`)).map((f) => f.slice(0, -4))
-    .filter((s) => /^XT\d+$/.test(s) && !EXCLUDE.has(s)).sort();
+  let stems =
+    arg("stems")?.split(",") ??
+    fs
+      .readdirSync(src)
+      .filter((f) => f.startsWith("XT") && f.endsWith(`.${ext}`))
+      .map((f) => f.slice(0, -4))
+      .filter((s) => /^XT\d+$/.test(s) && !EXCLUDE.has(s))
+      .sort();
   const per = Number(arg("stratify") ?? 0);
   if (per > 0) {
     // n per band, spaced evenly by shipped bpp through each band, so a band's
@@ -377,20 +415,27 @@ async function main(): Promise<number> {
   // tiles in flight: a 600px AV2 encode keeps about one core busy whatever
   // --jobs says (a tile has five 128px superblock rows to spread), so run several
   const parallel = Math.max(1, Number(arg("parallel") ?? Math.max(2, Math.floor(os.availableParallelism() / 3))));
-  await Promise.all(Array.from({ length: parallel }, async () => {
-    for (let s = queue.shift(); s; s = queue.shift()) {
-      const r = await probe(src, s, codec, configs);
-      rows.push(r);
-      console.error(`${s}: ${r.budget} B, ${(r.budget * 8 / 360000).toFixed(2)} bpp${r.control ? "" : " [AVIF CONTROL MISMATCH]"} | vs AVIF: ${configs.map((c) => `${c} ${signed(r.res[c].s2 - r.avif.s2)}`).join("  ")}`);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: parallel }, async () => {
+      for (let s = queue.shift(); s; s = queue.shift()) {
+        const r = await probe(src, s, codec, configs);
+        rows.push(r);
+        console.error(
+          `${s}: ${r.budget} B, ${((r.budget * 8) / 360000).toFixed(2)} bpp${r.control ? "" : " [AVIF CONTROL MISMATCH]"} | vs AVIF: ${configs.map((c) => `${c} ${signed(r.res[c].s2 - r.avif.s2)}`).join("  ")}`,
+        );
+      }
+    }),
+  );
   rows.sort((a, b) => a.stem.localeCompare(b.stem));
 
   console.log(`\n${rows.length} tiles, ${label} against the shipped AVIF at matched bytes`);
   console.log(`  control: the re-encoded AVIF matches the shipped /i/ file on ${rows.filter((r) => r.control).length} of ${rows.length}`);
   for (const c of configs) {
-    const s2 = rows.map((r) => r.res[c].s2 - r.avif.s2), bu3 = rows.map((r) => r.res[c].bu3 - r.avif.bu3);
-    console.log(`  ${c.padEnd(9)} Δs2 ${signed(mean(s2))}  wins ${s2.filter((x) => x > 0).length}/${rows.length}  Δbu3 ${signed(mean(bu3), 3)}  wins ${bu3.filter((x) => x < 0).length}/${rows.length}`);
+    const s2 = rows.map((r) => r.res[c].s2 - r.avif.s2),
+      bu3 = rows.map((r) => r.res[c].bu3 - r.avif.bu3);
+    console.log(
+      `  ${c.padEnd(9)} Δs2 ${signed(mean(s2))}  wins ${s2.filter((x) => x > 0).length}/${rows.length}  Δbu3 ${signed(mean(bu3), 3)}  wins ${bu3.filter((x) => x < 0).length}/${rows.length}`,
+    );
   }
   const first = configs[0];
   const who = codec === "avm" ? "AV2" : "JXL";
@@ -409,7 +454,8 @@ async function main(): Promise<number> {
   if (weight > 0) {
     console.log(`  tier-weighted (bands covering ${weight} of ${tier.size} shipped tiles):`);
     for (const c of configs) {
-      let ds2 = 0, wins = 0;
+      let ds2 = 0,
+        wins = 0;
       for (const b of covered) {
         const d = inBand(b).map((r) => r.res[c].s2 - r.avif.s2);
         ds2 += (tierCount[b] / weight) * mean(d);

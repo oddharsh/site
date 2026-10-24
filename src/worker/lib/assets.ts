@@ -25,11 +25,13 @@ export async function serveFreshAsset(request, env, contentType) {
   // edge for 5 minutes would outlive the deploy that restores the file. Same clamp
   // the serveAssetWith404Clamp sibling below applies.
   if (res.status === 404) {
-    try { await res.body?.cancel(); } catch {}
+    try {
+      await res.body?.cancel();
+    } catch {}
     return new Response("not found", {
       status: 404,
       headers: {
-        "content-type":  "text/plain; charset=utf-8",
+        "content-type": "text/plain; charset=utf-8",
         "cache-control": "public, max-age=0, must-revalidate",
       },
     });
@@ -45,7 +47,9 @@ export async function serveFreshAsset(request, env, contentType) {
 // out-of-band does not — the same write-only-init trap that made encodeBody a
 // silent no-op site-wide (docs/GOTCHAS.md gotcha 13). Spelled out so it stays visible.
 function bodiless(res) {
-  try { res.body?.cancel(); } catch {}
+  try {
+    res.body?.cancel();
+  } catch {}
   return new Response(null, { status: res.status, headers: new Headers(res.headers) });
 }
 
@@ -65,7 +69,9 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
   u.search = "";
   const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
   if (!res.ok) {
-    try { await res.body?.cancel(); } catch {}
+    try {
+      await res.body?.cancel();
+    } catch {}
     return null;
   }
   const body = await res.text();
@@ -99,7 +105,9 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
 export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = {}) {
   const res = await env.ASSETS.fetch(request);
   if (res.status === 404) {
-    try { await res.body?.cancel(); } catch {}
+    try {
+      await res.body?.cancel();
+    } catch {}
     return new Response(opts.notFoundBody || "not found", {
       status: 404,
       headers: {
@@ -118,7 +126,7 @@ export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = 
 // gets this right on its own; we only need it because the bytes we hand back came
 // from a `.br` file, whose extension would otherwise type the response as binary.
 const SHELL_TYPES = {
-  js:  "text/javascript; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml; charset=utf-8",
   // /a/pixel-peeper-manifest.<hash8>.json, since 2026-09-30: the year and the
@@ -135,12 +143,10 @@ const SHELL_TYPES = {
 // Named by path because the extension is shared with the other /a/ json.
 const SPECULATION_RULES_FILE = /^\/a\/speculation\.[0-9a-f]{8}\.json$/;
 const SPECULATION_RULES_TYPE = "application/speculationrules+json";
-const shellType = (pathname: string, ext: string) =>
-  SPECULATION_RULES_FILE.test(pathname) ? SPECULATION_RULES_TYPE : SHELL_TYPES[ext];
+const shellType = (pathname: string, ext: string) => (SPECULATION_RULES_FILE.test(pathname) ? SPECULATION_RULES_TYPE : SHELL_TYPES[ext]);
 // The identity fallbacks below hand back the asset layer's response, which types
 // a .json as application/json, so the ruleset carries its type through them too.
-const identityOpts = (pathname: string): AssetOptions =>
-  SPECULATION_RULES_FILE.test(pathname) ? { headers: { "content-type": SPECULATION_RULES_TYPE } } : {};
+const identityOpts = (pathname: string): AssetOptions => (SPECULATION_RULES_FILE.test(pathname) ? { headers: { "content-type": SPECULATION_RULES_TYPE } } : {});
 
 // Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
 // and the dcz delta): js, css and, since 2026-09-26, svg. The family .dict stays off,
@@ -221,12 +227,8 @@ const shellOffer = (pathname, ext) => {
 // `hasRegExpGroups` is false, as RFC 9842 requires.
 export const PAGE_FAMILY_MATCH = "/:sitewide_html_dictionary_preferred_over_uncaptured_exact_page_snapshots*/*";
 const pageFamilyOffer = (pathname) =>
-  pathname.startsWith("/a/") && parseFamilyDictionary(pathname.slice("/a/".length))
-    ? `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`
-    : null;
-const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
-  ? `match="${pathname}", match-dest=("document")`
-  : null;
+  pathname.startsWith("/a/") && parseFamilyDictionary(pathname.slice("/a/".length)) ? `match="${PAGE_FAMILY_MATCH}", match-dest=("document")` : null;
+const pageOffer = (pathname) => (pathname.length < PAGE_FAMILY_MATCH.length ? `match="${pathname}", match-dest=("document")` : null);
 
 // Can the BROWSER keep an offer made on a response with this cache-control?
 //
@@ -330,11 +332,20 @@ async function serveDictionaryDelta(url, ext, request, env) {
   if (!deltaPath) return null;
   let res;
   try {
-    res = await env.ASSETS.fetch(new Request(`${url.origin}${deltaPath}`, {
-      headers: { "accept-encoding": "identity" },
-    }));
-  } catch { return null; }
-  if (!res.ok) { try { await res.body?.cancel(); } catch {} return null; }
+    res = await env.ASSETS.fetch(
+      new Request(`${url.origin}${deltaPath}`, {
+        headers: { "accept-encoding": "identity" },
+      }),
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) {
+    try {
+      await res.body?.cancel();
+    } catch {}
+    return null;
+  }
 
   const headers = new Headers(res.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
@@ -347,7 +358,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
   // the new bytes and the chain continues on the next deploy.
   headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
-  headers.delete("etag");   // described the .dcz file, not this resource
+  headers.delete("etag"); // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
 
@@ -427,7 +438,9 @@ export async function servePrecompressedShell(request, env) {
   }
 
   if (!br.ok || br.headers.get("content-encoding")) {
-    try { await br.body?.cancel(); } catch {}
+    try {
+      await br.body?.cancel();
+    } catch {}
     return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
   }
 
@@ -466,7 +479,7 @@ export async function servePrecompressedShell(request, env) {
   // The asset layer's ETag describes the .br file. Two encodings of one resource
   // must not share a strong validator, so weaken it and mark the encoding.
   const etag = headers.get("etag");
-  if (etag) headers.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+  if (etag) headers.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, '-br"')}`);
 
   return new Response(br.body, {
     status: 200,
@@ -474,7 +487,6 @@ export async function servePrecompressedShell(request, env) {
     encodeBody: "manual",
   });
 }
-
 
 // servePrecompressedText: the brotli q11 twin for a static TEXT asset that is
 // neither a page nor part of the /a/ shell: the Markdown twins, the photo data
@@ -543,7 +555,11 @@ export async function servePrecompressedText(request, env, opts: AssetOptions = 
     env.ASSETS.fetch(new Request(url.toString(), identity)).catch(() => null),
     env.ASSETS.fetch(new Request(`${url.origin}${url.pathname}.br`, identity)).catch(() => null),
   ]);
-  const drop = async (r) => { try { await r?.body?.cancel(); } catch {} };
+  const drop = async (r) => {
+    try {
+      await r?.body?.cancel();
+    } catch {}
+  };
   if (!plain?.ok || !twin?.ok || twin.headers.get("content-encoding")) {
     await Promise.all([drop(plain), drop(twin)]);
     return serveAssetWith404Clamp(request, env, opts);
@@ -587,7 +603,10 @@ export function twinPolicy(headers: Record<string, string> = {}): Record<string,
     if (key === "cache-control") continue;
     if (key === "link") {
       // split between entries only: a comma inside <...> belongs to a URL
-      const kept = value.split(/,\s*(?=<)/).filter((entry) => !/;\s*rel="?preload"?/i.test(entry)).join(", ");
+      const kept = value
+        .split(/,\s*(?=<)/)
+        .filter((entry) => !/;\s*rel="?preload"?/i.test(entry))
+        .join(", ");
       if (kept) out[name] = kept;
       continue;
     }
@@ -651,9 +670,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // index.html, which build.ts bakes into a deterministic document precisely so
   // it can take this path. Has to come before the guard below, which would
   // otherwise hand `/` to the asset layer and skip the twin entirely.
-  const rel = url.pathname === "/"
-    ? "index"
-    : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  const rel = url.pathname === "/" ? "index" : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
@@ -708,23 +725,29 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     if (!tag) return null;
     for (const deltaPath of pageDeltaPaths(rel, tag)) {
       try {
-        const d = await env.ASSETS.fetch(new Request(`${url.origin}${deltaPath}`, {
-          headers: { "accept-encoding": "identity" },
-        }));
+        const d = await env.ASSETS.fetch(
+          new Request(`${url.origin}${deltaPath}`, {
+            headers: { "accept-encoding": "identity" },
+          }),
+        );
         if (d.ok) {
           const h = new Headers(d.headers);
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.delete("etag");                       // described the .dcz file, not this page
+          h.delete("etag"); // described the .dcz file, not this page
           applyExtraHeaders(h);
           // The self-offer is reconciled once more below, after this response borrows the
           // twin's cache-control; deciding it here would read a header about to change.
           offerIfStorable(h);
           return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
         }
-        try { await d.body?.cancel(); } catch {}
-      } catch { /* fall through to the twin */ }
+        try {
+          await d.body?.cancel();
+        } catch {}
+      } catch {
+        /* fall through to the twin */
+      }
     }
     return null;
   };
@@ -732,9 +755,11 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   const findBrotli = async () => {
     for (const base of bases) {
       try {
-        const br = await env.ASSETS.fetch(new Request(`${url.origin}/${base}.html.br`, {
-          headers: { "accept-encoding": "identity" },
-        }));
+        const br = await env.ASSETS.fetch(
+          new Request(`${url.origin}/${base}.html.br`, {
+            headers: { "accept-encoding": "identity" },
+          }),
+        );
         if (br.ok && !br.headers.get("content-encoding")) {
           const h = new Headers(br.headers);
           h.set("content-type", "text/html; charset=utf-8");
@@ -747,8 +772,12 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
           offerIfStorable(h);
           return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
         }
-        try { await br.body?.cancel(); } catch {}
-      } catch { /* fall through to the plain asset */ }
+        try {
+          await br.body?.cancel();
+        } catch {}
+      } catch {
+        /* fall through to the plain asset */
+      }
     }
     return null;
   };
@@ -765,13 +794,13 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // Skipping is content-preserving here rather than a different answer: the twin
   // is a compression of the very asset `plain` returns, so the document is the
   // same one, and the two lookups it avoids are pure cost on this path.
-  const [br, delta] = env.IDENTITY_BODY
-    ? [null, null]
-    : await Promise.all([findBrotli(), findDelta()]);
+  const [br, delta] = env.IDENTITY_BODY ? [null, null] : await Promise.all([findBrotli(), findDelta()]);
   if (br) {
     const fresh = notModifiedIfFresh(request, br);
     if (fresh.status === 304) {
-      try { await delta?.body?.cancel(); } catch {}
+      try {
+        await delta?.body?.cancel();
+      } catch {}
       return fresh;
     }
   }
@@ -788,7 +817,9 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
       // Brotli tag on a dcz body lets a cache/client validate the wrong encoding.
       const encoded = variantEtag(br.headers.get("etag"), "dcz");
       if (encoded) delta.headers.set("etag", encoded);
-      try { await br.body?.cancel(); } catch {}
+      try {
+        await br.body?.cancel();
+      } catch {}
     }
     // cache-control just moved; the self-offer has to agree with the one that shipped.
     offerIfStorable(delta.headers);

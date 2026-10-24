@@ -47,7 +47,8 @@ export const PINNED_PROBES = 12;
 // disqualifying.
 export async function sampleSplit(target, previous, runId, count = SAMPLES) {
   const seen = new Map();
-  let errors = 0, stalls = 0;
+  let errors = 0,
+    stalls = 0;
   const errorVersions: string[] = [];
   const stallReasons: string[] = [];
 
@@ -126,8 +127,13 @@ export async function sampleSplit(target, previous, runId, count = SAMPLES) {
 // actually moved, which stays sampleSplit()'s job, and is why both still run.
 export async function probePinned(versionId, worker) {
   const override = `${worker}="${versionId}"`;
-  let onTarget = 0, offTarget = 0, errors = 0, stalls = 0;
-  const errorDetail: string[] = [], stallReasons: string[] = [], strayVersions = new Set();
+  let onTarget = 0,
+    offTarget = 0,
+    errors = 0,
+    stalls = 0;
+  const errorDetail: string[] = [],
+    stallReasons: string[] = [],
+    strayVersions = new Set();
 
   for (let i = 0; i < PINNED_PROBES; i++) {
     try {
@@ -147,14 +153,27 @@ export async function probePinned(versionId, worker) {
       // separately for that reason: treating it as an error would roll back a
       // healthy deploy because a header did not apply.
       if (String(version || "").slice(0, 8) === String(versionId).slice(0, 8)) onTarget++;
-      else { offTarget++; if (version) strayVersions.add(String(version).slice(0, 8)); }
+      else {
+        offTarget++;
+        if (version) strayVersions.add(String(version).slice(0, 8));
+      }
     } catch (e) {
       stalls++;
       stallReasons.push(e?.name === "TimeoutError" ? `timed out after ${REQ_TIMEOUT_MS}ms` : String(e?.message || e));
     }
   }
 
-  return { onTarget, offTarget, errors, errorDetail, stalls, stallReasons, strayVersions: [...strayVersions], answered: PINNED_PROBES - stalls, total: PINNED_PROBES };
+  return {
+    onTarget,
+    offTarget,
+    errors,
+    errorDetail,
+    stalls,
+    stallReasons,
+    strayVersions: [...strayVersions],
+    answered: PINNED_PROBES - stalls,
+    total: PINNED_PROBES,
+  };
 }
 
 export async function servingVersion(res) {
@@ -163,7 +182,9 @@ export async function servingVersion(res) {
     const server = (body.groups || []).find((g) => g.title === "Server");
     const field = (server?.fields || []).find((f) => f.k === "Serving version");
     return field?.v || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // /whoareyou.json reports the full version id; the CLI and the log line use the

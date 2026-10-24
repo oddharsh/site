@@ -29,7 +29,11 @@ const COOKIES = JSON.stringify({ cookies: [{ name: "luma.auth-session-key", valu
 // A D1 double that answers the statements the cron sends. `settings` is the
 // record under test; `failOn` makes one statement throw, which is how the
 // thrown path is reached without touching the record's own write.
-function fakeD1({ sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test" }], pool = [5, 5], failOn = (null as string | null) }: Record<string, any> = {}) {
+function fakeD1({
+  sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test" }],
+  pool = [5, 5],
+  failOn = null as string | null,
+}: Record<string, any> = {}) {
   const settings = new Map();
   const pools = [...pool];
   const answer = (sql, args) => {
@@ -37,14 +41,18 @@ function fakeD1({ sets = [{ user_key: "k1", cookies_json: COOKIES, label: "test"
     if (/FROM user_cookies/.test(sql)) return { results: sets };
     if (/^SELECT COUNT\(\*\) AS n FROM events$/.test(sql.trim())) return { results: [{ n: pools.shift() ?? 0 }] };
     if (/COUNT\(\*\) AS n FROM events WHERE/.test(sql)) return { results: [{ n: 0 }] };
-    if (/^\s*INSERT INTO settings/.test(sql)) { settings.set(args[0], args[1]); return { results: [] }; }
+    if (/^\s*INSERT INTO settings/.test(sql)) {
+      settings.set(args[0], args[1]);
+      return { results: [] };
+    }
     if (/FROM settings WHERE key IN/.test(sql)) {
       return { results: args.filter((k) => settings.has(k)).map((key) => ({ key, value: settings.get(key) })) };
     }
     return { results: [] };
   };
   const stmt = (sql, args: any[] = []) => ({
-    sql, args,
+    sql,
+    args,
     bind: (...a: any[]) => stmt(sql, a),
     first: async () => answer(sql, args).results[0] ?? null,
     all: async () => answer(sql, args),
@@ -66,7 +74,13 @@ function recordingTracer() {
     enterSpan(name, fn) {
       const attrs: Record<string, any> = {};
       spans.push({ name, attrs });
-      return fn({ setAttribute: (k, v) => { attrs[k] = v; }, end() {}, isTraced: true });
+      return fn({
+        setAttribute: (k, v) => {
+          attrs[k] = v;
+        },
+        end() {},
+        isTraced: true,
+      });
     },
   };
 }
@@ -130,8 +144,11 @@ test("a thrown tick still writes the attempt, keeps the last success, and rethro
     const attempt = JSON.parse(db.settings.get(SYNC_ATTEMPT_KEY));
     assert.equal(attempt.ok, false);
     assert.match(attempt.error, /D1 refused/);
-    assert.equal(JSON.parse(db.settings.get(SYNC_OK_KEY)).at, "2026-09-29T00:23:00.000Z",
-      "a failure must never overwrite the last success, or staleness could not be read");
+    assert.equal(
+      JSON.parse(db.settings.get(SYNC_OK_KEY)).at,
+      "2026-09-29T00:23:00.000Z",
+      "a failure must never overwrite the last success, or staleness could not be read",
+    );
 
     const sync = tracer.spans.find((s) => s.name === "serendipity.sync");
     assert.equal(sync.attrs["serendipity.ok"], false);
@@ -149,7 +166,10 @@ test("a rejected session is a failed tick even though nothing throws", async () 
   // The state this whole change exists for: Luma answers 401, syncEvents
   // returns it, and the cron completes normally.
   const db = fakeD1();
-  const record = await withLuma(() => new Response("unauthorized", { status: 401 }), () => cronSerendipity(db));
+  const record = await withLuma(
+    () => new Response("unauthorized", { status: 401 }),
+    () => cronSerendipity(db),
+  );
   assert.equal(record.ok, false);
   assert.equal(record.session, "rejected");
   assert.match(record.error, /Luma 401/);
@@ -172,7 +192,12 @@ test("no enabled cookie set is recorded as a halt rather than skipped silently",
 function dbShim(db) {
   return {
     prepare: (sql) => ({
-      all: async (...a: any[]) => (await db.SERENDIPITY_DB.prepare(sql).bind(...a).all()).results,
+      all: async (...a: any[]) =>
+        (
+          await db.SERENDIPITY_DB.prepare(sql)
+            .bind(...a)
+            .all()
+        ).results,
     }),
   };
 }
@@ -180,8 +205,18 @@ function dbShim(db) {
 test("the record folds counts it can read and leaves the rest undefined", () => {
   const r = summarizeSync({
     at: "2026-09-30T00:23:00.000Z",
-    out: { events: [{ synced: 10, new: 3, pages: 3 }, { error: "Luma 403: nope", pages: 1 }], guests: [], skipped: [], descriptions: { error: "x" } },
-    sets: 2, budget: null, thrown: null,
+    out: {
+      events: [
+        { synced: 10, new: 3, pages: 3 },
+        { error: "Luma 403: nope", pages: 1 },
+      ],
+      guests: [],
+      skipped: [],
+      descriptions: { error: "x" },
+    },
+    sets: 2,
+    budget: null,
+    thrown: null,
   });
   assert.equal(r.ok, true, "one set syncing refreshes the pool");
   assert.equal(r.session, "rejected", "the worst session state is the one reported");
@@ -199,14 +234,20 @@ test("the record folds counts it can read and leaves the rest undefined", () => 
 test("the dashboard line reads ok, error and stale against two ticks of the declared schedule", () => {
   const now = Date.parse("2026-09-30T12:30:00.000Z");
 
-  const rec: (at: string, ok: boolean) => import("../serendipity/serendipity.ts").SyncRecord = (at, ok): import("../serendipity/serendipity.ts").SyncRecord => ({ at, ok, session: ok ? "ok" : "error", events_fetched: 42 });
+  const rec: (at: string, ok: boolean) => import("../serendipity/serendipity.ts").SyncRecord = (
+    at,
+    ok,
+  ): import("../serendipity/serendipity.ts").SyncRecord => ({ at, ok, session: ok ? "ok" : "error", events_fetched: 42 });
   const fresh = rec("2026-09-30T12:23:00.000Z", true);
   assert.match(syncHealthLine({ attempt: fresh, lastOk: fresh }, now), /data-sync="ok">Last Luma sync 7 min ago: ok, 42 events\./);
 
   const failed = rec("2026-09-30T12:23:00.000Z", false);
   const okEarlier = rec("2026-09-30T06:23:00.000Z", true);
-  assert.match(syncHealthLine({ attempt: failed, lastOk: okEarlier }, now), /data-sync="error".*the sync failed/,
-    "one failed tick after a recent success is an error, not yet stale");
+  assert.match(
+    syncHealthLine({ attempt: failed, lastOk: okEarlier }, now),
+    /data-sync="error".*the sync failed/,
+    "one failed tick after a recent success is an error, not yet stale",
+  );
 
   const okOld = rec(new Date(now - SYNC_STALE_MS - 60_000).toISOString(), true);
   assert.match(syncHealthLine({ attempt: failed, lastOk: okOld }, now), /data-sync="stale".*<b>Stale:<\/b> the last good sync was 12h ago/);

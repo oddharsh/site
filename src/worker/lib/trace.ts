@@ -98,11 +98,7 @@ export function setAttributes<N extends SpanName>(span: Span<N>, attrs: SpanAttr
 // silently becomes `${string}.${string}`, which accepts everything. That is the
 // failure mode to watch for if this signature is ever edited: it does not
 // error, it just stops checking.
-export function span<N extends SpanName, T>(
-  name: N,
-  fn: (span: Span<N>) => T,
-  attrs?: SpanAttrs<N>,
-): T {
+export function span<N extends SpanName, T>(name: N, fn: (span: Span<N>) => T, attrs?: SpanAttrs<N>): T {
   const t = tracing;
   if (!t) return fn(INERT as Span<N>);
   return t.enterSpan(name, (s) => {

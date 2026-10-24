@@ -10,11 +10,7 @@
 // (PENDING_TTL_DAYS = "7") and the BOOKINGS binding.
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { bootCal } from "./harness.ts";
-import {
-  createBooking, getBooking, setStatus,
-  holdSlot, releaseSlot, listHeld,
-} from "../src/booking.ts";
-
+import { createBooking, getBooking, setStatus, holdSlot, releaseSlot, listHeld } from "../src/booking.ts";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
@@ -59,9 +55,13 @@ type Booking = import("../src/booking.ts").Booking;
 // so the helper produces a shape createBooking would refuse.
 
 const pending = (fields: Partial<Omit<Booking, "id">> = {}): Omit<Booking, "id"> => ({
-  status: "pending", created: Date.now(),
-  name: "Test Requester", email: "test@example.dev", topic: "coffee",
-  ...soon(), ...fields,
+  status: "pending",
+  created: Date.now(),
+  name: "Test Requester",
+  email: "test@example.dev",
+  topic: "coffee",
+  ...soon(),
+  ...fields,
 });
 
 describe("booking record CRUD", () => {
@@ -109,8 +109,8 @@ describe("held slots (per-slot keys)", () => {
     const c = await createBooking(env, pending(soon(72)));
     await holdSlot(env, a);
     await holdSlot(env, c);
-    const starts = (await listHeld(env)).map((h) => h.start).sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0);
-    expect(starts).toEqual([a.start, c.start].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0));
+    const starts = (await listHeld(env)).map((h) => h.start).sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0));
+    expect(starts).toEqual([a.start, c.start].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)));
   });
 
   it("a released slot leaves the booking record intact (record != hold)", async () => {

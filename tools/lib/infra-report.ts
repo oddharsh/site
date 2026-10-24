@@ -21,9 +21,15 @@ export function createReport(env: Record<string, string | undefined> = process.e
   const advisory: string[] = [];
   const ok: string[] = [];
 
-  const fail = (m: string) => { hard.push(redactCredentials(m, env)); };
-  const warn = (m: string) => { advisory.push(redactCredentials(m, env)); };
-  const pass = (m: string) => { ok.push(redactCredentials(m, env)); };
+  const fail = (m: string) => {
+    hard.push(redactCredentials(m, env));
+  };
+  const warn = (m: string) => {
+    advisory.push(redactCredentials(m, env));
+  };
+  const pass = (m: string) => {
+    ok.push(redactCredentials(m, env));
+  };
 
   /** Take a comparer's findings, in the order it produced them. */
   const add = (findings: Finding[]) => {

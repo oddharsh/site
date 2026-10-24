@@ -1,10 +1,5 @@
 // ── 0-RTT early data, and the speculation ledger read back ───────────────────
-import {
-  configText,
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { configText, assert, readFileSync, test } from "./contract-shared.ts";
 
 // A request that arrived as TLS early data can be replayed, so the GET-shaped
 // writes answer 425 Too Early (RFC 8470) and every other request is untouched.
@@ -74,16 +69,23 @@ test("speculation readback: rows fold per path and the rate orders them", async 
     { kind: "activated", path: "/garage", n: 25 },
     { kind: "prerender", path: "/lwe", n: 100 },
     { kind: "activated", path: "/lwe", n: 2 },
-    { kind: "activated", path: "/orphan", n: 3 },      // an activation with no counted speculation
-    { kind: "prerender", path: "/ghost", n: 0 },       // zero rows are not rows
-    { kind: "banana", path: "/garage", n: 999 },        // unknown kinds are ignored, never counted
+    { kind: "activated", path: "/orphan", n: 3 }, // an activation with no counted speculation
+    { kind: "prerender", path: "/ghost", n: 0 }, // zero rows are not rows
+    { kind: "banana", path: "/garage", n: 999 }, // unknown kinds are ignored, never counted
   ]);
-  assert.deepEqual(rows.map((r) => r.path), ["/lwe", "/garage", "/orphan"], "sorted by speculations, descending");
+  assert.deepEqual(
+    rows.map((r) => r.path),
+    ["/lwe", "/garage", "/orphan"],
+    "sorted by speculations, descending",
+  );
   const garage = rows.find((r) => r.path === "/garage");
   assert.deepEqual(garage, { path: "/garage", prefetch: 10, prerender: 40, activated: 25, speculated: 50, rate: 0.5 });
   assert.equal(rows.find((r) => r.path === "/lwe")?.rate, 0.02);
   assert.equal(rows.find((r) => r.path === "/orphan")?.rate, null, "no denominator, no rate");
-  assert.equal(rows.some((r) => r.path === "/ghost"), false);
+  assert.equal(
+    rows.some((r) => r.path === "/ghost"),
+    false,
+  );
 });
 
 test("speculation readback: the route is wired, allowlisted, and refuses writes", async () => {

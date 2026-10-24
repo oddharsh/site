@@ -1,9 +1,5 @@
 // ── the span vocabulary ─────────────────────────────────────────────
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -94,9 +90,10 @@ test("every declared span name is actually opened somewhere", () => {
 
   const dead = [...names].filter((n) => !opened.has(n));
   assert.deepEqual(
-    dead, [],
+    dead,
+    [],
     `${REGISTRY} declares span name(s) nothing opens: ${dead.join(", ")}. ` +
-    "Delete them; a registry documenting spans that never fire is believed and wrong.",
+      "Delete them; a registry documenting spans that never fire is believed and wrong.",
   );
 });
 

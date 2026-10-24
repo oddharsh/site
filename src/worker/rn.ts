@@ -68,8 +68,8 @@ export async function handleRn(request, env, ctx) {
   return new Response(null, {
     status: 302,
     headers: {
-      "location":        await playlistUrl(env),
-      "cache-control":   "no-store, must-revalidate",
+      "location": await playlistUrl(env),
+      "cache-control": "no-store, must-revalidate",
       "referrer-policy": "no-referrer",
     },
   });
@@ -111,8 +111,8 @@ async function playlistUrl(env) {
 // available, the scrape fails closed instead of making an unsigned request.
 // The embed pages are public + cacheable, so neither the UA nor the signature
 // affects what Spotify serves.
-export const RN_TRACKS_TTL  = 3600;         // 1h: playlist tracks payload
-export const ARTIST_KV_TTL  = 30 * 86400;   // 30d: artist profile (rarely changes)
+export const RN_TRACKS_TTL = 3600; // 1h: playlist tracks payload
+export const ARTIST_KV_TTL = 30 * 86400; // 30d: artist profile (rarely changes)
 
 // Spotify serves the same art under several interchangeable CDN aliases, and
 // this file asks for art in two independent places: the per-track embed (tier 2)
@@ -150,7 +150,9 @@ export function canonicalArtUrl(raw) {
       u.hostname = "i.scdn.co";
       return u.toString();
     }
-  } catch { /* not parseable as a URL: leave it alone rather than guess */ }
+  } catch {
+    /* not parseable as a URL: leave it alone rather than guess */
+  }
   return raw;
 }
 
@@ -211,7 +213,9 @@ export function spotifyArtHash(raw) {
     if (u.hostname !== "i.scdn.co") return null;
     const id = u.pathname.slice("/image/".length);
     return u.pathname.startsWith("/image/") && ART_HASH.test(id) ? id : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // The one hover resource, built server-side and handed over as an attribute
@@ -301,7 +305,9 @@ export async function handleRnArt(request, env, ctx) {
       // at 240px would have been the wrong test and reads ~5 points harsher.
       cf: { image: { width, fit: "scale-down", format: ext === "jpg" ? "jpeg" : "avif", quality: 63 } },
     });
-  } catch { res = null; }
+  } catch {
+    res = null;
+  }
 
   // Every way the transform can fail lands here, and they are not exotic: the
   // Images Free plan returns 9422 once 5,000 unique transformations are used up
@@ -313,7 +319,11 @@ export async function handleRnArt(request, env, ctx) {
   let transformed = true;
   if (!res || !res.ok) {
     transformed = false;
-    try { res = await fetch(upstream); } catch { res = null; }
+    try {
+      res = await fetch(upstream);
+    } catch {
+      res = null;
+    }
   }
   if (!res || !res.ok) {
     return new Response("upstream unavailable", { status: 502, headers: { "cache-control": "no-store" } });
@@ -324,13 +334,11 @@ export async function handleRnArt(request, env, ctx) {
   // when the transform actually ran. A fallback body is Spotify's original JPEG
   // whatever the path claims, and labelling that as AVIF would break the one
   // path that exists to keep things working.
-  headers.set("content-type", transformed ? ART_EXT[ext] : (res.headers.get("content-type") || "image/jpeg"));
+  headers.set("content-type", transformed ? ART_EXT[ext] : res.headers.get("content-type") || "image/jpeg");
   // Only a TRANSFORMED response earns a year. An untransformed fallback is the
   // symptom of a temporary condition (a monthly allowance, a zone toggle), and
   // pinning it immutable would outlive the cause by eleven months.
-  headers.set("cache-control", transformed
-    ? "public, max-age=31536000, immutable"
-    : "public, max-age=300");
+  headers.set("cache-control", transformed ? "public, max-age=31536000, immutable" : "public, max-age=300");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-art-transformed", transformed ? "1" : "0");
   const out = new Response(res.body, { status: 200, headers });
@@ -422,35 +430,39 @@ export async function warmArtCache(payload, request, env, ctx) {
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
 
-  const outcomes = await Promise.all(urls.map(async (u) => {
-    try {
-      // Call the handler directly instead of fetching our own origin. A self
-      // fetch would cost a second worker invocation per cover to reach this
-      // same function, and `handleRnArt` already does its own cache.put.
-      const res = await handleRnArt(new Request(u), env, ctx);
-      // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
-      // and a tee branch nobody reads can back-pressure the branch being written
-      // to the cache. These are 5-19KB images, so buffering them is free.
-      if (res.body) await res.arrayBuffer();
-      // handleRnArt marks its own response, so the warm can report what it
-      // actually DID rather than how many URLs it considered. That distinction
-      // is the whole reason the broken guard went unnoticed: the old attribute
-      // counted intent, and intent looked identical to success.
-      //
-      // The same mistake survived one level down until 2026-10-09: anything
-      // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
-      // production that 502 is mostly the 50-subrequest cap: a cold cover costs
-      // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
-      // found nothing cached and tried all 40 (one CDG trace threw "Too many
-      // subrequests" while its span still read warmed 40). Only `miss` means a
-      // transformed cover went to cache.put. A 200 without it is the
-      // untransformed fallback, which is served but never stored.
-      const mark = res.headers.get("x-art-cache");
-      if (mark === "hit") return "already";
-      if (mark === "miss") return "warmed";
-      return res.ok ? "untransformed" : "failed";
-    } catch { return "failed"; }
-  }));
+  const outcomes = await Promise.all(
+    urls.map(async (u) => {
+      try {
+        // Call the handler directly instead of fetching our own origin. A self
+        // fetch would cost a second worker invocation per cover to reach this
+        // same function, and `handleRnArt` already does its own cache.put.
+        const res = await handleRnArt(new Request(u), env, ctx);
+        // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
+        // and a tee branch nobody reads can back-pressure the branch being written
+        // to the cache. These are 5-19KB images, so buffering them is free.
+        if (res.body) await res.arrayBuffer();
+        // handleRnArt marks its own response, so the warm can report what it
+        // actually DID rather than how many URLs it considered. That distinction
+        // is the whole reason the broken guard went unnoticed: the old attribute
+        // counted intent, and intent looked identical to success.
+        //
+        // The same mistake survived one level down until 2026-10-09: anything
+        // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
+        // production that 502 is mostly the 50-subrequest cap: a cold cover costs
+        // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
+        // found nothing cached and tried all 40 (one CDG trace threw "Too many
+        // subrequests" while its span still read warmed 40). Only `miss` means a
+        // transformed cover went to cache.put. A 200 without it is the
+        // untransformed fallback, which is served but never stored.
+        const mark = res.headers.get("x-art-cache");
+        if (mark === "hit") return "already";
+        if (mark === "miss") return "warmed";
+        return res.ok ? "untransformed" : "failed";
+      } catch {
+        return "failed";
+      }
+    }),
+  );
 
   const count = (o: string) => outcomes.filter((x) => x === o).length;
   return { warmed: count("warmed"), already: count("already"), untransformed: count("untransformed"), failed: count("failed") };
@@ -469,9 +481,13 @@ function trackResponse(payload, status = 200, format = "json") {
     // 1101 from the edge is also text/html and also resolves fine. Unlike the
     // default island this fragment is cacheable, because the playlist is shared
     // by everyone.
-    return islandResponse(renderTrackListHtml(payload), {
-      "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-    }, status);
+    return islandResponse(
+      renderTrackListHtml(payload),
+      {
+        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
+      },
+      status,
+    );
   }
   return jsonResponse(payload, status, { ...publicJsonHeaders(status), "x-robots-tag": "noindex" }, { pretty: false });
 }
@@ -583,19 +599,21 @@ export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
   const result = await loadRnTracks(request, env, ctx);
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
-    ctx.waitUntil(span("rn.art.warm", async (s) => {
-      const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
-      // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
-      // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
-      // feature not running at all, and the first version of this span could not
-      // tell those apart. That is precisely how the broken guard shipped green.
-      // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
-      // Images fallback; the four always sum to the URLs attempted.
-      s.setAttribute("rn.art.warmed", warmed);
-      s.setAttribute("rn.art.already", already);
-      s.setAttribute("rn.art.untransformed", untransformed);
-      s.setAttribute("rn.art.failed", failed);
-    }).catch(() => {}));
+    ctx.waitUntil(
+      span("rn.art.warm", async (s) => {
+        const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
+        // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
+        // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
+        // feature not running at all, and the first version of this span could not
+        // tell those apart. That is precisely how the broken guard shipped green.
+        // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
+        // Images fallback; the four always sum to the URLs attempted.
+        s.setAttribute("rn.art.warmed", warmed);
+        s.setAttribute("rn.art.already", already);
+        s.setAttribute("rn.art.untransformed", untransformed);
+        s.setAttribute("rn.art.failed", failed);
+      }).catch(() => {}),
+    );
   }
   return res;
 }
@@ -612,18 +630,21 @@ export function renderTrackListHtml(payload): Html {
   // was told the playlist is empty when the scrape actually broke.
   if (payload?.error) return html`<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>`;
   if (!tracks.length) return html`<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>`;
-  return joinHtml(tracks.map(t => {
-    const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
-    const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
-    return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
-      t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY}${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
+  return joinHtml(
+    tracks.map((t) => {
+      const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
+      const artistsText = t.artists_text || (t.artists || []).map((a) => a.name).join(", ");
+      return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
+        t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY
+      }${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
       <a href="${t.song_link_url}" target="_blank" rel="noopener">${
         dur ? html`<span class="np-duration">${dur}</span>` : EMPTY
       }<span class="np-title">${t.title}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
         t.is_explicit ? html`<span class="np-explicit">E</span>` : EMPTY
       }</a>
     </li>`;
-  }));
+    }),
+  );
 }
 
 // The Markdown representation, served at /rn.md and at /rn under
@@ -657,7 +678,7 @@ export function renderTrackListMarkdown(payload, target) {
   } else {
     body = [`## ${tracks.length} track${tracks.length === 1 ? "" : "s"}`, ""];
     tracks.forEach((t, i) => {
-      const artists = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+      const artists = t.artists_text || (t.artists || []).map((a) => a.name).join(", ");
       const dur = t.duration_ms ? ` (${fmtDuration(t.duration_ms)})` : "";
       const explicit = t.is_explicit ? " [E]" : "";
       const link = t.song_link_url || t.spotify_url;
@@ -685,8 +706,8 @@ export async function handleRnMarkdown(request, env, ctx) {
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
   const headers: Record<string, string> = {
-    "content-type":           "text/markdown; charset=utf-8",
-    "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
+    "content-type": "text/markdown; charset=utf-8",
+    "cache-control": negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
     "x-content-type-options": "nosniff",
   };
   if (negotiated) headers.vary = "accept";
@@ -701,17 +722,26 @@ export async function handleRnMarkdown(request, env, ctx) {
 
 function linkifyArtists(artists, fallbackText): Html {
   if (Array.isArray(artists) && artists.length) {
-    return joinHtml(artists.map(a => {
-      const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
-    }), ", ");
+    return joinHtml(
+      artists.map((a) => {
+        const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
+      }),
+      ", ",
+    );
   }
   const raw = fallbackText || asText(artists, "");
   if (!raw) return EMPTY;
-  return joinHtml(String(raw).split(/,\s*/).filter(Boolean).map(name => {
-    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-    return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
-  }), ", ");
+  return joinHtml(
+    String(raw)
+      .split(/,\s*/)
+      .filter(Boolean)
+      .map((name) => {
+        const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
+      }),
+    ", ",
+  );
 }
 
 function fmtDuration(ms) {
@@ -748,26 +778,22 @@ export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean 
 // auto-instrumented as children of its span.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // tier 1: playlist embed → ordered track list
-  const playlistEntity = await span(
-    "rn.scrape.playlist",
-    () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env),
-    { "rn.playlist_id": playlistId },
-  );
+  const playlistEntity = await span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId });
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
-    .filter(t => asText(t?.uri, "").startsWith("spotify:track:"))
-    .map(t => {
+    .filter((t) => asText(t?.uri, "").startsWith("spotify:track:"))
+    .map((t) => {
       const id = t.uri.slice("spotify:track:".length);
       return {
         id,
-        title:         t.title    || "",
-        artists_text:  t.subtitle || "",   // raw "A, B" string kept for back-compat
-        spotify_url:   `https://open.spotify.com/track/${id}`,
+        title: t.title || "",
+        artists_text: t.subtitle || "", // raw "A, B" string kept for back-compat
+        spotify_url: `https://open.spotify.com/track/${id}`,
         song_link_url: `https://song.link/s/${id}`,
-        duration_ms:   asNumber(t.duration),
-        preview_url:   t.audioPreview?.url || null,
-        is_explicit:   !!t.isExplicit,
+        duration_ms: asNumber(t.duration),
+        preview_url: t.audioPreview?.url || null,
+        is_explicit: !!t.isExplicit,
       };
     });
 
@@ -786,17 +812,19 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
     let known: Record<string, StoredTrackMeta> = {};
     try {
       known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
-    } catch { /* a missing map means every cover is pending, never an error */ }
+    } catch {
+      /* a missing map means every cover is pending, never an error */
+    }
     s.setAttribute("rn.meta_known", Object.keys(known).length);
     return known;
   });
 
-  const tracks = baseTracks.map(t => withTrackMeta(t, meta[t.id]));
+  const tracks = baseTracks.map((t) => withTrackMeta(t, meta[t.id]));
   return {
-    playlist_id:   playlistId,
+    playlist_id: playlistId,
     playlist_name: playlistEntity.name || "rn",
     tracks,
-    fetched_at:    new Date().toISOString(),
+    fetched_at: new Date().toISOString(),
   };
 }
 
@@ -809,7 +837,7 @@ function withTrackMeta(track, meta) {
     image_url: meta?.image_url || null,
     // `checked` is enrichment bookkeeping (see cronEnrichTracks), so it stays
     // in the map and out of the payload /rn/tracks serves.
-    artists:   Array.isArray(meta?.artists) ? meta.artists.map(({ checked: _checked, ...a }) => a) : [],
+    artists: Array.isArray(meta?.artists) ? meta.artists.map(({ checked: _checked, ...a }) => a) : [],
   };
 }
 
@@ -838,8 +866,8 @@ function withTrackMeta(track, meta) {
 // was right and the code had moved. The ledger cannot see subrequests nobody
 // routes through it either, which is what `budget.overrun` is for: the platform
 // refusing while the count shows headroom means this comment is wrong again.
-const TRACK_META_KEY       = "trackmeta:v1";
-const ENRICH_TRACK_BUDGET  = 6;
+const TRACK_META_KEY = "trackmeta:v1";
+const ENRICH_TRACK_BUDGET = 6;
 const ENRICH_ARTIST_BUDGET = 6;
 // Held back for the two payload writes at the end, plus slack. A tick that
 // spends its last subrequest cannot save the work it just did, so the failure
@@ -876,9 +904,9 @@ function readStoredArtist(raw: unknown): StoredArtist[] {
   if (!a || id === null) return [];
   const artist: StoredArtist = {
     id,
-    name:        asText(a.name, ""),
+    name: asText(a.name, ""),
     spotify_url: asText(a.spotify_url, `https://open.spotify.com/artist/${id}`),
-    image_url:   asText(a.image_url),
+    image_url: asText(a.image_url),
   };
   const checked = asNumber(a.checked);
   if (checked !== null) artist.checked = checked;
@@ -892,14 +920,14 @@ function trackMetaFromEntity(e): StoredTrackMeta {
     image_url: canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null),
     artists: Array.isArray(e?.artists)
       ? e.artists
-          .filter(a => asText(a?.uri, "").startsWith("spotify:artist:"))
-          .map(a => {
+          .filter((a) => asText(a?.uri, "").startsWith("spotify:artist:"))
+          .map((a) => {
             const id = a.uri.slice("spotify:artist:".length);
             return {
               id,
-              name:        a.name || "",
+              name: a.name || "",
               spotify_url: `https://open.spotify.com/artist/${id}`,
-              image_url:   null,
+              image_url: null,
             };
           })
       : [],
@@ -991,29 +1019,38 @@ export async function cronEnrichTracks(env, ctx) {
       // an entry written before this field existed is stamped rather than
       // deleted, so the upgrade cannot itself become the outage it prevents.
       const seen = meta[id].seen;
-      if (seen === undefined) { meta[id].seen = now; continue; }
-      if (now - seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
+      if (seen === undefined) {
+        meta[id].seen = now;
+        continue;
+      }
+      if (now - seen > TRACK_META_MAX_AGE_MS) {
+        delete meta[id];
+        pruned++;
+      }
     }
 
-    const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
-    let trackScraped = 0, trackFailed = 0;
-    await Promise.all(pendingTracks.map(async id => {
-      // Charged at DISPATCH, not on success: the subrequest is spent the moment
-      // the fetch goes out, whether or not it comes back.
-      budget.charge(1);
-      try {
-        meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
-        trackScraped++;
-      } catch (e) {
-        // THE LINE THIS WHOLE LEDGER EXISTS FOR. This was `catch { trackFailed++ }`,
-        // and on 2026-08-15 a 21-track scrape crossed the 50-subrequest ceiling
-        // and threw into it once per remaining track. That reported 15 upstream
-        // failures over a payload of nulls, twice, and both times it was read as
-        // Spotify being flaky. A ceiling is never this track's fault.
-        if (budget.fault(e) === "cap") capped = true;
-        else trackFailed++;   // stays pending, retried next tick
-      }
-    }));
+    const pendingTracks = live.filter((id) => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
+    let trackScraped = 0,
+      trackFailed = 0;
+    await Promise.all(
+      pendingTracks.map(async (id) => {
+        // Charged at DISPATCH, not on success: the subrequest is spent the moment
+        // the fetch goes out, whether or not it comes back.
+        budget.charge(1);
+        try {
+          meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
+          trackScraped++;
+        } catch (e) {
+          // THE LINE THIS WHOLE LEDGER EXISTS FOR. This was `catch { trackFailed++ }`,
+          // and on 2026-08-15 a 21-track scrape crossed the 50-subrequest ceiling
+          // and threw into it once per remaining track. That reported 15 upstream
+          // failures over a payload of nulls, twice, and both times it was read as
+          // Spotify being flaky. A ceiling is never this track's fault.
+          if (budget.fault(e) === "cap") capped = true;
+          else trackFailed++; // stays pending, retried next tick
+        }
+      }),
+    );
 
     // Artists on the LIVE tracks, including ones added before this tick: an
     // artist whose photo failed last tick is pending until it lands, and it is
@@ -1029,7 +1066,7 @@ export async function cronEnrichTracks(env, ctx) {
     // cache's own TTL, so an artist who uploads a photo is read again.
     const pendingArtists = new Map();
     for (const id of liveSet) {
-      for (const a of (meta[id]?.artists || [])) {
+      for (const a of meta[id]?.artists || []) {
         const checked = asNumber(a.checked);
         const settled = a.image_url || (checked !== null && now - checked < ARTIST_KV_TTL * 1000);
         if (!settled && !pendingArtists.has(a.id)) pendingArtists.set(a.id, a.name || "");
@@ -1039,7 +1076,9 @@ export async function cronEnrichTracks(env, ctx) {
     }
 
     const resolved = new Map();
-    let artistCached = 0, artistScraped = 0, artistFailed = 0;
+    let artistCached = 0,
+      artistScraped = 0,
+      artistFailed = 0;
 
     // A KV read is a subrequest too, which is the half of this ceiling everyone
     // forgets: the outage that started all this spent 37 fetches and 30 KV
@@ -1064,35 +1103,40 @@ export async function cronEnrichTracks(env, ctx) {
       // `?.` covers the no-read and failed-read paths with the miss path, since
       // all three mean the same thing here: this artist is still pending.
       const hit = asRecord(cachedArtists?.get(artistKey(id)));
-      if (!hit) { toScrape.push(id); continue; }
+      if (!hit) {
+        toScrape.push(id);
+        continue;
+      }
       artistCached++;
       resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
     }
 
-    await Promise.all(toScrape.map(async id => {
-      const key = artistKey(id);
-      budget.charge(1);
-      try {
-        const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
-        artistScraped++;
-        // 320px: the tooltip renders at 120x120 (luna.css pins
-        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
-        // and 320 is the smallest Spotify tier that clears it without paying
-        // the 640px hero weight. The tier DOWN is 160, which goes soft on
-        // retina, so there is no cheaper correct answer among Spotify's sizes.
-        const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
-        const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-        const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
-        resolved.set(id, rec);
-        if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
-      } catch (e) {
-        if (budget.fault(e) === "cap") capped = true;
-        else artistFailed++;
-      }
-    }));
+    await Promise.all(
+      toScrape.map(async (id) => {
+        const key = artistKey(id);
+        budget.charge(1);
+        try {
+          const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
+          artistScraped++;
+          // 320px: the tooltip renders at 120x120 (luna.css pins
+          // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
+          // and 320 is the smallest Spotify tier that clears it without paying
+          // the 640px hero weight. The tier DOWN is 160, which goes soft on
+          // retina, so there is no cheaper correct answer among Spotify's sizes.
+          const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
+          const pick = imgs.find((i) => i.maxWidth === 320) || imgs.find((i) => i.maxWidth === 160) || imgs[0] || null;
+          const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
+          resolved.set(id, rec);
+          if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
+        } catch (e) {
+          if (budget.fault(e) === "cap") capped = true;
+          else artistFailed++;
+        }
+      }),
+    );
 
     for (const id of Object.keys(meta)) {
-      meta[id].artists = (meta[id].artists || []).map(a => {
+      meta[id].artists = (meta[id].artists || []).map((a) => {
         const hit = resolved.get(a.id);
         return hit ? { ...a, image_url: hit.image_url || null, name: a.name || hit.name, checked: now } : a;
       });
@@ -1102,14 +1146,11 @@ export async function cronEnrichTracks(env, ctx) {
     // visible without waiting for the SWR sentinel to lapse. The payload write
     // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
     // read, and this pass did not read it.
-    const next = { ...payload, tracks: payload.tracks.map(t => withTrackMeta(t, meta[t.id])) };
+    const next = { ...payload, tracks: payload.tracks.map((t) => withTrackMeta(t, meta[t.id])) };
     budget.charge(2);
-    await Promise.all([
-      env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
-      env.RN_KV.put(cacheKey, JSON.stringify(next)),
-    ]);
+    await Promise.all([env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)), env.RN_KV.put(cacheKey, JSON.stringify(next))]);
 
-    const covered = live.filter(id => meta[id]?.image_url).length;
+    const covered = live.filter((id) => meta[id]?.image_url).length;
     s.setAttribute("rn.tracks_total", live.length);
     s.setAttribute("rn.tracks_covered", covered);
     s.setAttribute("rn.track_scraped", trackScraped);
@@ -1170,7 +1211,7 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
       // the same empty-entity path any embed failure already takes.
       signal: AbortSignal.timeout(5000),
       cf: fresh
-        ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache (retry + every playlist fetch)
+        ? { cacheTtl: 0, cacheEverything: false } // bypass CF cache (retry + every playlist fetch)
         : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (track/artist embeds)
     });
     if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
@@ -1192,12 +1233,12 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
   // if the entity is empty-ish on a track / artist fetch (no name AND no
   // visualIdentity), it's almost certainly a bad cached response — retry
   // once bypassing CF's edge cache. cheap to test, expensive to be wrong.
-  const looksEmpty = !entity || (
-    !entity.name &&
-    !entity.visualIdentity &&
-    !(Array.isArray(entity.artists) && entity.artists.length) &&
-    !(Array.isArray(entity.trackList) && entity.trackList.length)
-  );
+  const looksEmpty =
+    !entity ||
+    (!entity.name &&
+      !entity.visualIdentity &&
+      !(Array.isArray(entity.artists) && entity.artists.length) &&
+      !(Array.isArray(entity.trackList) && entity.trackList.length));
   if (looksEmpty) {
     entity = await tryOnce(true);
   }
@@ -1254,7 +1295,7 @@ export async function handleRnSet(request, env) {
   const url = new URL(request.url);
   const params = await readParams(request, url);
   const secret = params.get("secret") || "";
-  const target = params.get("url")    || "";
+  const target = params.get("url") || "";
 
   if (!secretMatches(secret, env.RN_BUST_SECRET)) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
@@ -1266,8 +1307,7 @@ export async function handleRnSet(request, env) {
     target.match(/open\.spotify\.com\/playlist\/([0-9A-Za-z]{22})/) ||
     target.match(/^([0-9A-Za-z]{22})$/);
   if (!m) {
-    return setPage(400, "bad url",
-      "couldn't find a 22-character playlist id in <code>" + esc(target) + "</code>.");
+    return setPage(400, "bad url", "couldn't find a 22-character playlist id in <code>" + esc(target) + "</code>.");
   }
   const id = m[1];
 
@@ -1280,9 +1320,12 @@ export async function handleRnSet(request, env) {
   // instant this write returns.
   await env.RN_KV.put("playlist-id", id);
 
-  return setPage(200, "updated",
+  return setPage(
+    200,
+    "updated",
     `<code>/rn</code> now points to <a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">open.spotify.com/playlist/${esc(id)}</a>.<br>` +
-    `<small><a href="/rn/admin?secret=${esc(secret)}">&larr; back to admin</a></small>`);
+      `<small><a href="/rn/admin?secret=${esc(secret)}">&larr; back to admin</a></small>`,
+  );
 }
 
 // gather params from query string, form body, or JSON body — query wins ties.
@@ -1329,7 +1372,7 @@ export function setPage(status, title, bodyHtml) {
 `),
     cache: "no-store",
     headers: {
-      "x-robots-tag":  "noindex",
+      "x-robots-tag": "noindex",
     },
   });
 }

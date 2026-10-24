@@ -97,7 +97,8 @@ if (WRITE) {
     pruned += gone.length;
     vouched++;
     console.log(`recorded ${d.id}: ${made.recorded.count} inputs -> ${made.recorded.inputs.slice(0, 12)}`);
-    if (gone.length) console.log(`      pruned ${gone.length} lock row(s) for inputs that are gone: ${gone.slice(0, 4).join(", ")}${gone.length > 4 ? ", ..." : ""}`);
+    if (gone.length)
+      console.log(`      pruned ${gone.length} lock row(s) for inputs that are gone: ${gone.slice(0, 4).join(", ")}${gone.length > 4 ? ", ..." : ""}`);
     for (const out of d.outputs) console.log(`      vouching for ${out}`);
   }
   // relock() prunes only rows its derivation still OWNS, so an input taken OUT of
@@ -111,12 +112,27 @@ if (WRITE) {
     const orphans = Object.keys(nextLock).filter((key) => !live.has(key));
     for (const key of orphans) delete nextLock[key];
     pruned += orphans.length;
-    if (orphans.length) console.log(`pruned ${orphans.length} lock row(s) no declaration collects any more: ${orphans.slice(0, 4).join(", ")}${orphans.length > 4 ? ", ..." : ""}`);
+    if (orphans.length)
+      console.log(
+        `pruned ${orphans.length} lock row(s) no declaration collects any more: ${orphans.slice(0, 4).join(", ")}${orphans.length > 4 ? ", ..." : ""}`,
+      );
   }
   await writeFile(DECL, `${JSON.stringify(declaration, null, 2)}\n`);
   await writeFile(
     LOCK,
-    `${JSON.stringify({ $comment: "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.", files: Object.fromEntries(Object.keys(nextLock).sort().map((k) => [k, nextLock[k]])) }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        $comment:
+          "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.",
+        files: Object.fromEntries(
+          Object.keys(nextLock)
+            .sort()
+            .map((k) => [k, nextLock[k]]),
+        ),
+      },
+      null,
+      2,
+    )}\n`,
   );
   console.log(
     `\nderive: recorded ${vouched} derivation(s), ${Object.keys(nextLock).length} lock rows${pruned ? `, ${pruned} pruned` : ""}. This asserts the committed outputs were made from these inputs.`,

@@ -12,15 +12,7 @@
 // The keys here are FULL JWKs (pub and priv), because bun and node refuse a
 // priv-only AKP JWK while workerd accepts one. The production secret's bare-
 // seed shape is exercised in workerd itself, in the harness test at the end.
-import {
-  assert,
-  botHeaders,
-  configText,
-  labels,
-  ROOT,
-  readFile,
-  test,
-} from "./contract-shared.ts";
+import { assert, botHeaders, configText, labels, ROOT, readFile, test } from "./contract-shared.ts";
 import { handleSignatureDirectory, jwkThumbprint } from "../src/worker/lib/botauth.ts";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,33 +30,33 @@ const encode = (s) => new TextEncoder().encode(s);
 // as CryptoKey | CryptoKeyPair and JsonWebKey has no AKP members. These name
 // what the runtime actually returns.
 
-type Jwk = JsonWebKey & { pub?: string, priv?: string, kid?: string };
+type Jwk = JsonWebKey & { pub?: string; priv?: string; kid?: string };
 
-type TestKey = { pair: CryptoKeyPair, priv: Jwk, pub: Jwk };
-
+type TestKey = { pair: CryptoKeyPair; priv: Jwk; pub: Jwk };
 
 async function edKey(): Promise<TestKey> {
-  const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair);
-  const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey) as Jwk);
-  const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey) as Jwk);
+  const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+  const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey)) as Jwk;
+  const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Jwk;
   return { pair, priv, pub: { ...pub, kid: await jwkThumbprint(pub) } };
 }
 
-
 async function pqKey(): Promise<TestKey> {
-  const pair = (await crypto.subtle.generateKey(MLDSA, true, ["sign", "verify"]) as CryptoKeyPair);
-  const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey) as Jwk);
-  const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey) as Jwk);
+  const pair = (await crypto.subtle.generateKey(MLDSA, true, ["sign", "verify"])) as CryptoKeyPair;
+  const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey)) as Jwk;
+  const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Jwk;
   return { pair, priv, pub: { ...pub, kid: await jwkThumbprint(pub) } };
 }
 
 // Split one Dictionary header into { label: value }. Signature-Input values
 // carry quoted strings but never ", sig", so splitting on that is exact here.
 function members(header) {
-  return Object.fromEntries(header.split(/, (?=sig\d+=)/).map((m) => {
-    const i = m.indexOf("=");
-    return [m.slice(0, i), m.slice(i + 1)];
-  }));
+  return Object.fromEntries(
+    header.split(/, (?=sig\d+=)/).map((m) => {
+      const i = m.indexOf("=");
+      return [m.slice(0, i), m.slice(i + 1)];
+    }),
+  );
 }
 
 function requestBase(host, params) {
@@ -74,7 +66,8 @@ function requestBase(host, params) {
 const sigBytes = (value) => Uint8Array.fromBase64(value.match(/^:([^:]+):$/)[1]);
 
 test("with an ML-DSA key, every request carries sig1 then sig2, and each verifies over its own base", async () => {
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   const headers = await botHeaders("https://example.com/robots.txt", {
     RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv),
     RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv),
@@ -89,16 +82,23 @@ test("with an ML-DSA key, every request carries sig1 then sig2, and each verifie
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig2)), true);
   assert.equal(await crypto.subtle.verify("Ed25519", ed.pair.publicKey, sigBytes(sig.sig1), requestBase("example.com", input.sig1)), true);
   // Controls: each signature is bound to its own parameters and authority.
-  assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig1)), false,
-    "sig2 must sign a base ending in sig2's own parameters");
-  assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("mirror.example", input.sig2)), false,
-    "sig2 must not verify for another authority");
+  assert.equal(
+    await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig1)),
+    false,
+    "sig2 must sign a base ending in sig2's own parameters",
+  );
+  assert.equal(
+    await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("mirror.example", input.sig2)),
+    false,
+    "sig2 must not verify for another authority",
+  );
   // Two independent nonces, so the labels are two signatures and not one reused.
   assert.notEqual(input.sig1.match(/nonce="([^"]+)"/)[1], input.sig2.match(/nonce="([^"]+)"/)[1]);
 });
 
 test("sig2's keyid is the RFC 9964 thumbprint of the key that signed, whatever the secret's kid says", async () => {
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   for (const kid of [undefined, "rn-mldsa-2026-07-27"]) {
     const headers = await botHeaders("https://example.com/", {
       RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv),
@@ -116,8 +116,10 @@ test("jwkThumbprint reads an AKP key's alg, kty and pub, and nothing else", asyn
   assert.notEqual(await jwkThumbprint({ ...bare, pub: (await pqKey()).pub.pub }), await jwkThumbprint(bare));
   assert.notEqual(await jwkThumbprint({ ...bare, alg: "ML-DSA-65" }), await jwkThumbprint(bare));
   // And the canonical form is the RFC 7638 one: lexicographic, no whitespace.
-  const expected = new Uint8Array(await crypto.subtle.digest("SHA-256", encode(`{"alg":"ML-DSA-44","kty":"AKP","pub":"${bare.pub}"}`)))
-    .toBase64({ alphabet: "base64url", omitPadding: true });
+  const expected = new Uint8Array(await crypto.subtle.digest("SHA-256", encode(`{"alg":"ML-DSA-44","kty":"AKP","pub":"${bare.pub}"}`))).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
   assert.equal(await jwkThumbprint(bare), expected);
 });
 
@@ -126,7 +128,12 @@ test("without an ML-DSA key, sig1 ships alone and unchanged", async () => {
   const headers = await botHeaders("https://example.com/", { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv) });
   assert.deepEqual(labels(headers), ["sig1"]);
   const input = headers.get("signature-input") ?? "";
-  assert.match(input, new RegExp(`^sig1=\\("@authority" "signature-agent"\\);created=\\d+;expires=\\d+;nonce="[A-Za-z0-9+/]+=*";keyid="${ed.pub.kid}";alg="ed25519";tag="web-bot-auth"$`));
+  assert.match(
+    input,
+    new RegExp(
+      `^sig1=\\("@authority" "signature-agent"\\);created=\\d+;expires=\\d+;nonce="[A-Za-z0-9+/]+=*";keyid="${ed.pub.kid}";alg="ed25519";tag="web-bot-auth"$`,
+    ),
+  );
   assert.doesNotMatch(headers.get("signature") ?? "", /sig2/);
 });
 
@@ -169,9 +176,11 @@ function directoryEnv(keys, secrets) {
 const getDirectory = (env) => handleSignatureDirectory(new Request(`https://aadhar.sh${DIRECTORY_PATH}`), env);
 
 test("with sig2 active, the directory publishes both keys and proves possession of each", async () => {
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   const { body, env } = directoryEnv([ed.pub, pq.pub], {
-    RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv),
+    RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv),
+    RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv),
   });
   const response = await getDirectory(env);
   assert.equal(response.status, 200);
@@ -183,12 +192,16 @@ test("with sig2 active, the directory publishes both keys and proves possession 
   assert.match(input.sig2, new RegExp(`;keyid="${pq.pub.kid}";alg="ml-dsa-44";tag="http-message-signatures-directory"$`));
   assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), base(input.sig2)), true);
   assert.equal(await crypto.subtle.verify("Ed25519", ed.pair.publicKey, sigBytes(sig.sig1), base(input.sig1)), true);
-  assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), encode(`"@authority";req: mirror.example\n"@signature-params": ${input.sig2}`)), false,
-    "a mirror cannot reuse the ML-DSA proof either");
+  assert.equal(
+    await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), encode(`"@authority";req: mirror.example\n"@signature-params": ${input.sig2}`)),
+    false,
+    "a mirror cannot reuse the ML-DSA proof either",
+  );
 });
 
 test("with sig2 unavailable, the directory drops its AKP entry and still proves sig1", async () => {
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   for (const secrets of [
     { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv) }, // unset: local dev, any preview without the secret
     { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: "not json" }, // unusable
@@ -208,7 +221,9 @@ test("with sig2 unavailable, the directory drops its AKP entry and still proves 
 });
 
 test("the directory refuses real drift: an active sig2 key that is missing, or not the published one", async () => {
-  const ed = await edKey(), pq = await pqKey(), other = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey(),
+    other = await pqKey();
   const secrets = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
   for (const keys of [
     [ed.pub], // sig2 signs with a key nobody can look up
@@ -228,7 +243,7 @@ test("the committed directory publishes a real ML-DSA-44 public key beside the e
   assert.equal(akp[0].alg, "ML-DSA-44");
   assert.equal(akp[0].kid, await jwkThumbprint(akp[0]), "its kid is its RFC 9964 thumbprint");
   assert.equal(Uint8Array.fromBase64(akp[0].pub, { alphabet: "base64url" }).length, 1312, "an ML-DSA-44 public key is 1,312 bytes");
-  await crypto.subtle.importKey("jwk",  ({ kty: "AKP", alg: "ML-DSA-44", pub: akp[0].pub } as JsonWebKey), MLDSA, false, ["verify"]);
+  await crypto.subtle.importKey("jwk", { kty: "AKP", alg: "ML-DSA-44", pub: akp[0].pub } as JsonWebKey, MLDSA, false, ["verify"]);
   assert.equal("priv" in akp[0], false, "the public directory must never carry the seed");
 });
 
@@ -243,17 +258,22 @@ test("production carries webcrypto_modern_algorithms, without which sig2 silentl
 
 // Dispatches through the harness, so it runs under node: tools/lib/harness-dispatch.ts.
 const WORKERD = "workerd signs sig2 from a bare-seed secret under production's flags, and refuses ML-DSA without the flag";
-test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
-  const ed = await edKey(), pq = await pqKey();
-  // The production secret is a bare 32-byte seed with no `pub`. bun and node
-  // refuse that shape, workerd accepts it, and this is the only place the
-  // shape that actually ships is signed with.
-  const seedOnly = { kty: "AKP", alg: "ML-DSA-44", kid: "seed-only", use: "sig", priv: pq.priv.priv };
-  const site = parseJsonc(await configText("cloudflare.config.ts"));
-  const botauth = fileURLToPath(new URL("src/worker/lib/botauth.ts", ROOT));
-  const run = async (flags) => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), "sig2-")));
-    writeFileSync(join(dir, "worker.js"), `
+test(
+  WORKERD,
+  underNode(import.meta.url, WORKERD, async () => {
+    const ed = await edKey(),
+      pq = await pqKey();
+    // The production secret is a bare 32-byte seed with no `pub`. bun and node
+    // refuse that shape, workerd accepts it, and this is the only place the
+    // shape that actually ships is signed with.
+    const seedOnly = { kty: "AKP", alg: "ML-DSA-44", kid: "seed-only", use: "sig", priv: pq.priv.priv };
+    const site = parseJsonc(await configText("cloudflare.config.ts"));
+    const botauth = fileURLToPath(new URL("src/worker/lib/botauth.ts", ROOT));
+    const run = async (flags) => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "sig2-")));
+      writeFileSync(
+        join(dir, "worker.js"),
+        `
       import { botHeaders } from ${JSON.stringify(botauth)};
       export default { async fetch(_request, env) {
         const errors = [];
@@ -263,40 +283,51 @@ test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
           const h = await botHeaders("https://example.com/", env);
           return Response.json({ input: h.get("signature-input"), signature: h.get("signature"), errors });
         } finally { console.error = original; }
-      } };`);
-    writeFileSync(join(dir, "wrangler.jsonc"), JSON.stringify({
-      name: "sig2-probe", main: "worker.js",
-      compatibility_date: site.compatibility_date, compatibility_flags: flags,
-      // `alg: "EdDSA"`, the spelling production's key and directory carry. bun
-      // exports "Ed25519" (RFC 9864's fully-specified name), and workerd refuses
-      // that spelling with or without webcrypto_modern_algorithms (measured
-      // 2026-10-01), so a fixture passed through unchanged fails on sig1.
-      vars: { RN_SIGNING_KEY_JWK: JSON.stringify({ ...ed.priv, alg: "EdDSA" }), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(seedOnly) },
-    }));
-    const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
-    try {
-      await server.listen();
-      return (await (await server.getWorker().fetch("http://sig2.test/")).json() as { input: string, signature: string, errors: string[] });
-    } finally {
-      await server.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  };
+      } };`,
+      );
+      writeFileSync(
+        join(dir, "wrangler.jsonc"),
+        JSON.stringify({
+          name: "sig2-probe",
+          main: "worker.js",
+          compatibility_date: site.compatibility_date,
+          compatibility_flags: flags,
+          // `alg: "EdDSA"`, the spelling production's key and directory carry. bun
+          // exports "Ed25519" (RFC 9864's fully-specified name), and workerd refuses
+          // that spelling with or without webcrypto_modern_algorithms (measured
+          // 2026-10-01), so a fixture passed through unchanged fails on sig1.
+          vars: { RN_SIGNING_KEY_JWK: JSON.stringify({ ...ed.priv, alg: "EdDSA" }), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(seedOnly) },
+        }),
+      );
+      const server = createTestHarness({ workers: [{ configPath: join(dir, "wrangler.jsonc") }] });
+      try {
+        await server.listen();
+        return (await (await server.getWorker().fetch("http://sig2.test/")).json()) as { input: string; signature: string; errors: string[] };
+      } finally {
+        await server.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
 
-  const live = await run(site.compatibility_flags);
-  const input = members(live.input), sig = members(live.signature);
-  assert.deepEqual(Object.keys(input), ["sig1", "sig2"], "production's flags must sign sig2 from the seed-only secret");
-  assert.match(input.sig2, new RegExp(`;keyid="${pq.pub.kid}";alg="ml-dsa-44";`), "keyid comes from the DERIVED public key");
-  assert.equal(await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig2)), true,
-    "a signature workerd made must verify in another implementation");
+    const live = await run(site.compatibility_flags);
+    const input = members(live.input),
+      sig = members(live.signature);
+    assert.deepEqual(Object.keys(input), ["sig1", "sig2"], "production's flags must sign sig2 from the seed-only secret");
+    assert.match(input.sig2, new RegExp(`;keyid="${pq.pub.kid}";alg="ml-dsa-44";`), "keyid comes from the DERIVED public key");
+    assert.equal(
+      await crypto.subtle.verify(MLDSA, pq.pair.publicKey, sigBytes(sig.sig2), requestBase("example.com", input.sig2)),
+      true,
+      "a signature workerd made must verify in another implementation",
+    );
 
-  // Control: the same Worker without the flag. The runtime refuses ML-DSA by
-  // name, sig2 drops, sig1 survives, and the refusal is logged once.
-  const bare = await run(site.compatibility_flags.filter((f) => f !== "webcrypto_modern_algorithms"));
-  assert.deepEqual(Object.keys(members(bare.input)), ["sig1"], "without the flag, sig2 must drop rather than fail the request");
-  assert.equal(bare.errors.length, 1);
-  assert.match(bare.errors[0], /sig2 disabled.*NotSupportedError/);
-}));
+    // Control: the same Worker without the flag. The runtime refuses ML-DSA by
+    // name, sig2 drops, sig1 survives, and the refusal is logged once.
+    const bare = await run(site.compatibility_flags.filter((f) => f !== "webcrypto_modern_algorithms"));
+    assert.deepEqual(Object.keys(members(bare.input)), ["sig1"], "without the flag, sig2 must drop rather than fail the request");
+    assert.equal(bare.errors.length, 1);
+    assert.match(bare.errors[0], /sig2 disabled.*NotSupportedError/);
+  }),
+);
 
 // Measured in production on 2026-10-01 with sig2 on EVERY request: a /lens
 // scan's CPU median went from 22ms to 32ms, ~0.33ms a signature, 3x the laptop
@@ -304,7 +335,8 @@ test(WORKERD, underNode(import.meta.url, WORKERD, async () => {
 // bootstrap) passes `postQuantum: false`, and only primary fetches carry sig2.
 
 test("postQuantum: false drops sig2 for that request and leaves sig1 untouched", async () => {
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   const env = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
   const scoped = await botHeaders("https://example.com/", env, { postQuantum: false });
   assert.deepEqual(labels(scoped), ["sig1"]);
@@ -315,16 +347,20 @@ test("postQuantum: false drops sig2 for that request and leaves sig1 untouched",
 
 test("a /lens scan's primary fetch carries sig2; its discovery probes and robots read do not", async () => {
   const { lensFetch, lensProbe, lensProbeMcp } = await import("../src/worker/lens.ts");
-  const ed = await edKey(), pq = await pqKey();
+  const ed = await edKey(),
+    pq = await pqKey();
   const env = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
   const seen: any[] = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
-    const headers = new Headers(init?.headers ?? (typeof input === "string" ? undefined : input.headers));
-    seen.push({ path: new URL(url).pathname, labels: headers.get("signature-input") ? labels(headers) : [] });
-    return new Response(new URL(url).pathname === "/robots.txt" ? "" : "{}", { status: new URL(url).pathname === "/robots.txt" ? 404 : 200 });
-  }, { preconnect: realFetch.preconnect });
+  globalThis.fetch = Object.assign(
+    async (input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      const headers = new Headers(init?.headers ?? (typeof input === "string" ? undefined : input.headers));
+      seen.push({ path: new URL(url).pathname, labels: headers.get("signature-input") ? labels(headers) : [] });
+      return new Response(new URL(url).pathname === "/robots.txt" ? "" : "{}", { status: new URL(url).pathname === "/robots.txt" ? 404 : 200 });
+    },
+    { preconnect: realFetch.preconnect },
+  );
   try {
     // A fresh origin per call, so the robots read is a real miss each time.
     await lensFetch("https://scan-target.example/", { ...env });

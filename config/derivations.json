@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "d947db3f38a60036604db9d082ce11676c25a408db2e3a7d211542510c530cd0",
+        "inputs": "51cd561730f9e5bc806f8d55ae7317183d6c1e7e06ba88e3dc5f396514411a63",
         "count": 2
       }
     },
@@ -209,7 +209,7 @@
       },
       "regenerate": "bun tools/gen-llms-api.ts",
       "recorded": {
-        "inputs": "68f60ca680fd41f0d01b9f97a49f9cc08eb8b07fd41bf12b1afb6770179977df",
+        "inputs": "ca470b1409fb5377e77b111d808e01679659890666448f870c338dd30e62bacc",
         "count": 2
       }
     },
@@ -255,6 +255,16 @@
       ],
       "unverifiable": "gen-og-cards.ts drives Chrome against PRODUCTION so the demos carry live data, which makes the input a deployed site at a moment in time rather than any bytes in the tree. Pinning these to their page sources would be a lie in the useful direction: the card can go stale from a deploy that changed no page file at all.",
       "regenerate": "bun tools/photos/gen-og-cards.ts"
+    },
+    {
+      "id": "og/video",
+      "tier": "unverifiable",
+      "why": "The og:video clips lib/og-video.ts hands to iMessage (HEVC in MP4) and Discord (AV1 in WebM). A page's clip is its live demo driven through a scripted timeline, recorded at 2x and composed onto the same Bliss card as the page's og:image, which stays the clip's poster; the homepage's is a recorded scene instead, tools/photos/og-video/scenes/boot.html, an XP-style boot screen that loops on its progress bar. Each codec is encoded at the cheapest setting compare.ts found reaching SSIMULACRA2 80, or the clip's own target in clips.ts.",
+      "outputs": [
+        "public/og/video"
+      ],
+      "unverifiable": "bake.ts records the LIVE page through a CDP screencast, so the input is a deployed site at a moment in time, the same class as og/cards, and frame timing follows the compositor rather than any bytes in the tree. The encoders are deterministic given frames; the frames are not.",
+      "regenerate": "bun tools/photos/og-video/bake.ts"
     },
     {
       "id": "lwe/quadgrams",
@@ -335,6 +345,8 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/photos/og-video/record.ts": "writes recorded frames only under the scratch directory its caller names (bake.ts passes a mkdtemp it deletes after encoding), never into the tree. The shipped clips are bake.ts's job, which og/video declares.",
+      "tools/photos/og-video/compare.ts": "writes its trial encodes, decoded frames and compare-<target>.json only under the scratch directory it is handed. It is the instrument that picked the knobs bake.ts ships with, and nothing it writes is committed or served.",
       "tools/cpu-sweep.ts": "writes only .build/cpu-sweep.json (or --out), a report of CPU per route on the bundle perf-budget just built, and appends its table to $GITHUB_STEP_SUMMARY when CI sets it. Only its own --replay reads the report back, and only when handed one; nothing is committed or served from it, and every run rewrites it whole.",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/served-manifest.ts": "writes served-manifest.json, a CI artifact cut from .build/public on each push to main and signed there; it is never committed, and tools/check-served.ts is what compares it against production",

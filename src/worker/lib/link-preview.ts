@@ -20,21 +20,23 @@
 import { html, type Html } from "./html.ts";
 
 const PREVIEW_BOT = new RegExp(
-  "\\b(?:" + [
-    "facebookexternalhit", // Facebook, Messenger, Instagram DMs; iMessage sends it too
-    "Facebot",
-    "Twitterbot",          // X; iMessage's LinkPresentation UA also names it
-    "Slackbot-LinkExpanding",
-    "Discordbot",
-    "TelegramBot",
-    "WhatsApp",            // WhatsApp, and Signal's preview fetcher borrows it
-    "LinkedInBot",
-    "SkypeUriPreview",     // Teams and Skype
-    "redditbot",
-    "Cardyb",              // Bluesky's card service
-    "Mastodon",            // every Mastodon server fetches its own previews
-    "Embedly",
-  ].join("|") + ")\\b",
+  "\\b(?:" +
+    [
+      "facebookexternalhit", // Facebook, Messenger, Instagram DMs; iMessage sends it too
+      "Facebot",
+      "Twitterbot", // X; iMessage's LinkPresentation UA also names it
+      "Slackbot-LinkExpanding",
+      "Discordbot",
+      "TelegramBot",
+      "WhatsApp", // WhatsApp, and Signal's preview fetcher borrows it
+      "LinkedInBot",
+      "SkypeUriPreview", // Teams and Skype
+      "redditbot",
+      "Cardyb", // Bluesky's card service
+      "Mastodon", // every Mastodon server fetches its own previews
+      "Embedly",
+    ].join("|") +
+    ")\\b",
 );
 
 export function isLinkPreviewBot(userAgent: string | null | undefined): boolean {

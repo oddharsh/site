@@ -29,9 +29,9 @@ import { COLS, SPARK, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib
 const INNER = COLS - 4;
 
 export const RADAR_LIMITS = {
-  samples: 40,      // devices per frame
-  name: 48,         // characters of a device name
-  history: 32,      // trailing readings kept for the trend sparkline
+  samples: 40, // devices per frame
+  name: 48, // characters of a device name
+  history: 32, // trailing readings kept for the trend sparkline
 };
 
 // dBm bands. Ordered strongest first; the first match wins.
@@ -53,7 +53,7 @@ export const radius = (rssi) => Math.max(0, Math.min(1, (Math.abs(rssi) - 30) / 
 function angleOf(name) {
   let hash = 0;
   for (const ch of String(name)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
-  return (hash % 3600) / 3600 * Math.PI * 2;
+  return ((hash % 3600) / 3600) * Math.PI * 2;
 }
 
 const MARKERS = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -68,13 +68,16 @@ export function readSamples(payload) {
   const out: { name: string; rssi: number; kind: string; history: number[] }[] = [];
   for (const item of raw) {
     const rssi = Number(item?.rssi);
-    if (!Number.isFinite(rssi) || rssi > 0 || rssi < -200) continue;   // dBm is negative
+    if (!Number.isFinite(rssi) || rssi > 0 || rssi < -200) continue; // dBm is negative
     out.push({
       name: String(item?.name ?? "unknown").slice(0, RADAR_LIMITS.name),
       rssi: Math.round(rssi),
-      kind: String(item?.kind ?? "").slice(0, 12).toLowerCase(),
+      kind: String(item?.kind ?? "")
+        .slice(0, 12)
+        .toLowerCase(),
       history: (Array.isArray(item?.history) ? item.history : [])
-        .map(Number).filter((n) => Number.isFinite(n) && n <= 0 && n >= -200)
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n <= 0 && n >= -200)
         .slice(-RADAR_LIMITS.history),
     });
     if (out.length >= RADAR_LIMITS.samples) break;
@@ -85,9 +88,13 @@ export function readSamples(payload) {
 
 function sparkline(history) {
   if (history.length < 2) return "";
-  const lo = Math.min(...history), hi = Math.max(...history);
+  const lo = Math.min(...history),
+    hi = Math.max(...history);
   const span = hi - lo || 1;
-  return history.slice(-16).map((v) => SPARK[Math.round(((v - lo) / span) * (SPARK.length - 1))]).join("");
+  return history
+    .slice(-16)
+    .map((v) => SPARK[Math.round(((v - lo) / span) * (SPARK.length - 1))])
+    .join("");
 }
 
 /**
@@ -113,7 +120,7 @@ export function ringPlot(samples, { height = 17 } = {}) {
       if (y >= 0 && y < height && x >= 0 && x < width && grid[y][x] === " ") grid[y][x] = "·";
     }
   }
-  grid[cy][rx] = "+";   // you are here
+  grid[cy][rx] = "+"; // you are here
 
   const placed = [];
   samples.forEach((sample, i) => {
@@ -127,7 +134,10 @@ export function ringPlot(samples, { height = 17 } = {}) {
     // Two devices at the same strength and a colliding hash would overwrite each
     // other; nudge along the row so both are visible rather than silently one.
     let guard = 0;
-    while (grid[y][x] !== " " && grid[y][x] !== "·" && guard < width) { x = (x + 1) % width; guard += 1; }
+    while (grid[y][x] !== " " && grid[y][x] !== "·" && guard < width) {
+      x = (x + 1) % width;
+      guard += 1;
+    }
     grid[y][x] = MARKERS[i];
     placed.push({ ...sample, marker: MARKERS[i] });
   });
@@ -142,7 +152,10 @@ export function radarFrame(samples, { source = "" } = {}) {
     return {
       title: "radar — no signal",
       body: rows(
-        ...wrap("No usable readings in that payload. Each sample needs a name and an rssi in dBm (negative). Nothing is stored here, so send the whole set each time.", INNER).map((row) => [s(row)]),
+        ...wrap(
+          "No usable readings in that payload. Each sample needs a name and an rssi in dBm (negative). Nothing is stored here, so send the whole set each time.",
+          INNER,
+        ).map((row) => [s(row)]),
         blank(),
         [s('  {"samples":[{"name":"Kitchen AP","rssi":-58,"kind":"wifi"}]}', "accent")],
       ),

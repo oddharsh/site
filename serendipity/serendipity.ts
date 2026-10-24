@@ -30,8 +30,7 @@ import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askClef, buildTagRequest, tagInputHash } from "./event-tags.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
-const html = (status, body) =>
-  new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+const html = (status, body) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 
 function banner(msg) {
   if (!msg) return "";
@@ -41,9 +40,17 @@ function banner(msg) {
 
 // stable initials-avatar (no external images → CSP-clean + light). hue from name.
 function avatar(name, size = 30) {
-  const initials = (name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
-  let h = 0; for (const ch of (name || "")) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return `<span class="ava" style="--ab:oklch(72% 0.13 ${h});width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px" aria-hidden="true">${esc(initials)}</span>`;
+  const initials =
+    (name || "?")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0] || "")
+      .join("")
+      .toUpperCase() || "?";
+  let h = 0;
+  for (const ch of name || "") h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `<span class="ava" style="--ab:oklch(72% 0.13 ${h});width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px" aria-hidden="true">${esc(initials)}</span>`;
 }
 
 // relativeTime and eventDate are Date-only on purpose. They carried a Temporal
@@ -83,10 +90,11 @@ function eventDate(s): Date | null {
 // rests on the same reasoning). Built on first use, so a request that renders
 // no event never pays for them.
 let eventFormats: { day: Intl.DateTimeFormat; clock: Intl.DateTimeFormat } | undefined;
-const eventFormat = () => eventFormats ??= {
-  day:   new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }),
-  clock: new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" }),
-};
+const eventFormat = () =>
+  (eventFormats ??= {
+    day: new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }),
+    clock: new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" }),
+  });
 
 function eventTime(d: Date | null): string {
   if (!d) return "date TBD";
@@ -147,7 +155,7 @@ export const ROLE_TIERS: readonly (readonly [tier: string, res: readonly RegExp[
  *  for no text at all. The two differ by 15 points, since saying anything about
  *  yourself is a weak signal of its own. Tested against the text as written,
  *  since one rule reads its capitals. */
-export function roleTier(text: string | null | undefined): { tier: string, points: number } {
+export function roleTier(text: string | null | undefined): { tier: string; points: number } {
   const r = text || "";
   for (const [tier, res, points] of ROLE_TIERS) if (res.some((re) => re.test(r))) return { tier, points };
   return r.trim().length ? { tier: "unmatched", points: 15 } : { tier: "none", points: 0 };
@@ -208,7 +216,11 @@ function db(env) {
       const st = D.prepare(sql);
       return {
         get: (...a) => st.bind(...norm(a)).first(),
-        all: (...a) => st.bind(...norm(a)).all().then((r) => r.results || []),
+        all: (...a) =>
+          st
+            .bind(...norm(a))
+            .all()
+            .then((r) => r.results || []),
         run: (...a) => st.bind(...norm(a)).run(),
       };
     },
@@ -217,8 +229,9 @@ function db(env) {
 
 // ── query layer: the SINGLE source of truth the pages and MCP both read ─────
 async function queryEvents(d) {
-  return d.prepare(
-    `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
+  return d
+    .prepare(
+      `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
             SUM(CASE WHEN ea.is_host = 0 THEN 1 ELSE 0 END) AS attendee_count,
             SUM(CASE WHEN ea.is_host = 1 THEN 1 ELSE 0 END) AS host_count,
             (SELECT GROUP_CONCAT(label, char(31)) FROM (
@@ -229,15 +242,17 @@ async function queryEvents(d) {
        FROM events e
        LEFT JOIN event_attendees ea ON ea.event_id = e.id
       GROUP BY e.id
-      ORDER BY e.start_at ASC`
-  ).all();
+      ORDER BY e.start_at ASC`,
+    )
+    .all();
 }
 async function queryEvent(d, id) {
   return d.prepare(`SELECT id, name, description, start_at, end_at, location, url, ticket_key, user_status FROM events WHERE id = ?`).get(id);
 }
 async function queryEventAttendees(d, id) {
-  return d.prepare(
-    `SELECT a.id AS attendee_id, a.name, a.bio_short,
+  return d
+    .prepare(
+      `SELECT a.id AS attendee_id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             ea.is_host,
             a.website, a.twitter_handle, a.linkedin_handle, a.instagram_handle,
@@ -246,20 +261,23 @@ async function queryEventAttendees(d, id) {
        FROM event_attendees ea
        JOIN attendees a ON a.id = ea.attendee_id
        LEFT JOIN enrichments en ON en.attendee_id = a.id
-      WHERE ea.event_id = ?`
-  ).all(id);
+      WHERE ea.event_id = ?`,
+    )
+    .all(id);
 }
 async function queryContributors(d, id) {
-  return d.prepare(
-    `SELECT label, MAX(enabled) AS enabled FROM (
+  return d
+    .prepare(
+      `SELECT label, MAX(enabled) AS enabled FROM (
        SELECT COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)) AS label,
               COALESCE(uc.enabled, 0) AS enabled, ec.contributed_at
          FROM event_contributions ec
          LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
         WHERE ec.event_id = ?)
       GROUP BY label
-      ORDER BY MAX(contributed_at) DESC`
-  ).all(id);
+      ORDER BY MAX(contributed_at) DESC`,
+    )
+    .all(id);
 }
 async function countContributors(d) {
   const r = await d.prepare(`SELECT COUNT(*) AS n FROM user_cookies WHERE enabled = 1`).get();
@@ -477,7 +495,10 @@ function eventCard(e, isPast) {
     <div class="row">
       ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
       ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:var(--ink-faint)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
-      ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
+      ${contributors
+        .slice(0, 3)
+        .map((c) => `<span class="badge via">via ${esc(c)}</span>`)
+        .join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>
   </a>`;
@@ -521,9 +542,7 @@ async function renderDashboardEvents(d, env) {
   // The sync line rides the island rather than the baked shell, so a new
   // reading costs no page re-mint, and a failed read of it costs the line
   // alone rather than the whole list.
-  const [events, contribCount, health] = await Promise.all([
-    queryEvents(d), countContributors(d), readSyncHealth(d).catch(() => null),
-  ]);
+  const [events, contribCount, health] = await Promise.all([queryEvents(d), countContributors(d), readSyncHealth(d).catch(() => null)]);
   const sync = health ? syncHealthLine(health) : "";
   if (!events.length) {
     return `<div class="empty">
@@ -533,21 +552,32 @@ async function renderDashboardEvents(d, env) {
       </div>`;
   }
   const now = Date.now();
-  const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
+  const PAST_CAP = 30; // past-event cards were ~88% of the payload, mostly unscrolled
   // stable: surface RSVP'd ('going') events first within each section, so the
   // real events lead and a past one isn't buried below the cap by the browsed pile.
   const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
   const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
-  const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                        .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
+  const pastAll = events
+    .filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+    .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
   const past = goingFirst(pastAll).slice(0, PAST_CAP);
   // sign the cover-proxy URL for every card we actually render (upcoming + the
   // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
   await Promise.all(
-    [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
+    [...upcoming, ...past]
+      .filter((e) => e.cover_url)
+      .map(async (e) => {
+        e._coverHref = await coverProxyUrl(e.cover_url, env);
+      }),
   );
   return `<p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}.${sync ? `<br>${sync}` : ""}</p>
-      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
+      ${
+        upcoming.length
+          ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming)
+              .map((e) => eventCard(e, false))
+              .join("")}`
+          : ""
+      }
       ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
 }
 
@@ -566,10 +596,17 @@ async function renderDashboard(d, path, msg, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderSerendipityPage() {
-  const mount = islandMount("sd-events", EVENTS_URL, unsafeHtml(pendingDashboardEvents()),
-    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`);
+  const mount = islandMount(
+    "sd-events",
+    EVENTS_URL,
+    unsafeHtml(pendingDashboardEvents()),
+    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`,
+  );
   const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
-  return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html));
+  return html(
+    200,
+    shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html),
+  );
 }
 
 // The island's response. Cookie-free and shared, so it may sit in the edge cache.
@@ -600,11 +637,20 @@ async function renderEvent(d, id, path) {
   // attendee/contributor reads run even on a 404 (rare), worth it for the common case.
   const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
   if (!ev) {
-    return html(404, shell("Not found", path, `<h1 class="page">Event not found</h1><p class="lede">No event with that id is in the pool.</p><p><a class="xp-button" href="${PREFIX}">&larr; All events</a></p>`));
+    return html(
+      404,
+      shell(
+        "Not found",
+        path,
+        `<h1 class="page">Event not found</h1><p class="lede">No event with that id is in the pool.</p><p><a class="xp-button" href="${PREFIX}">&larr; All events</a></p>`,
+      ),
+    );
   }
   const hosts = rows.filter((a) => a.is_host);
-  const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
-                     .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
+  const guests = rows
+    .filter((a) => !a.is_host)
+    .map((a) => ({ ...a, _s: attendeeScore(a) }))
+    .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
   const d0 = eventDate(ev.start_at);
   const lumaUrl = ev.url || (ev.id ? `https://lu.ma/${esc(ev.id)}` : null);
   const body = `
@@ -615,8 +661,11 @@ async function renderEvent(d, id, path) {
     ${ev.description && ev.description.trim() ? `<button class="xp-button" type="button" style="margin:0 0 12px" onclick="var d=this.nextElementSibling;d.hidden=false;this.remove()">Show description &#9662;</button><div class="evdesc" hidden="until-found">${esc(ev.description.trim())}</div>` : ""}
     ${hosts.length ? `<div class="grp">${hosts.length === 1 ? "Host" : "Hosts"}</div><div class="alist">${hosts.map(attendeeRow).join("")}</div>` : ""}
     <div class="grp">Attendees${guests.length ? ` (${guests.length})` : ""}</div>
-    ${guests.length ? `<div class="alist">${guests.map(attendeeRow).join("")}</div>`
-      : `<div class="empty"><p class="note">No guest list loaded for this event yet.</p></div>`}`;
+    ${
+      guests.length
+        ? `<div class="alist">${guests.map(attendeeRow).join("")}</div>`
+        : `<div class="empty"><p class="note">No guest list loaded for this event yet.</p></div>`
+    }`;
   return html(200, shell(ev.name, path, body + EVENT_SCRIPT, "", eventDescription(ev, d0, guests.length)));
 }
 
@@ -626,12 +675,16 @@ export async function renderContribute(d, path, uid, msg) {
   // three D1 calls (two overlapped, then the connected browser's event count),
   // so the common connected path still paid two binding-latency windows. The
   // seed row keeps the aggregate present when this browser is not a contributor.
-  const summary = await d.prepare(`
+  const summary = await d
+    .prepare(
+      `
     WITH own AS (SELECT user_key, label, enabled FROM user_cookies WHERE user_key = ?)
     SELECT (SELECT COUNT(*) FROM user_cookies WHERE enabled = 1) AS active_count,
            own.user_key, own.label, own.enabled,
            (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = own.user_key) AS event_count
-      FROM (SELECT 1) seed LEFT JOIN own ON 1 = 1`).get(uid);
+      FROM (SELECT 1) seed LEFT JOIN own ON 1 = 1`,
+    )
+    .get(uid);
   const n = Number(summary?.active_count || 0);
   const own = summary?.user_key ? summary : null;
   const cnt = own ? Number(own.event_count) : 0;
@@ -661,7 +714,16 @@ export async function renderContribute(d, path, uid, msg) {
       <p class="note" style="margin:0 0 8px">Stored privately, used only to sync your Luma events into the shared pool. Must contain <code>luma.auth-session-key</code>.</p>
       <button class="xp-button primary" type="submit">${own ? "Refresh my events" : "Save &amp; sync"}</button>
     </form>`;
-  return html(200, shell("Contribute", path, body, "", "Add an event to Serendipity by link, or connect a Luma feed to sync every event you're going to into the shared pool."));
+  return html(
+    200,
+    shell(
+      "Contribute",
+      path,
+      body,
+      "",
+      "Add an event to Serendipity by link, or connect a Luma feed to sync every event you're going to into the shared pool.",
+    ),
+  );
 }
 
 // parse a Cookie-Editor JSON export (or a "name=value; ..." header) into our
@@ -673,14 +735,34 @@ export function parseCookies(raw) {
   if (t.startsWith("[")) {
     const arr = JSON.parse(t);
     cookies = arr.map((c) => ({
-      name: c.name, value: c.value, domain: c.domain ?? ".lu.ma", path: c.path ?? "/",
-      expires: c.expirationDate ?? -1, httpOnly: c.httpOnly ?? false, secure: c.secure ?? true,
+      name: c.name,
+      value: c.value,
+      domain: c.domain ?? ".lu.ma",
+      path: c.path ?? "/",
+      expires: c.expirationDate ?? -1,
+      httpOnly: c.httpOnly ?? false,
+      secure: c.secure ?? true,
       sameSite: c.sameSite === "lax" ? "Lax" : c.sameSite === "strict" ? "Strict" : c.sameSite === "none" ? "None" : "Lax",
     }));
   } else {
-    const pairs = t.split(";").map((s) => s.trim()).filter(Boolean);
+    const pairs = t
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (!pairs.length) throw new Error("No cookies found in input");
-    cookies = pairs.map((p) => { const eq = p.indexOf("="); return { name: eq === -1 ? p : p.slice(0, eq), value: eq === -1 ? "" : p.slice(eq + 1), domain: ".lu.ma", path: "/", expires: -1, httpOnly: false, secure: true, sameSite: "Lax" }; });
+    cookies = pairs.map((p) => {
+      const eq = p.indexOf("=");
+      return {
+        name: eq === -1 ? p : p.slice(0, eq),
+        value: eq === -1 ? "" : p.slice(eq + 1),
+        domain: ".lu.ma",
+        path: "/",
+        expires: -1,
+        httpOnly: false,
+        secure: true,
+        sameSite: "Lax",
+      };
+    });
   }
   // Keep only Luma's own cookies, for the reason cookieJar() gives; it applies
   // the same filter on load.
@@ -694,16 +776,27 @@ export function parseCookies(raw) {
 
 // POST /serendipity/cookies — public contribute: save this uid's cookies + sync.
 async function handleCookies(request, env, d, uid) {
-  const back = (msg, toDash?) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const back = (msg, toDash?) =>
+    new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
   let form;
-  try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
+  try {
+    form = await request.formData();
+  } catch {
+    return back("Couldn't read the form");
+  }
   const label = (form.get("label") || "").toString().trim().slice(0, 40) || null;
   let parsed;
-  try { parsed = parseCookies((form.get("cookies") || "").toString()); }
-  catch (e) { return back(e instanceof Error ? e.message : "Invalid cookies"); }
-  await d.prepare(`INSERT INTO user_cookies (user_key,cookies_json,luma_user_id,label,enabled,updated_at)
+  try {
+    parsed = parseCookies((form.get("cookies") || "").toString());
+  } catch (e) {
+    return back(e instanceof Error ? e.message : "Invalid cookies");
+  }
+  await d
+    .prepare(
+      `INSERT INTO user_cookies (user_key,cookies_json,luma_user_id,label,enabled,updated_at)
     VALUES (?,?,?,?,1,datetime('now'))
-    ON CONFLICT(user_key) DO UPDATE SET cookies_json=excluded.cookies_json,luma_user_id=excluded.luma_user_id,label=COALESCE(?,user_cookies.label),updated_at=datetime('now')`)
+    ON CONFLICT(user_key) DO UPDATE SET cookies_json=excluded.cookies_json,luma_user_id=excluded.luma_user_id,label=COALESCE(?,user_cookies.label),updated_at=datetime('now')`,
+    )
     .run(uid, parsed.cookiesJson, parsed.lumaUserId, label, label);
   const r = await syncEvents(d, uid, parsed.cookiesJson);
   if (r.error) return back("Saved, but the Luma sync failed: " + r.error);
@@ -748,7 +841,16 @@ function renderMcpInfo(path) {
   }
 }</pre>
     <p class="note">It exposes exactly what the dashboard shows: event details and who&apos;s going, with names, roles, companies, and public social links. The email and phone columns behind the pool never leave the database.</p>`;
-  return html(200, shell("For agents", path, body, "", "Query Serendipity's event pool from an agent: a read-only MCP endpoint over Streamable HTTP, with tools to find events and see who's going."));
+  return html(
+    200,
+    shell(
+      "For agents",
+      path,
+      body,
+      "",
+      "Query Serendipity's event pool from an agent: a read-only MCP endpoint over Streamable HTTP, with tools to find events and see who's going.",
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -769,7 +871,9 @@ function selfIdFrom(cookiesJson) {
     const dot = auth.value.indexOf(".");
     const uid = dot === -1 ? auth.value : auth.value.slice(0, dot);
     return uid.startsWith("usr-") ? uid : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // The stored jar is a snapshot of the contributor's browser session, and Luma
@@ -787,25 +891,35 @@ function selfIdFrom(cookiesJson) {
 // reads as a scraper — plus Stripe/analytics noise. None of it authenticates
 // anything, so load strips it and marks the jar dirty, healing pre-existing
 // rows the first time they sync.
-export function cookieJar(cookiesJson) {  // exported for contract-the-luma-session-jar.test.ts
+export function cookieJar(cookiesJson) {
+  // exported for contract-the-luma-session-jar.test.ts
   let cookies;
-  try { cookies = JSON.parse(cookiesJson).cookies || []; } catch { return null; }
+  try {
+    cookies = JSON.parse(cookiesJson).cookies || [];
+  } catch {
+    return null;
+  }
   let dirty = cookies.some((c) => !c.name.startsWith("luma."));
   cookies = cookies.filter((c) => c.name.startsWith("luma."));
   return {
     header: () => cookies.map((c) => `${c.name}=${c.value}`).join("; "),
     absorb(res) {
-      for (const line of (res.headers.getSetCookie?.() || [])) {
+      for (const line of res.headers.getSetCookie?.() || []) {
         const semi = line.indexOf(";");
         const pair = (semi === -1 ? line : line.slice(0, semi)).trim();
         const eq = pair.indexOf("=");
         if (eq < 1) continue;
-        const name = pair.slice(0, eq), value = pair.slice(eq + 1);
-        if (!name.startsWith("luma.")) continue;  // api2 re-issues __cf_bm on every response; it must not enter the jar
+        const name = pair.slice(0, eq),
+          value = pair.slice(eq + 1);
+        if (!name.startsWith("luma.")) continue; // api2 re-issues __cf_bm on every response; it must not enter the jar
         const attrs = semi === -1 ? "" : line.slice(semi + 1).toLowerCase();
         const at = cookies.findIndex((c) => c.name === name);
-        if (!value || /max-age=(?:0|-\d+)(?:;|$)/.test(attrs)) {  // an explicit deletion: record reality
-          if (at !== -1) { cookies.splice(at, 1); dirty = true; }
+        if (!value || /max-age=(?:0|-\d+)(?:;|$)/.test(attrs)) {
+          // an explicit deletion: record reality
+          if (at !== -1) {
+            cookies.splice(at, 1);
+            dirty = true;
+          }
           continue;
         }
         // expires metadata is inert (header() never enforces it) but keeping it
@@ -819,8 +933,16 @@ export function cookieJar(cookiesJson) {  // exported for contract-the-luma-sess
           if (!Number.isNaN(t)) expires = Math.floor(t / 1000);
         }
         if (at === -1) {
-          cookies.push({ name, value, domain: ".luma.com", path: "/", expires,
-            httpOnly: attrs.includes("httponly"), secure: attrs.includes("secure"), sameSite: "Lax" });
+          cookies.push({
+            name,
+            value,
+            domain: ".luma.com",
+            path: "/",
+            expires,
+            httpOnly: attrs.includes("httponly"),
+            secure: attrs.includes("secure"),
+            sameSite: "Lax",
+          });
           dirty = true;
         } else if (cookies[at].value !== value) {
           cookies[at] = { ...cookies[at], value, expires };
@@ -828,7 +950,9 @@ export function cookieJar(cookiesJson) {  // exported for contract-the-luma-sess
         }
       }
     },
-    get dirty() { return dirty; },
+    get dirty() {
+      return dirty;
+    },
     json: () => JSON.stringify({ cookies, capturedAt: new Date().toISOString() }),
   };
 }
@@ -849,21 +973,34 @@ async function lumaFetch(url, auth) {
   const jar = asText(auth) === null ? auth : null;
   const res = await fetch(url, { headers: { "Content-Type": "application/json", Cookie: jar ? jar.header() : auth, "x-luma-web-url": "https://lu.ma" } });
   if (jar) jar.absorb(res);
-  if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); }
+  if (!res.ok) {
+    const b = await res.text().catch(() => "");
+    throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`);
+  }
   return res;
 }
 const toLumaUrl = (raw, id) => (!raw ? `https://lu.ma/${id}` : raw.startsWith("http") ? raw : `https://lu.ma/${raw}`);
 function parseGuest(entryApiId, user) {
   return {
-    id: entryApiId || user.api_id, name: user.name || null, email: user.email || null,
-    avatar_url: user.avatar_url || null, bio_short: user.bio_short || null, website: user.website || null,
-    twitter_handle: user.twitter_handle || null, linkedin_handle: user.linkedin_handle || null,
-    instagram_handle: user.instagram_handle || null, tiktok_handle: user.tiktok_handle || null, youtube_handle: user.youtube_handle || null,
+    id: entryApiId || user.api_id,
+    name: user.name || null,
+    email: user.email || null,
+    avatar_url: user.avatar_url || null,
+    bio_short: user.bio_short || null,
+    website: user.website || null,
+    twitter_handle: user.twitter_handle || null,
+    linkedin_handle: user.linkedin_handle || null,
+    instagram_handle: user.instagram_handle || null,
+    tiktok_handle: user.tiktok_handle || null,
+    youtube_handle: user.youtube_handle || null,
   };
 }
 function mapStatus(raw, ticketKey, role, isOwner) {
   if (isOwner) return "going";
-  if (role) { const r = role.toLowerCase(); if (r.includes("host") || r === "owner" || r === "manager" || r === "organizer") return "going"; }
+  if (role) {
+    const r = role.toLowerCase();
+    if (r.includes("host") || r === "owner" || r === "manager" || r === "organizer") return "going";
+  }
   if (!raw) return ticketKey ? "going" : "unknown";
   const s = raw.toLowerCase();
   if (s === "approved" || s === "going" || s === "attending") return "going";
@@ -874,9 +1011,11 @@ function mapStatus(raw, ticketKey, role, isOwner) {
   return ticketKey ? "going" : "unknown";
 }
 function parseEvents(data, selfId) {
-  return ((data.entries || [])).map((entry) => {
-    const event = entry.event || {}, cover = entry.cover_image || event.cover_image || {};
-    const geo = event.geo_address_info || {}, gi = entry.guest_info || {};
+  return (data.entries || []).map((entry) => {
+    const event = entry.event || {},
+      cover = entry.cover_image || event.cover_image || {};
+    const geo = event.geo_address_info || {},
+      gi = entry.guest_info || {};
     const id = entry.api_id || event.api_id;
     const ticketKey = gi.ticket_key || null;
     const approval = gi.approval_status || gi.calendar_status || null;
@@ -886,21 +1025,34 @@ function parseEvents(data, selfId) {
     const erRecord = asRecord(er);
     const roleType = erRecord ? erRecord.type : asText(er);
     const isManager = !!((erRecord && erRecord.is_manager) || entry.host_info || entry.manager_info);
-    const hosts = (entry.hosts || []);
+    const hosts = entry.hosts || [];
     const isHost = isManager || roleType === "host" || (selfId != null && hosts.some((h) => h.api_id === selfId));
     const userStatus = mapStatus(approval, ticketKey, gi.role || gi.user_role || null, isHost);
     const preview: any[] = [];
-    for (const g of (entry.guests || entry.attending_guests || entry.preview_guests || event.guests || [])) {
-      const u = g.user || g, gid = g.api_id || u.api_id; if (gid) preview.push(parseGuest(gid, u));
+    for (const g of entry.guests || entry.attending_guests || entry.preview_guests || event.guests || []) {
+      const u = g.user || g,
+        gid = g.api_id || u.api_id;
+      if (gid) preview.push(parseGuest(gid, u));
     }
     const parsedHosts: any[] = [];
-    for (const h of hosts) { if (h.api_id) parsedHosts.push(parseGuest(h.api_id, h)); }
+    for (const h of hosts) {
+      if (h.api_id) parsedHosts.push(parseGuest(h.api_id, h));
+    }
     return {
-      id, name: event.name || event.title || "", description: event.description || event.description_md || null,
-      start_at: entry.start_at || event.start_at || null, end_at: entry.end_at || event.end_at || null,
-      location: geo.full_address || event.location || null, cover_url: cover.url || event.cover_url || null,
-      url: toLumaUrl(event.url, id), geo_latitude: event.geo_latitude || null, geo_longitude: event.geo_longitude || null,
-      ticket_key: ticketKey, user_status: userStatus, preview_guests: preview, hosts: parsedHosts,
+      id,
+      name: event.name || event.title || "",
+      description: event.description || event.description_md || null,
+      start_at: entry.start_at || event.start_at || null,
+      end_at: entry.end_at || event.end_at || null,
+      location: geo.full_address || event.location || null,
+      cover_url: cover.url || event.cover_url || null,
+      url: toLumaUrl(event.url, id),
+      geo_latitude: event.geo_latitude || null,
+      geo_longitude: event.geo_longitude || null,
+      ticket_key: ticketKey,
+      user_status: userStatus,
+      preview_guests: preview,
+      hosts: parsedHosts,
     };
   });
 }
@@ -913,7 +1065,8 @@ async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = nu
     // invocation. Ten fetches total stays well under the cap. Four past pages
     // restores the depth the original app used; the two-page Worker port silently
     // dropped the older half of an active contributor's history.
-    let cursor: string | null = null, page = 0;
+    let cursor: string | null = null,
+      page = 0;
     const max = period === "past" ? SERENDIPITY_SYNC_LIMITS.pastPages : SERENDIPITY_SYNC_LIMITS.futurePages;
     while (page < max) {
       page++;
@@ -934,12 +1087,10 @@ async function fetchMyEvents(auth, selfId, walked: { pages: number } | null = nu
 // the cursor to resume from next tick. This looped `while (true)` with no cap
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
 // seven past events had parked on "Too many subrequests" because of it.
-export async function fetchEventGuests(
-  eventId, ticketKey, auth,
-  opts: { budget?: Budget | null, cursor?: string | null } = {},
-) {
+export async function fetchEventGuests(eventId, ticketKey, auth, opts: { budget?: Budget | null; cursor?: string | null } = {}) {
   const budget = opts.budget || null;
-  const all: any[] = []; let cursor = opts.cursor || null;
+  const all: any[] = [];
+  let cursor = opts.cursor || null;
   for (;;) {
     // Stop on the budget rather than on a page count, so a roster is paced by
     // what the invocation can actually spend instead of by a guessed constant.
@@ -983,13 +1134,19 @@ async function fetchEventDescription(eventId, auth) {
   const p = new URLSearchParams({ event_api_id: eventId });
   let res;
   // deleted/private events 400/404 — lumaFetch throws; treat as "no description".
-  try { res = await lumaFetch(`${LUMA_API}/event/get?${p.toString()}`, auth); }
-  catch { return null; }
+  try {
+    res = await lumaFetch(`${LUMA_API}/event/get?${p.toString()}`, auth);
+  } catch {
+    return null;
+  }
   const data = await res.json();
   const e = data.event || {};
   let txt = data.description_md || data.description || e.description_md || e.description || "";
   if (!txt && data.description_mirror) txt = pmToText(data.description_mirror);
-  txt = String(txt || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  txt = String(txt || "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return txt || null;
 }
 
@@ -1009,12 +1166,15 @@ async function resolveLumaEventId(input) {
   if (!/^[A-Za-z0-9._-]+$/.test(slug)) return null;
   try {
     const r = await fetch(`https://luma.com/${encodeURIComponent(slug)}`, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" }, redirect: "follow",
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" },
+      redirect: "follow",
     });
     if (!r.ok) return null;
     const m = (await r.text()).match(/evt-[A-Za-z0-9]{6,}/);
     return m ? m[0] : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // fetch one public event by link → our event shape (no cookies; /event/get is
@@ -1024,26 +1184,38 @@ async function fetchEventByLink(input) {
   const id = await resolveLumaEventId(input);
   if (!id) return { error: "no Luma event found at that link" };
   let res;
-  try { res = await lumaFetch(`${LUMA_API}/event/get?event_api_id=${id}`, ""); }
-  catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  try {
+    res = await lumaFetch(`${LUMA_API}/event/get?event_api_id=${id}`, "");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
   const data = await res.json();
   const e = data.event || {};
   if (!e.api_id) return { error: "event not found" };
   const geo = e.geo_address_info || {};
   let desc = data.description_md || e.description_md || "";
   if (!desc && data.description_mirror) desc = pmToText(data.description_mirror);
-  desc = String(desc || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null;
+  desc =
+    String(desc || "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim() || null;
   const hosts = (data.hosts || []).map((h) => parseGuest(h.api_id, h)).filter((g) => g.id);
-  return { event: {
-    id: e.api_id, name: e.name || "", description: desc,
-    start_at: e.start_at || null, end_at: e.end_at || null,
-    location: geo.full_address || geo.address || null,
-    cover_url: e.cover_url || (e.cover_image && e.cover_image.url) || null,
-    url: e.url ? toLumaUrl(e.url, e.api_id) : `https://lu.ma/${e.api_id}`,
-    geo_latitude: (e.coordinate && e.coordinate.latitude) || null,
-    geo_longitude: (e.coordinate && e.coordinate.longitude) || null,
-    hosts,
-  } };
+  return {
+    event: {
+      id: e.api_id,
+      name: e.name || "",
+      description: desc,
+      start_at: e.start_at || null,
+      end_at: e.end_at || null,
+      location: geo.full_address || geo.address || null,
+      cover_url: e.cover_url || (e.cover_image && e.cover_image.url) || null,
+      url: e.url ? toLumaUrl(e.url, e.api_id) : `https://lu.ma/${e.api_id}`,
+      geo_latitude: (e.coordinate && e.coordinate.latitude) || null,
+      geo_longitude: (e.coordinate && e.coordinate.longitude) || null,
+      hosts,
+    },
+  };
 }
 
 // ── calendar / discovery expansion ──────────────────────────────────────────
@@ -1054,8 +1226,8 @@ async function fetchEventByLink(input) {
 // hard-capped so a 493-event category can't flood the pool. Expanded events land
 // as user_status 'unknown' — the same "in the pool, nobody's confirmed going"
 // tier link-adds use (rendered "browsed / not RSVP'd", sorted below real RSVPs).
-const LIST_CAP = 30;   // most events pulled from ONE calendar/category/place URL
-const POOL_CAP = 60;   // most events pulled across a whole submission
+const LIST_CAP = 30; // most events pulled from ONE calendar/category/place URL
+const POOL_CAP = 60; // most events pulled across a whole submission
 // whole-globe viewport: /discover/get-paginated-events is map-region driven, so
 // a world box asks for every event in the category/place, ranked by Luma.
 const DISCOVER_BOX = "north=85&south=-85&east=179&west=-179";
@@ -1077,11 +1249,14 @@ async function resolveLumaSource(input) {
   let text;
   try {
     const r = await fetch(`https://luma.com/${encodeURIComponent(slug)}`, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" }, redirect: "follow",
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" },
+      redirect: "follow",
     });
     if (!r.ok) return null;
     text = await r.text();
-  } catch { return null; }
+  } catch {
+    return null;
+  }
   // pageProps.initialData.kind is emitted once and names the page type. Places
   // use the hyphenated "discover-place"; categories are "category".
   const km = text.match(/"kind":"(event|calendar|category|discover-place)"/);
@@ -1111,8 +1286,11 @@ async function fetchCalendarEvents(calId, cap) {
       const p = new URLSearchParams({ calendar_api_id: calId, period, pagination_limit: "50" });
       if (cursor) p.set("pagination_cursor", cursor);
       let data;
-      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p.toString()}`, "")).json(); }
-      catch { break; }  // rate-limit / transient error: keep whatever we have
+      try {
+        data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p.toString()}`, "")).json();
+      } catch {
+        break;
+      } // rate-limit / transient error: keep whatever we have
       all.push(...parseEvents(data, null));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -1127,14 +1305,19 @@ async function fetchCalendarEvents(calId, cap) {
 // the pool isn't seeded with stale events.
 async function fetchDiscoverEvents(slug, cap) {
   const cutoff = Date.now() - 12 * 3600 * 1000;
-  const all: any[] = []; let cursor = null, pages = 0;
+  const all: any[] = [];
+  let cursor = null,
+    pages = 0;
   while (all.length < cap && pages < 3) {
     pages++;
     const p = new URLSearchParams({ slug, pagination_limit: "50" });
     if (cursor) p.set("pagination_cursor", cursor);
     let data;
-    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p.toString()}&${DISCOVER_BOX}`, "")).json(); }
-    catch { break; }
+    try {
+      data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p.toString()}&${DISCOVER_BOX}`, "")).json();
+    } catch {
+      break;
+    }
     for (const e of parseEvents(data, null)) {
       if (!e.start_at || Date.parse(e.start_at) >= cutoff) all.push(e);
     }
@@ -1153,7 +1336,21 @@ const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_sho
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,avatar_url=excluded.avatar_url,bio_short=excluded.bio_short,website=excluded.website,
    twitter_handle=excluded.twitter_handle,linkedin_handle=excluded.linkedin_handle,instagram_handle=excluded.instagram_handle,
    tiktok_handle=excluded.tiktok_handle,youtube_handle=excluded.youtube_handle`;
-const attendeeStmt = (d, g) => d.stmt(UPSERT_ATTENDEE, g.id, g.name || "Unknown", g.email, g.avatar_url, g.bio_short, g.website, g.twitter_handle, g.linkedin_handle, g.instagram_handle, g.tiktok_handle, g.youtube_handle);
+const attendeeStmt = (d, g) =>
+  d.stmt(
+    UPSERT_ATTENDEE,
+    g.id,
+    g.name || "Unknown",
+    g.email,
+    g.avatar_url,
+    g.bio_short,
+    g.website,
+    g.twitter_handle,
+    g.linkedin_handle,
+    g.instagram_handle,
+    g.tiktok_handle,
+    g.youtube_handle,
+  );
 const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,location,cover_url,url,geo_latitude,geo_longitude,ticket_key,user_status,synced_at)
  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=COALESCE(excluded.description,events.description),start_at=excluded.start_at,end_at=excluded.end_at,
@@ -1183,19 +1380,67 @@ async function syncEvents(d, userKey, cookiesJson) {
     const count = () => d.stmt(`SELECT COUNT(*) AS n FROM events`);
     const S: any[] = [count()];
     if (selfId) {
-      S.push(d.stmt(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`, `luma_user_id_${userKey}`, selfId));
-      S.push(d.stmt(`INSERT INTO contributors (luma_user_id,first_seen_at,last_seen_at) VALUES (?,datetime('now'),datetime('now')) ON CONFLICT(luma_user_id) DO UPDATE SET last_seen_at=datetime('now')`, selfId));
+      S.push(
+        d.stmt(
+          `INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`,
+          `luma_user_id_${userKey}`,
+          selfId,
+        ),
+      );
+      S.push(
+        d.stmt(
+          `INSERT INTO contributors (luma_user_id,first_seen_at,last_seen_at) VALUES (?,datetime('now'),datetime('now')) ON CONFLICT(luma_user_id) DO UPDATE SET last_seen_at=datetime('now')`,
+          selfId,
+        ),
+      );
     }
     for (const e of events) {
-      S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, e.ticket_key, e.user_status));
-      S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`, e.id, userKey));
-      for (const h of e.hosts) { if (!h.id || h.id === selfId) continue; S.push(attendeeStmt(d, h)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id)); }
-      for (const g of e.preview_guests) { if (!g.id || g.id === selfId) continue; S.push(attendeeStmt(d, g)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id)); }
+      S.push(
+        d.stmt(
+          UPSERT_EVENT,
+          e.id,
+          e.name,
+          e.description,
+          e.start_at,
+          e.end_at,
+          e.location,
+          e.cover_url,
+          e.url,
+          e.geo_latitude,
+          e.geo_longitude,
+          e.ticket_key,
+          e.user_status,
+        ),
+      );
+      S.push(
+        d.stmt(
+          `INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`,
+          e.id,
+          userKey,
+        ),
+      );
+      for (const h of e.hosts) {
+        if (!h.id || h.id === selfId) continue;
+        S.push(attendeeStmt(d, h));
+        S.push(
+          d.stmt(
+            `INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`,
+            e.id,
+            h.id,
+          ),
+        );
+      }
+      for (const g of e.preview_guests) {
+        if (!g.id || g.id === selfId) continue;
+        S.push(attendeeStmt(d, g));
+        S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id));
+      }
     }
     S.push(count());
     const results = await d.batch(S);
     await persistJar(d, userKey, jar);
-    const before = poolCount(results[0]), after = poolCount(results[results.length - 1]);
+    const before = poolCount(results[0]),
+      after = poolCount(results[results.length - 1]);
     // Undefined rather than guessed when either count is unreadable: a span
     // saying nothing about new events is honest, one saying 0 is not. Clamped
     // to what this pass fetched, since a link-add landing between the two
@@ -1219,35 +1464,84 @@ function poolCount(result): number | null {
 // under the per-invocation subrequest limit. records each event + its hosts +
 // featured guests + a contribution by this uid. Returns {added,names,sources,failed}.
 async function addEventsByLink(d, uid, raw) {
-  const urls = (raw || "").split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
-  const S: any[] = [], names: string[] = [], sources: string[] = [], failed: string[] = [];
+  const urls = (raw || "")
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  const S: any[] = [],
+    names: string[] = [],
+    sources: string[] = [],
+    failed: string[] = [];
   let total = 0;
   for (const u of urls) {
     if (total >= POOL_CAP) break;
     let src;
-    try { src = await resolveLumaSource(u); } catch { src = null; }
-    if (!src) { failed.push(u.replace(/^https?:\/\//, "").slice(0, 32)); continue; }
+    try {
+      src = await resolveLumaSource(u);
+    } catch {
+      src = null;
+    }
+    if (!src) {
+      failed.push(u.replace(/^https?:\/\//, "").slice(0, 32));
+      continue;
+    }
     const room = POOL_CAP - total;
     let events: any[] = [];
     try {
       // pass the resolved evt- id (not the URL) so fetchEventByLink skips a re-scrape.
-      if (src.kind === "event") { const r = await fetchEventByLink(src.id); if (r && r.event) events = [r.event]; }
-      else if (src.kind === "calendar") events = await fetchCalendarEvents(src.id, Math.min(LIST_CAP, room));
-      else events = await fetchDiscoverEvents(src.slug, Math.min(LIST_CAP, room));  // category | place
-    } catch { events = []; }
-    if (!events.length) { failed.push((src.slug || u.replace(/^https?:\/\//, "")).slice(0, 32)); continue; }
+      if (src.kind === "event") {
+        const r = await fetchEventByLink(src.id);
+        if (r && r.event) events = [r.event];
+      } else if (src.kind === "calendar") events = await fetchCalendarEvents(src.id, Math.min(LIST_CAP, room));
+      else events = await fetchDiscoverEvents(src.slug, Math.min(LIST_CAP, room)); // category | place
+    } catch {
+      events = [];
+    }
+    if (!events.length) {
+      failed.push((src.slug || u.replace(/^https?:\/\//, "")).slice(0, 32));
+      continue;
+    }
     for (const e of events) {
       // pooled-by-link events are user_status 'unknown' (the submitter isn't
       // necessarily going); a later cookie-sync by an attendee upgrades it + fills
       // the guest list. Descriptions backfill via /sync-descriptions.
-      S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description || null, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, null, "unknown"));
-      S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`, e.id, uid));
-      for (const h of (e.hosts || [])) {
+      S.push(
+        d.stmt(
+          UPSERT_EVENT,
+          e.id,
+          e.name,
+          e.description || null,
+          e.start_at,
+          e.end_at,
+          e.location,
+          e.cover_url,
+          e.url,
+          e.geo_latitude,
+          e.geo_longitude,
+          null,
+          "unknown",
+        ),
+      );
+      S.push(
+        d.stmt(
+          `INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`,
+          e.id,
+          uid,
+        ),
+      );
+      for (const h of e.hosts || []) {
         if (!h.id) continue;
         S.push(attendeeStmt(d, h));
-        S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id));
+        S.push(
+          d.stmt(
+            `INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`,
+            e.id,
+            h.id,
+          ),
+        );
       }
-      for (const g of (e.preview_guests || [])) {
+      for (const g of e.preview_guests || []) {
         if (!g.id) continue;
         S.push(attendeeStmt(d, g));
         S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id));
@@ -1263,17 +1557,26 @@ async function addEventsByLink(d, uid, raw) {
 
 // POST /serendipity/add-event — public: add events to the pool by Luma link.
 async function handleAddEvent(request, env, d, uid) {
-  const back = (msg, toDash?) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const back = (msg, toDash?) =>
+    new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
   let form;
-  try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
+  try {
+    form = await request.formData();
+  } catch {
+    return back("Couldn't read the form");
+  }
   const raw = (form.get("links") || "").toString();
   if (!raw.trim()) return back("Paste at least one Luma event, calendar, or discovery-page link");
   let r;
-  try { r = await addEventsByLink(d, uid, raw); } catch (e) { return back("Add failed: " + (e instanceof Error ? e.message : String(e))); }
+  try {
+    r = await addEventsByLink(d, uid, raw);
+  } catch (e) {
+    return back("Add failed: " + (e instanceof Error ? e.message : String(e)));
+  }
   if (!r.added) return back("Couldn't resolve those — make sure they're public Luma event, calendar, or discovery-page links");
   let msg = `Added ${r.added} event${r.added === 1 ? "" : "s"} to the pool`;
   const bits = [...r.names.slice(0, 2), ...r.sources.slice(0, 2)];
-  if (bits.length) msg += `: ${bits.join(", ")}${(r.names.length + r.sources.length) > bits.length ? " …" : ""}`;
+  if (bits.length) msg += `: ${bits.join(", ")}${r.names.length + r.sources.length > bits.length ? " …" : ""}`;
   if (r.failed.length) msg += ` · ${r.failed.length} couldn't be resolved`;
   return back(msg, true);
 }
@@ -1316,10 +1619,12 @@ export function staleGuestIds(existingIds, nextGuests, selfId = null) {
 }
 
 async function markGuestSync(d, eventId, value) {
-  return d.prepare(
-    `INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`
-  ).run(GUEST_SYNC_KEY + eventId, value);
+  return d
+    .prepare(
+      `INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`,
+    )
+    .run(GUEST_SYNC_KEY + eventId, value);
 }
 
 // Sync one event's guest list (batched writes), paced by the invocation's fetch
@@ -1332,11 +1637,13 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | nul
   if (budget && budget.left <= 0) return { skipped: "budget" };
   // The resume marker rides the row lookup that was already happening, so
   // reading it costs no D1 call of its own per event in the sweep.
-  const ev = await d.prepare(
-    `SELECT e.ticket_key, e.user_status, s.value AS mark
+  const ev = await d
+    .prepare(
+      `SELECT e.ticket_key, e.user_status, s.value AS mark
        FROM events e LEFT JOIN settings s ON s.key = ?
-      WHERE e.id = ?`
-  ).get(GUEST_SYNC_KEY + eventId, eventId);
+      WHERE e.id = ?`,
+    )
+    .get(GUEST_SYNC_KEY + eventId, eventId);
   if (!ev) return { error: "event not found" };
   if (ev.user_status !== "going") return { error: `status is ${ev.user_status}, not going` };
   // no ticket_key gate: events you HOST/manage (and link-added ones) have no
@@ -1371,13 +1678,13 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | nul
     const fullWalk = mayPruneRoster(page, resume);
     let stale: any[] = [];
     if (fullWalk) {
-      const existing = await d.prepare(
-        "SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0"
-      ).all(eventId);
-      stale = staleGuestIds(existing.map((r) => r.attendee_id), guests, selfId);
-      await d.batch(stale.map((id) => d.stmt(
-        "DELETE FROM event_attendees WHERE event_id = ? AND attendee_id = ? AND is_host = 0", eventId, id
-      )));
+      const existing = await d.prepare("SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0").all(eventId);
+      stale = staleGuestIds(
+        existing.map((r) => r.attendee_id),
+        guests,
+        selfId,
+      );
+      await d.batch(stale.map((id) => d.stmt("DELETE FROM event_attendees WHERE event_id = ? AND attendee_id = ? AND is_host = 0", eventId, id)));
     }
     await markGuestSync(d, eventId, page.done ? `ok:${total}` : `partial:${total}@${page.cursor}`);
     await persistJar(d, userKey, jar);
@@ -1413,14 +1720,16 @@ async function syncDescriptions(d, userKey, cookiesJson, limit) {
     // only events we haven't attempted yet (desc_synced_at marks the attempt, so
     // events with no description / deleted events don't get re-scanned forever).
     // newest/soonest first — those are the events people are deciding on now.
-    const todo = await d.prepare(
-      `SELECT id FROM events WHERE description IS NULL AND desc_synced_at IS NULL ORDER BY start_at DESC LIMIT ?`
-    ).all(limit);
+    const todo = await d.prepare(`SELECT id FROM events WHERE description IS NULL AND desc_synced_at IS NULL ORDER BY start_at DESC LIMIT ?`).all(limit);
     let filled = 0;
     const S: any[] = [];
     for (const row of todo) {
       let desc = null;
-      try { desc = await fetchEventDescription(row.id, jar); } catch { desc = null; }  // never let one event abort the batch
+      try {
+        desc = await fetchEventDescription(row.id, jar);
+      } catch {
+        desc = null;
+      } // never let one event abort the batch
       // always stamp the attempt; set description only when we got text.
       S.push(d.stmt(`UPDATE events SET description = COALESCE(?, description), desc_synced_at = datetime('now') WHERE id = ?`, desc, row.id));
       if (desc) filled++;
@@ -1471,16 +1780,18 @@ const TAG_SCAN = 300;
 export async function tagEvents(d, env, limit) {
   if (!env?.AI) return { skipped: "no AI binding" };
   await d.raw.prepare(EVENT_TAGS_DDL).run();
-  const rows = await d.prepare(
-    `SELECT e.id, e.name, e.description, e.location, t.input_hash
+  const rows = await d
+    .prepare(
+      `SELECT e.id, e.name, e.description, e.location, t.input_hash
        FROM events e LEFT JOIN event_tags t ON t.event_id = e.id
       WHERE e.description IS NOT NULL OR e.desc_synced_at IS NOT NULL
       ORDER BY (e.start_at IS NOT NULL AND datetime(e.start_at) >= datetime('now')) DESC,
                CASE WHEN datetime(e.start_at) >= datetime('now') THEN datetime(e.start_at) END ASC,
                datetime(e.start_at) DESC
-      LIMIT ?`
-  ).all(TAG_SCAN);
-  const owed: { id: string, request: ReturnType<typeof buildTagRequest>, hash: string }[] = [];
+      LIMIT ?`,
+    )
+    .all(TAG_SCAN);
+  const owed: { id: string; request: ReturnType<typeof buildTagRequest>; hash: string }[] = [];
   for (const r of rows) {
     const request = buildTagRequest(r);
     const hash = await tagInputHash(request);
@@ -1493,16 +1804,28 @@ export async function tagEvents(d, env, limit) {
   const S: any[] = [];
   const failed: Record<string, number> = {};
   results.forEach((r, i) => {
-    if ("error" in r) { failed[r.error] = (failed[r.error] || 0) + 1; return; }
+    if ("error" in r) {
+      failed[r.error] = (failed[r.error] || 0) + 1;
+      return;
+    }
     const t = r.tag;
-    S.push(d.stmt(
-      `INSERT INTO event_tags (event_id, topic, topic_confidence, format, format_confidence, model, input_hash, probabilities, tagged_at)
+    S.push(
+      d.stmt(
+        `INSERT INTO event_tags (event_id, topic, topic_confidence, format, format_confidence, model, input_hash, probabilities, tagged_at)
        VALUES (?,?,?,?,?,?,?,?,datetime('now'))
        ON CONFLICT(event_id) DO UPDATE SET topic=excluded.topic, topic_confidence=excluded.topic_confidence,
          format=excluded.format, format_confidence=excluded.format_confidence, model=excluded.model,
          input_hash=excluded.input_hash, probabilities=excluded.probabilities, tagged_at=excluded.tagged_at`,
-      batch[i].id, t.topic, t.topic_confidence, t.format, t.format_confidence, t.model, batch[i].hash, JSON.stringify(t.probabilities),
-    ));
+        batch[i].id,
+        t.topic,
+        t.topic_confidence,
+        t.format,
+        t.format_confidence,
+        t.model,
+        batch[i].hash,
+        JSON.stringify(t.probabilities),
+      ),
+    );
   });
   if (S.length) await d.batch(S);
   // `remaining` is counted within the scan window, which is the honest bound:
@@ -1546,8 +1869,10 @@ async function queryEventTag(d, id) {
 function mcpTags(t) {
   if (!t) return null;
   return {
-    topic: t.topic, topic_confidence: Math.round(Number(t.topic_confidence) * 100) / 100,
-    format: t.format, format_confidence: Math.round(Number(t.format_confidence) * 100) / 100,
+    topic: t.topic,
+    topic_confidence: Math.round(Number(t.topic_confidence) * 100) / 100,
+    format: t.format,
+    format_confidence: Math.round(Number(t.format_confidence) * 100) / 100,
   };
 }
 
@@ -1622,7 +1947,7 @@ const CRON_DESC_LIMIT = 10;
 const CRON_BUDGET_HEADROOM = 8;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
-  return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
+  return Math.max(0, cap - setCount * perSet - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
 }
 // Enrichment CANNOT ride this invocation. syncEvents plus the roster sweep
 // already budget the 50 subrequests, and one attendee costs up to 4 ops, so even
@@ -1648,8 +1973,7 @@ export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
 // Declaring what this actually READS rather than `typeof fetch`: the full type
 // drags in `preconnect`, which no caller here implements and no test should
 // have to stub. The narrow shape is also the honest contract.
-export type EnrichFetch = (url: string, init?: any) =>
-  Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>;
+export type EnrichFetch = (url: string, init?: any) => Promise<{ ok: boolean; status?: number; json: () => Promise<any> }>;
 
 export async function dispatchEnrich(env, fetchImpl: EnrichFetch | null) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
@@ -1666,7 +1990,8 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch | null) {
   const limit = enrichBatchLimit(env.ENRICH_CRON_BATCH);
   try {
     const res = await fetchImpl(`${base}/serendipity/enrich?upcoming=1&limit=${limit}`, {
-      method: "POST", headers: { "x-sync-key": env.SYNC_SECRET },
+      method: "POST",
+      headers: { "x-sync-key": env.SYNC_SECRET },
     });
     if (!res.ok) return { error: `enrich ${res.status}` };
     const body = await res.json();
@@ -1693,7 +2018,8 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch | null) {
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
   try {
     const res = await fetchImpl(`${base}/serendipity/tag`, {
-      method: "POST", headers: { "x-sync-key": env.SYNC_SECRET },
+      method: "POST",
+      headers: { "x-sync-key": env.SYNC_SECRET },
     });
     if (!res.ok) return { error: `tag ${res.status}` };
     const body = await res.json();
@@ -1718,7 +2044,7 @@ export async function selectCronGuestEvents(D) {
   // "…T16:00" after "… 21:00" and let same-day past events shadow real ones.
   const [soonResult, pastResult] = await D.batch([
     D.prepare(
-      `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`
+      `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`,
     ).bind(CRON_UPCOMING_GUEST_EVENTS),
     // Completed past rosters are immutable. Unattempted ones lead; restricted or
     // transient failures fall to the back and are retried oldest-attempt first
@@ -1730,7 +2056,7 @@ export async function selectCronGuestEvents(D) {
           AND datetime(e.start_at) < datetime('now')
           AND (gs.value IS NULL OR gs.value NOT LIKE 'ok:%')
         ORDER BY (gs.updated_at IS NULL) DESC, datetime(gs.updated_at) ASC, datetime(e.start_at) DESC
-        LIMIT ?`
+        LIMIT ?`,
     ).bind(GUEST_SYNC_KEY, CRON_PAST_GUEST_EVENTS),
   ]);
   const soon = soonResult.results || [];
@@ -1779,30 +2105,30 @@ export const SYNC_OK_KEY = "serendipity_sync_last_ok";
 
 /** What one tick did, in the shape both the span and the settings record use. */
 export type SyncRecord = {
-  at: string,
-  ok: boolean,
-  error?: string,
+  at: string;
+  ok: boolean;
+  error?: string;
   // "ok" every set synced, "rejected" Luma answered 401/403 to a stored
   // session, "error" anything else failed, "none" no set was enabled.
-  session: "ok" | "rejected" | "error" | "none",
-  sets?: number,
-  jar_written?: boolean,
-  events_fetched?: number,
-  events_new?: number,
-  events_updated?: number,
-  event_pages?: number,
-  guest_events?: number,
-  guests_synced?: number,
-  guest_errors?: number,
-  guest_partial?: number,
-  guest_skipped?: number,
-  fetches?: number,
-  budget?: number,
-  budget_exhausted?: boolean,
-  descriptions_filled?: number,
-  descriptions_remaining?: number,
-  enrich?: string,
-  tag?: string,
+  session: "ok" | "rejected" | "error" | "none";
+  sets?: number;
+  jar_written?: boolean;
+  events_fetched?: number;
+  events_new?: number;
+  events_updated?: number;
+  event_pages?: number;
+  guest_events?: number;
+  guests_synced?: number;
+  guest_errors?: number;
+  guest_partial?: number;
+  guest_skipped?: number;
+  fetches?: number;
+  budget?: number;
+  budget_exhausted?: boolean;
+  descriptions_filled?: number;
+  descriptions_remaining?: number;
+  enrich?: string;
+  tag?: string;
 };
 
 const SYNC_ERROR_MAX = 200;
@@ -1831,9 +2157,7 @@ function dispatchText(r): string | undefined {
  * nothing threw. A restricted guest list or a failed description fetch leaves
  * it true, since those are per-event and already recorded per event.
  */
-export function summarizeSync(input: {
-  at: string, out: any, sets: number | null, budget: Budget | null, thrown: unknown, halt?: string,
-}): SyncRecord {
+export function summarizeSync(input: { at: string; out: any; sets: number | null; budget: Budget | null; thrown: unknown; halt?: string }): SyncRecord {
   const { at, out, sets, budget, thrown, halt } = input;
   const events: any[] = out?.events ?? [];
   const failed = events.filter((e) => e.error);
@@ -1869,7 +2193,12 @@ export function summarizeSync(input: {
     events_updated: fetched !== undefined && added !== undefined ? Math.max(0, fetched - added) : undefined,
     event_pages: sumOf(events, "pages"),
     guest_events: swept ? guests.length : undefined,
-    guests_synced: swept ? sumOf(guests.filter((g) => !g.error), "synced") ?? 0 : undefined,
+    guests_synced: swept
+      ? (sumOf(
+          guests.filter((g) => !g.error),
+          "synced",
+        ) ?? 0)
+      : undefined,
     guest_errors: swept ? guests.filter((g) => g.error).length : undefined,
     guest_partial: swept ? guests.filter((g) => g.partial).length : undefined,
     guest_skipped: swept ? out.skipped.length : undefined,
@@ -1905,15 +2234,17 @@ async function writeSyncRecord(d, r: SyncRecord) {
 }
 
 /** Both records, or nulls. Unparseable JSON reads as missing. */
-export async function readSyncHealth(d): Promise<{ attempt: SyncRecord | null, lastOk: SyncRecord | null }> {
+export async function readSyncHealth(d): Promise<{ attempt: SyncRecord | null; lastOk: SyncRecord | null }> {
   const rows = await d.prepare(`SELECT key, value FROM settings WHERE key IN (?, ?)`).all(SYNC_ATTEMPT_KEY, SYNC_OK_KEY);
   const parse = (key: string): SyncRecord | null => {
     const row = rows.find((x) => x.key === key);
     if (!row) return null;
     try {
       const rec = asRecord(JSON.parse(row.value));
-      return rec && asText(rec.at) ? rec as SyncRecord : null;
-    } catch { return null; }
+      return rec && asText(rec.at) ? (rec as SyncRecord) : null;
+    } catch {
+      return null;
+    }
   };
   return { attempt: parse(SYNC_ATTEMPT_KEY), lastOk: parse(SYNC_OK_KEY) };
 }
@@ -1940,7 +2271,7 @@ function publicSyncError(r: SyncRecord): string {
  * state is one attribute for anything reading the island. Stale wins over a
  * single failed tick, because stale is the state that needs a person.
  */
-export function syncHealthLine(h: { attempt: SyncRecord | null, lastOk: SyncRecord | null }, now = Date.now()): string {
+export function syncHealthLine(h: { attempt: SyncRecord | null; lastOk: SyncRecord | null }, now = Date.now()): string {
   const { attempt, lastOk } = h;
   if (!attempt) return `<span class="sd-sync" data-sync="none">No Luma sync recorded yet.</span>`;
   const attemptAt = Date.parse(attempt.at);
@@ -1952,9 +2283,7 @@ export function syncHealthLine(h: { attempt: SyncRecord | null, lastOk: SyncReco
   const result = attempt.ok ? `ok${count}` : `error (${publicSyncError(attempt)})`;
   let tail = "";
   if (stale) {
-    tail = Number.isFinite(okAt)
-      ? ` <b>Stale:</b> the last good sync was ${esc(agoText(now - okAt))}.`
-      : ` <b>Stale:</b> no sync has succeeded yet.`;
+    tail = Number.isFinite(okAt) ? ` <b>Stale:</b> the last good sync was ${esc(agoText(now - okAt))}.` : ` <b>Stale:</b> no sync has succeeded yet.`;
   }
   const state = stale ? "stale" : attempt.ok ? "ok" : "error";
   return `<span class="sd-sync" data-sync="${state}">Last Luma sync ${esc(when)}: ${esc(result)}.${tail}</span>`;
@@ -1971,8 +2300,12 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
     // three are declared here rather than bolted on: an object literal's shape is
     // fixed at the literal in TypeScript, and this is the log line's whole schema.
     const out: {
-      events: any[], guests: any[], skipped: any[],
-      descriptions: any, enrich?: any, tag?: any,
+      events: any[];
+      guests: any[];
+      skipped: any[];
+      descriptions: any;
+      enrich?: any;
+      tag?: any;
     } = { events: [], guests: [], skipped: [], descriptions: null };
     let sets: number | null = null;
     let budget: Budget | null = null;
@@ -1995,11 +2328,17 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
         else {
           budget = sweep;
           for (const ev of await selectCronGuestEvents(d.raw)) {
-            if (sweep.left <= 0) { out.skipped.push(ev.id); continue; }
+            if (sweep.left <= 0) {
+              out.skipped.push(ev.id);
+              continue;
+            }
             // first set that can read this list wins; with one contributor that is one
             // try, and a restricted list falls through to the next set rather than dying.
-            let r: { error?: string, synced?: number, skipped?: string } = { error: "no readable cookie set" };
-            for (const c of fresh) { r = await syncGuests(d, ev.id, c.user_key, c.cookies_json, sweep); if (!r.error) break; }
+            let r: { error?: string; synced?: number; skipped?: string } = { error: "no readable cookie set" };
+            for (const c of fresh) {
+              r = await syncGuests(d, ev.id, c.user_key, c.cookies_json, sweep);
+              if (!r.error) break;
+            }
             if (r.skipped) out.skipped.push(ev.id);
             else out.guests.push({ event: ev.id, ...r });
           }
@@ -2012,9 +2351,15 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
           // fetches + budget_exhausted are the two numbers that were missing while the
           // sweep was silently overspending. An exhausted budget is normal on a tick
           // holding a large roster; it is a problem only when it never clears.
-          console.log(JSON.stringify({
-            cron: "serendipity", ...out, fetches: sweep.spent, budget_exhausted: sweep.exhausted, budget_overrun: sweep.overrun,
-          }));
+          console.log(
+            JSON.stringify({
+              cron: "serendipity",
+              ...out,
+              fetches: sweep.spent,
+              budget_exhausted: sweep.exhausted,
+              budget_overrun: sweep.overrun,
+            }),
+          );
         }
       }
     } catch (err) {
@@ -2024,8 +2369,11 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
     setAttributes(s, syncSpanAttrs(record));
     if (budget) recordBudget(s, budget);
     // A failure to WRITE is logged and never replaces the error that got here.
-    try { await writeSyncRecord(d, record); }
-    catch (err) { console.log(JSON.stringify({ cron: "serendipity", record_write_failed: errorText(err) })); }
+    try {
+      await writeSyncRecord(d, record);
+    } catch (err) {
+      console.log(JSON.stringify({ cron: "serendipity", record_write_failed: errorText(err) }));
+    }
     if (thrown) throw thrown;
     return record;
   });
@@ -2051,10 +2399,32 @@ const STEALTH_PROMPT = `This person is reportedly building a stealth startup. Re
 Domain: <one of: crypto, AI, biotech, devtools, consumer, fintech, climate, robotics, defense, hardware, social, other>
 Thesis: <one short phrase — what problem or wedge, max 12 words>
 Signal: <one direct quote from the text, max 25 words>`;
-const GARBAGE = new Set(["in","at","of","on","the","a","an","is","and","linkedin","linkedin profile","linkedin.com","see profile","profile","n/a","none","unknown","tbd"]);
+const GARBAGE = new Set([
+  "in",
+  "at",
+  "of",
+  "on",
+  "the",
+  "a",
+  "an",
+  "is",
+  "and",
+  "linkedin",
+  "linkedin profile",
+  "linkedin.com",
+  "see profile",
+  "profile",
+  "n/a",
+  "none",
+  "unknown",
+  "tbd",
+]);
 const cleanVal = (raw) => {
   if (!raw) return null;
-  const s = raw.replace(/^[\s\-•*]+/, "").replace(/^["']|["']$/g, "").trim();
+  const s = raw
+    .replace(/^[\s\-•*]+/, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
   if (!s || s.length < 3 || /^(unknown|n\/?a|none)$/i.test(s) || GARBAGE.has(s.toLowerCase())) return null;
   return s;
 };
@@ -2063,22 +2433,40 @@ function parseStructured(text) {
   const KV = new RegExp(`^\\s*(?:ROLE|COMPANY|LOCATION|PAST|BIO)\\s*:`, "im");
   const m = KV.exec(text);
   const proseEnd = m ? m.index : text.length;
-  let bio = text.slice(0, proseEnd)
-    .replace(/^\s*PART\s*1\b[\s:.—-]*(?:Bio\b[\s:.—-]*)?/i, "")  // drop "PART 1 [— Bio:]" lead-in
-    .replace(/\bPART\s*2\b[\s:.—-]*$/i, "")                              // drop trailing "PART 2"
-    .replace(/^\s*(?:Bio|Summary)\s*:\s*/im, "")
-    .replace(/\s+/g, " ").trim() || null;
+  let bio =
+    text
+      .slice(0, proseEnd)
+      .replace(/^\s*PART\s*1\b[\s:.—-]*(?:Bio\b[\s:.—-]*)?/i, "") // drop "PART 1 [— Bio:]" lead-in
+      .replace(/\bPART\s*2\b[\s:.—-]*$/i, "") // drop trailing "PART 2"
+      .replace(/^\s*(?:Bio|Summary)\s*:\s*/im, "")
+      .replace(/\s+/g, " ")
+      .trim() || null;
   const kv = m ? text.slice(proseEnd) : "";
-  const line = (k) => { const lm = kv.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im")); return cleanVal(lm?.[1]); };
-  const role = line("ROLE"), company = line("COMPANY"), location = line("LOCATION"), past = line("PAST");
+  const line = (k) => {
+    const lm = kv.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+    return cleanVal(lm?.[1]);
+  };
+  const role = line("ROLE"),
+    company = line("COMPANY"),
+    location = line("LOCATION"),
+    past = line("PAST");
   const work: any[] = [];
   if (role || company) work.push({ title: role, company_name: company, current: true });
-  if (past) for (const c of past.split(/\s*,\s*/).slice(0, 3)) { const [t, co] = c.split(/\s+at\s+/i).map(cleanVal); if (t || co) work.push({ title: t ?? null, company_name: co ?? null }); }
+  if (past)
+    for (const c of past.split(/\s*,\s*/).slice(0, 3)) {
+      const [t, co] = c.split(/\s+at\s+/i).map(cleanVal);
+      if (t || co) work.push({ title: t ?? null, company_name: co ?? null });
+    }
   return { role, company, location, bio, work_history: work };
 }
 function parseStealth(text) {
   if (!text) return { domain: null, thesis: null, signal: null };
-  const line = (k) => { const m = text.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im")); if (!m) return null; const v = m[1].replace(/^["']|["']$/g, "").trim(); return (!v || /^unknown$/i.test(v) || /^n\/?a$/i.test(v)) ? null : v; };
+  const line = (k) => {
+    const m = text.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+    if (!m) return null;
+    const v = m[1].replace(/^["']|["']$/g, "").trim();
+    return !v || /^unknown$/i.test(v) || /^n\/?a$/i.test(v) ? null : v;
+  };
   return { domain: line("Domain"), thesis: line("Thesis"), signal: line("Signal") };
 }
 const isStealth = (c) => !!c && (/\bstealth\b/i.test(c) || /^(undisclosed|confidential|tbd)$/i.test(c.trim()));
@@ -2097,12 +2485,35 @@ async function drillStealth(key, attendee, knownLinkedIn) {
   const seed = knownLinkedIn ? `${attendee.name} (${knownLinkedIn})` : attendee.name;
   const q = `${seed}${attendee.bio_short ? " " + attendee.bio_short : ""} building stealth startup — what are they working on, recent posts, tweets, interviews`;
   try {
-    const data = await exaPost(key, "/search", { query: q, type: "neural", numResults: 5, startPublishedDate: new Date(Date.now() - 365 * 864e5).toISOString(), contents: { text: { maxCharacters: 3000 }, summary: { query: STEALTH_PROMPT } } });
-    const ranked = asList(data.results).flatMap((raw) => { const r = asRecord(raw); return r ? [{ r, p: parseStealth(asText(r.summary)) }] : []; }).filter(({ p }) => p.domain || p.thesis || p.signal)
-      .sort((a, b) => ((b.p.domain ? 1 : 0) + (b.p.thesis ? 2 : 0) + (b.p.signal ? 2 : 0)) - ((a.p.domain ? 1 : 0) + (a.p.thesis ? 2 : 0) + (a.p.signal ? 2 : 0)));
+    const data = await exaPost(key, "/search", {
+      query: q,
+      type: "neural",
+      numResults: 5,
+      startPublishedDate: new Date(Date.now() - 365 * 864e5).toISOString(),
+      contents: { text: { maxCharacters: 3000 }, summary: { query: STEALTH_PROMPT } },
+    });
+    const ranked = asList(data.results)
+      .flatMap((raw) => {
+        const r = asRecord(raw);
+        return r ? [{ r, p: parseStealth(asText(r.summary)) }] : [];
+      })
+      .filter(({ p }) => p.domain || p.thesis || p.signal)
+      .sort(
+        (a, b) => (b.p.domain ? 1 : 0) + (b.p.thesis ? 2 : 0) + (b.p.signal ? 2 : 0) - ((a.p.domain ? 1 : 0) + (a.p.thesis ? 2 : 0) + (a.p.signal ? 2 : 0)),
+      );
     const top = ranked[0];
-    return top ? { ...top.p, sources: ranked.slice(0, 3).flatMap(({ r }) => { const url = asText(r.url); return url ? [url] : []; }) } : null;
-  } catch { return null; }
+    return top
+      ? {
+          ...top.p,
+          sources: ranked.slice(0, 3).flatMap(({ r }) => {
+            const url = asText(r.url);
+            return url ? [url] : [];
+          }),
+        }
+      : null;
+  } catch {
+    return null;
+  }
 }
 // enrich one attendee via Exa, store into enrichments. Returns {outcome, profile?}.
 async function enrichViaExa(d, key, attendee, force) {
@@ -2112,22 +2523,42 @@ async function enrichViaExa(d, key, attendee, force) {
     if (ex && ex.source === "exa") return { outcome: "already_enriched" };
   }
   let linkedinUrl = null;
-  if (attendee.linkedin_handle) linkedinUrl = attendee.linkedin_handle.startsWith("http") ? attendee.linkedin_handle : `https://www.linkedin.com${attendee.linkedin_handle.startsWith("/") ? "" : "/in/"}${attendee.linkedin_handle}`;
+  if (attendee.linkedin_handle)
+    linkedinUrl = attendee.linkedin_handle.startsWith("http")
+      ? attendee.linkedin_handle
+      : `https://www.linkedin.com${attendee.linkedin_handle.startsWith("/") ? "" : "/in/"}${attendee.linkedin_handle}`;
   const query = `${attendee.name}${attendee.bio_short ? " " + attendee.bio_short : ""}`;
-  let text = null, summary = null;
+  let text = null,
+    summary = null;
   try {
     if (linkedinUrl) {
       const data = await exaPost(key, "/contents", { urls: [linkedinUrl], text: { maxCharacters: 4000 }, summary: { query: SUMMARY_PROMPT } });
-      const hit = data.results?.[0]; text = hit?.text ?? null; summary = hit?.summary ?? null;
+      const hit = data.results?.[0];
+      text = hit?.text ?? null;
+      summary = hit?.summary ?? null;
     } else {
-      const data = await exaPost(key, "/search", { query, type: "neural", numResults: 3, category: "linkedin profile", contents: { text: { maxCharacters: 4000 }, summary: { query: SUMMARY_PROMPT } } });
-      const hit = pickLinkedIn(data.results); if (hit) { linkedinUrl = hit.url; text = hit.text ?? null; summary = hit.summary ?? null; }
+      const data = await exaPost(key, "/search", {
+        query,
+        type: "neural",
+        numResults: 3,
+        category: "linkedin profile",
+        contents: { text: { maxCharacters: 4000 }, summary: { query: SUMMARY_PROMPT } },
+      });
+      const hit = pickLinkedIn(data.results);
+      if (hit) {
+        linkedinUrl = hit.url;
+        text = hit.text ?? null;
+        summary = hit.summary ?? null;
+      }
     }
-  } catch (err) { return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) }; }
+  } catch (err) {
+    return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) };
+  }
 
   const p = parseStructured(summary ?? text);
   const freeform = (summary ?? text ?? "").replace(/\s+/g, " ").trim();
-  let company = p.company, bio = p.bio ?? (freeform ? freeform.slice(0, 600) : null);
+  let company = p.company,
+    bio = p.bio ?? (freeform ? freeform.slice(0, 600) : null);
   let stealth: (ReturnType<typeof parseStealth> & { sources?: string[] }) | null = null;
   if (isStealth(company)) {
     stealth = await drillStealth(key, attendee, linkedinUrl);
@@ -2138,11 +2569,27 @@ async function enrichViaExa(d, key, attendee, force) {
     }
   }
   const found = !!(linkedinUrl || p.role || company || bio);
-  await d.prepare(`INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
+  await d
+    .prepare(
+      `INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
     ON CONFLICT(attendee_id) DO UPDATE SET linkedin_url=excluded.linkedin_url,company=excluded.company,role=excluded.role,bio=excluded.bio,
-      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`)
-    .run(attendee.id, linkedinUrl, company, p.role, bio, p.location, JSON.stringify(p.work_history), "[]", "[]", "[]", "exa", JSON.stringify({ summary, stealth }).slice(0, 4000));
+      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`,
+    )
+    .run(
+      attendee.id,
+      linkedinUrl,
+      company,
+      p.role,
+      bio,
+      p.location,
+      JSON.stringify(p.work_history),
+      "[]",
+      "[]",
+      "[]",
+      "exa",
+      JSON.stringify({ summary, stealth }).slice(0, 4000),
+    );
   return { outcome: found ? "success" : "not_found", profile: { company, role: p.role, location: p.location, linkedin_url: linkedinUrl, bio } };
 }
 
@@ -2164,7 +2611,9 @@ async function parallelSearch(key, objective, queries) {
 }
 function guessRoleCompany(text) {
   if (!text) return { role: null, company: null };
-  const m = text.match(/\b([A-Z][A-Za-z0-9/&+. -]{2,40}?(?:Engineer|Developer|Founder|Co-?founder|CEO|CTO|COO|CFO|CPO|President|VP|Director|Head|Manager|Lead|Designer|Researcher|Scientist|Partner|Investor|Analyst|Officer))\s+(?:at|@|,|\bof\b)\s+([A-Z][A-Za-z0-9/&+.' -]{1,40})/);
+  const m = text.match(
+    /\b([A-Z][A-Za-z0-9/&+. -]{2,40}?(?:Engineer|Developer|Founder|Co-?founder|CEO|CTO|COO|CFO|CPO|President|VP|Director|Head|Manager|Lead|Designer|Researcher|Scientist|Partner|Investor|Analyst|Officer))\s+(?:at|@|,|\bof\b)\s+([A-Z][A-Za-z0-9/&+.' -]{1,40})/,
+  );
   return m ? { role: m[1].trim(), company: m[2].trim() } : { role: null, company: null };
 }
 async function enrichViaParallel(d, key, attendee, force) {
@@ -2174,21 +2623,48 @@ async function enrichViaParallel(d, key, attendee, force) {
     if (ex && ex.source === "parallel") return { outcome: "already_enriched" };
   }
   const objective = `Identify the professional profile of ${attendee.name}${attendee.bio_short ? " (" + attendee.bio_short + ")" : ""}: current job title/role, current company or organization, and city/location. Prefer LinkedIn, company pages, and recent reputable sources.`;
-  const queries = [`${attendee.name} LinkedIn`, `${attendee.name} ${attendee.bio_short || "role company"}`.trim(), `${attendee.name} founder OR engineer OR investor`];
+  const queries = [
+    `${attendee.name} LinkedIn`,
+    `${attendee.name} ${attendee.bio_short || "role company"}`.trim(),
+    `${attendee.name} founder OR engineer OR investor`,
+  ];
   let results;
-  try { results = (await parallelSearch(key, objective, queries)).results || []; }
-  catch (err) { return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) }; }
+  try {
+    results = (await parallelSearch(key, objective, queries)).results || [];
+  } catch (err) {
+    return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) };
+  }
 
   const linkedinUrl = (results.find((r) => /linkedin\.com\/in\//i.test(r.url || "")) || {}).url || null;
-  const context = results.flatMap((r) => r.excerpts || []).join(" ").replace(/\s+/g, " ").trim();
+  const context = results
+    .flatMap((r) => r.excerpts || [])
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   const g = guessRoleCompany(context);
   const bio = context ? context.slice(0, 600) : null;
   const found = !!(linkedinUrl || g.role || g.company || bio);
-  await d.prepare(`INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
+  await d
+    .prepare(
+      `INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
     ON CONFLICT(attendee_id) DO UPDATE SET linkedin_url=excluded.linkedin_url,company=excluded.company,role=excluded.role,bio=excluded.bio,
-      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`)
-    .run(attendee.id, linkedinUrl, g.company, g.role, bio, null, "[]", "[]", "[]", "[]", "parallel", JSON.stringify({ objective, results: results.slice(0, 3) }).slice(0, 4000));
+      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`,
+    )
+    .run(
+      attendee.id,
+      linkedinUrl,
+      g.company,
+      g.role,
+      bio,
+      null,
+      "[]",
+      "[]",
+      "[]",
+      "[]",
+      "parallel",
+      JSON.stringify({ objective, results: results.slice(0, 3) }).slice(0, 4000),
+    );
   return { outcome: found ? "success" : "not_found", profile: { company: g.company, role: g.role, location: null, linkedin_url: linkedinUrl, bio } };
 }
 
@@ -2197,7 +2673,7 @@ async function enrichViaParallel(d, key, attendee, force) {
 // provider=exa (default) | parallel — both optional; only the one whose API key
 // is set will run. No agentcash / payment layer: each provider is a direct key.
 const ENRICH_PROVIDERS = {
-  exa:      { keyEnv: "EXA_API_KEY",      fn: enrichViaExa },
+  exa: { keyEnv: "EXA_API_KEY", fn: enrichViaExa },
   parallel: { keyEnv: "PARALLEL_API_KEY", fn: enrichViaParallel },
 };
 // One attendee costs at most 4 ops: the already-enriched read, the Exa lookup,
@@ -2223,15 +2699,20 @@ async function handleEnrich(request, env, d) {
   if (!key) return jerr(`${P.keyEnv} not set — add it with: wrangler secret put ${P.keyEnv}`, 400);
   const COLS = "id, name, linkedin_handle, email, bio_short";
   let targets;
-  const aid = url.searchParams.get("attendee"), eid = url.searchParams.get("event");
+  const aid = url.searchParams.get("attendee"),
+    eid = url.searchParams.get("event");
   if (aid) targets = await d.prepare(`SELECT ${COLS} FROM attendees WHERE id = ?`).all(aid);
   else if (eid) {
     const limit = enrichBatchLimit(url.searchParams.get("limit"));
-    targets = await d.prepare(`SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
+    targets = await d
+      .prepare(
+        `SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
        FROM event_attendees ea JOIN attendees a ON a.id = ea.attendee_id
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
-      ORDER BY (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC LIMIT ?`).all(eid, limit);
+      ORDER BY (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC LIMIT ?`,
+      )
+      .all(eid, limit);
   } else if (url.searchParams.get("upcoming")) {
     // The whole pool was 16,839 attendees on 2026-08-22, against a paid
     // per-person API, and the question this data actually gets asked is "who is
@@ -2242,7 +2723,9 @@ async function handleEnrich(request, env, d) {
     // regular whose next event is in five weeks can wait and a stranger at
     // tonight's thing cannot.
     const limit = enrichBatchLimit(url.searchParams.get("limit"));
-    targets = await d.prepare(`SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
+    targets = await d
+      .prepare(
+        `SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
        FROM event_attendees ea
        JOIN events e ON e.id = ea.event_id
        JOIN attendees a ON a.id = ea.attendee_id
@@ -2253,7 +2736,9 @@ async function handleEnrich(request, env, d) {
       GROUP BY a.id
       ORDER BY datetime(MIN(e.start_at)) ASC,
                (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC
-      LIMIT ?`).all(limit);
+      LIMIT ?`,
+      )
+      .all(limit);
   } else return jerr("pass ?attendee=, ?event= or ?upcoming=1", 400);
 
   const out: any[] = [];
@@ -2273,7 +2758,9 @@ async function handleEnrich(request, env, d) {
 // MAC, so attacker-chosen URLs are rejected. Secret reuses SYNC_SECRET (override
 // with a dedicated COVER_SECRET). If neither is set the proxy degrades to open —
 // that's an unconfigured deploy only, not anything an attacker can induce.
-function coverSecret(env) { return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null; }
+function coverSecret(env) {
+  return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null;
+}
 // Same-origin, signed cover-proxy URL for a raw cover_url ("" when there's none).
 async function coverProxyUrl(rawUrl, env) {
   if (!rawUrl) return "";
@@ -2298,7 +2785,11 @@ async function handleCover(request, env, ctx) {
   const raw = url.searchParams.get("u");
   if (!raw) return new Response("missing u", { status: 400 });
   let target;
-  try { target = new URL(raw); } catch { return new Response("bad u", { status: 400 }); }
+  try {
+    target = new URL(raw);
+  } catch {
+    return new Response("bad u", { status: 400 });
+  }
   if (target.protocol !== "https:") return new Response("https only", { status: 400 });
   if (target.port && target.port !== "443") return new Response("https only", { status: 400 });
   // SSRF guard, before any fetch and independent of the signature below.
@@ -2321,7 +2812,11 @@ async function handleCover(request, env, ctx) {
   // hop, 400, and the request to it is never made.
   const coverHop = (raw) => {
     let hop;
-    try { hop = new URL(raw); } catch { return { ok: false, error: "bad redirect" }; }
+    try {
+      hop = new URL(raw);
+    } catch {
+      return { ok: false, error: "bad redirect" };
+    }
     if (hop.protocol !== "https:" || (hop.port && hop.port !== "443")) return { ok: false, error: "https only" };
     if (privateHostBlocked(hop.hostname.toLowerCase())) return { ok: false, error: "blocked host" };
     return { ok: true };
@@ -2340,8 +2835,11 @@ async function handleCover(request, env, ctx) {
     if (walked.ok && !walked.response.ok) throw new Error("upstream " + walked.response.status);
   } catch {
     // Transformations off / transform error → plain fetch, original bytes.
-    try { walked = await fetchCover({ headers: ua }); }
-    catch { return new Response("upstream fetch failed", { status: 502 }); }
+    try {
+      walked = await fetchCover({ headers: ua });
+    } catch {
+      return new Response("upstream fetch failed", { status: 502 });
+    }
   }
   if (!walked.ok) return new Response(walked.error, { status: 400 });
   const upstream = walked.response;
@@ -2374,7 +2872,8 @@ async function handleCover(request, env, ctx) {
 // to be reported by a client author rather than by us.
 export const SERENDIPITY_MCP_SERVER_INFO = { name: "serendipity", title: "Serendipity", version: "2.0.0" };
 export const SERENDIPITY_MCP_CAPABILITIES = { tools: {} };
-export const SERENDIPITY_MCP_INSTRUCTIONS = "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.";
+export const SERENDIPITY_MCP_INSTRUCTIONS =
+  "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.";
 
 const MCP = mcpServer({
   serverInfo: SERENDIPITY_MCP_SERVER_INFO,
@@ -2393,21 +2892,21 @@ const MCP = mcpServer({
 // A projection whose shape is stated in one place is also the easier guardrail
 // to audit against the no-email/no-phone rule above.
 type McpAttendee = {
-  name: any,
-  role: any,
-  company: any,
-  location: any,
-  bio: any,
-  times_seen: number | null,
+  name: any;
+  role: any;
+  company: any;
+  location: any;
+  bio: any;
+  times_seen: number | null;
 
-  is_host?: boolean,
-  socials?: Record<string, string>,
+  is_host?: boolean;
+  socials?: Record<string, string>;
 
-  going_to?: any[],       // mcpSearchPeople: upcoming events, ascending
-  been_to?: any[],        // mcpSearchPeople: past events, already descending
-  events?: number,        // mcpFrequentPeople: how many events they turned up at
-  shared?: number,        // mcpCoAttendees: events shared with the subject
-  shared_events?: string[],
+  going_to?: any[]; // mcpSearchPeople: upcoming events, ascending
+  been_to?: any[]; // mcpSearchPeople: past events, already descending
+  events?: number; // mcpFrequentPeople: how many events they turned up at
+  shared?: number; // mcpCoAttendees: events shared with the subject
+  shared_events?: string[];
 };
 
 function mcpAttendee(a): McpAttendee {
@@ -2457,8 +2956,9 @@ function mcpEventSummary(e, tags: Map<string, any> | null = null) {
 // (two D1 subrequests total, no N+1).
 async function mcpSearchPeople(d, q, limit) {
   const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
-  const people = await d.prepare(
-    `SELECT a.id, a.name, a.bio_short,
+  const people = await d
+    .prepare(
+      `SELECT a.id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             a.website,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
@@ -2466,20 +2966,25 @@ async function mcpSearchPeople(d, q, limit) {
        FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE a.name LIKE ? ESCAPE '\\'
       ORDER BY times_seen DESC, a.name ASC
-      LIMIT ?`
-  ).all(term, limit);
+      LIMIT ?`,
+    )
+    .all(term, limit);
   if (!people.length) return [];
   const ids = people.map((p) => p.id);
   const ph = ids.map(() => "?").join(",");
-  const memberships = await d.prepare(
-    `SELECT ea.attendee_id, e.id AS event_id, e.name AS event_name, e.start_at, ea.is_host
+  const memberships = await d
+    .prepare(
+      `SELECT ea.attendee_id, e.id AS event_id, e.name AS event_name, e.start_at, ea.is_host
        FROM event_attendees ea JOIN events e ON e.id = ea.event_id
       WHERE ea.attendee_id IN (${ph})
-      ORDER BY e.start_at DESC`
-  ).all(...ids);
+      ORDER BY e.start_at DESC`,
+    )
+    .all(...ids);
   const byPerson = new Map();
   for (const m of memberships) {
-    byPerson.getOrInsertComputed(m.attendee_id, () => []).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+    byPerson
+      .getOrInsertComputed(m.attendee_id, () => [])
+      .push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
   }
   const now = Date.now();
   return people.map((p) => {
@@ -2487,9 +2992,10 @@ async function mcpSearchPeople(d, q, limit) {
     const evs = byPerson.get(p.id) || [];
     // split each person's events into what they're going to (upcoming) vs have
     // been to (past), so a caller can read both their trajectory and their reach.
-    o.going_to = evs.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now)
-                    .sort((a, b) => new Date(a.start_at || 0).getTime() - new Date(b.start_at || 0).getTime());
-    o.been_to = evs.filter((e) => e.start_at && new Date(e.start_at).getTime() < now);  // already DESC
+    o.going_to = evs
+      .filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now)
+      .sort((a, b) => new Date(a.start_at || 0).getTime() - new Date(b.start_at || 0).getTime());
+    o.been_to = evs.filter((e) => e.start_at && new Date(e.start_at).getTime() < now); // already DESC
     return o;
   });
 }
@@ -2502,38 +3008,49 @@ async function mcpSearchPeople(d, q, limit) {
 async function mcpContributorEvents(d, contributor) {
   const key = String(contributor || "").trim();
   if (!key) return null;
-  const c = await d.prepare(
-    `SELECT user_key, label, luma_user_id, enabled FROM user_cookies
-      WHERE user_key = ?1 OR label = ?1 OR user_key LIKE ?2 ESCAPE '\\' LIMIT 1`
-  ).get(key, key.replace(/[\\%_]/g, "\\$&") + "%");
+  const c = await d
+    .prepare(
+      `SELECT user_key, label, luma_user_id, enabled FROM user_cookies
+      WHERE user_key = ?1 OR label = ?1 OR user_key LIKE ?2 ESCAPE '\\' LIMIT 1`,
+    )
+    .get(key, key.replace(/[\\%_]/g, "\\$&") + "%");
   if (!c) return null;
-  const rows = await d.prepare(
-    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+  const rows = await d
+    .prepare(
+      `SELECT e.id, e.name, e.start_at, e.location, e.url,
             (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 0) AS attendee_count,
             (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 1) AS host_count
        FROM event_contributions ec JOIN events e ON e.id = ec.event_id
-      WHERE ec.user_key = ? ORDER BY e.start_at`
-  ).all(c.user_key);
+      WHERE ec.user_key = ? ORDER BY e.start_at`,
+    )
+    .all(c.user_key);
   const now = Date.now();
   const summaries = rows.map((e) => mcpEventSummary(e));
   return {
-    contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8),
-                   luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
+    contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8), luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
     total: rows.length,
     going_to: summaries.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now),
-    been_to: summaries.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                      .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime()),
+    been_to: summaries
+      .filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+      .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime()),
   };
 }
 
 async function mcpListContributors(d) {
-  const rows = await d.prepare(
-    `SELECT uc.label, uc.enabled, uc.luma_user_id, substr(uc.user_key, 1, 8) AS id_prefix,
+  const rows = await d
+    .prepare(
+      `SELECT uc.label, uc.enabled, uc.luma_user_id, substr(uc.user_key, 1, 8) AS id_prefix,
             (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = uc.user_key) AS events
-       FROM user_cookies uc ORDER BY events DESC, uc.updated_at DESC`
-  ).all();
-  return rows.map((r) => ({ label: r.label || null, id_prefix: r.id_prefix, luma_user_id: r.luma_user_id || null,
-                            enabled: Number(r.enabled) === 1, events: Number(r.events) }));
+       FROM user_cookies uc ORDER BY events DESC, uc.updated_at DESC`,
+    )
+    .all();
+  return rows.map((r) => ({
+    label: r.label || null,
+    id_prefix: r.id_prefix,
+    luma_user_id: r.luma_user_id || null,
+    enabled: Number(r.enabled) === 1,
+    events: Number(r.events),
+  }));
 }
 
 // ── social graph: frequency + co-attendance ──────────────────────────────────
@@ -2550,33 +3067,40 @@ const PUB_COLS = `a.id, a.name, a.bio_short,
 // best-match attendee for a name (most-seen wins ties).
 async function mcpResolvePerson(d, q) {
   const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
-  return d.prepare(
-    `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
-      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY times_seen DESC, a.name ASC LIMIT 1`
-  ).get(term);
+  return d
+    .prepare(
+      `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY times_seen DESC, a.name ASC LIMIT 1`,
+    )
+    .get(term);
 }
 
 // who shows up across the most events (who you're seeing a lot); optional slice.
 async function mcpFrequentPeople(d, when, limit) {
-  let filter = "", binds: any[] = [];
+  let filter = "",
+    binds: any[] = [];
   if (when === "upcoming" || when === "past") {
     const nowIso = new Date().toISOString();
-    filter = when === "upcoming"
-      ? `AND (e.start_at IS NULL OR e.start_at >= ?)`
-      : `AND (e.start_at IS NOT NULL AND e.start_at < ?)`;
+    filter = when === "upcoming" ? `AND (e.start_at IS NULL OR e.start_at >= ?)` : `AND (e.start_at IS NOT NULL AND e.start_at < ?)`;
     binds.push(nowIso);
   }
   binds.push(limit);
-  const rows = await d.prepare(
-    `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
+  const rows = await d
+    .prepare(
+      `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
        FROM attendees a
        JOIN event_attendees ea ON ea.attendee_id = a.id
        JOIN events e ON e.id = ea.event_id
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE 1=1 ${filter}
-      GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`
-  ).all(...binds);
-  return rows.map((r) => { const o = mcpAttendee(r); o.events = Number(r.events); return o; });
+      GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`,
+    )
+    .all(...binds);
+  return rows.map((r) => {
+    const o = mcpAttendee(r);
+    o.events = Number(r.events);
+    return o;
+  });
 }
 
 // one person's strongest co-attendees + the events they share.
@@ -2584,43 +3108,51 @@ async function mcpCoAttendees(d, q, limit) {
   const person = await mcpResolvePerson(d, q);
   if (!person) return null;
   const [rows, tot] = await Promise.all([
-    d.prepare(
-      `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+    d
+      .prepare(
+        `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
          FROM event_attendees ea
          JOIN attendees a ON a.id = ea.attendee_id
          JOIN events e ON e.id = ea.event_id
          LEFT JOIN enrichments en ON en.attendee_id = a.id
         WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
           AND ea.attendee_id != ?1
-        GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`
-    ).all(person.id, limit),
+        GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`,
+      )
+      .all(person.id, limit),
     d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id),
   ]);
   return {
     person: mcpAttendee(person),
     events_attended: tot ? Number(tot.n) : 0,
-    co_attendees: rows.map((r) => { const o = mcpAttendee(r); o.shared = Number(r.shared);
-      o.shared_events = (r.shared_names || "").split("|||").filter(Boolean); return o; }),
+    co_attendees: rows.map((r) => {
+      const o = mcpAttendee(r);
+      o.shared = Number(r.shared);
+      o.shared_events = (r.shared_names || "").split("|||").filter(Boolean);
+      return o;
+    }),
   };
 }
 
 // the tightest co-attendance pairs pool-wide (who's seeing who).
 async function mcpConnections(d, minShared, limit) {
-  const rows = await d.prepare(
-    `SELECT a1.attendee_id AS id1, a2.attendee_id AS id2,
+  const rows = await d
+    .prepare(
+      `SELECT a1.attendee_id AS id1, a2.attendee_id AS id2,
             COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
        FROM event_attendees a1
        JOIN event_attendees a2 ON a1.event_id = a2.event_id AND a1.attendee_id < a2.attendee_id
        JOIN events e ON e.id = a1.event_id
       GROUP BY a1.attendee_id, a2.attendee_id
-     HAVING shared >= ?1 ORDER BY shared DESC LIMIT ?2`
-  ).all(minShared, limit);
+     HAVING shared >= ?1 ORDER BY shared DESC LIMIT ?2`,
+    )
+    .all(minShared, limit);
   if (!rows.length) return [];
   const ids = [...new Set(rows.flatMap((r) => [r.id1, r.id2]))];
   const ph = ids.map(() => "?").join(",");
-  const people = await d.prepare(
-    `SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`
-  ).all(...ids);
+  const people = await d
+    .prepare(`SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`)
+    .all(...ids);
   const byId = new Map(people.map((p) => [p.id, { name: p.name, role: p.role || null, company: p.company || null }]));
   return rows.map((r) => ({
     a: byId.get(r.id1) || { name: "?" },
@@ -2639,37 +3171,54 @@ async function mcpSharedEvents(d, qa, qb) {
   const [a, b] = await Promise.all([mcpResolvePerson(d, qa), mcpResolvePerson(d, qb)]);
   if (!a) return { _missing: qa };
   if (!b) return { _missing: qb };
-  const rows = await d.prepare(
-    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+  const rows = await d
+    .prepare(
+      `SELECT e.id, e.name, e.start_at, e.location, e.url,
             (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 0) AS attendee_count,
             (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 1) AS host_count
        FROM events e
       WHERE e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
         AND e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?2)
-      ORDER BY e.start_at DESC`
-  ).all(a.id, b.id);
+      ORDER BY e.start_at DESC`,
+    )
+    .all(a.id, b.id);
   return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map((e) => mcpEventSummary(e)) };
 }
 
 const MCP_TOOL_DEFINITIONS = [
   {
     name: "list_events",
-    description: "List events in the Serendipity pool, each with a head count of who's going, an RSVP tier, and a classified topic and format with confidences (null until an event is tagged; filter with topic/format). The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+    description:
+      'List events in the Serendipity pool, each with a head count of who\'s going, an RSVP tier, and a classified topic and format with confidences (null until an event is tagged; filter with topic/format). The pool mixes events a contributor actually RSVP\'d to or hosts (rsvp:"going" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:"invited"/"pending"/etc — no roster, second-class). By default only the going (RSVP\'d) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:"all" to include them (first-class first) or rsvp:"discovered" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.',
     inputSchema: {
       type: "object",
       properties: {
-        when: { type: "string", enum: ["upcoming", "past", "all"], description: "which time slice to return (default \"upcoming\")" },
-        rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones" },
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: 'which time slice to return (default "upcoming")' },
+        rsvp: {
+          type: "string",
+          enum: ["going", "all", "discovered"],
+          description:
+            'RSVP tier: "going" = only events a contributor RSVP\'d to / hosts (default); "all" = include browsed-but-not-RSVP\'d events, first-class first; "discovered" = only the browsed ones',
+        },
         q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
-        topic: { type: "string", enum: [...EVENT_TOPICS], description: "optional: only events whose classified topic is this. Untagged or low-confidence events never match, and are counted in `untagged`" },
-        format: { type: "string", enum: [...EVENT_FORMATS], description: "optional: only events whose classified format is this (talks, meal, social, ...). Same untagged rule as topic" },
+        topic: {
+          type: "string",
+          enum: [...EVENT_TOPICS],
+          description: "optional: only events whose classified topic is this. Untagged or low-confidence events never match, and are counted in `untagged`",
+        },
+        format: {
+          type: "string",
+          enum: [...EVENT_FORMATS],
+          description: "optional: only events whose classified format is this (talks, meal, social, ...). Same untagged rule as topic",
+        },
         limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
       },
     },
   },
   {
     name: "get_event",
-    description: "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
+    description:
+      "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", description: "the event id, as returned by list_events" } },
@@ -2678,7 +3227,8 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "search_people",
-    description: "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and their events split into going_to (upcoming) and been_to (past), so you see both trajectory and reach.",
+    description:
+      "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and their events split into going_to (upcoming) and been_to (past), so you see both trajectory and reach.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2690,12 +3240,14 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "list_contributors",
-    description: "List the contributors feeding the pool (the people who synced a Luma feed): their label, an 8-char id prefix, and how many events each has fed in. Use the label or id prefix with contributor_events.",
+    description:
+      "List the contributors feeding the pool (the people who synced a Luma feed): their label, an 8-char id prefix, and how many events each has fed in. Use the label or id prefix with contributor_events.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "contributor_events",
-    description: "Given a contributor (their cookie id / user_key, an id prefix, or their label), return every event they fed into the pool, split into going_to (upcoming) and been_to (past). This is one contributor's whole event footprint.",
+    description:
+      "Given a contributor (their cookie id / user_key, an id prefix, or their label), return every event they fed into the pool, split into going_to (upcoming) and been_to (past). This is one contributor's whole event footprint.",
     inputSchema: {
       type: "object",
       properties: { contributor: { type: "string", description: "a contributor's cookie id (user_key), an id prefix from list_contributors, or their label" } },
@@ -2704,7 +3256,8 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "frequent_people",
-    description: "The people who show up across the most events in the pool (who you're seeing a lot), each with an event count. Optionally restrict the count to upcoming or past.",
+    description:
+      "The people who show up across the most events in the pool (who you're seeing a lot), each with an event count. Optionally restrict the count to upcoming or past.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2715,7 +3268,8 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "co_attendees",
-    description: "Given a person by name, who they cross paths with most: the people most often at the same events, with a shared-event count and the names of those shared events. Pass your own name to answer \"who am I seeing a lot\".",
+    description:
+      'Given a person by name, who they cross paths with most: the people most often at the same events, with a shared-event count and the names of those shared events. Pass your own name to answer "who am I seeing a lot".',
     inputSchema: {
       type: "object",
       properties: {
@@ -2727,7 +3281,8 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "connections",
-    description: "The tightest co-attendance pairs in the whole pool (who's seeing who): pairs of people who keep turning up at the same events, with the shared count and the shared event names. The relationship graph's strongest edges.",
+    description:
+      "The tightest co-attendance pairs in the whole pool (who's seeing who): pairs of people who keep turning up at the same events, with the shared count and the shared event names. The relationship graph's strongest edges.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2766,9 +3321,9 @@ export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 // callers branch on them, and an unnamed union of a dozen result literals could
 // not say so.
 type McpToolResult = {
-  _unknown?: true,          // no tool by that name — the caller answers -32602
-  _error?: string,          // the tool ran and refused — an isError RESULT, not an RPC error
-  [field: string]: any,
+  _unknown?: true; // no tool by that name — the caller answers -32602
+  _error?: string; // the tool ran and refused — an isError RESULT, not an RPC error
+  [field: string]: any;
 };
 
 async function mcpCallTool(d, name, args): Promise<McpToolResult> {
@@ -2784,8 +3339,10 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     const now = Date.now();
     let rows = await queryEvents(d);
     if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
-    else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                                         .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
+    else if (when === "past")
+      rows = rows
+        .filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+        .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
     const tags = await queryEventTags(d);
     // A topic/format filter can only match what was classified with confidence,
@@ -2803,38 +3360,56 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
       untagged = rows.filter((e) => (topic && judged(e, "topic") == null) || (format && judged(e, "format") == null)).length;
       rows = rows.filter((e) => (!topic || judged(e, "topic") === topic) && (!format || judged(e, "format") === format));
     }
-    const matched = rows.length;                                            // after when + q, before rsvp tier
+    const matched = rows.length; // after when + q, before rsvp tier
     const goingCount = rows.filter((e) => e.user_status === "going").length;
     if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
     else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
     else rows = rows.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
     const events = rows.slice(0, limit).map((e) => mcpEventSummary(e, tags));
-    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number, topic?: string, format?: string, untagged?: number } =
-      { when, rsvp, total, returned: events.length, events };
+    const out: {
+      when: any;
+      rsvp: any;
+      total: number;
+      returned: number;
+      events: any[];
+      discovered_hidden?: number;
+      topic?: string;
+      format?: string;
+      untagged?: number;
+    } = { when, rsvp, total, returned: events.length, events };
     if (topic) out.topic = topic;
     if (format) out.format = format;
     if (untagged !== undefined) out.untagged = untagged;
-    if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
+    if (rsvp === "going") out.discovered_hidden = matched - goingCount; // transparency: not-RSVP'd events omitted from this view
     return out;
   }
   if (name === "get_event") {
     const id = String(args.id || "").trim();
     if (!id) return { _error: "id is required" };
     const [ev, rows, contributors, tags] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id), queryEventTag(d, id)]);
-    if (!ev) return { _error: "no event with id \"" + id + "\" is in the pool" };
+    if (!ev) return { _error: 'no event with id "' + id + '" is in the pool' };
     const hosts = rows.filter((a) => a.is_host).map(mcpAttendee);
-    const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
-                       .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name)).map(mcpAttendee);
+    const guests = rows
+      .filter((a) => !a.is_host)
+      .map((a) => ({ ...a, _s: attendeeScore(a) }))
+      .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name))
+      .map(mcpAttendee);
     return {
       event: {
-        id: ev.id, name: ev.name, description: ev.description || null,
-        start_at: ev.start_at || null, end_at: ev.end_at || null,
-        location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
+        id: ev.id,
+        name: ev.name,
+        description: ev.description || null,
+        start_at: ev.start_at || null,
+        end_at: ev.end_at || null,
+        location: ev.location || null,
+        url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
         status: ev.user_status || null,
         tags: mcpTags(tags),
       },
-      hosts, going: guests.length, attendees: guests,
+      hosts,
+      going: guests.length,
+      attendees: guests,
       contributors: contributors.map((c) => c.label),
     };
   }
@@ -2852,7 +3427,7 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     const c = String(args.contributor || "").trim();
     if (!c) return { _error: "contributor is required (a cookie id / user_key, an id prefix, or a label)" };
     const out = await mcpContributorEvents(d, c);
-    if (!out) return { _error: "no contributor matching \"" + c + "\" (try list_contributors)" };
+    if (!out) return { _error: 'no contributor matching "' + c + '" (try list_contributors)' };
     return out;
   }
   if (name === "frequent_people") {
@@ -2866,7 +3441,7 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     if (!q) return { _error: "q is required (a person's name)" };
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
     const out = await mcpCoAttendees(d, q, limit);
-    if (!out) return { _error: "no person matching \"" + q + "\" (try search_people)" };
+    if (!out) return { _error: 'no person matching "' + q + '" (try search_people)' };
     return out;
   }
   if (name === "connections") {
@@ -2875,20 +3450,24 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     return { min_shared: minShared, pairs: await mcpConnections(d, minShared, limit) };
   }
   if (name === "shared_events") {
-    const a = String(args.a || "").trim(), b = String(args.b || "").trim();
+    const a = String(args.a || "").trim(),
+      b = String(args.b || "").trim();
     if (!a || !b) return { _error: "both a and b (person names) are required" };
     const out = await mcpSharedEvents(d, a, b);
-    if (out._missing) return { _error: "no person matching \"" + out._missing + "\"" };
+    if (out._missing) return { _error: 'no person matching "' + out._missing + '"' };
     return out;
   }
   if (name === "stats") {
-    const [events, contributors, attRow] = await Promise.all([
-      queryEvents(d), countContributors(d), d.prepare("SELECT COUNT(*) AS n FROM attendees").get(),
-    ]);
+    const [events, contributors, attRow] = await Promise.all([queryEvents(d), countContributors(d), d.prepare("SELECT COUNT(*) AS n FROM attendees").get()]);
     const now = Date.now();
     const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now).length;
-    return { events_total: events.length, events_upcoming: upcoming, events_past: events.length - upcoming,
-             people: attRow ? Number(attRow.n) : 0, contributors };
+    return {
+      events_total: events.length,
+      events_upcoming: upcoming,
+      events_past: events.length - upcoming,
+      people: attRow ? Number(attRow.n) : 0,
+      contributors,
+    };
   }
   return { _unknown: true };
 }
@@ -2921,19 +3500,25 @@ export async function serendipityFindEvents(env, args) {
 export async function handleMcp(request, env, d) {
   const cors = mcpCorsHeaders();
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  const respond = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), {
-    status, headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  });
+  const respond = (obj, status = 200) =>
+    new Response(obj === null ? null : JSON.stringify(obj), {
+      status,
+      headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
   if (request.method !== "POST") {
     // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
     return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
   }
   let payload;
-  try { payload = await request.json(); }
-  catch { return respond(mcpError(null, -32700, "Parse error")); }
+  try {
+    payload = await request.json();
+  } catch {
+    return respond(mcpError(null, -32700, "Parse error"));
+  }
 
   const dispatch = async (msg) => {
-    const id = msg.id, m = msg.method;
+    const id = msg.id,
+      m = msg.method;
     try {
       // MUST be implemented as of 2026-07-28.
       if (m === "server/discover") return MCP.discover(id);
@@ -2987,11 +3572,22 @@ export async function handleSerendipity(request, env, ctx) {
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent
-  let uid = readUid(request), setCookie: string | null = null;
-  if (!uid) { uid = mintUid(); setCookie = uidCookie(uid); }
+  let uid = readUid(request),
+    setCookie: string | null = null;
+  if (!uid) {
+    uid = mintUid();
+    setCookie = uidCookie(uid);
+  }
 
   if (!env.SERENDIPITY_DB) {
-    return html(500, shell("Setup", path, `<h1 class="page">Database not bound</h1><p class="lede">The <code>SERENDIPITY_DB</code> D1 binding isn&apos;t attached to this deployment yet.</p>`));
+    return html(
+      500,
+      shell(
+        "Setup",
+        path,
+        `<h1 class="page">Database not bound</h1><p class="lede">The <code>SERENDIPITY_DB</code> D1 binding isn&apos;t attached to this deployment yet.</p>`,
+      ),
+    );
   }
   const d = db(env);
 
@@ -3000,14 +3596,19 @@ export async function handleSerendipity(request, env, ctx) {
   if (path === `${PREFIX}/mcp`) return handleMcp(request, env, d);
 
   const msg = url.searchParams.get("msg");
-  const eventsKey = new Request(`${url.origin}${EVENTS_URL}`);  // the dashboard island's shared cache key
+  const eventsKey = new Request(`${url.origin}${EVENTS_URL}`); // the dashboard island's shared cache key
 
   // any mutation (a secret-gated trigger, a cookie paste, a link add)
   // invalidates the cached dashboard island
-  if (request.method === "POST" &&
-      (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
-       path === `${PREFIX}/enrich` || path === `${PREFIX}/tag` ||
-       path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
+  if (
+    request.method === "POST" &&
+    (path === `${PREFIX}/sync` ||
+      path === `${PREFIX}/sync-descriptions` ||
+      path === `${PREFIX}/enrich` ||
+      path === `${PREFIX}/tag` ||
+      path === `${PREFIX}/cookies` ||
+      path === `${PREFIX}/add-event`)
+  ) {
     ctx.waitUntil(caches.default.delete(eventsKey));
   }
 
@@ -3024,25 +3625,31 @@ export async function handleSerendipity(request, env, ctx) {
 
   // the dashboard's island, early and cookie-free for the same reason
   if ((request.method === "GET" || request.method === "HEAD") && path === EVENTS_URL) {
-    try { return await handleDashboardEvents(env, d, ctx, eventsKey); }
-    catch { return html(503, `<p class="note">The event pool hit a database error.</p>`); }
+    try {
+      return await handleDashboardEvents(env, d, ctx, eventsKey);
+    } catch {
+      return html(503, `<p class="note">The event pool hit a database error.</p>`);
+    }
   }
 
   let res;
   try {
-  if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
-  else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
-  // The plain GET is a built file served by index.ts (routeSerendipity), so this
-  // arm renders a flash-message view, a HEAD, or local dev's missing bake.
-  else if (path === PREFIX) res = await renderDashboard(d, path, msg, env);
-  else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
-  else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
-  else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
-  else res = html(404, shell("Not found", path, `<h1 class="page">404</h1><p class="lede">No such page. <a href="${PREFIX}">Back to events</a>.</p>`));
+    if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
+    else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
+    // The plain GET is a built file served by index.ts (routeSerendipity), so this
+    // arm renders a flash-message view, a HEAD, or local dev's missing bake.
+    else if (path === PREFIX) res = await renderDashboard(d, path, msg, env);
+    else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
+    else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
+    else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
+    else res = html(404, shell("Not found", path, `<h1 class="page">404</h1><p class="lede">No such page. <a href="${PREFIX}">Back to events</a>.</p>`));
   } catch (e) {
     // a bound-but-unmigrated / erroring D1 would otherwise throw a bare, unstyled
     // 500 — degrade to the same shell()-styled error the missing-binding case uses.
-    res = html(500, shell("Error", path, `<h1 class="page">Something broke</h1><p class="lede">The event pool hit a database error. Try again in a moment.</p>`));
+    res = html(
+      500,
+      shell("Error", path, `<h1 class="page">Something broke</h1><p class="lede">The event pool hit a database error. Try again in a moment.</p>`),
+    );
   }
 
   if (setCookie) {
@@ -3079,7 +3686,8 @@ export const SERENDIPITY_SECURITY_HEADERS = {
   // tokens must be ones a shipping browser still recognizes, or they're inert
   // and log a console error: `browsing-topics` went the way of `interest-cohort`
   // when Chrome removed the Topics API feature (dropped here 2026-07).
-  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+  "permissions-policy":
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
 export function withSerendipitySecurityHeaders(response) {

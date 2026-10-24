@@ -22,18 +22,24 @@
 // the touch-only signal; `(pointer: coarse)` also catches hybrids whose primary
 // pointer is touch. Exported so callers can skip building their content
 // machinery entirely rather than build it for a surface that will never show.
-export const hoverCapable = () =>
-  !(window.matchMedia &&
-    (window.matchMedia("(hover: none)").matches ||
-     window.matchMedia("(pointer: coarse)").matches));
+export const hoverCapable = () => !(window.matchMedia && (window.matchMedia("(hover: none)").matches || window.matchMedia("(pointer: coarse)").matches));
 
 // CSS anchor positioning, for the anchored mode. Unsupported engines simply
 // never get the class, so their users are no worse off than before it existed.
-export const ANCHOR_OK = !!(window.CSS && CSS.supports &&
-  (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom")));
+export const ANCHOR_OK = !!(window.CSS && CSS.supports && (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom")));
 
-
-export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => string; findTarget?: (el: EventTarget) => Element|null; followPointer?: boolean; anchorName?: string; dismissMs?: number; settleMs?: number; openMs?: number; autopopMs?: number; autopopFor?: (target: Element) => number }) {
+export function createHoist(o: {
+  node: HTMLElement;
+  contentFor: (t: Element) => string;
+  findTarget?: (el: EventTarget) => Element | null;
+  followPointer?: boolean;
+  anchorName?: string;
+  dismissMs?: number;
+  settleMs?: number;
+  openMs?: number;
+  autopopMs?: number;
+  autopopFor?: (target: Element) => number;
+}) {
   const node = o.node;
   const contentFor = o.contentFor;
   const findTarget = o.findTarget || null;
@@ -61,17 +67,24 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
   const dead = { show() {}, showAnchored() {}, hide() {}, isOpen: () => false, active: () => null };
   if (!node || !hoverCapable()) return dead;
 
-  let activeTarget: any = null, anchoredEl: any = null;
-  let lastX = 0, lastY = 0;
-  let hideTimer = 0, scrolling = false, scrollIdle = 0;
-  let openTimer = 0, pendingTarget: any = null, autopopTimer = 0;
+  let activeTarget: any = null,
+    anchoredEl: any = null;
+  let lastX = 0,
+    lastY = 0;
+  let hideTimer = 0,
+    scrolling = false,
+    scrollIdle = 0;
+  let openTimer = 0,
+    pendingTarget: any = null,
+    autopopTimer = 0;
 
   // Position is two CSS custom-property writes and nothing else. No rAF, no
   // getBoundingClientRect, no resize listener: the caller's CSS clamps against
   // the element's own size, so it stays correct even as an image sizes the box.
   // lastX/lastY are kept only for scroll re-targeting (elementFromPoint).
   const place = (e) => {
-    lastX = e.clientX; lastY = e.clientY;
+    lastX = e.clientX;
+    lastY = e.clientY;
     node.style.setProperty("--x", lastX + "px");
     node.style.setProperty("--y", lastY + "px");
   };
@@ -81,9 +94,7 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
   // because showPopover()/hidePopover() throw if the element is already in the
   // target state. Engines without popover fall back to a display toggle.
   const supportsPopover = "popover" in HTMLElement.prototype;
-  const isOpen = () => supportsPopover
-    ? node.matches(":popover-open")
-    : node.style.display === "block";
+  const isOpen = () => (supportsPopover ? node.matches(":popover-open") : node.style.display === "block");
 
   // will-change is an "earn it" hint, not a permanent set (gotcha #11): leaving
   // it on while the surface is display:none pins a compositor layer for an
@@ -93,14 +104,19 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
   // the instant it closes.
   const openNode = () => {
     const autopop = activeTarget ? autopopFor(activeTarget) : AUTOPOP_MS;
-    if (autopop) { clearTimeout(autopopTimer); autopopTimer = setTimeout(hide, autopop); }
+    if (autopop) {
+      clearTimeout(autopopTimer);
+      autopopTimer = setTimeout(hide, autopop);
+    }
     if (followPointer) node.style.willChange = "transform";
-    if (supportsPopover) { if (!node.matches(":popover-open")) node.showPopover(); }
-    else node.style.display = "block";
+    if (supportsPopover) {
+      if (!node.matches(":popover-open")) node.showPopover();
+    } else node.style.display = "block";
   };
   const closeNode = () => {
-    if (supportsPopover) { if (node.matches(":popover-open")) node.hidePopover(); }
-    else node.style.display = "none";
+    if (supportsPopover) {
+      if (node.matches(":popover-open")) node.hidePopover();
+    } else node.style.display = "none";
     node.style.willChange = "auto";
   };
 
@@ -128,22 +144,38 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
   };
 
   const dropAnchor = () => {
-    if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
+    if (anchoredEl) {
+      anchoredEl.style.removeProperty("anchor-name");
+      anchoredEl = null;
+    }
     node.classList.remove("anchored");
   };
-  const cancelOpen = () => { clearTimeout(openTimer); openTimer = 0; pendingTarget = null; };
+  const cancelOpen = () => {
+    clearTimeout(openTimer);
+    openTimer = 0;
+    pendingTarget = null;
+  };
   const hide = () => {
-    clearTimeout(autopopTimer); autopopTimer = 0;
+    clearTimeout(autopopTimer);
+    autopopTimer = 0;
     cancelOpen();
-    closeNode(); dropAnchor(); activeTarget = null;
+    closeNode();
+    dropAnchor();
+    activeTarget = null;
   };
 
   // Dismissal is deferred by a hair so hopping from one target straight across
   // the small gap to the NEXT one doesn't flash the surface off-then-on. A fresh
   // pointerover cancels the pending hide; if the cursor instead comes to rest in
   // the gap, it still clears after the delay, so dead space shows nothing.
-  const cancelHide = () => { clearTimeout(hideTimer); hideTimer = 0; };
-  const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hide, DISMISS_MS); };
+  const cancelHide = () => {
+    clearTimeout(hideTimer);
+    hideTimer = 0;
+  };
+  const scheduleHide = () => {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hide, DISMISS_MS);
+  };
 
   // Cursor-following show. Pointer hover ALWAYS follows the cursor (owner
   // re-ruling 2026-07-03: the anchored-hover experiment shipped and was rolled
@@ -158,9 +190,12 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
     dropAnchor();
     activeTarget = target;
     const html = contentFor(target);
-    if (!html) { hide(); return; }
+    if (!html) {
+      hide();
+      return;
+    }
     render(html);
-    if (e) place(e);            // position before showing, so there is no glide-in
+    if (e) place(e); // position before showing, so there is no glide-in
     openNode();
   };
 
@@ -171,7 +206,10 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
     cancelHide();
     cancelOpen();
     const html = contentFor(target);
-    if (!html) { hide(); return; }
+    if (!html) {
+      hide();
+      return;
+    }
     dropAnchor();
     activeTarget = target;
     render(html);
@@ -188,29 +226,41 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
   // and nothing else, so the deferred show hands it a plain pair rather than
   // holding the event object alive for 400ms.
   const showSoon = (target, e) => {
-    if (!OPEN_MS || isOpen()) { show(target, e); return; }
-    if (target === pendingTarget) return;    // pointerover bubbles from children
+    if (!OPEN_MS || isOpen()) {
+      show(target, e);
+      return;
+    }
+    if (target === pendingTarget) return; // pointerover bubbles from children
     cancelOpen();
     pendingTarget = target;
-    const x = e.clientX, y = e.clientY;
+    const x = e.clientX,
+      y = e.clientY;
     openTimer = setTimeout(() => {
-      openTimer = 0; pendingTarget = null;
+      openTimer = 0;
+      pendingTarget = null;
       show(target, { clientX: x, clientY: y });
     }, OPEN_MS);
   };
 
   if (findTarget) {
-    document.addEventListener("pointerover", (e) => {
-      const target = findTarget(e.target);
-      if (!target) {
-        cancelOpen();                        // left the target before the dwell was up
-        if (activeTarget) scheduleHide();    // only when open — no timer churn on plain moves
-        return;
-      }
-      cancelHide();                          // re-entered a target → keep it up
-      if (target === activeTarget) { cancelOpen(); return; }
-      showSoon(target, e);
-    }, { passive: true });
+    document.addEventListener(
+      "pointerover",
+      (e) => {
+        const target = findTarget(e.target);
+        if (!target) {
+          cancelOpen(); // left the target before the dwell was up
+          if (activeTarget) scheduleHide(); // only when open — no timer churn on plain moves
+          return;
+        }
+        cancelHide(); // re-entered a target → keep it up
+        if (target === activeTarget) {
+          cancelOpen();
+          return;
+        }
+        showSoon(target, e);
+      },
+      { passive: true },
+    );
 
     // passive: the browser dispatches without waiting on us, and the work is
     // two custom-property writes.
@@ -223,23 +273,40 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
     // was sitting on a non-target the whole time, no pointerout ever came to
     // close it: it followed the cursor around empty space until the next
     // target. Reproduced on the homepage grid and /access, 2026-09-30.
-    document.addEventListener("pointermove", (e) => {
-      if (followPointer && isOpen()) place(e);
-      else { lastX = e.clientX; lastY = e.clientY; }
-    }, { passive: true });
+    document.addEventListener(
+      "pointermove",
+      (e) => {
+        if (followPointer && isOpen()) place(e);
+        else {
+          lastX = e.clientX;
+          lastY = e.clientY;
+        }
+      },
+      { passive: true },
+    );
     // A cursor that leaves the page leaves nothing to re-target under, so a
     // keyboard scroll afterwards must not open a card at the old position.
-    document.documentElement.addEventListener("pointerleave", () => { lastX = lastY = 0; }, { passive: true });
+    document.documentElement.addEventListener(
+      "pointerleave",
+      () => {
+        lastX = lastY = 0;
+      },
+      { passive: true },
+    );
 
-    document.addEventListener("pointerout", (e) => {
-      const from = findTarget(e.target);
-      if (!from) return;
-      const to = findTarget(e.relatedTarget);
-      if (to === from) return;   // still inside the same target
-      if (to) return;            // moving to another valid target: let pointerover swap without a flicker
-      cancelOpen();              // a dwell in progress ends with the hover that started it
-      scheduleHide();
-    }, { passive: true });
+    document.addEventListener(
+      "pointerout",
+      (e) => {
+        const from = findTarget(e.target);
+        if (!from) return;
+        const to = findTarget(e.relatedTarget);
+        if (to === from) return; // still inside the same target
+        if (to) return; // moving to another valid target: let pointerover swap without a flicker
+        cancelOpen(); // a dwell in progress ends with the hover that started it
+        scheduleHide();
+      },
+      { passive: true },
+    );
 
     // Scroll model. Any scroll (an internal window scroller bubbles here in the
     // capture phase) hides the surface and suppresses new ones WHILE scrolling,
@@ -254,17 +321,24 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
     // (events keep firing ~every frame until it fully stops) without flashing
     // back mid-decel, and is short enough to read as instant.
     const reshowUnderCursor = () => {
-      if (!lastX && !lastY) return;          // pointer never moved → nothing to re-target
+      if (!lastX && !lastY) return; // pointer never moved → nothing to re-target
       const target = findTarget(document.elementFromPoint(lastX, lastY));
-      if (target) show(target);              // no event: the existing --x/--y are still right
+      if (target) show(target); // no event: the existing --x/--y are still right
     };
-    document.addEventListener("scroll", () => {
-      scrolling = true;
-      cancelOpen();
-      if (isOpen()) hide();
-      clearTimeout(scrollIdle);
-      scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SETTLE_MS);
-    }, { capture: true, passive: true });
+    document.addEventListener(
+      "scroll",
+      () => {
+        scrolling = true;
+        cancelOpen();
+        if (isOpen()) hide();
+        clearTimeout(scrollIdle);
+        scrollIdle = setTimeout(() => {
+          scrolling = false;
+          reshowUnderCursor();
+        }, SETTLE_MS);
+      },
+      { capture: true, passive: true },
+    );
 
     // Keyboard-focus path: same content, tethered to the focused element. Only
     // for :focus-visible, so a mouse click that happens to focus a link doesn't
@@ -273,8 +347,10 @@ export function createHoist(o: { node: HTMLElement; contentFor: (t: Element) => 
       document.addEventListener("focusin", (e) => {
         const target = findTarget(e.target);
         if (!target) return;
-        try { if (!target.matches(":focus-visible")) return; } catch (_) {}
-        showAnchored(target);                // keyboard focus is deliberate: no cold delay
+        try {
+          if (!target.matches(":focus-visible")) return;
+        } catch (_) {}
+        showAnchored(target); // keyboard focus is deliberate: no cold delay
       });
       document.addEventListener("focusout", (e) => {
         if (anchoredEl && findTarget(e.target) === anchoredEl) hide();

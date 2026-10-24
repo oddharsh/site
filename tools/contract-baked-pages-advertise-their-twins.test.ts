@@ -40,7 +40,11 @@ test("the premise: a query re-evaluates an entry module and none of its imports,
     assert.equal((await import(url + "?build=1")).count, 0);
     await writeFile(dep, 'export const LIST = ["/whoareyou"];\n');
     // The trap: a fresh entry URL, a stale import underneath it.
-    assert.equal((await import(url + "?build=2")).count, 0, "the runtime now re-reads imports under a new query; the fresh-process bake is still right, but revisit why it exists");
+    assert.equal(
+      (await import(url + "?build=2")).count,
+      0,
+      "the runtime now re-reads imports under a new query; the fresh-process bake is still right, but revisit why it exists",
+    );
 
     const child = spawnSync(process.execPath, ["-e", `import(${JSON.stringify(url)}).then((m) => console.log(m.count))`], { encoding: "utf8" });
     assert.equal(child.status, 0, child.stderr);
@@ -64,10 +68,12 @@ test("the check reads twins from what the build wrote, so an empty TWIN_PATHS fa
 });
 
 test("the check accepts both the rendered and the minified shapes, and only in <head>", () => {
-  const quoted = '<html><head><link rel="alternate" type="text/markdown" title="markdown source" href="/bot.md"></head><body>'
-    + '<div class="axp-tasks"><aside class="axp-pane"><section class="axp-group"><h2>Object tasks</h2><ul><li><a href="/bot.md">Read this as Markdown</a></li></ul></section></aside></div></body>';
-  const minified = '<head><link title="markdown source" href=/bot.md rel=alternate type=text/markdown><body>'
-    + '<div class=axp-tasks><aside class=axp-pane><section class=axp-group><h2>Object tasks</h2><ul><li><a href=/bot.md>Read this as Markdown</a></ul></section></aside></div>';
+  const quoted =
+    '<html><head><link rel="alternate" type="text/markdown" title="markdown source" href="/bot.md"></head><body>' +
+    '<div class="axp-tasks"><aside class="axp-pane"><section class="axp-group"><h2>Object tasks</h2><ul><li><a href="/bot.md">Read this as Markdown</a></li></ul></section></aside></div></body>';
+  const minified =
+    '<head><link title="markdown source" href=/bot.md rel=alternate type=text/markdown><body>' +
+    "<div class=axp-tasks><aside class=axp-pane><section class=axp-group><h2>Object tasks</h2><ul><li><a href=/bot.md>Read this as Markdown</a></ul></section></aside></div>";
   for (const html of [quoted, minified]) {
     assert.equal(hasAlternateLink(html, "/bot.md"), true);
     assert.equal(paneOffersTwin(html, "/bot.md"), true);
@@ -79,7 +85,7 @@ test("the check accepts both the rendered and the minified shapes, and only in <
   assert.equal(hasAlternateLink('<head></head><body><link rel="alternate" type="text/markdown" href="/bot.md">', "/bot.md"), false);
   assert.equal(hasAlternateLink(quoted, "/photos.md"), false);
   assert.equal(paneOffersTwin(quoted.replace('<li><a href="/bot.md">Read this as Markdown</a></li>', ""), "/bot.md"), false);
-  assert.equal(paneOffersTwin('<head></head><body><p>no pane</p>', "/bot.md"), null);
+  assert.equal(paneOffersTwin("<head></head><body><p>no pane</p>", "/bot.md"), null);
 
   assert.equal(routeOf("index.html"), "/");
   assert.equal(routeOf("writing/index.html"), "/writing");

@@ -94,7 +94,8 @@ if (whoareyouResponse.status !== 200) throw new Error(`static /whoareyou rendere
 const whoareyouHtml = await whoareyouResponse.text();
 const valuesUrl = whoareyou.VALUES_URL;
 if (!whoareyouHtml.includes(`data-island="${valuesUrl}"`)) throw new Error("static /whoareyou renderer lost its values island");
-if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crossorigin`)) throw new Error("static /whoareyou renderer lost the preload for its values island");
+if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crossorigin`))
+  throw new Error("static /whoareyou renderer lost the preload for its values island");
 if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
 if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
 await writeFile(`${PAGES}/whoareyou.html`, whoareyouHtml);
@@ -108,7 +109,8 @@ if (dynoResponse.status !== 200) throw new Error(`static /garage/dyno renderer r
 const dynoHtml = await dynoResponse.text();
 const pullsUrl = dyno.PULLS_URL;
 if (!dynoHtml.includes(`data-island="${pullsUrl}"`)) throw new Error("static /garage/dyno renderer lost its pulls island");
-if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`)) throw new Error("static /garage/dyno renderer lost the preload for its pulls island");
+if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`))
+  throw new Error("static /garage/dyno renderer lost the preload for its pulls island");
 if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
 if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
 await writeFile(`${PAGES}/garage/dyno.html`, dynoHtml);
@@ -118,20 +120,27 @@ await writeFile(`${PAGES}/garage/dyno.html`, dynoHtml);
 // a priced total, a neighbour's name or a latency in the bake could only be a
 // fixture served to every visitor until the next deploy.
 for (const page of [
-  { module: "ledger", render: "renderLedgerPage", url: "LINES_URL", out: "ledger.html",
-    live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
-  { module: "around", render: "renderAroundPage", url: "SNAPSHOT_URL", out: "around.html",
-    live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/ },
+  { module: "ledger", render: "renderLedgerPage", url: "LINES_URL", out: "ledger.html", live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
+  {
+    module: "around",
+    render: "renderAroundPage",
+    url: "SNAPSHOT_URL",
+    out: "around.html",
+    live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/,
+  },
   // /inbox and /lens/census, the same day. A mention row carries an id and a
   // ugc link, and a census row links a site through the lens.
-  { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html",
-    live: /id="m-\d|rel="noopener ugc external"/ },
-  { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
-    live: /class="cx-site"><a |<span>\/100<\/span>/ },
+  { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html", live: /id="m-\d|rel="noopener ugc external"/ },
+  { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html", live: /class="cx-site"><a |<span>\/100<\/span>/ },
   // /reading, 2026-09-29. The build has no Curius payload, so a linked title,
   // a real link count or a sync date in the bake could only be a fixture.
-  { module: "reading", render: "renderReadingPage", url: "LIST_URL", out: "reading.html",
-    live: /<a class="rd-title" href=|\d+ links? &middot;|\d+ links? ·|last synced \d/ },
+  {
+    module: "reading",
+    render: "renderReadingPage",
+    url: "LIST_URL",
+    out: "reading.html",
+    live: /<a class="rd-title" href=|\d+ links? &middot;|\d+ links? ·|last synced \d/,
+  },
 ]) {
   const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href);
   const res = mod[page.render]();
@@ -156,7 +165,8 @@ if (serendipityResponse.status !== 200) throw new Error(`static /serendipity ren
 const serendipityHtml = await serendipityResponse.text();
 const eventsUrl = serendipity.EVENTS_URL;
 if (!serendipityHtml.includes(`data-island="${eventsUrl}"`)) throw new Error("static /serendipity renderer lost its events island");
-if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" crossorigin`)) throw new Error("static /serendipity renderer lost the preload for its events island");
+if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" crossorigin`))
+  throw new Error("static /serendipity renderer lost the preload for its events island");
 if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
 if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
 await writeFile(`${PAGES}/serendipity.html`, serendipityHtml);
@@ -164,7 +174,7 @@ await writeFile(`${PAGES}/serendipity.html`, serendipityHtml);
 // page is a fixed tool list. Two renders must agree, or the build would bake
 // whichever it got.
 const mcpInfoHtml = await serendipity.renderMcpInfoPage().text();
-if (mcpInfoHtml !== await serendipity.renderMcpInfoPage().text()) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
+if (mcpInfoHtml !== (await serendipity.renderMcpInfoPage().text())) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
 if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
 await mkdir(`${PAGES}/serendipity`, { recursive: true });
 await writeFile(`${PAGES}/serendipity/mcp-info.html`, mcpInfoHtml);
@@ -184,10 +194,12 @@ await writeFile(`${PAGES}/serendipity/mcp-info.html`, mcpInfoHtml);
   if (coffeeHtml !== cal.bookingPage(calEnv)) throw new Error("static /coffee renderer is not deterministic");
   const slotsUrl = `/coffee${cal.SLOTS_PATH}`;
   if (!coffeeHtml.includes(`data-island="${slotsUrl}"`)) throw new Error("static /coffee renderer lost its slots island");
-  if (!coffeeHtml.includes(`rel="preload" as="fetch" href="${slotsUrl}" crossorigin`)) throw new Error("static /coffee renderer lost the preload for its slots island");
+  if (!coffeeHtml.includes(`rel="preload" as="fetch" href="${slotsUrl}" crossorigin`))
+    throw new Error("static /coffee renderer lost the preload for its slots island");
   if (!coffeeHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /coffee renderer lost the island loader");
   if (!coffeeHtml.includes('id="bookform" method="POST" action="/coffee/book"')) throw new Error("static /coffee renderer lost its booking form");
-  if (/name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/.test(coffeeHtml)) throw new Error("static /coffee bake carries a live slot");
+  if (/name="start" value=|class="xp-day-label">[A-Z][a-z]+day,|no open slots in the next/.test(coffeeHtml))
+    throw new Error("static /coffee bake carries a live slot");
   // cal cannot import the site tree (gotcha 16), so its template cannot ask
   // lib/twins.ts about /coffee.md. The bake can, through the same staged module
   // lunaPage reads, so the link appears exactly where the build wrote a twin.
@@ -213,4 +225,6 @@ for (const post of posts) {
   if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
   await writeFile(`${PAGES}/writing/${post.slug}.html`, await response.text());
 }
-console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /coffee + /writing index + ${posts.length} notes staged from canonical Worker renderers, in a fresh process`);
+console.log(
+  `static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /reading + /coffee + /writing index + ${posts.length} notes staged from canonical Worker renderers, in a fresh process`,
+);

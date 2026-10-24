@@ -90,7 +90,9 @@ function collect(expr: string, sign: 1 | -1, out: Array<[1 | -1, string]>): void
   // Split on a top-level `+` or `-` that has whitespace on both sides, which is
   // the only way calc() can spell an operator (a bare `-` is part of a name).
   const parts: Array<[1 | -1, string]> = [];
-  let depth = 0, from = 0, next: 1 | -1 = 1;
+  let depth = 0,
+    from = 0,
+    next: 1 | -1 = 1;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (c === "(") depth++;

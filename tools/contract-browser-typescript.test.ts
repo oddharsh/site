@@ -11,8 +11,8 @@ import { browserJavaScript, browserJavaScripts } from "./lib/browser-source.ts";
 import { copyServedTree, linkServedTree, planServedTree } from "./lib/served-tree.ts";
 import { watchClientSources } from "./dev-stage.ts";
 
-const authoredJs = (files: string[]) => files.filter((file) =>
-  !file.startsWith("src/dict/") && !file.startsWith("tools/fixtures/") && file !== "src/client/garage/pretext.lib.js");
+const authoredJs = (files: string[]) =>
+  files.filter((file) => !file.startsWith("src/dict/") && !file.startsWith("tools/fixtures/") && file !== "src/client/garage/pretext.lib.js");
 
 test("owned JavaScript has migrated; dictionaries, byte fixtures and vendored code keep their bytes", () => {
   const files = execFileSync("git", ["ls-files", "*.js", "*.mjs", "*.cjs"], { encoding: "utf8" }).trim().split("\n");
@@ -22,7 +22,7 @@ test("owned JavaScript has migrated; dictionaries, byte fixtures and vendored co
 });
 
 test("erasure retains readable comments and rejects syntax that requires runtime transformation", () => {
-  const source = '// The visitor can read this decision.\ntype Label = string;\nconst label: Label = `ready\n   \n`;\nglobalThis.label = label;\n';
+  const source = "// The visitor can read this decision.\ntype Label = string;\nconst label: Label = `ready\n   \n`;\nglobalThis.label = label;\n";
   const js = browserJavaScript(source, "fixture.ts");
   assert.ok(js.includes("// The visitor can read this decision."));
   assert.ok(!js.includes(": Label"));
@@ -61,7 +61,12 @@ test("both staging adapters serve JavaScript URLs and dev edits recompile and re
     await writeFile(source, 'const state: string = "after";');
     await waitFor(async () => (await readFile(join(cwd, "dev/nav.js"), "utf8")).includes('"after"'));
     await rm(source);
-    await waitFor(async () => readFile(join(cwd, "dev/nav.js")).then(() => false, () => true));
+    await waitFor(async () =>
+      readFile(join(cwd, "dev/nav.js")).then(
+        () => false,
+        () => true,
+      ),
+    );
     watcher.close();
     watcher = undefined;
     await writeFile(source, 'const state: string = "collision";');

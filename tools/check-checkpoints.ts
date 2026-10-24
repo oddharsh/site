@@ -40,7 +40,10 @@ const FILE = path.join(ROOT, PROJECTION);
 const SYNC = process.argv.includes("--sync");
 const RECORD = process.argv.includes("--record");
 
-function fail(msg: string): never { console.error(`checkpoints: ${msg}`); process.exit(1); }
+function fail(msg: string): never {
+  console.error(`checkpoints: ${msg}`);
+  process.exit(1);
+}
 
 // The fields a checkpoints.json row carries, in vnum order: --sync writes these
 // rows out as the file.
@@ -52,8 +55,11 @@ if (RECORD && process.env.CI) {
 // --record acts on what production carries, so it reads a fresh ref. The check
 // reads whatever origin/production the clone already has and names its sha.
 if (RECORD) {
-  try { execFileSync("git", ["fetch", "--quiet", "origin", "production"], { cwd: ROOT, stdio: "inherit" }); }
-  catch { fail("could not fetch origin/production, so what shipped is unknown. Nothing was written."); }
+  try {
+    execFileSync("git", ["fetch", "--quiet", "origin", "production"], { cwd: ROOT, stdio: "inherit" });
+  } catch {
+    fail("could not fetch origin/production, so what shipped is unknown. Nothing was written.");
+  }
 }
 
 let live;
@@ -69,7 +75,6 @@ try {
   process.exit(RECORD ? 1 : 0);
 }
 
-
 if (SYNC) {
   await writeFile(FILE, JSON.stringify(live, null, 2).replace(/\n$/, "") + "\n");
   console.log(`checkpoints: synced ${live.length} rows from D1 -> ${PROJECTION}`);
@@ -78,23 +83,29 @@ if (SYNC) {
 }
 
 let committed;
-try { committed = JSON.parse(await readFile(FILE, "utf8")); }
-catch { fail(`${PROJECTION} is missing or unparseable: run bun run checkpoints:sync`); }
+try {
+  committed = JSON.parse(await readFile(FILE, "utf8"));
+} catch {
+  fail(`${PROJECTION} is missing or unparseable: run bun run checkpoints:sync`);
+}
 
 const byVnum = (rows): Map<number, any> => new Map(rows.map((r) => [r.vnum, r]));
-const c = byVnum(committed), l = byVnum(live);
+const c = byVnum(committed),
+  l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 
 // "Ahead" is legal and "behind" never is. A projection row BELOW D1's high
 // -water mark that D1 does not have is not pending, it is a rewrite of history.
-const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax)
-  .sort((a, b) => a.vnum - b.vnum);
+const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax).sort((a, b) => a.vnum - b.vnum);
 const pendingVnums = new Set(pending.map((r) => r.vnum));
 
 const diffs: string[] = [];
 for (const [vnum, row] of l) {
   const mine = c.get(vnum);
-  if (!mine) { diffs.push(`v${vnum} present in D1, absent from the projection`); continue; }
+  if (!mine) {
+    diffs.push(`v${vnum} present in D1, absent from the projection`);
+    continue;
+  }
   for (const k of ["ymd", "version", "slug", "title"]) {
     if (mine[k] !== row[k]) diffs.push(`v${vnum} ${k}: projection ${JSON.stringify(mine[k])} vs D1 ${JSON.stringify(row[k])}`);
   }
@@ -115,9 +126,12 @@ pending.forEach((row, i) => {
 if (diffs.length) {
   fail(
     `${diffs.length} row(s) differ from D1:\n` +
-    diffs.slice(0, 8).map((d) => `  - ${d}`).join("\n") +
-    (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
-    `\n  fix with: bun run checkpoints:sync && git add ${PROJECTION}`,
+      diffs
+        .slice(0, 8)
+        .map((d) => `  - ${d}`)
+        .join("\n") +
+      (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
+      `\n  fix with: bun run checkpoints:sync && git add ${PROJECTION}`,
   );
 }
 
@@ -132,7 +146,8 @@ const staged = pending.filter((r) => !shippedVnums.has(r.vnum));
 const at = released ? `${RELEASED_REF} ${released.sha.slice(0, 8)}` : RELEASED_REF;
 // The same contiguity rule as the tree's tail, for the same reason.
 unrecorded.forEach((row, i) => {
-  if (row.vnum !== liveMax + i + 1) fail(`${at} carries v${row.vnum}, which D1 lacks, out of sequence after D1's v${liveMax}. Nothing was written; read both before recording.`);
+  if (row.vnum !== liveMax + i + 1)
+    fail(`${at} carries v${row.vnum}, which D1 lacks, out of sequence after D1's v${liveMax}. Nothing was written; read both before recording.`);
 });
 
 if (RECORD) {
@@ -169,8 +184,8 @@ if (staged.length) {
 if (unrecorded.length) {
   fail(
     `${unrecorded.length} released entr${unrecorded.length === 1 ? "y is" : "ies are"} on ${at} but not in D1:\n` +
-    unrecorded.map((r) => `  - v${r.vnum} ${r.version}`).join("\n") +
-    "\n  nothing on the release path writes D1 since 2026-09-28 (#1002)." +
-    "\n  record with: bun run checkpoints:record",
+      unrecorded.map((r) => `  - v${r.vnum} ${r.version}`).join("\n") +
+      "\n  nothing on the release path writes D1 since 2026-09-28 (#1002)." +
+      "\n  record with: bun run checkpoints:record",
   );
 }

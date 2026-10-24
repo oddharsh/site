@@ -94,8 +94,7 @@ export function packHistogram(hi) {
       // safe character range and could emit a quote or an ampersand, which is a
       // markup bug rather than a wrong shape. The pipeline's rule everywhere is
       // to refuse a value it cannot state, never to fabricate one.
-      const level = Math.max(0, Math.min(HIST_LEVELS - 1,
-        Math.round((Number.isFinite(v) ? v : 0) * (HIST_LEVELS - 1) / 100)));
+      const level = Math.max(0, Math.min(HIST_LEVELS - 1, Math.round(((Number.isFinite(v) ? v : 0) * (HIST_LEVELS - 1)) / 100)));
       // previous starts at zero, so this also makes each channel's first bin
       // absolute without a separate format bit or branch.
       const wire = (level - previous + HIST_LEVELS) % HIST_LEVELS;
@@ -121,7 +120,7 @@ export function unpackHistogram(packed) {
       const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
       if (wire < 0 || wire >= HIST_LEVELS) return null;
       const level = (previous + wire) % HIST_LEVELS;
-      bins.push(Math.round(level * 100 / (HIST_LEVELS - 1)));
+      bins.push(Math.round((level * 100) / (HIST_LEVELS - 1)));
       previous = level;
     }
     hi[channel] = bins;

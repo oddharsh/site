@@ -89,7 +89,10 @@ const print = (g: Gate) => {
   console.log(`${g.ok ? "  ok  " : g.hard ? " FAIL " : " DIFF "} ${g.name} — ${g.detail}`);
   for (const n of g.notes ?? []) console.log(`       ${n}`);
 };
-const step = (g: Gate) => { gates.push(g); print(g); };
+const step = (g: Gate) => {
+  gates.push(g);
+  print(g);
+};
 
 type Subject = { ref: string; url: string; wrangler: string; miniflare: string; workerd: string; pin: string };
 type Report = {
@@ -120,8 +123,7 @@ const emit = (verdict: Report["verdict"], subject: Subject, reason?: string) => 
   return report;
 };
 
-const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) =>
-  spawnSync(cmd, args, { encoding: "utf8", ...opts });
+const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) => spawnSync(cmd, args, { encoding: "utf8", ...opts });
 const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 4) =>
   `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines);
 
@@ -203,7 +205,12 @@ try {
   {
     const out = run(NODE, [candidateEntry, "deploy", "--dry-run", "--outdir", candidateOut, "--x-new-config"], { cwd: wt, timeout: 10 * 60_000 });
     const ok = out.status === 0 && existsSync(join(candidateOut, "index.js"));
-    step({ name: "deploy --dry-run bundles", ok, hard: true, detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : tail(out).join(" ") });
+    step({
+      name: "deploy --dry-run bundles",
+      ok,
+      hard: true,
+      detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : tail(out).join(" "),
+    });
     if (!ok) {
       emit("red", subject);
       process.exit(1);
@@ -227,7 +234,10 @@ try {
       name: "bundle is byte-identical to the pinned wrangler's",
       ok: a === b,
       hard: false,
-      detail: a === b ? `${sizeA} B, sha256 ${a.slice(0, 12)}` : `pinned ${sizeA} B (${a.slice(0, 12)}) vs candidate ${sizeB} B (${b.slice(0, 12)}), ${sizeB - sizeA >= 0 ? "+" : ""}${sizeB - sizeA} B`,
+      detail:
+        a === b
+          ? `${sizeA} B, sha256 ${a.slice(0, 12)}`
+          : `pinned ${sizeA} B (${a.slice(0, 12)}) vs candidate ${sizeB} B (${b.slice(0, 12)}), ${sizeB - sizeA >= 0 ? "+" : ""}${sizeB - sizeA} B`,
     });
   }
 
@@ -243,8 +253,18 @@ try {
       name: "route oracle passes on the candidate harness",
       ok,
       hard: true,
-      detail: timedOut ? "hung past 10 minutes" : ok ? (text.match(/\d+ (?:routes?|rows?) (?:ok|passed|checked)[^\n]*/)?.[0] ?? "exit 0") : `exit ${out.status}`,
-      notes: ok ? [] : text.split("\n").filter((l) => /FAIL|fail|Error/.test(l)).slice(0, 10).map((l) => l.trim()),
+      detail: timedOut
+        ? "hung past 10 minutes"
+        : ok
+          ? (text.match(/\d+ (?:routes?|rows?) (?:ok|passed|checked)[^\n]*/)?.[0] ?? "exit 0")
+          : `exit ${out.status}`,
+      notes: ok
+        ? []
+        : text
+            .split("\n")
+            .filter((l) => /FAIL|fail|Error/.test(l))
+            .slice(0, 10)
+            .map((l) => l.trim()),
     });
   }
 
@@ -262,7 +282,11 @@ try {
       ok: !timedOut && out.status === 0 && fail === 0 && pass > 0,
       hard: true,
       detail: timedOut ? "hung past 5 minutes" : suiteCountsText(counts),
-      notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
+      notes: text
+        .split("\n")
+        .filter((l) => l.includes("(fail)"))
+        .slice(0, 10)
+        .map((l) => l.trim()),
     });
   }
 
@@ -295,7 +319,10 @@ try {
     const notes = lines.flatMap((l, i) => {
       if (!l.includes("(fail)") || seen.has(l.trim())) return [];
       seen.add(l.trim());
-      const cause = lines.slice(Math.max(0, i - 30), i).reverse().find((c) => /^\s*(\w*Error|error)\b/.test(c));
+      const cause = lines
+        .slice(Math.max(0, i - 30), i)
+        .reverse()
+        .find((c) => /^\s*(\w*Error|error)\b/.test(c));
       return [l.trim(), ...(cause ? [`  ${cause.trim().slice(0, 200)}`] : [])];
     });
     step({
@@ -344,14 +371,21 @@ try {
   console.log("");
   if (hardFail) {
     emit("red", subject);
-    console.log(`canary:wrangler: wrangler@${ref} (${subject.wrangler}) is RED — ${gates.filter((g) => g.hard && !g.ok).map((g) => g.name).join("; ")}`);
+    console.log(
+      `canary:wrangler: wrangler@${ref} (${subject.wrangler}) is RED — ${gates
+        .filter((g) => g.hard && !g.ok)
+        .map((g) => g.name)
+        .join("; ")}`,
+    );
     process.exit(1);
   }
   if (softDiff) {
     emit("changed", subject);
     const movedWatches = watches.filter(watchMoved);
     const bundleMoved = gates.some((g) => !g.hard && !g.ok);
-    console.log(`canary:wrangler: wrangler@${ref} (${subject.wrangler}) passes every gate${bundleMoved ? " and bundles DIFFERENT bytes; the next wrangler pin re-mints the bundle" : ""}${movedWatches.length ? `${bundleMoved ? ", and" : " and"} ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => w.name).join(", ")}` : ""}.`);
+    console.log(
+      `canary:wrangler: wrangler@${ref} (${subject.wrangler}) passes every gate${bundleMoved ? " and bundles DIFFERENT bytes; the next wrangler pin re-mints the bundle" : ""}${movedWatches.length ? `${bundleMoved ? ", and" : " and"} ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => w.name).join(", ")}` : ""}.`,
+    );
     process.exit(1);
   }
   emit("green", subject);

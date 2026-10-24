@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { digestOf, hashInputs, project, record, relock, resolveInputs, verify } from "./lib/derive.ts";
 import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
-
 type Derivation = import("./lib/derive.ts").Derivation;
 
 const root = fileURLToPath(ROOT);
@@ -123,11 +122,7 @@ test("derive: verify names the file that moved", async () => {
 // stable digest and reports fresh forever.
 test("derive: a declared input that has vanished is an error, never an empty set", async () => {
   const dir = await scratch({ "a.txt": "one" });
-  await assert.rejects(
-    () => resolveInputs(dir, { paths: ["in", "gone"] }),
-    /declared input does not exist: gone/,
-    "a missing input tree did not throw",
-  );
+  await assert.rejects(() => resolveInputs(dir, { paths: ["in", "gone"] }), /declared input does not exist: gone/, "a missing input tree did not throw");
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -158,11 +153,7 @@ test("derive: set mode refuses an input it cannot project", async () => {
   const dir = await scratch({ "a.11111111.jpg": "px", "README": "not a thumbnail" });
 
   const d: Derivation = { id: "t", tier: "pinned", why: "", outputs: [], inputs: spec };
-  await assert.rejects(
-    () => project(dir, d),
-    /does not match the set pattern/,
-    "an unparseable input was silently skipped",
-  );
+  await assert.rejects(() => project(dir, d), /does not match the set pattern/, "an unparseable input was silently skipped");
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -259,10 +250,7 @@ test("derive: `bytes` rows are bare paths in the lock, owned by the derivation t
 
 test("derive: `bytes` outside set mode is refused, and a vanished `bytes` file is an error", async () => {
   const dir = await withCaptions();
-  await assert.rejects(
-    () => project(dir, { id: "t", tier: "pinned", why: "", outputs: [], inputs: { paths: ["in"], bytes: ["cap.json"] } }),
-    /set mode only/,
-  );
+  await assert.rejects(() => project(dir, { id: "t", tier: "pinned", why: "", outputs: [], inputs: { paths: ["in"], bytes: ["cap.json"] } }), /set mode only/);
   await assert.rejects(
     () => project(dir, { id: "t", tier: "pinned", why: "", outputs: [], inputs: { ...SET_WITH_BYTES, bytes: ["gone.json"] } }),
     /declared input does not exist: gone.json/,
@@ -323,8 +311,13 @@ test("derive: --only prunes its own dead rows and leaves every other derivation'
   await fs.mkdir(path.join(dir, "other"), { recursive: true });
   await fs.writeFile(path.join(dir, "other/keep.txt"), "not mine");
 
-
-  const stems: Derivation = { id: "stems", tier: "pinned", why: "", outputs: [], inputs: { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" } };
+  const stems: Derivation = {
+    id: "stems",
+    tier: "pinned",
+    why: "",
+    outputs: [],
+    inputs: { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" },
+  };
 
   const sibling: Derivation = { id: "sibling", tier: "pinned", why: "", outputs: [], inputs: { paths: ["other"] } };
 

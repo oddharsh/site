@@ -11,12 +11,17 @@ import { ASK_BUDGET, ASK_FLOOR, ASK_MODEL, MAX_OPTIONS, buildAskRequest } from "
 // "crawled" is not "crawler": the lexical pass finds /writing/bots-log and
 // never /ledger, which is the measured recall miss this change exists for.
 const RECORDS = [
-  { url: "/ledger", title: "Crawl ledger", description: "A commentary ledger of identified AI-crawler visits.", text: "crawler visits priced", kind: "utility" },
+  {
+    url: "/ledger",
+    title: "Crawl ledger",
+    description: "A commentary ledger of identified AI-crawler visits.",
+    text: "crawler visits priced",
+    kind: "utility",
+  },
   { url: "/writing/bots-log", title: "A note", description: "Which bots I saw", text: "bots recently", kind: "writing" },
   { url: "/coffee", title: "Coffee", description: "Book a coffee in NYC.", text: "coffee slots", kind: "utility" },
 ];
 const QUERY = "which bots crawled the site recently";
-
 
 function env(extra: Record<string, any> = {}): any {
   _resetSearchIndex();
@@ -30,7 +35,7 @@ function ai(probs, calls: any[] = []) {
     async run(model, input, options) {
       calls.push({ model, input, options });
       const criteria = input.questions.best.criteria;
-      const probabilities = Object.fromEntries(Object.entries(criteria).map(([id, opt]) => [id, probs[ (opt as any).url] ?? 0]));
+      const probabilities = Object.fromEntries(Object.entries(criteria).map(([id, opt]) => [id, probs[(opt as any).url] ?? 0]));
       return { answers: { best: { type: "choice", choice: "p0", confidence: 0.9, probabilities } } };
     },
   };
@@ -40,7 +45,7 @@ async function ask(e, query = QUERY, request = new Request("https://aadhar.sh/as
   const { nlwebAsk, parseAskRequest } = await import("../src/worker/nlweb.ts");
   const parsed = parseAskRequest(new URL("https://aadhar.sh/ask"), { query, streaming: false });
   assert.ok(parsed.ok);
-  return nlwebAsk(e,  (parsed as any).params, request);
+  return nlwebAsk(e, (parsed as any).params, request);
 }
 
 test("one choice question, every page an option, capped at Clef's ceiling", () => {
@@ -50,7 +55,10 @@ test("one choice question, every page an option, capped at Clef's ceiling", () =
   assert.deepEqual(Object.keys(request.questions), ["best"]);
   assert.equal(request.questions.best.type, "choice");
   assert.deepEqual(ids, ["p0", "p1", "p2"]);
-  assert.deepEqual(Object.values(request.questions.best.criteria).map((o) =>  (o as any).url), RECORDS.map((r) => r.url));
+  assert.deepEqual(
+    Object.values(request.questions.best.criteria).map((o) => (o as any).url),
+    RECORDS.map((r) => r.url),
+  );
   const many = Array.from({ length: 300 }, (_, i) => ({ url: `/p/${i}`, title: `p${i}` }));
   assert.equal(buildAskRequest("q", many).ids.length, MAX_OPTIONS);
 });
@@ -62,8 +70,14 @@ test("a page that shares no word with the question can win, scored as Clef's pro
   assert.equal(binding.calls[0].model, `@cf/cloudflare/${ASK_MODEL}`);
   assert.deepEqual(binding.calls[0].options, { gateway: { id: "default", skipCache: true } });
   assert.equal(out._meta.ranking, "clef");
-  assert.deepEqual(out.results.map((r) => r.url), ["https://aadhar.sh/ledger", "https://aadhar.sh/writing/bots-log"]);
-  assert.deepEqual(out.results.map((r) => r.score), [91, 8]);
+  assert.deepEqual(
+    out.results.map((r) => r.url),
+    ["https://aadhar.sh/ledger", "https://aadhar.sh/writing/bots-log"],
+  );
+  assert.deepEqual(
+    out.results.map((r) => r.score),
+    [91, 8],
+  );
   assert.match(out._meta.score, /probability Clef puts/);
   assert.equal(out.total, 2, "a page under the floor that lexical search did not match is left out");
   assert.ok(0.01 < ASK_FLOOR);
@@ -71,7 +85,10 @@ test("a page that shares no word with the question can win, scored as Clef's pro
 
 test("every page the lexical pass matched stays in the answer, however low Clef puts it", async () => {
   const out = await ask(env({ AI: ai({ "/ledger": 0.99, "/writing/bots-log": 0.0, "/coffee": 0.01 }) }));
-  assert.deepEqual(out.results.map((r) => r.url), ["https://aadhar.sh/ledger", "https://aadhar.sh/writing/bots-log"]);
+  assert.deepEqual(
+    out.results.map((r) => r.url),
+    ["https://aadhar.sh/ledger", "https://aadhar.sh/writing/bots-log"],
+  );
 });
 
 test("every failure lands on the lexical ranking and says why", async () => {
@@ -79,19 +96,46 @@ test("every failure lands on the lexical ranking and says why", async () => {
 
   const none = await ask(env());
   assert.match(none._meta.ranking, /^lexical: no Workers AI binding/);
-  assert.deepEqual(none.results.map((r) => r.url), lexicalOnly);
+  assert.deepEqual(
+    none.results.map((r) => r.url),
+    lexicalOnly,
+  );
   assert.match(none._meta.score, /percentage of the maximum/);
 
-  const capacity = { async run() { throw new Error("AiError: Capacity temporarily exceeded, please try again. (3040)"); } };
+  const capacity = {
+    async run() {
+      throw new Error("AiError: Capacity temporarily exceeded, please try again. (3040)");
+    },
+  };
   const busy = await ask(env({ AI: capacity }));
   assert.match(busy._meta.ranking, /^lexical: Clef answered nothing usable \(ai 3040\)/);
-  assert.deepEqual(busy.results.map((r) => r.url), lexicalOnly);
+  assert.deepEqual(
+    busy.results.map((r) => r.url),
+    lexicalOnly,
+  );
 
-  const odd = await ask(env({ AI: { async run() { return { answers: { best: { type: "noul", noul: 1 } } }; } } }));
+  const odd = await ask(
+    env({
+      AI: {
+        async run() {
+          return { answers: { best: { type: "noul", noul: 1 } } };
+        },
+      },
+    }),
+  );
   assert.match(odd._meta.ranking, /unparseable/);
 
   const binding = ai({ "/ledger": 0.9 });
-  const limited = await ask(env({ AI: binding, ASK_RL: { async limit() { return { success: false }; } } }));
+  const limited = await ask(
+    env({
+      AI: binding,
+      ASK_RL: {
+        async limit() {
+          return { success: false };
+        },
+      },
+    }),
+  );
   assert.match(limited._meta.ranking, new RegExp(`passed ${ASK_BUDGET.max} Clef-ranked questions`));
   assert.equal(binding.calls.length, 0, "a caller over budget spends no Workers AI");
 });

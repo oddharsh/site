@@ -11,7 +11,18 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { addCheckpoint, hashTiers, jqUri, mergeIndex, parseSpool, pretty, pyCompactJson, pyPrettyJson, sortKeysDeep, tierStem } from "./photos/pipeline-json.ts";
+import {
+  addCheckpoint,
+  hashTiers,
+  jqUri,
+  mergeIndex,
+  parseSpool,
+  pretty,
+  pyCompactJson,
+  pyPrettyJson,
+  sortKeysDeep,
+  tierStem,
+} from "./photos/pipeline-json.ts";
 
 const CLI = fileURLToPath(new URL("photos/pipeline-json.ts", import.meta.url));
 const run = (...args: any[]) => execFileSync(process.execPath, [CLI, ...args], { cwd: fileURLToPath(ROOT), encoding: "utf8" });
@@ -52,10 +63,16 @@ test("index-merge keeps a migrated photo's retired JPEG key only while the entry
     Other: { full: "Other.jxl", jpeg: "Other.jpg", size: 9, uploaded: T },
   };
   const rec = (...f: any[]) => f.join("\0") + "\0";
-  const merged = mergeIndex(index, parseSpool(Buffer.from(
-    rec("Same", "Same.jxl", "9", "", "") +       // a remote rerender of the moved photo
-    rec("Other", "Other.jpg", "11", "", ""))),   // a different original under the stem
-  "NOW");
+  const merged = mergeIndex(
+    index,
+    parseSpool(
+      Buffer.from(
+        rec("Same", "Same.jxl", "9", "", "") + // a remote rerender of the moved photo
+          rec("Other", "Other.jpg", "11", "", ""),
+      ),
+    ), // a different original under the stem
+    "NOW",
+  );
   assert.deepEqual(merged.Same, { full: "Same.jxl", jpeg: "Same.JPG", size: 9, uploaded: T });
   // Control: a new original doesn't inherit a redirect from the old one.
   assert.deepEqual(merged.Other, { full: "Other.jpg", size: 11, uploaded: T });
@@ -77,7 +94,10 @@ test("prune reproduces the committed metadata byte for byte when every stem is p
   assert.equal(run("prune", "public/images/metadata.json", "--published", partial, "--out", out), `${gone}\n`);
   const kept = Object.keys(JSON.parse(await fsReadFile(out, "utf8")));
   const all = Object.keys(JSON.parse(await readFile(new URL("public/images/metadata.json", ROOT), "utf8")));
-  assert.deepEqual(kept, all.filter((k) => k !== gone));
+  assert.deepEqual(
+    kept,
+    all.filter((k) => k !== gone),
+  );
 });
 
 test("meta-split writes jaq -c's shape through the one key map that ships", async () => {
@@ -90,7 +110,10 @@ test("meta-split writes jaq -c's shape through the one key map that ships", asyn
   const short = JSON.parse(text);
   assert.equal(short.cm, meta[stem].camera);
   assert.ok(!("hi" in short), "the histogram channel is zenc's to add, not the split's");
-  assert.ok(Object.values(short).every((v) => v !== null), "nulls are dropped, never written");
+  assert.ok(
+    Object.values(short).every((v) => v !== null),
+    "nulls are dropped, never written",
+  );
 });
 
 test("uri is jq's @uri, not encodeURIComponent", () => {
@@ -100,17 +123,32 @@ test("uri is jq's @uri, not encodeURIComponent", () => {
 });
 
 test("no photo shell script calls jaq on a code line, and no tool declares it", async () => {
-  const codeOf = async (rel) => (await readFile(new URL(rel, ROOT), "utf8")).split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
-  for (const rel of ["tools/photos/add-photos.sh", "tools/photos/extract-photo-metadata.sh", "tools/photos/download-remote-photos.sh", "tools/photos/hash-thumbnails.sh", "tools/photos/bump-version.sh"]) {
+  const codeOf = async (rel) =>
+    (await readFile(new URL(rel, ROOT), "utf8"))
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l))
+      .join("\n");
+  for (const rel of [
+    "tools/photos/add-photos.sh",
+    "tools/photos/extract-photo-metadata.sh",
+    "tools/photos/download-remote-photos.sh",
+    "tools/photos/hash-thumbnails.sh",
+    "tools/photos/bump-version.sh",
+  ]) {
     assert.match(await codeOf(rel), /pipeline-json\.ts/, `${rel} should route its JSON through pipeline-json.ts`);
   }
   // The ban itself reads every committed shell script rather than a list: a
   // hand-kept list is how the no-python ban missed two heredocs for a week.
-  const shells = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: fileURLToPath(ROOT), encoding: "utf8" }).split("\0").filter(Boolean);
+  const shells = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: fileURLToPath(ROOT), encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
   assert.ok(shells.length >= 13, `git ls-files found ${shells.length} shell scripts`);
   for (const rel of shells) assert.doesNotMatch(await codeOf(rel), /\bjaq\b/, `${rel} still calls jaq`);
   const tools = JSON.parse(await readFile(new URL("config/tools.json", ROOT), "utf8")).tools;
-  assert.equal(tools.some((t) => t.bin === "jaq"), false);
+  assert.equal(
+    tools.some((t) => t.bin === "jaq"),
+    false,
+  );
 });
 
 // hash-tiers replaced the Python heredoc hash-thumbnails.sh ran, and checkpoint-
@@ -139,8 +177,11 @@ test("the Python-shaped serializers reproduce the committed hashes.json and chec
 
 test("hash-tiers finds stems from any tier, merges rather than replaces, and prunes to the map", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "pipeline-json-tiers-"));
-  const src = path.join(dir, "images"), out = path.join(dir, "i"), map = path.join(src, "hashes.json");
-  await mkdir(src); await mkdir(out);
+  const src = path.join(dir, "images"),
+    out = path.join(dir, "i"),
+    map = path.join(src, "hashes.json");
+  await mkdir(src);
+  await mkdir(out);
   // OLD is already addressed, with a j tier that is about to be re-encoded and
   // a superseded /i/ file lying beside it.
   await writeFile(path.join(out, "OLD.aaaaaaaa.avif"), "old-a");
@@ -171,12 +212,15 @@ test("hash-tiers finds stems from any tier, merges rather than replaces, and pru
 test("hash-tiers refuses a map that exists and does not parse, and writes and deletes nothing", async () => {
   // Every file in both directories, with its bytes, so "untouched" covers a
   // copy, a prune AND a rewritten map.
-  const snapshot = async (dir) => Object.fromEntries(await Promise.all(
-    (await readdir(dir)).sort().map(async (f) => [f, await fsReadFile(path.join(dir, f), "utf8")])));
+  const snapshot = async (dir) =>
+    Object.fromEntries(await Promise.all((await readdir(dir)).sort().map(async (f) => [f, await fsReadFile(path.join(dir, f), "utf8")])));
   const fixture = async (mapBytes, { seeded = true }: Record<string, any> = {}) => {
     const dir = await mkdtemp(path.join(tmpdir(), "pipeline-json-corrupt-"));
-    const src = path.join(dir, "images"), out = path.join(dir, "i"), map = path.join(src, "hashes.json");
-    await mkdir(src); await mkdir(out);
+    const src = path.join(dir, "images"),
+      out = path.join(dir, "i"),
+      map = path.join(src, "hashes.json");
+    await mkdir(src);
+    await mkdir(out);
     if (seeded) {
       await writeFile(path.join(out, "OLD.aaaaaaaa.avif"), "old-a");
       await writeFile(path.join(out, "OLD.bbbbbbbb.jpg"), "old-j");
@@ -231,10 +275,17 @@ test("hash-tiers refuses a map that exists and does not parse, and writes and de
 });
 
 test("checkpoint-add mints the next vnum from the projection and refuses a reused slug", () => {
-  const rows = [{ slug: "b", title: "B", version: "aadhar-v7-b", vnum: 7, ymd: "2026-01-02" }, { slug: "a", title: "A", version: "aadhar-v3-a", vnum: 3, ymd: "2026-01-01" }];
+  const rows = [
+    { slug: "b", title: "B", version: "aadhar-v7-b", vnum: 7, ymd: "2026-01-02" },
+    { slug: "a", title: "A", version: "aadhar-v3-a", vnum: 3, ymd: "2026-01-01" },
+  ];
   const { rows: next, entry } = addCheckpoint(rows, "c", "C", "2026-09-22");
   assert.deepEqual(entry, { slug: "c", title: "C", version: "aadhar-v8-c", vnum: 8, ymd: "2026-09-22" });
-  assert.deepEqual(next.map((r) => r.vnum), [3, 7, 8], "kept in vnum order");
+  assert.deepEqual(
+    next.map((r) => r.vnum),
+    [3, 7, 8],
+    "kept in vnum order",
+  );
   assert.equal(addCheckpoint([], "x", "X", "d").entry.vnum, 1);
   assert.throws(() => addCheckpoint(rows, "a", "again", "d"), /already in the log/);
 });

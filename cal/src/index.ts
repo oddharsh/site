@@ -33,23 +33,31 @@
 //     for a "host-decision" event; approve/decline fire that event to end it
 //     early, and a timeout reclaims the slot (see cal/src/workflow.ts).
 
-import { BOOK_MAX_STALE_MS }               from "./availability.ts";
-import { listOpenSlots }                   from "./slots.ts";
-import { createBooking, getBooking, setStatus,
-         holdSlot, releaseSlot, setLocation, setSchedule,
-         cancelBooking }                   from "./booking.ts";
-import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
-import { sendApprovalRequest, sendInvite, sendHostCopy,
-         sendDecline, sendUpdate, sendCancel } from "./email.ts";
-import { sign, verify }                    from "../../src/worker/lib/sign.ts";
-import { bookingPage, slotsFragment, SLOTS_PATH, PICK_PATH, successPage,
-         confirmedPage, declinedPage,
-         locationPage, locationSavedPage,
-         reschedulePage, rescheduledPage,
-         cancelPage, cancelledPage,
-         errorPage, type BookingAnswers }   from "./templates.ts";
+import { BOOK_MAX_STALE_MS } from "./availability.ts";
+import { listOpenSlots } from "./slots.ts";
+import { createBooking, getBooking, setStatus, holdSlot, releaseSlot, setLocation, setSchedule, cancelBooking } from "./booking.ts";
+import { releaseSlotClaim, reserveSlot } from "./reservation.ts";
+import { sendApprovalRequest, sendInvite, sendHostCopy, sendDecline, sendUpdate, sendCancel } from "./email.ts";
+import { sign, verify } from "../../src/worker/lib/sign.ts";
+import {
+  bookingPage,
+  slotsFragment,
+  SLOTS_PATH,
+  PICK_PATH,
+  successPage,
+  confirmedPage,
+  declinedPage,
+  locationPage,
+  locationSavedPage,
+  reschedulePage,
+  rescheduledPage,
+  cancelPage,
+  cancelledPage,
+  errorPage,
+  type BookingAnswers,
+} from "./templates.ts";
 import { jsonResponse } from "../../src/worker/lib/http.ts";
-import { ISLAND_CSP, ISLAND_MARKER }    from "../../src/worker/lib/island.ts";
+import { ISLAND_CSP, ISLAND_MARKER } from "../../src/worker/lib/island.ts";
 
 // Re-exported for cal/wrangler.test.toml, whose `main` is this file and whose
 // [[workflows]] entry names BookingWorkflow as its class_name, so the test
@@ -66,23 +74,23 @@ export default {
     // form actions + redirects stay on the same path. env is patched
     // per-request (no shared state — workers fetch is request-scoped).
     const basePath = url.pathname.startsWith("/coffee") ? "/coffee" : "";
-    const path = basePath ? (url.pathname.slice(basePath.length) || "/") : url.pathname;
+    const path = basePath ? url.pathname.slice(basePath.length) || "/" : url.pathname;
     env = { ...env, BASE_PATH: basePath };
 
     try {
       // routing — small enough not to need a router lib
-      if (req.method === "GET"  && (path === "/" || path === ""))  return route_index(req, env, ctx);
-      if (req.method === "GET"  && path === "/slots")              return route_slots(req, env, ctx);
-      if (req.method === "GET"  && path === SLOTS_PATH)            return route_slots_html(req, env, ctx);
-      if (req.method === "GET"  && path === PICK_PATH)             return route_pick(req, env, ctx);
-      if (req.method === "POST" && path === "/book")               return route_book(req, env, ctx);
-      if (req.method === "GET"  && path === "/approve")            return route_approve(req, env, ctx, url);
-      if (req.method === "GET"  && path === "/decline")            return route_decline(req, env, ctx, url);
+      if (req.method === "GET" && (path === "/" || path === "")) return route_index(req, env, ctx);
+      if (req.method === "GET" && path === "/slots") return route_slots(req, env, ctx);
+      if (req.method === "GET" && path === SLOTS_PATH) return route_slots_html(req, env, ctx);
+      if (req.method === "GET" && path === PICK_PATH) return route_pick(req, env, ctx);
+      if (req.method === "POST" && path === "/book") return route_book(req, env, ctx);
+      if (req.method === "GET" && path === "/approve") return route_approve(req, env, ctx, url);
+      if (req.method === "GET" && path === "/decline") return route_decline(req, env, ctx, url);
       // GET renders the form, POST applies it. Both carry the same signature, so
       // the form is not a second capability: anyone who can open the page could
       // already have submitted it by hand.
-      if (req.method === "GET"  && path === "/location")           return route_location_form(req, env, ctx, url);
-      if (req.method === "POST" && path === "/location")           return route_location_save(req, env, ctx);
+      if (req.method === "GET" && path === "/location") return route_location_form(req, env, ctx, url);
+      if (req.method === "POST" && path === "/location") return route_location_save(req, env, ctx);
       // Reschedule and cancel are POST-applied for the same reason /location is,
       // and cancel has a second reason. A GET that writes would need adding to
       // BOTH lib/preview.ts's guard list and lib/early-data.ts's 425 list in the
@@ -90,15 +98,14 @@ export default {
       // a form keeps this feature out of that pair entirely. And a destructive
       // action reached from a mail client that prefetches links should not fire
       // because something looked at it.
-      if (req.method === "GET"  && path === "/reschedule")         return route_reschedule_form(req, env, ctx, url);
-      if (req.method === "POST" && path === "/reschedule")         return route_reschedule_save(req, env, ctx);
-      if (req.method === "GET"  && path === "/cancel")             return route_cancel_form(req, env, ctx, url);
-      if (req.method === "POST" && path === "/cancel")             return route_cancel_apply(req, env, ctx);
+      if (req.method === "GET" && path === "/reschedule") return route_reschedule_form(req, env, ctx, url);
+      if (req.method === "POST" && path === "/reschedule") return route_reschedule_save(req, env, ctx);
+      if (req.method === "GET" && path === "/cancel") return route_cancel_form(req, env, ctx, url);
+      if (req.method === "POST" && path === "/cancel") return route_cancel_apply(req, env, ctx);
       return new Response(errorPage("not found", env), { status: 404, headers: htmlHeaders() });
     } catch (e) {
       console.error("unhandled", e?.stack || e);
-      return new Response(errorPage("something broke. try again in a minute.", env),
-                          { status: 500, headers: htmlHeaders() });
+      return new Response(errorPage("something broke. try again in a minute.", env), { status: 500, headers: htmlHeaders() });
     }
   },
 };
@@ -125,7 +132,11 @@ async function route_slots_html(req, env, ctx) {
   const cache = caches.default;
   const key = calSlotsKey(req, env);
   const hit = await cache.match(key);
-  if (hit) { const r = new Response(hit.body, hit); r.headers.set("x-cal-cache", "hit"); return r; }
+  if (hit) {
+    const r = new Response(hit.body, hit);
+    r.headers.set("x-cal-cache", "hit");
+    return r;
+  }
 
   // Filled phase by phase as the fragment is assembled (render, total, and the
   // fetch timings listOpenSlots adds), so the key set is not knowable here.
@@ -151,7 +162,7 @@ async function route_slots_html(req, env, ctx) {
     // a 5xx from the edge is text/html too.
     [ISLAND_MARKER]: "1",
     "server-timing": fmtServerTiming(timings),
-    "x-cal-source": cal.source,   // fresh | live | stale | none
+    "x-cal-source": cal.source, // fresh | live | stale | none
   };
   const cached = new Response(html, { headers });
   if (ctx) ctx.waitUntil(cache.put(key, cached.clone()));
@@ -188,12 +199,12 @@ async function route_book(req, env, ctx) {
 
   // basic validation. real abuse prevention happens in the slot check below
   // (you can't double-book a slot that's already pending).
-  const name  = (payload.name  || "").toString().trim().slice(0, 100);
+  const name = (payload.name || "").toString().trim().slice(0, 100);
   const email = (payload.email || "").toString().trim().slice(0, 200);
   const topic = (payload.topic || "").toString().trim().slice(0, 1000);
   // Optional. A blank answer is a real answer ("wherever, I'll travel"), and a
   // required field here would turn a nice-to-have into a reason a request fails.
-  const area  = (payload.area  || "").toString().trim().slice(0, 120);
+  const area = (payload.area || "").toString().trim().slice(0, 120);
   const start = parseInt(payload.start, 10);
 
   // A refusal re-renders the booking page with everything typed still in it
@@ -201,8 +212,7 @@ async function route_book(req, env, ctx) {
   // retry link reloaded an empty form. The slots render inline, as on /pick,
   // so the posted one can come back checked and the page works without script.
   const values = { name, email, area, topic, start: Number.isFinite(start) ? start : undefined };
-  const refuse = (status, errors, slots) =>
-    new Response(bookingPage(env, { slots, answers: { values, errors } }), { status, headers: htmlHeaders() });
+  const refuse = (status, errors, slots) => new Response(bookingPage(env, { slots, answers: { values, errors } }), { status, headers: htmlHeaders() });
   const errors: BookingAnswers["errors"] = {};
   if (!Number.isFinite(start)) errors.start = "pick one of the open slots above.";
   if (!name) errors.name = "add the name that should go on the invite.";
@@ -218,10 +228,12 @@ async function route_book(req, env, ctx) {
   // snapshot is too old, refuse rather than book over a real event we can't see.
   const { slots, cal } = await listOpenSlots(env, ctx);
   if (!cal.ok || cal.ageMs > BOOK_MAX_STALE_MS) {
-    return new Response(errorPage("can't confirm the calendar right now — grab a slot again in a minute.", env),
-                        { status: 503, headers: { ...htmlHeaders(), "retry-after": "60" } });
+    return new Response(errorPage("can't confirm the calendar right now — grab a slot again in a minute.", env), {
+      status: 503,
+      headers: { ...htmlHeaders(), "retry-after": "60" },
+    });
   }
-  const slot = slots.find(s => s.start === start);
+  const slot = slots.find((s) => s.start === start);
   if (!slot) {
     return refuse(409, { start: "that slot was taken or expired. pick another one." }, slots);
   }
@@ -233,12 +245,15 @@ async function route_book(req, env, ctx) {
   }
 
   const booking = await createBooking(env, {
-    name, email, topic,
+    name,
+    email,
+    topic,
     // Blank stays undefined rather than "": JSON.stringify drops an undefined
     // key outright, so an unanswered field is ABSENT in KV rather than an empty
     // string every later reader has to remember to test for.
     area: area || undefined,
-    start: slot.start, end: slot.end,
+    start: slot.start,
+    end: slot.end,
     created: Date.now(),
     status: "pending",
   });
@@ -255,8 +270,7 @@ async function route_book(req, env, ctx) {
     // booking nobody can act on: `expired` is the one status the approve path
     // refuses, and the 90-day TTL clears the row on its own.
     await setStatus(env, booking.id, "expired");
-    return new Response(errorPage("someone just took that slot. pick another.", env),
-                        { status: 409, headers: htmlHeaders() });
+    return new Response(errorPage("someone just took that slot. pick another.", env), { status: 409, headers: htmlHeaders() });
   }
   // The KV hold stays: it is what listOpenSlots (/slots, /slots.html, /pick)
   // reads to draw availability, and it carries the expiry the reservation deliberately does
@@ -269,13 +283,15 @@ async function route_book(req, env, ctx) {
   // binding is missing the booking still works and only loses auto-expiry, and
   // no cron backs it up.
   if (env.BOOKING_WORKFLOW) {
-    ctx.waitUntil((async () => {
-      try {
-        await env.BOOKING_WORKFLOW.create({ id: booking.id, params: { id: booking.id } });
-      } catch (e) {
-        console.error("booking workflow create failed", e?.stack || e);
-      }
-    })());
+    ctx.waitUntil(
+      (async () => {
+        try {
+          await env.BOOKING_WORKFLOW.create({ id: booking.id, params: { id: booking.id } });
+        } catch (e) {
+          console.error("booking workflow create failed", e?.stack || e);
+        }
+      })(),
+    );
   }
 
   // sign approve/decline links so only someone with the secret can act on them
@@ -291,7 +307,7 @@ async function route_book(req, env, ctx) {
   const locationUrl = `${base}/location?t=${booking.id}&sig=${locationSig}`;
 
   ctx.waitUntil(sendApprovalRequest(env, booking, approveUrl, declineUrl, locationUrl));
-  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // slot now held: drop the stale slot list
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env))); // slot now held: drop the stale slot list
 
   return new Response(successPage(env), { headers: htmlHeaders() });
 }
@@ -303,48 +319,47 @@ async function route_book(req, env, ctx) {
 // missed cancel only means the workflow times out later and no-ops on the guard.
 function cancelExpiry(env, ctx, id) {
   if (!env.BOOKING_WORKFLOW) return;
-  ctx.waitUntil((async () => {
-    try {
-      const instance = await env.BOOKING_WORKFLOW.get(id);
-      await instance.sendEvent({ type: "host-decision", payload: { resolved: true } });
-    } catch { /* instance already finished or never created */ }
-  })());
+  ctx.waitUntil(
+    (async () => {
+      try {
+        const instance = await env.BOOKING_WORKFLOW.get(id);
+        await instance.sendEvent({ type: "host-decision", payload: { resolved: true } });
+      } catch {
+        /* instance already finished or never created */
+      }
+    })(),
+  );
 }
 
 async function route_approve(req, env, ctx, url) {
-  const id  = url.searchParams.get("t");
+  const id = url.searchParams.get("t");
   const sig = url.searchParams.get("sig");
   if (!id || !sig || !(await verify(`${id}|approve`, sig, env.SIGNING_SECRET))) {
-    return new Response(errorPage("approval link invalid or expired.", env),
-                        { status: 401, headers: htmlHeaders() });
+    return new Response(errorPage("approval link invalid or expired.", env), { status: 401, headers: htmlHeaders() });
   }
   const booking = await getBooking(env, id);
   if (!booking) {
-    return new Response(errorPage("booking not found (already expired?).", env),
-                        { status: 404, headers: htmlHeaders() });
+    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   const links = await hostLinks(req, env, booking.id);
   if (booking.status !== "pending") {
-    return new Response(confirmedPage(booking, env, /*already=*/true, links.location, links),
-                        { headers: htmlHeaders() });
+    return new Response(confirmedPage(booking, env, /*already=*/ true, links.location, links), { headers: htmlHeaders() });
   }
-  await setStatus(env, id, "confirmed");   // slot stays held (confirmed coffees hold their slot + count toward caps)
+  await setStatus(env, id, "confirmed"); // slot stays held (confirmed coffees hold their slot + count toward caps)
   ctx.waitUntil(sendInvite(env, booking));
   // Separate send, separate event: the guest gets an invitation and the host
   // gets a plain PUBLISH copy they own outright. See buildICS in email.ts.
   // The links ride that mail because it is the one the host keeps.
   ctx.waitUntil(sendHostCopy(env, booking, { links }));
-  cancelExpiry(env, ctx, id);                                   // end the durable timer early
-  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // pending slot resolved
-  return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/false, links.location, links),
-                      { headers: htmlHeaders() });
+  cancelExpiry(env, ctx, id); // end the durable timer early
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env))); // pending slot resolved
+  return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/ false, links.location, links), { headers: htmlHeaders() });
 }
 
 async function hostLink(req, env, id: string, action: "location" | "reschedule" | "cancel") {
   const sig = await sign(`${id}|${action}`, env.SIGNING_SECRET);
   return `https://${new URL(req.url).host}${env.BASE_PATH || ""}/${action}?t=${id}&sig=${sig}`;
 }
-
 
 // Every link the host needs on a live booking, minted together because they are
 // mailed together and a missing one is invisible until somebody needs it.
@@ -370,25 +385,28 @@ const DEAD_END = { location: "place", reschedule: "move", cancel: "cancel" };
 
 async function resolveHostAction(env, id, sig, action: "location" | "reschedule" | "cancel") {
   if (!id || !sig || !(await verify(`${id}|${action}`, sig, env.SIGNING_SECRET))) {
-    return { err: new Response(errorPage(`${action} link invalid or expired.`, env),
-                               { status: 401, headers: htmlHeaders() }) };
+    return { err: new Response(errorPage(`${action} link invalid or expired.`, env), { status: 401, headers: htmlHeaders() }) };
   }
   const booking = await getBooking(env, id);
   if (!booking) {
-    return { err: new Response(errorPage("booking not found (already expired?).", env),
-                               { status: 404, headers: htmlHeaders() }) };
+    return { err: new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() }) };
   }
   // Only a live booking is worth acting on at all.
   if (booking.status === "declined" || booking.status === "expired" || booking.status === "cancelled") {
-    return { err: new Response(errorPage(`this booking is ${booking.status}; there's nothing to ${DEAD_END[action]}.`, env),
-                               { status: 409, headers: htmlHeaders() }) };
+    return {
+      err: new Response(errorPage(`this booking is ${booking.status}; there's nothing to ${DEAD_END[action]}.`, env), { status: 409, headers: htmlHeaders() }),
+    };
   }
   // Cancelling is the one action that needs a confirmed booking: a pending one
   // has no entry anywhere to withdraw, and /decline is the route that answers
   // it with the note a would-be guest should actually receive.
   if (action === "cancel" && booking.status !== "confirmed") {
-    return { err: new Response(errorPage("this booking isn't confirmed yet — decline it from the request mail instead.", env),
-                               { status: 409, headers: htmlHeaders() }) };
+    return {
+      err: new Response(errorPage("this booking isn't confirmed yet — decline it from the request mail instead.", env), {
+        status: 409,
+        headers: htmlHeaders(),
+      }),
+    };
   }
   return { booking };
 }
@@ -396,7 +414,7 @@ async function resolveHostAction(env, id, sig, action: "location" | "reschedule"
 const resolveLocationTarget = (env, id, sig) => resolveHostAction(env, id, sig, "location");
 
 async function route_location_form(req, env, ctx, url) {
-  const id  = url.searchParams.get("t");
+  const id = url.searchParams.get("t");
   const sig = url.searchParams.get("sig");
   const { booking, err } = await resolveLocationTarget(env, id, sig);
   if (err) return err;
@@ -406,15 +424,14 @@ async function route_location_form(req, env, ctx, url) {
 
 async function route_location_save(req, env, ctx) {
   const form = await req.formData();
-  const id   = (form.get("t")   || "").toString();
-  const sig  = (form.get("sig") || "").toString();
+  const id = (form.get("t") || "").toString();
+  const sig = (form.get("sig") || "").toString();
   const { err } = await resolveLocationTarget(env, id, sig);
   if (err) return err;
 
   const location = (form.get("location") || "").toString().trim().slice(0, 200);
   if (!location) {
-    return new Response(errorPage("give it somewhere to be.", env),
-                        { status: 400, headers: htmlHeaders() });
+    return new Response(errorPage("give it somewhere to be.", env), { status: 400, headers: htmlHeaders() });
   }
 
   const updated = await setLocation(env, id, location);
@@ -423,8 +440,7 @@ async function route_location_save(req, env, ctx) {
   // Vanishingly rare and still a real state, so it gets the same 404 the read
   // path gives, rather than a `!` that would throw a 500 at the same moment.
   if (!updated) {
-    return new Response(errorPage("booking not found (already expired?).", env),
-                        { status: 404, headers: htmlHeaders() });
+    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   // A pending booking has no invite out yet, so there is nothing to update and
   // the address simply rides the first one. Mailing here would tell a guest
@@ -436,7 +452,7 @@ async function route_location_save(req, env, ctx) {
 }
 
 async function route_reschedule_form(req, env, ctx, url) {
-  const id  = url.searchParams.get("t");
+  const id = url.searchParams.get("t");
   const sig = url.searchParams.get("sig");
   const { booking, err } = await resolveHostAction(env, id, sig, "reschedule");
   if (err) return err;
@@ -449,8 +465,8 @@ async function route_reschedule_form(req, env, ctx, url) {
 
 async function route_reschedule_save(req, env, ctx) {
   const form = await req.formData();
-  const id   = (form.get("t")   || "").toString();
-  const sig  = (form.get("sig") || "").toString();
+  const id = (form.get("t") || "").toString();
+  const sig = (form.get("sig") || "").toString();
   const { booking, err } = await resolveHostAction(env, id, sig, "reschedule");
   if (err) return err;
 
@@ -464,13 +480,14 @@ async function route_reschedule_save(req, env, ctx) {
   // as putting a new one there. A stale snapshot refuses rather than guesses.
   const { slots, cal } = await listOpenSlots(env, ctx);
   if (!cal.ok || cal.ageMs > BOOK_MAX_STALE_MS) {
-    return new Response(errorPage("can't confirm the calendar right now — try again in a minute.", env),
-                        { status: 503, headers: { ...htmlHeaders(), "retry-after": "60" } });
+    return new Response(errorPage("can't confirm the calendar right now — try again in a minute.", env), {
+      status: 503,
+      headers: { ...htmlHeaders(), "retry-after": "60" },
+    });
   }
-  const slot = slots.find(sl => sl.start === start);
+  const slot = slots.find((sl) => sl.start === start);
   if (!slot) {
-    return new Response(errorPage("that slot was taken or expired. pick another.", env),
-                        { status: 409, headers: htmlHeaders() });
+    return new Response(errorPage("that slot was taken or expired. pick another.", env), { status: 409, headers: htmlHeaders() });
   }
 
   // ORDER IS THE SAFETY PROPERTY. Take the new hold first, so no one can win a
@@ -483,8 +500,7 @@ async function route_reschedule_save(req, env, ctx) {
     // The KV record's 90-day TTL landing between the two reads. Vanishingly
     // rare, still real, and the hold just taken has to go back.
     await releaseSlot(env, slot);
-    return new Response(errorPage("booking not found (already expired?).", env),
-                        { status: 404, headers: htmlHeaders() });
+    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   await releaseSlot(env, moved.was);
 
@@ -499,7 +515,7 @@ async function route_reschedule_save(req, env, ctx) {
 }
 
 async function route_cancel_form(req, env, ctx, url) {
-  const id  = url.searchParams.get("t");
+  const id = url.searchParams.get("t");
   const sig = url.searchParams.get("sig");
   const { booking, err } = await resolveHostAction(env, id, sig, "cancel");
   if (err) return err;
@@ -509,15 +525,14 @@ async function route_cancel_form(req, env, ctx, url) {
 
 async function route_cancel_apply(req, env, ctx) {
   const form = await req.formData();
-  const id   = (form.get("t")   || "").toString();
-  const sig  = (form.get("sig") || "").toString();
+  const id = (form.get("t") || "").toString();
+  const sig = (form.get("sig") || "").toString();
   const { booking, err } = await resolveHostAction(env, id, sig, "cancel");
   if (err) return err;
 
   const cancelled = await cancelBooking(env, id);
   if (!cancelled) {
-    return new Response(errorPage("booking not found (already expired?).", env),
-                        { status: 404, headers: htmlHeaders() });
+    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   // A cancelled coffee gives its slot back, which is what separates this from
   // the confirmed state it leaves: confirmed bookings hold their slot and count
@@ -531,29 +546,25 @@ async function route_cancel_apply(req, env, ctx) {
 }
 
 async function route_decline(req, env, ctx, url) {
-  const id  = url.searchParams.get("t");
+  const id = url.searchParams.get("t");
   const sig = url.searchParams.get("sig");
   if (!id || !sig || !(await verify(`${id}|decline`, sig, env.SIGNING_SECRET))) {
-    return new Response(errorPage("decline link invalid or expired.", env),
-                        { status: 401, headers: htmlHeaders() });
+    return new Response(errorPage("decline link invalid or expired.", env), { status: 401, headers: htmlHeaders() });
   }
   const booking = await getBooking(env, id);
   if (!booking) {
-    return new Response(errorPage("booking not found (already expired?).", env),
-                        { status: 404, headers: htmlHeaders() });
+    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   if (booking.status !== "pending") {
-    return new Response(declinedPage(booking, env, /*already=*/true),
-                        { headers: htmlHeaders() });
+    return new Response(declinedPage(booking, env, /*already=*/ true), { headers: htmlHeaders() });
   }
   await setStatus(env, id, "declined");
-  await releaseSlot(env, booking);         // free the slot NOW so /slots reoffers it immediately
-  await releaseSlotClaim(env, booking);   // and give up the atomic claim, so the next booker can take it
+  await releaseSlot(env, booking); // free the slot NOW so /slots reoffers it immediately
+  await releaseSlotClaim(env, booking); // and give up the atomic claim, so the next booker can take it
   ctx.waitUntil(sendDecline(env, booking));
-  cancelExpiry(env, ctx, id);                                   // end the durable timer early
-  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env)));  // slot freed again
-  return new Response(declinedPage(booking, env, /*already=*/false),
-                      { headers: htmlHeaders() });
+  cancelExpiry(env, ctx, id); // end the durable timer early
+  ctx.waitUntil(caches.default.delete(calSlotsKey(req, env))); // slot freed again
+  return new Response(declinedPage(booking, env, /*already=*/ false), { headers: htmlHeaders() });
 }
 
 // one edge-cache entry per (origin, basePath) for the slots island. Every action
@@ -569,7 +580,9 @@ function calSlotsKey(req, env) {
 // Object.entries over an untyped bag yields unknown. This is the timings record
 // assembled above; durations are milliseconds.
 function fmtServerTiming(t: Record<string, number>) {
-  return Object.entries(t).map(([k, v]) => `${k};dur=${v}`).join(", ");
+  return Object.entries(t)
+    .map(([k, v]) => `${k};dur=${v}`)
+    .join(", ");
 }
 
 function htmlHeaders() {

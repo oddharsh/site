@@ -48,8 +48,7 @@ export type Span = [string, SpanStyle | null];
 export type Line = Span[];
 
 /** One styled run of text. `style` is a SpanStyle, or null for terminal default. */
-export const s = (text, style: SpanStyle | null = null): Span =>
-  [text === null || text === undefined ? "" : String(text), style];
+export const s = (text, style: SpanStyle | null = null): Span => [text === null || text === undefined ? "" : String(text), style];
 
 // Every character in these ranges is a whole grapheme that never joins its
 // neighbour, so for a string made only of them splitting by UTF-16 unit counts
@@ -57,9 +56,7 @@ export const s = (text, style: SpanStyle | null = null): Span =>
 const NEVER_COMBINES = /^[ -\u02ff\u2013\u2014\u2018-\u201f\u2022\u2026\u2190-\u2bff]*$/;
 let segmenter: Intl.Segmenter | undefined;
 const graphemes = (text: string) =>
-  NEVER_COMBINES.test(text)
-    ? text.split("")
-    : Array.from((segmenter ??= new Intl.Segmenter()).segment(text), (g) => g.segment);
+  NEVER_COMBINES.test(text) ? text.split("") : Array.from((segmenter ??= new Intl.Segmenter()).segment(text), (g) => g.segment);
 
 /** Visible width of a line, in grapheme clusters. */
 export const width = (spans) => spans.reduce((n, [t]) => n + graphemes(t).length, 0);
@@ -69,10 +66,14 @@ export function truncTo(spans, w) {
   if (w <= 0) return [];
   if (width(spans) <= w) return spans;
   const out: Line = [];
-  let left = w - 1;                       // reserve the ellipsis column
+  let left = w - 1; // reserve the ellipsis column
   for (const [text, style] of spans) {
     const chars = graphemes(text);
-    if (chars.length <= left) { out.push([text, style]); left -= chars.length; continue; }
+    if (chars.length <= left) {
+      out.push([text, style]);
+      left -= chars.length;
+      continue;
+    }
     if (left > 0) out.push([chars.slice(0, left).join(""), style]);
     break;
   }
@@ -109,7 +110,14 @@ export function ends(left, right, w) {
 // a Windows window rendered in ASCII inside a real one. Trailing whitespace goes
 // too: it carries no information and is what makes a diff of two frames noisy.
 export function emit(lines) {
-  return lines.map((spans) => spans.map(([t]) => t).join("").replace(/[ \t]+$/, "")).join("\n");
+  return lines
+    .map((spans) =>
+      spans
+        .map(([t]) => t)
+        .join("")
+        .replace(/[ \t]+$/, ""),
+    )
+    .join("\n");
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────
@@ -123,31 +131,55 @@ export function emit(lines) {
 // caller tracking which helper returns which. A line's first element is a span
 // ([string, style]); a block's first element is a line, whose first element is
 // an array. That one test tells them apart unambiguously.
-export const rows = (...items) =>
-  items.flatMap((item) => (Array.isArray(item?.[0]?.[0]) ? item : [item]));
+export const rows = (...items) => items.flatMap((item) => (Array.isArray(item?.[0]?.[0]) ? item : [item]));
 
 // CP437 box drawing, which is what cmd.exe drew with in the OEM codepage. Single
 // line for panes, double for the outer frame, so a nested pane reads as nested.
 const G = {
-  tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│",
-  lt: "├", rt: "┤", tt: "┬", bt: "┴", x: "┼",
-  dtl: "╔", dtr: "╗", dbl: "╚", dbr: "╝", dh: "═", dv: "║",
+  tl: "┌",
+  tr: "┐",
+  bl: "└",
+  br: "┘",
+  h: "─",
+  v: "│",
+  lt: "├",
+  rt: "┤",
+  tt: "┬",
+  bt: "┴",
+  x: "┼",
+  dtl: "╔",
+  dtr: "╗",
+  dbl: "╚",
+  dbr: "╝",
+  dh: "═",
+  dv: "║",
   // The single-line separator INSIDE a double-line frame. ╟ and ╢ are the
   // dedicated CP437 joins for exactly this (double vertical meeting single
   // horizontal); ├ and ┤ are single-on-single and leave a visible notch where
   // the rule meets the frame wall.
-  slt: "╟", srt: "╢",
+  slt: "╟",
+  srt: "╢",
 };
 
 /** Wrap plain text to `w` columns on word boundaries. Returns plain strings. */
 export function wrap(text, w) {
-  const words = String(text ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const words = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
   if (!words.length) return [];
   const out: string[] = [];
   let cur = "";
   for (const word of words) {
-    if (!cur) { cur = word; continue; }
-    if (graphemes(cur).length + 1 + graphemes(word).length <= w) { cur += " " + word; continue; }
+    if (!cur) {
+      cur = word;
+      continue;
+    }
+    if (graphemes(cur).length + 1 + graphemes(word).length <= w) {
+      cur += " " + word;
+      continue;
+    }
     out.push(cur);
     cur = word;
   }
@@ -215,9 +247,7 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
   const layRow = (cells, style?) => {
     const out = [];
     cells.forEach((cell, i) => {
-      const spans = Array.isArray(cell) && Array.isArray(cell[0]) ? cell
-        : Array.isArray(cell) ? [cell]
-        : [s(cell ?? "", style)];
+      const spans = Array.isArray(cell) && Array.isArray(cell[0]) ? cell : Array.isArray(cell) ? [cell] : [s(cell ?? "", style)];
       const cw = widths[i];
       out.push(...(cols[i].align === "right" ? rightTo(truncTo(spans, cw), cw) : fit(spans, cw)));
       if (i < cols.length - 1) out.push(s(" "));
@@ -227,7 +257,12 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
 
   const lines: Line[] = [];
   if (header) {
-    lines.push(layRow(cols.map((c) => c.title || ""), "label"));
+    lines.push(
+      layRow(
+        cols.map((c) => c.title || ""),
+        "label",
+      ),
+    );
     lines.push([s(widths.map((n) => G.h.repeat(n)).join(" "), "border")]);
   }
   for (const row of rows) lines.push(layRow(row));
@@ -238,7 +273,10 @@ export function plainFrame({ title, body, status }) {
   // A title, a blank line, and indented content. No border, because the border
   // was drawing a window inside a window.
   const out = [];
-  if (title) { out.push([s(title, "strong")]); out.push([s("")]); }
+  if (title) {
+    out.push([s(title, "strong")]);
+    out.push([s("")]);
+  }
   for (const spans of rows(...body)) out.push([s("  "), ...spans]);
   if (status !== undefined) {
     out.push([s("")]);

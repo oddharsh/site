@@ -1,16 +1,5 @@
 // ── the tools are SERVICES, the frame is a representation ────────────────
-import {
-  MODERN_META,
-  assert,
-  context,
-  handleSiteMcp,
-  handleTool,
-  mcpPost,
-  readFileSync,
-  terminalEnv,
-  terminalGet,
-  test,
-} from "./contract-shared.ts";
+import { MODERN_META, assert, context, handleSiteMcp, handleTool, mcpPost, readFileSync, terminalEnv, terminalGet, test } from "./contract-shared.ts";
 
 test("every tool is a top-level utility, not a subpage of a presentation", async () => {
   // The site's own manifest encodes the rule: utilities live at the root
@@ -76,8 +65,9 @@ test("every tool with a route is reachable over MCP, and vice versa", async () =
   // exact caller this whole surface is built for. dict and cache shipped that
   // way for two commits before this test existed.
   const { TOOL_NAMES } = await import("../src/worker/terminal.ts");
-  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), terminalEnv(), context())).json())
-    .result.tools.map((t) => t.name);
+  const listed = (
+    await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), terminalEnv(), context())).json()
+  ).result.tools.map((t) => t.name);
 
   // ONE VOCABULARY, TWO SPELLINGS. A URL path uses hyphens (/agent-ready) and
   // an MCP tool name conventionally uses underscores (agent_ready). That is a
@@ -86,7 +76,6 @@ test("every tool with a route is reachable over MCP, and vice versa", async () =
   // the next tool with a two-word name does not get to invent its own answer.
   const asToolName = (route) => route.replace(/-/g, "_");
   for (const tool of TOOL_NAMES) {
-    assert.ok(listed.includes(asToolName(tool)),
-      `/${tool} has a route but no MCP tool (expected ${asToolName(tool)}) — an agent cannot reach it`);
+    assert.ok(listed.includes(asToolName(tool)), `/${tool} has a route but no MCP tool (expected ${asToolName(tool)}) — an agent cannot reach it`);
   }
 });

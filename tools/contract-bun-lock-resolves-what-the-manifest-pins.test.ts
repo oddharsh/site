@@ -48,8 +48,8 @@ function rootOf(lockfiles: ReturnType<typeof readLockfilePins>) {
   if (!manifest) throw new Error("bun.lock declares no root workspace");
   return {
     lock,
-    packages:  (lock.parsed.packages as Record<string, unknown[]>),
-    devDependencies:  (manifest.pkg.devDependencies as Record<string, string>),
+    packages: lock.parsed.packages as Record<string, unknown[]>,
+    devDependencies: manifest.pkg.devDependencies as Record<string, string>,
   };
 }
 
@@ -88,8 +88,7 @@ test("perturbing one real resolution turns the live check red", () => {
   const lockfiles = readLockfilePins();
   const { packages, devDependencies } = rootOf(lockfiles);
 
-  const target = auditLockfilePins({ lockfiles }).checked
-    .find((c) => c.lock === "bun.lock" && c.field === "devDependencies");
+  const target = auditLockfilePins({ lockfiles }).checked.find((c) => c.lock === "bun.lock" && c.field === "devDependencies");
   if (!target) throw new Error("the walk checked no root devDependency");
   const entry = packages[target.name];
   if (!Array.isArray(entry)) throw new Error(`bun.lock resolves nothing for ${target.name}`);
@@ -102,10 +101,7 @@ test("perturbing one real resolution turns the live check red", () => {
 
   const { problems } = auditLockfilePins({ lockfiles });
   assert.equal(problems.length, 1, problems.join("\n"));
-  assert.ok(
-    problems[0].includes(`pins ${target.name} at ${pin} and bun.lock RESOLVES ${moved}`),
-    problems[0],
-  );
+  assert.ok(problems[0].includes(`pins ${target.name} at ${pin} and bun.lock RESOLVES ${moved}`), problems[0]);
 });
 
 // ── the negative battery ─────────────────────────────────────────────────────
@@ -114,10 +110,25 @@ test("perturbing one real resolution turns the live check red", () => {
 // that exists for the real walk.
 const resolutionEntry = (name, version) => [`${name}@${version}`, "", {}, "sha512-fixture"];
 
-
-function fixture({ pin, mirror, resolution, head, overrides, lockOverrides, resolutions, name = "widget" }: { pin: string, mirror?: string, resolution?: string, head?: unknown[],
-              overrides?: Record<string, string>, lockOverrides?: Record<string, string>,
-              resolutions?: Record<string, string>, name?: string }) {
+function fixture({
+  pin,
+  mirror,
+  resolution,
+  head,
+  overrides,
+  lockOverrides,
+  resolutions,
+  name = "widget",
+}: {
+  pin: string;
+  mirror?: string;
+  resolution?: string;
+  head?: unknown[];
+  overrides?: Record<string, string>;
+  lockOverrides?: Record<string, string>;
+  resolutions?: Record<string, string>;
+  name?: string;
+}) {
   const pkg: { devDependencies: Record<string, string>; overrides?: Record<string, string> } = { devDependencies: { [name]: pin } };
   if (overrides) pkg.overrides = overrides;
   const ws: { name: string; devDependencies?: Record<string, string> } = { name: "fixture" };
@@ -129,7 +140,10 @@ function fixture({ pin, mirror, resolution, head, overrides, lockOverrides, reso
   for (const [k, v] of Object.entries(resolutions ?? overrides ?? {})) packages[k] = resolutionEntry(k, v);
   if (head !== undefined) packages[name] = head;
   else if (resolution !== undefined) packages[name] = resolutionEntry(name, resolution);
-  const parsed: { workspaces: Record<string, typeof ws>; packages: Record<string, any>; overrides?: Record<string, string> } = { workspaces: { "": ws }, packages };
+  const parsed: { workspaces: Record<string, typeof ws>; packages: Record<string, any>; overrides?: Record<string, string> } = {
+    workspaces: { "": ws },
+    packages,
+  };
   if (lockOverrides) parsed.overrides = lockOverrides;
   return { lockfiles: [{ lock: "bun.lock", parsed, manifests: [{ manifest: "package.json", wsKey: "", pkg }] }], floor: 0 };
 }
@@ -199,16 +213,23 @@ test("the lockfile-pin check catches every drift it exists for", () => {
   //    way. bun records it at the lockfile's TOP LEVEL rather than per
   //    workspace, so it needs its own mirror lookup and gets its own cases.
   const over = audit({
-    pin: "1.2.3", mirror: "1.2.3", resolution: "1.2.3",
-    overrides: { sharp: "0.35.4" }, lockOverrides: { sharp: "0.35.4" },
+    pin: "1.2.3",
+    mirror: "1.2.3",
+    resolution: "1.2.3",
+    overrides: { sharp: "0.35.4" },
+    lockOverrides: { sharp: "0.35.4" },
   });
   assert.deepEqual(over.problems, [], over.problems.join("\n"));
   assert.equal(over.checked.length, 2, "the override must be counted as a checked pin");
 
   // 8b. the override's MIRROR alone is stale.
   const overMirror = audit({
-    pin: "1.2.3", mirror: "1.2.3", resolution: "1.2.3",
-    overrides: { sharp: "0.35.4" }, lockOverrides: { sharp: "0.35.5" }, resolutions: { sharp: "0.35.4" },
+    pin: "1.2.3",
+    mirror: "1.2.3",
+    resolution: "1.2.3",
+    overrides: { sharp: "0.35.4" },
+    lockOverrides: { sharp: "0.35.5" },
+    resolutions: { sharp: "0.35.4" },
   }).problems;
   assert.equal(overMirror.length, 1, overMirror.join("\n"));
   assert.match(overMirror[0], /overrides\.sharp at 0\.35\.4 but bun\.lock overrides mirrors "0\.35\.5"/);
@@ -216,8 +237,12 @@ test("the lockfile-pin check catches every drift it exists for", () => {
   // 8c. the override's RESOLUTION alone is ahead — the silent half, on the one
   //     declaration that reaches every transitive consumer of the package.
   const overResolved = audit({
-    pin: "1.2.3", mirror: "1.2.3", resolution: "1.2.3",
-    overrides: { sharp: "0.35.4" }, lockOverrides: { sharp: "0.35.4" }, resolutions: { sharp: "0.35.5" },
+    pin: "1.2.3",
+    mirror: "1.2.3",
+    resolution: "1.2.3",
+    overrides: { sharp: "0.35.4" },
+    lockOverrides: { sharp: "0.35.4" },
+    resolutions: { sharp: "0.35.5" },
   }).problems;
   assert.equal(overResolved.length, 1, overResolved.join("\n"));
   assert.match(overResolved[0], /pins sharp at 0\.35\.4 and bun\.lock RESOLVES 0\.35\.5/);
@@ -226,8 +251,12 @@ test("the lockfile-pin check catches every drift it exists for", () => {
   //    override in lens-reader, and reporting its drift twice would read as two
   //    problems where there is one.
   const twice = audit({
-    name: "htmlparser2", pin: "12.0.0", mirror: "12.0.0", resolution: "11.0.0",
-    overrides: { htmlparser2: "12.0.0" }, lockOverrides: { htmlparser2: "12.0.0" },
+    name: "htmlparser2",
+    pin: "12.0.0",
+    mirror: "12.0.0",
+    resolution: "11.0.0",
+    overrides: { htmlparser2: "12.0.0" },
+    lockOverrides: { htmlparser2: "12.0.0" },
   }).problems;
   assert.equal(twice.length, 1, twice.join("\n"));
   assert.match(twice[0], /RESOLVES 11\.0\.0/);

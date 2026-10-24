@@ -35,7 +35,7 @@ export async function fetchRdap(ip) {
     const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
       headers: {
         "user-agent": BOT_UA,
-        "accept":     "application/rdap+json",
+        "accept": "application/rdap+json",
       },
       redirect: "follow",
       // cap the enrichment: a slow/unreachable RIR must not block the page.
@@ -43,7 +43,7 @@ export async function fetchRdap(ip) {
       // optional owner/CIDR/registration lines (they refill once the 24h edge
       // cache warms). RDAP is non-essential enrichment, so 2s is deliberate.
       signal: AbortSignal.timeout(2000),
-      cf: { cacheTtl: RDAP_CACHE_TTL_S, cacheEverything: true },  // CF edge cache, keyed by URL
+      cf: { cacheTtl: RDAP_CACHE_TTL_S, cacheEverything: true }, // CF edge cache, keyed by URL
     });
     if (!res.ok) return null;
     const data = asRecord(await res.json());
@@ -73,17 +73,21 @@ export async function fetchRdap(ip) {
     // RDAP encodes entity contact info as a vCard 4.0 jCard structure;
     // the "fn" (formatted name) property is the human-readable owner.
     let owner: string | null = null;
-    const entities = asList(data.entities).flatMap((raw) => { const entity = asRecord(raw); return entity ? [entity] : []; });
-    const registrant = entities.find((entity) =>
-      Array.isArray(entity.roles) && entity.roles.includes("registrant")
-    );
+    const entities = asList(data.entities).flatMap((raw) => {
+      const entity = asRecord(raw);
+      return entity ? [entity] : [];
+    });
+    const registrant = entities.find((entity) => Array.isArray(entity.roles) && entity.roles.includes("registrant"));
     const vcard = registrant?.vcardArray;
     if (Array.isArray(vcard) && Array.isArray(vcard[1])) {
-      const fn = vcard[1].find(v => Array.isArray(v) && v[0] === "fn");
+      const fn = vcard[1].find((v) => Array.isArray(v) && v[0] === "fn");
       if (fn && asText(fn[3]) !== null) owner = asText(fn[3]);
     }
 
-    const events = asList(data.events).flatMap((raw) => { const event = asRecord(raw); return event ? [event] : []; });
+    const events = asList(data.events).flatMap((raw) => {
+      const event = asRecord(raw);
+      return event ? [event] : [];
+    });
     const regEvent = events.find((event) => event.eventAction === "registration");
     const lastChanged = events.find((event) => event.eventAction === "last changed");
 
@@ -95,7 +99,7 @@ export async function fetchRdap(ip) {
       owner,
       cidr,
       allocType,
-      registered:  asText(regEvent?.eventDate),
+      registered: asText(regEvent?.eventDate),
       lastChanged: asText(lastChanged?.eventDate),
     };
   } catch (_e) {
@@ -108,57 +112,57 @@ export async function fetchRdap(ip) {
 // shared by the /whoareyou page and the /whoareyou.json popout feed.
 export async function gatherWhoareyou(request, ctx) {
   const cf = request.cf || {};
-  const h  = request.headers;
+  const h = request.headers;
   const url = new URL(request.url);
 
   const bm = cf.botManagement || {};
   const data = {
-    host:           url.hostname,
-    scheme:         url.protocol.replace(":", ""),
-    ray:            h.get("cf-ray") || "—",
-    ip:             h.get("cf-connecting-ip") || "—",
-    asn:            cf.asn || "—",
-    asOrg:          cf.asOrganization || "—",
-    country:        cf.country || "??",
-    continent:      cf.continent || "—",
-    isEU:           cf.isEUCountry === "1" || cf.isEUCountry === true,
-    region:         cf.region || "—",
-    city:           cf.city || "—",
-    postalCode:     cf.postalCode || "—",
-    latitude:       cf.latitude || null,
-    longitude:      cf.longitude || null,
-    timezone:       cf.timezone || "—",
-    colo:           cf.colo || "—",
+    host: url.hostname,
+    scheme: url.protocol.replace(":", ""),
+    ray: h.get("cf-ray") || "—",
+    ip: h.get("cf-connecting-ip") || "—",
+    asn: cf.asn || "—",
+    asOrg: cf.asOrganization || "—",
+    country: cf.country || "??",
+    continent: cf.continent || "—",
+    isEU: cf.isEUCountry === "1" || cf.isEUCountry === true,
+    region: cf.region || "—",
+    city: cf.city || "—",
+    postalCode: cf.postalCode || "—",
+    latitude: cf.latitude || null,
+    longitude: cf.longitude || null,
+    timezone: cf.timezone || "—",
+    colo: cf.colo || "—",
     // MEASURED 2026-09-21 in Chrome over a real HTTP/3 connection: cf.clientTcpRtt
     // is 0 rather than absent on QUIC, so `?? null` alone rendered "TCP
     // round-trip 0 ms" beside a 40 ms QUIC row on the page whose own copy says
     // the two never both appear. The transport decides which row is real.
-    clientTcpRtt:   cf.httpProtocol === "HTTP/3" ? null : (cf.clientTcpRtt ?? null),
+    clientTcpRtt: cf.httpProtocol === "HTTP/3" ? null : (cf.clientTcpRtt ?? null),
     // QUIC's counterpart, and the same bug in the other direction. MEASURED
     // 2026-09-25 over curl on HTTP/2: cf.clientQuicRtt is 0 rather than absent
     // on TCP, so the page showed "QUIC round-trip 0 ms" beside a real 8 ms TCP
     // row. The transport decides here too, which is what finally makes the two
     // mutually exclusive, the way the page's own copy always said they were.
-    clientQuicRtt:  cf.httpProtocol === "HTTP/3" ? (cf.clientQuicRtt ?? null) : null,
-    deliveryRate:   cf.edgeL4?.deliveryRate ?? null,
+    clientQuicRtt: cf.httpProtocol === "HTTP/3" ? (cf.clientQuicRtt ?? null) : null,
+    deliveryRate: cf.edgeL4?.deliveryRate ?? null,
     requestPriority: cf.requestPriority || null,
-    httpProtocol:   cf.httpProtocol || "—",
-    tlsVersion:     cf.tlsVersion || "—",
-    tlsCipher:      cf.tlsCipher || "—",
-    tlsExtensions:  cf.tlsClientExtensionsSha1 || null,
+    httpProtocol: cf.httpProtocol || "—",
+    tlsVersion: cf.tlsVersion || "—",
+    tlsCipher: cf.tlsCipher || "—",
+    tlsExtensions: cf.tlsClientExtensionsSha1 || null,
     acceptEncoding: h.get("accept-encoding") || "—",
-    userAgent:      h.get("user-agent") || "—",
+    userAgent: h.get("user-agent") || "—",
     acceptLanguage: h.get("accept-language") || "—",
-    dnt:            h.get("dnt") === "1" ? "set (1)" : "not set",
-    referer:        h.get("referer") || "(none)",
-    cookies:        h.get("cookie") ? "present" : "none",
-    botScore:       bm.score ?? null,
-    verifiedBot:    bm.verifiedBot ?? false,
-    detectionIds:   bm.detectionIds || null,
+    dnt: h.get("dnt") === "1" ? "set (1)" : "not set",
+    referer: h.get("referer") || "(none)",
+    cookies: h.get("cookie") ? "present" : "none",
+    botScore: bm.score ?? null,
+    verifiedBot: bm.verifiedBot ?? false,
+    detectionIds: bm.detectionIds || null,
     corporateProxy: bm.corporateProxy ?? null,
-    ja3Hash:        bm.ja3Hash || null,
-    ja4:            bm.ja4 || null,
-    when:           new Date().toISOString(),
+    ja3Hash: bm.ja3Hash || null,
+    ja4: bm.ja4 || null,
+    when: new Date().toISOString(),
   };
 
   const ua = parseUA(data.userAgent);
@@ -169,7 +173,9 @@ export async function gatherWhoareyou(request, ctx) {
   // outer bound; a cold or unreachable RIR no longer makes the page pay it.
   let rdapTimedOut = false;
   const rdapRead = fetchRdap(data.ip);
-  const rdap = await deadline(rdapRead, RDAP_BUDGET_MS, null, () => { rdapTimedOut = true; });
+  const rdap = await deadline(rdapRead, RDAP_BUDGET_MS, null, () => {
+    rdapTimedOut = true;
+  });
   if (rdapTimedOut) {
     if (ctx) ctx.waitUntil(rdapRead);
     else void rdapRead;
@@ -189,7 +195,14 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
     rdap && rdap.owner ? { k: "Registered to", v: rdap.owner } : null,
     rdap && rdap.networkName ? { k: "Network name", v: rdap.networkName + (rdap.allocType ? ` (${rdap.allocType.toLowerCase()})` : "") } : null,
     rdap && rdap.cidr ? { k: "Allocated range", v: rdap.cidr } : null,
-    rdap && rdap.registered ? { k: "Block registered", v: rdap.registered.slice(0, 10) + (rdap.lastChanged && rdap.lastChanged.slice(0, 10) !== rdap.registered.slice(0, 10) ? ` (changed ${rdap.lastChanged.slice(0, 10)})` : "") } : null,
+    rdap && rdap.registered
+      ? {
+          k: "Block registered",
+          v:
+            rdap.registered.slice(0, 10) +
+            (rdap.lastChanged && rdap.lastChanged.slice(0, 10) !== rdap.registered.slice(0, 10) ? ` (changed ${rdap.lastChanged.slice(0, 10)})` : ""),
+        }
+      : null,
     { k: "Country", v: data.country + (data.continent !== "—" ? ` (${data.continent}${data.isEU ? ", EU" : ""})` : "") },
     { k: "Region", v: data.region },
     { k: "City", v: data.city + (data.postalCode !== "—" ? ` (${data.postalCode})` : "") },
@@ -268,15 +281,16 @@ export async function handleWhoareyouJson(request, env, ctx) {
   // `build` is the same facts as the Server group, for a reader that wants them
   // without walking the groups. Null when there is neither a version binding nor
   // a Workers Builds commit, and each missing half is null, never a placeholder.
-  const build = version || BUILD_INFO
-    ? { version: version ?? null, commit: BUILD_INFO?.commit ?? null, branch: BUILD_INFO?.branch ?? null, build: BUILD_INFO?.build ?? null }
-    : null;
+  const build =
+    version || BUILD_INFO
+      ? { version: version ?? null, commit: BUILD_INFO?.commit ?? null, branch: BUILD_INFO?.branch ?? null, build: BUILD_INFO?.build ?? null }
+      : null;
   const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap, version), build });
   return new Response(body, {
     headers: {
-      "content-type":    "application/json; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
-      "x-robots-tag":    "noindex",
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store, must-revalidate",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });
@@ -308,14 +322,43 @@ const PENDING = "…";
 // their rows are already standing when the values land. Fields most visitors
 // never carry (RDAP until the colo is warm, JA3/JA4, a bot score) stay null.
 const PLACEHOLDER_DATA = {
-  host: "aadhar.sh", scheme: "https", ray: PENDING, ip: PENDING, asn: PENDING, asOrg: PENDING,
-  country: PENDING, continent: "—", isEU: false, region: PENDING, city: PENDING, postalCode: "—",
-  latitude: PENDING, longitude: PENDING, timezone: PENDING, colo: PENDING,
-  clientTcpRtt: PENDING, clientQuicRtt: null, deliveryRate: PENDING, requestPriority: PENDING,
-  httpProtocol: PENDING, tlsVersion: PENDING, tlsCipher: PENDING, tlsExtensions: PENDING,
-  acceptEncoding: PENDING, userAgent: PENDING, acceptLanguage: PENDING, dnt: PENDING,
-  referer: PENDING, cookies: PENDING, botScore: null, verifiedBot: false, detectionIds: null,
-  corporateProxy: null, ja3Hash: null, ja4: null, when: PENDING,
+  host: "aadhar.sh",
+  scheme: "https",
+  ray: PENDING,
+  ip: PENDING,
+  asn: PENDING,
+  asOrg: PENDING,
+  country: PENDING,
+  continent: "—",
+  isEU: false,
+  region: PENDING,
+  city: PENDING,
+  postalCode: "—",
+  latitude: PENDING,
+  longitude: PENDING,
+  timezone: PENDING,
+  colo: PENDING,
+  clientTcpRtt: PENDING,
+  clientQuicRtt: null,
+  deliveryRate: PENDING,
+  requestPriority: PENDING,
+  httpProtocol: PENDING,
+  tlsVersion: PENDING,
+  tlsCipher: PENDING,
+  tlsExtensions: PENDING,
+  acceptEncoding: PENDING,
+  userAgent: PENDING,
+  acceptLanguage: PENDING,
+  dnt: PENDING,
+  referer: PENDING,
+  cookies: PENDING,
+  botScore: null,
+  verifiedBot: false,
+  detectionIds: null,
+  corporateProxy: null,
+  ja3Hash: null,
+  ja4: null,
+  when: PENDING,
 };
 const PLACEHOLDER_UA = { browser: PENDING, os: PENDING, device: "" };
 
@@ -696,30 +739,39 @@ footer .signature small { color: var(--ink-faint); }
 })();
 </script>`)}${islandScript()}`,
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });
 }
 
 export function parseUA(ua) {
-  const browser =
-    /Edg\//.test(ua)             ? "Edge"    :
-    /OPR\//.test(ua)             ? "Opera"   :
-    /Firefox\//.test(ua)         ? "Firefox" :
-    /Chrome\//.test(ua)          ? "Chrome"  :
-    /Safari\//.test(ua)          ? "Safari"  :
-    /curl/.test(ua)              ? "curl"    :
-    /bot|spider|crawl/i.test(ua) ? "a bot"   : "an unknown browser";
-  const os =
-    /iPhone|iPad/.test(ua)       ? "iOS"     :
-    /Android/.test(ua)           ? "Android" :
-    /Mac OS X/.test(ua)          ? "macOS"   :
-    /Windows/.test(ua)           ? "Windows" :
-    /Linux/.test(ua)             ? "Linux"   : "an unknown OS";
-  const device =
-    /iPhone/.test(ua)            ? "(iPhone)" :
-    /iPad/.test(ua)              ? "(iPad)"   :
-    /Mobile/.test(ua)            ? "(mobile)" : "";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\//.test(ua)
+      ? "Opera"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Chrome\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : /curl/.test(ua)
+              ? "curl"
+              : /bot|spider|crawl/i.test(ua)
+                ? "a bot"
+                : "an unknown browser";
+  const os = /iPhone|iPad/.test(ua)
+    ? "iOS"
+    : /Android/.test(ua)
+      ? "Android"
+      : /Mac OS X/.test(ua)
+        ? "macOS"
+        : /Windows/.test(ua)
+          ? "Windows"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : "an unknown OS";
+  const device = /iPhone/.test(ua) ? "(iPhone)" : /iPad/.test(ua) ? "(iPad)" : /Mobile/.test(ua) ? "(mobile)" : "";
   return { browser, os, device };
 }

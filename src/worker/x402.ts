@@ -27,7 +27,7 @@ const PRICE_HUMAN = "$0.01";
 // wallet signs against — mainnet USDC self-describes as "USD Coin", Circle's
 // Sepolia test token as "USDC").
 const USDC = {
-  "base":         { asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", eip712: { name: "USD Coin", version: "2" } },
+  "base": { asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", eip712: { name: "USD Coin", version: "2" } },
   "base-sepolia": { asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", eip712: { name: "USDC", version: "2" } },
 };
 const FACILITATOR_DEFAULT = "https://x402.org/facilitator";
@@ -43,13 +43,17 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
   const requirements = paymentRequirements(env, url);
   const paymentHeader = request.headers.get("x-payment");
   if (!paymentHeader) {
-    return deny(requirements, "X-PAYMENT header is required. This resource costs " + PRICE_HUMAN +
-      " in USDC (" + requirements.network + "). The llms.txt map next door is free.");
+    return deny(
+      requirements,
+      "X-PAYMENT header is required. This resource costs " + PRICE_HUMAN + " in USDC (" + requirements.network + "). The llms.txt map next door is free.",
+    );
   }
 
   // JSON is UTF-8, and atob's Latin-1 string turned any non-ASCII byte in it to mojibake
   let payload = null;
-  try { payload = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(paymentHeader))); } catch (_e) {
+  try {
+    payload = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(paymentHeader)));
+  } catch (_e) {
     return deny(requirements, "X-PAYMENT did not decode as base64 JSON.");
   }
 
@@ -60,21 +64,30 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
   const body = JSON.stringify({ x402Version: X402_VERSION, paymentHeader, paymentPayload: payload, paymentRequirements: requirements });
 
   let verify;
-  try { verify = await facilitatorPost(fac + "/verify", body); }
-  catch (_e) { return deny(requirements, "The payment facilitator is unreachable; try again shortly."); }
+  try {
+    verify = await facilitatorPost(fac + "/verify", body);
+  } catch (_e) {
+    return deny(requirements, "The payment facilitator is unreachable; try again shortly.");
+  }
   const isValid = verify.json && (verify.json.isValid === true || verify.json.valid === true);
   if (!verify.ok || !isValid) {
-    return deny(requirements, "Payment did not verify" +
-      (verify.json && (verify.json.invalidReason || verify.json.error) ? ": " + (verify.json.invalidReason || verify.json.error) : "."));
+    return deny(
+      requirements,
+      "Payment did not verify" +
+        (verify.json && (verify.json.invalidReason || verify.json.error) ? ": " + (verify.json.invalidReason || verify.json.error) : "."),
+    );
   }
 
   let settle;
-  try { settle = await facilitatorPost(fac + "/settle", body); }
-  catch (_e) { return deny(requirements, "Payment verified but settlement failed (facilitator unreachable); nothing was charged."); }
-  const settled = settle.ok && settle.json && (settle.json.success === true || (settle.json.success === undefined && (settle.json.txHash || settle.json.transaction)));
+  try {
+    settle = await facilitatorPost(fac + "/settle", body);
+  } catch (_e) {
+    return deny(requirements, "Payment verified but settlement failed (facilitator unreachable); nothing was charged.");
+  }
+  const settled =
+    settle.ok && settle.json && (settle.json.success === true || (settle.json.success === undefined && (settle.json.txHash || settle.json.transaction)));
   if (!settled) {
-    return deny(requirements, "Payment verified but did not settle" +
-      (settle.json && settle.json.error ? ": " + settle.json.error : "."));
+    return deny(requirements, "Payment verified but did not settle" + (settle.json && settle.json.error ? ": " + settle.json.error : "."));
   }
 
   // UTF-8 before base64. btoa threw on anything above U+00FF, and this line runs after
@@ -93,7 +106,8 @@ function paymentRequirements(env: Env, url: URL) {
     network: USDC[network] ? network : "base",
     maxAmountRequired: PRICE_ATOMIC,
     resource: url.origin + "/llms-full.txt",
-    description: "llms-full.txt for aadhar.sh: the llms.txt map plus the full text of every writing post and every Garage and LWE explainer, one cent, payable by machine. The map alone is free at /llms.txt.",
+    description:
+      "llms-full.txt for aadhar.sh: the llms.txt map plus the full text of every writing post and every Garage and LWE explainer, one cent, payable by machine. The map alone is free at /llms.txt.",
     mimeType: "text/plain",
     payTo: env.X402_PAY_TO,
     maxTimeoutSeconds: 60,
@@ -159,11 +173,17 @@ async function assembleWritingOnly(grab: (path: string) => Promise<string | null
   // `never` and every field read on it an error. The shape is the registry's,
   // src/content/writing/posts.json.
   let posts: Array<{ slug: string; title: string; date: string }> = [];
-  try { posts = JSON.parse(postsRaw || "[]"); } catch (_e) {}
-  const docs = (await Promise.all(posts.map(async (p): Promise<LlmsFullDoc | null> => {
-    const path = "/writing/" + p.slug + ".txt";
-    const body = await grab(path);
-    return body == null ? null : { title: p.title, date: p.date, path, body };
-  }))).filter((d): d is LlmsFullDoc => d !== null);
+  try {
+    posts = JSON.parse(postsRaw || "[]");
+  } catch (_e) {}
+  const docs = (
+    await Promise.all(
+      posts.map(async (p): Promise<LlmsFullDoc | null> => {
+        const path = "/writing/" + p.slug + ".txt";
+        const body = await grab(path);
+        return body == null ? null : { title: p.title, date: p.date, path, body };
+      }),
+    )
+  ).filter((d): d is LlmsFullDoc => d !== null);
   return renderLlmsFull(llms || "# aadhar.sh", [{ heading: WRITING_HEADING, docs }]);
 }

@@ -69,17 +69,26 @@ sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", pat
 const BIN = path.join(METRICS, "target/release/photo-metrics");
 const ours = (ref: string, img: string): Score => JSON.parse(sh([BIN, ref, img])) as Score;
 
-const hifs = fs.readdirSync(SRC).sort().filter((f) => /^XT.*\.HIF$/.test(f)).filter((_, i) => i % 7 === 0)
+const hifs = fs
+  .readdirSync(SRC)
+  .sort()
+  .filter((f) => /^XT.*\.HIF$/.test(f))
+  .filter((_, i) => i % 7 === 0)
   .slice(0, Number(arg("limit") ?? Infinity));
 fs.mkdirSync(WORK, { recursive: true });
-let same = 0, worstS2 = 0, worstBa3 = 0;
+let same = 0,
+  worstS2 = 0,
+  worstBa3 = 0;
 for (const f of hifs) {
   const stem = f.replace(/\.[^.]+$/, "");
   const dir = fs.mkdtempSync(path.join(WORK, `${stem}-`));
   try {
-    const raw = path.join(dir, "raw.png"), ref = path.join(dir, "ref.png");
-    const baseJpg = path.join(dir, "base.jpg"), bare = path.join(dir, "bare.jpg");
-    const repack = path.join(dir, "bare.jxl"), base = path.join(dir, "base.png");
+    const raw = path.join(dir, "raw.png"),
+      ref = path.join(dir, "ref.png");
+    const baseJpg = path.join(dir, "base.jpg"),
+      bare = path.join(dir, "bare.jpg");
+    const repack = path.join(dir, "bare.jxl"),
+      base = path.join(dir, "base.png");
     sh(["sips", "-s", "format", "png", path.join(SRC, f), "--out", raw]);
     stripPng(raw, ref);
     sh([ZENC, raw, baseJpg, "-q", "100", "--yuv", "422"]);
@@ -108,7 +117,8 @@ for (const f of hifs) {
         return beats(s, bar);
       });
     };
-    const a = await pick("ours"), b = await pick("libjxl");
+    const a = await pick("ours"),
+      b = await pick("libjxl");
     for (const [d, s] of scored.ours) {
       const l = scored.libjxl.get(d);
       if (!l) continue;
@@ -121,5 +131,7 @@ for (const f of hifs) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(`\n${same === hifs.length ? "PASS" : "FAIL"}: same distance on ${same}/${hifs.length}; worst gap over shared candidates: ssimulacra2 ${worstS2.toFixed(4)}, 3-norm ${worstBa3.toFixed(4)}`);
+console.log(
+  `\n${same === hifs.length ? "PASS" : "FAIL"}: same distance on ${same}/${hifs.length}; worst gap over shared candidates: ssimulacra2 ${worstS2.toFixed(4)}, 3-norm ${worstBa3.toFixed(4)}`,
+);
 process.exitCode = same === hifs.length ? 0 : 1;

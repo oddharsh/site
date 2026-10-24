@@ -63,21 +63,28 @@ export function renderInboxMail(mentions, state, origin) {
 
   const folderRows = pending
     ? `<li><span class="oe-folder oe-muted"><span class="oe-fico" aria-hidden="true"></span>${dots}</span></li>`
-    : [...folders.entries()].map(([path, items]) =>
-      `<li><a class="oe-folder" href="#f-${esc(slugOf(path))}"><span class="oe-fico" aria-hidden="true"></span>${esc(path)}<span class="oe-count">${items.length}</span></a></li>`
-    ).join("\n        ");
+    : [...folders.entries()]
+        .map(
+          ([path, items]) =>
+            `<li><a class="oe-folder" href="#f-${esc(slugOf(path))}"><span class="oe-fico" aria-hidden="true"></span>${esc(path)}<span class="oe-count">${items.length}</span></a></li>`,
+        )
+        .join("\n        ");
 
   const messageRows = pending
-    ? Array.from({ length: PENDING_ROWS }, () => `<li class="oe-row oe-light" aria-hidden="true">
+    ? Array.from(
+        { length: PENDING_ROWS },
+        () => `<li class="oe-row oe-light" aria-hidden="true">
           <span class="oe-from">${dots}</span><span class="oe-subject">${dots}</span><span class="oe-kind">${dots}</span><span class="oe-target">${dots}</span><span class="oe-date">${dots}</span>
-        </li>`).join("\n        ")
-    : mentions.map((m, i) => {
-    const kind = KIND_LABEL[m.kind] || "mentioned";
-    const when = m.approved_at ? new Date(m.approved_at).toISOString().slice(0, 10) : "";
-    // A like/bookmark is a read receipt, not a message: one compact line, no
-    // excerpt. A reply/repost/mention is a real message with its own row.
-    const light = m.kind === "like" || m.kind === "bookmark";
-    return `<li class="oe-row${light ? " oe-light" : ""}" id="m-${i}">
+        </li>`,
+      ).join("\n        ")
+    : mentions
+        .map((m, i) => {
+          const kind = KIND_LABEL[m.kind] || "mentioned";
+          const when = m.approved_at ? new Date(m.approved_at).toISOString().slice(0, 10) : "";
+          // A like/bookmark is a read receipt, not a message: one compact line, no
+          // excerpt. A reply/repost/mention is a real message with its own row.
+          const light = m.kind === "like" || m.kind === "bookmark";
+          return `<li class="oe-row${light ? " oe-light" : ""}" id="m-${i}">
           <span class="oe-from">${esc(m.author || "someone")}</span>
           <span class="oe-subject"><a href="${esc(m.source)}" rel="noopener ugc external" target="_blank">${esc(m.title || m.source)}</a></span>
           <span class="oe-kind">${esc(kind)}</span>
@@ -85,13 +92,15 @@ export function renderInboxMail(mentions, state, origin) {
           <span class="oe-date">${esc(when)}</span>
           ${light || !m.excerpt ? "" : `<p class="oe-excerpt">${esc(m.excerpt)}</p>`}
         </li>`;
-  }).join("\n        ");
+        })
+        .join("\n        ");
 
-  const empty = state === "unbound"
-    ? "The mention store (Cloudflare D1, aadhar-social) is not connected to this page yet."
-    : state === "error"
-    ? "The mention store did not answer just now. This page stays read-only either way."
-    : "No mentions yet. Link to a page here from your own site and it will show up, once I have approved it.";
+  const empty =
+    state === "unbound"
+      ? "The mention store (Cloudflare D1, aadhar-social) is not connected to this page yet."
+      : state === "error"
+        ? "The mention store did not answer just now. This page stays read-only either way."
+        : "No mentions yet. Link to a page here from your own site and it will show up, once I have approved it.";
 
   return unsafeHtml(`<div class="oe-panes">
       <nav class="oe-tree" aria-label="folders">
@@ -165,10 +174,15 @@ export function renderInboxPage() {
 }
 
 function pathOf(target, origin) {
-  try { return new URL(target).pathname.replace(/\/+$/, "") || "/"; }
-  catch { return String(target).replace(origin, "") || "/"; }
+  try {
+    return new URL(target).pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return String(target).replace(origin, "") || "/";
+  }
 }
-function slugOf(path) { return path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root"; }
+function slugOf(path) {
+  return path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
+}
 
 const OE_CSS = `/*min*/
 .oe-sub{font-size:var(--text-xs);color:var(--slate-45);margin:0 0 12px;max-width:64ch;line-height:1.5}

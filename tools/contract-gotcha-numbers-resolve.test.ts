@@ -52,10 +52,14 @@ test("every gotcha reference in the repository resolves to an entry", async () =
     maxBuffer: 1 << 24,
   });
 
-  const referenced = [...new Set(hits.split("\n").flatMap((h) => {
-    const m = h.match(/(\d+)/);
-    return m ? [Number(m[1])] : [];
-  }))];
+  const referenced = [
+    ...new Set(
+      hits.split("\n").flatMap((h) => {
+        const m = h.match(/(\d+)/);
+        return m ? [Number(m[1])] : [];
+      }),
+    ),
+  ];
   assert.ok(referenced.length >= 20, `only ${referenced.length} distinct references found; the scan has stopped matching`);
 
   const dangling = referenced.filter((n) => !defined.has(n)).sort((a, b) => a - b);
@@ -102,13 +106,20 @@ test("every gotcha says what checks it, and every named check cites it back", as
   // 26 on 2026-10-14. Fewer means entries were relabelled `nothing`.
   assert.ok(named.length >= 20, `only ${named.length} gotchas name a check`);
 
-  const tracked = new Set(execFileSync("git", ["ls-files"], {
-    cwd: new URL(".", ROOT), encoding: "utf8", maxBuffer: 1 << 24,
-  }).split("\n"));
+  const tracked = new Set(
+    execFileSync("git", ["ls-files"], {
+      cwd: new URL(".", ROOT),
+      encoding: "utf8",
+      maxBuffer: 1 << 24,
+    }).split("\n"),
+  );
   const problems = entries.filter((e) => e.problem).map((e) => `gotcha ${e.n}: ${e.problem}`);
   for (const { n, files = [] } of entries) {
     for (const file of files) {
-      if (!tracked.has(file)) { problems.push(`gotcha ${n}: ${file} is not a tracked file`); continue; }
+      if (!tracked.has(file)) {
+        problems.push(`gotcha ${n}: ${file} is not a tracked file`);
+        continue;
+      }
       const text = await readFile(new URL(file, ROOT), "utf8");
       if (!new RegExp(`gotchas? +#?${n}\\b`, "i").test(text)) problems.push(`gotcha ${n}: ${file} never says "gotcha ${n}"`);
     }

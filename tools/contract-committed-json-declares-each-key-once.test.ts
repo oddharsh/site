@@ -38,15 +38,28 @@ function duplicateKeys(text) {
   const stack: any[] = [];
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch === "{") { stack.push(new Map()); continue; }
-    if (ch === "[") { stack.push(null); continue; }
-    if (ch === "}" || ch === "]") { stack.pop(); continue; }
+    if (ch === "{") {
+      stack.push(new Map());
+      continue;
+    }
+    if (ch === "[") {
+      stack.push(null);
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      stack.pop();
+      continue;
+    }
     if (ch !== '"') continue;
 
     let j = i + 1;
     let raw = "";
     for (; j < text.length; j++) {
-      if (text[j] === "\\") { raw += text[j] + text[j + 1]; j++; continue; }
+      if (text[j] === "\\") {
+        raw += text[j] + text[j + 1];
+        j++;
+        continue;
+      }
       if (text[j] === '"') break;
       raw += text[j];
     }

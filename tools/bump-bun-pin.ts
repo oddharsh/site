@@ -250,8 +250,12 @@ if (!target && channel === "canary") {
   }
   target = seasoned.version;
   if (seasoned.skipped.length) {
-    const ages = seasoned.skipped.map((s) => `${npmVersion(s.version)} (${s.ageSeconds === null ? "no publish time" : `${(s.ageSeconds / 3600).toFixed(0)} h`})`);
-    console.log(`skipping ${seasoned.skipped.length} newer canar${seasoned.skipped.length === 1 ? "y" : "ies"} inside bunfig's ${(window / 3600).toFixed(0)} h window: ${ages.join(", ")}`);
+    const ages = seasoned.skipped.map(
+      (s) => `${npmVersion(s.version)} (${s.ageSeconds === null ? "no publish time" : `${(s.ageSeconds / 3600).toFixed(0)} h`})`,
+    );
+    console.log(
+      `skipping ${seasoned.skipped.length} newer canar${seasoned.skipped.length === 1 ? "y" : "ies"} inside bunfig's ${(window / 3600).toFixed(0)} h window: ${ages.join(", ")}`,
+    );
   }
 }
 
@@ -296,7 +300,13 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
     const onNpm = npmVersion(target);
     const known = Boolean(npmMeta.versions?.[onNpm]);
     publishedAt = npmMeta.time?.[onNpm] ? Date.parse(npmMeta.time[onNpm]) : null;
-    record("npm carries the release", known, known ? `bun@${onNpm} published ${npmMeta.time?.[onNpm] ?? "at an unstated time"}` : `the registry has no bun@${onNpm} yet, so half the resolvers cannot see it`);
+    record(
+      "npm carries the release",
+      known,
+      known
+        ? `bun@${onNpm} published ${npmMeta.time?.[onNpm] ?? "at an unstated time"}`
+        : `the registry has no bun@${onNpm} yet, so half the resolvers cannot see it`,
+    );
   }
 }
 
@@ -310,11 +320,7 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
   } else {
     const ageSeconds = Math.floor((Date.now() - publishedAt) / 1000);
     const hours = (ageSeconds / 3600).toFixed(0);
-    record(
-      "older than the install policy's window",
-      ageSeconds >= window,
-      `${hours} h old against bunfig's ${(window / 3600).toFixed(0)} h`,
-    );
+    record("older than the install policy's window", ageSeconds >= window, `${hours} h old against bunfig's ${(window / 3600).toFixed(0)} h`);
   }
 }
 
@@ -373,16 +379,12 @@ try {
   // the identity is the tarball's own package.json, and the revision is printed
   // because it is what an upstream bug report needs.
   const identity = bunIdentity(candidate);
-  const packaged = channel === "stable"
-    ? identity.version
-    : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
+  const packaged = channel === "stable" ? identity.version : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
   // The canary tarball's manifest names the version WITH its build sha, so it
   // equals the whole pin; a release tarball names the bare version, which is
   // the whole pin too. The binary's revision is the second witness.
   const sha = target.split("+")[1] ?? "";
-  const same = channel === "stable"
-    ? packaged === target
-    : packaged === target && identity.revision.includes(`+${sha}`);
+  const same = channel === "stable" ? packaged === target : packaged === target && identity.revision.includes(`+${sha}`);
   record(
     channel === "stable" ? "the asset reports the version it is tagged with" : "the tarball and the binary both name the pinned canary",
     same,
@@ -422,7 +424,8 @@ gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
 // failure in either is the instrument.
 try {
   const gen = spawnSync(process.execPath, ["tools/gen-runtime-types.ts"], { cwd: ROOT, encoding: "utf8" });
-  if (gen.status !== 0) throw new Error(`the pinned bun could not generate the runtime types:\n${`${gen.stderr}\n${gen.stdout}`.trim().split("\n").slice(-4).join("\n")}`);
+  if (gen.status !== 0)
+    throw new Error(`the pinned bun could not generate the runtime types:\n${`${gen.stderr}\n${gen.stdout}`.trim().split("\n").slice(-4).join("\n")}`);
   const tsc = await downloadTsc(join(WORK, "tsc"));
   gate(checkerAgreementGate(candidate, process.execPath, tsc, ROOT, defaultPrograms(ROOT)));
 } catch (err) {

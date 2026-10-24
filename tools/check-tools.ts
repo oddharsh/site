@@ -61,8 +61,7 @@ const REPO_PINNED = new Set(["node", "wrangler"]);
 // Git owns the census at every depth, including the nested AVIF builder but
 // excluding its ignored downloads. Stage new scripts before checking them.
 // A failed census or unreadable tracked script must fail the check.
-const scripts = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: ROOT, encoding: "utf8" })
-  .split("\0").filter(Boolean).sort();
+const scripts = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean).sort();
 const source = new Map();
 for (const rel of scripts) source.set(rel, await readFile(path.join(ROOT, rel), "utf8"));
 
@@ -203,9 +202,7 @@ for (const [rel, text] of source) {
 // min_version already had: something must actually enforce it.
 for (const tool of tools) {
   if (!tool.min_version) continue;
-  const enforced = [...source.values()].some((text) =>
-    new RegExp(`^[ \t]*${tool.bin.toUpperCase().replace(/-/g, "_")}_MIN=`, "m").test(text),
-  );
+  const enforced = [...source.values()].some((text) => new RegExp(`^[ \t]*${tool.bin.toUpperCase().replace(/-/g, "_")}_MIN=`, "m").test(text));
   if (!enforced) {
     errors.push(`config/tools.json: ${tool.bin} declares min_version ${tool.min_version}, and no script enforces it`);
   }
@@ -228,15 +225,12 @@ async function present(tool: Tool): Promise<string | null> {
   // directory, so a tool built into the tree (zenc) can be declared by its
   // committed location and still be found when this runs from anywhere.
   // `path.resolve` leaves an absolute path (jpegtran's) untouched.
-  const candidates = tool.path
-    ? [path.resolve(ROOT, tool.path)]
-    : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
+  const candidates = tool.path ? [path.resolve(ROOT, tool.path)] : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
   for (const candidate of candidates) {
     try {
       await access(candidate, fsConstants.X_OK);
       return candidate;
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
@@ -298,9 +292,7 @@ for (const [bin, where] of found) {
     // kind the floors exist for: the tier would go on reporting a pass while
     // reading nothing. The tool changed its output, and that is worth
     // knowing on the day it happens rather than on the day bytes move.
-    versionErrors.push(
-      `${bin}: \`${spec.flag}\` no longer matches its declared pattern. It answered: ${JSON.stringify(text.split("\n")[0] ?? "")}`,
-    );
+    versionErrors.push(`${bin}: \`${spec.flag}\` no longer matches its declared pattern. It answered: ${JSON.stringify(text.split("\n")[0] ?? "")}`);
     continue;
   }
 
@@ -323,9 +315,7 @@ for (const [bin, where] of found) {
   // a multi-part record. Saying so beats comparing anyway: a floor that silently
   // stops flooring is the same scanner rot.
   if (tool.min_version && groups) {
-    versionErrors.push(
-      `config/tools.json: ${bin} declares min_version ${tool.min_version} and a multi-part version pattern, which cannot be ordered`,
-    );
+    versionErrors.push(`config/tools.json: ${bin} declares min_version ${tool.min_version} and a multi-part version pattern, which cannot be ordered`);
     continue;
   }
 
@@ -335,9 +325,7 @@ for (const [bin, where] of found) {
     marks.push(`BELOW ${tool.min_version}`);
   }
   if (tool.bytes && tool.recorded && tool.recorded !== version) {
-    versionNotices.push(
-      `${bin} at ${where} reports ${version}; config/tools.json records ${tool.recorded}.`,
-    );
+    versionNotices.push(`${bin} at ${where} reports ${version}; config/tools.json records ${tool.recorded}.`);
     marks.push(`RECORDED ${tool.recorded}`);
   }
   versionLines.push(`  ${bin.padEnd(18)} ${version}${tool.bytes ? "  (bytes)" : ""}${marks.length ? `  <-- ${marks.join(", ")}` : ""}`);
