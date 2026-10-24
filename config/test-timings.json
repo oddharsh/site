@@ -146,7 +146,6 @@
     "tools/contract-agent-ready-the-scorecard-that-grades-its-author-too.test.ts": 6,
     "tools/contract-coffee-is-a-built-document.test.ts": 6,
     "tools/contract-deps-pin-proposes-what-dependabot-would.test.ts": 6,
-    "tools/contract-dictionary-preference-model.test.ts": 6,
     "tools/contract-every-client-script-is-a-shell.test.ts": 6,
     "tools/contract-indieweb-doors.test.ts": 6,
     "tools/contract-the-cover-proxy-walks-every-hop.test.ts": 6,
