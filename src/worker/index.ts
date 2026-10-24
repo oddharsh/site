@@ -175,7 +175,7 @@ export default {
       // catch it because cronJob() matches minute+hour and is right either way.
       // The pairing is pinned in contract-the-perf-probe now. Prefer the
       // three-letter form in anything new.
-      await cron("cron.census", () => cronCensus(env)); // the longitudinal census, full roster in one awaited pass
+      await cron("cron.census", () => cronCensus(env)); // the longitudinal census: one CensusWorkflow instance per roster host (census.ts)
     } else if (job === "around") {
       // 05:41 UTC daily: crawl the /around neighborhood. One of the two jobs that
       // probe somebody else's server, each alone in its own invocation because

@@ -1,10 +1,11 @@
 // lens.js — client behavior for /lens ("The Other Web").
 //
 // Calls the server-side /lens/fetch engine (CORS blocks the browser from
-// fetching arbitrary origins itself), then renders the result through six
-// machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
-// files — next to a plain human read and an opt-in Browser Run render. No deps, no
-// build. Deferred, short-cached with SWR.
+// fetching arbitrary origins itself), then renders the result through eleven
+// machine "lenses" (LENS_LABEL below has them all), next to a plain human read
+// and an opt-in Browser Run render. Five lenses (Reader, Wire, Tools, NLWeb,
+// Markdown) load their own island on first use. No deps. Deferred, short-cached
+// with SWR.
 (() => {
   "use strict";
 
@@ -432,17 +433,33 @@
     }
   }
 
-  function showError(j) {
-    var msg = (j && j.error) || "Something went wrong.";
-    data = null;
+  // Every tab's result belongs to one scan, so a new scan, an error or Back
+  // clears all of them. Tools, NLWeb and Markdown were missing from three copies
+  // of this list: site A's catalogue showed on site B, and a request in flight
+  // when the next scan started left its tab "pending" for good, because the
+  // loader's staleness guard returns without clearing the busy flag.
+  function clearScanResults() {
     browserData = null;
     browserRecipeData = null;
     readerData = null;
     cloudflareData = null;
     wireData = null;
+    toolsData = null;
+    nlwebData = null;
+    markdownData = null;
+    browserBusy = false;
     readerBusy = false;
     cloudflareBusy = false;
     wireBusy = false;
+    toolsBusy = false;
+    nlwebBusy = false;
+    markdownBusy = false;
+  }
+
+  function showError(j) {
+    var msg = (j && j.error) || "Something went wrong.";
+    data = null;
+    clearScanResults();
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     if (machineTop) machineTop.innerHTML = "";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
@@ -460,14 +477,7 @@
     }
     if (vsMode) exitVs(false); // a single scan replaces the head-to-head
     busy = true;
-    browserData = null;
-    browserRecipeData = null;
-    readerData = null;
-    cloudflareData = null;
-    wireData = null;
-    readerBusy = false;
-    cloudflareBusy = false;
-    wireBusy = false;
+    clearScanResults();
     urlInput.value = url;
     // A new site is a fresh page: don't carry the last scan's Delta switches onto
     // it (a markdown/contract simulation from site A silently misrepresenting site
@@ -892,6 +902,12 @@
     // MouseEvent in here and encode "[object PointerEvent]" into the query.
     if (asText(recipeId) === null) recipeId = "";
     browserBusy = true;
+    // Same staleness guard as the lazy tabs: Browser Run is the slowest call on
+    // the page (one rendered session, about 19 s), so a second scan landing
+    // first is common, and site A's snapshot must not become site B's. Before
+    // this guard it did, and A's still-busy flag refused B's own auto-run.
+    var targetUrl = data.finalUrl || data.url;
+    var stale = () => !data || (data.finalUrl || data.url) !== targetUrl;
     function runLoaded() {
       if (!window.LensBrowser) {
         browserBusy = false;
@@ -902,6 +918,7 @@
         browserBody,
         data,
         (j) => {
+          if (stale()) return;
           browserBusy = false;
           if (recipeId) browserRecipeData = j;
           else browserData = j;
@@ -909,7 +926,10 @@
           renderStatus();
         },
         (e) => {
+          // false tells the island this run is stale, so it paints nothing
+          if (stale()) return false;
           browserBusy = false;
+          return true;
         },
         runBrowser,
         recipeId,
@@ -3614,6 +3634,21 @@
         note: "The doors an agent can find before it has to drive the human page.",
         rows: ["robots.txt, sitemap.xml, and llms.txt", "feeds and API/action descriptions", "MCP, NLWeb, WebMCP, and agent-card hints"],
       },
+      tools: {
+        title: "What it accepts",
+        note: "The MCP tools this origin lists, read and never called.",
+        rows: ["each tool's name and inputSchema", "a form built from that schema", "the JSON-RPC call an agent would send"],
+      },
+      nlweb: {
+        title: "What it answers",
+        note: "One real question to the origin's NLWeb /ask door, graded against NLWeb's result contract.",
+        rows: ["the answer the door sends back", "whether its results are ones an agent can use", "a door that answers 200 with nothing usable"],
+      },
+      markdown: {
+        title: "What agents get",
+        note: "The Accept header seven named agent clients send, replayed, and what each one got back.",
+        rows: ["who gets Markdown and who gets HTML", "a bare text/markdown request against real clients' headers", "the content type each reply claims"],
+      },
     };
     var p = primers[lens] || primers.anatomy;
     // No scan, no verdict: the slot above the tabs must not outlive its data.
@@ -3674,6 +3709,7 @@
       b.setAttribute("aria-checked", active ? "true" : "false");
     });
     updateDeltaCount();
+    syncRoving();
     if (humanH && !data) {
       humanH.innerHTML = view === "delta" ? "Human view &middot; baseline" : "Human view &middot; the live page";
     }
@@ -3715,6 +3751,7 @@
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-selected", active ? "true" : "false");
     });
+    syncRoving();
     if (data) renderMachine();
     else {
       updateModeUi();
@@ -3765,6 +3802,36 @@
       setLens(b.getAttribute("data-lens"));
     });
   });
+
+  // Arrow keys, Home and End move through the view radios and the lens tabs, the
+  // keyboard model ARIA gives a radiogroup and a tablist: only the selected item
+  // sits in the Tab order, and moving selects. A move clicks the next item, so it
+  // takes exactly the path a pointer would (Delta's lens rule, history writes).
+  // Wired here, after hydration, so a page whose script never runs keeps every
+  // button reachable by Tab.
+  function syncRoving() {
+    [].forEach.call(document.querySelectorAll(".lx-seg, .lx-tab"), (b) => {
+      b.setAttribute("tabindex", b.classList.contains("is-on") ? "0" : "-1");
+    });
+  }
+  function arrowKeys(selector) {
+    return (e) => {
+      var items = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter((b) => b.getClientRects().length > 0);
+      var i = items.indexOf(document.activeElement as HTMLElement);
+      if (i < 0) return;
+      var n = items.length;
+      var k = e.key;
+      var next = k === "ArrowRight" || k === "ArrowDown" ? (i + 1) % n : k === "ArrowLeft" || k === "ArrowUp" ? (i - 1 + n) % n : k === "Home" ? 0 : k === "End" ? n - 1 : -1;
+      if (next < 0) return;
+      e.preventDefault();
+      items[next].click();
+      items[next].focus();
+    };
+  }
+  var viewGroup = document.querySelector(".lx-view");
+  if (viewGroup) viewGroup.addEventListener("keydown", arrowKeys(".lx-seg"));
+  var lensGroup = document.querySelector(".lx-lenses");
+  if (lensGroup) lensGroup.addEventListener("keydown", arrowKeys(".lx-tab"));
 
   // "state of the machine web" dialog: close button, backdrop light-dismiss, and
   // every [data-sow-open] trigger (the rail's "?" and the footer link). The
@@ -3851,17 +3918,13 @@
     }
     if (!state.url && data) {
       data = null;
-      browserData = null;
-      browserRecipeData = null;
-      readerData = null;
-      cloudflareData = null;
-      wireData = null;
-      readerBusy = false;
-      cloudflareBusy = false;
-      wireBusy = false;
+      clearScanResults();
+      // the same idle text the server renders (renderLensShell), so Back to a
+      // bare /lens reads exactly like arriving at one
       humanBody.innerHTML =
         '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
-      machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
+      machineBody.innerHTML = '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>';
+      if (machineTop) machineTop.innerHTML = "";
       renderBrowser();
       statusBar.innerHTML = "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>";
     }

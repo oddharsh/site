@@ -476,10 +476,12 @@
       })
       .then(done)
       .catch((error) => {
+        // The shell answers false when this run belongs to a scan it has moved
+        // past, and the pane already shows the newer one.
+        if (onError(error) === false) return;
         body.innerHTML = unavailable(error, data);
         var button = document.getElementById("lx-browser-run");
         if (button) button.addEventListener("click", onRun);
-        onError(error);
       });
   }
   window.LensBrowser = { mount: mount, run: run };

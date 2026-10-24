@@ -1805,7 +1805,7 @@ footer a { color:var(--link); }
       </section>
     </div>
 
-    <div class="lx-status" id="lx-status">${
+    <div class="lx-status" id="lx-status" role="status">${
       vsActive
         ? compare.payload && compare.payload.ok
           ? "<span><b>Head-to-head</b></span><span>" +
@@ -3959,9 +3959,10 @@ export function lensDecode(s) {
 // ── the Terms lens ----------------------------------------------------------
 // What this site permits, resists, or charges — per bot, per path. Everything
 // below is read from PUBLISHED policy (robots.txt, Content-Signal, TDMRep,
-// noai directives) plus what happened to our own identified fetch. Lens never
-// wears another bot's user-agent to test enforcement; same honesty rule as
-// AadharshBot itself.
+// noai directives) plus what happened to our own identified fetch. The verdicts
+// never come from wearing another bot's user-agent. The bot views below do send
+// crawler user-agents, unsigned, to show what each is served, and Terms stays
+// the source of truth for what a site permits.
 
 // The crawlers worth a scoreboard row: the household names of the agentic web,
 // grouped by what they take (a search index / a training corpus / live
