@@ -9,107 +9,112 @@
     "name": "Aadharsh Pannirselvam",
     "email": "resume@aadhar.sh",
     "url": "https://aadhar.sh",
+    "summary": "I notice technology, take it apart to understand it, and write up what's inside. Obsessive about feel and performance: I live on beta and canary builds, give feedback, and lately ship the fixes. By day I invest in that frontier at Archetype, and the writing is part of that job; the rest of the time I tinker and play.",
     "profiles": [
-      { "network": "X", "username": "oddhash", "url": "https://x.com/oddhash" },
-      { "network": "ENS", "username": "aadharsh.eth" }
+      {
+        "network": "GitHub",
+        "username": "oddharsh",
+        "url": "https://github.com/oddharsh"
+      },
+      {
+        "network": "X",
+        "username": "oddhash",
+        "url": "https://x.com/oddhash"
+      }
     ]
   },
+  "projects": [
+    {
+      "name": "Learning With Errors",
+      "url": "https://aadhar.sh/lwe",
+      "roles": [
+        "Builder & Writer"
+      ],
+      "startDate": "2026-05",
+      "highlights": [
+        "Interactive technical explainers written as conversations: inline demos you can poke, a pop quiz at the end of each one. FHE, MPC, TEEs, UTF-8: hard things taught the way you'd actually pick them up, by taking them apart.",
+        "Garage study: disassembled thumbnail encoding: AVIF vs JPEG vs jpegli at the byte level, bytes-per-pixel benchmarks from my own measurements, plus experiments in image optimization, minifiers, and dictionary-based content compressors.",
+        "Among the first 10 solvers of Paradigm's Kryptos-style CTF puzzles, cracked with a group ideating constantly, AI in the loop. The Vigenère explainer above came out of that rabbit hole."
+      ]
+    },
+    {
+      "name": "Open-source contributor",
+      "url": "https://github.com/oddharsh",
+      "startDate": "2026-06",
+      "highlights": [
+        "Fixed the WebMCP standard on EmDash (a WordPress replacement) so hosted content is legible to AI agents, tracing the agent-readable web down to the protocol.",
+        "Improved the JavaScript minifier on Bun and Oxc, taking apart how code gets smaller.",
+        "Found that workerd's zstd silently dropped its dictionary option, filed it, and wrote the fix, pricing it against production first: 21.9% off 13 pages at roughly 0.2 ms of CPU each.",
+        "More merged work in the same lanes: Compression Dictionary Transport in web-platform-tests and MDN, and image-codec PRs into jxl-rs (libjxl) and zenjpeg.",
+        "Built houseguest, my personal software factory: a Claude Code plugin that makes my OSS contributions repeatable so PRs land mergeable, still being tweaked as I contribute more.",
+        "Thinking hard about how OSS maintenance evolves as AI-generated issues and PRs get cheap: what happens to feedback loops, and whether canaries and nightlies become the review process. I run both constantly."
+      ]
+    },
+    {
+      "name": "Internal tooling",
+      "entity": "Archetype",
+      "description": "shipped & maintained",
+      "highlights": [
+        "Surveyed agent frameworks, then built a firmwide Slack AI agent on DigitalOcean Kubernetes around an open-source, extensible base, folding in lessons from each framework and my own tools. Plus a 20-skill sidekick toolkit; people across the firm use both daily, and I maintain them from usage metrics, feedback, what people build, and security developments."
+      ]
+    }
+  ],
   "work": [
     {
       "name": "Archetype",
-      "position": "Research Analyst to Analyst to Associate to Principal",
+      "position": "Principal",
       "location": "New York, NY",
       "startDate": "2023-10",
-      "summary": "Investments: TACEO, Turnkey. Portfolio companies worked closely with: Ritual, Opacity, Odyn.",
       "highlights": [
-        "Conduct sourcing, diligence, and decision for investments in Archetype's Fund II and III, most focused on applied cryptography.",
-        "Wrote the 3-part \"Privacy 2.0\" series on PETs (TEEs, MPC, FHE) and co-authored investment theses on archetype.fund.",
-        "Built, deployed, and maintain a firm-wide Slack AI agent on DigitalOcean Kubernetes, plus its 20-skill local sidekick toolkit.",
-        "Work with Archetype's portfolio companies across funds to direct strategy on product, marketing, and engineering.",
-        "Forecasted the results of the USBTC-Hut8 merger in the context of BTC, HPC/AI, and power-grid pricing dynamics."
+        "Wrote the 3-part \"Privacy 2.0\" series on privacy-enhancing technologies (TEEs, MPC, FHE, obfuscation), long-form research at the AI/crypto intersection that shaped the fund's applied-cryptography thesis.",
+        "Treated diligence as deep technical education: dug into parallel execution for distributed systems, eval design, model architectures, and audio processing for voice models. I learn the machinery first, then the market.",
+        "Mapped the agent-readable web: evangelized agent payment rails, onchain agents, and app-chain design through hands-on work with open-source builders.",
+        "Host and curate dinners and events gathering top technical people across cryptography, formal verification, and privacy, and have spoken on panels and MC'ed events in the space, including an Oxford-style debate on onchain agents."
       ]
     },
     {
       "name": "Galaxy",
       "position": "Analyst, Ventures Team",
       "location": "New York, NY",
-      "startDate": "2022-06",
-      "endDate": "2023-08",
-      "summary": "Two summers: June to August 2022 and June to August 2023.",
+      "startDate": "2022",
+      "endDate": "2023",
+      "summary": "Summers 2022 and 2023.",
       "highlights": [
-        "Conducted market sourcing, diligence, and decision for technical investments in Galaxy's Principal Investments Fund.",
-        "Researched a taxonomy of Move-based chains as part of diligence into Mysten's Series A round in 2022.",
-        "Analyzed cross-chain stablecoin bridging and modeled impermanent loss between staking and providing AMM liquidity.",
-        "Wrote future-facing theses on mechanism design for Proposer-Builder-separated fee markets and protocols in response to MEV."
-      ]
-    },
-    {
-      "name": "Benzinga Crypto",
-      "position": "Blockchain Analyst",
-      "location": "Detroit, MI (Remote)",
-      "startDate": "2022-01",
-      "endDate": "2022-06",
-      "highlights": [
-        "Wrote educational content on blockchain, DeFi, and Web3 spanning technical topics such as IPFS and ZK proofs.",
-        "Researched trends in the blockchain space to produce comparative content, focused on investment opportunities.",
-        "Used Glassnode's on-chain data analytics to generate graphics and keywords to maximize article traffic."
-      ]
-    },
-    {
-      "name": "Flipside Crypto",
-      "position": "Data Science",
-      "location": "Boston, MA",
-      "startDate": "2021-05",
-      "endDate": "2021-09",
-      "highlights": [
-        "Analyzed cross-chain Ethereum bridges and price data, published in OurNetwork Issue #91.",
-        "Developed bounties and evaluated submissions for 3,100+ community researchers on Compound, Uniswap, and Yearn.",
-        "Learned SQL and web scraping to validate and update tokenomic data on Snowflake across multiple chains and protocols."
+        "Diligence on Mysten's Series A: benchmarked Sui's Move-based state concurrency model against Solana's parallelism and consensus protocol, applying broad distributed systems principles, and wrote internal directives on separated fee markets, applying game-theoretic principles and data."
       ]
     }
   ],
   "education": [
     {
       "institution": "University of Chicago",
-      "location": "Chicago, IL",
       "area": "Economics (minor in Data Science)",
       "studyType": "A.B.",
-      "score": "3.81 GPA",
-      "endDate": "2024-06"
+      "score": "3.81",
+      "endDate": "2024"
     }
   ],
-  "volunteer": [
+  "skills": [
     {
-      "organization": "ChicagoDAO",
-      "position": "External Governance Team, Maker Lead",
-      "location": "Chicago, IL",
-      "startDate": "2022-03",
-      "endDate": "2024-06",
-      "highlights": [
-        "Managed the DAO's Uniswap, Compound, and MakerDAO token delegations, evaluating and designing governance proposals.",
-        "Worked with Prof. Anthony Lee Zhang to build and maintain relations with alumni in crypto and decentralized systems."
+      "name": "Languages",
+      "keywords": [
+        "TypeScript",
+        "Python",
+        "SQL"
       ]
     },
     {
-      "organization": "Blockchain Chicago",
-      "position": "Co-Founder, Instructor",
-      "location": "Chicago, IL",
-      "startDate": "2021-08",
-      "endDate": "2024-06",
-      "highlights": [
-        "Built development and business curriculum with other universities' clubs to support members' DeFi literacy.",
-        "Outlined a DAO for post-education ventures and collaborations with blockchain clubs at Booth and UChicago Law."
+      "name": "Tools",
+      "keywords": [
+        "Claude Code",
+        "Codex"
       ]
     },
     {
-      "organization": "Oeconomica",
-      "position": "Researcher, Labor and Consumption Cohort",
-      "location": "Chicago, IL",
-      "startDate": "2021-10",
-      "endDate": "2022-02",
-      "highlights": [
-        "Designed and co-authored an original research paper on labor and consumption impacts downstream of COVID.",
-        "Honed econometric and data-analysis skills (in R) to evaluate economic literature and validate research methods."
+      "name": "Current puzzles",
+      "keywords": [
+        "image codecs",
+        "compression dictionaries",
+        "agent-readable web"
       ]
     }
   ]
