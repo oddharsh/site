@@ -1,9 +1,10 @@
 # aadhar.sh
 
 > Aadharsh Pannirselvam's corner of the web. Researching and investing at
-> Archetype, a crypto-native venture firm in New York, mostly in cryptography
-> and privacy tech (FHE, MPC, zero-knowledge proofs, TEEs). Building this site
-> by hand, always under construction. The root is a
+> Archetype, a NY based venture firm focused on all things programmable,
+> mostly in how machines access, browse, and learn from the internet, and in
+> applied cryptography and privacy tech (FHE, MPC, zero-knowledge proofs,
+> TEEs). Building this site by hand (and prompt), always under construction. The root is a
 > personal homepage styled after the 2003 Windows-XP era. Photographs (a
 > live photo grid) and longform writing (an editable Notepad at /writing)
 > are live. Sounds, dishes, and tinkering are still planned.
@@ -364,8 +365,8 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
 
 ## Optional
 
-- [Archetype](https://www.archetype.fund/): The crypto-native venture firm
-  where I research and invest.
+- [Archetype](https://www.archetype.fund/): The NY based venture firm, focused
+  on all things programmable, where I research and invest.
 - [song.link](https://song.link): The redirector used in `/rn/tracks` so
   music links work across Spotify, Apple Music, YouTube Music, Tidal, etc.
 
