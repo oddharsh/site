@@ -304,6 +304,13 @@ async function listPages() {
   // local static server too — no LOCAL skip, unlike the worker routes. The
   // static server serves raw paths, the live worker serves the clean route.
   for (const p of OG_PAGE_DIRS) {
+    // A card another generator writes (the homepage's is its og:video's first
+    // frame, from og-video/bake.ts) is never captured here, or a full run would
+    // put the live page back over it.
+    if ("bakedBy" in p) {
+      console.log(`  - ${p.id}  skipped: its card comes from ${p.bakedBy}`);
+      continue;
+    }
     // An empty dir is the site root: `/` live, `/index.html` on the static server.
     const local = `${BASE}/${p.dir ? p.dir + "/" : ""}index.html`;
     out.push({ id: p.id, url: LOCAL ? local : `${BASE}/${p.dir}` });
