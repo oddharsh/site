@@ -394,7 +394,11 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
 
   let cursorDay = startOfDay(now, tz);
   for (let d = 0; d < +env.MAX_LOOKAHEAD_DAYS + 1; d++) {
-    const dayStart = addDays(cursorDay, d);
+    // Step from local noon, then snap to that day's midnight. A day that
+    // crosses a DST change is 23 or 25 hours long, so 24h steps from midnight
+    // land at 23:00 the night before once clocks fall back: on 2026-10-24 the
+    // window offered Saturday Nov 7 and dropped Monday Nov 2.
+    const dayStart = startOfDay(addDays(cursorDay, d) + 12 * 3600_000, tz);
     const dow = dayOfWeek(dayStart, tz);
     if (!workDays.includes(dow)) continue;
 
