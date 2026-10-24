@@ -31,7 +31,7 @@ jobs:
       # The libavif config/tools.json records for zenc-avif, which is what the
       # owner's grid tiers link. The distro's libavif is never the oracle: Ubuntu
       # 26.04 ships 1.3.0, whose avifenc writes gray PNGs ~4x dark at -d 10
-      # (gotcha 84). tools/contract-photos-ci-builds-the-recorded-libavif.test.ts
+      # (gotcha 84). tools/tests/contract-photos-ci-builds-the-recorded-libavif.test.ts
       # fails when this tag and the recorded version part.
       LIBAVIF_TAG: v1.4.2
       LIBAVIF_COMMIT: c5240fc79fe5c2407e10afd35f5505ef6333ea49

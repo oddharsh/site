@@ -1,5 +1,7 @@
 # Dependency updates and site leverage
 
+For pin locations and everyday commands, start with [TOOLING.md](TOOLING.md).
+
 Two systems own dependency updates, split by ecosystem:
 
 | owner | ecosystem | directory | what it owns |
@@ -155,8 +157,7 @@ it; the header of [`osv-scanner.toml`](../osv-scanner.toml) carries the
 command. Reach for `deps:audit` when you want the npm half answered in the time
 it takes to read the question, and run the osv scan for the whole tree.
 
-`bun why <package>` answers the floor questions the manifest comments argue in
-prose. The `comment:undici` block spends a paragraph on where undici comes from
+`bun why <package>` answers the floor questions the toolchain notes discuss. The `undici` section in [TOOLCHAIN-DECISIONS.md](TOOLCHAIN-DECISIONS.md#undici) records on where undici comes from
 and why an `overrides` entry was retired; the command prints the chain, read
 here on 2026-10-05 and checked by nothing, so treat the versions as a snapshot:
 
@@ -185,7 +186,7 @@ slowest files first, since three spawn-bound files now carry 57s of the
 suite's 98s and the longest one sets the floor. That's a laptop win (about
 22%); CI measured no change, because there the cpu-sweep contract test alone
 runs 43s of a 44s suite. Refresh it with `bun run test --update-timings`. The tables, the isolation argument and the
-control are at `comment:test-parallel`.
+control are in [TOOLCHAIN-DECISIONS.md](TOOLCHAIN-DECISIONS.md#test-parallel).
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
 anything a `.test.ts` file imports, or spawns with `process.execPath`, runs
@@ -803,8 +804,8 @@ the reason, rather than written here with the caret quietly dropped.
   up to the workspace root, so without it `cf build` refuses with "No
   Cloudflare dev-server is installed in this project." Under bun's isolated
   linker the same URL resolves to the same store entry, so this adds 3 lines to
-  `bun.lock` and zero packages. `check-wrangler` holds it to the root pin byte
-  for byte, and `wrangler:pin` moves both in one write.
+  `bun.lock` and zero packages. `catalog:` references the root pin, `check-wrangler` verifies the shared
+  installation, and `wrangler:pin` changes the catalog once.
 
   **`cf` itself is NOT a dependency here, and that is deliberate.** Installed
   into the tree it pins its own Miniflare and Workerd for its CLI half

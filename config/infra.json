@@ -1058,7 +1058,7 @@
         "zero or by one, so no threshold separates a clean repository from a",
         "compromised one. Coverage is held by the scan failing CLOSED on anything",
         "it cannot classify, and by the fixtures in",
-        "tools/contract-every-action-reference-under-github-is-pinned.test.ts.",
+        "tools/tests/contract-every-action-reference-under-github-is-pinned.test.ts.",
         "",
         "Local `./` references are RESOLVED, never exempted. There are 12 and each",
         "one has its target action file located and scanned, transitively, which",

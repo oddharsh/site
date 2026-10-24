@@ -72,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          before=$(bun -e 'process.stdout.write(require("./package.json").devDependencies.wrangler)')
+          before=$(bun -e 'process.stdout.write(require("./package.json").catalog.wrangler)')
 
           # gotcha 40: read the status without a pipe in front of it.
           set +e
@@ -83,7 +83,7 @@ jobs:
           set -e
           cat pin.log
 
-          after=$(bun -e 'process.stdout.write(require("./package.json").devDependencies.wrangler)')
+          after=$(bun -e 'process.stdout.write(require("./package.json").catalog.wrangler)')
           {
             echo "before=$before"
             echo "after=$after"
@@ -138,9 +138,8 @@ jobs:
           DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run timbrado digest --repo cloudflare/workers-sdk --from "$from" --to "$to" --prefer wrangler,miniflare)
 
           git checkout -B "$BRANCH"
-          # Every TRACKED manifest, not just the root: cf-garage names the same
-          # pin for the cf CLI and bump-wrangler-pin.ts moves it in the same write.
-          git add -u -- package.json bun.lock '*/package.json'
+          # Workspace manifests reference the catalog; only its pin and lock move.
+          git add -u -- package.json bun.lock
           git commit -m "chore(wrangler): move the pin from $from to $to
 
           Every gate green on the candidate's own createTestHarness: the dry-run

@@ -258,7 +258,7 @@
       // through the parse layer would assert that the parse layer works, not
       // that the surface under test returns the right type. Same scoping as the
       // no-floating-promises entry below, and for a related reason.
-      "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.ts"],
+      "files": ["**/test/**", "**/*.test.*", "tools/tests/contract-shared.ts"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
@@ -266,7 +266,7 @@
       // application promises that need a caller to await them. Suppression
       // stays scoped to tests so Worker promises remain checked: an unawaited
       // promise can be cancelled at request teardown.
-      "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.ts"],
+      "files": ["**/test/**", "**/*.test.*", "tools/tests/contract-shared.ts"],
       "rules": { "typescript/no-floating-promises": "off" }
     },
     {

@@ -41,3 +41,16 @@ export function pinnedSha(pin: string): string | undefined {
 export function installedSha(manifestRealpath: string): string | undefined {
   return STORE_SHA.exec(manifestRealpath)?.[1];
 }
+
+/** Resolve the root declaration through Bun's shared catalog when referenced. */
+export function wranglerPin(pkg: {
+  devDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  catalog?: Record<string, string>;
+}): string {
+  const spec = pkg.devDependencies?.wrangler ?? pkg.dependencies?.wrangler ?? "";
+  if (spec !== "catalog:") return spec;
+  const pin = pkg.catalog?.wrangler;
+  if (!pin || pin.startsWith("catalog:")) throw new Error("package.json catalog.wrangler must declare an exact pin");
+  return pin;
+}

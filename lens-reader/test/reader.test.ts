@@ -7,7 +7,7 @@
 // first run).
 //
 // The split by capability:
-//   tools/contract-the-reader-lens-lens-read-lens-reader.test.ts: everything
+//   tools/tests/contract-the-reader-lens-lens-read-lens-reader.test.ts: everything
 //     provable from SOURCE TEXT or the configs: the rate limit against
 //     cloudflare.config.ts, minify and source maps, the shared SSRF guard, the
 //     Markdown walk's shape, the dropped tally, the tab labels, the 429 headers.

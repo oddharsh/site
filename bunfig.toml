@@ -13,7 +13,7 @@
 # bundles. Hoisting would blur exactly the line that split is drawing.
 #
 # It also preserves the shape the undici note in package.json reasons about,
-# with one correction recorded there: that note was written for a HOISTED
+# with one correction recorded in docs/TOOLCHAIN-DECISIONS.md: that note was written for a HOISTED
 # layout and talks about winning a race for "the hoisted position". Under an
 # isolated linker there is no single such position. The floors still hold.
 linker = "isolated"
@@ -52,7 +52,7 @@ minimumReleaseAge = 86400
 # CI's frozen install instead, so read the registry's `time` field for the
 # PINNED version before deleting its line.
 # ONE PACKAGE FAMILY, since 2026-09-15, and the reason is the wrangler pin.
-# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main, taken
+# `catalog.wrangler` is a pkg.pr.new COMMIT of workers-sdk main, taken
 # at zero hours old by construction, and each such commit names the exact
 # `workerd` it was built against. workerd is the same publisher one step
 # removed and it releases most days, so wrangler main is routinely a day ahead
@@ -104,7 +104,7 @@ minimumReleaseAgeExcludes = [
 # so a bare `bun test` sweeps the same files green, sequentially, at roughly
 # twice the wall clock and under the runner's own 5s per-test default. Those
 # flags live in the script for the same reason the preload is stated there, and
-# package.json's comment:test-parallel carries the measurements, the isolation
+# docs/TOOLCHAIN-DECISIONS.md carries the measurements, the isolation
 # argument and the control that come with them.
 
 #
@@ -116,7 +116,7 @@ minimumReleaseAgeExcludes = [
 # it now builds inside node_modules/av2-tone, which bun test never walks.
 
 [test]
-root = "tools"
+root = "tools/tests"
 preload = ["./tools/lib/no-network.ts"]
 pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
 
@@ -126,7 +126,7 @@ pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build
 # on every run, explicit paths included, so it decides what the formatter may
 # touch. Every line below answers a hazard measured on 2026-10-16 by formatting
 # the whole tree and running the build, the suite, lint and the checks on it.
-# tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts holds each
+# tools/tests/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts holds each
 # one, with a --no-config control showing the hazard is real on the pinned bun.
 #
 #   embeddedLanguageFormatting = "off"  the default reformats the HTML inside

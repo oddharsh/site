@@ -45,7 +45,7 @@
    generated design system, until 2026-10-06: the chrome sat up to dE 0.040
    from its hex (--darkshadow) and the title blues up to 0.042 (--blue-95).
    Each comment that names a hex now states its measured distance, and
-   tools/contract-design-tokens-reach-every-page.test.ts holds the four
+   tools/tests/contract-design-tokens-reach-every-page.test.ts holds the four
    chrome and four title values to it.
    ============================================================================ */
 
@@ -1246,7 +1246,7 @@ a.term:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
    tree. One bitmap pixel is --hypercam-px, a whole number of CSS px so every
    pixel stays square: 1 on phones, 2 from 1024px (where the desktop icons
    appear), 3 from 1920px. That holds it near the quarter of the frame it took
-   in a 640px capture. tools/contract-the-hypercam-watermark-is-the-system-font
+   in a 640px capture. tools/tests/contract-the-hypercam-watermark-is-the-system-font
    holds the path to the bitmap and the homepage's inline copy to these steps.
 
    Nothing starts under it: the icon layer, the window column and a maximized

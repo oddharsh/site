@@ -63,6 +63,7 @@ import { suiteCounts, suiteCountsText } from "./lib/bun-gates.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
 import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { wranglerPin } from "./lib/wrangler-provenance.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { siteWranglerArgs } from "./lib/site-config.ts";
 
@@ -138,7 +139,7 @@ const BUN = process.execPath;
 // wrangler runs under node, per command, and never under bun (gotcha 38).
 const NODE = "node";
 
-const pin = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies?.wrangler ?? "?";
+const pin = wranglerPin(JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")));
 const bare: Subject = { ref, url, wrangler: "", miniflare: "", workerd: "", pin };
 console.log(`pinned:    wrangler@${pin}`);
 console.log(`candidate: ${url}\n`);
@@ -179,9 +180,14 @@ try {
     process.exit(2);
   }
 
-  const added = run(BUN, ["add", "--dev", url], { cwd: wt });
+  const manifest = join(wt, "package.json");
+  const body = readFileSync(manifest, "utf8");
+  const next = body.replace(`"wrangler": "${pin}"`, `"wrangler": "${url}"`);
+  if (next === body) throw new Error("could not find the Wrangler pin in the candidate manifest");
+  writeFileSync(manifest, next);
+  const added = run(BUN, ["install"], { cwd: wt });
   if (added.status !== 0) {
-    console.error(`bun add ${url} failed: ${tail(added).join(" ")}`);
+    console.error(`bun install with ${url} failed: ${tail(added).join(" ")}`);
     emit("instrument", bare, `pkg.pr.new did not serve wrangler@${ref}`);
     process.exit(2);
   }

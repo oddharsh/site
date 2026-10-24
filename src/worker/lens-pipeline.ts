@@ -62,7 +62,7 @@ type LensBudgetDecl = {
 // account's minute and the next visitor got a failure that read like a bug.
 //
 // Every 429 the lens doors send is DERIVED from this table by budgetMessage().
-// tools/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
+// tools/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
 // in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },

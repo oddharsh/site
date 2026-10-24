@@ -8,7 +8,7 @@
 // node (`bun run test:node`). So anything a contract test touches has to reach
 // the slot logic WITHOUT going through index.ts. The site Worker's coffee.ts
 // (/coffee/availability.json), terminal.ts and lib/tools.ts, and
-// tools/contract-shared.ts, all import from here for that reason.
+// tools/tests/contract-shared.ts, all import from here for that reason.
 
 import { generateSlots, fetchBusySWR, BOOK_MAX_STALE_MS } from "./availability.ts";
 import { listHeld } from "./booking.ts";

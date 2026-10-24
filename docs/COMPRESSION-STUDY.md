@@ -185,12 +185,12 @@ The SVG image loader stays off DCZ until a browser test overturns the documented
 
 The study's model and its test left the tree on 2026-10-24. Restore them with
 `git show 8c013511:tools/measure-dictionary-preference.ts` and
-`git show 8c013511:tools/contract-dictionary-preference-model.test.ts`, then:
+`git show 8c013511:tools/tests/contract-dictionary-preference-model.test.ts`, then:
 
 ```bash
 bun run build
 bun tools/measure-dictionary-preference.ts
-bun test tools/contract-dictionary-preference-model.test.ts
+bun test tools/tests/contract-dictionary-preference-model.test.ts
 node tools/workerd-zstd-probe.ts
 bun run dcz:check
 ```
