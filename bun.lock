@@ -13,7 +13,7 @@
         "oxc-minify": "0.155.0",
         "playwright-core": "1.64.1",
         "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
+        "wrangler": "catalog:",
       },
     },
     "cal": {
@@ -24,20 +24,20 @@
       "name": "cf-garage",
       "version": "1.0.0",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
+        "wrangler": "catalog:",
       },
     },
     "config/dev": {
       "name": "aadhar-sh-dev",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
+        "wrangler": "catalog:",
       },
     },
     "lwe-ask": {
       "name": "lwe-ask",
       "version": "0.1.0",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
+        "wrangler": "catalog:",
       },
     },
     "serendipity": {
@@ -49,6 +49,9 @@
     "sharp",
     "workerd",
   ],
+  "catalog": {
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
+  },
   "packages": {
     "@cloudflare/config": ["@cloudflare/config@0.28.0", "", { "dependencies": { "zod": "4.6.5" } }, "sha512-2SaZn5rzNSxAR5VQYIlMm8+zHj2EGfLbaN+abYiPXDI42IFRCHSENpDxjAQpLj2NZnUVszHY4h6T1XljwHk5eQ=="],
 

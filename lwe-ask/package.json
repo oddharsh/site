@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "$comment": "Every wrangler script that READS the config passes --x-new-config and runs from THIS directory, because the Worker config is cloudflare.config.ts (migrated from wrangler.toml with `cf migrate` on 2026-09-28) and that loader reads the working directory and refuses -c. That loader never walks up to the root cloudflare.config.ts, so wrangler can't pick up the site's config from here. wrangler is declared as a devDependency for the `cf` CLI alone, which reads a project's OWN manifest for its dev server; it is the root pin byte for byte, check-wrangler holds it there, and bun links both to one install. `tail` is the exception and names the Worker instead: it refuses --x-new-config as an unknown argument (measured 2026-09-28, although `tail --x-new-config --help` exits 0), and with a positional name it reads no config and runs no build.",
+  "$comment": "Every wrangler script that READS the config passes --x-new-config and runs from THIS directory, because the Worker config is cloudflare.config.ts (migrated from wrangler.toml with `cf migrate` on 2026-09-28) and that loader reads the working directory and refuses -c. That loader never walks up to the root cloudflare.config.ts, so wrangler can't pick up the site's config from here. wrangler is declared as a devDependency for the `cf` CLI alone, which reads a project's OWN manifest for its dev server; it references the root catalog, and check-wrangler verifies the installed resolution. `tail` is the exception and names the Worker instead: it refuses --x-new-config as an unknown argument (measured 2026-09-28, although `tail --x-new-config --help` exits 0), and with a positional name it reads no config and runs no build.",
   "scripts": {
     "dev": "wrangler dev --x-new-config",
     "deploy": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false",
     "tail": "wrangler tail lwe-ask"
   },
   "devDependencies": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539"
+    "wrangler": "catalog:"
   }
 }

@@ -120,20 +120,22 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
           declarations.push({ field, name, pin, mirror: asMap(ws[field])[name] });
         }
       }
-      // `overrides` is the root manifest's alone, and bun mirrors it outside the
-      // workspace blocks. A non-root workspace declaring one is not something
-      // bun honours, so it is not something this can hold it to.
+      // Root overrides and the shared catalog are mirrored outside workspace
+      // blocks. Their exact pins need the same resolution check as direct pins.
       if (wsKey === "") {
-        for (const [name, spec] of Object.entries(asMap(pkg.overrides))) {
-          const pin = asText(spec);
-          if (pin === null || !EXACT_PIN.test(pin)) continue;
-          declarations.push({ field: "overrides", name, pin, mirror: lockOverrides[name] });
+        for (const field of ["overrides", "catalog"]) {
+          for (const [name, spec] of Object.entries(asMap(pkg[field]))) {
+            const pin = asText(spec);
+            if (pin === null || !EXACT_PIN.test(pin)) continue;
+            const mirror = field === "overrides" ? lockOverrides[name] : asMap(parsed.catalog)[name];
+            declarations.push({ field, name, pin, mirror });
+          }
         }
       }
 
       for (const { field, name, pin, mirror } of declarations) {
         checked.push({ lock, manifest, name, field, pin });
-        const where = `${lock} ${field === "overrides" ? "overrides" : `workspaces[${JSON.stringify(wsKey)}].${field}`}`;
+        const where = `${lock} ${["overrides", "catalog"].includes(field) ? field : `workspaces[${JSON.stringify(wsKey)}].${field}`}`;
 
         if (mirror === undefined) {
           problems.push(`${manifest} declares ${field}.${name} at ${pin} and ${where} does not record it. ` + `Run \`bun update ${name}\` and commit ${lock}.`);

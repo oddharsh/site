@@ -112,7 +112,7 @@ export const SUB_MANIFEST_POLICY = [
     versionless: new Map([
       [
         "wrangler",
-        "the root's exact pkg.pr.new commit URL, restated so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version",
+        "the root catalog's pkg.pr.new commit URL, referenced so the `cf` CLI finds a dev server in cf-garage's own manifest; check-wrangler verifies the shared resolution and bump-wrangler-pin moves the catalog, so the root line in DEPENDENCIES.md is its version",
       ],
     ]),
   },
@@ -123,7 +123,7 @@ export const SUB_MANIFEST_POLICY = [
     versionless: new Map([
       [
         "wrangler",
-        "the root's exact pkg.pr.new commit URL, restated so `cf dev` (tools/dev.ts) finds a dev server in config/dev's own manifest; check-wrangler holds the two byte-equal and bump-wrangler-pin moves both, so the root line in DEPENDENCIES.md is its version",
+        "the root catalog's pkg.pr.new commit URL, referenced so `cf dev` (tools/dev.ts) finds a dev server in config/dev's own manifest; check-wrangler verifies the shared resolution and bump-wrangler-pin moves the catalog, so the root line in DEPENDENCIES.md is its version",
       ],
     ]),
   },

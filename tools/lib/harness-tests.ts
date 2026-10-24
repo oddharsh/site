@@ -41,25 +41,25 @@ export function bootsHarness(source: string): boolean {
   return IMPORTS_WRANGLER.test(code) && BOOTS_HARNESS.test(code);
 }
 
-/** The contract tests under `<root>/tools/` that boot the harness, as paths
+/** The contract tests under `<root>/tools/tests/` that boot the harness, as paths
  *  relative to `root`, sorted. */
 export function harnessTests(root: string): string[] {
-  return readdirSync(join(root, "tools"))
+  return readdirSync(join(root, "tools/tests"))
     .filter((name) => name.endsWith(".test.ts"))
-    .filter((name) => bootsHarness(readFileSync(join(root, "tools", name), "utf8")))
-    .map((name) => `tools/${name}`)
+    .filter((name) => bootsHarness(readFileSync(join(root, "tools/tests", name), "utf8")))
+    .map((name) => `tools/tests/${name}`)
     .sort();
 }
 
-/** `bun run test`'s own argv with its `tools/` target swapped for `files`, so
+/** `bun run test`'s own argv with its `tools/tests/` target swapped for `files`, so
  *  the gate runs them exactly as `validate` does: the same flags, the same
  *  network tripwire, the same per-test timeout, and the same underNode() path
  *  a bun-collected harness test takes. Throws when the script no longer has
  *  the shape this edits, since a guessed command would gate on something else. */
 export function testArgv(testScript: string, files: string[]): string[] {
   const parts = testScript.trim().split(/\s+/);
-  if (parts[0] !== "bun" || parts[1] !== "test" || parts.at(-1) !== "tools/") {
-    throw new Error(`package.json's "test" is ${JSON.stringify(testScript)}, which is not \`bun test ... tools/\`; re-anchor testArgv()`);
+  if (parts[0] !== "bun" || parts[1] !== "test" || parts.at(-1) !== "tools/tests/") {
+    throw new Error(`package.json's "test" is ${JSON.stringify(testScript)}, which is not \`bun test ... tools/tests/\`; re-anchor testArgv()`);
   }
   return [...parts.slice(1, -1), ...files];
 }

@@ -91,7 +91,7 @@ describe("slot reservations", () => {
 
   // Booking must keep working where no Durable Object is bound, the same way a
   // missing BOOKING_WORKFLOW only costs the expiry timer. Production always
-  // binds it, and tools/contract-the-perf-probe.test.ts asserts that, so this
+  // binds it, and tools/tests/contract-the-perf-probe.test.ts asserts that, so this
   // cannot become the quiet default.
   it("does not block booking when no Durable Object is bound", async () => {
     expect(await reserveSlot({}, { id: "x", start, end })).toBe(true);

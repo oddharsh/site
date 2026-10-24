@@ -37,6 +37,7 @@ export type Manifest = {
     devDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     overrides?: Record<string, string>;
+    catalog?: Record<string, string>;
   };
 };
 
@@ -88,7 +89,7 @@ export const GROUPS: Group[] = [
 ];
 export const CATCH_ALL = "minor-and-patch";
 
-const DEP_FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
+const DEP_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "catalog"] as const;
 
 type Semver = { major: number; minor: number; patch: number; pre: string[] };
 

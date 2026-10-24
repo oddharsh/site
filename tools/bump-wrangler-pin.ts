@@ -40,6 +40,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { wranglerPin } from "./lib/wrangler-provenance.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -66,7 +67,7 @@ if (!process.versions.bun) {
 }
 
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
-const current = String(pkg.devDependencies?.wrangler ?? "");
+const current = wranglerPin(pkg);
 const currentSha = PIN.exec(current)?.[1] ?? null;
 if (!currentSha) {
   console.error(`the wrangler pin is ${JSON.stringify(current)}, which is not a pkg.pr.new commit URL.`);
@@ -188,8 +189,7 @@ if (!has("--write")) {
 // ---------------------------------------------------------------------------
 // 3. write the pin, and relock with the runtime that owns the lockfile
 // ---------------------------------------------------------------------------
-// A surgical replace of one line rather than a JSON round trip, because
-// package.json carries paragraphs in its comment fields.
+// Change only the evaluated catalog pin; keep the manifest formatting intact.
 const url = `${PKG_PR_NEW}/wrangler@${target}`;
 const text = readFileSync(join(ROOT, "package.json"), "utf8");
 const next = text.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);
@@ -198,19 +198,6 @@ if (next === text) {
   process.exit(2);
 }
 writeFileSync(join(ROOT, "package.json"), next);
-
-// A project may name wrangler too, by the root's exact string (cf-garage does,
-// for the `cf` CLI), and check-wrangler fails the moment the two disagree. So
-// every tracked manifest carrying the OLD pin moves with the root in the same
-// write, or this job would red its own PR every night.
-const manifests = spawnSync("git", ["ls-files", "-z", "--", ":(glob)**/package.json"], { cwd: ROOT, encoding: "utf8" })
-  .stdout.split("\0")
-  .filter((name) => name && name !== "package.json");
-for (const manifest of manifests) {
-  const body = readFileSync(join(ROOT, manifest), "utf8");
-  const moved = body.replace(`"wrangler": "${current}"`, `"wrangler": "${url}"`);
-  if (moved !== body) writeFileSync(join(ROOT, manifest), moved);
-}
 
 const relock = spawnSync(process.execPath, ["install"], { cwd: ROOT, encoding: "utf8" });
 if (relock.status !== 0) {

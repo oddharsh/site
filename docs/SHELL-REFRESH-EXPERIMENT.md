@@ -44,7 +44,7 @@ bun tools/roll-shell-dictionary.ts --shell --live
 bun run build
 bun run derive:check
 bun run dcz:check
-bun test tools/contract-family-dictionary-is-committed.test.ts tools/contract-dictionary-preference-model.test.ts tools/contract-perf-snapshot-counts-dictionary-acquisition.test.ts
+bun test tools/tests/contract-family-dictionary-is-committed.test.ts tools/tests/contract-dictionary-preference-model.test.ts tools/tests/contract-perf-snapshot-counts-dictionary-acquisition.test.ts
 ```
 
 The baseline also ran `bun run build`, without the roll. Both builds passed;

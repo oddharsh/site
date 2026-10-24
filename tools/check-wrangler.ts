@@ -7,7 +7,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMMIT_PIN, STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
+import { COMMIT_PIN, STALE_INSTALL_REMEDY, installedSha, pinnedSha, wranglerPin } from "./lib/wrangler-provenance.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -16,7 +16,7 @@ async function readJson(relativePath) {
 }
 
 const rootPackage = await readJson("package.json");
-const rootPin = process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "";
+const rootPin = process.env.WRANGLER_VERSION || wranglerPin(rootPackage);
 // TWO PIN SHAPES, both exact. A release is a plain `4.131.1`. A COMMIT of
 // workers-sdk main is a pkg.pr.new tarball URL naming the sha
 // (`https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`), which is
@@ -40,7 +40,7 @@ try {
   process.exit(1);
 }
 
-const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.dependencies?.wrangler || "";
+const rootDeclared = wranglerPin(rootPackage);
 
 // For a release the expected version is the pin; for a commit it is whatever
 // the tarball carries, so `expected` is the installed version and the version
@@ -94,17 +94,14 @@ if (!manifests.includes("package.json")) throw new Error("Wrangler check found n
 for (const manifest of manifests.filter((name) => name !== "package.json")) {
   const project = path.dirname(manifest);
   const pkg = await readJson(manifest);
-  // EQUALITY, not absence, since 2026-09-28. The `cf` CLI finds a project's dev
-  // server by reading THAT project's manifest and does not walk up to the
-  // workspace root, so cf-garage has to name wrangler for `cf build` to run at
-  // all. A declaration is allowed when it is the root pin byte for byte, and
-  // only as a devDependency; under bun's isolated linker the same URL resolves
-  // to the same store entry, which the realpath check below still asserts.
-  // Absence could never catch a root bump leaving a project behind, because no
-  // project could name a version; equality can.
+  // cf discovers a dev server through each project's own manifest. Catalog
+  // references keep that declaration while sharing one root pin and install.
   for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
-    const declared = pkg[kind]?.wrangler;
-    if (declared === undefined) continue;
+    const spec = pkg[kind]?.wrangler;
+    const declared = spec === "catalog:" ? rootPackage.catalog?.wrangler : spec;
+    if (spec === undefined) continue;
+    if (rootPackage.devDependencies?.wrangler === "catalog:" && spec !== "catalog:")
+      errors.push(`${project}: declares a second Wrangler pin; use catalog: to share catalog.wrangler`);
     if (kind !== "devDependencies")
       errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
     else if (declared !== rootDeclared)
