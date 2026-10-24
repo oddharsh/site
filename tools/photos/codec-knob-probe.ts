@@ -5,7 +5,7 @@
 // Every JXL variant is searched onto the SAME byte budget the format axis uses (the
 // AVIF encode's real output size, per tier), decoded by djxl, and scored against
 // the native crop. So a variant is only ever compared at matched bytes, which is
-// the rule matched-bytes-probe.ts states for the resampling work: a flag that
+// the rule the 2026-08 resampling study settled on: a flag that
 // "improves quality" by spending more bytes has improved nothing.
 //
 // AVIF CANNOT BE SEARCHED ONTO A BUDGET, which is why its half works

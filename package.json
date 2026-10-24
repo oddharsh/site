@@ -74,7 +74,6 @@
     "wrangler:pin": "bun tools/bump-wrangler-pin.ts",
     "timbrado": "bun node_modules/timbrado/src/cli.ts",
     "node:pin": "bun tools/check-node-pin.ts",
-    "speculation:probe": "bun tools/speculation-probe.ts",
     "speculation:report": "bun tools/speculation-report.ts",
     "serendipity:roles": "bun tools/serendipity-role-baseline.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
@@ -91,7 +90,7 @@
   "devDependencies": {
     "@cloudflare/config": "0.28.0",
     "@oxlint/plugins": "1.89.0",
-    "@types/bun": "1.4.3",
+    "@types/bun": "1.4.4",
     "av2-tone": "github:oddharsh/av2-tone#462f9ca175a5e4f9c1640ed6d8a47266e2590418",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.155.0",

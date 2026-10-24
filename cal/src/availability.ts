@@ -394,11 +394,7 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
 
   let cursorDay = startOfDay(now, tz);
   for (let d = 0; d < +env.MAX_LOOKAHEAD_DAYS + 1; d++) {
-    // Step from local noon, then snap to that day's midnight. A day that
-    // crosses a DST change is 23 or 25 hours long, so 24h steps from midnight
-    // land at 23:00 the night before once clocks fall back: on 2026-10-24 the
-    // window offered Saturday Nov 7 and dropped Monday Nov 2.
-    const dayStart = startOfDay(addDays(cursorDay, d) + 12 * 3600_000, tz);
+    const dayStart = localDayAfter(cursorDay, d, tz);
     const dow = dayOfWeek(dayStart, tz);
     if (!workDays.includes(dow)) continue;
 
@@ -520,8 +516,14 @@ function startOfDay(ms, tz) {
   // local midnight, expressed as unix-ms
   return atLocalHour(Date.parse(ymd(ms, tz) + "T00:00:00Z"), tz, 0);
 }
-function addDays(ms, days) {
-  return ms + days * 86400000;
+// Local midnight `days` calendar days after the local midnight `dayStartMs`. A
+// fixed 24h step drifts an hour at each DST change: from 2026-10-24, nine steps
+// land on 2026-11-01 23:00 EST, so dayOfWeek reads the day before the one
+// atLocalHour (which takes the UTC date) builds slots on. A 14-day window hid
+// Monday 2026-11-02 and offered Saturday 2026-11-07. Noon of the target day
+// sits inside that day on either side of a change, so snap from there.
+function localDayAfter(dayStartMs, days, tz) {
+  return startOfDay(dayStartMs + days * 86400000 + 12 * 3600000, tz);
 }
 function atLocalHour(dayStartMs, tz, hour) {
   // return the unix-ms for `hour:00` local time on the day containing dayStartMs.
@@ -534,7 +536,16 @@ function atLocalHour(dayStartMs, tz, hour) {
 }
 // Test seam, never called by the worker: the helpers above are module-private,
 // and the test pins them against known offsets and day boundaries.
-export const TZ_HELPERS_FOR_TEST = { ymd, yw, dayOfWeek, startOfDay, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes };
+export const TZ_HELPERS_FOR_TEST = {
+  ymd,
+  yw,
+  dayOfWeek,
+  startOfDay,
+  localDayAfter,
+  atLocalHour,
+  tzOffsetMinutes,
+  icsZoneOffsetMinutes,
+};
 
 function tzOffsetMinutes(date, tz) {
   // distance between UTC and local at this instant, in minutes (positive = west of UTC)

@@ -28,7 +28,8 @@
 //
 // There is deliberately NO prefetch rule. An eager /garage/* + /lwe/* one lived
 // on the 12 lwe pages and was measured fetching NOTHING, twice, by
-// tools/speculation-probe.ts: zero documents when /lwe offered it 12 matching
+// tools/speculation-probe.ts (deleted 2026-10-24; `git show
+// 8c013511:tools/speculation-probe.ts` restores it): zero documents when /lwe offered it 12 matching
 // anchors at load, and zero when the Run palette injected 30 more on /lwe/utf8,
 // while the control in the same run (hover a link, moderate) reached the origin.
 // The homepage had already deleted its own copy on 2026-07-30 after measuring
