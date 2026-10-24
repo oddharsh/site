@@ -183,6 +183,10 @@ The SVG image loader stays off DCZ until a browser test overturns the documented
 
 ## Reproduce the deterministic preference study
 
+The study's model and its test left the tree on 2026-10-24. Restore them with
+`git show 8c013511:tools/measure-dictionary-preference.ts` and
+`git show 8c013511:tools/contract-dictionary-preference-model.test.ts`, then:
+
 ```bash
 bun run build
 bun tools/measure-dictionary-preference.ts

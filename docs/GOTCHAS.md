@@ -171,8 +171,9 @@ skips it.
     Checked by: `tools/check-page-contracts.ts`, `tools/contract-ci-required-gate.test.ts`.
 
 33. **A speculation rule can't be measured from the page or from an agent's
-    backgrounded tab.** Count at the origin (`Sec-Purpose`) with
-    `bun run speculation:probe`, and read its control line first.
+    backgrounded tab.** Count at the origin (`Sec-Purpose`) from a headful,
+    visible window, beside a control that does reach it. The probe that did
+    this left the tree on 2026-10-24: `git show 8c013511:tools/speculation-probe.ts`.
     Checked by: nothing (how to measure).
 
 34. **Read every hunk `oxlint --fix` produces.** `no-useless-spread` broke a

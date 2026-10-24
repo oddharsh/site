@@ -1283,9 +1283,8 @@ release path; this workflow is advisory by construction and holds only a
 GITHUB token with `issues: write`.
 
 `CHROME_CHANNEL` is the one knob shared with every other Playwright probe here
-(`csp:sweep`, `speculation:probe`, `lens-seed`, the OG
-cards, ...): `CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary,
-and unset means the stable Chrome it always meant.
+(`csp:sweep`, `lens-seed`, the OG cards, ...):
+`CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary, and unset means the stable Chrome it always meant.
 
 ## Re-run the user-agent survey (`/garage/useragent`)
 

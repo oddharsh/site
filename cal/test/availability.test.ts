@@ -7,7 +7,7 @@
 // structural invariants relative to "now" rather than fixed timestamps — no
 // fake timers, which were unreliable under the workers runtime and are not
 // worth reintroducing on the host.
-import { describe, it, expect, mock, afterEach } from "bun:test";
+import { describe, it, expect, mock, afterEach, setSystemTime } from "bun:test";
 import { fetchBusySWR, generateSlots, CAL_FRESH_MS, TZ_HELPERS_FOR_TEST } from "../src/availability.ts";
 import { stubFetch } from "./harness.ts";
 
@@ -146,6 +146,25 @@ describe("generateSlots — invariants", () => {
     }
   });
 
+  // The test above reads the real clock, so it only sees a DST change when
+  // one falls inside the next 14 days. These pin the clock on both sides of
+  // New York's 2026 fall-back and 2027 spring-forward.
+  for (const pinned of ["2026-10-24T16:00:00Z", "2027-03-01T16:00:00Z"]) {
+    it(`keeps weekday slots on weekdays across a DST change (now = ${pinned})`, () => {
+      setSystemTime(new Date(pinned));
+      try {
+        const slots = generateSlots(baseEnv, []);
+        const days = new Set(slots.map((s) => localDay(s.start)));
+        for (const s of slots) expect([1, 2, 3, 4, 5]).toContain(localParts(s.start).dow);
+        // every weekday in the window gets slots: Oct 26 to Nov 6, and Mar 2
+        // to Mar 15, 10 weekdays each
+        expect(days.size).toBe(10);
+      } finally {
+        setSystemTime();
+      }
+    });
+  }
+
   it("slots never overlap each other", () => {
     const slots = generateSlots(baseEnv, []).sort((a, b) => a.start - b.start);
     for (let i = 1; i < slots.length; i++) {
@@ -210,7 +229,7 @@ describe("generateSlots — invariants", () => {
 // values, so a change to how they read the wall clock cannot quietly move a
 // slot by an hour at a DST change or put a booking on the wrong day.
 describe("timezone helpers — known offsets and day boundaries", () => {
-  const { ymd, dayOfWeek, startOfDay, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes } = TZ_HELPERS_FOR_TEST;
+  const { ymd, dayOfWeek, startOfDay, localDayAfter, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes } = TZ_HELPERS_FOR_TEST;
   const at = (iso) => Date.parse(iso);
   const off = (iso, tz) => tzOffsetMinutes(new Date(at(iso)), tz);
 
@@ -238,6 +257,18 @@ describe("timezone helpers — known offsets and day boundaries", () => {
     expect(dayOfWeek(at("2026-10-07T04:00:00Z"), TZ)).toBe(3); // Wednesday
     // local midnight on the day DST ends is still EDT: 04:00Z
     expect(startOfDay(at("2026-11-01T15:00:00Z"), TZ)).toBe(at("2026-11-01T04:00:00Z"));
+  });
+
+  it("stepping whole days across the fall-back keeps local midnight and the weekday", () => {
+    // Saturday 2026-10-24 at EDT midnight; DST ends Sunday 2026-11-01.
+    const sat = at("2026-10-24T04:00:00Z");
+    expect(localDayAfter(sat, 7, TZ)).toBe(at("2026-10-31T04:00:00Z")); // Sat, still EDT
+    expect(localDayAfter(sat, 8, TZ)).toBe(at("2026-11-01T04:00:00Z")); // Sun, midnight is EDT
+    expect(localDayAfter(sat, 9, TZ)).toBe(at("2026-11-02T05:00:00Z")); // Mon, EST
+    expect(dayOfWeek(localDayAfter(sat, 9, TZ), TZ)).toBe(1);
+    expect(dayOfWeek(localDayAfter(sat, 14, TZ), TZ)).toBe(6);
+    // and across the spring-forward, Saturday 2026-03-07 at EST midnight
+    expect(localDayAfter(at("2026-03-07T05:00:00Z"), 2, TZ)).toBe(at("2026-03-09T04:00:00Z"));
   });
 
   it("10:00 local is 10:00 on either side of a transition", () => {

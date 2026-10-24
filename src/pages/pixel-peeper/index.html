@@ -265,6 +265,11 @@ const FMT_QS=[
   {q:`so where does each format win, on these photos?`, when:()=>!!(DATA.format_pool&&DATA.format_pool.length),
    a:`this counts every call the format axis scored, before it kept only the ones an eye can tell apart, since that cut favors whichever format lost biggest. each cell is the first format's mean ssimulacra2 lead over the second, then how many of the calls it won.`,
    more:()=>poolHTML()},
+  // Numbers from the 2026-10-24 layered-AVIF test written up, with its method,
+  // at /garage/encoding#layered-avif. Change the two together.
+  {q:`can an AVIF load progressively, like a JPEG?`,
+   a:`only in Chrome, and only if the file is built for it. a plain AVIF draws nothing until its last byte arrives. a layered AVIF puts a small preview layer first: on this site's 600px tiles, a 1/8-scale preview fits in a median 429 bytes, and Chrome 156 draws it the moment those land. Safari's engine decodes the same file and still waits for the last byte. at the same final quality the preview costs 6% more bytes, and avifenc's own --progressive costs 10%, so the tiles here stay single-layer.`,
+   more:()=>`<div><a href="/garage/encoding#layered-avif">the long version</a>.</div>`},
   {q:`is WebP still worth anything?`,
    a:`for lossy photos, no. it came last on all 14 calls it entered here. its last job is lossless. on the 9 figures /garage/av2 ships, lossless WebP came in 34% smaller than lossless AVIF and 11% larger than JPEG XL, and every browser draws it. that's why those figures are WebP.`},
 ];

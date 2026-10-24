@@ -22,6 +22,7 @@ import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, h
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 import { dictionaryTag } from "./lib/dcz.ts";
 import { pageSlug, pageSnapshotName, parseFamilyDictionary, parsePageSnapshot, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
+import { PAGE_CACHE_CONTROL } from "../src/worker/lib/const.ts";
 
 // **How old is a committed dictionary?** mtime cannot answer that, because
 // `git checkout` stamps every file it writes with the checkout time — so in a
@@ -58,18 +59,35 @@ function gitTimes(dir) {
   return times;
 }
 
-// Oldest first, so the caller can slice the head off.
-async function oldestFirst(dir, group, { keep, current = new Set() }) {
+// The candidates no browser can still offer, which are the only ones worth deleting.
+//
+// Retention was a fixed count per base (3 shell, 4 page) until 2026-10-24, which
+// is a proxy for "has every browser dropped this?" and a poor one: a churny base
+// (luna, nav-run) burned through 3 slots in a day, so a visitor back after a
+// weekend offered a hash with no delta behind it. The real bound is a lifetime. A
+// version is handed out until the one after it lands, and a browser that took it
+// keeps it for the tier's lifetime from then. So a candidate stays while it is
+// current, is one of the `floor` newest, or was replaced less than `windowSec` ago.
+//
+// The replacement's COMMIT time stands in for when production stopped serving the
+// old version. A roll commits after the release it reads, so the stand-in is late,
+// which errs toward keeping.
+async function prunable(dir, group, { floor, windowSec, current = new Set() }) {
   const times = gitTimes(dir);
   const withTime = await Promise.all(
-    group.map(async (g) => ({
-      g,
-      t: current.has(g.name) ? Infinity : times.has(g.name) ? times.get(g.name) : (await stat(`${dir}/${g.name}`)).mtimeMs / 1000,
-    })),
+    group.map(async (g) => {
+      const t = times.has(g.name) ? times.get(g.name) : (await stat(`${dir}/${g.name}`)).mtimeMs / 1000;
+      // Anything this run confirmed as currently served sorts newest by definition,
+      // but keeps its real time as the moment it replaced its predecessor.
+      return { g, t, rank: current.has(g.name) ? Infinity : t };
+    }),
   );
-  withTime.sort((a, b) => a.t - b.t);
-  return withTime.slice(0, Math.max(0, withTime.length - keep)).map((x) => x.g);
+  withTime.sort((a, b) => a.rank - b.rank);
+  const cutoff = Date.now() / 1000 - windowSec;
+  return withTime.filter((x, i) => i < withTime.length - floor && !current.has(x.g.name) && withTime[i + 1].t < cutoff).map((x) => x.g);
 }
+
+const DAY = 86400;
 
 const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
 
@@ -93,20 +111,27 @@ const only = process.argv.includes("--family") ? "family" : process.argv.include
 // What it buys is that adoption no longer has to run FROM the deployed commit. Reading
 // the built tree can only ever capture the shell THIS checkout builds, so a release that
 // went by without a roll is unrecoverable, and an unramped checkout would adopt bytes no
-// browser holds and evict one that is still in use (KEEP is 3). Reading the wire captures
+// browser holds and evict one that is still in use. Reading the wire captures
 // whatever is live, from anywhere, which is what lets a scheduled job do this unattended.
 const live = process.argv.includes("--live");
 
 const BUILT = ".build/public/a";
 const DICTS = "src/dict/a-dict";
-// Each extra candidate costs one delta per asset per deploy and widens the cache-variant
-// fan-out, while only serving visitors who skipped exactly that many deploys.
-const KEEP = 3;
+// `/a/` ships `max-age=31536000, immutable`, so a browser can offer a shell asset
+// for a year; eviction makes the real figure shorter and nobody has measured it.
+// 90 days is a judgment inside that year. Measured 2026-10-24: 232 candidates
+// landed in a-dict over the previous 60 days, and the two delta phases (q11
+// twins included) took 1.4 s of a 4.2 s build that staged 2,479 files, against
+// the 20,000-file asset cap. Each candidate is about 15 KB in the tree and one delta
+// per build. The floor of 3 is the old count, kept so a rarely-changing asset
+// (icons.svg) holds history however long ago it last changed.
+const SHELL_FLOOR = 3;
+const SHELL_WINDOW = 90 * DAY;
 
 // js, css, and the icon sprite. The sprite sat out until 2026-09-26, matching
 // DICTIONARY_TYPES in lib/assets.ts, and rejoined when svg deltas went on for everyone.
 // A delta exists only if a-dict already holds the sprite a browser was offered. It
-// changes rarely and KEEP prunes per base, so this files one candidate per sprite
+// changes rarely and the prune runs per base, so this files one candidate per sprite
 // change rather than one per deploy.
 const parse = parseShellAsset;
 
@@ -221,14 +246,16 @@ else {
   }
   let pruned = 0;
   for (const [, group] of byBase) {
-    if (group.length <= KEEP) continue;
-    for (const g of await oldestFirst(DICTS, group, { keep: KEEP, current: currentShell })) {
+    if (group.length <= SHELL_FLOOR) continue;
+    for (const g of await prunable(DICTS, group, { floor: SHELL_FLOOR, windowSec: SHELL_WINDOW, current: currentShell })) {
       await rm(`${DICTS}/${g.name}`, { force: true });
       pruned++;
       console.log(`pruned ${g.name}`);
     }
   }
-  console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
+  console.log(
+    `shell:roll — adopted ${adopted}, pruned ${pruned}, keeping anything replaced in the last ${SHELL_WINDOW / DAY} days (at least ${SHELL_FLOOR} per asset).`,
+  );
   console.log("  Commit src/dict/a-dict/. build.ts regenerates the deltas on its own from here.");
 }
 
@@ -271,17 +298,24 @@ if (only === "shell" || only === "family") console.log(`pages:roll — --${only}
 else {
   const BUILT_PAGES = ".build/public";
   const PDICTS = "src/dict/p-dict";
-  // 4, since 2026-09-29; it was 2. A shell re-mint changes the /a/ URL every page
-  // embeds, and 26 of the 39 rolls from 2026-07-27 to 09-28 re-versioned over
-  // 90% of pages at once, so N snapshots cover a returning visitor for about
-  // N-1 rolls (1.6 days a roll). Measured over those rolls, a visitor returning
-  // to a changed page 3 rolls later was covered 20% of the time at 2 and 100%
-  // at 4, saving about 10 KB against the q11 twin. That visitor is one who holds
-  // the page but not the family dictionary, which wins whenever it is held. Each
-  // extra level costs 67 more deltas per build and about 0.8 MB of committed
-  // snapshots; past 4 the curve is flat (a 16-roll return is covered 4% at 4
-  // and 4% at 6).
-  const KEEP_PAGES = 4;
+  // A lifetime window since 2026-10-24; before that a count (2, then 4 from
+  // 2026-09-29). A shell re-mint changes the /a/ URL every page embeds, and 26 of
+  // the 39 rolls from 2026-07-27 to 09-28 re-versioned over 90% of pages at once,
+  // so N snapshots covered a returning visitor for about N-1 rolls (1.6 days a
+  // roll). A count can't keep up with that churn; 582 snapshots landed in the 7
+  // days before 2026-10-24, about 9 per page. The help goes to a visitor who
+  // holds the page but not the family dictionary, which wins whenever it is held.
+  //
+  // The window is exact here, unlike the shell's. PAGE_CACHE_CONTROL's swr is the
+  // dictionary's lifetime in the browser (Chromium sizes it from the response's
+  // freshness), and s-maxage is how long the edge can keep handing out a replaced
+  // version. Past their sum no browser can offer the snapshot, so it goes. A page
+  // that changes rarely ends up with fewer snapshots than the old count of 4,
+  // and every one it loses was dead.
+  const directive = (name) => Number(new RegExp(`${name}=(\\d+)`).exec(PAGE_CACHE_CONTROL)?.[1] ?? NaN);
+  const PAGE_WINDOW = directive("s-maxage") + directive("stale-while-revalidate");
+  if (!Number.isFinite(PAGE_WINDOW) || PAGE_WINDOW <= 0)
+    throw new Error(`pages:roll — no s-maxage + stale-while-revalidate in PAGE_CACHE_CONTROL (${PAGE_CACHE_CONTROL}); refusing to prune without a lifetime`);
   const FETCH_CONCURRENCY = 6;
   const parse = parsePageSnapshot;
   // `.build/public/garage/pretext.html` is served at `/garage/pretext`, and an
@@ -369,14 +403,16 @@ else {
   // is the half where it actually bit: see gitTimes(). `adoptedNow` is what makes
   // the current release un-prunable regardless of how git dates it.
   for (const [, group] of byent) {
-    if (group.length <= KEEP_PAGES) continue;
-    for (const g of await oldestFirst(PDICTS, group, { keep: KEEP_PAGES, current: adoptedNow })) {
+    if (group.length <= 1) continue;
+    for (const g of await prunable(PDICTS, group, { floor: 1, windowSec: PAGE_WINDOW, current: adoptedNow })) {
       await rm(`${PDICTS}/${g.name}`, { force: true });
       pruned++;
       console.log(`pruned page ${g.slug}.${g.tag}`);
     }
   }
-  console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping ${KEEP_PAGES} per page (source: ${ORIGIN}).`);
+  console.log(
+    `pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping anything replaced in the last ${PAGE_WINDOW / DAY} days (source: ${ORIGIN}).`,
+  );
 }
 
 // ── THE FAMILY DICTIONARY (src/dict/f-dict) ──────────────────────────────────────

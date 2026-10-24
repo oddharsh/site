@@ -7,13 +7,13 @@
       "devDependencies": {
         "@cloudflare/config": "0.28.0",
         "@oxlint/plugins": "1.89.0",
-        "@types/bun": "1.4.3",
+        "@types/bun": "1.4.4",
         "av2-tone": "github:oddharsh/av2-tone#462f9ca175a5e4f9c1640ed6d8a47266e2590418",
         "lightningcss": "1.33.0",
         "oxc-minify": "0.155.0",
         "playwright-core": "1.64.1",
         "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e651d7c",
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
       },
     },
     "cal": {
@@ -24,20 +24,20 @@
       "name": "cf-garage",
       "version": "1.0.0",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e651d7c",
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
       },
     },
     "config/dev": {
       "name": "aadhar-sh-dev",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e651d7c",
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
       },
     },
     "lwe-ask": {
       "name": "lwe-ask",
       "version": "0.1.0",
       "devDependencies": {
-        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e651d7c",
+        "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539",
       },
     },
     "serendipity": {
@@ -52,9 +52,9 @@
   "packages": {
     "@cloudflare/config": ["@cloudflare/config@0.28.0", "", { "dependencies": { "zod": "4.6.5" } }, "sha512-2SaZn5rzNSxAR5VQYIlMm8+zHj2EGfLbaN+abYiPXDI42IFRCHSENpDxjAQpLj2NZnUVszHY4h6T1XljwHk5eQ=="],
 
-    "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@e651d7c", {}, "sha512-9fJ3Vk3wBc7Yhsc2tU6hrP0zqdFEUZvtkq5Q6hsz5shpbQrguPp7K8p3LfO7sRwgxHV2H4ju2Lpioej+a/YYIA=="],
+    "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@ac79539", {}, "sha512-nM6d/aRIUTWAscmVuNW2OmKCtFDuy1uBl1OiLpxuHtNt9IZ2HrU9Hp0Y40/t1PfQtg72HxpnK7RCipvVB4+RzQ=="],
 
-    "@cloudflare/unenv-preset": ["@cloudflare/unenv-preset@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/unenv-preset@e651d7c", { "peerDependencies": { "unenv": "2.0.0-rc.24", "workerd": ">1.20260305.0 <2.0.0-0" }, "optionalPeers": ["workerd"] }, "sha512-sfoTS0Q9HBbgoaRqQ6UKip+KjrQGnF+2joIx8Tztla3Dhb1XtLqojmz0snBqySH0IcXx5suIrf04BWK4GrUleQ=="],
+    "@cloudflare/unenv-preset": ["@cloudflare/unenv-preset@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/unenv-preset@ac79539", { "peerDependencies": { "unenv": "2.0.0-rc.24", "workerd": ">1.20260305.0 <2.0.0-0" }, "optionalPeers": ["workerd"] }, "sha512-sfoTS0Q9HBbgoaRqQ6UKip+KjrQGnF+2joIx8Tztla3Dhb1XtLqojmz0snBqySH0IcXx5suIrf04BWK4GrUleQ=="],
 
     "@cloudflare/workerd-darwin-64": ["@cloudflare/workerd-darwin-64@1.20261023.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-lsEx0i7nR0PNG/erUFFHmQmiidEhLfDE5uQmAL9421/y4/ycuxDDOSaxu3VGGYFFPK5sduyUeMmjIlX4CwOBFg=="],
 
@@ -232,7 +232,7 @@
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.24", "", {}, "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="],
 
-    "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+    "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
     "@types/node": ["@types/node@26.6.4", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg=="],
 
@@ -242,7 +242,7 @@
 
     "blake3-wasm": ["blake3-wasm@2.1.5", "", {}, "sha512-F1+K8EbfOZE49dtoPtmxUQrpXaBIl3ICvasLh+nJta0xkz+9kF/7uet9fLnwKqhDrmj6g+6K3Tw9yQPUg2ka5g=="],
 
-    "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "cal-aadhar-sh": ["cal-aadhar-sh@workspace:cal"],
 
@@ -286,7 +286,7 @@
 
     "lwe-ask": ["lwe-ask@workspace:lwe-ask"],
 
-    "miniflare": ["miniflare@https://pkg.pr.new/cloudflare/workers-sdk/miniflare@e651d7c", { "dependencies": { "@cspotcode/source-map-support": "0.8.1", "sharp": "0.35.5", "undici": "7.29.1", "workerd": "1.20261023.1", "ws": "8.21.0", "youch": "4.1.0-beta.10" } }, "sha512-4rG8W26EuO7JpEw2Sbb32liyRcLaq1HR48zL6w2UeMGJg669Kperg44HhYIG9YuTVnZoD0Dc2irFZ7ej63ABTQ=="],
+    "miniflare": ["miniflare@https://pkg.pr.new/cloudflare/workers-sdk/miniflare@ac79539", { "dependencies": { "@cspotcode/source-map-support": "0.8.1", "sharp": "0.35.5", "undici": "7.29.1", "workerd": "1.20261023.1", "ws": "8.21.0", "youch": "4.1.0-beta.10" } }, "sha512-DyZlVctJGP6G97RvY3M4i940nKDXw8J/R5PWrjE97YGyKZTv2NF/gwGjlvMrV6ogCB/yShxT9kfVSnzneGVFbA=="],
 
     "oxc-minify": ["oxc-minify@0.155.0", "", { "optionalDependencies": { "@oxc-minify/binding-android-arm-eabi": "0.155.0", "@oxc-minify/binding-android-arm64": "0.155.0", "@oxc-minify/binding-darwin-arm64": "0.155.0", "@oxc-minify/binding-darwin-x64": "0.155.0", "@oxc-minify/binding-freebsd-x64": "0.155.0", "@oxc-minify/binding-linux-arm-gnueabihf": "0.155.0", "@oxc-minify/binding-linux-arm-musleabihf": "0.155.0", "@oxc-minify/binding-linux-arm64-gnu": "0.155.0", "@oxc-minify/binding-linux-arm64-musl": "0.155.0", "@oxc-minify/binding-linux-ppc64-gnu": "0.155.0", "@oxc-minify/binding-linux-riscv64-gnu": "0.155.0", "@oxc-minify/binding-linux-riscv64-musl": "0.155.0", "@oxc-minify/binding-linux-s390x-gnu": "0.155.0", "@oxc-minify/binding-linux-x64-gnu": "0.155.0", "@oxc-minify/binding-linux-x64-musl": "0.155.0", "@oxc-minify/binding-openharmony-arm64": "0.155.0", "@oxc-minify/binding-win32-arm64-msvc": "0.155.0", "@oxc-minify/binding-win32-ia32-msvc": "0.155.0", "@oxc-minify/binding-win32-x64-msvc": "0.155.0" } }, "sha512-Y8pRwnciWtDIxrXipqHVLcAi/9LTi2ppVMrvidd0TXwxhAA+y/69R/acULnAhylPOt3E7aHDfoYvwYNVHJFBYg=="],
 
@@ -316,7 +316,7 @@
 
     "workerd": ["workerd@1.20261023.1", "", { "optionalDependencies": { "@cloudflare/workerd-darwin-64": "1.20261023.1", "@cloudflare/workerd-darwin-arm64": "1.20261023.1", "@cloudflare/workerd-linux-64": "1.20261023.1", "@cloudflare/workerd-linux-arm64": "1.20261023.1", "@cloudflare/workerd-windows-64": "1.20261023.1" }, "hasInstallScript": true, "bin": { "workerd": "bin/workerd" } }, "sha512-NeofJFyaYNpqKpFRJW3ApuonaerPd6/JWlfTtLDYf2A6ygqrDEFnYgEXmc0hhOxqnJsSM+kXJN6VebPojzRrsg=="],
 
-    "wrangler": ["wrangler@https://pkg.pr.new/cloudflare/workers-sdk/wrangler@e651d7c", { "dependencies": { "@cloudflare/kv-asset-handler": "https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@e651d7c", "@cloudflare/unenv-preset": "https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/unenv-preset@e651d7c", "blake3-wasm": "2.1.5", "esbuild": "0.28.2", "miniflare": "https://pkg.pr.new/cloudflare/workers-sdk/miniflare@e651d7c", "path-to-regexp": "6.3.0", "unenv": "2.0.0-rc.24", "workerd": "1.20261023.1" }, "optionalDependencies": { "fsevents": "2.3.3" }, "peerDependencies": { "@cloudflare/workers-types": "^5.20261023.1" }, "optionalPeers": ["@cloudflare/workers-types"], "bin": { "cf-wrangler": "./bin/cf-wrangler.js", "wrangler": "./bin/wrangler.js", "wrangler2": "./bin/wrangler.js" } }, "sha512-m/+1qF8BceCAo0tC7YiCNhUkdCiRxFVuXCcpJvrt0OOR2agCwq6Myt5FLcjLgRKtZOxgXuy/o/hoxlTaftMsjg=="],
+    "wrangler": ["wrangler@https://pkg.pr.new/cloudflare/workers-sdk/wrangler@ac79539", { "dependencies": { "@cloudflare/kv-asset-handler": "https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@ac79539", "@cloudflare/unenv-preset": "https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/unenv-preset@ac79539", "blake3-wasm": "2.1.5", "esbuild": "0.28.2", "miniflare": "https://pkg.pr.new/cloudflare/workers-sdk/miniflare@ac79539", "path-to-regexp": "6.3.0", "unenv": "2.0.0-rc.24", "workerd": "1.20261023.1" }, "optionalDependencies": { "fsevents": "2.3.3" }, "peerDependencies": { "@cloudflare/workers-types": "^5.20261023.1" }, "optionalPeers": ["@cloudflare/workers-types"], "bin": { "cf-wrangler": "./bin/cf-wrangler.js", "wrangler": "./bin/wrangler.js", "wrangler2": "./bin/wrangler.js" } }, "sha512-PmDooUf0KxX3PJJuW4AnO9xwdkigstDz2o7OUQKPC3xx8aLqo9wGafj4+o5vkUXhz8BpYoyKlbaUFzh9L9usvg=="],
 
     "ws": ["ws@8.21.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g=="],
 

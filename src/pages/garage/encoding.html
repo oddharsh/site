@@ -342,9 +342,10 @@
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
       the worker streams a median 21.6&nbsp;MB progressive JPEG from R2 (since October 2026 as its
       lossless JPEG XL copy, about 8% smaller), and that single file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
-      structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
-      Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
-      here emits layered AVIF anyway. So the format that wins every byte comparison on this page
+      structurally cannot do this</b>. Its layered mode caps at four stages, paints early only in
+      Chromium, and is staged rather than incremental the way a JPEG scan script is. On the tiles it
+      costs 6 to 10% more bytes (<a href="#layered-avif">measured below</a>), so nothing here emits
+      it. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is a progressive JPEG.</p>
 
@@ -521,6 +522,35 @@
     </table>
     <p class="note">The screenshots were 400&times;600, where a 1:8 preview already looks nearly final, so
       the early frames would read blurrier full-screen.</p>
+
+    <h3 id="layered-avif">Layered AVIF on the tiles <span class="badge review">measured</span></h3>
+    <p class="note">That table tried layered AVIF on the archive. The tiles are the AVIF that actually
+      ships, so the question was asked again there. A layered AVIF stores a small first layer, then
+      the real image coded as a prediction from it, the way video codes a P-frame. Three recipes ran on
+      16 shipped 600px tiles, each held to the shipped tile&apos;s SSIMULACRA2 so only the bytes move:</p>
+    <table class="enc-table">
+      <thead><tr><th>recipe</th><th>layer 0 ends at</th><th>bytes at the same quality</th></tr></thead>
+      <tbody>
+        <tr><td><code>avifenc --progressive</code></td><td class="num">1,346 B (6.5%)</td><td class="num">+10.1%</td></tr>
+        <tr><td><code>--layered</code>, 1/8-scale preview</td><td class="num">429 B (2.2%)</td><td class="num">+6.0%</td></tr>
+        <tr><td><code>--layered</code>, 1/4-scale preview</td><td class="num">566 B (3.1%)</td><td class="num">+7.3%</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Each cell is the median of the 16. The <code>--progressive</code> preset costs most
+      because its first layer is a full-size frame at quality 2. The 1/8 recipe comes from
+      <a href="https://jakearchibald.com/2025/present-and-future-of-progressive-image-rendering/" rel="external">Jake
+      Archibald&apos;s post on progressive rendering</a>.</p>
+    <p class="note">The held-open server then asked what each engine paints. Chrome 156 draws layer 0 the
+      moment its last byte lands: on three tiles, nothing one byte earlier and a blur exactly at the
+      boundary, for both recipes. WebKit 27.2, the engine inside Safari, decodes the same file and
+      paints nothing until the final byte, like a single-layer AVIF. Firefox wouldn&apos;t launch on
+      this machine the day of the test; Jake reports the same Chromium-only result.</p>
+    <p class="note"><b>So the tiles stay single-layer.</b> The median tile in the sample is
+      19&nbsp;KB. A preview would cost every visitor about 6% more bytes so Chrome can show a coloured
+      blur until the rest arrives, and Safari would pay the same bytes for nothing. Shipping it would
+      also re-mint every <code>/i/</code> URL. If Safari or Firefox starts painting layer 0
+      (<a href="https://github.com/web-platform-tests/interop/issues/1459" rel="external">an Interop 2027
+      proposal</a> asks for it), the trade changes and the tiles are worth testing again.</p>
 
     <p class="note"><b>Where this lands: nothing changes.</b> The tiles stay AVIF. Every browser that
       decodes JPEG XL also decodes AVIF, and AVIF wins at these sizes, so a JPEG XL
@@ -824,7 +854,7 @@
         {
           "t": "At 20 MB the loading order is the whole experience, and AVIF can't paint incrementally like JPEG.",
           "ok": true,
-          "why": "Both facts hold at once. The archive is one bare file with no picture element, so scan order IS the loading experience. AVIF wins every byte comparison here and still loses that property: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
+          "why": "Both facts hold at once. The archive is one bare file with no picture element, so scan order IS the loading experience. AVIF wins every byte comparison here and still loses that property: its layered mode caps at four stages, paints early only in Chromium, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply the smaller file there.",
