@@ -7,7 +7,8 @@
 
      It loops on the boot screen alone. One sweep is 1.5 s, a whole 45 frames
      at 30 fps, and the clip is three of them (4.5 s), so the last frame runs
-     into the first with no seam. -->
+     into the first with no seam. Frame 0 is baked to public/og/home.jpg as the
+     still, so the poster a fetcher shows before playing is the clip's own start. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -27,7 +28,11 @@
       /* the bar: a rounded, grey-ringed slot with three chunks crossing it. The
          sweep starts and ends with the chunks outside the slot, so any phase loops. */
       .bar { position: relative; width: 300px; height: 26px; border: 2px solid #b2b4bf; border-radius: 7px; overflow: hidden; }
-      .chunks { position: absolute; top: 3px; left: -76px; display: flex; gap: 4px; animation: sweep 1.5s linear infinite; }
+      .chunks { position: absolute; top: 3px; left: -76px; display: flex; gap: 4px; }
+      /* body.go starts the sweep 0.75 s in, the chunks centred in the slot, and
+         the recorder starts its clock there too (clockFromSteps), so frame 0,
+         which is also the homepage's og:image, is the bar mid-sweep */
+      body.go .chunks { animation: sweep 1.5s linear -0.75s infinite; }
       .chunks i { width: 20px; height: 16px; border-radius: 2px; background: linear-gradient(#5d84f0, #2a44c8 55%, #3456d8); }
       .legal { position: absolute; left: 34px; bottom: 26px; font-size: 15px; color: #c9c9c9; }
       @keyframes sweep { from { transform: translateX(0); } to { transform: translateX(376px); } }

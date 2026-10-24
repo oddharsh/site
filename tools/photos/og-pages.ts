@@ -32,7 +32,12 @@ export const OG_PAGE_DIRS = [
     // library on every request and a regeneration changes every photo.
     id: "home",
     dir: "",
-    alt: "The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name " + "and one-line bio above a contact sheet of his photographs.",
+    // Since 2026-10-24 the card is the first frame of the homepage's og:video
+    // (an XP-style boot screen), so the still a fetcher shows before it plays is
+    // the clip's own start. gen-og-cards.ts skips a page that names `bakedBy`.
+    bakedBy: "tools/photos/og-video/bake.ts",
+    alt:
+      "An XP-style boot screen on black: Pannirselvam above a large aadhar.sh with an orange .sh, " + "and three blue chunks crossing a rounded progress bar.",
   },
   {
     id: "access",

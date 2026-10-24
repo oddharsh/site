@@ -249,7 +249,7 @@
     {
       "id": "og/video",
       "tier": "unverifiable",
-      "why": "The og:video clips lib/og-video.ts hands to iMessage (HEVC in MP4) and Discord (AV1 in WebM). A page's clip is its live demo driven through a scripted timeline, recorded at 2x and composed onto the same Bliss card as the page's og:image, which stays the clip's poster; the homepage's is a recorded scene instead, tools/photos/og-video/scenes/boot.html, an XP-style boot screen that loops on its progress bar. Each codec is encoded at the cheapest setting compare.ts found reaching SSIMULACRA2 80, or the clip's own target in clips.ts.",
+      "why": "The og:video clips lib/og-video.ts hands to iMessage (HEVC in MP4) and Discord (AV1 in WebM). A page's clip is its live demo driven through a scripted timeline, recorded at 2x and composed onto the same Bliss card as the page's og:image, which stays the clip's poster; the homepage's is a recorded scene instead, tools/photos/og-video/scenes/boot.html, an XP-style boot screen that loops on its progress bar, whose first frame bake.ts also writes as public/og/home.jpg (og-pages.ts marks it bakedBy, so gen-og-cards.ts leaves it alone). Each codec is encoded at the cheapest setting compare.ts found reaching SSIMULACRA2 80, or the clip's own target in clips.ts.",
       "outputs": [
         "public/og/video"
       ],
