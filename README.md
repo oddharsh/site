@@ -1,82 +1,27 @@
-# aadhar.sh
+## this is my personal site, running on cloudflare workers w/ static assets
 
-My personal site, styled after Windows XP and Outlook Express. It runs on a
-Cloudflare Worker with static assets, native fonts, and small client islands.
+it uses no frameworks, is mostly static and tries to mash my favorite bits of the windows I grew up on, google chrome flags, and really fast sites like mcmaster
 
-Pages are authored as HTML. One build minifies the site, gives shell assets
-content hashes, and produces readable source twins and compression dictionaries.
-The Worker adds feeds, search, photo queries, and integrations.
+for instance:
 
-## Run locally
+* the photos are encoded as avifs and jpegs with lots of care and the html, js, and css are all served as minified but with nonminified mirrors
+* brotli q11 where possible and also trying to use shared dictionaries with deltas on zstandard
+* encrypted client hello and quic are used
 
-Use Node from [`.node-version`](.node-version) and install the Bun declared in
-[`config/bun-pin.json`](config/bun-pin.json). The shared installer verifies the
-binary before installing it:
+## where things are
 
-```sh
-bash .github/install-bun.sh /tmp/aadhar-sh-bun
-export PATH="/tmp/aadhar-sh-bun:$PATH"
-bun install --frozen-lockfile
-bun run build
+* `public/` is the bytes a browser fetches unchanged: photos, og cards, headers. the build puts hashed assets in `.build/public/a/`
+* `src/` is everything authored: `pages/` the html, `content/` the prose, `worker/` the site worker, `client/` and `styles/` the islands and the css
+* `tools/` is every dev tool, including the build; the test suite lives in `tools/tests/`. none of it ships
+* `config/` is wrangler's neighbours: declared infra, the surface registry, tsconfig
+* `docs/` is the long runbooks. `CLAUDE.md` is the architecture doc and the thing agents read
+* `cal/` and `serendipity/` are apps the site worker bundles; `counter/`, `cf-garage/`, `lwe-ask/` and `lens-reader/` deploy on their own (the last three use wrangler's experimental TypeScript config, so their config-reading wrangler commands want `--x-new-config`)
+* `pipelines/` generates the garage and lwe pages, `design/` is the luna design system
+
+both wrangler configs stay at the root because workers builds runs from there.
+
+use the bun in `config/bun-pin.json` and the node major in `.node-version`. local dev also needs the `cf` cli and cloudflare auth. [the tooling guide](docs/TOOLING.md) and [maintenance runbook](docs/MAINTENANCE.md) have the setup and commands. the shared wrangler pin lives in `package.json`'s `catalog`.
+
+```bash
+bun install --frozen-lockfile && bun run dev
 ```
-
-For the local site and its Counter service, install the `cf` CLI described in
-[MAINTENANCE.md](docs/MAINTENANCE.md), authenticate, and run `bun run dev`.
-Cloudflare bindings and account access are needed for integrated development.
-
-```sh
-bun run check:fast  # lint, format check, typecheck, contract tests
-bun run build      # stage the deployable site in .build/
-bun run routes:check
-```
-
-The separately deployed Reader has its own dependencies and checks:
-
-```sh
-cd lens-reader
-bun install --frozen-lockfile
-bun run typecheck
-bun run test
-```
-
-## Find your way around
-
-| Directory | What belongs here |
-| --- | --- |
-| [`src/pages/`](src/pages/) | HTML documents, arranged by served path |
-| [`src/content/`](src/content/) | Writing, Markdown representations, and content indexes |
-| [`src/worker/`](src/worker/) | The site Worker; start with `routes.ts` and `index.ts` |
-| [`src/client/`](src/client/), [`src/styles/`](src/styles/) | Client islands and styles transformed by the build |
-| [`src/dict/`](src/dict/) | Committed compression dictionaries used as build inputs |
-| [`public/`](public/) | Files shipped unchanged, including photo tiers and OG cards |
-| [`cal/`](cal/), [`serendipity/`](serendipity/) | Feature modules bundled into the site Worker |
-| [`counter/`](counter/), [`cf-garage/`](cf-garage/), [`lwe-ask/`](lwe-ask/), [`lens-reader/`](lens-reader/) | Independently deployed supporting Workers |
-| [`tools/`](tools/) | Build and maintenance commands; shared code in `lib/`, photo tooling in `photos/` |
-| [`tools/tests/`](tools/tests/) | Contract tests and their shared helper |
-| [`pipelines/`](pipelines/) | Garage and LWE page generators |
-| [`config/`](config/) | Registries, declared infrastructure, runtime pins, and TypeScript programs |
-| [`design/`](design/) | Luna design rules and canonical color tokens |
-| [`docs/`](docs/) | Maintenance, dependency, photo, and architecture documentation |
-
-The root `cloudflare.config.ts` describes the site Worker; `wrangler.config.ts`
-describes its build and upload. Workers Builds runs from this directory.
-Generated output goes into the ignored `.build/` directory.
-
-## Change the site
-
-Register routes in [`src/worker/routes.ts`](src/worker/routes.ts) and pages in
-[`config/site-manifest.json`](config/site-manifest.json). Edit generated content
-through its generator, recorded in [`config/derivations.json`](config/derivations.json).
-Keep the native-font Luna interface and use tokens from [`design/`](design/).
-
-Changes go through a PR. The required `validate` check covers the build, budgets,
-contracts, routes, generated artifacts, and coffee tests. Merged commits reach
-production through the promotion workflow and Cloudflare Workers Builds.
-
-- [Tooling and pin ownership](docs/TOOLING.md)
-- [Maintenance commands and release process](docs/MAINTENANCE.md)
-- [Dependency policy](docs/DEPENDENCIES.md)
-- [Photo pipeline](docs/PHOTO-PIPELINE.md)
-- [Design system](design/DESIGN.md)
-- [Architecture and agent instructions](CLAUDE.md)
-- [Known traps and their checks](docs/GOTCHAS.md)
