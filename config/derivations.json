@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "0ca1525385ba827e7e52640695e20c37a84326dd20cd26eebbc74693bb55a860",
+        "inputs": "16d420484059d2d6bce53b6f2936a2c2c0fe6ad744a93eec103ca3d8c8d8b4b8",
         "count": 2
       }
     },
@@ -209,7 +209,7 @@
       },
       "regenerate": "bun tools/gen-llms-api.ts",
       "recorded": {
-        "inputs": "ca470b1409fb5377e77b111d808e01679659890666448f870c338dd30e62bacc",
+        "inputs": "b7d8fd4635f4ba8fc2927d373fa83534151f7a87d1c9e993e92525cf37f466d4",
         "count": 2
       }
     },

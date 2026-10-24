@@ -270,7 +270,7 @@ function renderOverview(data) {
     blank(),
     rule(INNER, "plan"),
     ...wrap(
-      "Crypto investing at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T50, and whatever I am reading. Everything here is public and readable by machines on purpose.",
+      "Researching how machines use the internet, and applied cryptography, at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T50, and whatever I am reading. Everything here is public and readable by machines on purpose.",
       INNER,
     ).map((row) => [s(row)]),
     blank(),
@@ -465,7 +465,7 @@ function renderPlan() {
     rule(INNER, "still true"),
     [s("  still writing at /writing", "dim")],
     [s("  still shooting on the X-T50", "dim")],
-    [s("  still investing crypto at Archetype", "dim")],
+    [s("  still at Archetype", "dim")],
     ...wrap("the deploy log at ?pane=deploys is more honest than this file, since a machine writes that one and I write this one", INNER).map((row) => [
       s("  " + row, "dim"),
     ]),

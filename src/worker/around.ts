@@ -10,7 +10,7 @@ import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } fro
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
 
-// the neighborhood — crypto-VC homepages worth checking in on. just funds
+// the neighborhood — VC homepages worth checking in on. just funds
 // whose work i follow; the dashboard is mostly an excuse to point a branded
 // crawler at something interesting.
 //
@@ -46,7 +46,7 @@ export const NEIGHBORS = [
 ];
 
 // ── /around ─────────────────────────────────────────────────────────
-// what's going on in the crypto-VC neighborhood, as of the last CRON crawl.
+// what's going on in the VC neighborhood, as of the last CRON crawl.
 // The request path only READS the snapshot: no visitor, crawler, or speculative
 // prerender can make this site fetch 20 third-party homepages, which is what
 // lets /around join the prerender set with every other page. The crawl runs on
@@ -595,7 +595,7 @@ export function renderAroundPage() {
     path: "aadhar.sh/around",
     route: "/around",
     width: 820,
-    description: "Snapshot of crypto VC homepages I keep tabs on, crawled once a day by AadharshBot.",
+    description: "Snapshot of venture firm homepages I keep tabs on, crawled once a day by AadharshBot.",
     robots: "noindex",
     head: islandPreload(SNAPSHOT_URL),
     css: `/*min*/
@@ -646,7 +646,7 @@ export function renderAroundPage() {
     body: html`
     <h1>Around the Neighborhood</h1>
     <p class="lede">
-      A peek at what folks in crypto VC are up to. <code>${BOT_UA}</code>, the
+      A peek at what folks in VC are up to. <code>${BOT_UA}</code>, the
       small branded crawler I run from this site, crawls each homepage on a
       schedule and lays the snapshot out as a tiny neighborhood window. I built
       this mostly to play with signed outbound requests per

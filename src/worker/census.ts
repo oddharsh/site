@@ -9,7 +9,7 @@ import { CENSUS_TABLE_URL } from "./routes.ts";
 import { SPARK } from "./lib/tui.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
-// crypto-VC audience cares about. Agent-native infra, AI labs, publishers
+// VC audience cares about. Agent-native infra, AI labs, publishers
 // building walls, an indie hand-built site, and the bare baseline. `label` is the
 // storage key + display name; `url` is exactly what gets scanned.
 export const CENSUS_ROSTER = [

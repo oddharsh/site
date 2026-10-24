@@ -1,10 +1,11 @@
 # Aadharsh Pannirselvam
 
 I'm a researcher and investor at [Archetype](https://www.archetype.fund/), a
-crypto-native venture firm in New York. I'm most interested in cryptography and
-privacy tech: FHE, MPC, zero-knowledge proofs and TEEs.
-[This site](https://aadhar.sh) is where I keep my photos, my writing and the
-explainers I build to learn things. More [about me](https://aadhar.sh/about).
+NY based venture firm focused on all things programmable. I'm broadly interested
+in how machines access, browse, and learn from the internet and its resources, as
+well as applied cryptography and privacy tech: FHE, MPC, zero-knowledge proofs and
+TEEs. [This site](https://aadhar.sh) is where I keep my photos, my writing, demos,
+and explainers I build, generate, and play with to learn stuff. More [about me](https://aadhar.sh/about).
 
 **Always under construction.**
 
