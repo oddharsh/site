@@ -237,7 +237,10 @@ async function record(browser, cardPage, luna, c: Clip, out) {
   if (!raw.length) throw new Error(`${c.id}: screencast produced no frames`);
 
   // Resample: for each output tick, the latest frame painted at or before it.
-  const start = raw[0].t;
+  // clockFromSteps: frame 0 is the moment the steps begin (plus a frame for
+  // the first paint after them) rather than the first paint ever, so a scene
+  // whose first step starts its animation opens on that animation's frame 0.
+  const start = c.clockFromSteps ? t0 + 50 : raw[0].t;
   const total = Math.min(c.maxMs ?? 8000, Math.max(wallMs, raw[raw.length - 1].t - start + 33));
   const n = Math.round((total / 1000) * FPS);
   await cardPage.setContent(cardHtml(c.hypercam === false ? { ...luna, hypercam: null } : luna, fav, clip, vw, vh, c.fullBleed), { waitUntil: "load" });

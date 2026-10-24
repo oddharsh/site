@@ -34,6 +34,7 @@ export type Clip = {
   // laid over the whole card rather than floated on Bliss.
   url?: string;
   fullBleed?: boolean;
+  clockFromSteps?: boolean;
   hypercam?: boolean;
   viewport?: { width: number; height: number };
   settle?: number;
@@ -45,7 +46,9 @@ export type Clip = {
   // <card>.av1.webm at these knobs, the cheapest compare.ts found reaching
   // SSIMULACRA2 80 unless the clip says otherwise (VideoToolbox quality 0..1,
   // aomenc cq-level).
-  ship?: { card: string; hevc: number; av1: number };
+  // poster: also write frame 0 as public/og/<card>.jpg, the page's og:image,
+  // so the still a fetcher shows before playing is the clip's own first frame.
+  ship?: { card: string; hevc: number; av1: number; poster?: boolean };
 };
 
 const wait = (ms: number): Step => ({ do: "wait", ms });
@@ -110,11 +113,12 @@ export const CLIPS: Clip[] = [
     viewport: { width: 1200, height: 630 },
     fullBleed: true,
     hypercam: false,
-    steps: [wait(4700)],
+    steps: [...play, wait(4700)],
+    clockFromSteps: true,
     tail: 0,
     maxMs: 4500,
     // at SSIMULACRA2 88 rather than 80: mostly black, so near-ceiling costs 32 KB and 11 KB
-    ship: { card: "home", hevc: 0.63, av1: 50 },
+    ship: { card: "home", hevc: 0.63, av1: 50, poster: true },
   },
   {
     id: "home-bsod",

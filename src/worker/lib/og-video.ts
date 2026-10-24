@@ -77,6 +77,11 @@ export function withOgVideo(page: Response, origin: string, v: ChosenVideo): Res
   // The bytes are no longer the asset's, so its validator would lie.
   out.headers.delete("etag");
   out.headers.delete("last-modified");
+  // The asset subrequest's own cache status rides along otherwise, and on
+  // production the bot copy read `cf-cache-status: HIT` while being built
+  // fresh, no-store, every time (measured 2026-10-24).
+  out.headers.delete("cf-cache-status");
+  out.headers.delete("age");
   out.headers.set("cache-control", "no-store");
   out.headers.set("vary", "User-Agent");
   out.headers.set("x-og-video", v.codec);
