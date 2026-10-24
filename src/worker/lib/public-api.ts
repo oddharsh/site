@@ -298,7 +298,7 @@ export const OPERATIONS: readonly Operation[] = [
     tags: ["around"],
     summary: "Read the neighborhood crawl",
     description:
-      "The latest AadharshBot crawl of a small list of crypto venture firm homepages: status, title, description and robots verdict for each. The same data as the /around page.",
+      "The latest AadharshBot crawl of a small list of venture firm homepages: status, title, description and robots verdict for each. The same data as the /around page.",
     responses: { 200: json("The latest snapshot.", ref("AroundReport")), 503: json("No snapshot exists yet. Retry after a day.", ref("Pending")) },
   },
   {

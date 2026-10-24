@@ -95,7 +95,7 @@ changing anything. Two MCP tools write, `representation_capture` and
 - [/bot](https://aadhar.sh/bot): Identity page for `AadharshBot`, the small
   branded crawler that this site operates. Documents the User-Agent,
   Signature-Agent URL, signing algorithm, and opt-out instructions.
-- [/around](https://aadhar.sh/around): A small dashboard of crypto-VC
+- [/around](https://aadhar.sh/around): A small dashboard of venture firm
   homepages I keep tabs on, crawled by AadharshBot on a 30-minute cron
   (your visit only reads the snapshot). Curious rather than competitive.
   Signed per Web Bot Auth so receiving sites can verify the requests came
@@ -255,9 +255,9 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   listener's own music service, its duration, a preview URL and an explicit
   flag. Cached for an hour.
 - [/around/json](https://aadhar.sh/around/json) (`getNeighborhood`): Read the
-  neighborhood crawl. The latest AadharshBot crawl of a small list of crypto
-  venture firm homepages: status, title, description and robots verdict for
-  each. The same data as the /around page.
+  neighborhood crawl. The latest AadharshBot crawl of a small list of venture
+  firm homepages: status, title, description and robots verdict for each. The
+  same data as the /around page.
 - [/around/changes.json](https://aadhar.sh/around/changes.json)
   (`getChangeRadar`): Read what changed in the neighborhood. A bounded history
   of changes between crawls of the neighborhood: status, title, description,

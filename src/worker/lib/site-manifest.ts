@@ -46,7 +46,7 @@ export const AGENT_SURFACES = [
     "path": "/around",
     "title": "Around",
     "mimeType": "text/html",
-    "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood."
+    "description": "AadharshBot's scheduled crawl of the VC neighborhood."
   },
   {
     "path": "/garage",
