@@ -578,7 +578,7 @@ does not make a failed write safe to ignore.
   moves its port to a newer TypeScript, both read the move as disagreement
   and the pin holds until `TSC_REFERENCE` is bumped to match, which makes
   that bump the review of the new checker.
-- @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
+- @types/bun 1.4.4 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
 
