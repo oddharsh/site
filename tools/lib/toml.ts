@@ -34,7 +34,9 @@ export function parse(src: string): TomlTable {
   const fail = (what: string): never => {
     throw new Error(`toml: ${what} at line ${src.slice(0, i).split("\n").length}`);
   };
-  const space = () => { while (src[i] === " " || src[i] === "\t") i++; };
+  const space = () => {
+    while (src[i] === " " || src[i] === "\t") i++;
+  };
   // whitespace, newlines and comments: between lines, and inside arrays
   const gap = () => {
     for (;;) {
@@ -78,7 +80,11 @@ export function parse(src: string): TomlTable {
   const path = (): string[] => {
     const parts = [key()];
     space();
-    while (src[i] === ".") { i++; parts.push(key()); space(); }
+    while (src[i] === ".") {
+      i++;
+      parts.push(key());
+      space();
+    }
     return parts;
   };
   // A table under `keys`, made on the way down; an array of tables yields its last.
@@ -129,7 +135,10 @@ export function parse(src: string): TomlTable {
         if (src[i++] !== "=") fail("expected =");
         set(out, k, value());
         space();
-        if (src[i] === ",") { i++; space(); }
+        if (src[i] === ",") {
+          i++;
+          space();
+        }
       }
       i++;
       return out;

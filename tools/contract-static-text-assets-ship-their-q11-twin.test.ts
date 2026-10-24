@@ -1,6 +1,5 @@
 // ── static text assets ship their q11 twin ───────────────────────────────────
-import {
-  configText, ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
+import { configText, ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../src/worker/lib/assets.ts";
@@ -54,7 +53,11 @@ test("every text twin sits on a path the Worker claims", { skip: needsBuild }, a
   assert.ok(allow.length >= 60, `${config}: scanned only ${allow.length} run_worker_first entries; the reader has lost the allowlist`);
   const covered = claimedByWorker(allow);
   const dead = twins.filter((p) => !covered(p));
-  assert.deepEqual(dead, [], `${config}: ${dead.length} twin(s) on paths the asset layer answers directly, so they are uploaded and never served: ${dead.slice(0, 5).join(", ")}`);
+  assert.deepEqual(
+    dead,
+    [],
+    `${config}: ${dead.length} twin(s) on paths the asset layer answers directly, so they are uploaded and never served: ${dead.slice(0, 5).join(", ")}`,
+  );
   // THE CONVERSE CONTROL. The build's walk is a declared set of routable globs,
   // deliberately not "every text file", and this is what proves the restriction
   // is real: two static text files the allowlist does not reach must have NO twin.
@@ -85,12 +88,14 @@ function fakeEnv(overrides: Record<string, any> = {}) {
         const req = input instanceof Request ? input : new Request(input);
         const path = new URL(req.url).pathname;
         if (path === "/garage/feed.xml") {
-          return new Response(PLAIN, { headers: {
-            "content-type": "application/rss+xml; charset=utf-8",
-            "cache-control": "public, max-age=2592000, s-maxage=2592000",
-            "content-length": String(PLAIN.length),
-            "etag": '"feed-v3"',
-          } });
+          return new Response(PLAIN, {
+            headers: {
+              "content-type": "application/rss+xml; charset=utf-8",
+              "cache-control": "public, max-age=2592000, s-maxage=2592000",
+              "content-length": String(PLAIN.length),
+              "etag": '"feed-v3"',
+            },
+          });
         }
         if (path === "/garage/feed.xml.br" && !overrides.noTwin) {
           const headers = {
@@ -153,7 +158,10 @@ test("a type the build does not twin never takes the path", async () => {
   const env = fakeEnv();
   const asked: any[] = [];
   const inner = env.ASSETS.fetch.bind(env.ASSETS);
-  env.ASSETS.fetch = async (input) => { asked.push(new URL(input instanceof Request ? input.url : input).pathname); return inner(input); };
+  env.ASSETS.fetch = async (input) => {
+    asked.push(new URL(input instanceof Request ? input.url : input).pathname);
+    return inner(input);
+  };
   const res = await servePrecompressedText(new Request("https://aadhar.sh/garage/photo.avif"), env);
   assert.deepEqual(asked, ["/garage/photo.avif"], "an .avif must go straight to the asset layer without a twin lookup");
   assert.equal(res.status, 404, "the asset layer's own answer comes back");

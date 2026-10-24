@@ -527,21 +527,24 @@ skips it.
 69. **A dated canary's npm sha can name a different commit from its
     binary.** The tarball's `package.json` version carries npm's `gitHead`
     (`+9bcbf1e`), and `bun --revision` carries the commit the binary was
-    built from (`+9bcbf1ecb`). They agreed through 20261013.1 and again from
-    20261021.1. From 20261014.1 to 20261019.1 they didn't, on Linux x64 and
-    macOS arm64 alike: each tarball shipped whatever the rolling `canary`
-    release was at publish time under a newer commit's label (20261017.1
-    shipped `5f5799ed1`, the build the canary leg ran that afternoon), and
-    the 20261015.1, 20261016.1 and 20261017.1 Linux binaries are
-    byte-identical under three labels. No pin satisfies both: pinning the
+    built from (`+9bcbf1ecb`). They agreed through 20261013.1, at 20261021.1,
+    and again from 20261023.1. From 20261014.1 to 20261019.1 they didn't, on
+    Linux x64 and macOS arm64 alike: each tarball shipped whatever the
+    rolling `canary` release was at publish time under a newer commit's
+    label (20261017.1 shipped `5f5799ed1`, the build the canary leg ran that
+    afternoon), and the 20261015.1, 20261016.1 and 20261017.1 Linux binaries
+    are byte-identical under three labels. No pin satisfies both: pinning the
     binary's sha fails the installer's second witness and pinning npm's
     fails its third. So the bumper's identity gate refused all six (#1373)
-    and moved only when 20261021.1 matched. Read that red gate as an
+    and moved only when 20261021.1 matched. The next day it happened once
+    more: 1.4.4-canary.20261022.1 is labeled `+38afee6`, the 1.4.4 release
+    commit, and its Linux x64 binary is 20261021.1's `963452075` byte for
+    byte. The installer refuses it under either sha. Read that red gate as an
     upstream mislabel and wait for a matching build; never relax the gate
     to pass one. Check a candidate by hand with
     `npm view @oven/bun-linux-x64@<version> gitHead` against
     `bun --revision` on the unpacked binary. Measured 2026-10-15; every
-    build from 20261010.1 to 20261021.1 re-read 2026-10-23.
+    build from 20261010.1 to 20261023.1 re-read 2026-10-23.
     Checked by: `.github/install-bun.sh`.
 
 70. **Safari reads a fixed box's background-color, never its gradient.**
@@ -600,16 +603,23 @@ skips it.
     THE CLIENT EDGE in `luna.css`; the design tokens `luna.css` must carry
     verbatim; `lwe/encoding.html`, which inlines its spec from
     `pipelines/lwe/specs/`; the generated files (`lib/desktop.*`,
-    `lib/site-manifest.*`) and generated blocks (`nav-run.js`, `lwe/ask.js`)
-    their checks compare byte for byte; two derivation digests; and 7
-    contract-test regexes that spell out one-line source. JSON is out because
-    tools write it with `JSON.stringify(v, null, 2)` and the printer packs
-    short arrays onto one line, so every `derive --lock` would fail
-    `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
+    `lib/site-manifest.*`) and generated blocks (`nav-run.ts`, `lwe/ask.ts`)
+    their checks compare byte for byte; two derivation digests; and 8
+    contract-test regexes that spell out one-line source. A 9th, from a test
+    written after that, turned up when the tree was re-formatted on
+    2026-10-23. JSON is out because tools write it with
+    `JSON.stringify(v, null, 2)` and the printer packs short arrays onto one
+    line, so every `derive --lock` would fail `bun fmt --check`. With all of that in `[fmt].ignorePatterns`, the 504
     files that remain format with no `/a/` or `pd/` change: the served diff is
     the 46 `.src` twins and `sw.js`. The Worker bundle still changes bytes at
     the same size, because esbuild picks minified names by character
-    frequency. A new reader of exact source text belongs in the ignore list.
+    frequency. A new reader of exact source text belongs in the ignore list,
+    or matches with `\s*` where the formatter may wrap, as those 9 regexes
+    have since the tree was formatted. The same re-format split a one-line
+    `try { … } catch { … }` in `src/client/webmcp.ts` and left its
+    `oxlint-disable-next-line` above the `try`, away from the line it
+    excused. Lint reports the stranded directive as unused, so `bun run lint`
+    catches this one; move the directive down onto the line it excuses.
     Checked by: `tools/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts`.
 
 75. **A playwright-core bump strands the canary's browser image.** The
@@ -728,7 +738,21 @@ skips it.
     the `nearest` scroll container (use `overflow: clip`).
     Checked by: `tools/lib/css-parse.ts`, `tools/contract-animation-timeline-stays-a-longhand.test.ts`.
 
-83. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
+83. **An HTMLRewriter append to `<head>` writes nothing on a built page.**
+    The minifier drops the optional `</head>`, and lol-html can't append to
+    an element whose end tag never arrives, so `.on("head", { element(e) {
+    e.append(...) } })` passes on a hand-written fixture and does nothing in
+    production. The first cut of og:video shipped its tags that way and the
+    built `/garage/encoding` carried none (route oracle, 2026-10-23). Anchor
+    the insertion on an element that is always there and use `after` or
+    `prepend`; `lib/og-video.ts` writes after `og:type`. A fixture for the
+    rewriter has to be the minified shape, without `</head>`. Related: the
+    asset layer ignores `Range` (a `bytes=0-99` on `/og/home.jpg` came back
+    200 with all 105,441 bytes), so anything a player streams goes through
+    the Worker.
+    Checked by: `tools/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
+
+84. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
     changes.** 1.3.0 stopped routing gray PNGs through RGB, and its new gray
     branch in `avifImageRGBToYUV` stores the raw sample with no scaling or
     range mapping, so at `-d 10` an 8-bit 200 lands as 200 of 1023

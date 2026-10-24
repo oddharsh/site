@@ -1,7 +1,6 @@
 // ── the census never publishes a check the platform refused ──────────────────
 import { execFileSync } from "node:child_process";
-import {
-  configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { configText, ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { CENSUS_ROSTER, censusCapHit, censusInstanceId } from "../src/worker/census.ts";
 
 // THE BUG THIS PINS. Every probe in lens.ts catches its own error and returns
@@ -53,8 +52,11 @@ test("censusCapHit finds the platform's refusal wherever a probe buried it", () 
   // Junk in, false out. A body is a string and must never be descended into.
   assert.equal(censusCapHit(null), false);
   assert.equal(censusCapHit("Too many subrequests"), false, "a bare string is not a probe result");
-  assert.equal(censusCapHit({ discovery: { robotsTxt: { ok: true, body: "Too many subrequests" } } }), false,
-    "the words appearing in a fetched BODY are the site's content, not our failure");
+  assert.equal(
+    censusCapHit({ discovery: { robotsTxt: { ok: true, body: "Too many subrequests" } } }),
+    false,
+    "the words appearing in a fetched BODY are the site's content, not our failure",
+  );
 });
 
 test("censusInstanceId is deterministic, per host per day, and legal", () => {
@@ -107,8 +109,11 @@ test("the Workflow class is exported from the entrypoint and bound in the site c
   // BookingWorkflow does, and a class that is bound
   // but not exported fails at startup rather than at review.
   const index = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
-  assert.match(index, /export \{ CensusWorkflow \} from "\.\/census-workflow\.ts";/,
-    "index.ts must re-export CensusWorkflow for the binding's class_name to resolve");
+  assert.match(
+    index,
+    /export \{ CensusWorkflow \} from "\.\/census-workflow\.ts";/,
+    "index.ts must re-export CensusWorkflow for the binding's class_name to resolve",
+  );
 
   const { parseJsonc } = await import("./lib/jsonc.ts");
   const config = "cloudflare.config.ts";
@@ -128,11 +133,11 @@ test("only the entrypoint and the workflow module import cloudflare:workers", ()
   // one. Anchor to a line that actually begins an import statement, which is the
   // same quote-versus-code distinction the CSP and link-integrity scanners had
   // to learn. `-E` for a real regex, and the floor below proves it still matches.
-  const out = execFileSync("git", ["grep", "-lE", "^\\s*import .*from \"cloudflare:workers\"", "--", "src/worker"], {
-    cwd: new URL(".", ROOT), encoding: "utf8",
+  const out = execFileSync("git", ["grep", "-lE", '^\\s*import .*from "cloudflare:workers"', "--", "src/worker"], {
+    cwd: new URL(".", ROOT),
+    encoding: "utf8",
   });
   const files = out.split("\n").filter(Boolean).sort();
   assert.ok(files.length >= 2, `the scanner found ${files.length} importers; it is broken`);
-  assert.deepEqual(files, ["src/worker/census-workflow.ts", "src/worker/index.ts"],
-    "cloudflare:workers may only be imported where workerd is the only loader");
+  assert.deepEqual(files, ["src/worker/census-workflow.ts", "src/worker/index.ts"], "cloudflare:workers may only be imported where workerd is the only loader");
 });

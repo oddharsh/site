@@ -77,8 +77,8 @@ const GOTO_MS = 18_000;
 // the live route would have refused to build.
 const CONTENT_MAX = 120_000;
 const MARKDOWN_MAX = 60_000;
-const SHOT_MAX = 6_000_000;      // base64 chars, LENS_BROWSER_SHOT_MAX
-const KV_MAX = 20_000_000;       // LENS_KV_MAX, src/worker/lens-pipeline.ts
+const SHOT_MAX = 6_000_000; // base64 chars, LENS_BROWSER_SHOT_MAX
+const KV_MAX = 20_000_000; // LENS_KV_MAX, src/worker/lens-pipeline.ts
 // Not a server limit. CDP hands back every node in the tree and a news homepage
 // runs to tens of thousands, which serves nobody inside a <pre>.
 const AX_NODE_MAX = 4_000;
@@ -181,10 +181,21 @@ async function captureWire(browser, url) {
         const logged = events.filter((e) => e.method === "Log.entryAdded" && e.params?.entry?.level === "error");
         const first = thrown[0]
           ? String(thrown[0].params?.exceptionDetails?.text || "").slice(0, 120)
-          : logged[0] ? String(logged[0].params.entry.text || "").slice(0, 120) : "";
-        execution = { ran: true, engine: "chromium-local-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
+          : logged[0]
+            ? String(logged[0].params.entry.text || "").slice(0, 120)
+            : "";
+        execution = {
+          ran: true,
+          engine: "chromium-local-cdp",
+          pageErrors: thrown.length,
+          consoleErrors: logged.length,
+          firstError: first || undefined,
+          ...raw,
+        };
       }
-    } catch { /* no execution evidence is null, never a zero that reads as a clean page */ }
+    } catch {
+      /* no execution evidence is null, never a zero that reads as a clean page */
+    }
 
     return {
       ok: true,
@@ -229,7 +240,9 @@ async function capture(browser, url) {
       await cdp.send("Accessibility.enable");
       const { nodes } = await cdp.send("Accessibility.getFullAXTree");
       tree = axTree(nodes || []);
-    } catch { /* a tree we could not build is absent, never invented */ }
+    } catch {
+      /* a tree we could not build is absent, never invented */
+    }
 
     const png = SHOTS ? await page.screenshot({ fullPage: true, type: "png" }).catch(() => null) : null;
     const b64 = png ? png.toString("base64") : "";
@@ -239,7 +252,11 @@ async function capture(browser, url) {
     // That is the axis the pane cares about, and it is why this is not simply
     // the Markdown twin of the same URL.
     let markdown = "";
-    try { markdown = (readDocument(content, { origin: new URL(finalUrl).origin }).body || ""); } catch { /* leave empty */ }
+    try {
+      markdown = readDocument(content, { origin: new URL(finalUrl).origin }).body || "";
+    } catch {
+      /* leave empty */
+    }
 
     return {
       ok: true,
@@ -285,7 +302,9 @@ async function keyUrl(url) {
     });
     const body = await res.json();
     if (body && body.ok !== false && (body.finalUrl || body.url)) return body.finalUrl || body.url;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return url;
 }
 
@@ -294,8 +313,7 @@ async function kvPut(key, file, label) {
   // its own default rather than the site config wrangler needed `-c` for. A
   // hardcoded package manager here once killed every seed run;
   // contract-the-typescript-quarantine guards against that coming back.
-  await cf(["kv", "keys", "put", key, "--namespace-id", NAMESPACE,
-    "--expiration-ttl", String(TTL), "--file", file]);
+  await cf(["kv", "keys", "put", key, "--namespace-id", NAMESPACE, "--expiration-ttl", String(TTL), "--file", file]);
   process.stdout.write(`      wrote ${label} -> ${key}\n`);
 }
 
@@ -327,7 +345,9 @@ try {
     delete snap._png;
     const json = JSON.stringify(snap);
     const words = snap.tally ? snap.tally.words : 0;
-    process.stdout.write(`${String(snap.status ?? "?").padEnd(4)} ${String(words).padStart(6)} words  ${bytes(json.length).padStart(9)}  ${snap.elapsedMs} ms\n`);
+    process.stdout.write(
+      `${String(snap.status ?? "?").padEnd(4)} ${String(words).padStart(6)} words  ${bytes(json.length).padStart(9)}  ${snap.elapsedMs} ms\n`,
+    );
 
     if (json.length > KV_MAX) {
       failed++;
@@ -339,7 +359,10 @@ try {
         try {
           const wire = await captureWire(browser, target);
           process.stdout.write(`      wire: ${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.hostTotal} hosts, ${wire.thirdParty.bytesPct}% third-party\n`);
-        } catch (e) { process.stdout.write(`      wire FAILED: ${(e && e.message) || e}\n`); failed++; }
+        } catch (e) {
+          process.stdout.write(`      wire FAILED: ${(e && e.message) || e}\n`);
+          failed++;
+        }
       }
       continue;
     }
@@ -364,8 +387,7 @@ try {
         const wire = await captureWire(browser, target);
         const wireFile = join(scratch, `${hash}.wire.json`);
         writeFileSync(wireFile, JSON.stringify(wire));
-        await kvPut(`lens:wire:${hash}`, wireFile,
-          `wire (${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.thirdParty.bytesPct}% third-party)`);
+        await kvPut(`lens:wire:${hash}`, wireFile, `wire (${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.thirdParty.bytesPct}% third-party)`);
       } catch (e) {
         // The render is the load-bearing half and it is already seeded. A wire
         // capture that fails costs one tab, not the URL.
@@ -379,10 +401,6 @@ try {
   rmSync(scratch, { recursive: true, force: true });
 }
 
-console.log(
-  failed === 0
-    ? `\nall ${targets.length} URL(s) captured${DRY ? "" : " and seeded"}.`
-    : `\n${failed} of ${targets.length} URL(s) did not complete.`,
-);
+console.log(failed === 0 ? `\nall ${targets.length} URL(s) captured${DRY ? "" : " and seeded"}.` : `\n${failed} of ${targets.length} URL(s) did not complete.`);
 if (!DRY) console.log(`entries live ${(TTL / 3600).toFixed(0)}h. After that /lens goes back to live Browser Run renders.`);
 process.exit(failed === 0 ? 0 : 1);

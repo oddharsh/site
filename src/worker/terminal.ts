@@ -46,9 +46,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { escHtml } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
-import {
-  COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap,
-} from "./lib/tui.ts";
+import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
 import { currentPlaylistId, getTracksSWR } from "./rn.ts";
 import { getCuriusCached } from "./reading.ts";
@@ -81,7 +79,11 @@ export function tokenizeKeys(input) {
     if (text[i] === "<") {
       const close = text.indexOf(">", i);
       const name = close > i ? text.slice(i + 1, close).toLowerCase() : "";
-      if (name && Object.hasOwn(NAMED, name)) { out.push(NAMED[name]); i = close + 1; continue; }
+      if (name && Object.hasOwn(NAMED, name)) {
+        out.push(NAMED[name]);
+        i = close + 1;
+        continue;
+      }
     }
     const cp = String.fromCodePoint(text.codePointAt(i));
     out.push(cp);
@@ -133,18 +135,27 @@ export function readState(url, app) {
 /** The canonical URL for a state: what the frame tells the caller to send next. */
 export function stateUrl(state, extra = {}) {
   const params = new URLSearchParams();
-  const put = (key, value, skip?) => { if (value !== undefined && value !== null && value !== "" && value !== skip) params.set(key, String(value)); };
+  const put = (key, value, skip?) => {
+    if (value !== undefined && value !== null && value !== "" && value !== skip) params.set(key, String(value));
+  };
   if (state.app === "finger") {
     put("pane", state.pane, FINGER_PANES[0]);
     put("cursor", state.cursor, 0);
     put("open", state.open);
     put("q", state.q);
   } else if (state.app === "photos") {
-    put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
-    put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
+    put("q", state.q);
+    put("film", state.film);
+    put("camera", state.camera);
+    put("lens", state.lens);
+    put("page", state.page, 0);
+    put("cursor", state.cursor, 0);
+    put("open", state.open);
   } else if (state.app === "lens" || state.app === "dict" || state.app === "cache" || state.app === "agent-ready" || state.app === "encode") {
     put("url", state.url);
-    if (state.doors) put("doors", "1"); put("left", state.left); put("right", state.right);
+    if (state.doors) put("doors", "1");
+    put("left", state.left);
+    put("right", state.right);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
@@ -162,11 +173,7 @@ export function stateUrl(state, extra = {}) {
  * state. Unlabelled, the first match in the frame is whichever URL happens to
  * appear earliest in the body, which is not the state and is not stable.
  */
-const stateLine = (state, trailer = "") => [
-  s("state ", "label"),
-  s(stateUrl(state), "accent"),
-  ...(trailer ? [s(`   ${trailer}`, "dim")] : []),
-];
+const stateLine = (state, trailer = "") => [s("state ", "label"), s(stateUrl(state), "accent"), ...(trailer ? [s(`   ${trailer}`, "dim")] : [])];
 
 // ── finger: the panes ─────────────────────────────────────────────────────
 // Each pane declares how to LOAD its data and how to turn that data into a list
@@ -181,11 +188,7 @@ const PANES = {
     // Every source here is a bundled file or an asset read, deliberately: the
     // first frame of the flagship app should not wait on Spotify, Curius, or a
     // calendar. Those load on the pane that shows them, and nowhere else.
-    const [posts, photos, checkpoints] = await Promise.all([
-      readPosts(env),
-      queryPhotos(env, { limit: 1 }),
-      readCheckpoints(env),
-    ]);
+    const [posts, photos, checkpoints] = await Promise.all([readPosts(env), queryPhotos(env, { limit: 1 }), readCheckpoints(env)]);
     return { posts, photos, checkpoints, list: [] };
   },
   async writing(env) {
@@ -266,7 +269,10 @@ function renderOverview(data) {
     kv("shell", "a resto-mod Windows XP desktop, served from a Cloudflare Worker", INNER),
     blank(),
     rule(INNER, "plan"),
-    ...wrap("Crypto investing at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T50, and whatever I am reading. Everything here is public and readable by machines on purpose.", INNER).map((row) => [s(row)]),
+    ...wrap(
+      "Crypto investing at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T50, and whatever I am reading. Everything here is public and readable by machines on purpose.",
+      INNER,
+    ).map((row) => [s(row)]),
     blank(),
     rule(INNER, "what this host knows"),
     kv("writing", `${posts.length} note${posts.length === 1 ? "" : "s"}`, INNER),
@@ -291,7 +297,9 @@ function renderWriting(data, state) {
       // serves it as plain text with no chrome at all, which is strictly better
       // than the same bytes reflowed into an 80-column box, and a frame that
       // duplicated it would make the archive's total size the frame's size.
-      ...wrap("The full text is one fetch away, unwrapped and unstyled, at the .txt URL above. This frame is the index card.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap("The full text is one fetch away, unwrapped and unstyled, at the .txt URL above. This frame is the index card.", INNER).map((row) => [
+        s(row, "dim"),
+      ]),
     );
   }
   return listBody(data.list, state, { empty: "no notes published yet.", metaWidth: 12 });
@@ -335,10 +343,7 @@ function renderPhotoFacets(data) {
   const { facets } = data;
   const top = (list, n) => list.slice(0, n);
   const max = (list) => Math.max(1, ...list.map((f) => f.count));
-  const section = (title, list, n) => rows(
-    rule(INNER, title),
-    ...top(list, n).map((f) => meter(f.name, f.count, max(list), INNER, { labelWidth: 26 })),
-  );
+  const section = (title, list, n) => rows(rule(INNER, title), ...top(list, n).map((f) => meter(f.name, f.count, max(list), INNER, { labelWidth: 26 })));
   return rows(
     kv("archive", `${facets.total} photographs`, INNER),
     blank(),
@@ -375,7 +380,9 @@ function renderCoffee(data) {
     return rows(
       [s("CLOSED — the calendar could not be read, so no slot is offered.", "warn")],
       blank(),
-      ...wrap("This fails closed on purpose: showing every slot as free when the calendar is unreadable is how you double-book a real person.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap("This fails closed on purpose: showing every slot as free when the calendar is unreadable is how you double-book a real person.", INNER).map(
+        (row) => [s(row, "dim")],
+      ),
     );
   }
   const slots = (avail.slots || []).slice(0, 12);
@@ -384,7 +391,11 @@ function renderCoffee(data) {
     kv("open slots", String((avail.slots || []).length), INNER),
     blank(),
     slots.length
-      ? table({ cols: [{ title: "start", width: 26 }, { title: "end" }], rows: slots.map((slot) => [String(slot.start || ""), String(slot.end || "")]), width: INNER })
+      ? table({
+          cols: [{ title: "start", width: 26 }, { title: "end" }],
+          rows: slots.map((slot) => [String(slot.start || ""), String(slot.end || "")]),
+          width: INNER,
+        })
       : [[s("no slots in the published window.", "dim")]],
     blank(),
     [s("book one at https://aadhar.sh/coffee", "accent")],
@@ -413,7 +424,9 @@ function renderSearch(data, state) {
       blank(),
       [s("  /finger?pane=search&q=lattice", "accent")],
       blank(),
-      ...wrap("Searches the public pages, writing, garage notes, and utility descriptions. The same index /search serves.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap("Searches the public pages, writing, garage notes, and utility descriptions. The same index /search serves.", INNER).map((row) => [
+        s(row, "dim"),
+      ]),
     );
   }
   if (state.open) {
@@ -439,24 +452,38 @@ function renderPlan() {
     rule(INNER, ".plan"),
     kv("last edited", "2026-08-18", INNER),
     blank(),
-    ...wrap("Most finger daemons died with the machines they ran on. This one didn't, because the daemon is an HTTP handler now and a .plan file is a function that returns a string — same convention, different transport.", INNER).map((row) => [s(row)]),
+    ...wrap(
+      "Most finger daemons died with the machines they ran on. This one didn't, because the daemon is an HTTP handler now and a .plan file is a function that returns a string — same convention, different transport.",
+      INNER,
+    ).map((row) => [s(row)]),
     blank(),
-    ...wrap("Nothing on this host links here, and that's correct: a real .plan was never in a menu. You fingered a name and got whatever was in the file. If you're reading this you read the source, guessed ?pane=plan, or someone told you — all three are the protocol working as intended.", INNER).map((row) => [s(row)]),
+    ...wrap(
+      "Nothing on this host links here, and that's correct: a real .plan was never in a menu. You fingered a name and got whatever was in the file. If you're reading this you read the source, guessed ?pane=plan, or someone told you — all three are the protocol working as intended.",
+      INNER,
+    ).map((row) => [s(row)]),
     blank(),
     rule(INNER, "still true"),
     [s("  still writing at /writing", "dim")],
     [s("  still shooting on the X-T50", "dim")],
     [s("  still investing crypto at Archetype", "dim")],
-    ...wrap("the deploy log at ?pane=deploys is more honest than this file, since a machine writes that one and I write this one", INNER).map((row) => [s("  " + row, "dim")]),
+    ...wrap("the deploy log at ?pane=deploys is more honest than this file, since a machine writes that one and I write this one", INNER).map((row) => [
+      s("  " + row, "dim"),
+    ]),
     blank(),
     [s("-- aadharsh", "strong")],
   );
 }
 
 const RENDER = {
-  overview: renderOverview, writing: renderWriting, reading: renderReading,
-  listening: renderListening, photos: renderPhotoFacets, around: renderAround,
-  coffee: renderCoffee, deploys: renderDeploys, search: renderSearch,
+  overview: renderOverview,
+  writing: renderWriting,
+  reading: renderReading,
+  listening: renderListening,
+  photos: renderPhotoFacets,
+  around: renderAround,
+  coffee: renderCoffee,
+  deploys: renderDeploys,
+  search: renderSearch,
   plan: renderPlan,
 };
 
@@ -477,7 +504,8 @@ async function driveFinger(env, ctx, request, state, tokens) {
     const digit = "123456789".indexOf(key);
     if (digit >= 0 && digit < FINGER_PANES.length) {
       state.pane = FINGER_PANES[digit];
-      state.cursor = 0; state.open = "";
+      state.cursor = 0;
+      state.open = "";
       data = await load(state.pane);
       continue;
     }
@@ -499,19 +527,31 @@ async function driveFinger(env, ctx, request, state, tokens) {
 function fingerStatus(state, data) {
   const index = FINGER_PANES.indexOf(state.pane) + 1;
   const hints = state.open
-    ? [["h", "back"], ["j/k", "move"], ["1-9", "pane"], ["q", "quit"]]
-    : [["1-9", "pane"], ["j/k", "move"], ["<cr>", "open"], ["/", "search"], ["?", "help"], ["q", "quit"]];
+    ? [
+        ["h", "back"],
+        ["j/k", "move"],
+        ["1-9", "pane"],
+        ["q", "quit"],
+      ]
+    : [
+        ["1-9", "pane"],
+        ["j/k", "move"],
+        ["<cr>", "open"],
+        ["/", "search"],
+        ["?", "help"],
+        ["q", "quit"],
+      ];
   const trailer = index ? `pane ${index}/${FINGER_PANES.length} · ${state.pane}` : `.plan · not one of the 9`;
-  return [
-    keyHints(hints),
-    stateLine(state, trailer),
-  ];
+  return [keyHints(hints), stateLine(state, trailer)];
 }
 
 function helpBody() {
   return rows(
     rule(INNER, "driving this thing"),
-    ...wrap("Every frame is one HTTP request. Send a key with ?k= (one key) or ?keys= (a sequence, up to 32). The state that produced a frame is printed in its status bar, so you can bookmark it, fork it, or hand it to somebody else.", INNER).map((row) => [s(row)]),
+    ...wrap(
+      "Every frame is one HTTP request. Send a key with ?k= (one key) or ?keys= (a sequence, up to 32). The state that produced a frame is printed in its status bar, so you can bookmark it, fork it, or hand it to somebody else.",
+      INNER,
+    ).map((row) => [s(row)]),
     blank(),
     rule(INNER, "keys"),
     kv("1-9", "jump to a pane", INNER, { gutter: 10 }),
@@ -540,7 +580,10 @@ function quitBody() {
     blank(),
     [s("  connection closed.", "strong")],
     blank(),
-    ...wrap("Nothing was stored, so there is nothing to resume — start again at /finger, or jump straight back to wherever you were with the URL that frame printed.", INNER).map((row) => [s("  " + row, "dim")]),
+    ...wrap(
+      "Nothing was stored, so there is nothing to resume — start again at /finger, or jump straight back to wherever you were with the URL that frame printed.",
+      INNER,
+    ).map((row) => [s("  " + row, "dim")]),
     blank(),
   );
 }
@@ -548,7 +591,15 @@ function quitBody() {
 export async function fingerFrame(env, ctx, request, state, tokens) {
   if (state.quit) return { title: "finger — aadharsh@aadhar.sh", body: quitBody(), status: keyHints([["/finger", "reconnect"]]) };
   const data = await driveFinger(env, ctx, request, state, tokens);
-  if (state.help) return { title: "finger — help", body: helpBody(), status: keyHints([["any pane key", "leave help"], ["q", "quit"]]) };
+  if (state.help)
+    return {
+      title: "finger — help",
+      body: helpBody(),
+      status: keyHints([
+        ["any pane key", "leave help"],
+        ["q", "quit"],
+      ]),
+    };
   const body = RENDER[state.pane](data, state);
   return { title: `finger — aadharsh@aadhar.sh`, body, status: fingerStatus(state, data) };
 }
@@ -558,17 +609,31 @@ const PAGE = 12;
 
 export async function photosFrame(env, ctx, state, tokens) {
   for (const key of tokens) {
-    if (key === "n") { state.page += 1; state.cursor = 0; state.open = ""; }
-    else if (key === "p") { state.page = Math.max(0, state.page - 1); state.cursor = 0; state.open = ""; }
-    else if (key === "h" || key === "\x1b") state.open = "";
+    if (key === "n") {
+      state.page += 1;
+      state.cursor = 0;
+      state.open = "";
+    } else if (key === "p") {
+      state.page = Math.max(0, state.page - 1);
+      state.cursor = 0;
+      state.open = "";
+    } else if (key === "h" || key === "\x1b") state.open = "";
     else if (key === "q") state.quit = true;
   }
   if (state.quit) return { title: "photos", body: quitBody(), status: keyHints([["/photos", "reconnect"]]) };
 
-  const result = await queryPhotos(env, {
-    q: state.q, film: state.film, camera: state.camera, lens: state.lens,
-    limit: PAGE, offset: state.page * PAGE,
-  }, ctx);
+  const result = await queryPhotos(
+    env,
+    {
+      q: state.q,
+      film: state.film,
+      camera: state.camera,
+      lens: state.lens,
+      limit: PAGE,
+      offset: state.page * PAGE,
+    },
+    ctx,
+  );
 
   // j/k move within the page that was just fetched, so the cursor is applied
   // AFTER the query rather than before it — otherwise a cursor from the previous
@@ -579,14 +644,13 @@ export async function photosFrame(env, ctx, state, tokens) {
     else if (key === "\r" || key === "l") state.open = result.photos[Math.min(state.cursor, result.photos.length - 1)]?.stem || "";
   }
 
-  const filters = [
-    state.q && `q=${state.q}`, state.film && `film=${state.film}`,
-    state.camera && `camera=${state.camera}`, state.lens && `lens=${state.lens}`,
-  ].filter(Boolean).join("  ") || "none";
+  const filters =
+    [state.q && `q=${state.q}`, state.film && `film=${state.film}`, state.camera && `camera=${state.camera}`, state.lens && `lens=${state.lens}`]
+      .filter(Boolean)
+      .join("  ") || "none";
 
   if (state.open) {
-    const photo = result.photos.find((p) => p.stem === state.open)
-      || (await queryPhotos(env, { q: state.open, limit: 1 }, ctx)).photos[0];
+    const photo = result.photos.find((p) => p.stem === state.open) || (await queryPhotos(env, { q: state.open, limit: 1 }, ctx)).photos[0];
     if (!photo) return { title: "photos", body: [[s("no such frame.", "dim")]], status: keyHints([["h", "back"]]) };
     const meta = photo.metadata || {};
     const recipe = meta.recipe || {};
@@ -596,9 +660,12 @@ export async function photosFrame(env, ctx, state, tokens) {
         ...wrap(photo.alt || "", INNER).map((row) => [s(row)]),
         blank(),
         rule(INNER, "exposure"),
-        kv("body", meta.camera, INNER), kv("lens", meta.lens, INNER),
-        kv("shutter", meta.shutter, INNER), kv("aperture", meta.aperture, INNER),
-        kv("iso", meta.iso, INNER), kv("focal length", meta.focal, INNER),
+        kv("body", meta.camera, INNER),
+        kv("lens", meta.lens, INNER),
+        kv("shutter", meta.shutter, INNER),
+        kv("aperture", meta.aperture, INNER),
+        kv("iso", meta.iso, INNER),
+        kv("focal length", meta.focal, INNER),
         kv("shot", meta.date, INNER),
         blank(),
         rule(INNER, "recipe"),
@@ -611,7 +678,13 @@ export async function photosFrame(env, ctx, state, tokens) {
         blank(),
         kv("full size", photo.full, INNER, { style: "accent" }),
       ),
-      status: [keyHints([["h", "back"], ["q", "quit"]]), stateLine(state)],
+      status: [
+        keyHints([
+          ["h", "back"],
+          ["q", "quit"],
+        ]),
+        stateLine(state),
+      ],
     };
   }
 
@@ -626,20 +699,25 @@ export async function photosFrame(env, ctx, state, tokens) {
       blank(),
       shown.length
         ? table({
-          cols: [{ title: "", width: 2 }, { title: "frame", width: 16 }, { title: "film", width: 17 }, { title: "caption" }],
-          rows: shown.map((photo, i) => {
-            const sel = i === Math.min(state.cursor, shown.length - 1);
-            const style = sel ? "sel" : null;
-            return [[s(sel ? "▶" : "", style)], [s(photo.stem, style)], [s(photo.metadata?.film || "—", sel ? "sel" : "dim")], [s(photo.alt || "", style)]];
-          }),
-          width: INNER,
-        })
+            cols: [{ title: "", width: 2 }, { title: "frame", width: 16 }, { title: "film", width: 17 }, { title: "caption" }],
+            rows: shown.map((photo, i) => {
+              const sel = i === Math.min(state.cursor, shown.length - 1);
+              const style = sel ? "sel" : null;
+              return [[s(sel ? "▶" : "", style)], [s(photo.stem, style)], [s(photo.metadata?.film || "—", sel ? "sel" : "dim")], [s(photo.alt || "", style)]];
+            }),
+            width: INNER,
+          })
         : [[s("no frame matches those filters.", "dim")]],
       blank(),
       [s("filter with &q= &film= &camera= &lens=  ·  facets at /finger?pane=photos", "dim")],
     ),
     status: [
-      keyHints([["j/k", "move"], ["<cr>", "open"], ["n/p", "page"], ["q", "quit"]]),
+      keyHints([
+        ["j/k", "move"],
+        ["<cr>", "open"],
+        ["n/p", "page"],
+        ["q", "quit"],
+      ]),
       stateLine(state),
     ],
   };
@@ -649,7 +727,9 @@ export async function photosFrame(env, ctx, state, tokens) {
 const verdictStyle = (level) => (level >= 4 ? "ok" : level >= 2 ? "warn" : "bad");
 
 function lensReadout(obs) {
-  const doorNames = Object.entries(obs.surfaces || {}).filter(([, on]) => on).map(([name]) => name);
+  const doorNames = Object.entries(obs.surfaces || {})
+    .filter(([, on]) => on)
+    .map(([name]) => name);
   return rows(
     kv("url", obs.finalUrl || obs.url, INNER, { style: "accent" }),
     obs.redirected ? kv("redirected", "yes, from " + obs.url, INNER) : blank(),
@@ -663,7 +743,11 @@ function lensReadout(obs) {
     kv("words", obs.wordCount, INNER),
     kv("bytes", obs.bytes, INNER),
     obs.parseTruncated
-      ? kv("parsed", [s(`first ${Math.round(obs.parsedBytes / 1024)} KB of ${Math.round(obs.bytes / 1024)} KB — words and cost are for that prefix`, "warn")], INNER)
+      ? kv(
+          "parsed",
+          [s(`first ${Math.round(obs.parsedBytes / 1024)} KB of ${Math.round(obs.bytes / 1024)} KB — words and cost are for that prefix`, "warn")],
+          INNER,
+        )
       : blank(),
     kv("fetch", obs.elapsedMs == null ? null : `${obs.elapsedMs} ms`, INNER),
     blank(),
@@ -710,11 +794,16 @@ export async function lensFrame(env, request, state, ctx) {
     return {
       title: "lens — the other web",
       body: rows(
-        ...wrap("Inspect any public URL the way a machine does: what it returns, how much of it is readable, and which agent doors it leaves open.", INNER).map((row) => [s(row)]),
+        ...wrap("Inspect any public URL the way a machine does: what it returns, how much of it is readable, and which agent doors it leaves open.", INNER).map(
+          (row) => [s(row)],
+        ),
         blank(),
         [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
         blank(),
-        ...wrap(`Private, local, and non-HTTP targets are refused. Lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.`, INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          `Private, local, and non-HTTP targets are refused. Lookups are rate-limited to ${LENS_BUDGETS.inspect.max}/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.`,
+          INNER,
+        ).map((row) => [s(row, "dim")]),
       ),
       status: keyHints([["&url=", "inspect a target"]]),
     };
@@ -744,17 +833,23 @@ export async function lensFrame(env, request, state, ctx) {
         blank(),
         rule(INNER, "what is behind them"),
         door("llms.txt", doors.llms, doors.llms.ok ? `${doors.llms.bytes} bytes` : doors.llms.why || doors.llms.wrongType),
-        door("markdown twin", doors.markdown, doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why),
+        door(
+          "markdown twin",
+          doors.markdown,
+          doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why,
+        ),
         door("agent card", doors.agentCard, doors.agentCard.ok ? "present" : doors.agentCard.why || doors.agentCard.wrongType),
         door("api catalog", doors.apiCatalog, doors.apiCatalog.ok ? "present" : doors.apiCatalog.why || doors.apiCatalog.wrongType),
         door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
-        doors.mcp.ok && doors.mcp.tools.length ? rows(
-          blank(),
-          // LISTED, NEVER CALLED. tools/list asks a server to describe itself;
-          // tools/call is execution on somebody else's infrastructure.
-          rule(INNER, "their tools — listed, never called"),
-          ...doors.mcp.tools.slice(0, 8).map((t) => [...fit([s(t.name, "strong")], 24), s(t.description, "dim")]),
-        ) : blank(),
+        doors.mcp.ok && doors.mcp.tools.length
+          ? rows(
+              blank(),
+              // LISTED, NEVER CALLED. tools/list asks a server to describe itself;
+              // tools/call is execution on somebody else's infrastructure.
+              rule(INNER, "their tools — listed, never called"),
+              ...doors.mcp.tools.slice(0, 8).map((t) => [...fit([s(t.name, "strong")], 24), s(t.description, "dim")]),
+            )
+          : blank(),
       );
     }
   }
@@ -762,7 +857,13 @@ export async function lensFrame(env, request, state, ctx) {
   return {
     title: `lens — ${obs.finalUrl || obs.url}`,
     body: rows(lensReadout(obs), doorsBody),
-    status: [keyHints([["&url=", "another target"], ["&doors=1", "read through them"]]), stateLine(state)],
+    status: [
+      keyHints([
+        ["&url=", "another target"],
+        ["&doors=1", "read through them"],
+      ]),
+      stateLine(state),
+    ],
   };
 }
 
@@ -771,10 +872,13 @@ function radarIdleFrame() {
   return {
     title: "radar — post readings, get an instrument",
     body: rows(
-      ...wrap("A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.", INNER).map((row) => [s(row)]),
+      ...wrap(
+        "A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.",
+        INNER,
+      ).map((row) => [s(row)]),
       blank(),
       [s("  node tools/photos/radar-sample.ts --at https://aadhar.sh", "accent")],
-      [s("  curl -X POST aadhar.sh/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
+      [s('  curl -X POST aadhar.sh/radar -d \'{"samples":[{"name":"AP","rssi":-58}]}\'', "accent")],
       blank(),
       rule(INNER, "the shape"),
       kv("name", "whatever you want on the label", INNER, { gutter: 10 }),
@@ -783,11 +887,20 @@ function radarIdleFrame() {
       kv("history", "optional trailing readings, for the trend sparkline", INNER, { gutter: 10 }),
       blank(),
       rule(INNER, "what it will not pretend to know"),
-      ...wrap("RSSI is a scalar: it carries distance-ish information and no bearing. The rings are real; the angles are a hash of the name, stable so nothing jumps between frames, and meaningless. Bands are findphone's field calibration.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap(
+        "RSSI is a scalar: it carries distance-ish information and no bearing. The rings are real; the angles are a hash of the name, stable so nothing jumps between frames, and meaningless. Bands are findphone's field calibration.",
+        INNER,
+      ).map((row) => [s(row, "dim")]),
       blank(),
-      ...wrap("Nothing is stored. Post the whole set each time — which also means device names travel in the request, so use --anonymize when pointing the sampler at a public host.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap(
+        "Nothing is stored. Post the whole set each time — which also means device names travel in the request, so use --anonymize when pointing the sampler at a public host.",
+        INNER,
+      ).map((row) => [s(row, "dim")]),
     ),
-    status: keyHints([["POST", "readings"], [`${RADAR_LIMITS.samples}`, "max sources"]]),
+    status: keyHints([
+      ["POST", "readings"],
+      [`${RADAR_LIMITS.samples}`, "max sources"],
+    ]),
   };
 }
 
@@ -800,17 +913,26 @@ export async function dictFrame(env, request, state, ctx) {
     return {
       title: "dict — compression dictionary lint",
       body: rows(
-        ...wrap("Compression dictionaries fail silently. Chromium declines to register a perfectly good one because of a cache directive on it, and nothing tells you: no console warning, no header, no failed request. Your site just serves full responses forever while you believe it is serving deltas.", INNER).map((row) => [s(row)]),
+        ...wrap(
+          "Compression dictionaries fail silently. Chromium declines to register a perfectly good one because of a cache directive on it, and nothing tells you: no console warning, no header, no failed request. Your site just serves full responses forever while you believe it is serving deltas.",
+          INNER,
+        ).map((row) => [s(row)]),
         blank(),
         [s("  curl 'aadhar.sh/dict?url=https://example.com/app.js'", "accent")],
         blank(),
         rule(INNER, "what it checks"),
-        ...wrap("The rules that decide registration, applied to the response headers of the resource you point it at, plus the other half of the handshake: whether a delta-serving response varies on available-dictionary. A cache that does not is not a slow page, it is ERR_CONTENT_DECODING_FAILED.", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          "The rules that decide registration, applied to the response headers of the resource you point it at, plus the other half of the handshake: whether a delta-serving response varies on available-dictionary. A cache that does not is not a slow page, it is ERR_CONTENT_DECODING_FAILED.",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
         blank(),
         rule(INNER, "measured on this origin"),
         ...MEASURED.map(([label, value]) => kv(label, value, INNER, { gutter: 26 })),
         blank(),
-        ...wrap("There is deliberately no delta calculator here. workerd's node:zlib has zstdCompressSync and SILENTLY IGNORES its dictionary option — measured 2026-08-05, identical byte counts with the right dictionary, a wrong one, and none. A delta computed here would be plain zstd reporting a saving that does not exist.", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          "There is deliberately no delta calculator here. workerd's node:zlib has zstdCompressSync and SILENTLY IGNORES its dictionary option — measured 2026-08-05, identical byte counts with the right dictionary, a wrong one, and none. A delta computed here would be plain zstd reporting a saving that does not exist.",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
       ),
       status: keyHints([["&url=", "audit a resource"]]),
     };
@@ -838,16 +960,15 @@ export async function dictFrame(env, request, state, ctx) {
       rule(INNER, "as a dictionary"),
       // Every rule prints, including the ones that passed. A lint that shows only
       // failures leaves you unsure whether it looked.
-      ...dictionary.results.map((r) => [
-        s(VERDICT_MARK[r.verdict], VERDICT_STYLE[r.verdict]),
-        ...fit([s(r.title, "strong")], 26),
-        s(r.detail, "dim"),
-      ]),
+      ...dictionary.results.map((r) => [s(VERDICT_MARK[r.verdict], VERDICT_STYLE[r.verdict]), ...fit([s(r.title, "strong")], 26), s(r.detail, "dim")]),
       blank(),
       dictionary.registers
-        ? [s(dictionary.warns.length
-          ? "  Chromium will register this, but read the warnings above."
-          : "  Chromium will register this.", dictionary.warns.length ? "warn" : "ok")]
+        ? [
+            s(
+              dictionary.warns.length ? "  Chromium will register this, but read the warnings above." : "  Chromium will register this.",
+              dictionary.warns.length ? "warn" : "ok",
+            ),
+          ]
         : [s(`  Chromium will NOT register this: ${dictionary.vetoes.map((v) => v.title).join(", ")}.`, "bad")],
       blank(),
       rule(INNER, "as a delta-served response"),
@@ -860,10 +981,7 @@ export async function dictFrame(env, request, state, ctx) {
         ? [s("  this to a client with no dictionary: ERR_CONTENT_DECODING_FAILED, not a slow page.", "bad")]
         : blank(),
     ),
-    status: [
-      [s("verdict ", "label"), s(dictionary.registers ? "registers" : "never registers", dictionary.registers ? "ok" : "bad")],
-      stateLine(state),
-    ],
+    status: [[s("verdict ", "label"), s(dictionary.registers ? "registers" : "never registers", dictionary.registers ? "ok" : "bad")], stateLine(state)],
   };
 }
 
@@ -876,12 +994,18 @@ export async function cacheFrame(env, request, state, ctx) {
     return {
       title: "cache — a behavioral revalidation lint",
       body: rows(
-        ...wrap("Plenty of origins serve an ETag that can never match: compression or a template nonce varies per response, so every If-None-Match comes back 200 with a full body. The headers look perfect and nothing warns — your cache revalidates forever and never once succeeds.", INNER).map((row) => [s(row)]),
+        ...wrap(
+          "Plenty of origins serve an ETag that can never match: compression or a template nonce varies per response, so every If-None-Match comes back 200 with a full body. The headers look perfect and nothing warns — your cache revalidates forever and never once succeeds.",
+          INNER,
+        ).map((row) => [s(row)]),
         blank(),
         [s("  curl 'aadhar.sh/cache?url=https://example.com/app.css'", "accent")],
         blank(),
         rule(INNER, "what it does"),
-        ...wrap("No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          "No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
         blank(),
         kv("cost", "3-4 subrequests, headers only; bodies are cancelled unread", INNER, { gutter: 8 }),
         kv("shares", `Lens's ${LENS_BUDGETS.inspect.max}/min per-address budget`, INNER, { gutter: 8 }),
@@ -920,10 +1044,7 @@ export async function cacheFrame(env, request, state, ctx) {
         ? [s("  Revalidation works: a warm client pays headers, not bodies.", "ok")]
         : [s(`  Revalidation is broken here: ${verdict.vetoes.map((v) => v.id).join(", ")}.`, "bad")],
     ),
-    status: [
-      [s("verdict ", "label"), s(verdict.healthy ? "revalidates" : "never revalidates", verdict.healthy ? "ok" : "bad")],
-      stateLine(state),
-    ],
+    status: [[s("verdict ", "label"), s(verdict.healthy ? "revalidates" : "never revalidates", verdict.healthy ? "ok" : "bad")], stateLine(state)],
   };
 }
 
@@ -944,7 +1065,10 @@ export async function encodeFrame(env, request, state, ctx) {
     return {
       title: "encode — what did your encoder actually do?",
       body: rows(
-        ...wrap("Point it at a JPEG or an AVIF and it reads the container: quantization tables, the scan script, component sampling factors, the av1C record. No pixels are decoded, which is the only reason this can run in a Worker at all.", INNER).map((row) => [s(row)]),
+        ...wrap(
+          "Point it at a JPEG or an AVIF and it reads the container: quantization tables, the scan script, component sampling factors, the av1C record. No pixels are decoded, which is the only reason this can run in a Worker at all.",
+          INNER,
+        ).map((row) => [s(row)]),
         blank(),
         [s("  curl 'aadhar.sh/encode?url=https://example.com/photo.jpg'", "accent")],
         blank(),
@@ -955,7 +1079,10 @@ export async function encodeFrame(env, request, state, ctx) {
         kv("depth", "8-bit vs 10-bit AVIF — the latter measured ~6% smaller here, free", INNER, { gutter: 12 }),
         kv("metadata", "ICC/EXIF/XMP riding along on a thumbnail", INNER, { gutter: 12 }),
         blank(),
-        ...wrap("Quality is an ESTIMATE and the frame says so. There is no quality number in a JPEG, only quantization tables, and every tool that prints one is inferring it. The method and its deviation are shown so the number can be argued with.", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          "Quality is an ESTIMATE and the frame says so. There is no quality number in a JPEG, only quantization tables, and every tool that prints one is inferring it. The method and its deviation are shown so the number can be argued with.",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
       ),
       status: keyHints([["&url=", "read an image"]]),
     };
@@ -983,9 +1110,12 @@ export async function encodeFrame(env, request, state, ctx) {
       body: rows(
         [s(kind === "heif" ? "HEIF/HEIC container." : kind ? `${kind} container.` : "unrecognised container.", "warn")],
         blank(),
-        ...wrap(kind === "heif"
-          ? "The EXIF and recipe are reachable in here without decoding, but the encode facts live in boxes this lint does not read yet. JPEG and AVIF are the two it knows."
-          : "This reads JPEG and AVIF. Both are answerable from the container; PNG and WebP would need their own readers.", INNER).map((row) => [s(row, "dim")]),
+        ...wrap(
+          kind === "heif"
+            ? "The EXIF and recipe are reachable in here without decoding, but the encode facts live in boxes this lint does not read yet. JPEG and AVIF are the two it knows."
+            : "This reads JPEG and AVIF. Both are answerable from the container; PNG and WebP would need their own readers.",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
       ),
       status: stateLine(state),
     };
@@ -996,8 +1126,7 @@ export async function encodeFrame(env, request, state, ctx) {
     title: `encode — ${target.url}`,
     body: encodeReadout(inspected, got.declaredLength),
     status: [
-      [s("read ", "label"), s(`${Math.min(got.bytes.length, ENCODE_CAP).toLocaleString()} bytes of container`, "dim"),
-        s("  no pixels decoded", "dim")],
+      [s("read ", "label"), s(`${Math.min(got.bytes.length, ENCODE_CAP).toLocaleString()} bytes of container`, "dim"), s("  no pixels decoded", "dim")],
       stateLine(state),
     ],
   };
@@ -1005,30 +1134,53 @@ export async function encodeFrame(env, request, state, ctx) {
 
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
-  const app = (name, line) => rows(
-    [s(`  /${name}`, "accent")],
-    ...wrap(line, INNER - 4).map((row) => [s("    " + row)]),
-    blank(),
-  );
+  const app = (name, line) => rows([s(`  /${name}`, "accent")], ...wrap(line, INNER - 4).map((row) => [s("    " + row)]), blank());
   return {
     title: "aadhar.sh — terminal utilities",
     body: rows(
-      ...wrap("Three programs, drawn as terminal frames. Each one answers a plain GET, so curl works and so does an agent with nothing but an HTTP client. The same frames are callable over MCP at /mcp.", INNER).map((row) => [s(row)]),
+      ...wrap(
+        "Three programs, drawn as terminal frames. Each one answers a plain GET, so curl works and so does an agent with nothing but an HTTP client. The same frames are callable over MCP at /mcp.",
+        INNER,
+      ).map((row) => [s(row)]),
       blank(),
       rule(INNER, "programs"),
       blank(),
-      app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
-      app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
+      app(
+        "finger",
+        "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame.",
+      ),
+      app(
+        "photos",
+        "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with.",
+      ),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
-      app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
-      app("encode", "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, subsampling, bit depth — and says where bytes are being left on the table. No pixels decoded."),
+      app(
+        "cache",
+        "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see.",
+      ),
+      app(
+        "encode",
+        "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, subsampling, bit depth — and says where bytes are being left on the table. No pixels decoded.",
+      ),
       app("agent-ready", "How much of an origin can a machine actually use — and, for this one, what that cost to build. Doors are counted, never scored."),
-      app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
-      app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
+      app(
+        "dict",
+        "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured.",
+      ),
+      app(
+        "radar",
+        "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here.",
+      ),
       rule(INNER, "driving"),
-      ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
+      ...wrap(
+        "?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.",
+        INNER,
+      ).map((row) => [s(row, "dim")]),
     ),
-    status: keyHints([["/finger", "start here"], ["?", "help inside any app"]]),
+    status: keyHints([
+      ["/finger", "start here"],
+      ["?", "help inside any app"],
+    ]),
   };
 }
 
@@ -1055,8 +1207,6 @@ const frameLines = (frame) => plainFrame({ title: frame.title, body: frame.body,
 export function frameText(frame) {
   return emit(frameLines(frame));
 }
-
-
 
 // ── a tool asked for HTML ─────────────────────────────────────────────────
 // The frame, in a <pre>, in the ordinary site window. What a browser needs from
@@ -1102,7 +1252,11 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
   // become writable.
   if (request.method === "POST" && name === "radar") {
     let payload = null;
-    try { payload = await request.json(); } catch { payload = null; }
+    try {
+      payload = await request.json();
+    } catch {
+      payload = null;
+    }
     const samples = readSamples(payload);
     const frame = radarFrame(samples, { source: String(payload?.source || "").slice(0, 60) });
     return new Response(frameText(frame) + "\n", {
@@ -1117,9 +1271,7 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
   }
 
   const frame = await buildFrame(name, request, env, ctx, url);
-  const wantsHtml = !explicitText
-    && (request.headers.get("accept") || "").includes("text/html")
-    && !url.searchParams.has("plain");
+  const wantsHtml = !explicitText && (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain");
 
   if (wantsHtml) return toolPage(frame, url.pathname);
   // ANSI by default over plain HTTP, because the usual caller of a text/plain
@@ -1148,14 +1300,12 @@ export async function handleTool(request, env, ctx) {
     // The index frame IS the 404 body: a wrong name gets every right one, with a
     // sentence each.
     return new Response(`no such tool: ${name}\n\n${frameText(indexFrame())}\n`, {
-      status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+      status: 404,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
   }
   return serveFrame(name, request, env, ctx, { explicitText });
 }
-
-
-
 
 /** The MCP entry point: a frame as plain text, never coloured. */
 export async function terminalToolFrame(app, args, request, env, ctx) {

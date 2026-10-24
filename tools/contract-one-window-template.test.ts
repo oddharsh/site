@@ -37,7 +37,9 @@ test("every static page with a title bar carries exactly one generated bar", () 
 test("the bake converges the old variants and keeps every field", () => {
   const page = (bar) => `<body>\n<div class="window">\n    ${bar}\n    <div class="content"></div>\n</div>\n</body>`;
   // the lwe shape: split tags, a tooltip on .min, an entity in the caption
-  const lwe = page('<div class="title-bar">\n      <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; FHE</span>\n      <span class="controls"\n        ><span class="min" title="minimize" aria-hidden="true"></span\n        ><button type="button" class="max" title="maximize" aria-label="maximize"></button\n        ><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a\n      ></span>\n    </div>');
+  const lwe = page(
+    '<div class="title-bar">\n      <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/lwe &middot; FHE</span>\n      <span class="controls"\n        ><span class="min" title="minimize" aria-hidden="true"></span\n        ><button type="button" class="max" title="maximize" aria-label="maximize"></button\n        ><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a\n      ></span>\n    </div>',
+  );
   const once = bakeTitleBar(lwe);
   // the caption was authored HTML, so it must pass through unescaped
   assert.ok(once.includes("aadhar.sh/lwe &middot; FHE</span>"), "the caption's entity was re-escaped");
@@ -45,8 +47,9 @@ test("the bake converges the old variants and keeps every field", () => {
   assert.equal(occurrences(once, 'title="minimize"'), 0);
   assert.equal(bakeTitleBar(once), once, "a second bake must change nothing");
   // the icon class, the close label differing from its title, and the opt-out
-  const custom = page('<div class="title-bar"><span class="title-text"><span class="icon df-icon" aria-hidden="true"></span>aadhar.sh/dotfiles</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to the desktop" aria-label="close dotfiles"></a></span></div>')
-    .replace('<div class="window">', '<div class="window" data-no-histnav>');
+  const custom = page(
+    '<div class="title-bar"><span class="title-text"><span class="icon df-icon" aria-hidden="true"></span>aadhar.sh/dotfiles</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="back to the desktop" aria-label="close dotfiles"></a></span></div>',
+  ).replace('<div class="window">', '<div class="window" data-no-histnav>');
   const baked = bakeTitleBar(custom);
   assert.ok(baked.includes('<span class="icon df-icon" aria-hidden="true">'), "the icon class was dropped");
   assert.ok(baked.includes('title="back to the desktop" aria-label="close dotfiles"'), "the close label was dropped");
@@ -54,7 +57,8 @@ test("the bake converges the old variants and keeps every field", () => {
 });
 
 test("the bake refuses markup the template has no field for (control)", () => {
-  const withExtra = '<body>\n<div class="window">\n  <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>x</span><span class="badge">beta</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="t" aria-label="t"></a></span></div>\n</div>\n</body>';
+  const withExtra =
+    '<body>\n<div class="window">\n  <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>x</span><span class="badge">beta</span><span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/" title="t" aria-label="t"></a></span></div>\n</div>\n</body>';
   assert.throws(() => bakeTitleBar(withExtra, "fixture"), /fixture: the title bar carries markup the template would drop/);
   const attributed = withExtra.replace('<span class="badge">beta</span>', "").replace('<div class="title-bar">', '<div class="title-bar" data-x="1">');
   assert.throws(() => bakeTitleBar(attributed, "fixture"), /attributes the template has no field for/);

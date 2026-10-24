@@ -44,11 +44,18 @@ const { values } = parseArgs({
 });
 
 const SIGNER = `${values.repo}/.github/workflows/ci.yml`;
-function instrument(msg: string): never { console.error(`served:check: ${msg}`); process.exit(2); }
+function instrument(msg: string): never {
+  console.error(`served:check: ${msg}`);
+  process.exit(2);
+}
 const gh = (args: string[]) => execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 async function productionCommit(): Promise<{ commit: string | null; version: string | null }> {
-  try { return await originBuild(values.origin); } catch (e) { instrument((e as Error).message); }
+  try {
+    return await originBuild(values.origin);
+  } catch (e) {
+    instrument((e as Error).message);
+  }
 }
 
 const downloadManifest = (commit: string) => fetchManifest(values.repo, commit);
@@ -68,19 +75,25 @@ function attested(path: string): boolean {
 
 const live = await productionCommit();
 const commit = (values.commit ?? live.commit)?.toLowerCase() ?? null;
-if (!commit) instrument(`${values.origin} reports no build commit and no --commit was given (production predates build-info, or this is not a Workers Builds build)`);
+if (!commit)
+  instrument(`${values.origin} reports no build commit and no --commit was given (production predates build-info, or this is not a Workers Builds build)`);
 
-const path = values.manifest ?? downloadManifest(commit) ?? instrument(`no served-manifest artifact for ${commit.slice(0, 12)} in ${values.repo}'s ci.yml push runs`);
+const path =
+  values.manifest ?? downloadManifest(commit) ?? instrument(`no served-manifest artifact for ${commit.slice(0, 12)} in ${values.repo}'s ci.yml push runs`);
 const manifest: ServedManifest = parseManifest(readFileSync(path, "utf8"));
-console.log(`served:check: ${values.origin} version ${live.version?.slice(0, 8) ?? "?"}, commit ${commit.slice(0, 12)}, ${Object.keys(manifest.files).length} URLs in the manifest`);
+console.log(
+  `served:check: ${values.origin} version ${live.version?.slice(0, 8) ?? "?"}, commit ${commit.slice(0, 12)}, ${Object.keys(manifest.files).length} URLs in the manifest`,
+);
 
 const findings: string[] = [];
 // --commit is an EXPECTATION when the origin names a commit of its own: a
 // preview that already moved to a newer push, or a release that never landed,
 // would otherwise be compared against the wrong manifest and every changed URL
 // would read as a mismatch. It only stands in for the origin when that is silent.
-if (values.commit && live.commit && live.commit !== commit) findings.push(`${values.origin} serves ${live.commit.slice(0, 12)}, not the expected ${commit.slice(0, 12)}`);
-if (manifest.commit && manifest.commit !== commit) findings.push(`the manifest is for ${manifest.commit.slice(0, 12)}, not the ${commit.slice(0, 12)} being checked`);
+if (values.commit && live.commit && live.commit !== commit)
+  findings.push(`${values.origin} serves ${live.commit.slice(0, 12)}, not the expected ${commit.slice(0, 12)}`);
+if (manifest.commit && manifest.commit !== commit)
+  findings.push(`the manifest is for ${manifest.commit.slice(0, 12)}, not the ${commit.slice(0, 12)} being checked`);
 if (!values["no-attest"]) {
   if (attested(path)) console.log(`  attestation: verified, signed by ${SIGNER}`);
   else findings.push("the manifest is not attested by ci.yml");
@@ -118,7 +131,9 @@ if (findings.length) {
 // "0 of 0 URLs" read as a pass (first seen on #1075's release, 2026-10-01).
 // What such a run DID verify is the commit and the signature, so say exactly that.
 if (!results.length) {
-  console.log(`served:check: nothing to compare, no static URL changed since ${values.since?.slice(0, 12)}; verified only the commit${values["no-attest"] ? "" : " and the signature"}`);
+  console.log(
+    `served:check: nothing to compare, no static URL changed since ${values.since?.slice(0, 12)}; verified only the commit${values["no-attest"] ? "" : " and the signature"}`,
+  );
   process.exit(0);
 }
 console.log(`served:check: ${values.origin} serves what CI built, ${results.length} of ${results.length} URLs`);

@@ -34,8 +34,10 @@ export function bunLintProblem(executable = process.execPath): string | null {
     if (result.status === 0 && /Usage: bun lint\b/.test(result.stdout ?? "")) return null;
     const revision = spawnSync(executable, ["--revision"], { encoding: "utf8" }).stdout?.trim() || "unknown revision";
     const said = `${result.stderr ?? ""}${result.stdout ?? ""}`.trim().split("\n")[0] || result.error?.message || `exit ${result.status}`;
-    return `${executable} (${revision}) has no built-in \`bun lint\` (gotcha 67), so the lint script would call itself ` +
-      `(the probe said: ${said}). Install the pinned Bun with \`bash .github/install-bun.sh ~/.bun/bin\``;
+    return (
+      `${executable} (${revision}) has no built-in \`bun lint\` (gotcha 67), so the lint script would call itself ` +
+      `(the probe said: ${said}). Install the pinned Bun with \`bash .github/install-bun.sh ~/.bun/bin\``
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -1,5 +1,6 @@
 import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
+import { ogVideoFor } from "./og-video.ts";
 import { CACHEABLE_PREFIXES } from "../routes.ts";
 
 // lib/cache.ts: the worker's caching kit, one primitive surface where four
@@ -77,7 +78,8 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
   };
 
   if (kv) {
-    let value: T | null = null, fresh = false;
+    let value: T | null = null,
+      fresh = false;
     try {
       const read = await kv.getWithMetadata(key, cacheTtl ? { type, cacheTtl } : { type });
       value = read.value;
@@ -90,7 +92,7 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
           Promise.resolve()
             .then(buildFn)
             .then(store)
-            .catch(() => {})
+            .catch(() => {}),
         );
       }
       return value;
@@ -180,7 +182,9 @@ export function notModifiedIfFresh(request, response) {
   // Response without draining it leaves that stream unconsumed for the rest of the
   // invocation, so cancel it explicitly — same discipline as every other body we
   // decide not to serve in assets.js.
-  try { response.body?.cancel(); } catch {}
+  try {
+    response.body?.cancel();
+  } catch {}
   return new Response(null, { status: 304, headers });
 }
 
@@ -290,6 +294,11 @@ export function shouldUseWorkersCache(request, cacheablePaths) {
   // "has an accept header", since every browser sends one.
   if (wantsMarkdown(request)) return false;
   const url = new URL(request.url);
+  // A preview fetcher that gets an og:video clip gets its own copy of the page
+  // (lib/og-video.ts), so it skips the cache both ways: a hit would hand it the
+  // plain document, and a miss would store its copy for everyone else. `/` is
+  // the page where this bites, being the one clip page Workers Cache answers.
+  if (ogVideoFor(url.pathname, request.headers.get("user-agent"))) return false;
   if (!isCanonicalHost(url.hostname)) return false;
   if (url.search) return false;
   if (cacheablePaths.has(url.pathname)) return true;

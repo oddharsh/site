@@ -6,12 +6,7 @@
 // decides pass or fail: the expected set per route, and the diff. A diff that
 // can't report a missing tool would turn the probe green on exactly the
 // failure it exists for.
-import {
-  SITE_MCP_TOOLS,
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { SITE_MCP_TOOLS, assert, readFileSync, test } from "./contract-shared.ts";
 import { diffCatalog, expectedCatalog, lensPageToolNames } from "./lib/webmcp-catalog.ts";
 
 const LENS_WEBMCP = readFileSync("./src/client/lens-webmcp.ts", "utf8");
@@ -32,7 +27,11 @@ test("/lens expects the /mcp catalog plus its page tools; every other page expec
     assert.equal(expectedCatalog(route, SITE, lens).length, SITE.length + lens.length, `${route} is /lens`);
   }
   for (const route of ["/", "/garage", "/whoareyou", "/lensx"]) {
-    assert.deepEqual(expectedCatalog(route, SITE, lens), [...SITE].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0), `${route} should expect /mcp only`);
+    assert.deepEqual(
+      expectedCatalog(route, SITE, lens),
+      [...SITE].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
+      `${route} should expect /mcp only`,
+    );
   }
 });
 

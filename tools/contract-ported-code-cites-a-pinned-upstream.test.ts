@@ -39,7 +39,8 @@ const COMMENT = /^\s*(?:\/\/|\/\*|\*|#)/;
 /** Every GitHub file link in a COMMENT of `source`, with whether its ref is a
  *  branch. */
 function upstreamRefs(source, { patch = false }: Record<string, any> = {}) {
-  const comments = source.split("\n")
+  const comments = source
+    .split("\n")
     .map((line) => (patch ? line.replace(/^[+\- ]/, "") : line))
     .filter((line) => COMMENT.test(line))
     .join("\n");
@@ -55,12 +56,17 @@ test("the ref matcher sees a branch link and passes a tag or sha (control)", () 
   const [branch] = upstreamRefs("// see https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L42");
   assert.equal(branch.ref, "main");
   assert.equal(branch.branch, true, "a blob/main link must read as a branch");
-  const pinned = upstreamRefs([
-    "// https://github.com/python-pillow/Pillow/blob/12.3.0/src/libImaging/Convert.c#L42",
-    "// https://github.com/microsoft/NLWeb/blob/b423f15d9aeaa023ce75993ac9deed2354597043/AskAgent/x.py",
-    "// https://raw.githubusercontent.com/0xdiid/buttcrack/c398ef10/src/x.txt",
-  ].join("\n"));
-  assert.deepEqual(pinned.map((r) => r.branch), [false, false, false]);
+  const pinned = upstreamRefs(
+    [
+      "// https://github.com/python-pillow/Pillow/blob/12.3.0/src/libImaging/Convert.c#L42",
+      "// https://github.com/microsoft/NLWeb/blob/b423f15d9aeaa023ce75993ac9deed2354597043/AskAgent/x.py",
+      "// https://raw.githubusercontent.com/0xdiid/buttcrack/c398ef10/src/x.txt",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    pinned.map((r) => r.branch),
+    [false, false, false],
+  );
   // A runtime fetch is code, so it is not read; the same link in a comment is.
   const live = 'const SCHEDULE = "https://raw.githubusercontent.com/nodejs/Release/main/schedule.json";';
   assert.deepEqual(upstreamRefs(live), []);
@@ -84,6 +90,9 @@ test("a GitHub file link in this repository's code names a tag or a commit", () 
   }
   // FLOOR on what was matched, too: the eight links added with this test.
   assert.ok(pinned >= 8, `matched only ${pinned} pinned upstream links; the matcher has stopped matching`);
-  assert.deepEqual(branchLinks, [],
-    "a link to an upstream branch reads whatever that branch holds today, so it stops describing what was ported. Link the tag or the commit you read.");
+  assert.deepEqual(
+    branchLinks,
+    [],
+    "a link to an upstream branch reads whatever that branch holds today, so it stops describing what was ported. Link the tag or the commit you read.",
+  );
 });

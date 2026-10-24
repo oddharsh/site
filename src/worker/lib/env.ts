@@ -259,9 +259,4 @@ export interface EnvInjected {
 export type SiteRequest = Request<unknown, IncomingRequestCfProperties>;
 
 /** The site Worker's env. `route()` and every handler take this instead of `any`. */
-export interface Env
-  extends EnvBindings,
-    EnvVars,
-    EnvSecrets,
-    EnvOptionalSecrets,
-    EnvInjected {}
+export interface Env extends EnvBindings, EnvVars, EnvSecrets, EnvOptionalSecrets, EnvInjected {}

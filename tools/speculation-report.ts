@@ -38,10 +38,18 @@ const isDocument = (p: string) => !p.startsWith("/a/") && !/\.[a-z0-9]+$/i.test(
 const all = report.rows || [];
 const hidden = all.filter((r) => !isDocument(r.path)).length;
 const rows = all.filter((r) => isDocument(r.path) && r.speculated >= MIN);
-console.log(`speculation ledger, last ${report.window_days} days, document paths speculated ${MIN}+ times (${rows.length} of ${all.length}; ${hidden} sub-resource rows hidden)\n`);
+console.log(
+  `speculation ledger, last ${report.window_days} days, document paths speculated ${MIN}+ times (${rows.length} of ${all.length}; ${hidden} sub-resource rows hidden)\n`,
+);
 console.log("path".padEnd(34), "prefetch".padStart(9), "prerender".padStart(10), "activated".padStart(10), "rate".padStart(7));
 for (const r of rows) {
-  console.log(r.path.slice(0, 34).padEnd(34), String(r.prefetch).padStart(9), String(r.prerender).padStart(10), String(r.activated).padStart(10), (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7));
+  console.log(
+    r.path.slice(0, 34).padEnd(34),
+    String(r.prefetch).padStart(9),
+    String(r.prerender).padStart(10),
+    String(r.activated).padStart(10),
+    (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7),
+  );
 }
 // The recommendation is deliberately narrow. A high activation rate on a
 // moderate rule says the hover already predicts the click; promoting that link
@@ -66,4 +74,6 @@ const hot = rows.filter((r) => r.rate !== null && r.rate >= 0.5);
 const cold = rows.filter((r) => r.rate !== null && r.rate <= 0.05 && r.speculated >= MIN * 3);
 console.log(`\ncandidates to promote (rate >= 50%): ${hot.length ? hot.map((r) => r.path).join(", ") : "none"}`);
 console.log(`candidates to exclude (rate <= 5% on ${MIN * 3}+ speculations): ${cold.length ? cold.map((r) => r.path).join(", ") : "none"}`);
-console.log("\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\n`bun run speculation:probe` shows the promoted rule reaching the origin. Read that file's note first.");
+console.log(
+  "\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\n`bun run speculation:probe` shows the promoted rule reaching the origin. Read that file's note first.",
+);

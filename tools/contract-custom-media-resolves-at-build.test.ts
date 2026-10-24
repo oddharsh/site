@@ -1,10 +1,6 @@
 // ── @custom-media resolves at build, for every stylesheet, and fails by name ─
 import { readFileSync } from "node:fs";
-import {
-  assert,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 import { parseCss } from "./lib/css-parse.ts";
 
 // No browser implements @custom-media (cssdb 8.11: zero engines), so the
@@ -53,7 +49,9 @@ test("every declared name expands to its query, minified or not", () => {
 });
 
 test("a custom media query composes with a plain one and with `not`", () => {
-  const out = parseCss("fixture.css", `@media (--coarse) and (--p3) { .a { color: red } } @media not (--reduced-motion) { .b { color: blue } }`, { minify: true });
+  const out = parseCss("fixture.css", `@media (--coarse) and (--p3) { .a { color: red } } @media not (--reduced-motion) { .b { color: blue } }`, {
+    minify: true,
+  });
   assert.match(out, /@media \(hover:none\) and \(color-gamut:p3\)\{\.a\{color:red\}\}/, out);
   assert.match(out, /@media not \(prefers-reduced-motion:reduce\)\{\.b\{color:#00f\}\}/, out);
 });
@@ -64,10 +62,7 @@ test("a stylesheet that uses no custom media ships not one byte of the definitio
 });
 
 test("a name nothing defines fails the parse by name, rather than shipping a query no engine matches", () => {
-  assert.throws(
-    () => parseCss("fixture.css", `@media (--definitely-not-defined) { .a { color: red } }`, { minify: true }),
-    /--definitely-not-defined/,
-  );
+  assert.throws(() => parseCss("fixture.css", `@media (--definitely-not-defined) { .a { color: red } }`, { minify: true }), /--definitely-not-defined/);
 });
 
 test("the append leaves the caller's line numbers alone", () => {
@@ -75,7 +70,11 @@ test("the append leaves the caller's line numbers alone", () => {
   // why the definitions are appended rather than prepended. A prepend would
   // shift every reported line by the length of the definitions file.
   let err;
-  try { parseCss("fixture.css", `.a { color: red }\n.b { color: blue }\n}\n.c { d: 1 }`, { minify: true }); } catch (e) { err = e; }
+  try {
+    parseCss("fixture.css", `.a { color: red }\n.b { color: blue }\n}\n.c { d: 1 }`, { minify: true });
+  } catch (e) {
+    err = e;
+  }
   assert.ok(err, "a stray close brace must throw");
   assert.equal(err.loc?.line, 3, `expected the error on the caller's line 3, got ${JSON.stringify(err.loc)}`);
 });
@@ -86,8 +85,5 @@ test("a block left open at end-of-input is reported as that, not as five unknown
   // block and every definition reads as a nested unknown at-rule. The append
   // turns a silent authoring bug into a failure, and parseCss names the bug
   // rather than the symptom.
-  assert.throws(
-    () => parseCss("fixture.css", `.a { color: red }\n.c { d: 1 `, { minify: true }),
-    /never closed/,
-  );
+  assert.throws(() => parseCss("fixture.css", `.a { color: red }\n.c { d: 1 `, { minify: true }), /never closed/);
 });

@@ -42,7 +42,7 @@ import { existsSync, readFileSync } from "node:fs";
 // describes). So these assert on the source text, and each one guards a
 // failure that would ship silently.
 
-test("\"what was hovered\" is answered in exactly one place", async () => {
+test('"what was hovered" is answered in exactly one place', async () => {
   const nav = await readFile(new URL("src/client/nav.ts", ROOT), "utf8");
   const tip = await readFile(new URL("src/client/infotip.ts", ROOT), "utf8");
   // nav.js's loader has to match the same elements the module does, or the
@@ -85,8 +85,7 @@ test("every string an infotip prints is escaped on the way in", async () => {
     assert.match(tip, hole, `${hole} must interpolate through esc()`);
   }
   const printed = tip.match(/<div class="n">\$\{[^}]+\}/g) || [];
-  assert.ok(printed.length >= 2 && printed.every((p) => p.includes("esc(")),
-    "every name line must be escaped, including any added later");
+  assert.ok(printed.length >= 2 && printed.every((p) => p.includes("esc(")), "every name line must be escaped, including any added later");
 });
 
 test("an infotip row is dropped rather than filled in", async () => {
@@ -106,11 +105,13 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
   assert.equal(minifiedScripts().find((row) => row.file === "infotip.js")?.twin, "/infotip.src.js", "infotip.js belongs in the registry");
   const infotip = CLIENT_ASSETS.find((asset) => asset.file === "infotip.js");
   assert.ok(infotip, "infotip.js is a registry row");
-  assert.ok(infotip.load.some((loader) => loader.via === "import"), "nav.js's import() must be repointed");
+  assert.ok(
+    infotip.load.some((loader) => loader.via === "import"),
+    "nav.js's import() must be repointed",
+  );
   assert.ok(infotip.loadedBy.includes("public/nav.js"), "and nav.js is the loader the build witnesses");
   const order = hashOrder().map((asset) => asset.file);
-  assert.ok(order.indexOf("hoist.js") < order.indexOf("infotip.js"),
-    "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
+  assert.ok(order.indexOf("hoist.js") < order.indexOf("infotip.js"), "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
 test("every workflow bootstraps the Bun source that config/bun-pin.json declares", async () => {
@@ -123,8 +124,11 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
   const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
   // Fixed sources are exact npm versions. The rolling canary, when selected,
   // resolves its verified commit through the same installer on every build path.
-  assert.match(String(declared.bun), /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/,
-    `config/bun-pin.json names ${declared.bun}; it must select a supported Bun source`);
+  assert.match(
+    String(declared.bun),
+    /^(canary|\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)$/,
+    `config/bun-pin.json names ${declared.bun}; it must select a supported Bun source`,
+  );
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
@@ -137,15 +141,16 @@ test("every workflow bootstraps the Bun source that config/bun-pin.json declares
     // deploy:promote" as advice in an echo and runs no bun at all; a scanner
     // that reads the string demands a bootstrap that workflow does not need.
     // Same shape as every other naive scanner this repo has had to sharpen.
-    const commands = body.split("\n").filter((l) => !/\becho\b/.test(l)).join("\n");
+    const commands = body
+      .split("\n")
+      .filter((l) => !/\becho\b/.test(l))
+      .join("\n");
     if (!/^\s*bun\s+(install|run|test|x)\b/m.test(commands)) continue;
     // ONE bootstrap, and it reads config/bun-pin.json itself. A workflow that curls
     // its own bun, or names a version inline, is a second declaration that can
     // drift from the first.
-    assert.match(body, /uses: \.\/\.github\/actions\/setup-bun/,
-      `.github/workflows/${file} runs bun without going through the shared setup-bun action`);
-    assert.ok(!/bun-version:|oven-sh\/setup-bun/.test(body),
-      `.github/workflows/${file} names a bun version inline instead of reading config/bun-pin.json`);
+    assert.match(body, /uses: \.\/\.github\/actions\/setup-bun/, `.github/workflows/${file} runs bun without going through the shared setup-bun action`);
+    assert.ok(!/bun-version:|oven-sh\/setup-bun/.test(body), `.github/workflows/${file} names a bun version inline instead of reading config/bun-pin.json`);
     checked++;
   }
   assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
@@ -174,8 +179,7 @@ test("every trustedDependencies entry is a live approval, never a dead one", asy
 
   const lock = await readFile(new URL("bun.lock", ROOT), "utf8");
   for (const name of trusted) {
-    assert.ok(lock.includes(`"${name}@`) || lock.includes(`"${name}"`),
-      `trustedDependencies names ${name}, which is not in bun.lock — a dead approval`);
+    assert.ok(lock.includes(`"${name}@`) || lock.includes(`"${name}"`), `trustedDependencies names ${name}, which is not in bun.lock — a dead approval`);
   }
 });
 
@@ -188,19 +192,16 @@ test("a section's favicon is in its own <head>, never set by script", async () =
   // 1. The pins carry no favicon data. A reintroduced attribute is the whole
   //    per-page cost coming back, and nothing would fail without this.
   const chrome = await readFile(new URL("src/worker/lib/desktop.ts", ROOT), "utf8");
-  assert.doesNotMatch(chrome, /data-favicon/,
-    "taskbar pins must not carry favicon data: the page's own <head> owns this");
+  assert.doesNotMatch(chrome, /data-favicon/, "taskbar pins must not carry favicon data: the page's own <head> owns this");
 
   // 2. nav.js sets no favicon. A favicon applied after boot is a visible flip.
   const nav = await readFile(new URL("src/client/nav.ts", ROOT), "utf8");
-  assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/,
-    "nav.js must not set the tab favicon; the document declares it");
+  assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/, "nav.js must not set the tab favicon; the document declares it");
 
   // 3. Every taskbar route resolves to an icon that EXISTS on disk, through the
   //    generated map the worker actually reads. A route added to TASKBAR without
   //    its tile would otherwise ship a 404 favicon.
-  assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
-    "lib/desktop.js drifted from shell-data.ts — run bun run gen:shell");
+  assert.deepEqual(SECTION_FAVICONS, sectionFavicons(), "lib/desktop.js drifted from shell-data.ts — run bun run gen:shell");
   for (const item of TASKBAR) {
     const href = SECTION_FAVICONS[item.path];
     assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
@@ -209,10 +210,17 @@ test("a section's favicon is in its own <head>, never set by script", async () =
 
   // 4. The three hand-authored section pages link their own tile. These are the
   //    only section pages outside lunaPage, so they are the ones that go quiet.
-  for (const [file, slug] of [["garage", "garage"], ["lwe", "lwe"], ["pixel-peeper", "pixel-peeper"]]) {
+  for (const [file, slug] of [
+    ["garage", "garage"],
+    ["lwe", "lwe"],
+    ["pixel-peeper", "pixel-peeper"],
+  ]) {
     const page = await readFile(new URL(`src/pages/${file}/index.html`, ROOT), "utf8");
-    assert.match(page, new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
-      `src/pages/${file}/index.html must link its own section tile`);
+    assert.match(
+      page,
+      new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
+      `src/pages/${file}/index.html must link its own section tile`,
+    );
   }
 });
 
@@ -226,8 +234,7 @@ test("the speculation ruleset has exactly one author", async () => {
   // 1. An inline block anywhere in src/pages. The browser would union it with the
   //    header's ruleset, so any copy is a second author. The build byte-compares
   //    every static page against a fresh render too; this names the rule.
-  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
-    .filter((relative) => relative.endsWith(".html"));
+  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true })).filter((relative) => relative.endsWith(".html"));
   let scanned = 0;
   for (const relative of pages) {
     const html = await readFile(new URL(`src/pages/${relative}`, ROOT), "utf8");
@@ -245,54 +252,67 @@ test("the speculation ruleset has exactly one author", async () => {
   // sender: security.ts names the build-patched URL and nothing else.
   assert.equal(speculationRulesJson(), JSON.stringify(SPECULATION));
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
-  assert.match(security, /headers\.set\("speculation-rules", `"\$\{SPECULATION_RULES\}"`\)/,
-    "withSecurityHeaders names the ruleset file in a Speculation-Rules header");
+  assert.match(
+    security,
+    /headers\.set\("speculation-rules", `"\$\{SPECULATION_RULES\}"`\)/,
+    "withSecurityHeaders names the ruleset file in a Speculation-Rules header",
+  );
 
   // 2. The lwe generator getting its own template back. It had one, it went stale
   //    when two commits removed exclusions site-wide, and regenerating a page then
   //    silently restored the old rules onto it (src/pages/lwe/encoding.html).
   const generator = await readFile(new URL("pipelines/lwe/generate.ts", ROOT), "utf8");
-  assert.doesNotMatch(generator, /speculationrules/,
-    "generate.ts must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
-  assert.doesNotMatch(generator, /serviceWorker\.register\(["']\/sw\.js["']\)/,
-    "the LWE generator must not reinstall the retired service worker; /sw.js remains only as a cleanup stub for old clients");
-  assert.match(generator, /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,
-    "the LWE template must hand its desktop to the canonical shell compiler inside one generated sentinel");
+  assert.doesNotMatch(
+    generator,
+    /speculationrules/,
+    "generate.ts must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates",
+  );
+  assert.doesNotMatch(
+    generator,
+    /serviceWorker\.register\(["']\/sw\.js["']\)/,
+    "the LWE generator must not reinstall the retired service worker; /sw.js remains only as a cleanup stub for old clients",
+  );
+  assert.match(
+    generator,
+    /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,
+    "the LWE template must hand its desktop to the canonical shell compiler inside one generated sentinel",
+  );
 
   // 3. nav.js building one at runtime again, which is where the injected copy
   //    lived. Rules in the HTML parse with the document; injected ones landed
   //    after first paint and could not prerender anything hovered before that.
   const nav = await readFile(new URL("src/client/nav.ts", ROOT), "utf8");
-  assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/,
-    "nav.js must not inject a ruleset; it ships in the chrome now");
+  assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/, "nav.js must not inject a ruleset; it ships in the chrome now");
 });
 
-test("the staged Worker names the built ruleset on HTML and only on HTML", { skip: !existsSync(".build/src/worker/lib/shell-assets.ts") && "needs a build" }, async () => {
-  // The STAGED modules, because the ruleset URL exists only once build.ts has
-  // written the file and patched the marker line; source reads "" by design.
-  // Imported through a computed URL so the type checker leaves them alone:
-  // typecheck runs before any build in CI, and a literal specifier into
-  // .build/ is two unresolved-module errors against the tools baseline.
-  const { SPECULATION_RULES } = await import(new URL("../.build/src/worker/lib/shell-assets.ts", import.meta.url).href);
-  assert.match(SPECULATION_RULES, /^\/a\/speculation\.[0-9a-f]{8}\.json$/, "build.ts patched the ruleset URL in");
-  const bytes = readFileSync(`.build/public${SPECULATION_RULES}`, "utf8");
-  assert.equal(bytes, speculationRulesJson(), "the file is the projection of SPECULATION");
-  assert.ok(existsSync(`.build/public${SPECULATION_RULES}.br`), "the ruleset has its q11 twin");
+test(
+  "the staged Worker names the built ruleset on HTML and only on HTML",
+  { skip: !existsSync(".build/src/worker/lib/shell-assets.ts") && "needs a build" },
+  async () => {
+    // The STAGED modules, because the ruleset URL exists only once build.ts has
+    // written the file and patched the marker line; source reads "" by design.
+    // Imported through a computed URL so the type checker leaves them alone:
+    // typecheck runs before any build in CI, and a literal specifier into
+    // .build/ is two unresolved-module errors against the tools baseline.
+    const { SPECULATION_RULES } = await import(new URL("../.build/src/worker/lib/shell-assets.ts", import.meta.url).href);
+    assert.match(SPECULATION_RULES, /^\/a\/speculation\.[0-9a-f]{8}\.json$/, "build.ts patched the ruleset URL in");
+    const bytes = readFileSync(`.build/public${SPECULATION_RULES}`, "utf8");
+    assert.equal(bytes, speculationRulesJson(), "the file is the projection of SPECULATION");
+    assert.ok(existsSync(`.build/public${SPECULATION_RULES}.br`), "the ruleset has its q11 twin");
 
-  const { withSecurityHeaders } = await import(new URL("../.build/src/worker/lib/security.ts", import.meta.url).href);
-  const html = withSecurityHeaders(new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8" } }), "/garage");
-  // A structured-field list of one string: the quotes are the syntax.
-  assert.equal(html.headers.get("speculation-rules"), `"${SPECULATION_RULES}"`);
-  const json = withSecurityHeaders(new Response("{}", { headers: { "content-type": "application/json" } }), "/rn/tracks");
-  assert.equal(json.headers.get("speculation-rules"), null, "a non-HTML response never carries it");
-});
+    const { withSecurityHeaders } = await import(new URL("../.build/src/worker/lib/security.ts", import.meta.url).href);
+    const html = withSecurityHeaders(new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8" } }), "/garage");
+    // A structured-field list of one string: the quotes are the syntax.
+    assert.equal(html.headers.get("speculation-rules"), `"${SPECULATION_RULES}"`);
+    const json = withSecurityHeaders(new Response("{}", { headers: { "content-type": "application/json" } }), "/rn/tracks");
+    assert.equal(json.headers.get("speculation-rules"), null, "a non-HTML response never carries it");
+  },
+);
 
 test("outbound endpoint discovery follows the spec's precedence", () => {
   const base = "https://example.com/post";
   // Link header wins over markup.
-  assert.equal(
-    findEndpointIn('<link rel="webmention" href="/from-markup">', '</from-header>; rel="webmention"', base),
-    "https://example.com/from-header");
+  assert.equal(findEndpointIn('<link rel="webmention" href="/from-markup">', '</from-header>; rel="webmention"', base), "https://example.com/from-header");
   // then <link>, resolved relative to the fetched URL
   assert.equal(findEndpointIn('<link rel="webmention" href="/wm">', null, base), "https://example.com/wm");
   // then <a>, and rel lists with extra tokens still count
@@ -342,14 +362,9 @@ test("an accepted webmention answers 202 without a Location header", async () =>
   // "helpfully" pointing at /inbox, so pin it.
   const db = fakeD1();
   const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () =>
-    new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } });
+  testGlobals.fetch = async () => new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } });
   try {
-    const res = await handleWebmention(
-      wmPost("https://mari.example/post", "https://aadhar.sh/writing/in-flux"),
-      wmEnv(db),
-      deferredContext()
-    );
+    const res = await handleWebmention(wmPost("https://mari.example/post", "https://aadhar.sh/writing/in-flux"), wmEnv(db), deferredContext());
     assert.equal(res.status, 202);
     assert.equal(res.headers.get("location"), null, "202 must not carry a Location header");
   } finally {
@@ -370,14 +385,29 @@ test("endpoint discovery survives the webmention.rocks decoys", () => {
     // #10 the rel is a token LIST; webmention is one of several.
     [10, "", '<https://webmention.rocks/test/10/webmention>; rel="webmention somethingelse"', at(10) + "/webmention"],
     // #19 one header, several values: the non-webmention one must not win.
-    [19, "", '<https://webmention.rocks/test/19/webmention/error>; rel="other", <https://webmention.rocks/test/19/webmention>; rel="webmention"', at(19) + "/webmention"],
+    [
+      19,
+      "",
+      '<https://webmention.rocks/test/19/webmention/error>; rel="other", <https://webmention.rocks/test/19/webmention>; rel="webmention"',
+      at(19) + "/webmention",
+    ],
     // #12 rel="not-webmention" is a DIFFERENT rel. A \bwebmention\b regex
     // matches it anyway, because "-" is a word boundary.
     [12, '<link rel="not-webmention" href="/test/12/webmention/error"><a href="/test/12/webmention" rel="webmention">ok</a>', null, at(12) + "/webmention"],
     // #13 a decoy inside an HTML comment is not markup.
-    [13, 'comment <!-- <a href="/test/13/webmention/error" rel="webmention"></a> --> then <a href="/test/13/webmention" rel="webmention">correct</a>', null, at(13) + "/webmention"],
+    [
+      13,
+      'comment <!-- <a href="/test/13/webmention/error" rel="webmention"></a> --> then <a href="/test/13/webmention" rel="webmention">correct</a>',
+      null,
+      at(13) + "/webmention",
+    ],
     // #14 the same decoy, escaped. Never matched a "<"-anchored pattern.
-    [14, '<code>&lt;a href="/test/14/webmention/error" rel="webmention"&gt;&lt;/a&gt;</code><a href="/test/14/webmention" rel="webmention">x</a>', null, at(14) + "/webmention"],
+    [
+      14,
+      '<code>&lt;a href="/test/14/webmention/error" rel="webmention"&gt;&lt;/a&gt;</code><a href="/test/14/webmention" rel="webmention">x</a>',
+      null,
+      at(14) + "/webmention",
+    ],
     // #15 href="" is a legitimate self-reference, not a missing href.
     [15, '<link rel="webmention" href="">', null, at(15)],
     // #16 <a> first, <link> later: DOCUMENT ORDER decides, not tag name. An
@@ -416,16 +446,35 @@ test("committed manifest projections match a fresh generation", async () => {
   const mod = await readFile("src/worker/lib/site-manifest.ts", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run bun run gen:manifest");
   const nav = await readFile("src/client/nav-run.ts", "utf8");
-  for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
+  for (const [section, marker] of [
+    ["garage", "garage-pages"],
+    ["lwe", "lwe-pages"],
+  ]) {
     assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav-run.js generated:${marker} is stale — run bun run gen:manifest`);
   }
   assert.equal(readFenceBody(nav, "run-profiles"), runProfilesBody(), "nav-run.js profiles are stale — run bun run gen:manifest");
 });
 
 test("site MCP lists the agent surfaces as resources", async () => {
-  const init = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }), headers: { "content-type": "application/json" } }), {}, context());
+  const init = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+      headers: { "content-type": "application/json" },
+    }),
+    {},
+    context(),
+  );
   assert.deepEqual((await init.json()).result.capabilities.resources, {}, "initialize must declare the resources capability");
-  const list = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "resources/list" }), headers: { "content-type": "application/json" } }), {}, context());
+  const list = await handleSiteMcp(
+    new Request("https://aadhar.sh/mcp", {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "resources/list" }),
+      headers: { "content-type": "application/json" },
+    }),
+    {},
+    context(),
+  );
   const resources = (await list.json()).result.resources;
   assert.equal(resources.length, AGENT_SURFACES.length);
   assert.ok(resources.length > 0);
@@ -442,10 +491,12 @@ test("site MCP lists the agent surfaces as resources", async () => {
 
 test("MCP reads a terminal tool's URI as its text/plain frame", async () => {
   let asked = "";
-  const env = { SELF_FETCH: async (req) => {
-    asked = req.headers.get("accept");
-    return new Response("finger — aadharsh@aadhar.sh\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
-  } };
+  const env = {
+    SELF_FETCH: async (req) => {
+      asked = req.headers.get("accept");
+      return new Response("finger — aadharsh@aadhar.sh\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    },
+  };
   const out = await readMcpResource("https://aadhar.sh/finger", env);
   assert.equal(asked, "text/plain", "the read asks for the representation the listing advertised");
   assert.equal(out.result.contents[0].mimeType, "text/plain");
@@ -454,10 +505,15 @@ test("MCP reads a terminal tool's URI as its text/plain frame", async () => {
 
 // Direct handler tests inject the same local dispatcher that /mcp receives.
 async function readMcpResource(uri, env, origin = "https://aadhar.sh") {
-  const response = await handleSiteMcp(new Request(origin + "/mcp", {
-    method: "POST", headers: { "content-type": "application/json", cookie: "private=fixture", authorization: "Bearer fixture" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri } }),
-  }), env, context());
+  const response = await handleSiteMcp(
+    new Request(origin + "/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: "private=fixture", authorization: "Bearer fixture" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri } }),
+    }),
+    env,
+    context(),
+  );
   return response.json();
 }
 
@@ -465,17 +521,23 @@ test("MCP reads the listed music URI through its existing Markdown representatio
   const { handleRn, handleRnMarkdown } = await import("../src/worker/rn.ts");
   const realFetch = globalThis.fetch;
   let wireReads = 0;
-  testGlobals.fetch = async () => { wireReads++; throw new Error("unexpected wire request"); };
+  testGlobals.fetch = async () => {
+    wireReads++;
+    throw new Error("unexpected wire request");
+  };
   try {
     for (const RN_KV of [undefined, kvForTracks()]) {
       const env = { RN_KV, RN_BUST_SECRET: "must-not-bust" };
       const seen: any[] = [];
       const ctx = context();
       const uri = "https://aadhar.sh/rn?bust=must-not-bust#tracks";
-      const result = await readMcpResource(uri, { ...env, SELF_FETCH: (request) => {
-        seen.push([request.url, request.headers.get("accept")]);
-        return handleRn(request, env, ctx);
-      } });
+      const result = await readMcpResource(uri, {
+        ...env,
+        SELF_FETCH: (request) => {
+          seen.push([request.url, request.headers.get("accept")]);
+          return handleRn(request, env, ctx);
+        },
+      });
       assert.ok(result.result, "a listed music read must not follow the browser redirect");
       const content = result.result.contents[0];
       assert.equal(content.uri, uri, "the stable resource URI is preserved");
@@ -492,18 +554,25 @@ test("MCP reads the listed music URI through its existing Markdown representatio
       assert.equal(new URL(location).hostname, "open.spotify.com");
     }
     assert.equal(wireReads, 0);
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("site MCP resources/read dispatches only listed local pages with public headers", async () => {
   const realFetch = globalThis.fetch;
   let wireReads = 0;
-  testGlobals.fetch = async () => { wireReads++; return new Response("upstream failure", { status: 522 }); };
+  testGlobals.fetch = async () => {
+    wireReads++;
+    return new Response("upstream failure", { status: 522 });
+  };
   const seen: any[] = [];
-  const env = { SELF_FETCH: async (request) => {
-    seen.push(request);
-    return new Response("<!doctype html><title>local ✓</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
-  } };
+  const env = {
+    SELF_FETCH: async (request) => {
+      seen.push(request);
+      return new Response("<!doctype html><title>local ✓</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+    },
+  };
   try {
     for (const origin of ["https://aadhar.sh", "https://preview.aadhar-sh.workers.dev"]) {
       const uri = origin + "/whoareyou?url=https://evil.example&admin=1#fragment";
@@ -526,7 +595,9 @@ test("site MCP resources/read dispatches only listed local pages with public hea
     }
     assert.equal(seen.length, 2, "invalid inputs and disarmed dispatch never read a page");
     assert.equal(wireReads, 0, "no same-host network request or fallback");
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("site MCP resources/read refuses failed and redirected pages and cancels their bodies", async () => {
@@ -534,19 +605,34 @@ test("site MCP resources/read refuses failed and redirected pages and cancels th
   try {
     for (const status of [301, 302, 307, 308, 404, 500, 522]) {
       let cancelled = false;
-      const fetch = async () => new Response(new ReadableStream({
-        start(controller) { controller.enqueue(new TextEncoder().encode("not a resource")); controller.close(); },
-        cancel() { cancelled = true; },
-      }), { status, headers: { location: "https://evil.example/", "content-type": "text/html" } });
+      const fetch = async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("not a resource"));
+              controller.close();
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status, headers: { location: "https://evil.example/", "content-type": "text/html" } },
+        );
       testGlobals.fetch = fetch;
       const out = await readMcpResource("https://aadhar.sh/whoareyou", { SELF_FETCH: fetch });
       assert.equal(out.error?.code, -32602, `HTTP ${status} must not become a complete resource`);
       assert.equal(out.result, undefined);
       assert.ok(cancelled, `HTTP ${status} body must be discarded`);
     }
-    const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: () => { throw new Error("broken dispatcher"); } });
+    const out = await readMcpResource("https://aadhar.sh/", {
+      SELF_FETCH: () => {
+        throw new Error("broken dispatcher");
+      },
+    });
     assert.equal(out.error.code, -32602);
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("site MCP resources/read returns whole bounded UTF-8 pages and cancels overflow", async () => {
@@ -559,45 +645,72 @@ test("site MCP resources/read returns whole bounded UTF-8 pages and cancels over
       testGlobals.fetch = fetch;
       assert.equal((await readMcpResource("https://aadhar.sh/garage/horizon", { SELF_FETCH: fetch })).result.contents[0].text, text);
     }
-    let pulls = 0, cancelled = false;
-    const fetch = async () => new Response(new ReadableStream({
-      pull(controller) {
-        pulls++;
-        if (pulls > 32) controller.close();
-        else controller.enqueue(new Uint8Array(64 * 1024).fill(65));
-      },
-      cancel() { cancelled = true; },
-    }));
+    let pulls = 0,
+      cancelled = false;
+    const fetch = async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            pulls++;
+            if (pulls > 32) controller.close();
+            else controller.enqueue(new Uint8Array(64 * 1024).fill(65));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      );
     testGlobals.fetch = fetch;
     const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch });
     assert.equal(out.error?.code, -32602, "a prefix is not a complete resource");
     assert.ok(cancelled, "overflow cancels the producer");
     assert.ok(pulls < 16, `bounded reader must not drain the whole body: ${pulls} pulls`);
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("site MCP resources/read deadlines cover stalled dispatch and body reads", async () => {
-  const realFetch = globalThis.fetch, realTimer = globalThis.setTimeout;
+  const realFetch = globalThis.fetch,
+    realTimer = globalThis.setTimeout;
   const budgets: any[] = [];
   // Advance only this endpoint's eight-second budget; use real stream and timer
   // scheduling for the cancellation and late-response races.
   testGlobals.setTimeout = (fn, ms, ...args: any[]) => {
-    if (ms === 8000) { budgets.push(ms); return realTimer(fn, 10, ...args); }
+    if (ms === 8000) {
+      budgets.push(ms);
+      return realTimer(fn, 10, ...args);
+    }
     return realTimer(fn, ms, ...args);
   };
   try {
     for (const phase of ["dispatch", "body"]) {
-      let signal, deliver, cancelled = false;
-      const response = () => new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+      let signal,
+        deliver,
+        cancelled = false;
+      const response = () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+        );
       const fetch = async (request, init) => {
         signal = init?.signal || request.signal;
-        return phase === "body" ? response() : new Promise((resolve) => { deliver = resolve; });
+        return phase === "body"
+          ? response()
+          : new Promise((resolve) => {
+              deliver = resolve;
+            });
       };
       testGlobals.fetch = fetch;
       let watchdog;
       const out = await Promise.race([
         readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch }),
-        new Promise((resolve) => { watchdog = realTimer(() => resolve(null), 500); }),
+        new Promise((resolve) => {
+          watchdog = realTimer(() => resolve(null), 500);
+        }),
       ]);
       clearTimeout(watchdog);
       if (deliver) deliver(response());
@@ -608,7 +721,10 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
       assert.ok(cancelled, `${phase} body is cancelled, including late responses`);
     }
     assert.deepEqual(budgets, [8000, 8000]);
-  } finally { testGlobals.fetch = realFetch; testGlobals.setTimeout = realTimer; }
+  } finally {
+    testGlobals.fetch = realFetch;
+    testGlobals.setTimeout = realTimer;
+  }
 });
 
 // Server cards are pre-connection metadata. The live `server/discover` and
@@ -616,15 +732,36 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
 // generated projections rather than a second hand-maintained tool catalog.
 test("published MCP server cards and discovery files stay aligned with both live servers", async () => {
   const { handleMcp } = await import("../serendipity/serendipity.ts");
-  const siteLive = await (await handleSiteMcp(mcpPost({
-    jsonrpc: "2.0", id: "site-tools", method: "tools/list", params: { ...MODERN_META },
-  }), {}, context())).json();
-  const serendipityPost = (body) => new Request("https://aadhar.sh/serendipity/mcp", {
-    method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
-  });
-  const serendipityLive = await (await handleMcp(serendipityPost({
-    jsonrpc: "2.0", id: "serendipity-tools", method: "tools/list", params: { ...MODERN_META },
-  }), {}, null)).json();
+  const siteLive = await (
+    await handleSiteMcp(
+      mcpPost({
+        jsonrpc: "2.0",
+        id: "site-tools",
+        method: "tools/list",
+        params: { ...MODERN_META },
+      }),
+      {},
+      context(),
+    )
+  ).json();
+  const serendipityPost = (body) =>
+    new Request("https://aadhar.sh/serendipity/mcp", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    });
+  const serendipityLive = await (
+    await handleMcp(
+      serendipityPost({
+        jsonrpc: "2.0",
+        id: "serendipity-tools",
+        method: "tools/list",
+        params: { ...MODERN_META },
+      }),
+      {},
+      null,
+    )
+  ).json();
   const cards = [
     {
       file: "public/.well-known/mcp/server-card.json",

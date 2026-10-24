@@ -30,8 +30,7 @@ import { parseJsonc } from "./jsonc.ts";
 
 export type Gate = { name: string; ok: boolean; detail: string; notes?: string[] };
 
-const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) =>
-  spawnSync(cmd, args, { encoding: "utf8", ...opts });
+const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) => spawnSync(cmd, args, { encoding: "utf8", ...opts });
 
 const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 2) =>
   `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines).join(" ");
@@ -123,7 +122,10 @@ export function lockfileFormatGate(candidate: string, pinned: string, root: stri
   const lockVersions: Record<string, string | null> = {};
   const texts: Record<string, string> = {};
 
-  for (const [label, exe] of [["pinned", pinned], ["candidate", candidate]] as const) {
+  for (const [label, exe] of [
+    ["pinned", pinned],
+    ["candidate", candidate],
+  ] as const) {
     const mirror = join(work, `lock-${label}`);
     rmSync(mirror, { recursive: true, force: true });
     for (const rel of manifests) {
@@ -155,7 +157,9 @@ export function lockfileFormatGate(candidate: string, pinned: string, root: stri
   return {
     name: "writes the committed lockfile format",
     ok: same,
-    detail: same ? committedFormat : `committed ${committedFormat}, pinned ${lockVersions.pinned ?? "wrote nothing"}, candidate ${lockVersions.candidate ?? "wrote nothing"}`,
+    detail: same
+      ? committedFormat
+      : `committed ${committedFormat}, pinned ${lockVersions.pinned ?? "wrote nothing"}, candidate ${lockVersions.candidate ?? "wrote nothing"}`,
     notes,
   };
 }
@@ -257,7 +261,8 @@ export function byteIdenticalBuildGate(candidate: string, pinned: string, root: 
 export function suiteArgs(root: string): string[] {
   const script = String(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts?.test ?? "");
   const [cmd, sub, ...args] = script.trim().split(/\s+/);
-  if (cmd !== "bun" || sub !== "test" || !args.length) throw new Error(`package.json's test script is ${JSON.stringify(script)}; the suite gate expects \`bun test <flags> <paths>\``);
+  if (cmd !== "bun" || sub !== "test" || !args.length)
+    throw new Error(`package.json's test script is ${JSON.stringify(script)}; the suite gate expects \`bun test <flags> <paths>\``);
   return args;
 }
 
@@ -303,7 +308,10 @@ export function contractSuiteGate(exe: string, root: string, timeoutMs = 15 * 60
   const counts = suiteCounts(text);
   const { pass, fail } = counts;
   const timedOut = out.signal === "SIGTERM";
-  const telling = text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("(fail)") || l.startsWith("error:"));
+  const telling = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("(fail)") || l.startsWith("error:"));
   return {
     name: "contract suite passes under the candidate",
     ok: !timedOut && fail === 0 && pass > 0,
@@ -328,7 +336,11 @@ export function calSuiteGate(exe: string, root: string, timeoutMs = 5 * 60_000):
     name: "cal suite passes under the candidate (wrangler harness)",
     ok: !timedOut && fail === 0 && pass > 0 && out.status === 0,
     detail: timedOut ? `hung past ${timeoutMs / 1000}s, which is the shape of oven-sh/bun#39247` : suiteCountsText(counts),
-    notes: text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10).map((l) => l.trim()),
+    notes: text
+      .split("\n")
+      .filter((l) => l.includes("(fail)"))
+      .slice(0, 10)
+      .map((l) => l.trim()),
   };
 }
 
@@ -362,7 +374,8 @@ export async function downloadTsc(work: string, version: string = TSC_REFERENCE)
   const doc = await res.json();
   const tarball = String(doc?.dist?.tarball ?? "");
   const integrity = String(doc?.dist?.integrity ?? "");
-  if (!tarball.endsWith(".tgz") || !integrity.startsWith("sha512-")) throw new Error(`registry document for ${name}@${version} carries no tarball or no sha512`);
+  if (!tarball.endsWith(".tgz") || !integrity.startsWith("sha512-"))
+    throw new Error(`registry document for ${name}@${version} carries no tarball or no sha512`);
 
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
@@ -428,7 +441,8 @@ export function checkerAgreementGate(candidate: string, pinned: string, tsc: str
   let pinnedDisagreeing = 0;
   for (const config of programs) {
     const ref = run(tsc, ["-p", config, "--noEmit", "--pretty", "false"], opts);
-    if (ref.error || ref.status === null || ref.status > 1) throw new Error(`tsc ${TSC_REFERENCE} could not check ${config} (exit ${ref.status}): ${tail(ref, 4)}`);
+    if (ref.error || ref.status === null || ref.status > 1)
+      throw new Error(`tsc ${TSC_REFERENCE} could not check ${config} (exit ${ref.status}): ${tail(ref, 4)}`);
     const reference = diagnosticBlocks(ref.stdout);
     total += reference.length;
     const cand = bunCheck(candidate, config);
@@ -437,7 +451,9 @@ export function checkerAgreementGate(candidate: string, pinned: string, tsc: str
     if (!pin.agree) pinnedDisagreeing++;
     if (d.agree && cand.status === ref.status) continue;
     disagreeing++;
-    notes.push(`${config}: tsc exit ${ref.status} with ${reference.length}, candidate exit ${cand.status}, ${d.onlyReference.length} only in tsc, ${d.onlyCandidate.length} only in bun check; the pinned bun ${pin.agree ? "agrees with tsc, so this is new" : "disagrees too"}`);
+    notes.push(
+      `${config}: tsc exit ${ref.status} with ${reference.length}, candidate exit ${cand.status}, ${d.onlyReference.length} only in tsc, ${d.onlyCandidate.length} only in bun check; the pinned bun ${pin.agree ? "agrees with tsc, so this is new" : "disagrees too"}`,
+    );
     for (const b of d.onlyReference.slice(0, 3)) notes.push(`  - tsc: ${b.split("\n")[0]}`);
     for (const b of d.onlyCandidate.slice(0, 3)) notes.push(`  + bun: ${b.split("\n")[0]}`);
     if (cand.status !== 0 && cand.status !== 1) notes.push(`  ${tail(cand, 2)}`);
@@ -445,9 +461,10 @@ export function checkerAgreementGate(candidate: string, pinned: string, tsc: str
   return {
     name: `bun check agrees with tsc ${TSC_REFERENCE}`,
     ok: disagreeing === 0,
-    detail: disagreeing === 0
-      ? `${programs.length} programs, ${total} diagnostics, every one identical${pinnedDisagreeing ? ` (the pinned bun disagrees in ${pinnedDisagreeing})` : ""}`
-      : `${disagreeing} of ${programs.length} programs disagree`,
+    detail:
+      disagreeing === 0
+        ? `${programs.length} programs, ${total} diagnostics, every one identical${pinnedDisagreeing ? ` (the pinned bun disagrees in ${pinnedDisagreeing})` : ""}`
+        : `${disagreeing} of ${programs.length} programs disagree`,
     notes,
   };
 }

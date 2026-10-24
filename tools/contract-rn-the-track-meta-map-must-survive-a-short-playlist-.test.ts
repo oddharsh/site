@@ -54,7 +54,7 @@ function metaEnv({ tracks, meta, seed = {} }) {
   const reads: any[] = [];
   const decode = (raw, t) => {
     if (raw === undefined) return null;
-    return (t === "json" || t?.type === "json") ? JSON.parse(raw) : raw;
+    return t === "json" || t?.type === "json" ? JSON.parse(raw) : raw;
   };
   return {
     store,
@@ -77,9 +77,7 @@ function metaEnv({ tracks, meta, seed = {} }) {
   };
 }
 
-const metaFor = (ids) => Object.fromEntries(
-  ids.map((id) => [id, { image_url: `https://i.scdn.co/image/${id}`, artists: [], seen: Date.now() }])
-);
+const metaFor = (ids) => Object.fromEntries(ids.map((id) => [id, { image_url: `https://i.scdn.co/image/${id}`, artists: [], seen: Date.now() }]));
 
 test("a SHORT playlist read cannot delete track meta", async () => {
   const all = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -102,7 +100,7 @@ test("a SHORT playlist read cannot delete track meta", async () => {
 test("an entry unseen past the age window is pruned, so the map stays bounded", async () => {
   const stale = 31 * 24 * 60 * 60 * 1000;
   const meta = metaFor(["a", "b"]);
-  meta.b.seen = Date.now() - stale;          // dropped from the playlist a month ago
+  meta.b.seen = Date.now() - stale; // dropped from the playlist a month ago
   const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
   await cronEnrichTracks(env, null);
   const after = JSON.parse(store.get("trackmeta:v1")!);
@@ -110,7 +108,7 @@ test("an entry unseen past the age window is pruned, so the map stays bounded", 
 });
 
 test("an entry written before `seen` existed is stamped, never dropped", async () => {
-  const meta = { a: { image_url: "https://i.scdn.co/image/a", artists: [] } };  // no `seen`
+  const meta = { a: { image_url: "https://i.scdn.co/image/a", artists: [] } }; // no `seen`
   const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
   await cronEnrichTracks(env, null);
   const after = JSON.parse(store.get("trackmeta:v1")!);
@@ -124,9 +122,7 @@ test("the enrich tick reads KV in bulk, so its cost does not scale with artists"
   // against that ceiling, so the property worth pinning is the CALL COUNT: it
   // must not move when the pending set grows.
   const artistIds = ["p", "q", "r", "s", "t"];
-  const seed = Object.fromEntries(artistIds.map((a) => [
-    `artist:${a}`, { name: a.toUpperCase(), image_url: `https://i.scdn.co/image/${a}` },
-  ]));
+  const seed = Object.fromEntries(artistIds.map((a) => [`artist:${a}`, { name: a.toUpperCase(), image_url: `https://i.scdn.co/image/${a}` }]));
   const meta = {
     a: {
       image_url: "https://i.scdn.co/image/a",
@@ -139,11 +135,11 @@ test("the enrich tick reads KV in bulk, so its cost does not scale with artists"
 
   // playlist id, then the two setup keys together, then all five artists
   // together. Five separate artist reads is the shape this replaced.
-  assert.deepEqual(reads, [
-    "playlist-id",
-    ["tracks:0raTdu2MZH4dNvfG5keVAL", "trackmeta:v1"],
-    artistIds.map((id) => `artist:${id}`),
-  ], "the tick must read three times regardless of how many artists are pending");
+  assert.deepEqual(
+    reads,
+    ["playlist-id", ["tracks:0raTdu2MZH4dNvfG5keVAL", "trackmeta:v1"], artistIds.map((id) => `artist:${id}`)],
+    "the tick must read three times regardless of how many artists are pending",
+  );
 
   // And the cache hits still land, which is what makes the collapse free rather
   // than merely cheap: no artist was scraped, so no fetch left the isolate.
@@ -184,15 +180,17 @@ test("the artist slots go to live tracks, and an artist with no photo stops aski
   const { store, reads, env } = metaEnv({ tracks: [{ id: "live" }], meta, seed });
   await cronEnrichTracks(env, null);
 
-  assert.deepEqual(reads[2], ["artist:nophoto", "artist:x"],
-    "only live tracks' artists take slots; a retired playlist's six would have filled all of them");
+  assert.deepEqual(reads[2], ["artist:nophoto", "artist:x"], "only live tracks' artists take slots; a retired playlist's six would have filled all of them");
   const after = JSON.parse(store.get("trackmeta:v1")!);
   const [nophoto, x] = after.live.artists;
   assert.equal(x.image_url, "https://i.scdn.co/image/x", "the live artist lands in one tick");
   assert.equal(nophoto.image_url, null);
   assert.equal(typeof nophoto.checked, "number", "a read that found no photo is recorded as read");
   const payload = JSON.parse(store.get("tracks:0raTdu2MZH4dNvfG5keVAL"));
-  assert.ok(payload.tracks[0].artists.every((a) => !("checked" in a)), "bookkeeping stays out of /rn/tracks");
+  assert.ok(
+    payload.tracks[0].artists.every((a) => !("checked" in a)),
+    "bookkeeping stays out of /rn/tracks",
+  );
 
   // The next tick has nothing left to ask about, so it makes no artist read.
   reads.length = 0;
@@ -243,10 +241,16 @@ test("bounded response reads cancel stalled producers and never report aborted p
     const controller = new AbortController();
     const reason = new Error("read budget exhausted");
     let cancelled;
-    const response = new Response(new ReadableStream({
-      start(stream) { stream.enqueue(new TextEncoder().encode("partial")); },
-      cancel(error) { cancelled = error; },
-    }));
+    const response = new Response(
+      new ReadableStream({
+        start(stream) {
+          stream.enqueue(new TextEncoder().encode("partial"));
+        },
+        cancel(error) {
+          cancelled = error;
+        },
+      }),
+    );
     if (alreadyAborted) controller.abort(reason);
     const read = readResponseCapped(response, 100, controller.signal);
     if (!alreadyAborted) {
@@ -289,10 +293,12 @@ test("Change Radar keeps the latest two observations per target", async () => {
     prepare() {
       return {
         async all() {
-          return { results: [
-            { target: "https://example.com/", name: "Example", observed_at: 2000, status: 503, title: null, body_hash: null, robots: "allow" },
-            { target: "https://example.com/", name: "Example", observed_at: 1000, status: 200, title: "Example", body_hash: "a", robots: "allow" },
-          ] };
+          return {
+            results: [
+              { target: "https://example.com/", name: "Example", observed_at: 2000, status: 503, title: null, body_hash: null, robots: "allow" },
+              { target: "https://example.com/", name: "Example", observed_at: 1000, status: 200, title: "Example", body_hash: "a", robots: "allow" },
+            ],
+          };
         },
       };
     },
@@ -304,10 +310,7 @@ test("Change Radar keeps the latest two observations per target", async () => {
 });
 
 test("Change Radar remains a stable public JSON surface without D1", async () => {
-  const response = await handleAroundChangesJson(
-    new Request("https://aadhar.sh/around/changes.json"),
-    {},
-  );
+  const response = await handleAroundChangesJson(new Request("https://aadhar.sh/around/changes.json"), {});
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /^application\/json/);
   assert.equal((await response.json()).available, false);
@@ -330,8 +333,7 @@ test("Lens shell states the past, present, and future argument before the instru
 
 test("Lens state facts link to the evidence, not publication homepages", async () => {
   const html = await renderLensShell().text();
-  const links = [...html.matchAll(/<div class="lx-sow-src"><a href="([^"]+)"/g)]
-    .map((match) => new URL(match[1].replaceAll("&amp;", "&")));
+  const links = [...html.matchAll(/<div class="lx-sow-src"><a href="([^"]+)"/g)].map((match) => new URL(match[1].replaceAll("&amp;", "&")));
 
   assert.equal(links.length, 6, "every state-of-the-web card must carry one source");
   for (const url of links) {
@@ -377,24 +379,22 @@ test("Spotify art collapses onto one host, and only where it is safe to", () => 
   const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
   // every alias lands on the canonical host, path untouched
   for (const host of ["image-cdn-fa", "image-cdn-ak", "image-cdn-zz9"]) {
-    assert.equal(
-      canonicalArtUrl(`https://${host}.spotifycdn.com/image/${hash}`),
-      `https://i.scdn.co/image/${hash}`,
-    );
+    assert.equal(canonicalArtUrl(`https://${host}.spotifycdn.com/image/${hash}`), `https://i.scdn.co/image/${hash}`);
   }
   // already canonical is a no-op, so applying it at both scrape and emit is safe
   assert.equal(canonicalArtUrl(`https://i.scdn.co/image/${hash}`), `https://i.scdn.co/image/${hash}`);
   // anything the rewrite was not proven safe for passes through UNCHANGED. a
   // wrong rewrite is a broken image; the untouched value is one that already works.
   for (const keep of [
-    "https://mosaic.scdn.co/640/abc",                          // different scdn service
-    "https://image-cdn-fa.spotifycdn.com/other/xyz",           // right host, not an /image/ path
-    "https://evil.example.com/image/abc",                      // unrelated host
-    "not-a-url",                                               // unparseable
+    "https://mosaic.scdn.co/640/abc", // different scdn service
+    "https://image-cdn-fa.spotifycdn.com/other/xyz", // right host, not an /image/ path
+    "https://evil.example.com/image/abc", // unrelated host
+    "not-a-url", // unparseable
     "",
     null,
     undefined,
-  ]) assert.equal(canonicalArtUrl(keep), keep);
+  ])
+    assert.equal(canonicalArtUrl(keep), keep);
 });
 
 const ART_HASH_A = "ab67616d00001e026b458d1409d938dad4e3ba2c";
@@ -410,10 +410,14 @@ test("art URLs are derived from the hash, whatever alias it arrived under", () =
     "https://mosaic.scdn.co/640/abc",
     `https://evil.example.com/image/${ART_HASH_A}`,
     "https://i.scdn.co/image/NOTHEX",
-    "https://i.scdn.co/image/ab67616d",            // too short
-    `https://i.scdn.co/image/${ART_HASH_A}extra`,  // too long
-    "not-a-url", "", null, undefined,
-  ]) assert.equal(spotifyArtHash(no), null);
+    "https://i.scdn.co/image/ab67616d", // too short
+    `https://i.scdn.co/image/${ART_HASH_A}extra`, // too long
+    "not-a-url",
+    "",
+    null,
+    undefined,
+  ])
+    assert.equal(spotifyArtHash(no), null);
 
   const u = artUrls(`https://i.scdn.co/image/${ART_HASH_A}`);
   assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
@@ -434,10 +438,8 @@ test("the art warm list covers first, dedupes, and skips what cannot be re-hoste
   const payload = {
     tracks: [
       // Two tracks sharing one album cover, so the dedupe has something to do.
-      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
-        artists: [{ image_url: `https://image-cdn-fa.spotifycdn.com/image/${artHash(3)}` }] },
-      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
-        artists: [{ image_url: `https://i.scdn.co/image/${artHash(4)}` }] },
+      { image_url: `https://i.scdn.co/image/${artHash(1)}`, artists: [{ image_url: `https://image-cdn-fa.spotifycdn.com/image/${artHash(3)}` }] },
+      { image_url: `https://i.scdn.co/image/${artHash(1)}`, artists: [{ image_url: `https://i.scdn.co/image/${artHash(4)}` }] },
       { image_url: `https://i.scdn.co/image/${artHash(2)}`, artists: [] },
       // A collage cover and an artist with no picture: neither can be re-hosted,
       // so neither may appear. A /rn/art/ URL for these would 404 on hover.
@@ -454,14 +456,15 @@ test("the art warm list covers first, dedupes, and skips what cannot be re-hoste
   ]);
   // Covers ahead of artist pictures, because the cap truncates the tail and a
   // row is a far bigger hover target than the artist name inside it.
-  assert.ok(urls.indexOf(`https://aadhar.sh/rn/art/${artHash(2)}-240-${ART_VERSION}.avif`)
-          < urls.indexOf(`https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`));
+  assert.ok(
+    urls.indexOf(`https://aadhar.sh/rn/art/${artHash(2)}-240-${ART_VERSION}.avif`) <
+      urls.indexOf(`https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`),
+  );
 
   // Every warmed URL must be one handleRnArt will actually serve, or the warm
   // spends a subrequest and a transformation to cache a 404.
   for (const u of urls) {
-    assert.match(new URL(u).pathname,
-      /^\/rn\/art\/[0-9a-f]{40}-(120|240)-\d{1,4}\.(avif|jpg)$/);
+    assert.match(new URL(u).pathname, /^\/rn\/art\/[0-9a-f]{40}-(120|240)-\d{1,4}\.(avif|jpg)$/);
   }
 
   assert.deepEqual(artWarmList({ tracks: [] }, "https://aadhar.sh"), []);
@@ -469,10 +472,12 @@ test("the art warm list covers first, dedupes, and skips what cannot be re-hoste
 });
 
 test("the art warm is capped, so one long playlist cannot drain the subrequest budget", () => {
-  const many = { tracks: Array.from({ length: 60 }, (_, i) => ({
-    image_url: `https://i.scdn.co/image/${artHash(i)}`,
-    artists: [{ image_url: `https://i.scdn.co/image/${artHash(i + 100)}` }],
-  })) };
+  const many = {
+    tracks: Array.from({ length: 60 }, (_, i) => ({
+      image_url: `https://i.scdn.co/image/${artHash(i)}`,
+      artists: [{ image_url: `https://i.scdn.co/image/${artHash(i + 100)}` }],
+    })),
+  };
   const urls = artWarmList(many, "https://aadhar.sh");
   assert.equal(urls.length, WARM_MAX_URLS);
   // Workers Free allows 50 subrequests per invocation and the warm spends one
@@ -497,19 +502,24 @@ test("the art warm attempts every URL even when one is already cached", async ()
   const hadCaches = "caches" in globalThis;
   testGlobals.caches = {
     default: {
-      async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
-      async put(req, res) { store.set(req.url, res); },
+      async match(req) {
+        const r = store.get(req.url);
+        return r ? r.clone() : undefined;
+      },
+      async put(req, res) {
+        store.set(req.url, res);
+      },
     },
   };
-  testGlobals.fetch = async () =>
-    new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+  testGlobals.fetch = async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
 
   try {
-    const payload = { tracks: [
-      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
-        artists: [{ image_url: `https://i.scdn.co/image/${artHash(2)}` }] },
-      { image_url: `https://i.scdn.co/image/${artHash(3)}`, artists: [] },
-    ] };
+    const payload = {
+      tracks: [
+        { image_url: `https://i.scdn.co/image/${artHash(1)}`, artists: [{ image_url: `https://i.scdn.co/image/${artHash(2)}` }] },
+        { image_url: `https://i.scdn.co/image/${artHash(3)}`, artists: [] },
+      ],
+    };
     const urls = artWarmList(payload, "https://aadhar.sh");
     assert.equal(urls.length, 3);
 
@@ -518,8 +528,7 @@ test("the art warm attempts every URL even when one is already cached", async ()
     store.set(urls[0], new Response(new Uint8Array([9]), { status: 200 }));
 
     const waits: any[] = [];
-    const res = await warmArtCache(
-      payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
+    const res = await warmArtCache(payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
     await Promise.all(waits);
 
     assert.equal(res.already, 1, "the pre-warmed URL must report as already cached, not as work done");
@@ -542,8 +551,13 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
   const hadCaches = "caches" in globalThis;
   testGlobals.caches = {
     default: {
-      async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
-      async put(req, res) { store.set(req.url, res); },
+      async match(req) {
+        const r = store.get(req.url);
+        return r ? r.clone() : undefined;
+      },
+      async put(req, res) {
+        store.set(req.url, res);
+      },
     },
   };
   // Cover 1 transforms. Cover 2's transform fails and the plain fetch works,
@@ -559,8 +573,7 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
   try {
     const payload = { tracks: [1, 2, 3].map((n) => ({ image_url: `https://i.scdn.co/image/${artHash(n)}`, artists: [] })) };
     const waits: any[] = [];
-    const res = await warmArtCache(
-      payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
+    const res = await warmArtCache(payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
     await Promise.all(waits);
 
     assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1 });
@@ -573,17 +586,23 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
 
 test("rendered track rows re-host recognized art and pass everything else through", () => {
   const { html } = renderTrackListHtml({
-    tracks: [{
-      title: "t", song_link_url: "https://song.link/x", duration_ms: 1000,
-      image_url: `https://image-cdn-ak.spotifycdn.com/image/${ART_HASH_A}`,
-      artists: [{ name: "a", spotify_url: "https://open.spotify.com/artist/1",
-                  image_url: `https://image-cdn-fa.spotifycdn.com/image/${ART_HASH_A}` }],
-    }],
+    tracks: [
+      {
+        title: "t",
+        song_link_url: "https://song.link/x",
+        duration_ms: 1000,
+        image_url: `https://image-cdn-ak.spotifycdn.com/image/${ART_HASH_A}`,
+        artists: [{ name: "a", spotify_url: "https://open.spotify.com/artist/1", image_url: `https://image-cdn-fa.spotifycdn.com/image/${ART_HASH_A}` }],
+      },
+    ],
   });
   assert.match(html, new RegExp(`data-track-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.avif"`));
   assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.avif"`));
-  assert.doesNotMatch(html, /data-(?:track|artist)-imageset=|\/rn\/art\/[^" ]+\.jpg/,
-    "each hover target must name the one warmed AVIF, not alternate browser resources");
+  assert.doesNotMatch(
+    html,
+    /data-(?:track|artist)-imageset=|\/rn\/art\/[^" ]+\.jpg/,
+    "each hover target must name the one warmed AVIF, not alternate browser resources",
+  );
   // the whole point: a hover no longer reaches Spotify at all
   assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
 
@@ -592,8 +611,7 @@ test("rendered track rows re-host recognized art and pass everything else throug
   // hosts; now that it does not, that URL would render as a frame the browser
   // refuses to load. The row falls through to the text card instead.
   const odd = renderTrackListHtml({
-    tracks: [{ title: "t", song_link_url: "https://song.link/x",
-               image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
+    tracks: [{ title: "t", song_link_url: "https://song.link/x", image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
   }).html;
   assert.doesNotMatch(odd, /data-track-image/);
   assert.doesNotMatch(odd, /data-track-imageset/);
@@ -611,10 +629,10 @@ test("the art route 404s every shape that is not one it minted", async () => {
   // so each rejection below is a way someone could otherwise aim it or burn the
   // monthly transformation allowance by hand.
   const bad = [
-    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`,   // width not in the tier set
-    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`,    // format we do not mint
-    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`,        // no extension
-    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`,  // uppercase hex
+    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`, // width not in the tier set
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`, // format we do not mint
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`, // no extension
+    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`, // uppercase hex
     "/rn/art/nothex-240-1.avif",
     `/rn/art/${ART_HASH_A}.avif`,
     "/rn/art/",
@@ -638,11 +656,7 @@ test("track endpoints keep JSON and HTML contracts independent of Accept", async
   assert.equal(json.headers.get("vary"), null);
   assert.deepEqual(await json.json(), TRACKS);
 
-  const html = await handleRnTracksHtml(
-    new Request("https://aadhar.sh/rn/tracks.html", { headers: { accept: "application/json" } }),
-    env,
-    context(),
-  );
+  const html = await handleRnTracksHtml(new Request("https://aadhar.sh/rn/tracks.html", { headers: { accept: "application/json" } }), env, context());
   assert.equal(html.status, 200);
   assert.match(html.headers.get("content-type") || "", /^text\/html/);
   assert.equal(html.headers.get("vary"), null);
@@ -673,10 +687,14 @@ test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
 });
 
 test("Lens parses only Cloudflare's normalized readiness level from an MCP SSE answer", () => {
-  const body = 'event: message\ndata: ' + JSON.stringify({
-    jsonrpc: "2.0", id: "lens-cloudflare-score",
-    result: { content: [{ type: "text", text: "## Result\n**Level 4/5 — Agent-Optimized**\n21 checks follow" }] },
-  }) + "\n\n";
+  const body =
+    "event: message\ndata: " +
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: "lens-cloudflare-score",
+      result: { content: [{ type: "text", text: "## Result\n**Level 4/5 — Agent-Optimized**\n21 checks follow" }] },
+    }) +
+    "\n\n";
   assert.deepEqual(lensParseCloudflareAgentScore(body), {
     available: true,
     level: 4,
@@ -692,22 +710,44 @@ test("Lens caches only the completed Cloudflare score response, never progress o
   const id = "lens-cloudflare-score";
   const result = { content: [{ type: "text", text: "Level 4/5 — Agent-Optimized" }] };
   const reply = { jsonrpc: "2.0", id, result };
-  const frame = (value) => JSON.stringify(value, null, 2).split("\n").map((line) => `data: ${line}\n`).join("") + "\n";
-  const noise = frame({ jsonrpc: "2.0", method: "notifications/progress", params: { message: "Level 1/5 — Working" } })
-    + frame({ ...reply, id: "another-scan", result: { content: [{ type: "text", text: "Level 2/5 — Other" }] } });
-  const compact = 'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"message":"Level 1/5 — Working"}}\n\n'
-    + 'data: ' + JSON.stringify(reply) + '\n\n';
+  const frame = (value) =>
+    JSON.stringify(value, null, 2)
+      .split("\n")
+      .map((line) => `data: ${line}\n`)
+      .join("") + "\n";
+  const noise =
+    frame({ jsonrpc: "2.0", method: "notifications/progress", params: { message: "Level 1/5 — Working" } }) +
+    frame({ ...reply, id: "another-scan", result: { content: [{ type: "text", text: "Level 2/5 — Other" }] } });
+  const compact =
+    'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"message":"Level 1/5 — Working"}}\n\n' + "data: " + JSON.stringify(reply) + "\n\n";
   const realFetch = globalThis.fetch;
   try {
-    for (const body of [noise + frame(reply), JSON.stringify(reply), compact, noise, noise + frame(reply).trimEnd(),
-      frame({ ...reply, result: { ...result, isError: true } }), frame({ jsonrpc: "2.0", id, error: { message: "Level 5/5 — Failed" } })]) {
+    for (const body of [
+      noise + frame(reply),
+      JSON.stringify(reply),
+      compact,
+      noise,
+      noise + frame(reply).trimEnd(),
+      frame({ ...reply, result: { ...result, isError: true } }),
+      frame({ jsonrpc: "2.0", id, error: { message: "Level 5/5 — Failed" } }),
+    ]) {
       const writes: any[] = [];
       testGlobals.fetch = async (_url, init) => {
         assert.equal(JSON.parse(init.body).id, id);
         return new Response(body.replace(/\n/g, "\r\n"), { headers: { "content-type": body.startsWith("{") ? "application/json" : "text/event-stream" } });
       };
-      const response = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https://example.com"),
-        { RN_KV: { get: async () => null, put: async (_key, value) => { writes.push(JSON.parse(value)); } } }, context());
+      const response = await handleLensFetch(
+        new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https://example.com"),
+        {
+          RN_KV: {
+            get: async () => null,
+            put: async (_key, value) => {
+              writes.push(JSON.parse(value));
+            },
+          },
+        },
+        context(),
+      );
       const payload = await response.json();
       const available = body === noise + frame(reply) || body === JSON.stringify(reply) || body === compact;
       assert.equal(payload.available, available);
@@ -717,7 +757,9 @@ test("Lens caches only the completed Cloudflare score response, never progress o
         assert.equal(writes[0].score, 80);
       }
     }
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("Lens field evidence scores observed access without borrowing the standards rubric", () => {
@@ -735,7 +777,10 @@ test("Lens field evidence scores observed access without borrowing the standards
     agent: { strategy: { action: [], readable: ["markdown negotiation"], unknowns: [] } },
     botViews: [...controls, ...crawlers],
   });
-  assert.deepEqual(field.components.map((component) => component.score), [100, 75, 100, 60]);
+  assert.deepEqual(
+    field.components.map((component) => component.score),
+    [100, 75, 100, 60],
+  );
   assert.equal(field.overall, 84);
 
   const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: [...controls, ...crawlers.slice(0, 5)] });
@@ -748,7 +793,9 @@ test("Lens refuses to read crawler refusals as policy when no control got in", (
   // too, and grading them would report our own exclusion as their policy.
   const crawlers = Array.from({ length: 8 }, () => ({ status: 403, blocked: true, challenge: false }));
   const shut = lensFieldEvidence({
-    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    status: 200,
+    anatomy: { wordCount: 300 },
+    agent: null,
     botViews: [{ role: "control", status: 403, blocked: true }, { role: "control", status: 403, blocked: true }, ...crawlers],
   });
   const shutBots = shut.components.find((c) => c.key === "sampledBots");
@@ -757,7 +804,9 @@ test("Lens refuses to read crawler refusals as policy when no control got in", (
 
   // One control in, and the identical crawler rows become a real 0.
   const open = lensFieldEvidence({
-    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    status: 200,
+    anatomy: { wordCount: 300 },
+    agent: null,
     botViews: [{ role: "control", status: 200, blocked: false }, { role: "control", status: 403, blocked: true }, ...crawlers],
   });
   assert.equal(open.components.find((c) => c.key === "sampledBots").score, 0, "a control got in, so the refusals are about the name");
@@ -770,10 +819,16 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
   try {
     testGlobals.fetch = async (url, init) => {
       upstream = { url: String(url), body: JSON.parse(init.body) };
-      return new Response('data: ' + JSON.stringify({
-        jsonrpc: "2.0", id: "lens-cloudflare-score",
-        result: { content: [{ type: "text", text: "**Level 5/5 -- Agent-Native**\nprivate report details" }] },
-      }) + "\n\n", { status: 200, headers: { "content-type": "text/event-stream" } });
+      return new Response(
+        "data: " +
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: "lens-cloudflare-score",
+            result: { content: [{ type: "text", text: "**Level 5/5 -- Agent-Native**\nprivate report details" }] },
+          }) +
+          "\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
     };
     const response = await handleLensFetch(
       new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https%3A%2F%2Fexample.com"),
@@ -788,8 +843,12 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
     assert.equal(upstream.body.params.arguments.url, "https://example.com/");
     assert.equal(writes.length, 1);
     assert.deepEqual(JSON.parse(writes[0].value), {
-      available: true, level: 5, score: 100, levelName: "Agent-Native",
-      source: "Cloudflare Agent Readiness", sourceUrl: "https://isitagentready.com/",
+      available: true,
+      level: 5,
+      score: 100,
+      levelName: "Agent-Native",
+      source: "Cloudflare Agent Readiness",
+      sourceUrl: "https://isitagentready.com/",
     });
     assert.doesNotMatch(writes[0].value, /private report details/);
   } finally {
@@ -828,7 +887,13 @@ test("Lens Browser Run endpoint validates targets before invoking the binding", 
     new Request("https://aadhar.sh/lens/browser?url=javascript%3Aalert(1)", {
       headers: { accept: "text/html" },
     }),
-    { BROWSER: { quickAction: async () => { called = true; } } },
+    {
+      BROWSER: {
+        quickAction: async () => {
+          called = true;
+        },
+      },
+    },
     context(),
   );
   assert.equal(response.status, 400);
@@ -851,7 +916,10 @@ test("both browser routes report an upstream 429 as a 429, not a bad gateway", a
   // TUPLES: inference widens the rows to (string | Function)[], so `handler` is
   // a union that includes string and stops being callable.
 
-  const lensHandlers: Array<[name: string, handler: (req: Request, env: any, ctx: any) => Promise<Response>]> = [["shot", handleLensShot], ["browser", handleLensBrowser]];
+  const lensHandlers: Array<[name: string, handler: (req: Request, env: any, ctx: any) => Promise<Response>]> = [
+    ["shot", handleLensShot],
+    ["browser", handleLensBrowser],
+  ];
   for (const [name, handler] of lensHandlers) {
     const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
     assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);

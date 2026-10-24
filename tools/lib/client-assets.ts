@@ -81,44 +81,97 @@ export type ClientAsset = {
 export const CLIENT_ASSETS: readonly ClientAsset[] = [
   // Three first-interaction sheets, each extracted byte-for-byte from luna.css
   // and loaded by nav.js beside its matching island.
-  { file: "nav-run.css", kind: "style", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "after", prefix: '"nav-run"\\s*:\\s*' }], loadedBy: ["public/nav.js"] },
-  { file: "nav-tray.css", kind: "style", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "after", prefix: '"nav-tray"\\s*:\\s*' }], loadedBy: ["public/nav.js"] },
+  {
+    file: "nav-run.css",
+    kind: "style",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "after", prefix: '"nav-run"\\s*:\\s*' }],
+    loadedBy: ["public/nav.js"],
+  },
+  {
+    file: "nav-tray.css",
+    kind: "style",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "after", prefix: '"nav-tray"\\s*:\\s*' }],
+    loadedBy: ["public/nav.js"],
+  },
   // nav.js's source quotes this key ("infotip":) and the minifier drops the
   // quotes, so the prefix takes both: the build rewrites the minified form, the
   // contract suite checks the source one.
-  { file: "infotip.css", kind: "style", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "after", prefix: '"?\\binfotip\\b"?\\s*:\\s*' }], loadedBy: ["public/nav.js"] },
+  {
+    file: "infotip.css",
+    kind: "style",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "after", prefix: '"?\\binfotip\\b"?\\s*:\\s*' }],
+    loadedBy: ["public/nav.js"],
+  },
   // quiz.js's stylesheet. Page-scoped: it loads beside quiz.js on the garage and
   // lwe pages, reads --font-ui and --font-caption, and defines no property.
-  { file: "quiz.css", kind: "style", scope: "page", budget: "unbudgeted",
-    load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }], loadedBy: ["public/quiz.js"] },
+  { file: "quiz.css", kind: "style", scope: "page", budget: "unbudgeted", load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }], loadedBy: ["public/quiz.js"] },
   // The shared hover engine. TWO loader shapes, and missing the second cost a
   // serialized fetch in production (2026-07-27): nav.js and index.html reach it
   // through import(), tooltip.js through a static `from`.
-  { file: "hoist.js", kind: "script", marker: "createHoist", scope: "shell",
+  {
+    file: "hoist.js",
+    kind: "script",
+    marker: "createHoist",
+    scope: "shell",
     budget: { role: "shared hover engine", gzipKiB: 2, brotliKiB: 1.5 },
     load: [IMPORT, FROM],
-    loadedBy: ["public/index.html", "public/nav.js", "public/nav-run.js", "public/tooltip.js", "public/infotip.js", "public/lens.js", "public/serendipity.js"] },
+    loadedBy: ["public/index.html", "public/nav.js", "public/nav-run.js", "public/tooltip.js", "public/infotip.js", "public/lens.js", "public/serendipity.js"],
+  },
   // First-party WebMCP registration, loaded on idle from nav.js on every page
   // and from lens-webmcp.js. Hashed since 2026-09-26; before that it shipped at
   // the edge's q4 with no twin (2,436 B against 2,098 at q11).
-  { file: "webmcp.js", kind: "script", marker: "registerSiteTools", scope: "shell", budget: "unbudgeted",
-    load: [IMPORT], loadedBy: ["public/nav.js", "public/lens-webmcp.js"] },
-  { file: "nav-run.js", kind: "script", marker: "axp-run", scope: "shell",
+  {
+    file: "webmcp.js",
+    kind: "script",
+    marker: "registerSiteTools",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [IMPORT],
+    loadedBy: ["public/nav.js", "public/lens-webmcp.js"],
+  },
+  {
+    file: "nav-run.js",
+    kind: "script",
+    marker: "axp-run",
+    scope: "shell",
     budget: { role: "first-open Run island", gzipKiB: 12, brotliKiB: 10 },
-    load: [IMPORT], loadedBy: ["public/nav.js"] },
-  { file: "nav-tray.js", kind: "script", marker: "axp-balloon", scope: "shell",
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
+  {
+    file: "nav-tray.js",
+    kind: "script",
+    marker: "axp-balloon",
+    scope: "shell",
     budget: { role: "first-click tray island", gzipKiB: 5, brotliKiB: 4 },
-    load: [IMPORT], loadedBy: ["public/nav.js"] },
-  { file: "nav-pipes.js", kind: "script", marker: "axp-pipes", scope: "shell",
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
+  {
+    file: "nav-pipes.js",
+    kind: "script",
+    marker: "axp-pipes",
+    scope: "shell",
     budget: { role: "idle screen-saver island", gzipKiB: 6, brotliKiB: 5 },
-    load: [IMPORT], loadedBy: ["public/nav.js"] },
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
   // Tip of the Day, once a day. Its stylesheet is nav-tray.css.
-  { file: "nav-tips.js", kind: "script", marker: "axp-tips", scope: "shell",
+  {
+    file: "nav-tips.js",
+    kind: "script",
+    marker: "axp-tips",
+    scope: "shell",
     budget: { role: "once-a-day tips island", gzipKiB: 3, brotliKiB: 2.5 },
-    load: [IMPORT], loadedBy: ["public/nav.js"] },
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
   // The six /lens feature modules, each loaded by lens.js as script.src. The
   // ?v=1 ritual retires at the rewrite: the hash IS the version.
   //
@@ -126,109 +179,254 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   // interaction recipes: the chip row, the before/after screenshot pair, and
   // the six honest-null strings that say WHY a recipe found nothing. Measured
   // +1.4 KiB gzip, 3.0 -> 4.4. Bumped deliberately rather than discovered by CI.
-  { file: "lens-browser.js", kind: "script", marker: "LensBrowser", scope: "shell",
+  {
+    file: "lens-browser.js",
+    kind: "script",
+    marker: "LensBrowser",
+    scope: "shell",
     budget: { role: "optional browser island", gzipKiB: 5, brotliKiB: 4.5 },
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
-  { file: "lens-reader.js", kind: "script", marker: "LensReader", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
-  { file: "lens-wire.js", kind: "script", marker: "LensWire", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
-  { file: "lens-tools.js", kind: "script", marker: "LensTools", scope: "shell",
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
+  {
+    file: "lens-reader.js",
+    kind: "script",
+    marker: "LensReader",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
+  {
+    file: "lens-wire.js",
+    kind: "script",
+    marker: "LensWire",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
+  {
+    file: "lens-tools.js",
+    kind: "script",
+    marker: "LensTools",
+    scope: "shell",
     budget: { role: "optional MCP-form island", gzipKiB: 7, brotliKiB: 6 },
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
-  { file: "lens-nlweb.js", kind: "script", marker: "LensNlweb", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
-  { file: "lens-markdown.js", kind: "script", marker: "LensMarkdown", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "string", query: V1 }], loadedBy: ["public/lens.js"] },
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
+  {
+    file: "lens-nlweb.js",
+    kind: "script",
+    marker: "LensNlweb",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
+  {
+    file: "lens-markdown.js",
+    kind: "script",
+    marker: "LensMarkdown",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "string", query: V1 }],
+    loadedBy: ["public/lens.js"],
+  },
   // The WebMCP-capable idle shell loads only this registrar.
-  { file: "lens-webmcp.js", kind: "script", marker: "LensWebMcp", scope: "shell",
+  {
+    file: "lens-webmcp.js",
+    kind: "script",
+    marker: "LensWebMcp",
+    scope: "shell",
     budget: { role: "idle WebMCP registrar", gzipKiB: 5, brotliKiB: 4 },
-    load: [IMPORT], loadedBy: ["public/lens-boot.js"] },
+    load: [IMPORT],
+    loadedBy: ["public/lens-boot.js"],
+  },
   // The full Lens application. The bootstrap imports it, so the bootstrap's
   // immutable URL covers the complete lazy chain.
-  { file: "lens.js", kind: "script", marker: "replaceState", scope: "shell",
+  {
+    file: "lens.js",
+    kind: "script",
+    marker: "replaceState",
+    scope: "shell",
     budget: { role: "post-intent Lens application", gzipKiB: 24, brotliKiB: 21 },
-    load: [{ via: "import", query: V1 }], loadedBy: ["public/lens-boot.js"] },
-  { file: "tooltip.js", kind: "script", marker: "function start", scope: "shell",
+    load: [{ via: "import", query: V1 }],
+    loadedBy: ["public/lens-boot.js"],
+  },
+  {
+    file: "tooltip.js",
+    kind: "script",
+    marker: "function start",
+    scope: "shell",
     budget: { role: "optional hover island", gzipKiB: 6, brotliKiB: 5 },
-    load: [IMPORT], loadedBy: ["public/index.html"] },
+    load: [IMPORT],
+    loadedBy: ["public/index.html"],
+  },
   // The shell's own tooltips, imported by nav.js on the first hover with a tip.
-  { file: "infotip.js", kind: "script", marker: "axp-infotip", scope: "shell", budget: "unbudgeted",
-    load: [IMPORT], loadedBy: ["public/nav.js"] },
+  { file: "infotip.js", kind: "script", marker: "axp-infotip", scope: "shell", budget: "unbudgeted", load: [IMPORT], loadedBy: ["public/nav.js"] },
   // Page-scoped since 2026-09-30: each was a plain URL every visit revalidated.
   //
   // The vendored @chenglou/pretext (tools/vendor-pretext.ts). /garage/pretext
   // imports it RELATIVELY, so the pattern takes both spellings; the page's prose names the path in
   // <code> twice, and call syntax is what keeps those mentions out of reach.
   // The marker is an export NAME, which survives minification by construction.
-  { file: "garage/pretext.lib.js", kind: "module", marker: "prepareWithSegments", base: "pretext-lib", scope: "page",
+  {
+    file: "garage/pretext.lib.js",
+    kind: "module",
+    marker: "prepareWithSegments",
+    base: "pretext-lib",
+    scope: "page",
     budget: "unbudgeted",
-    load: [{ via: "import", also: ["./pretext.lib.js"] }], loadedBy: ["public/garage/pretext.html"] },
+    load: [{ via: "import", also: ["./pretext.lib.js"] }],
+    loadedBy: ["public/garage/pretext.html"],
+  },
   // /garage/round-trip's parser: the inverse of tools/lib/html-to-md.ts. The
   // page imports it RELATIVELY, and the contract suite imports the source to
   // hold every twin to the round trip. The marker is its export name.
-  { file: "garage/md-to-html.js", kind: "module", marker: "mdToHtml", scope: "page", budget: "unbudgeted",
-    load: [{ via: "import", also: ["./md-to-html.js"] }], loadedBy: ["public/garage/round-trip.html"] },
+  {
+    file: "garage/md-to-html.js",
+    kind: "module",
+    marker: "mdToHtml",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [{ via: "import", also: ["./md-to-html.js"] }],
+    loadedBy: ["public/garage/round-trip.html"],
+  },
   // The AV2 decoder, run as a module Worker by /garage/av2 and, since
   // 2026-10-14, by /pixel-peeper for its AV2 tiles. Each page names it in
   // `new Worker(...)`, so that call is the pattern; the prose's <code> mention
   // of the path has no `new Worker(` before it and stays plain. Its WASM is a
   // content-addressed file in public/garage/av2, outside the registry, because
   // the /a/ route only answers js, css, svg, json and dict.
-  { file: "garage/av2-decode.js", kind: "module", marker: "av2_decode", base: "av2-decode", scope: "page",
+  {
+    file: "garage/av2-decode.js",
+    kind: "module",
+    marker: "av2_decode",
+    base: "av2-decode",
+    scope: "page",
     budget: "unbudgeted",
-    load: [{ via: "after", prefix: "new Worker\\(\\s*" }], loadedBy: ["public/garage/av2.html", "public/pixel-peeper/index.html"] },
+    load: [{ via: "after", prefix: "new Worker\\(\\s*" }],
+    loadedBy: ["public/garage/av2.html", "public/pixel-peeper/index.html"],
+  },
   // The /dotfiles checklist, an ES module (tools/gen-dotfiles.ts imports its
   // renderer to write the committed macos.sh).
-  { file: "dotfiles.js", kind: "module", marker: "dotfiles-data", scope: "page", budget: "unbudgeted",
-    load: [FROM, IMPORT], loadedBy: ["public/dotfiles/index.html"] },
+  {
+    file: "dotfiles.js",
+    kind: "module",
+    marker: "dotfiles-data",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [FROM, IMPORT],
+    loadedBy: ["public/dotfiles/index.html"],
+  },
   // The one DATA file, fetched before /pixel-peeper can draw a trial. It stays
   // off the dictionary path (DICTIONARY_TYPES in lib/assets.ts says why).
-  { file: "pixel-peeper/manifest.json", kind: "static", base: "pixel-peeper-manifest", scope: "page",
+  {
+    file: "pixel-peeper/manifest.json",
+    kind: "static",
+    base: "pixel-peeper-manifest",
+    scope: "page",
     budget: "unbudgeted",
-    load: [{ via: "fetch" }], loadedBy: ["public/pixel-peeper/index.html"] },
+    load: [{ via: "fetch" }],
+    loadedBy: ["public/pixel-peeper/index.html"],
+  },
 
   // Loaded by ATTRIBUTE from markup. cal/src/templates.ts is a witness for nav
   // and luna because a /coffee page left on the plain URL keeps working and
   // only loses the immutable cache, which nothing else would notice.
-  { file: "nav.js", kind: "script", marker: "axp-histnav", scope: "shell",
+  {
+    file: "nav.js",
+    kind: "script",
+    marker: "axp-histnav",
+    scope: "shell",
     budget: { role: "shared deferred shell", gzipKiB: 20, brotliKiB: 18 },
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["public/index.html", "cal/src/templates.ts"] },
-  { file: "luna.css", kind: "style", scope: "shell",
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["public/index.html", "cal/src/templates.ts"],
+  },
+  {
+    file: "luna.css",
+    kind: "style",
+    scope: "shell",
     budget: { role: "shared render-blocking CSS", gzipKiB: 12, brotliKiB: 10 },
-    load: [{ via: "attr", attr: "href" }], loadedBy: ["public/index.html", "cal/src/templates.ts"] },
+    load: [{ via: "attr", attr: "href" }],
+    loadedBy: ["public/index.html", "cal/src/templates.ts"],
+  },
   // The server-rendered idle Lens shell emits only this interaction bootstrap.
-  { file: "lens-boot.js", kind: "script", marker: "requestSubmit", scope: "shell",
+  {
+    file: "lens-boot.js",
+    kind: "script",
+    marker: "requestSubmit",
+    scope: "shell",
     budget: { role: "idle Lens bootstrap", gzipKiB: 1, brotliKiB: 1 },
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["src/worker/lens.ts"] },
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["src/worker/lens.ts"],
+  },
   // The desktop icon sprite. Every ref carries a #fragment
   // (src="/icons.svg#pin-garage"); src= because the refs are <img> against
   // <view>s (the WebKit note in gen-desktop-partial.ts).
-  { file: "icons.svg", kind: "static", scope: "shell", budget: "unbudgeted",
-    load: [{ via: "attr", attr: "src", fragment: true }], loadedBy: ["src/worker/lib/desktop.ts"] },
+  {
+    file: "icons.svg",
+    kind: "static",
+    scope: "shell",
+    budget: "unbudgeted",
+    load: [{ via: "attr", attr: "src", fragment: true }],
+    loadedBy: ["src/worker/lib/desktop.ts"],
+  },
   // The /serendipity event list's island, emitted by the Worker's page shell.
   // Page-scoped since it joined /a/ on 2026-10-02.
-  { file: "serendipity.js", kind: "script", marker: "data-event-time", scope: "page", budget: "unbudgeted",
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["serendipity/serendipity.ts"] },
-  { file: "quiz.js", kind: "script", marker: "luq-data", scope: "shell",
+  {
+    file: "serendipity.js",
+    kind: "script",
+    marker: "data-event-time",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["serendipity/serendipity.ts"],
+  },
+  {
+    file: "quiz.js",
+    kind: "script",
+    marker: "luq-data",
+    scope: "shell",
     budget: { role: "understanding-check island", gzipKiB: 6, brotliKiB: 5 },
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["public/garage/encoding.html"] },
-  { file: "notepad.js", kind: "script", marker: "np-window", scope: "shell",
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["public/garage/encoding.html"],
+  },
+  {
+    file: "notepad.js",
+    kind: "script",
+    marker: "np-window",
+    scope: "shell",
     budget: { role: "writing-only island", gzipKiB: 4, brotliKiB: 3.5 },
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["src/worker/writing.ts"] },
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["src/worker/writing.ts"],
+  },
   // Shared LWE structure, a separate warm-cache object.
-  { file: "lwe-base.css", kind: "style", scope: "shell",
+  {
+    file: "lwe-base.css",
+    kind: "style",
+    scope: "shell",
     budget: { role: "LWE render-blocking CSS", gzipKiB: 2, brotliKiB: 2 },
-    load: [{ via: "attr", attr: "href" }], loadedBy: ["public/lwe/vigenere.html"] },
+    load: [{ via: "attr", attr: "href" }],
+    loadedBy: ["public/lwe/vigenere.html"],
+  },
   // The prose kit: article typography for every Garage page, linked before a
   // page's own <style>. Page-scoped, so its custom-property uses cannot
   // re-rank luna.css's short names (gotcha 35).
-  { file: "prose.css", kind: "style", scope: "page", budget: "unbudgeted",
-    load: [{ via: "attr", attr: "href" }], loadedBy: ["public/garage/wire.html"] },
+  { file: "prose.css", kind: "style", scope: "page", budget: "unbudgeted", load: [{ via: "attr", attr: "href" }], loadedBy: ["public/garage/wire.html"] },
   // The LWE pages' ask widget, on 12 pages. Minified since 2026-09-16 (4,305 B
   // at the edge's q4 against 2,833 with a q11 twin); /lwe/ask.js stays served.
-  { file: "lwe/ask.js", kind: "script", marker: "lwe-q", base: "ask", scope: "page", budget: "unbudgeted",
-    load: [{ via: "attr", attr: "src" }], loadedBy: ["public/lwe/vigenere.html"] },
+  {
+    file: "lwe/ask.js",
+    kind: "script",
+    marker: "lwe-q",
+    base: "ask",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["public/lwe/vigenere.html"],
+  },
 ];
 
 const extOf = (file: string): string => file.slice(file.lastIndexOf(".") + 1);
@@ -239,15 +437,13 @@ export const assetExt = (a: ClientAsset): string => extOf(a.file);
 // The staged path the mangler and the edges use, relative to the staged root.
 export const stagedPath = (a: ClientAsset): string => `public/${a.file}`;
 // The readable twin a minified asset ships beside: nav.js -> nav.src.js.
-export const twinOf = (a: ClientAsset): string | null =>
-  a.kind === "static" ? null : a.file.replace(/\.(js|css)$/, ".src.$1");
+export const twinOf = (a: ClientAsset): string | null => (a.kind === "static" ? null : a.file.replace(/\.(js|css)$/, ".src.$1"));
 
 const isScript = (a: ClientAsset): boolean => a.kind === "script" || a.kind === "module";
 
 // ── projections ──────────────────────────────────────────────────────────────
 
-export const clientSourceFile = (file: string): string =>
-  `src/client/${file === "garage/pretext.lib.js" ? file : file.replace(/\.js$/, ".ts")}`;
+export const clientSourceFile = (file: string): string => `src/client/${file === "garage/pretext.lib.js" ? file : file.replace(/\.js$/, ".ts")}`;
 
 export type ScriptRow = { file: string; twin: string; marker: string; module: boolean };
 
@@ -256,12 +452,10 @@ export const minifiedScripts = (assets: readonly ClientAsset[] = CLIENT_ASSETS):
   assets.filter(isScript).map((a) => ({ file: a.file, twin: `/${twinOf(a)}`, marker: a.marker ?? "", module: a.kind === "module" }));
 
 // Step 4's rows: every stylesheet the build minifies.
-export const minifiedStyles = (assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] =>
-  assets.filter((a) => a.kind === "style").map((a) => a.file);
+export const minifiedStyles = (assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] => assets.filter((a) => a.kind === "style").map((a) => a.file);
 
 // Every staged file step 6 hashes into /a/.
-export const contentHashedFiles = (assets: readonly ClientAsset[] = CLIENT_ASSETS): Set<string> =>
-  new Set(assets.map(stagedPath));
+export const contentHashedFiles = (assets: readonly ClientAsset[] = CLIENT_ASSETS): Set<string> => new Set(assets.map(stagedPath));
 
 // The part of it step 5c ranks as the shell. The hasher and the mangler read
 // one registry, so an asset cannot join /a/ without being placed in a tier.
@@ -275,8 +469,7 @@ export const budgetedAssets = (assets: readonly ClientAsset[] = CLIENT_ASSETS): 
 // minified form to budget, so it is not part of the gap.
 export const unbudgetedAssets = (assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] =>
   assets.filter((a) => a.budget === "unbudgeted" && a.kind !== "static").map((a) => a.file);
-export const readableTwins = (assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] =>
-  assets.flatMap((a) => twinOf(a) ?? []);
+export const readableTwins = (assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] => assets.flatMap((a) => twinOf(a) ?? []);
 
 // The route oracle: each script's readable twin serves, and still carries the
 // marker the build holds the minified copy to.
@@ -295,7 +488,8 @@ export function clientScriptProblems(srcClientFiles: readonly string[], assets: 
   const rows = new Map(minifiedScripts(assets).map((r) => [clientSourceFile(r.file).slice("src/client/".length), r.marker]));
   const problems: string[] = [];
   const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !rows.has(f));
-  if (missing.length) problems.push(`${missing.join(", ")} in src/client but not in the client asset registry, so it would ship unminified with no twin and no marker tripwire`);
+  if (missing.length)
+    problems.push(`${missing.join(", ")} in src/client but not in the client asset registry, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
   if (unmarked.length) problems.push(`${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
   return problems;
@@ -378,9 +572,7 @@ export function loaderRewrites(a: ClientAsset, loader: Loader, to: string): Arra
       ];
     }
     case "import": {
-      const spec = loader.also?.length
-        ? `(?:${[path, ...loader.also].map(esc).join("|")})`
-        : esc(path);
+      const spec = loader.also?.length ? `(?:${[path, ...loader.also].map(esc).join("|")})` : esc(path);
       return [[new RegExp(`import\\(${QUOTE}${spec}${esc(loader.query ?? "")}\\1\\)`, "g"), `import($1${to}$1)`]];
     }
     case "string":

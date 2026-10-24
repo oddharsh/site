@@ -213,7 +213,7 @@ mod tests {
                 ]).output().expect("install avifenc alongside libavif to run the parity test");
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
                 // The control is only as right as the CLI: libavif 1.3.x's avifenc writes gray
-                // PNGs ~4x dark at -d 10 while zenc is correct (gotcha 83), so name the version.
+                // PNGs ~4x dark at -d 10 while zenc is correct (gotcha 84), so name the version.
                 let version = std::process::Command::new("avifenc").arg("--version").output()
                     .map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string())
                     .unwrap_or_default();

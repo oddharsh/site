@@ -14,7 +14,7 @@ const SECRET = "integration-signing-secret";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
-let env: import("./harness.ts").CalEnv & { SIGNING_SECRET: string, RESEND_API_KEY: string, ICAL_URL: string };
+let env: import("./harness.ts").CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
 beforeAll(async () => {
   cal = await bootCal();
   env = {
@@ -26,19 +26,14 @@ beforeAll(async () => {
 });
 afterAll(() => cal.close());
 
-const EMPTY_ICS = [
-  "BEGIN:VCALENDAR",
-  "VERSION:2.0",
-  "END:VCALENDAR",
-  "",
-].join("\r\n");
+const EMPTY_ICS = ["BEGIN:VCALENDAR", "VERSION:2.0", "END:VCALENDAR", ""].join("\r\n");
 
 let mailCalls;
 // Approval and /location each send TWO mails: the guest's invitation and
 // the host's own PUBLISH copy. ctx.waitUntil orders neither, so these pick by
 // attachment rather than by index.
 const guestMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee.ics");
-const hostMail  = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee-host.ics");
+const hostMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee-host.ics");
 let bookingWf;
 let restoreFetch = () => {};
 beforeEach(async () => {
@@ -67,13 +62,14 @@ beforeEach(async () => {
     }
     mailCalls.push({ url: String(url as string | URL), body: JSON.parse(String(init?.body as string)) });
     return new Response(JSON.stringify({ id: "m" }), {
-      status: 200, headers: { "content-type": "application/json" },
+      status: 200,
+      headers: { "content-type": "application/json" },
     });
   });
 });
 afterEach(async () => {
   restoreFetch();
-  await bookingWf.dispose();   // tear down any booking expiry timers this test created
+  await bookingWf.dispose(); // tear down any booking expiry timers this test created
 });
 
 // dispatch a request through the worker and flush ctx.waitUntil (the emails)
@@ -86,11 +82,15 @@ async function dispatch(path, init: Record<string, any> = {}, envOverrides: Reco
 async function postBook(fields, overrides: Record<string, any> = {}) {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(fields)) form.set(k, String(v));
-  return dispatch("/book", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  }, overrides);
+  return dispatch(
+    "/book",
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    },
+    overrides,
+  );
 }
 
 // A stand-in for the COUNTER Durable Object namespace.
@@ -115,15 +115,22 @@ function stubCounterNamespace() {
             const { claimReservation, dropReservation } = await import("../src/reservation.ts");
             const storage = {
               get: async (key) => instance.records.get(key),
-              put: async (key, value) => { instance.records.set(key, value); },
-              delete: async (key) => { instance.records.delete(key); },
+              put: async (key, value) => {
+                instance.records.set(key, value);
+              },
+              delete: async (key) => {
+                instance.records.delete(key);
+              },
             };
             const body = JSON.parse(init.body);
             return new URL(url).pathname === "/release"
               ? Response.json({ released: await dropReservation(storage, body.bookingId) })
               : Response.json({ claimed: await claimReservation(storage, body.bookingId, body.start, body.end) });
           });
-          instance.queue = run.then(() => undefined, () => undefined);
+          instance.queue = run.then(
+            () => undefined,
+            () => undefined,
+          );
           return run;
         },
       };
@@ -133,7 +140,7 @@ function stubCounterNamespace() {
 // `Response.json()` is `Promise<unknown>` under bun's types (the pool's was
 // `any`), and the one shape this suite reads back is /slots.
 
-const slotsOf = async (res: Response): Promise<{ slots: { start: number, end: number }[] }> =>  (await res.json() as any);
+const slotsOf = async (res: Response): Promise<{ slots: { start: number; end: number }[] }> => (await res.json()) as any;
 // pick a slot from the MIDDLE of the list, not slots[0]: the earliest slot sits
 // on the now+MIN_NOTICE boundary and can roll off as the wall clock advances
 // during a test, making assertions about it flaky. a mid-list slot is days out
@@ -198,7 +205,7 @@ describe("routing", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-robots-tag")).toBe("noindex");
     const html = await res.text();
-    expect(html).not.toContain("data-island=\"");
+    expect(html).not.toContain('data-island="');
     expect(html).toMatch(/<input type="radio" name="start" value="\d+" form="bookform" required/);
     expect(html).toContain('id="bookform"');
   });
@@ -242,20 +249,21 @@ describe("POST /book validation", () => {
   // the booking page now, with what was typed still in it and each field at
   // fault marked invalid and pointed at its own message.
   /** The open tag of the control with this id (or the first radio for start). */
-  const control = (html, id) => (id === "start"
-    ? html.match(/<input type="radio" name="start"[^>]*>/)?.[0]
-    : html.match(new RegExp(`<(?:input|textarea)[^>]*\\bid="${id}"[^>]*>`))?.[0]) ?? "";
+  const control = (html, id) =>
+    (id === "start" ? html.match(/<input type="radio" name="start"[^>]*>/)?.[0] : html.match(new RegExp(`<(?:input|textarea)[^>]*\\bid="${id}"[^>]*>`))?.[0]) ??
+    "";
   /** Each control that claims to be invalid, and the text of the message it names. */
-  const invalidFields = (html) => ["start", "name", "email", "topic"].flatMap((id) => {
-    const tag = control(html, id);
-    if (!/aria-invalid="true"/.test(tag)) return [];
-    const ref = tag.match(/aria-describedby="([^"]+)"/)?.[1];
-    const text = ref ? html.match(new RegExp(`<p class="field-error" id="${ref}">([^<]+)</p>`))?.[1] : undefined;
-    return [{ id, text }];
-  });
+  const invalidFields = (html) =>
+    ["start", "name", "email", "topic"].flatMap((id) => {
+      const tag = control(html, id);
+      if (!/aria-invalid="true"/.test(tag)) return [];
+      const ref = tag.match(/aria-describedby="([^"]+)"/)?.[1];
+      const text = ref ? html.match(new RegExp(`<p class="field-error" id="${ref}">([^<]+)</p>`))?.[1] : undefined;
+      return [{ id, text }];
+    });
 
   it("a refused request comes back as the booking page with the typed values kept", async () => {
-    const res = await postBook({ name: "Ada <Lovelace>", email: "nope", area: "Greenpoint", topic: "engines & \"looms\"", start: 123 });
+    const res = await postBook({ name: "Ada <Lovelace>", email: "nope", area: "Greenpoint", topic: 'engines & "looms"', start: 123 });
     expect(res.status).toBe(400);
     const html = await res.text();
     expect(html).toMatch(/<form class="book" id="bookform"/);
@@ -310,7 +318,7 @@ describe("POST /book validation", () => {
       postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }),
     ]);
     expect([a.status, b.status]).toEqual([200, 200]);
-    expect(mailCalls.length).toBe(2);   // the host is asked to approve one slot twice
+    expect(mailCalls.length).toBe(2); // the host is asked to approve one slot twice
   });
 
   it("with the atomic claim, exactly one of two simultaneous bookings wins", async () => {
@@ -320,10 +328,10 @@ describe("POST /book validation", () => {
       postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { COUNTER }),
       postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { COUNTER }),
     ]);
-    const statuses = [a.status, b.status].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0);
+    const statuses = [a.status, b.status].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0));
     expect(statuses).toEqual([200, 409]);
-    expect(mailCalls.length).toBe(1);              // one approval request, not two
-    expect(await listHeld(env)).toHaveLength(1);   // one slot held
+    expect(mailCalls.length).toBe(1); // one approval request, not two
+    expect(await listHeld(env)).toHaveLength(1); // one slot held
   });
 
   it("a different slot is never blocked by a claim on its neighbour", async () => {
@@ -355,7 +363,7 @@ describe("POST /book validation", () => {
     const slot = await firstSlot();
     const res = await postBook({ name: "Bot", email: "b@b.co", topic: "spam", start: slot.start, website: "http://x" });
     expect(res.status).toBe(200);
-    expect(await listHeld(env)).toHaveLength(0);   // no slot held
+    expect(await listHeld(env)).toHaveLength(0); // no slot held
     expect(mailCalls).toHaveLength(0);
   });
 });
@@ -437,14 +445,14 @@ describe("book → approve / decline lifecycle", () => {
   // atob alone hands back latin-1 bytes, so an accented venue ("Devoción")
   // reads as mojibake and an assertion about it fails on the TEST rather than
   // on the code. email.test.js keeps the same helper for the same reason.
-  const icsOf = (call) => new TextDecoder().decode(
-    Uint8Array.from(atob(call.body.attachments[0].content), (c) => c.charCodeAt(0)));
+  const icsOf = (call) => new TextDecoder().decode(Uint8Array.from(atob(call.body.attachments[0].content), (c) => c.charCodeAt(0)));
   const locSig = (id) => sign(`${id}|location`, SECRET);
-  const postLoc = async (id, sig, location) => dispatch("/location", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ t: id, sig, location }).toString(),
-  });
+  const postLoc = async (id, sig, location) =>
+    dispatch("/location", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ t: id, sig, location }).toString(),
+    });
 
   it("a location set BEFORE approval mails nothing and rides out on the invite", async () => {
     const slot = await firstSlot();
@@ -454,12 +462,12 @@ describe("book → approve / decline lifecycle", () => {
 
     const res = await postLoc(id, await locSig(id), "Devoción, 25 E 20th St");
     expect(res.status).toBe(200);
-    expect(mailCalls).toHaveLength(0);           // nothing to update yet
+    expect(mailCalls).toHaveLength(0); // nothing to update yet
 
     await dispatch(`/approve?t=${id}&sig=${await sign(`${id}|approve`, SECRET)}`);
     const ics = icsOf(mailCalls.at(-1));
     expect(ics).toContain("LOCATION:Devoción\\, 25 E 20th St");
-    expect(ics).toContain("SEQUENCE:0");          // first invite, never a bump
+    expect(ics).toContain("SEQUENCE:0"); // first invite, never a bump
   });
 
   it("a location set AFTER approval sends an in-place update at a higher SEQUENCE", async () => {
@@ -512,8 +520,7 @@ describe("book → approve / decline lifecycle", () => {
 
   it("carries the requester's NYC area into the approval mail and the invite", async () => {
     const slot = await firstSlot();
-    await postBook({ name: "Iris", email: "iris@x.dev", topic: "hi",
-                     area: "Bushwick", start: slot.start });
+    await postBook({ name: "Iris", email: "iris@x.dev", topic: "hi", area: "Bushwick", start: slot.start });
     const id = lastBookingId();
     expect(mailCalls.at(-1).body.html).toContain("Bushwick");
 
@@ -554,11 +561,12 @@ describe("book → approve / decline lifecycle", () => {
   // Worker's preview and early-data guards, and keeps a link-prefetching mail
   // client from calling off a coffee by looking at it.
   const sigFor = (id, action) => sign(`${id}|${action}`, SECRET);
-  const postForm = (path, fields) => dispatch(path, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(fields).toString(),
-  });
+  const postForm = (path, fields) =>
+    dispatch(path, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields).toString(),
+    });
 
   // Narrowing AND a precondition. `find` gives `T | undefined`, which the cal
   // test program refuses at zero errors, and a reschedule test that ran against
@@ -606,7 +614,11 @@ describe("book → approve / decline lifecycle", () => {
     // rather than add a second one at the new time.
     expect(update).toContain(`UID:${id}@cal.aadhar.sh`);
     expect(update).toContain("SEQUENCE:1");
-    const fmt = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const fmt = (ms) =>
+      new Date(ms)
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\.\d{3}/, "");
     expect(update).toContain(`DTSTART:${fmt(target.start)}`);
     expect(icsOf(hostMail())).toContain(`DTSTART:${fmt(target.start)}`);
   });
@@ -683,7 +695,7 @@ describe("book → approve / decline lifecycle", () => {
     await postBook({ name: "Sam", email: "sam@x.dev", topic: "hi", start: slot.start });
     const id = lastBookingId();
     const sig = await sign(`${id}|approve`, SECRET);
-    await dispatch(`/approve?t=${id}&sig=${sig}`);   // first approve → invite
+    await dispatch(`/approve?t=${id}&sig=${sig}`); // first approve → invite
     mailCalls.length = 0;
     const res = await dispatch(`/approve?t=${id}&sig=${sig}`); // second
     expect(res.status).toBe(200);

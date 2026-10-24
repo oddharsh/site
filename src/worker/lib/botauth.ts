@@ -46,13 +46,13 @@ import type { Env } from "./env.ts";
 
 const ENCODER = new TextEncoder();
 
-export const BOT_NAME    = "AadharshBot";
+export const BOT_NAME = "AadharshBot";
 
-const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
+const BOT_VERSION = "1.0"; // module-private: only BOT_UA below consumes it
 
-export const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
+export const BOT_UA = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
 
-export const SIG_AGENT   = "https://aadhar.sh/";
+export const SIG_AGENT = "https://aadhar.sh/";
 
 const DIRECTORY_PATH = "/.well-known/http-message-signatures-directory";
 const DIRECTORY_TYPE = "application/http-message-signatures-directory+json";
@@ -113,11 +113,9 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   const host = new URL(targetUrl).host;
   // RFC 9421: one covered component per line, then the signed parameters. Each
   // label signs its OWN base, because the base ends in that label's parameters.
-  const signed = await signLabels(await activeSigners(env, opts.postQuantum !== false), '"@authority" "signature-agent"', "web-bot-auth", (params) => [
-    `"@authority": ${host}`,
-    `"signature-agent": "${SIG_AGENT}"`,
-    `"@signature-params": ${params}`,
-  ].join("\n"));
+  const signed = await signLabels(await activeSigners(env, opts.postQuantum !== false), '"@authority" "signature-agent"', "web-bot-auth", (params) =>
+    [`"@authority": ${host}`, `"signature-agent": "${SIG_AGENT}"`, `"@signature-params": ${params}`].join("\n"),
+  );
   headers.set("Signature-Agent", `"${SIG_AGENT}"`);
   headers.set("Signature-Input", signed.input);
   headers.set("Signature", signed.signature);
@@ -147,12 +145,14 @@ async function activeSigners(env: SigningEnv, postQuantum = true): Promise<Signe
 // sig2 is ML-DSA-44, which is the order a verifier that stops at the first
 // label it knows wants to meet them in. The signatures run concurrently.
 async function signLabels(signers: Signer[], components: string, tag: string, base: (params: string) => string) {
-  const parts = await Promise.all(signers.map(async (signer, i) => {
-    const label = `sig${i + 1}`;
-    const params = signatureParams(components, signer.keyId, tag, signer.alg);
-    const signature = new Uint8Array(await signer.sign(ENCODER.encode(base(params)))).toBase64();
-    return { input: `${label}=${params}`, signature: `${label}=:${signature}:` };
-  }));
+  const parts = await Promise.all(
+    signers.map(async (signer, i) => {
+      const label = `sig${i + 1}`;
+      const params = signatureParams(components, signer.keyId, tag, signer.alg);
+      const signature = new Uint8Array(await signer.sign(ENCODER.encode(base(params)))).toBase64();
+      return { input: `${label}=${params}`, signature: `${label}=:${signature}:` };
+    }),
+  );
   return {
     input: parts.map((p) => p.input).join(", "),
     signature: parts.map((p) => p.signature).join(", "),
@@ -189,16 +189,20 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
     if (!Array.isArray(directory.keys)) throw new Error("Directory has no keys");
     const ed = directory.keys.filter((k) => k.kty !== "AKP");
     const akp = directory.keys.filter((k) => k.kty === "AKP");
-    if (ed.length !== 1 || await jwkThumbprint(ed[0]) !== signers[0].keyId || akp.length > 1) {
+    if (ed.length !== 1 || (await jwkThumbprint(ed[0])) !== signers[0].keyId || akp.length > 1) {
       throw new Error("Directory does not match signing key");
     }
     const pq = signers[1];
-    if (pq && (akp.length !== 1 || await jwkThumbprint(akp[0]) !== pq.keyId)) {
+    if (pq && (akp.length !== 1 || (await jwkThumbprint(akp[0])) !== pq.keyId)) {
       throw new Error("Directory does not publish the ML-DSA key sig2 signs with");
     }
     if (!pq && akp.length) body = JSON.stringify({ ...directory, keys: ed });
-    const signed = await signLabels(signers, '"@authority";req', "http-message-signatures-directory",
-      (params) => `"@authority";req: ${new URL(request.url).host}\n"@signature-params": ${params}`);
+    const signed = await signLabels(
+      signers,
+      '"@authority";req',
+      "http-message-signatures-directory",
+      (params) => `"@authority";req: ${new URL(request.url).host}\n"@signature-params": ${params}`,
+    );
     headers.set("content-type", DIRECTORY_TYPE);
     headers.set("signature-input", signed.input);
     headers.set("signature", signed.signature);
@@ -251,10 +255,7 @@ function signingMaterial(jwkText: string) {
     // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
     // the directory agreed with each other and with no verifier. Deriving it from
     // the public members means the two cannot disagree again.
-    const [keyId, key] = await Promise.all([
-      jwkThumbprint(jwk),
-      crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]),
-    ]);
+    const [keyId, key] = await Promise.all([jwkThumbprint(jwk), crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"])]);
     return { keyId, key };
   })();
   signingKey = { jwkText, material };
@@ -308,7 +309,11 @@ export class BotPolicyError extends Error {
 // consult this cached policy unless RN selects the Spotify-only exception below.
 // Keep this out of botHeaders: signing is a pure operation used by self-dispatch
 // and cryptographic verifiers as well as network callers.
-export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE" | "OUTBOUND_TRANSPORT">, signal?: AbortSignal): Promise<BotPolicy> {
+export async function botRobotsPolicy(
+  targetUrl: string,
+  env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE" | "OUTBOUND_TRANSPORT">,
+  signal?: AbortSignal,
+): Promise<BotPolicy> {
   const target = validateLensTarget(targetUrl);
   if (!target.ok) return { ok: false, kind: "undetermined", reason: target.error || "invalid target" };
   const url = new URL(target.url);
@@ -340,15 +345,25 @@ export function withBotPolicyCache<T>(env: T) {
 async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "OUTBOUND_TRANSPORT">): Promise<BotRobotsRead> {
   const cacheKey = `bot:robots:v1:${origin}`;
   let parsed: ReturnType<typeof lensParseRobots> | null = null;
-  try { parsed = env.RN_KV ? await env.RN_KV.get(cacheKey, "json") : null; } catch (error) { if (isSubrequestLimit(error)) throw error; }
+  try {
+    parsed = env.RN_KV ? await env.RN_KV.get(cacheKey, "json") : null;
+  } catch (error) {
+    if (isSubrequestLimit(error)) throw error;
+  }
   if (!parsed) {
     const policySignal = AbortSignal.timeout(3000);
     try {
-      const followed = await fetchFollowingPublicRedirects(origin + "/robots.txt", async (candidate) => ({
-        headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" }, postQuantum: false }),
-        signal: policySignal,
-        cf: { cacheTtl: 0 },
-      }), validateLensTarget, 5, env.OUTBOUND_TRANSPORT);
+      const followed = await fetchFollowingPublicRedirects(
+        origin + "/robots.txt",
+        async (candidate) => ({
+          headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" }, postQuantum: false }),
+          signal: policySignal,
+          cf: { cacheTtl: 0 },
+        }),
+        validateLensTarget,
+        5,
+        env.OUTBOUND_TRANSPORT,
+      );
       if (!followed.ok) return { ok: false, kind: "undetermined", reason: "robots.txt redirect refused" };
       const response = followed.response;
       if (response.ok) {
@@ -365,7 +380,11 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
         parsed = lensParseRobots(""); // RFC 9309: unavailable 4xx means no rules.
       }
       if (env.RN_KV) {
-        try { await env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch (error) { if (isSubrequestLimit(error)) throw error; }
+        try {
+          await env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: 43200 });
+        } catch (error) {
+          if (isSubrequestLimit(error)) throw error;
+        }
       }
     } catch (error) {
       // Census must still distinguish an exhausted instrument from the site.
@@ -395,13 +414,13 @@ export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) 
   const init = async (url) => ({
     method: opts.method || "GET",
     headers: await botRequestHeaders(url, env, opts),
-    signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
-    cf: opts.cf || { cacheTtl: 0 },  // caller may set its own edge-cache policy; default is app-layer only
+    signal: opts.signal, // optional caller-supplied deadline (AbortSignal)
+    cf: opts.cf || { cacheTtl: 0 }, // caller may set its own edge-cache policy; default is app-layer only
   });
   if (opts.redirect && opts.redirect !== "follow") {
     const verdict = validateLensTarget(targetUrl);
     if (!verdict.ok) throw new TypeError(verdict.error);
-    const single = { ...await init(targetUrl), redirect: opts.redirect };
+    const single = { ...(await init(targetUrl)), redirect: opts.redirect };
     return env?.OUTBOUND_TRANSPORT ? env.OUTBOUND_TRANSPORT(targetUrl, single) : fetch(targetUrl, single);
   }
   const followed = await fetchFollowingPublicRedirects(targetUrl, init, validateLensTarget, 20, env?.OUTBOUND_TRANSPORT);

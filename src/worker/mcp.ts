@@ -28,7 +28,8 @@ import { asRecord, asText } from "./lib/parse.ts";
 // report at `initialize`.
 export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" };
 export const SITE_MCP_CAPABILITIES = { tools: {}, resources: {} };
-export const SITE_MCP_INSTRUCTIONS = "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
+export const SITE_MCP_INSTRUCTIONS =
+  "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
 
 const MCP = mcpServer({
   // Self-reported and explicitly NOT a security signal — the spec says clients
@@ -41,10 +42,10 @@ const MCP = mcpServer({
 // Which cache hint each surface earns. Tools are a static array in this file and
 // resources are projected from site-manifest.json, so both change exactly at
 // deploy; resources/read fetches a live page; prompts are permanently empty.
-const CACHE_TOOLS     = CACHE_STATIC;
+const CACHE_TOOLS = CACHE_STATIC;
 const CACHE_RESOURCES = CACHE_STATIC;
-const CACHE_READ      = CACHE_LIVE;
-const CACHE_PROMPTS   = CACHE_EMPTY;
+const CACHE_READ = CACHE_LIVE;
+const CACHE_PROMPTS = CACHE_EMPTY;
 // Generous for a real client (they batch a handful of calls, not hundreds) and
 // small enough that a batch can't outrun the per-IP crawl budgets. See the note
 // at the batch branch in handleSiteMcp.
@@ -54,43 +55,66 @@ const HOSTED_TOOLS = [
   {
     name: "image_inspect",
     description: "Inspect an image's dimensions, format, and animation/frame information. Image bytes are processed ephemerally and are not stored.",
-    inputSchema: { type: "object", properties: {
-      image_data: { type: "string", description: "base64 image bytes, optionally as a data URL" },
-      mime_type: { type: "string" },
-      source_url: { type: "string", description: "public HTTPS image URL" },
-    } },
+    inputSchema: {
+      type: "object",
+      properties: {
+        image_data: { type: "string", description: "base64 image bytes, optionally as a data URL" },
+        mime_type: { type: "string" },
+        source_url: { type: "string", description: "public HTTPS image URL" },
+      },
+    },
   },
   {
     name: "image_transform",
-    description: "Run a bounded web image transform through Cloudflare Images and return the transformed image inline plus an exact byte receipt. The output is ephemeral.",
-    inputSchema: { type: "object", properties: {
-      image_data: { type: "string" }, mime_type: { type: "string" }, source_url: { type: "string" },
-      preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
-      width: { type: "integer", minimum: 1, maximum: 2400 }, height: { type: "integer", minimum: 1, maximum: 2400 },
-      fit: { type: "string", enum: ["cover", "contain", "crop", "scale-down", "pad", "squeeze"] },
-      format: { type: "string", enum: ["avif", "webp", "jpeg"] },
-      quality: { type: "integer", minimum: 1, maximum: 100 },
-      rotate: { type: "integer", enum: [0, 90, 180, 270] },
-    } },
+    description:
+      "Run a bounded web image transform through Cloudflare Images and return the transformed image inline plus an exact byte receipt. The output is ephemeral.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        image_data: { type: "string" },
+        mime_type: { type: "string" },
+        source_url: { type: "string" },
+        preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
+        width: { type: "integer", minimum: 1, maximum: 2400 },
+        height: { type: "integer", minimum: 1, maximum: 2400 },
+        fit: { type: "string", enum: ["cover", "contain", "crop", "scale-down", "pad", "squeeze"] },
+        format: { type: "string", enum: ["avif", "webp", "jpeg"] },
+        quality: { type: "integer", minimum: 1, maximum: 100 },
+        rotate: { type: "integer", enum: [0, 90, 180, 270] },
+      },
+    },
   },
   {
     name: "image_compare",
-    description: "Encode one image into up to three bounded format variants and report exact byte sizes and hashes. It does not pretend to score visual quality.",
-    inputSchema: { type: "object", properties: {
-      image_data: { type: "string" }, mime_type: { type: "string" }, source_url: { type: "string" },
-      formats: { type: "array", maxItems: 3, items: { type: "string", enum: ["avif", "webp", "jpeg"] } },
-      preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
-      width: { type: "integer", minimum: 1, maximum: 2400 }, height: { type: "integer", minimum: 1, maximum: 2400 },
-      fit: { type: "string" }, quality: { type: "integer", minimum: 1, maximum: 100 },
-    } },
+    description:
+      "Encode one image into up to three bounded format variants and report exact byte sizes and hashes. It does not pretend to score visual quality.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        image_data: { type: "string" },
+        mime_type: { type: "string" },
+        source_url: { type: "string" },
+        formats: { type: "array", maxItems: 3, items: { type: "string", enum: ["avif", "webp", "jpeg"] } },
+        preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
+        width: { type: "integer", minimum: 1, maximum: 2400 },
+        height: { type: "integer", minimum: 1, maximum: 2400 },
+        fit: { type: "string" },
+        quality: { type: "integer", minimum: 1, maximum: 100 },
+      },
+    },
   },
   {
     name: "photo_recipe",
-    description: "Return the exact public Fuji recipe for a named archive photo, archive URL, or exact published thumbnail bytes. Arbitrary visual lookalikes are not treated as matches.",
-    inputSchema: { type: "object", properties: {
-      stem: { type: "string" }, source_url: { type: "string" },
-      image_data: { type: "string", description: "base64 bytes from a published thumbnail" },
-    } },
+    description:
+      "Return the exact public Fuji recipe for a named archive photo, archive URL, or exact published thumbnail bytes. Arbitrary visual lookalikes are not treated as matches.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        stem: { type: "string" },
+        source_url: { type: "string" },
+        image_data: { type: "string", description: "base64 bytes from a published thumbnail" },
+      },
+    },
   },
   {
     // The two vault WRITERS, and the only tools on this server that are not
@@ -112,11 +136,17 @@ const HOSTED_TOOLS = [
     // one field that survives, so the claim rides there too. Delete the prose
     // only once a bridge is observed forwarding annotations.
     name: "representation_capture",
-    description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
+    description:
+      "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
     annotations: { readOnlyHint: false, idempotentHint: false },
-    inputSchema: { type: "object", properties: {
-      url: { type: "string" }, profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
-    }, required: ["url"] },
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
+      },
+      required: ["url"],
+    },
   },
   {
     name: "representation_read",
@@ -125,11 +155,17 @@ const HOSTED_TOOLS = [
   },
   {
     name: "representation_compare",
-    description: "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
+    description:
+      "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
     annotations: { readOnlyHint: false, idempotentHint: false },
-    inputSchema: { type: "object", properties: {
-      snapshot_id: { type: "string" }, url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },
-    }, required: ["snapshot_id"] },
+    inputSchema: {
+      type: "object",
+      properties: {
+        snapshot_id: { type: "string" },
+        url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },
+      },
+      required: ["snapshot_id"],
+    },
   },
 ];
 
@@ -150,69 +186,106 @@ const MCP_TOOL_DEFINITIONS = [
   // window is noise the model then has to be robust to.
   {
     name: "finger",
-    description: "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
-    inputSchema: { type: "object", properties: {
-      keys: { type: "string", description: "a key sequence, up to 32 keys, e.g. \"2jj<cr>\"" },
-      pane: { type: "string", enum: ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"] },
-      cursor: { type: "integer", minimum: 0, maximum: 4999 },
-      open: { type: "string", description: "id of the row to open (slug, index, or version number)" },
-      q: { type: "string", description: "query for the search pane" },
-    } },
+    description:
+      "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        keys: { type: "string", description: 'a key sequence, up to 32 keys, e.g. "2jj<cr>"' },
+        pane: { type: "string", enum: ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"] },
+        cursor: { type: "integer", minimum: 0, maximum: 4999 },
+        open: { type: "string", description: "id of the row to open (slug, index, or version number)" },
+        q: { type: "string", description: "query for the search pane" },
+      },
+    },
   },
   {
     name: "photos",
-    description: "Browse the published photo archive as a terminal frame, filterable by caption, film simulation, body, and lens. Opening a frame shows its exposure and the in-camera recipe it was shot with. Send `keys` (j/k cursor, <cr> open, n/p page).",
-    inputSchema: { type: "object", properties: {
-      keys: { type: "string" }, q: { type: "string" }, film: { type: "string" },
-      camera: { type: "string" }, lens: { type: "string" },
-      page: { type: "integer", minimum: 0, maximum: 200 },
-      cursor: { type: "integer", minimum: 0, maximum: 4999 },
-      open: { type: "string", description: "photo stem to open" },
-    } },
+    description:
+      "Browse the published photo archive as a terminal frame, filterable by caption, film simulation, body, and lens. Opening a frame shows its exposure and the in-camera recipe it was shot with. Send `keys` (j/k cursor, <cr> open, n/p page).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        keys: { type: "string" },
+        q: { type: "string" },
+        film: { type: "string" },
+        camera: { type: "string" },
+        lens: { type: "string" },
+        page: { type: "integer", minimum: 0, maximum: 200 },
+        cursor: { type: "integer", minimum: 0, maximum: 4999 },
+        open: { type: "string", description: "photo stem to open" },
+      },
+    },
   },
   {
     // The one tool here whose INPUT this server cannot produce. An agent with a
     // shell has an antenna; this origin does not. So the agent samples and this
     // draws. radar.ts's header says why a hosted radar is otherwise dishonest.
     name: "radar",
-    description: "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
-    inputSchema: { type: "object", properties: {
-      samples: { type: "array", maxItems: 40, items: { type: "object", properties: {
-        name: { type: "string" },
-        rssi: { type: "number", description: "dBm, negative; e.g. -58" },
-        kind: { type: "string", description: "optional tag, e.g. wifi or ble" },
-        history: { type: "array", items: { type: "number" }, description: "optional trailing readings for the trend" },
-      }, required: ["name", "rssi"] } },
-      source: { type: "string", description: "optional label for what did the sampling" },
-    }, required: ["samples"] },
+    description:
+      "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        samples: {
+          type: "array",
+          maxItems: 40,
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              rssi: { type: "number", description: "dBm, negative; e.g. -58" },
+              kind: { type: "string", description: "optional tag, e.g. wifi or ble" },
+              history: { type: "array", items: { type: "number" }, description: "optional trailing readings for the trend" },
+            },
+            required: ["name", "rssi"],
+          },
+        },
+        source: { type: "string", description: "optional label for what did the sampling" },
+      },
+      required: ["samples"],
+    },
   },
   {
     name: "encode",
-    description: "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
+    description:
+      "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "agent_ready",
-    description: "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
+    description:
+      "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "dict",
-    description: "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
+    description:
+      "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "cache",
-    description: "Does a URL's ETag ever actually 304? A BEHAVIORAL probe rather than a header read: fetches twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin did. Also checks Accept negotiation against Vary. Returns a rendered frame. Same route as /cache.",
+    description:
+      "Does a URL's ETag ever actually 304? A BEHAVIORAL probe rather than a header read: fetches twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin did. Also checks Accept negotiation against Vary. Returns a rendered frame. Same route as /cache.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "lens",
-    description: "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
-    inputSchema: { type: "object", properties: {
-      url: { type: "string" },
-      doors: { type: "boolean", description: "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called." },
-    }, required: ["url"] },
+    description:
+      "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        doors: {
+          type: "boolean",
+          description:
+            "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called.",
+        },
+      },
+      required: ["url"],
+    },
   },
 ];
 
@@ -240,17 +313,23 @@ async function readResource(uri: unknown, request: Request, env: Env) {
   const selfFetch = env.SELF_FETCH;
   if (!resourceUri || !selfFetch) return null;
   let target;
-  try { target = new URL(resourceUri); } catch { return null; }
+  try {
+    target = new URL(resourceUri);
+  } catch {
+    return null;
+  }
   const origin = new URL(request.url).origin;
   const resourceType = MCP_RESOURCE_TYPES.get(target.pathname);
   if (target.origin !== origin || !resourceType) return null;
   const ctrl = new AbortController();
   const read = async () => {
-    const res = await selfFetch(new Request(origin + target.pathname, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: resourceType },
-      redirect: "manual",
-      signal: ctrl.signal,
-    }));
+    const res = await selfFetch(
+      new Request(origin + target.pathname, {
+        headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: resourceType },
+        redirect: "manual",
+        signal: ctrl.signal,
+      }),
+    );
     if (!res.ok || ctrl.signal.aborted) {
       void res.body?.cancel().catch(() => {});
       return null;
@@ -259,11 +338,16 @@ async function readResource(uri: unknown, request: Request, env: Env) {
     const { text, truncated } = await readResponseCapped(res, 512 * 1024, ctrl.signal);
     return truncated ? null : { uri: resourceUri, mimeType, text };
   };
-  try { return await deadline(read(), 8000, null, () => ctrl.abort()); }
-  catch { return null; }
+  try {
+    return await deadline(read(), 8000, null, () => ctrl.abort());
+  } catch {
+    return null;
+  }
 }
 
-function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
+function errorResult(message) {
+  return { _error: String(message).slice(0, 400) };
+}
 
 // The five tools that spend something the caller does not own: a fetch of a URL
 // they named, an Images transform, or a row in the vault. FIVE buckets rather
@@ -277,11 +361,11 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 // is mirrored in cloudflare.config.ts's rate-limit bindings, and
 // contract-lens-per-ip-crawl-budgets pins the pair.
 export const MCP_BUDGETS = {
-  imageInspect:   { binding: "MCP_RL_IMAGE_INSPECT",   max: 20, what: "Image inspections" },
-  imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8,  what: "Image transforms" },
-  imageCompare:   { binding: "MCP_RL_IMAGE_COMPARE",   max: 4,  what: "Image comparisons" },
-  reprCapture:    { binding: "MCP_RL_REPR_CAPTURE",    max: 4,  what: "Representation captures" },
-  reprCompare:    { binding: "MCP_RL_REPR_COMPARE",    max: 8,  what: "Representation comparisons" },
+  imageInspect: { binding: "MCP_RL_IMAGE_INSPECT", max: 20, what: "Image inspections" },
+  imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8, what: "Image transforms" },
+  imageCompare: { binding: "MCP_RL_IMAGE_COMPARE", max: 4, what: "Image comparisons" },
+  reprCapture: { binding: "MCP_RL_REPR_CAPTURE", max: 4, what: "Representation captures" },
+  reprCompare: { binding: "MCP_RL_REPR_COMPARE", max: 8, what: "Representation comparisons" },
 };
 
 const budgetRefusal = (budget) => errorResult(`${budget.what} are rate-limited to ${budget.max}/min.`);
@@ -346,13 +430,16 @@ async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
 export async function handleSiteMcp(request, env, ctx) {
   const cors = mcpCorsHeaders();
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  const respond = (body, status = 200) => body === null
-    ? new Response(null, { status, headers: cors })
-    : jsonResponse(body, status, { ...cors, "cache-control": "no-store" });
+  const respond = (body, status = 200) =>
+    body === null ? new Response(null, { status, headers: cors }) : jsonResponse(body, status, { ...cors, "cache-control": "no-store" });
   if (request.method !== "POST") return respond({ error: "Use POST with JSON-RPC 2.0." }, 405);
 
   let payload;
-  try { payload = await request.json(); } catch { return respond(mcpError(null, -32700, "Parse error")); }
+  try {
+    payload = await request.json();
+  } catch {
+    return respond(mcpError(null, -32700, "Parse error"));
+  }
   const dispatch = async (msg) => {
     const id = msg.id;
     try {

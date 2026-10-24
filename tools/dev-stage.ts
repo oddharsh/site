@@ -84,18 +84,23 @@ export function watchClientSources(dest = FARM, cwd = ".") {
     if (!filename || !filename.endsWith(".ts") || filename.endsWith(".d.ts")) return;
     const source = resolve(cwd, "src/client", filename);
     const output = resolve(cwd, dest, filename.replace(/\.ts$/, ".js"));
-    pending = pending.then(async () => {
-      let text: string;
-      try { text = await readFile(source, "utf8"); }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        await rm(output, { force: true });
-        return;
-      }
-      const js = browserJavaScript(text, filename);
-      await mkdir(dirname(output), { recursive: true });
-      await writeFile(output, js);
-    }).catch((error) => { console.error(`dev: ${filename}: ${error.message}`); });
+    pending = pending
+      .then(async () => {
+        let text: string;
+        try {
+          text = await readFile(source, "utf8");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          await rm(output, { force: true });
+          return;
+        }
+        const js = browserJavaScript(text, filename);
+        await mkdir(dirname(output), { recursive: true });
+        await writeFile(output, js);
+      })
+      .catch((error) => {
+        console.error(`dev: ${filename}: ${error.message}`);
+      });
   });
 }
 
@@ -107,9 +112,20 @@ if (import.meta.main) {
     if (!process.argv.includes("--") || command.length === 0) throw new Error("dev-stage --watch -- <command> [args]");
     const watcher = watchClientSources();
     const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
-    for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => { watcher.close(); child.kill(signal); });
-    child.once("error", (error) => { watcher.close(); console.error(error); process.exitCode = 1; });
-    child.once("exit", (code) => { watcher.close(); process.exitCode = code ?? 1; });
+    for (const signal of ["SIGINT", "SIGTERM"] as const)
+      process.once(signal, () => {
+        watcher.close();
+        child.kill(signal);
+      });
+    child.once("error", (error) => {
+      watcher.close();
+      console.error(error);
+      process.exitCode = 1;
+    });
+    child.once("exit", (code) => {
+      watcher.close();
+      process.exitCode = code ?? 1;
+    });
   }
   for (const path of skipped) console.warn(`dev-stage: left out ${path} (the build derives it; this copy is a local leftover)`);
 }

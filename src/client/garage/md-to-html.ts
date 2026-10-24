@@ -47,11 +47,17 @@ function backtickRun(s, i) {
 /** Index of the next unescaped `delim` at or after `from`, skipping code spans. */
 function findClose(s, delim, from) {
   for (let i = from; i < s.length; i++) {
-    if (s[i] === "\\") { i++; continue; }
+    if (s[i] === "\\") {
+      i++;
+      continue;
+    }
     if (s[i] === "`") {
       const run = backtickRun(s, i);
       const end = s.indexOf(run, i + run.length);
-      if (end !== -1) { i = end + run.length - 1; continue; }
+      if (end !== -1) {
+        i = end + run.length - 1;
+        continue;
+      }
     }
     if (s.startsWith(delim, i)) {
       // a single `*` must not match half of a `**`
@@ -64,9 +70,13 @@ function findClose(s, delim, from) {
 
 /** `[text](href)` starting at s[i] === "[": returns { text, href, end } or null. */
 function readLink(s, i) {
-  let depth = 0, j = i;
+  let depth = 0,
+    j = i;
   for (; j < s.length; j++) {
-    if (s[j] === "\\") { j++; continue; }
+    if (s[j] === "\\") {
+      j++;
+      continue;
+    }
     if (s[j] === "[") depth++;
     else if (s[j] === "]" && --depth === 0) break;
   }
@@ -77,7 +87,8 @@ function readLink(s, i) {
     return ref ? { text: s.slice(i + 1, j), key: ref[1], end: j + 1 + ref[0].length } : null;
   }
   if (s[j + 1] !== "(") return null;
-  let k = j + 2, parens = 1;
+  let k = j + 2,
+    parens = 1;
   for (; k < s.length; k++) {
     if (s[k] === "(") parens++;
     else if (s[k] === ")" && --parens === 0) break;
@@ -101,8 +112,15 @@ export function inline(s) {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (c === "\\" && i + 1 < s.length && ESCAPABLE.has(s[i + 1])) { out += esc(s[++i]); continue; }
-    if (c === " " && s.startsWith("  \n", i)) { out += "<br>"; i += 2; continue; }
+    if (c === "\\" && i + 1 < s.length && ESCAPABLE.has(s[i + 1])) {
+      out += esc(s[++i]);
+      continue;
+    }
+    if (c === " " && s.startsWith("  \n", i)) {
+      out += "<br>";
+      i += 2;
+      continue;
+    }
     if (c === "`") {
       const run = backtickRun(s, i);
       const end = s.indexOf(run, i + run.length);
@@ -117,7 +135,11 @@ export function inline(s) {
     // `<br>` is the one tag html-to-md writes, for a line break inside a table
     // cell, where Markdown has no other way to say it. Every other `<` it
     // writes is escaped.
-    if (s.startsWith("<br>", i)) { out += "<br>"; i += 3; continue; }
+    if (s.startsWith("<br>", i)) {
+      out += "<br>";
+      i += 3;
+      continue;
+    }
     // <https://…>: the hand twins write autolinks; html-to-md never does, since
     // it escapes every `<` in prose
     if (c === "<") {
@@ -157,7 +179,11 @@ export function inline(s) {
       }
     }
     const span = emphasis(s, i);
-    if (span) { out += span.html; i = span.end - 1; continue; }
+    if (span) {
+      out += span.html;
+      i = span.end - 1;
+      continue;
+    }
     out += esc(c);
   }
   return out;
@@ -165,7 +191,11 @@ export function inline(s) {
 
 // **strong**, ~~del~~ and *em*, longest delimiter first so `**` never reads as
 // two empty <em>s. An opener with no closer is literal text.
-const EMPHASIS = [["**", "strong"], ["~~", "del"], ["*", "em"]];
+const EMPHASIS = [
+  ["**", "strong"],
+  ["~~", "del"],
+  ["*", "em"],
+];
 function emphasis(s, i) {
   for (const [delim, tag] of EMPHASIS) {
     if (!s.startsWith(delim, i)) continue;
@@ -192,8 +222,16 @@ function cells(row) {
   const out: any[] = [];
   let cur = "";
   for (let i = 0; i < inner.length; i++) {
-    if (inner[i] === "\\" && inner[i + 1] === "|") { cur += "|"; i++; continue; }
-    if (inner[i] === "|") { out.push(cur.trim()); cur = ""; continue; }
+    if (inner[i] === "\\" && inner[i + 1] === "|") {
+      cur += "|";
+      i++;
+      continue;
+    }
+    if (inner[i] === "|") {
+      out.push(cur.trim());
+      cur = "";
+      continue;
+    }
     cur += inner[i];
   }
   out.push(cur.trim());
@@ -201,8 +239,14 @@ function cells(row) {
 }
 
 function startsBlock(line, next) {
-  return FENCE.test(line) || HEADING.test(line) || line === "---" || line.startsWith(">")
-    || LIST_ITEM.test(line) || (line.startsWith("|") && next !== undefined && TABLE_SEP.test(next));
+  return (
+    FENCE.test(line) ||
+    HEADING.test(line) ||
+    line === "---" ||
+    line.startsWith(">") ||
+    LIST_ITEM.test(line) ||
+    (line.startsWith("|") && next !== undefined && TABLE_SEP.test(next))
+  );
 }
 
 export function blocks(md) {
@@ -211,7 +255,10 @@ export function blocks(md) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (!line.trim()) { i++; continue; }
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
 
     if (FENCE.test(line)) {
       const body: any[] = [];
@@ -221,8 +268,16 @@ export function blocks(md) {
       continue;
     }
     const h = HEADING.exec(line);
-    if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
-    if (line === "---") { out.push("<hr>"); i++; continue; }
+    if (h) {
+      out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`);
+      i++;
+      continue;
+    }
+    if (line === "---") {
+      out.push("<hr>");
+      i++;
+      continue;
+    }
 
     if (line.startsWith(">")) {
       const body: any[] = [];
@@ -248,7 +303,7 @@ export function blocks(md) {
       const items: any[] = [];
       const termRows: any[] = [];
 
-      const dlItems: { dt: string, dds: string[] }[] = [];
+      const dlItems: { dt: string; dds: string[] }[] = [];
       while (i < lines.length) {
         const m = LIST_ITEM.exec(lines[i]);
         if (!m || m[1].length !== indent || (m[2] !== "-") === !ordered) break;

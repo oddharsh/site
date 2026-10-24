@@ -69,15 +69,17 @@ type PhotoQueryOptions = {
 // permissive on stem but strict on extension and forbids any path traversal characters.
 // A migrated entry records the JPEG key it retired (`jpeg`), so this maps the
 // exact old URL, casing included, to the original that replaced it.
-const MOVED_JPEGS = new Map(Object.values(photoIndex as Record<string, { full?: string; jpeg?: string }>)
-  .flatMap((p) => (p.jpeg && p.full ? [[p.jpeg, p.full] as const] : [])));
+const MOVED_JPEGS = new Map(
+  Object.values(photoIndex as Record<string, { full?: string; jpeg?: string }>).flatMap((p) => (p.jpeg && p.full ? [[p.jpeg, p.full] as const] : [])),
+);
 
 // A day rather than a year: a permanent redirect cached for a year is the one
 // thing here a rollback couldn't take back.
-const movedTo = (url: URL, key: string) => new Response(null, {
-  status: 301,
-  headers: { location: `${url.origin}/images/full/${key}`, "cache-control": "public, max-age=86400" },
-});
+const movedTo = (url: URL, key: string) =>
+  new Response(null, {
+    status: 301,
+    headers: { location: `${url.origin}/images/full/${key}`, "cache-control": "public, max-age=86400" },
+  });
 
 export async function servePhotoFromR2(request, env, ctx) {
   if (!env.PHOTOS_R2) {
@@ -103,7 +105,7 @@ export async function servePhotoFromR2(request, env, ctx) {
   const moved = /\.jpe?g$/i.test(key) ? key.replace(/\.jpe?g$/i, ".jxl") : null;
 
   const ifNoneMatch = request.headers.get("if-none-match");
-  const range       = request.headers.get("range");
+  const range = request.headers.get("range");
 
   // caches.default holds full GETs of the originals, so a repeat view serves
   // from the colo instead of re-pulling a 10MB object from R2. Safe to cache hard
@@ -139,9 +141,7 @@ export async function servePhotoFromR2(request, env, ctx) {
     if (m) {
       const offset = parseInt(m[1], 10);
       const end = m[2] ? parseInt(m[2], 10) : undefined;
-      getOpts.range = end !== undefined
-        ? { offset, length: end - offset + 1 }
-        : { offset };
+      getOpts.range = end !== undefined ? { offset, length: end - offset + 1 } : { offset };
     }
   }
 
@@ -150,7 +150,7 @@ export async function servePhotoFromR2(request, env, ctx) {
   // answer: an R2Object with metadata and no body, so a matching
   // If-None-Match lands here as an object, never as null.
   if (obj === null) {
-    if (moved && await env.PHOTOS_R2.head(moved)) return movedTo(url, moved);
+    if (moved && (await env.PHOTOS_R2.head(moved))) return movedTo(url, moved);
     return errorResp("not found", 404);
   }
   if (!("body" in obj)) {
@@ -166,17 +166,17 @@ export async function servePhotoFromR2(request, env, ctx) {
   obj.writeHttpMetadata(headers);
   // A JPEG XL original goes up as image/jxl; the extension covers a put that
   // set no type.
-  headers.set("content-type",  obj.httpMetadata?.contentType || (/\.jxl$/i.test(key) ? "image/jxl" : "image/jpeg"));
-  headers.set("etag",          obj.httpEtag);
+  headers.set("content-type", obj.httpMetadata?.contentType || (/\.jxl$/i.test(key) ? "image/jxl" : "image/jpeg"));
+  headers.set("etag", obj.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("accept-ranges", "bytes");
 
   const isRange = !!getOpts.range && obj.range;
   if (isRange) {
     const start = obj.range.offset;
-    const len   = obj.range.length;
-    const end   = start + len - 1;
-    headers.set("content-range",  `bytes ${start}-${end}/${obj.size}`);
+    const len = obj.range.length;
+    const end = start + len - 1;
+    headers.set("content-range", `bytes ${start}-${end}/${obj.size}`);
     headers.set("content-length", String(len));
     return new Response(obj.body, { status: 206, headers });
   }
@@ -234,32 +234,36 @@ export async function servePhotoFromR2(request, env, ctx) {
 // slim hot-path rows: ONLY the fields the SSR slot-builder reads
 // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
 export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
-  return Object.entries(index || {}).flatMap(([stem, p]) => {
-    const h = hashes?.[stem];
-    if (!h || !h.a || !h.j || !h.s) {
-      console.log(`photo pool: skipping ${stem} (no content-hash in hashes.json)`);
-      return [];
-    }
-    return [{
-      full:        p.full,                  // R2 key, e.g. "XT507333.JPG"
-      thumb_avif:  `/i/${stem}.${h.a}.avif`,
-      thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
-      thumb_small: `/i/${stem}-400.${h.s}.avif`,
-      // The DPR-1 candidate. Optional on purpose: a stem hashed before the 200px
-      // tier existed still serves, it just has one fewer srcset candidate, so a
-      // half-run pipeline degrades to the old behaviour rather than dropping the
-      // photo. derivePhotoPool already skips a stem missing a, j or s.
-      thumb_xs:    h.x ? `/i/${stem}-200.${h.x}.avif` : null,
-      stem,
-      size:       p.size,                   // R2 object size in bytes
-      uploaded:   p.uploaded || null,
-      // Album membership and the HEIF original are both OPTIONAL and both null
-      // for the whole pre-2026-09-12 library, so every consumer of a row has to
-      // read null as "the site-wide pool, JPEG only" rather than as a gap.
-      album:      p.album || null,
-      heif:       p.heif || null,           // R2 key, like `full`; the URL is built at render
-    }];
-  }).sort((a, b) => (a.full < b.full ? -1 : a.full > b.full ? 1 : 0));
+  return Object.entries(index || {})
+    .flatMap(([stem, p]) => {
+      const h = hashes?.[stem];
+      if (!h || !h.a || !h.j || !h.s) {
+        console.log(`photo pool: skipping ${stem} (no content-hash in hashes.json)`);
+        return [];
+      }
+      return [
+        {
+          full: p.full, // R2 key, e.g. "XT507333.JPG"
+          thumb_avif: `/i/${stem}.${h.a}.avif`,
+          thumb_jpg: `/i/${stem}.${h.j}.jpg`,
+          thumb_small: `/i/${stem}-400.${h.s}.avif`,
+          // The DPR-1 candidate. Optional on purpose: a stem hashed before the 200px
+          // tier existed still serves, it just has one fewer srcset candidate, so a
+          // half-run pipeline degrades to the old behaviour rather than dropping the
+          // photo. derivePhotoPool already skips a stem missing a, j or s.
+          thumb_xs: h.x ? `/i/${stem}-200.${h.x}.avif` : null,
+          stem,
+          size: p.size, // R2 object size in bytes
+          uploaded: p.uploaded || null,
+          // Album membership and the HEIF original are both OPTIONAL and both null
+          // for the whole pre-2026-09-12 library, so every consumer of a row has to
+          // read null as "the site-wide pool, JPEG only" rather than as a gap.
+          album: p.album || null,
+          heif: p.heif || null, // R2 key, like `full`; the URL is built at render
+        },
+      ];
+    })
+    .sort((a, b) => (a.full < b.full ? -1 : a.full > b.full ? 1 : 0));
 }
 
 export const PHOTO_POOL = derivePhotoPool(photoIndex, thumbHashes);
@@ -284,7 +288,9 @@ export async function getAltMap(env) {
   try {
     const r = await env.ASSETS.fetch("https://assets.local/images/alt.json");
     _altMap = r.ok ? await r.json() : {};
-  } catch { _altMap = {}; }
+  } catch {
+    _altMap = {};
+  }
   return _altMap;
 }
 
@@ -307,7 +313,9 @@ export async function getHistogramMap(env) {
   try {
     const r = await env.ASSETS.fetch("https://assets.local/images/histograms.json");
     _histograms = r.ok ? await r.json() : {};
-  } catch { _histograms = {}; }
+  } catch {
+    _histograms = {};
+  }
   return _histograms;
 }
 
@@ -329,7 +337,9 @@ export async function getThumbHashes(env) {
   try {
     const r = await env.ASSETS.fetch("https://assets.local/images/hashes.json");
     _thumbHashes = r.ok ? await r.json() : {};
-  } catch { _thumbHashes = {}; }
+  } catch {
+    _thumbHashes = {};
+  }
   return _thumbHashes;
 }
 
@@ -348,11 +358,38 @@ export function _resetPhotoCaches() {
 }
 
 const PHOTO_PUBLIC_FIELDS = [
-  "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
-  "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
-  "flash", "exposure_mode", "meter", "focus_mode", "drive", "sharpness",
-  "noise_reduction", "clarity", "film", "dr", "dr_value", "chrome", "chrome_blue",
-  "grain", "grain_size", "highlight_tone", "shadow_tone", "saturation",
+  "camera",
+  "lens",
+  "aperture",
+  "shutter",
+  "iso",
+  "focal",
+  "ev",
+  "date",
+  "width",
+  "height",
+  "color_space",
+  "white_balance",
+  "color_temp",
+  "wb_shift",
+  "flash",
+  "exposure_mode",
+  "meter",
+  "focus_mode",
+  "drive",
+  "sharpness",
+  "noise_reduction",
+  "clarity",
+  "film",
+  "dr",
+  "dr_value",
+  "chrome",
+  "chrome_blue",
+  "grain",
+  "grain_size",
+  "highlight_tone",
+  "shadow_tone",
+  "saturation",
   // the derived film-recipe card (exif-sooc --keyed): the same knobs, spelled the
   // way a recipe is written down, so a reader can re-shoot the look directly.
   "recipe",
@@ -370,10 +407,12 @@ async function getStaticPhotoJson<T>(env, path, fallback: T): Promise<T> {
   try {
     const r = await env.ASSETS.fetch(`https://assets.local/${path}`);
     if (!r.ok) return fallback;
-    const value = await r.json() as T;
+    const value = (await r.json()) as T;
     _photoJson.set(path, value);
     return value;
-  } catch { return fallback; }
+  } catch {
+    return fallback;
+  }
 }
 
 function photoMetadata(record) {
@@ -401,7 +440,9 @@ const PHOTO_FIELD_WEIGHTS = [
 ];
 
 function photoFields(stem, record, alt, expansion): Record<string, string> {
-  const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
+  const date = String(record.date || "")
+    .slice(0, 10)
+    .replaceAll(":", "-");
   return {
     film: String(record.film || ""),
     alt: String(alt || ""),
@@ -409,7 +450,9 @@ function photoFields(stem, record, alt, expansion): Record<string, string> {
     lens: String(record.lens || ""),
     expansion: String(expansion || ""),
     year: date.slice(0, 4),
-    recipe: Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${asScalarText(v)}`).join(" "),
+    recipe: Object.entries(record.recipe || {})
+      .map(([k, v]) => `${k}: ${asScalarText(v)}`)
+      .join(" "),
     stem: String(stem),
   };
 }
@@ -424,9 +467,12 @@ let _preparedFields: { metadata: object; altMap: unknown; semantics: unknown; by
 function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semantics) {
   const cached = _preparedFields;
   if (cached && cached.metadata === metadata && cached.altMap === altMap && cached.semantics === semantics) return cached.byStem;
-  const byStem = new Map(Object.entries(metadata).map(([stem, record]) => [stem, Object.fromEntries(
-    Object.entries(photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms)).map(([name, text]) => [name, text.toLowerCase()]),
-  )]));
+  const byStem = new Map(
+    Object.entries(metadata).map(([stem, record]) => [
+      stem,
+      Object.fromEntries(Object.entries(photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms)).map(([name, text]) => [name, text.toLowerCase()])),
+    ]),
+  );
   _preparedFields = { metadata, altMap, semantics, byStem };
   return byStem;
 }
@@ -436,15 +482,34 @@ function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semant
 // metadata grows later.
 export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = null) {
   const { textMax, dateMax } = PHOTO_QUERY_LIMITS;
-  const q = String(options.q || "").trim().slice(0, textMax).toLowerCase();
-  const camera = String(options.camera || "").trim().slice(0, textMax).toLowerCase();
-  const lens = String(options.lens || "").trim().slice(0, textMax).toLowerCase();
-  const film = String(options.film || "").trim().slice(0, textMax).toLowerCase();
+  const q = String(options.q || "")
+    .trim()
+    .slice(0, textMax)
+    .toLowerCase();
+  const camera = String(options.camera || "")
+    .trim()
+    .slice(0, textMax)
+    .toLowerCase();
+  const lens = String(options.lens || "")
+    .trim()
+    .slice(0, textMax)
+    .toLowerCase();
+  const film = String(options.film || "")
+    .trim()
+    .slice(0, textMax)
+    .toLowerCase();
   // `recipe` matches anywhere in the derived card ("DR400", "Acros", "+2 Red"),
   // so one param answers "which shots used this look?" without a client-side scan.
-  const recipe = String(options.recipe || "").trim().slice(0, textMax).toLowerCase();
-  const from = String(options.from || "").trim().slice(0, dateMax);
-  const to = String(options.to || "").trim().slice(0, dateMax);
+  const recipe = String(options.recipe || "")
+    .trim()
+    .slice(0, textMax)
+    .toLowerCase();
+  const from = String(options.from || "")
+    .trim()
+    .slice(0, dateMax);
+  const to = String(options.to || "")
+    .trim()
+    .slice(0, dateMax);
   const limit = clampParam(options.limit, PHOTO_QUERY_LIMITS.limitDefault, PHOTO_QUERY_LIMITS.limitMax);
   const offset = clampParam(options.offset, 0, PHOTO_QUERY_LIMITS.offsetMax, 0);
   const [metadata, altMap, hashes, semantics] = await Promise.all([
@@ -460,14 +525,37 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
   // ranked. Mixing the two would make a filter negotiable, which is the one
   // property a filter has.
   const kept = Object.entries(metadata || {}).filter(([, record]) => {
-    if (camera && !String(record.camera || "").toLowerCase().includes(camera)) return false;
-    if (lens && !String(record.lens || "").toLowerCase().includes(lens)) return false;
-    if (film && !String(record.film || "").toLowerCase().includes(film)) return false;
+    if (
+      camera &&
+      !String(record.camera || "")
+        .toLowerCase()
+        .includes(camera)
+    )
+      return false;
+    if (
+      lens &&
+      !String(record.lens || "")
+        .toLowerCase()
+        .includes(lens)
+    )
+      return false;
+    if (
+      film &&
+      !String(record.film || "")
+        .toLowerCase()
+        .includes(film)
+    )
+      return false;
     if (recipe) {
-      const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${asScalarText(v)}`).join("\n").toLowerCase();
+      const card = Object.entries(record.recipe || {})
+        .map(([k, v]) => `${k}: ${asScalarText(v)}`)
+        .join("\n")
+        .toLowerCase();
       if (!card.includes(recipe)) return false;
     }
-    const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
+    const date = String(record.date || "")
+      .slice(0, 10)
+      .replaceAll(":", "-");
     if (from && date < from) return false;
     if (to && date > to) return false;
     return true;
@@ -484,13 +572,19 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
     // Measured against the set that survived the filters, not the whole archive:
     // inside `film=Classic Chrome` the word "chrome" IS in every candidate and
     // genuinely stops discriminating, which is the right answer there.
-    const { skip, common: suppressed } = commonPairs(candidates.map((row) => row.fields), PHOTO_FIELD_WEIGHTS, queryTermList);
+    const { skip, common: suppressed } = commonPairs(
+      candidates.map((row) => row.fields),
+      PHOTO_FIELD_WEIGHTS,
+      queryTermList,
+    );
     common = suppressed;
-    const scoredRows = candidates.map(({ stem, record, fields }) => ({
-      stem,
-      record,
-      scored: scoreFields(fields, PHOTO_FIELD_WEIGHTS, queryTermList, skip),
-    })).filter((row) => row.scored.hits > 0);
+    const scoredRows = candidates
+      .map(({ stem, record, fields }) => ({
+        stem,
+        record,
+        scored: scoreFields(fields, PHOTO_FIELD_WEIGHTS, queryTermList, skip),
+      }))
+      .filter((row) => row.scored.hits > 0);
     // Prefer photos that answer the WHOLE query. Falling straight to a bag of
     // terms would let one strong field on one term outrank a photo that matched
     // every term, which is how "classic chrome bridge" returns chrome bumpers.
@@ -502,18 +596,18 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
     // for an empty result set says a search happened and nearly worked, when in
     // fact nothing matched at all — a caller deciding whether to broaden its
     // query needs those two apart.
-    mode = !queryTermList.length ? "no-terms"
-      : full.length ? "all-terms"
-        : scoredRows.length ? "partial" : "no-match";
+    mode = !queryTermList.length ? "no-terms" : full.length ? "all-terms" : scoredRows.length ? "partial" : "no-match";
   }
 
   // Score first, then newest, then stem. The old ordering was stem-alphabetical,
   // which is filename order — stable, and meaningless to a reader.
-  const dateOf = (record) => String(record.date || "").slice(0, 10).replaceAll(":", "-");
-  ranked.sort((a, b) =>
-    (b.scored?.score || 0) - (a.scored?.score || 0)
-    || compareCodepoints(dateOf(b.record), dateOf(a.record))
-    || compareCodepoints(a.stem, b.stem));
+  const dateOf = (record) =>
+    String(record.date || "")
+      .slice(0, 10)
+      .replaceAll(":", "-");
+  ranked.sort(
+    (a, b) => (b.scored?.score || 0) - (a.scored?.score || 0) || compareCodepoints(dateOf(b.record), dateOf(a.record)) || compareCodepoints(a.stem, b.stem),
+  );
 
   const rows = ranked.map(({ stem, record, scored }) => {
     const manifestPhoto = manifestByStem.get(stem);
@@ -581,7 +675,9 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
 export async function photoFacets(env) {
   const metadata = await getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {});
   const tally = { camera: new Map(), lens: new Map(), film: new Map(), year: new Map() };
-  const bump = (map, key) => { if (key) map.set(key, (map.get(key) || 0) + 1); };
+  const bump = (map, key) => {
+    if (key) map.set(key, (map.get(key) || 0) + 1);
+  };
   const records = Object.values(metadata || {});
   for (const record of records) {
     bump(tally.camera, record.camera);
@@ -596,13 +692,21 @@ export async function photoFacets(env) {
 
 export async function handlePhotoQuery(request, env, ctx) {
   const url = new URL(request.url);
-  const payload = await queryPhotos(env, {
-    q: url.searchParams.get("q"), camera: url.searchParams.get("camera"),
-    lens: url.searchParams.get("lens"), film: url.searchParams.get("film"),
-    recipe: url.searchParams.get("recipe"),
-    from: url.searchParams.get("from"), to: url.searchParams.get("to"),
-    limit: url.searchParams.get("limit"), offset: url.searchParams.get("offset"),
-  }, ctx);
+  const payload = await queryPhotos(
+    env,
+    {
+      q: url.searchParams.get("q"),
+      camera: url.searchParams.get("camera"),
+      lens: url.searchParams.get("lens"),
+      film: url.searchParams.get("film"),
+      recipe: url.searchParams.get("recipe"),
+      from: url.searchParams.get("from"),
+      to: url.searchParams.get("to"),
+      limit: url.searchParams.get("limit"),
+      offset: url.searchParams.get("offset"),
+    },
+    ctx,
+  );
   return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
 }
 
@@ -632,14 +736,19 @@ export function imagesManifestJson(photos: ReturnType<typeof derivePhotoPool>): 
 export function imageSitemapXml(photos: ReturnType<typeof derivePhotoPool>, albums: Album[]): string {
   const xml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const page = (path: string, members: ReturnType<typeof derivePhotoPool>) =>
-    `  <url>\n    <loc>https://aadhar.sh${path}</loc>\n`
-    + members.filter((p) => p.full).map((p) => `    <image:image><image:loc>${xml(`https://aadhar.sh${fullUrl(p.full)}`)}</image:loc></image:image>\n`).join("")
-    + `  </url>\n`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n`
-    + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n`
-    + page("/photos", curatedPool(photos))
-    + albums.map((album) => page(albumPath(album), albumPool(photos, album))).join("")
-    + `</urlset>\n`;
+    `  <url>\n    <loc>https://aadhar.sh${path}</loc>\n` +
+    members
+      .filter((p) => p.full)
+      .map((p) => `    <image:image><image:loc>${xml(`https://aadhar.sh${fullUrl(p.full)}`)}</image:loc></image:image>\n`)
+      .join("") +
+    `  </url>\n`;
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+    page("/photos", curatedPool(photos)) +
+    albums.map((album) => page(albumPath(album), albumPool(photos, album))).join("") +
+    `</urlset>\n`
+  );
 }
 
 // cache-control is load-bearing on the STATIC path rather than a restatement.
@@ -700,12 +809,13 @@ const fullUrl = (key: string | undefined) => `/images/full/${encodeURIComponent(
 const EAGER_TILES = 12;
 function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
   const alt = (altMap && altMap[p.stem]) || p.stem;
-  const picture = i < EAGER_TILES
-    ? html`<picture>
+  const picture =
+    i < EAGER_TILES
+      ? html`<picture>
 <source type="image/avif" srcset="${p.thumb_small}">
 <img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
 </picture>`
-    : html`<picture data-defer>
+      : html`<picture data-defer>
 <source type="image/avif" data-srcset="${p.thumb_small}">
 <img data-src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
 </picture><noscript><picture>
@@ -782,13 +892,15 @@ export function renderPhotosPage(photos, altMap) {
   // .html rather than the Html value itself: this body is still the pre-`html`
   // literal form, and an object in a plain template literal is what
   // restrict-template-expressions exists to catch.
-  const tiles = joinHtml(curated.map((p, i) => renderTile(p, altMap, i)), "\n").html;
+  const tiles = joinHtml(
+    curated.map((p, i) => renderTile(p, altMap, i)),
+    "\n",
+  ).html;
   const albums = Object.values(ALBUMS)
     .map((a) => ({ album: a, count: albumPool(photos, a).length }))
     .filter(({ count }) => count > 0);
   const albumsLine = albums.length
-    ? `\n    Albums: ${albums.map(({ album, count }) =>
-        `<a href="${escAttr(albumPath(album))}">${escHtml(album.title)}</a> (${count})`).join(" &middot; ")}.`
+    ? `\n    Albums: ${albums.map(({ album, count }) => `<a href="${escAttr(albumPath(album))}">${escHtml(album.title)}</a> (${count})`).join(" &middot; ")}.`
     : "";
 
   return lunaPage({
@@ -840,15 +952,23 @@ export function renderAlbumPage(album: Album, photos, altMap) {
       headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
     });
   }
-  const tiles = joinHtml(members.map((p, i) => {
-    // `download`: the tile opens the original in the browser, the format links
-    // save it. Same-origin, so the attribute is honoured; the filename is the R2
-    // key. An original is a JPEG until migrate-originals.ts moves it to JPEG XL.
-    const links = [html`<a href="${fullUrl(p.full)}" download>${/\.jxl$/i.test(p.full ?? "") ? "JPEG XL" : "JPEG"}</a>`];
-    if (p.heif) links.push(html`<a href="${fullUrl(p.heif)}" download>HEIF</a>`);
-    return renderTile(p, altMap, i, html`
-<span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`);
-  }), "\n");
+  const tiles = joinHtml(
+    members.map((p, i) => {
+      // `download`: the tile opens the original in the browser, the format links
+      // save it. Same-origin, so the attribute is honoured; the filename is the R2
+      // key. An original is a JPEG until migrate-originals.ts moves it to JPEG XL.
+      const links = [html`<a href="${fullUrl(p.full)}" download>${/\.jxl$/i.test(p.full ?? "") ? "JPEG XL" : "JPEG"}</a>`];
+      if (p.heif) links.push(html`<a href="${fullUrl(p.heif)}" download>HEIF</a>`);
+      return renderTile(
+        p,
+        altMap,
+        i,
+        html`
+<span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`,
+      );
+    }),
+    "\n",
+  );
 
   return lunaPage({
     title: `aadhar.sh${albumPath(album)}`,
@@ -862,7 +982,10 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     body: html`
   <h1>${album.title}</h1>
   <p class="lede">
-    ${joinHtml(album.lede.map((line) => html`${line}`), "<br>\n    ")}
+    ${joinHtml(
+      album.lede.map((line) => html`${line}`),
+      "<br>\n    ",
+    )}
   </p>
   <div class="sheet">
 ${tiles}

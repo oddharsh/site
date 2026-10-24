@@ -30,13 +30,19 @@ test("a style() query is a reference and not a definition", () => {
 });
 
 test("a flag only a setProperty call sets is DANGLING, and is planned no name", () => {
-  const files = new Map([["a.css", query], ["b.js", setter]]);
+  const files = new Map([
+    ["a.css", query],
+    ["b.js", setter],
+  ]);
   assert.deepEqual([...unresolved(files)], ["--shell-maximized"], "read in CSS, defined in no stylesheet: that is the dangling set's job");
   assert.equal(planNames(files).size, 0, "nothing defines it, so nothing may rename it");
 });
 
 test("a flag the tree defines is renamed consistently across the query, the declaration and the JS literal", () => {
-  const files = new Map([["a.css", definition + query], ["b.js", setter]]);
+  const files = new Map([
+    ["a.css", definition + query],
+    ["b.js", setter],
+  ]);
   const map = planNames(files);
   const short = map.get("--shell-maximized");
   assert.ok(short && short !== "--shell-maximized", "a defined name gets a short one");

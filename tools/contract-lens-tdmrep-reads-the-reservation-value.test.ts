@@ -16,7 +16,10 @@ test("tdm-reservation 0 reads as not reserved, and keeps the site open", () => {
   assert.equal(t.tdmrep.present, true);
   assert.equal(t.tdmrep.reserved, false);
   assert.equal(t.spectrum.tier, "open");
-  assert.ok(t.spectrum.reasons.some((r) => /not reserved/.test(r)), t.spectrum.reasons.join(" | "));
+  assert.ok(
+    t.spectrum.reasons.some((r) => /not reserved/.test(r)),
+    t.spectrum.reasons.join(" | "),
+  );
 });
 
 test("tdm-reservation 1 reads as reserved and signals, the control for the row above", () => {
@@ -27,7 +30,10 @@ test("tdm-reservation 1 reads as reserved and signals, the control for the row a
 });
 
 test("the first matching location wins, matched against the scanned path", () => {
-  const rules = [{ location: "/blog/", "tdm-reservation": 1 }, { location: "/", "tdm-reservation": 0 }];
+  const rules = [
+    { location: "/blog/", "tdm-reservation": 1 },
+    { location: "/", "tdm-reservation": 0 },
+  ];
   assert.equal(lensTdmrep(probe(rules), "/blog/post").reserved, true);
   assert.equal(lensTdmrep(probe(rules), "/about").reserved, false);
   const none = lensTdmrep(probe([{ location: "/private/", "tdm-reservation": 1 }]), "/about");

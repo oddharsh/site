@@ -12,7 +12,10 @@
 (() => {
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
   function bytes(n) {
     if (n == null) return "?";
@@ -20,11 +23,19 @@
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / 1024 / 1024).toFixed(2) + " MB";
   }
-  function num(n) { return String(n == null ? "?" : n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  function num(n) {
+    return String(n == null ? "?" : n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
   function section(title, badge, caption, inner) {
-    return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) +
+    return (
+      '<div class="lx-sec"><div class="lx-sec-h">' +
+      esc(title) +
       (badge ? ' <span class="lx-badge' + (badge.kind ? " " + badge.kind : "") + '">' + esc(badge.text) + "</span>" : "") +
-      "</div>" + (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") + inner + "</div>";
+      "</div>" +
+      (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") +
+      inner +
+      "</div>"
+    );
   }
   function kvTable(obj) {
     var rows = "";
@@ -35,7 +46,9 @@
     }
     return '<table class="lx-kv">' + rows + "</table>";
   }
-  function pre(text) { return '<pre class="lx-pre">' + esc(text) + "</pre>"; }
+  function pre(text) {
+    return '<pre class="lx-pre">' + esc(text) + "</pre>";
+  }
 
   var CREDIT =
     '<div class="lx-cap lx-reader-credit">Extraction by <a href="https://github.com/mozilla/readability" rel="noopener">Readability</a> ' +
@@ -50,28 +63,43 @@
   function gap(d) {
     var pct = d.dropped && d.dropped.pct;
     var kind = pct == null ? "" : pct >= 50 ? "warn" : pct >= 20 ? "" : "ok";
-    var reading = pct == null ? "No comparison available."
-      : pct >= 50 ? "Over half the page did not survive. On an article that means heavy chrome; on a landing or index page it usually means the extractor found no article and picked a fragment."
-      : pct >= 20 ? "A normal article-shaped result: navigation, footers and related-links stripped, body kept."
-      : "Almost everything survived, so this page is nearly all body text — or the extractor kept the chrome too.";
-    return section("What the extractor threw away", { text: pct == null ? "n/a" : pct + "% dropped", kind: kind },
+    var reading =
+      pct == null
+        ? "No comparison available."
+        : pct >= 50
+          ? "Over half the page did not survive. On an article that means heavy chrome; on a landing or index page it usually means the extractor found no article and picked a fragment."
+          : pct >= 20
+            ? "A normal article-shaped result: navigation, footers and related-links stripped, body kept."
+            : "Almost everything survived, so this page is nearly all body text — or the extractor kept the chrome too.";
+    return section(
+      "What the extractor threw away",
+      { text: pct == null ? "n/a" : pct + "% dropped", kind: kind },
       "Both counts come from the same function on the same fetch, so the difference is extraction and not two definitions of a word.",
       kvTable({
         "page as served": num(d.source && d.source.words) + " words · " + bytes(d.source && d.source.bytes),
         "extractor kept": num(d.kept && d.kept.words) + " words · " + bytes(d.kept && d.kept.bytes),
         "dropped": num(d.dropped && d.dropped.words) + " words",
-      }) + '<div class="lx-cap">' + esc(reading) + "</div>");
+      }) +
+        '<div class="lx-cap">' +
+        esc(reading) +
+        "</div>",
+    );
   }
 
   function recoveryScore(d) {
     var r = d.recovery;
     if (!r || r.overall == null) return "";
-    var rows = (r.checks || []).map((check) => {
-      return '<li><b>' + (check.pass ? '&#10003;' : '&#10005;') + ' ' + esc(check.label) + '</b><span>' + esc(check.detail || "") + '</span></li>';
-    }).join("");
-    return section("Readability content recovery", { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
+    var rows = (r.checks || [])
+      .map((check) => {
+        return "<li><b>" + (check.pass ? "&#10003;" : "&#10005;") + " " + esc(check.label) + "</b><span>" + esc(check.detail || "") + "</span></li>";
+      })
+      .join("");
+    return section(
+      "Readability content recovery",
+      { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
       "Lens computes this from Readability's output. Readability itself does not publish a readability score.",
-      '<ol class="lx-reader-recovery">' + rows + '</ol><div class="lx-cap">' + esc(r.scoringNote || "") + '</div>');
+      '<ol class="lx-reader-recovery">' + rows + '</ol><div class="lx-cap">' + esc(r.scoringNote || "") + "</div>",
+    );
   }
 
   // The finding this lens exists to make visible, beyond the word gap. An
@@ -87,24 +115,44 @@
     if (!c || !c.total) return "";
     var kind = c.kept === 0 ? "ok" : c.kept >= c.total / 2 ? "warn" : "";
     var examples = (c.examples || []).length
-      ? '<div class="lx-cap">Kept, verbatim: ' + (c.examples || []).map((x) => { return "<code>" + esc(x) + "</code>"; }).join(", ") + "</div>"
+      ? '<div class="lx-cap">Kept, verbatim: ' +
+        (c.examples || [])
+          .map((x) => {
+            return "<code>" + esc(x) + "</code>";
+          })
+          .join(", ") +
+        "</div>"
       : "";
-    return section("Control labels that survived", { text: c.kept + " of " + c.total, kind: kind },
+    return section(
+      "Control labels that survived",
+      { text: c.kept + " of " + c.total, kind: kind },
       "Button and control text the extraction kept. A label without its behaviour is a claim, and an agent reading this output has no way to tell one from a sentence.",
       kvTable({
         "controls on the page": c.total,
         "labels in the extracted text": c.kept,
-      }) + examples + '<div class="lx-cap">' + esc(c.note || "") + "</div>");
+      }) +
+        examples +
+        '<div class="lx-cap">' +
+        esc(c.note || "") +
+        "</div>",
+    );
   }
 
   function claims(d) {
-    return section("What the extractor claims this is", { text: d.title ? "titled" : "untitled" },
+    return section(
+      "What the extractor claims this is",
+      { text: d.title ? "titled" : "untitled" },
       "Metadata Readability lifted while extracting. Unset fields are omitted rather than guessed.",
       kvTable({
-        title: d.title, author: d.author, published: d.published, site: d.site,
-        "final URL": d.finalUrl, "redirected": d.redirected ? "yes" : null,
+        title: d.title,
+        author: d.author,
+        published: d.published,
+        site: d.site,
+        "final URL": d.finalUrl,
+        "redirected": d.redirected ? "yes" : null,
         "response": d.status + " · " + (d.contentType || "(none)"),
-      }));
+      }),
+    );
   }
 
   // A Worker's clock advances across I/O and NEVER during synchronous execution,
@@ -123,47 +171,73 @@
   }
   function timing(d) {
     var ms = d.ms || {};
-    var measured = (ms.fetch || 0);
-    var blind = ["parse", "extract", "markdown"].filter((k) => { return ms[k] === 0; }).length;
-    return section("What the second read cost", { text: measured + " ms of network" },
+    var measured = ms.fetch || 0;
+    var blind = ["parse", "extract", "markdown"].filter((k) => {
+      return ms[k] === 0;
+    }).length;
+    return section(
+      "What the second read cost",
+      { text: measured + " ms of network" },
       "This lens is opt-in because it re-fetches the target in full. The CPU half is a different story, below.",
       kvTable({
         "fetch the page again": phase(ms.fetch),
         "build a DOM (linkedom)": phase(ms.parse),
         "extract (readability)": phase(ms.extract),
         "to markdown (first-party)": phase(ms.markdown),
-      }) + (blind
-        ? '<div class="lx-cap">A Worker\'s clock advances across I/O and never during synchronous execution, so the three CPU phases cannot time themselves from inside. They are real work — the same run under a local runtime reported 30 ms, 347 ms and 10 ms — and the zeros here mean "unmeasurable", not "free". Actual CPU is readable in Workers Logs as <code>cpuTime</code>.</div>'
-        : ""));
+      }) +
+        (blind
+          ? '<div class="lx-cap">A Worker\'s clock advances across I/O and never during synchronous execution, so the three CPU phases cannot time themselves from inside. They are real work — the same run under a local runtime reported 30 ms, 347 ms and 10 ms — and the zeros here mean "unmeasurable", not "free". Actual CPU is readable in Workers Logs as <code>cpuTime</code>.</div>'
+          : ""),
+    );
   }
 
   function prose(d) {
     var md = d.markdown || "";
-    if (!md) return section("The extraction", { text: "empty" },
-      "Readability returned no content for this page.", '<div class="lx-empty">Nothing extracted.</div>');
-    return section("The extraction", { text: bytes(md.length) + (d.markdownTruncated ? " (capped)" : "") },
+    if (!md)
+      return section("The extraction", { text: "empty" }, "Readability returned no content for this page.", '<div class="lx-empty">Nothing extracted.</div>');
+    return section(
+      "The extraction",
+      { text: bytes(md.length) + (d.markdownTruncated ? " (capped)" : "") },
       "The markdown Readability would hand a clipper or an agent. First slice.",
-      pre(md.slice(0, 2000) + (md.length > 2000 ? "\n\n[… " + bytes(md.length) + " total]" : "")));
+      pre(md.slice(0, 2000) + (md.length > 2000 ? "\n\n[… " + bytes(md.length) + " total]" : "")),
+    );
   }
 
   function mount(d, isBusy) {
     if (isBusy) return '<div class="lx-spin">Readability is re-reading the page and extracting an article&hellip;</div>';
-    if (!d) return section("Reader's guess", { text: "not run" },
-      "A third-party extractor's opinion of this page, from its own Worker.",
-      '<div class="lx-reader-intro">Readability guesses which part of the document is the article and throws the rest away. ' +
-      'The <b>Raw response</b> tab is what the server actually sent. The interesting number is the gap between them.' +
-      '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>' + CREDIT);
+    if (!d)
+      return section(
+        "Reader's guess",
+        { text: "not run" },
+        "A third-party extractor's opinion of this page, from its own Worker.",
+        '<div class="lx-reader-intro">Readability guesses which part of the document is the article and throws the rest away. ' +
+          "The <b>Raw response</b> tab is what the server actually sent. The interesting number is the gap between them." +
+          '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>' +
+          CREDIT,
+      );
     if (!d.ok) {
-      return section("Reader's guess", { text: "failed", kind: "warn" },
-        "The extractor could not read this page.",
-        '<div class="lx-fallback-note">' + esc(d.error || "Unknown failure.") + "</div>" +
-        '<button class="lx-browser-run" type="button" id="lx-reader-run">Try again</button>') + CREDIT;
+      return (
+        section(
+          "Reader's guess",
+          { text: "failed", kind: "warn" },
+          "The extractor could not read this page.",
+          '<div class="lx-fallback-note">' +
+            esc(d.error || "Unknown failure.") +
+            "</div>" +
+            '<button class="lx-browser-run" type="button" id="lx-reader-run">Try again</button>',
+        ) + CREDIT
+      );
     }
     if (d.skipped === "not-html") {
-      return section("Reader's guess", { text: "not applicable" },
-        "This response is not HTML, so there is no article for an extractor to find.",
-        kvTable({ "content-type": d.contentType || "(none)", "payload": bytes(d.source && d.source.bytes) }) +
-        '<div class="lx-cap">Refusing is the honest answer here. Running an article heuristic over JSON would produce a number that means nothing.</div>') + CREDIT;
+      return (
+        section(
+          "Reader's guess",
+          { text: "not applicable" },
+          "This response is not HTML, so there is no article for an extractor to find.",
+          kvTable({ "content-type": d.contentType || "(none)", "payload": bytes(d.source && d.source.bytes) }) +
+            '<div class="lx-cap">Refusing is the honest answer here. Running an article heuristic over JSON would produce a number that means nothing.</div>',
+        ) + CREDIT
+      );
     }
     return recoveryScore(d) + gap(d) + controls(d) + claims(d) + prose(d) + timing(d) + CREDIT;
   }
@@ -177,12 +251,18 @@
         // names the parser rather than the failure.
         return response.text().then((text) => {
           var json: any = null;
-          try { json = JSON.parse(text); } catch (_e) {}
+          try {
+            json = JSON.parse(text);
+          } catch (_e) {}
           if (!json) {
             return {
               ok: false,
-              error: "the reader answered with " + (response.headers.get("content-type") || "an unknown body") +
-                " instead of an extraction (HTTP " + response.status + "). That is the edge or the Worker failing, not the target page.",
+              error:
+                "the reader answered with " +
+                (response.headers.get("content-type") || "an unknown body") +
+                " instead of an extraction (HTTP " +
+                response.status +
+                "). That is the edge or the Worker failing, not the target page.",
             };
           }
           return json;

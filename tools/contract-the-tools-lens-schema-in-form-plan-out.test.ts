@@ -1,11 +1,7 @@
 import { runInThisContext } from "node:vm";
 import { browserJavaScript } from "./lib/browser-source.ts";
 // ── the Tools lens: schema in, form plan out ────────────────────────────────
-import {
-  assert,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
 
 // The planner is a browser IIFE, so it is loaded here the way a browser would
 // and then exercised directly. Only the DOM builders touch `document`, and they
@@ -25,22 +21,27 @@ test("the Tools planner keeps an enum's ORIGINAL type, so a numeric enum stays n
   const plan = _plan({ type: "object", properties: { rotate: { type: "integer", enum: [0, 90, 180, 270] } } });
   const field = plan.fields[0];
   assert.equal(field.kind, "select");
-  assert.deepEqual(field.options.map((o) => o.value), [0, 90, 180, 270]);
-  assert.equal(typeof field.options[1].value, "number",
-    'a select that hands back "90" has misdescribed the call it is previewing');
+  assert.deepEqual(
+    field.options.map((o) => o.value),
+    [0, 90, 180, 270],
+  );
+  assert.equal(typeof field.options[1].value, "number", 'a select that hands back "90" has misdescribed the call it is previewing');
 });
 
 test("every shape a control cannot carry degrades to JSON and names the reason", () => {
   const { _plan } = loadLensTools();
-  const plan = _plan({ type: "object", properties: {
-    // anyOf is not hypothetical: mcp.deepwiki.com's ask_question.repoName is one.
-    either: { anyOf: [{ type: "string" }, { items: { type: "string" }, type: "array" }] },
-    linked: { $ref: "#/definitions/Thing" },
-    loose: { type: "object" },
-    tuple: { type: "array", items: [{ type: "string" }] },
-    mystery: { description: "no type at all" },
-    both: { type: ["string", "number"] },
-  } });
+  const plan = _plan({
+    type: "object",
+    properties: {
+      // anyOf is not hypothetical: mcp.deepwiki.com's ask_question.repoName is one.
+      either: { anyOf: [{ type: "string" }, { items: { type: "string" }, type: "array" }] },
+      linked: { $ref: "#/definitions/Thing" },
+      loose: { type: "object" },
+      tuple: { type: "array", items: [{ type: "string" }] },
+      mystery: { description: "no type at all" },
+      both: { type: ["string", "number"] },
+    },
+  });
   for (const field of plan.fields) {
     assert.equal(field.kind, "json", `${field.name} must degrade rather than be guessed at`);
     assert.ok(field.why && field.why.length, `${field.name} must say why`);
@@ -52,10 +53,28 @@ test("every shape a control cannot carry degrades to JSON and names the reason",
 test("the Tools planner bounds recursion and reports the boundary", () => {
   const { _plan } = loadLensTools();
   const leaf = { type: "object", properties: { e: { type: "string" } } };
-  const deep = { type: "object", properties: { a: { type: "object", properties: { b: { type: "object", properties: {
-    c: { type: "object", properties: { d: leaf } } } } } } } };
-  let field = _plan(deep).fields[0], depth = 0;
-  while (field && field.kind === "group") { depth += 1; field = field.fields[0]; }
+  const deep = {
+    type: "object",
+    properties: {
+      a: {
+        type: "object",
+        properties: {
+          b: {
+            type: "object",
+            properties: {
+              c: { type: "object", properties: { d: leaf } },
+            },
+          },
+        },
+      },
+    },
+  };
+  let field = _plan(deep).fields[0],
+    depth = 0;
+  while (field && field.kind === "group") {
+    depth += 1;
+    field = field.fields[0];
+  }
   assert.ok(depth <= 3, `stopped nesting at ${depth}`);
   assert.equal(field.kind, "json");
   assert.match(field.why, /nesting deeper/);
@@ -65,8 +84,7 @@ test("a tool with no arguments says so instead of rendering an empty form", () =
   const { _plan } = loadLensTools();
   assert.match(_plan({ type: "object" }).notes[0], /no arguments/);
   assert.match(_plan(undefined).notes[0], /no inputSchema/);
-  assert.ok(_plan({ type: "object", additionalProperties: true, properties: { a: { type: "string" } } })
-    .notes.some((n) => /additionalProperties/.test(n)));
+  assert.ok(_plan({ type: "object", additionalProperties: true, properties: { a: { type: "string" } } }).notes.some((n) => /additionalProperties/.test(n)));
 });
 
 test("a blank optional is omitted from the frame, never sent as an empty string", () => {
@@ -75,10 +93,11 @@ test("a blank optional is omitted from the frame, never sent as an empty string"
   assert.deepEqual(frame.params.arguments, { q: "photos" });
   assert.equal(frame.method, "tools/call");
   assert.equal(frame.params._meta["io.modelcontextprotocol/protocolVersion"], "2026-07-28");
-  const plan = _plan({ type: "object", properties: { q: { type: "string" },
-    limit: { type: "integer", minimum: 1, maximum: 50 } }, required: ["q"] });
+  const plan = _plan({ type: "object", properties: { q: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50 } }, required: ["q"] });
   assert.deepEqual(_validate(plan, { limit: 99 }), [
-    { at: "q", why: "required" }, { at: "limit", why: "above maximum 50" }]);
+    { at: "q", why: "required" },
+    { at: "limit", why: "above maximum 50" },
+  ]);
 });
 
 test("the Tools pane builds foreign strings as NODES, never as markup", () => {
@@ -119,6 +138,5 @@ test("foreignMcpTools carries schemas ONLY when asked, and drops one it cannot b
   // schema whole and flags it, and the pane says "too large to carry" rather
   // than the opposite claim, "takes no arguments".
   assert.ok(/oversize/.test(doors), "an over-cap schema is reported rather than silently absent");
-  assert.ok(/if \(!opts\.schemas\) return row;/.test(doors),
-    "the three prose callers keep the catalogue they already had");
+  assert.ok(/if \(!opts\.schemas\) return row;/.test(doors), "the three prose callers keep the catalogue they already had");
 });

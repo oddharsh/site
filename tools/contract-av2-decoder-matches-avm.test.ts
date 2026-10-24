@@ -27,7 +27,9 @@ test("the worker names exactly one .wasm, which exists and names its own bytes",
 });
 
 test("every shipped AV2 file decodes to the samples native AVM produced", async () => {
-  const files = readdirSync(DIR).filter((f) => f.endsWith("-av2.avif")).sort();
+  const files = readdirSync(DIR)
+    .filter((f) => f.endsWith("-av2.avif"))
+    .sort();
   assert.deepEqual(files, Object.keys(EXPECTED).sort(), "expected.json covers every AV2 file; re-run tools/photos/av2-wasm/expect.ts");
   const wasm = readFileSync(new URL(wasmName, DIR));
   for (const f of files) {
@@ -44,5 +46,8 @@ test("every shipped AV2 file decodes to the samples native AVM produced", async 
 
 test("a file whose image item isn't AV2 is refused by name, before any decode", async () => {
   const av1 = readFileSync(new URL("demo-av1.avif", DIR));
-  await assert.rejects(decode(av1.buffer.slice(av1.byteOffset, av1.byteOffset + av1.byteLength), { wasm: readFileSync(new URL(wasmName, DIR)) }), /av01, not av02/);
+  await assert.rejects(
+    decode(av1.buffer.slice(av1.byteOffset, av1.byteOffset + av1.byteLength), { wasm: readFileSync(new URL(wasmName, DIR)) }),
+    /av01, not av02/,
+  );
 });

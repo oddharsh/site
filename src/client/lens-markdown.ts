@@ -20,14 +20,22 @@
 (() => {
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
   function section(title, badge, caption, inner) {
-    return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) +
+    return (
+      '<div class="lx-sec"><div class="lx-sec-h">' +
+      esc(title) +
       (badge ? ' <span class="lx-badge' + (badge.kind ? " " + badge.kind : "") + '">' + esc(badge.text) + "</span>" : "") +
-      "</div>" + (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") + inner + "</div>";
+      "</div>" +
+      (caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "") +
+      inner +
+      "</div>"
+    );
   }
-
 
   var state: any = null;
 
@@ -36,71 +44,104 @@
       // No control separation means no reach number. An origin handing every
       // Accept the same bytes is not turning seven agents away, it has one
       // representation, and reporting "0 of 7" would read as a refusal.
-      return "This URL answers every Accept header with the same " + (s.controlType || "representation") +
-        ". It is not negotiating at all, so there is no Markdown here for any client to get.";
+      return (
+        "This URL answers every Accept header with the same " +
+        (s.controlType || "representation") +
+        ". It is not negotiating at all, so there is no Markdown here for any client to get."
+      );
     }
     var r = s.reach;
     if (!r) return "The browser control did not come back, so reach cannot be scored.";
     if (r.reached === r.of) return "All " + r.of + " agent clients get Markdown from this URL.";
     if (r.reached === 0) return "This URL negotiates, and none of the " + r.of + " agent clients get Markdown from it.";
-    return r.reached + " of " + r.of + " agent clients get Markdown. The rest send an Accept header this origin " +
-      "answers with " + (s.controlType || "HTML") + ".";
+    return (
+      r.reached + " of " + r.of + " agent clients get Markdown. The rest send an Accept header this origin " + "answers with " + (s.controlType || "HTML") + "."
+    );
   }
 
   function paneHtml(s) {
-    if (!s) return section("What agents get", { text: "not run" },
-      "Replays the Accept header seven named agent clients actually send, and reports which representation each one got back.",
-      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'The doors tier keeps one boolean about Markdown negotiation: did the content-type flip for a bare ' +
-      '<code>text/markdown</code>. That can be true while the client you use still gets HTML, because ' +
-      'three of the seven agents send a header where Markdown and HTML arrive tied.' +
-      '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>' +
-      '<div class="lx-cap">Ten plain requests for this one page, cached for an hour. It costs the origin ' +
-      'bandwidth rather than compute, and it never fires on its own.</div></div>');
-    if (s.pending) return section("What agents get", { text: "checking…" },
-      "Ten requests for this page, one per distinct Accept header.",
-      '<div class="lx-md-note">Waiting for the origin.</div>');
-    if (!s.ok) return section("What agents get", { text: "unreadable", kind: "warn" },
-      esc(s.error || ""),
-      '<div class="lx-md-note">The origin did not answer a plain browser request, so nothing below could be ' +
-      'measured. This is not evidence that it refuses Markdown.</div>');
+    if (!s)
+      return section(
+        "What agents get",
+        { text: "not run" },
+        "Replays the Accept header seven named agent clients actually send, and reports which representation each one got back.",
+        '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+          "The doors tier keeps one boolean about Markdown negotiation: did the content-type flip for a bare " +
+          "<code>text/markdown</code>. That can be true while the client you use still gets HTML, because " +
+          "three of the seven agents send a header where Markdown and HTML arrive tied." +
+          '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>' +
+          '<div class="lx-cap">Ten plain requests for this one page, cached for an hour. It costs the origin ' +
+          "bandwidth rather than compute, and it never fires on its own.</div></div>",
+      );
+    if (s.pending)
+      return section(
+        "What agents get",
+        { text: "checking…" },
+        "Ten requests for this page, one per distinct Accept header.",
+        '<div class="lx-md-note">Waiting for the origin.</div>',
+      );
+    if (!s.ok)
+      return section(
+        "What agents get",
+        { text: "unreadable", kind: "warn" },
+        esc(s.error || ""),
+        '<div class="lx-md-note">The origin did not answer a plain browser request, so nothing below could be ' +
+          "measured. This is not evidence that it refuses Markdown.</div>",
+      );
     state = s;
 
     var r = s.reach;
-    var badge = !s.negotiating ? { text: "no negotiation", kind: "bad" }
-      : !r ? { text: "unscored", kind: "warn" }
-        : r.reached === r.of ? { text: "all " + r.of, kind: "ok" }
-          : r.reached ? { text: r.reached + " of " + r.of, kind: "warn" }
+    var badge = !s.negotiating
+      ? { text: "no negotiation", kind: "bad" }
+      : !r
+        ? { text: "unscored", kind: "warn" }
+        : r.reached === r.of
+          ? { text: "all " + r.of, kind: "ok" }
+          : r.reached
+            ? { text: r.reached + " of " + r.of, kind: "warn" }
             : { text: "none of " + r.of, kind: "bad" };
 
     var caption = esc(s.host || "") + " · " + s.responses.length + " requests" + (s.fromCache ? " · cached" : "");
 
     var deltaHtml = s.delta
-      ? '<div class="lx-md-delta"><b>' + esc(String(s.delta.ratio)) + '×</b> smaller: ' +
-        esc(fmtBytes(s.delta.htmlBytes)) + " of HTML against " + esc(fmtBytes(s.delta.markdownBytes)) +
-        " of Markdown, " + esc(String(s.delta.saved)) + "% less to read." +
+      ? '<div class="lx-md-delta"><b>' +
+        esc(String(s.delta.ratio)) +
+        "×</b> smaller: " +
+        esc(fmtBytes(s.delta.htmlBytes)) +
+        " of HTML against " +
+        esc(fmtBytes(s.delta.markdownBytes)) +
+        " of Markdown, " +
+        esc(String(s.delta.saved)) +
+        "% less to read." +
         '<div class="lx-cap">Both numbers are the decoded bodies of the two responses just fetched, counted in ' +
-        'full rather than estimated. Decoded rather than on-the-wire because an agent spends its context on the ' +
-        'characters, not on what the transfer encoding did with them.</div></div>'
-      // Stated as an absence rather than omitted, the same discipline the NLWeb
-      // pane uses: a missing row reads as a question nobody asked.
-      : '<div class="lx-cap">No byte comparison: ' + (s.anyMarkdown
-        ? "one of the two responses was larger than the read cap, so a total would be a floor rather than a size."
-        : "nothing here came back as Markdown to compare against.") + "</div>";
+        "full rather than estimated. Decoded rather than on-the-wire because an agent spends its context on the " +
+        "characters, not on what the transfer encoding did with them.</div></div>"
+      : // Stated as an absence rather than omitted, the same discipline the NLWeb
+        // pane uses: a missing row reads as a question nobody asked.
+        '<div class="lx-cap">No byte comparison: ' +
+        (s.anyMarkdown
+          ? "one of the two responses was larger than the read cap, so a total would be a floor rather than a size."
+          : "nothing here came back as Markdown to compare against.") +
+        "</div>";
 
-    return section("What agents get", badge, caption,
-      '<div class="lx-md-verdict">' + esc(verdictLine(s)) + "</div>" +
-      '<table class="lx-md-agents"><thead><tr><th>client</th><th>sends</th><th>gets</th></tr></thead>' +
-      '<tbody id="lx-md-agents"></tbody></table>' +
-      deltaHtml +
-      '<div class="lx-sec-h" style="margin-top:10px">Conformance</div>' +
-      '<div class="lx-cap">The four checks <a href="https://acceptmarkdown.com/" target="_blank" rel="noopener noreferrer">acceptmarkdown.com</a> ' +
-      'scores a URL against, plus two it does not: an explicit <code>q=0</code> refusal, and the ' +
-      '<code>rel=alternate</code> link the clients that send no Accept header follow instead.</div>' +
-      '<div class="lx-md-checks" id="lx-md-checks"></div>' +
-      (s.sample ? '<div class="lx-sec-h" style="margin-top:10px">What came back</div>' +
-        '<pre class="lx-md-sample" id="lx-md-sample"></pre>' : "") +
-      '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check again</button></div>');
+    return section(
+      "What agents get",
+      badge,
+      caption,
+      '<div class="lx-md-verdict">' +
+        esc(verdictLine(s)) +
+        "</div>" +
+        '<table class="lx-md-agents"><thead><tr><th>client</th><th>sends</th><th>gets</th></tr></thead>' +
+        '<tbody id="lx-md-agents"></tbody></table>' +
+        deltaHtml +
+        '<div class="lx-sec-h" style="margin-top:10px">Conformance</div>' +
+        '<div class="lx-cap">The four checks <a href="https://acceptmarkdown.com/" target="_blank" rel="noopener noreferrer">acceptmarkdown.com</a> ' +
+        "scores a URL against, plus two it does not: an explicit <code>q=0</code> refusal, and the " +
+        "<code>rel=alternate</code> link the clients that send no Accept header follow instead.</div>" +
+        '<div class="lx-md-checks" id="lx-md-checks"></div>' +
+        (s.sample ? '<div class="lx-sec-h" style="margin-top:10px">What came back</div>' + '<pre class="lx-md-sample" id="lx-md-sample"></pre>' : "") +
+        '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check again</button></div>',
+    );
   }
 
   function fmtBytes(n) {
@@ -141,7 +182,7 @@
       gets.className = "lx-md-gets";
       var badge = document.createElement("span");
       badge.className = "lx-badge " + (a.markdown ? "ok" : "warn");
-      badge.textContent = a.markdown ? "Markdown" : (a.contentType || "no content-type");
+      badge.textContent = a.markdown ? "Markdown" : a.contentType || "no content-type";
       gets.appendChild(badge);
       var meta = document.createElement("div");
       meta.className = "lx-md-vendor";
@@ -176,9 +217,13 @@
   window.LensMarkdown = {
     run: (targetUrl, onOk, onFail) => {
       fetch("/lens/markdown?url=" + encodeURIComponent(targetUrl), { headers: { accept: "application/json" } })
-        .then((r) => { return r.json(); })
+        .then((r) => {
+          return r.json();
+        })
         .then(onOk)
-        .catch(() => { onFail(); });
+        .catch(() => {
+          onFail();
+        });
     },
     render: paneHtml,
     // Called after the pane's HTML lands, exactly like LensNlweb.bind. Everything

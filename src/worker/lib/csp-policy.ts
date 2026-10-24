@@ -25,8 +25,7 @@ const CSP_SCRIPT_SRC_LOOSE = "'self' 'unsafe-inline'";
 const CSP_TAIL =
   "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests";
 
-const cspWith = (scriptSrc: string) =>
-  `default-src 'self'; script-src ${scriptSrc}; ${CSP_TAIL}`;
+const cspWith = (scriptSrc: string) => `default-src 'self'; script-src ${scriptSrc}; ${CSP_TAIL}`;
 
 export const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 
@@ -38,5 +37,4 @@ export const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 // script at all gets a bare `script-src 'self'`, which is the strictest this policy
 // can be. Do not confuse it with "no entry", which means the build could not speak
 // for this document and falls back to the loose policy.
-export const cspHashed = (hashes: readonly string[]) =>
-  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "));
+export const cspHashed = (hashes: readonly string[]) => cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "));

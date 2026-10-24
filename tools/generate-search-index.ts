@@ -38,18 +38,22 @@ export type { SearchRecord } from "../src/worker/search.ts";
 // knows the answer.
 const ROOTS = [
   // Every HTML document, staged at its own path: garage/horizon.html -> /garage/horizon.
-  { dir: "src/pages", route: (rel) => (
-    rel === "index.html" ? "/"
-      : rel.endsWith("/index.html") ? "/" + rel.slice(0, -"/index.html".length)
-        : rel.endsWith(".html") ? "/" + rel.slice(0, -5)
-          : null) },
+  {
+    dir: "src/pages",
+    route: (rel) =>
+      rel === "index.html"
+        ? "/"
+        : rel.endsWith("/index.html")
+          ? "/" + rel.slice(0, -"/index.html".length)
+          : rel.endsWith(".html")
+            ? "/" + rel.slice(0, -5)
+            : null,
+  },
   // Authored prose. The writing posts are .txt served at /writing/<slug>. The
   // Markdown files beside them stay out: index.md is the homepage's twin, and
   // indexing it would enter the homepage's own words a second time under a
   // second URL.
-  { dir: "src/content", route: (rel) => (
-    rel.startsWith("writing/") && rel.endsWith(".txt") ? "/writing/" + rel.slice("writing/".length, -4)
-      : null) },
+  { dir: "src/content", route: (rel) => (rel.startsWith("writing/") && rel.endsWith(".txt") ? "/writing/" + rel.slice("writing/".length, -4) : null) },
   // Bytes, not documents. llms.txt is the one indexable thing in here.
   { dir: "public", route: (rel) => (rel === "llms.txt" ? "/llms.txt" : null) },
 ];
@@ -64,9 +68,7 @@ const SKIP_DIRS = new Set(["images", "i", "meta", "full", ".wrangler", "og", "ca
 // list. Static pages are auto-indexed by the walk regardless of the manifest.
 async function manualRecords(root) {
   const manifest = JSON.parse(await readFile(join(root, "config/site-manifest.json"), "utf8"));
-  return manifest.surfaces
-    .filter((s) => s.flags.searchIndex)
-    .map((s) => [s.path, s.title, s.description, "utility"]);
+  return manifest.surfaces.filter((s) => s.flags.searchIndex).map((s) => [s.path, s.title, s.description, "utility"]);
 }
 
 // A code point becomes a character unless it is a control character, which has
@@ -74,20 +76,69 @@ async function manualRecords(root) {
 // escape nobody can read.
 function safeChar(code) {
   if (!Number.isFinite(code) || code < 0x20 || (code >= 0x7f && code <= 0x9f)) return " ";
-  try { return String.fromCodePoint(code); } catch { return " "; }
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return " ";
+  }
 }
 
 const ENTITIES = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
-  middot: "·", bull: "•", hellip: "…", mdash: "—", ndash: "–", minus: "-",
-  ldquo: "\u201c", rdquo: "\u201d", lsquo: "\u2018", rsquo: "\u2019",
-  times: "×", divide: "÷", plusmn: "±", deg: "°", micro: "µ",
-  larr: "←", rarr: "→", uarr: "↑", darr: "↓", harr: "↔",
-  le: "≤", ge: "≥", ne: "≠", asymp: "≈", infin: "∞", radic: "√", sum: "∑",
-  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", lambda: "λ",
-  mu: "μ", pi: "π", sigma: "σ", tau: "τ", phi: "φ", omega: "ω",
-  copy: "©", reg: "®", trade: "™", sect: "§", para: "¶", dagger: "†",
-  euro: "€", pound: "£", yen: "¥", cent: "¢",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  middot: "·",
+  bull: "•",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+  minus: "-",
+  ldquo: "\u201c",
+  rdquo: "\u201d",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  times: "×",
+  divide: "÷",
+  plusmn: "±",
+  deg: "°",
+  micro: "µ",
+  larr: "←",
+  rarr: "→",
+  uarr: "↑",
+  darr: "↓",
+  harr: "↔",
+  le: "≤",
+  ge: "≥",
+  ne: "≠",
+  asymp: "≈",
+  infin: "∞",
+  radic: "√",
+  sum: "∑",
+  alpha: "α",
+  beta: "β",
+  gamma: "γ",
+  delta: "δ",
+  epsilon: "ε",
+  lambda: "λ",
+  mu: "μ",
+  pi: "π",
+  sigma: "σ",
+  tau: "τ",
+  phi: "φ",
+  omega: "ω",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  sect: "§",
+  para: "¶",
+  dagger: "†",
+  euro: "€",
+  pound: "£",
+  yen: "¥",
+  cent: "¢",
 };
 
 function stripMarkup(value) {
@@ -96,27 +147,29 @@ function stripMarkup(value) {
   // `</script/>`, and a missed close spills a script body into the indexed text
   // of a record that /ask now publishes as a schema.org description. The scan
   // and the shapes it accepts are argued at tools/lib/html-raw-text.ts.
-  return stripRawText(stripRawText(String(value || ""), "script"), "style")
-    // comments BEFORE tags. this site's HTML is deliberately comment-heavy for
-    // View Source, and a `>` inside a comment (an arrow, a shell redirect, a
-    // nested tag name) made the tag pattern below match only as far as that
-    // `>` and spill the rest of the comment into the indexed text.
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    // quote-aware tag match: `[^>]+` stopped at the first `>` even when it sat
-    // inside an attribute value, leaving a `">` fragment in 28 of 47 records.
-    // Consume quoted runs whole so only a real tag-closing `>` ends the match.
-    .replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " ")
-    // Decode ALL character references, not the six this used to know. The
-    // leftovers were survivable while these records only ever became a search
-    // snippet, and stopped being survivable when /ask started publishing them
-    // inside a schema.org object: `description` is then structured data handed
-    // to a machine, and "&middot;" in it is simply a wrong value. Numeric first,
-    // then the named ones this site's prose actually uses.
-    .replace(/&#(\d+);/g, (_m, n) => safeChar(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_m, n) => safeChar(parseInt(n, 16)))
-    .replace(/&([a-z][a-z0-9]*);/gi, (m, name) => ENTITIES[name] ?? ENTITIES[name.toLowerCase()] ?? " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    stripRawText(stripRawText(String(value || ""), "script"), "style")
+      // comments BEFORE tags. this site's HTML is deliberately comment-heavy for
+      // View Source, and a `>` inside a comment (an arrow, a shell redirect, a
+      // nested tag name) made the tag pattern below match only as far as that
+      // `>` and spill the rest of the comment into the indexed text.
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      // quote-aware tag match: `[^>]+` stopped at the first `>` even when it sat
+      // inside an attribute value, leaving a `">` fragment in 28 of 47 records.
+      // Consume quoted runs whole so only a real tag-closing `>` ends the match.
+      .replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " ")
+      // Decode ALL character references, not the six this used to know. The
+      // leftovers were survivable while these records only ever became a search
+      // snippet, and stopped being survivable when /ask started publishing them
+      // inside a schema.org object: `description` is then structured data handed
+      // to a machine, and "&middot;" in it is simply a wrong value. Numeric first,
+      // then the named ones this site's prose actually uses.
+      .replace(/&#(\d+);/g, (_m, n) => safeChar(Number(n)))
+      .replace(/&#x([0-9a-f]+);/gi, (_m, n) => safeChar(parseInt(n, 16)))
+      .replace(/&([a-z][a-z0-9]*);/gi, (m, name) => ENTITIES[name] ?? ENTITIES[name.toLowerCase()] ?? " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function titleFor(text, path) {
@@ -131,7 +184,7 @@ async function walk(dir: string): Promise<string[]> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".") || (entry.isDirectory() && SKIP_DIRS.has(entry.name))) continue;
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...await walk(full));
+    if (entry.isDirectory()) out.push(...(await walk(full)));
     else out.push(full);
   }
   return out;
@@ -210,10 +263,10 @@ async function main() {
     if (target === root || target.startsWith(root + sep)) {
       throw new Error(
         `search index: refusing to write into the source tree (${relative(".", target)}). ` +
-        "The index is build output; it is staged into .build/ by build.ts step 1i and has no committed copy. " +
-        (outDir.includes(".dev-assets")
-          ? "This is the dev farm's stale symlink from the committed era — re-run `bun run dev` to re-stage it."
-          : "Pass a staged tree instead."),
+          "The index is build output; it is staged into .build/ by build.ts step 1i and has no committed copy. " +
+          (outDir.includes(".dev-assets")
+            ? "This is the dev farm's stale symlink from the committed era — re-run `bun run dev` to re-stage it."
+            : "Pass a staged tree instead."),
       );
     }
   }

@@ -69,10 +69,7 @@ import { existsSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { parseArgs } from "node:util";
-import {
-  brotliCompressSync, brotliDecompressSync, gunzipSync, inflateSync, zstdDecompressSync,
-  constants as zc,
-} from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, gunzipSync, inflateSync, zstdDecompressSync, constants as zc } from "node:zlib";
 
 const BUILT = ".build/public/";
 // What Chrome sends. The edge chooses among these, so offering br alone would
@@ -157,19 +154,25 @@ function get(base: string, path: string, acceptEncoding: string): Promise<Got> {
   const url = new URL(path, base);
   const request = url.protocol === "http:" ? httpRequest : httpsRequest;
   return new Promise((resolve, reject) => {
-    const req = request(url, {
-      headers: { "accept-encoding": acceptEncoding, accept: "*/*", "user-agent": "aadhar.sh q11:check" },
-      timeout: 20_000,
-    }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => resolve({
-        status: res.statusCode ?? 0,
-        encoding: (res.headers["content-encoding"] as string) ?? null,
-        body: Buffer.concat(chunks),
-      }));
-      res.on("error", reject);
-    });
+    const req = request(
+      url,
+      {
+        headers: { "accept-encoding": acceptEncoding, accept: "*/*", "user-agent": "aadhar.sh q11:check" },
+        timeout: 20_000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            encoding: (res.headers["content-encoding"] as string) ?? null,
+            body: Buffer.concat(chunks),
+          }),
+        );
+        res.on("error", reject);
+      },
+    );
     req.on("timeout", () => req.destroy(new Error(`timed out: ${path}`)));
     req.on("error", reject);
     req.end();
@@ -202,39 +205,45 @@ async function main() {
   const probe = twins.find((t) => t === "llms.txt.br") ?? twins[0];
   const probePlain = await readFile(BUILT + probe.slice(0, -3));
   const q4 = brotliCompressSync(probePlain, { params: { [zc.BROTLI_PARAM_QUALITY]: 4 } });
-  const offlineOk = classify("br", q4).verdict === "over"
-    && classify("br", await readFile(BUILT + probe)).verdict === "q11";
+  const offlineOk = classify("br", q4).verdict === "over" && classify("br", await readFile(BUILT + probe)).verdict === "q11";
   console.log(`CONTROL offline: q4 and q11 encodings of /${probe.slice(0, -3)} ${offlineOk ? "classify apart" : "DO NOT classify apart"}`);
   if (!offlineOk) process.exit(2);
 
   let live: Got;
-  try { live = await get(base, LIVE_CONTROL, ae); }
-  catch (e) {
+  try {
+    live = await get(base, LIVE_CONTROL, ae);
+  } catch (e) {
     console.log(`CONTROL live: ${LIVE_CONTROL} unreachable at ${base} (${e instanceof Error ? e.message : e})`);
     process.exit(2);
   }
   const liveV = live.status === 200 ? classify(live.encoding, live.body) : null;
   const liveOk = liveV !== null && liveV.verdict === "over";
-  console.log(`CONTROL live: ${LIVE_CONTROL} has no twin and arrived ${live.status} ${live.encoding ?? "identity"} ${live.body.length} B, `
-    + (liveOk ? "not at q11, so this run can see an on-the-fly encoding" : "which leaves this run unable to tell an edge encoding from a twin"));
+  console.log(
+    `CONTROL live: ${LIVE_CONTROL} has no twin and arrived ${live.status} ${live.encoding ?? "identity"} ${live.body.length} B, ` +
+      (liveOk ? "not at q11, so this run can see an on-the-fly encoding" : "which leaves this run unable to tell an edge encoding from a twin"),
+  );
   if (!liveOk) process.exit(2);
 
   type Row = { rel: string; path: string; kind: string; status: number; v?: Verdict; error?: string };
   const rows: Row[] = [];
   let next = 0;
-  await Promise.all(Array.from({ length: concurrency }, async () => {
-    while (next < twins.length) {
-      const rel = twins[next++];
-      const path = urlForTwin(rel);
-      const row: Row = { rel, path, kind: kindOfTwin(rel), status: 0 };
-      try {
-        const got = await get(base, path, ae);
-        row.status = got.status;
-        if (got.status === 200) row.v = classify(got.encoding, got.body);
-      } catch (e) { row.error = e instanceof Error ? e.message : String(e); }
-      rows.push(row);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (next < twins.length) {
+        const rel = twins[next++];
+        const path = urlForTwin(rel);
+        const row: Row = { rel, path, kind: kindOfTwin(rel), status: 0 };
+        try {
+          const got = await get(base, path, ae);
+          row.status = got.status;
+          if (got.status === 200) row.v = classify(got.encoding, got.body);
+        } catch (e) {
+          row.error = e instanceof Error ? e.message : String(e);
+        }
+        rows.push(row);
+      }
+    }),
+  );
   rows.sort((a, b) => a.rel.localeCompare(b.rel));
 
   const served = rows.filter((r) => r.v);
@@ -253,10 +262,18 @@ async function main() {
     const ok = of.filter((r) => atQ11(r.v!));
     const exact = ok.filter((r) => r.v!.verdict === "q11").length;
     const wire = ok.reduce((t, r) => t + r.v!.wire, 0);
-    console.log(`  ${kind.padEnd(5)}  ${ok.length}/${of.length} at q11 (${(wire / 1024).toFixed(1)} KB)`
-      + (exact < ok.length ? `, ${exact} byte-identical to this machine's re-encode` : ""));
+    console.log(
+      `  ${kind.padEnd(5)}  ${ok.length}/${of.length} at q11 (${(wire / 1024).toFixed(1)} KB)` +
+        (exact < ok.length ? `, ${exact} byte-identical to this machine's re-encode` : ""),
+    );
   }
-  if (absent.length) console.log(`  absent  ${absent.length} URL(s) 404 here, so this checkout differs from what ${base} serves: ${absent.slice(0, 4).map((r) => r.path).join(", ")}${absent.length > 4 ? ", ..." : ""}`);
+  if (absent.length)
+    console.log(
+      `  absent  ${absent.length} URL(s) 404 here, so this checkout differs from what ${base} serves: ${absent
+        .slice(0, 4)
+        .map((r) => r.path)
+        .join(", ")}${absent.length > 4 ? ", ..." : ""}`,
+    );
   if (other.length) console.log(`  unread  ${other.length}: ${other.map((r) => `${r.path} (${r.error ?? r.status})`).join(", ")}`);
 
   // At q11 size but a different stream: not a finding, and still worth a line,

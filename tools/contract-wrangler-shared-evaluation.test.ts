@@ -8,10 +8,18 @@ import { ROOT, assert, test } from "./contract-shared.ts";
 const SHA = "1234567" + "8".repeat(33);
 
 test("one scheduled Wrangler evaluation feeds the pin and canary report", () => {
-  const read = (name) => JSON.parse(execFileSync("bun", ["-e",
-    "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
-    fileURLToPath(new URL(`.github/workflows/${name}.yml`, ROOT)),
-  ], { encoding: "utf8" }));
+  const read = (name) =>
+    JSON.parse(
+      execFileSync(
+        "bun",
+        [
+          "-e",
+          "console.log(JSON.stringify(Bun.YAML.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))))",
+          fileURLToPath(new URL(`.github/workflows/${name}.yml`, ROOT)),
+        ],
+        { encoding: "utf8" },
+      ),
+    );
   const canary = read("canary");
   const pin = read("wrangler-pin");
   assert.equal(canary.jobs.wrangler.if, "github.event_name == 'workflow_dispatch'");
@@ -51,15 +59,22 @@ for (const scenario of cases) {
       mkdirSync(join(root, "src/worker/lib"), { recursive: true });
       copyFileSync(new URL("src/worker/lib/parse.ts", ROOT), join(root, "src/worker/lib/parse.ts"));
       copyFileSync(new URL("tools/bump-wrangler-pin.ts", ROOT), join(root, "tools", "bump-wrangler-pin.ts"));
-      const original = JSON.stringify({ devDependencies: { wrangler: `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@${(scenario.pin ?? "abcdef0").slice(0, 7)}` } });
+      const original = JSON.stringify({
+        devDependencies: { wrangler: `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@${(scenario.pin ?? "abcdef0").slice(0, 7)}` },
+      });
       writeFileSync(join(root, "package.json"), original);
-      writeFileSync(join(root, "fetch.ts"), `
+      writeFileSync(
+        join(root, "fetch.ts"),
+        `
         globalThis.fetch = async () => {
           if (process.env.MODE === "resolve-failure") throw new Error("offline control");
           return new Response(null, {headers: {"x-commit-key": "cloudflare:workers-sdk:${SHA}"}});
         };
-      `);
-      writeFileSync(join(root, "tools", "canary-wrangler.ts"), `
+      `,
+      );
+      writeFileSync(
+        join(root, "tools", "canary-wrangler.ts"),
+        `
         import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
         appendFileSync("calls", "evaluate\\n");
         const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
@@ -76,7 +91,8 @@ for (const scenario of cases) {
         writeFileSync(arg("--json"), text);
         writeFileSync("original-report", text);
         process.exit(process.env.MODE === "exit-mismatch" ? 1 : verdict === "green" ? 0 : verdict === "instrument" ? 2 : 1);
-      `);
+      `,
+      );
       const args = ["--preload", "./fetch.ts", "tools/bump-wrangler-pin.ts"];
       if (scenario.json !== false) {
         args.push("--json", "out.json");
@@ -84,7 +100,9 @@ for (const scenario of cases) {
       }
       if (scenario.write) args.push("--write");
       const result = spawnSync("bun", args, {
-        cwd: root, encoding: "utf8", timeout: 10000,
+        cwd: root,
+        encoding: "utf8",
+        timeout: 10000,
         env: { ...process.env, TMPDIR: join(root, "temp"), MODE: scenario.mode ?? "", VERDICT: scenario.verdict ?? "green" },
       });
       assert.equal(result.status, scenario.status, result.stdout + result.stderr);
@@ -97,7 +115,10 @@ for (const scenario of cases) {
       } else {
         assert.ok(!existsSync(join(root, "out.json")));
       }
-      assert.deepEqual(readdirSync(join(root, "temp")).filter((name) => name.startsWith("wrangler-pin-")), []);
+      assert.deepEqual(
+        readdirSync(join(root, "temp")).filter((name) => name.startsWith("wrangler-pin-")),
+        [],
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

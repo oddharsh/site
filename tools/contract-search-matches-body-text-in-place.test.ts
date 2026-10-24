@@ -22,28 +22,45 @@ function oldPrepare(records) {
 function oldSnippet({ record, fields }, queryTerms) {
   const [source, lower] = record.text ? [record.text, fields[2]] : [String(record.description || ""), fields[1]];
   if (!source) return "";
-  const first = queryTerms.map((term) => lower.indexOf(term)).filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const first =
+    queryTerms
+      .map((term) => lower.indexOf(term))
+      .filter((n) => n >= 0)
+      .sort((a, b) => a - b)[0] ?? 0;
   const start = Math.max(0, first - 70);
-  return (start ? "…" : "") + source.slice(start, start + 220).replace(/\s+/g, " ").trim() + (start + 220 < source.length ? "…" : "");
+  return (
+    (start ? "…" : "") +
+    source
+      .slice(start, start + 220)
+      .replace(/\s+/g, " ")
+      .trim() +
+    (start + 220 < source.length ? "…" : "")
+  );
 }
 const termsFor = (query) => {
-  const q = String(query || "").trim().slice(0, 160);
+  const q = String(query || "")
+    .trim()
+    .slice(0, 160);
   const meaningful = queryTermsOf(q).terms;
   return meaningful.length ? meaningful : terms(q);
 };
 function oldRanked(prepared, query) {
   const queryTerms = termsFor(query);
   if (!queryTerms.length) return [];
-  return prepared.map((entry) => {
-    let score = 0;
-    for (const term of queryTerms) {
-      if (entry.fields[0].includes(term)) score += 8;
-      if (entry.fields[1].includes(term)) score += 4;
-      if (entry.fields[2].includes(term)) score += 1;
-    }
-    return score ? { entry, score } : null;
-  }).filter((row) => row !== null).sort((a, b) => b.score - a.score || compareCodepoints(a.entry.record.url, b.entry.record.url))
-    .slice(0, 50).map(({ entry, score }) => ({ url: entry.record.url, score, snippet: oldSnippet(entry, queryTerms) }));
+  return prepared
+    .map((entry) => {
+      let score = 0;
+      for (const term of queryTerms) {
+        if (entry.fields[0].includes(term)) score += 8;
+        if (entry.fields[1].includes(term)) score += 4;
+        if (entry.fields[2].includes(term)) score += 1;
+      }
+      return score ? { entry, score } : null;
+    })
+    .filter((row) => row !== null)
+    .sort((a, b) => b.score - a.score || compareCodepoints(a.entry.record.url, b.entry.record.url))
+    .slice(0, 50)
+    .map(({ entry, score }) => ({ url: entry.record.url, score, snippet: oldSnippet(entry, queryTerms) }));
 }
 
 function setup() {
@@ -57,10 +74,25 @@ function setup() {
 // holds), plus phrases that mix cases, stopwords and several terms.
 function queries(records) {
   // terms() reads only a query's first 160 characters, so split the text here.
-  const words = [...new Set<string>(records.flatMap((r) => `${r.title} ${r.description} ${r.text}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1)))].sort();
+  const words = [
+    ...new Set<string>(
+      records.flatMap((r) =>
+        `${r.title} ${r.description} ${r.text}`
+          .toLowerCase()
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter((w) => w.length > 1),
+      ),
+    ),
+  ].sort();
   return [
     ...words.filter((_, i) => i % 5 === 0),
-    "Brotli Dictionary", "what does he think about agents", "WebMCP", "zstd brotli dcz", "Classic Chrome bridge", "LWE", "the",
+    "Brotli Dictionary",
+    "what does he think about agents",
+    "WebMCP",
+    "zstd brotli dcz",
+    "Classic Chrome bridge",
+    "LWE",
+    "the",
   ];
 }
 
@@ -83,6 +115,10 @@ test("/ask's whole-corpus excerpts are the same", { skip: !built && "needs a bui
   for (const q of queries(records).filter((_, i) => i % 40 === 0)) {
     const queryTerms = termsFor(q);
     const now = (await searchCorpusFor(env, q)).map((r) => r.snippet);
-    assert.deepEqual(now, prepared.map((entry) => oldSnippet(entry, queryTerms)), `excerpts differ for ${JSON.stringify(q)}`);
+    assert.deepEqual(
+      now,
+      prepared.map((entry) => oldSnippet(entry, queryTerms)),
+      `excerpts differ for ${JSON.stringify(q)}`,
+    );
   }
 });

@@ -47,7 +47,22 @@ const ratioOf = (name) => {
 };
 
 // The tokens text is written in on the white window and paper.
-const TEXT_TOKENS = ["--ink", "--ink-soft", "--ink-quiet", "--ink-dim", "--ink-faint", "--link", "--link-visited", "--link-hover", "--blue-40", "--blue-45", "--slate-38", "--slate-55", "--go", "--warn"];
+const TEXT_TOKENS = [
+  "--ink",
+  "--ink-soft",
+  "--ink-quiet",
+  "--ink-dim",
+  "--ink-faint",
+  "--link",
+  "--link-visited",
+  "--link-hover",
+  "--blue-40",
+  "--blue-45",
+  "--slate-38",
+  "--slate-55",
+  "--go",
+  "--warn",
+];
 
 // Tokens under 4.5:1 on white that colour text on purpose, each on a dark ground
 // or as an aria-hidden glyph (1.4.11's 3:1 non-text bar, not 1.4.3's). Keyed by
@@ -115,7 +130,11 @@ const LUNA = "src/styles/luna.css";
 const GROUNDS = [
   { ground: "--row-alt", paints: ".np-list li:nth-child(even) { background: var(--row-alt); }", scope: /^\.np-(?:list|sep|artist|explicit|duration)\b/ },
   { ground: "--face-light", paints: "background: var(--face-light); border-top: 1px solid var(--rule);", scope: /^:where\(\.xp-statusbar\b/ },
-  { ground: "--face", paints: ".axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--face);", scope: /^\.axp-(?:address|addr-label)\b/ },
+  {
+    ground: "--face",
+    paints: ".axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--face);",
+    scope: /^\.axp-(?:address|addr-label)\b/,
+  },
   { ground: "--face", paints: ".axp-acc>.bd{padding:8px;background:var(--face)}", scope: /^\.(?:axp-acc>\.bd|clk)\b/ },
   { ground: "--paper", paints: "gap:4px;padding:2px 6px;background:var(--paper);", scope: /^\.axp-(?:well|here|sep)\b/ },
   { ground: "oklch(96% 0.004 240)", paints: "background: oklch(96% 0.004 240);", scope: /^\.xp-tooltip \.car-(?:cap|credit)\b/ },
@@ -161,7 +180,8 @@ test("text on luna.css's tinted grounds holds 4.5:1 against that ground", () => 
 });
 
 test("the ground check fails on the old .np-duration (control)", () => {
-  const old = ".np-list li:nth-child(even) { background: var(--row-alt); }\n.np-duration {\n  font-family: var(--font-mono);\n  color: var(--ink-faint);\n}\n.np-list a:hover .np-title { color: var(--link-hover); }";
+  const old =
+    ".np-list li:nth-child(even) { background: var(--row-alt); }\n.np-duration {\n  font-family: var(--font-mono);\n  color: var(--ink-faint);\n}\n.np-list a:hover .np-title { color: var(--link-hover); }";
   const uses = scopedColours(old, GROUNDS[0].scope);
   assert.deepEqual(uses, [{ selector: ".np-duration", name: "--ink-faint" }], "hover rules are skipped, the duration is not");
   assert.ok(contrast(byName.get("--ink-faint"), byName.get("--row-alt")) < AA);

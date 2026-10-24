@@ -1,11 +1,5 @@
 // ── /encode — read the container, decode nothing ─────────────────────────
-import {
-  ROOT,
-  assert,
-  readFile,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { ROOT, assert, readFile, readFileSync, test } from "./contract-shared.ts";
 
 // These parse the repo's OWN committed encodes, which is the strongest test
 // available: the files under public/i this site's pipeline produced, with
@@ -18,7 +12,10 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
   // unsorted slice sampled different files on APFS and ext4, which is how this
   // test failed in CI while passing locally. Sorted, the L-prefixed Monochrom
   // stems land in the window and both layout arms below are exercised.
-  const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).sort().slice(0, 12);
+  const files = readdirSync("public/i")
+    .filter((f) => f.endsWith(".jpg"))
+    .sort()
+    .slice(0, 12);
   assert.ok(files.length > 4, "expected committed thumbnails to test against");
 
   // The corpus carries BOTH layouts since 2026-08-26: colour tiles at 4:2:0,
@@ -27,7 +24,8 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
   // the AVIF tier had been YUV400 all along). The alphabetical first-12 sample
   // includes the L-prefixed stems, so both arms are exercised; the counters
   // assert that stays true rather than trusting the sort.
-  let gray = 0, colour = 0;
+  let gray = 0,
+    colour = 0;
   for (const f of files) {
     const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
@@ -49,8 +47,7 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
     // If this ever flips, the encoder changed underneath the pipeline.
     const luma = info.tables.find((t) => t.id === 0);
     assert.ok(luma, `${f} must carry a luma quantization table`);
-    assert.equal(estimateQuality(luma.values).standard, false,
-      `${f} should read as a CUSTOM table — zenjpeg does not use scaled Annex K`);
+    assert.equal(estimateQuality(luma.values).standard, false, `${f} should read as a CUSTOM table — zenjpeg does not use scaled Annex K`);
   }
   assert.ok(gray >= 1, "the sample lost its grayscale tiles; the 1-component arm is unexercised");
   assert.ok(colour >= 1, "the sample lost its colour tiles; the 4:2:0 arm is unexercised");
@@ -63,8 +60,11 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
   // parser and a right one looked identical until the sample got bigger.
   const { parseAvif, sniff } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
-  const files = readdirSync("public/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
-  let mono = 0, colour = 0;
+  const files = readdirSync("public/i")
+    .filter((f) => f.endsWith(".avif"))
+    .slice(0, 30);
+  let mono = 0,
+    colour = 0;
 
   for (const f of files) {
     const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
@@ -72,7 +72,8 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
     const info = parseAvif(bytes);
     assert.ok(info, `${f} should parse`);
     assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
-    if (info.monochrome) mono += 1; else colour += 1;
+    if (info.monochrome) mono += 1;
+    else colour += 1;
     // Colour AVIF tiers are 4:4:4 since 2026-09-26 (tools/photos/zenc/src/avif.c has the why).
     assert.ok(["4:4:4", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
   }
@@ -85,8 +86,8 @@ test("encode sniffs the container from magic bytes, not content-type", async () 
   // A mislabelled response is common, and the parse has to match the actual
   // bytes or it reads garbage confidently.
   const { sniff } = await import("../src/worker/encode.ts");
-  assert.equal(sniff(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "jpeg");
-  assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0, 0])), "png");
+  assert.equal(sniff(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0])), "jpeg");
+  assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0])), "png");
   assert.equal(sniff(new Uint8Array(4)), null);
 });
 
@@ -103,8 +104,10 @@ test("encode judges chroma and depth against this site's own measurements", asyn
   const lean = judgeEncode({ format: "jpeg", subsampling: "4:2:0", progressive: true, scans: 8, tables: [], width: 600, height: 600 }, 40000);
   assert.equal(lean.warns.length, 0, "a well-made delivery JPEG should draw no warnings");
 
-  assert.ok(judgeEncode({ format: "avif", bitDepth: 8, subsampling: "4:2:0" }, 30000).warns.some((w) => w.id === "depth"),
-    "8-bit AVIF must be flagged — 10-bit is free");
+  assert.ok(
+    judgeEncode({ format: "avif", bitDepth: 8, subsampling: "4:2:0" }, 30000).warns.some((w) => w.id === "depth"),
+    "8-bit AVIF must be flagged — 10-bit is free",
+  );
   assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
 });
 
@@ -127,15 +130,19 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
   const helper = await readFile(new URL("./tools/lib/cf.ts", ROOT), "utf8");
 
-  assert.ok(/const rows = await d1Rows\(/.test(src),
-    "the D1 read must consume d1Rows()'s parsed rows directly");
-  assert.equal(/JSON\.parse\(\s*await (d1Rows|cf)\(/.test(src), false,
-    "d1Rows() and cf() already return parsed JSON — a second JSON.parse throws on the object");
+  assert.ok(/const rows = await d1Rows\(/.test(src), "the D1 read must consume d1Rows()'s parsed rows directly");
+  assert.equal(
+    /JSON\.parse\(\s*await (d1Rows|cf)\(/.test(src),
+    false,
+    "d1Rows() and cf() already return parsed JSON — a second JSON.parse throws on the object",
+  );
 
   // The helper's contract is the other half: if it ever stops parsing, the call
   // site above silently starts handing a string to the row reader instead.
-  assert.ok(/parsed = JSON\.parse\(stdout\);/.test(helper) && /return first\.results;/.test(helper),
-    "cf() must keep parsing and d1Rows() must keep returning the results array — the call site depends on it");
+  assert.ok(
+    /parsed = JSON\.parse\(stdout\);/.test(helper) && /return first\.results;/.test(helper),
+    "cf() must keep parsing and d1Rows() must keep returning the results array — the call site depends on it",
+  );
 
   // FRESHNESS. Workers Builds uploads a couple of minutes after a merge, and a
   // ramp inside that window targets the PREVIOUS release while every downstream
@@ -148,8 +155,7 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   const dryRunExitAt = src.indexOf('if (has("dry-run"))');
   assert.ok(freshnessAt > 0, "the ramp must report target freshness");
   assert.ok(dryRunExitAt > 0, "the --dry-run early exit must still exist");
-  assert.ok(freshnessAt < dryRunExitAt,
-    "reportTargetFreshness must run BEFORE the --dry-run exit, or a real ramp loses the warning");
+  assert.ok(freshnessAt < dryRunExitAt, "reportTargetFreshness must run BEFORE the --dry-run exit, or a real ramp loses the warning");
 
   // It warns and does not refuse, on purpose: ramping something older than HEAD
   // is legitimate for a rollback and for re-ramping the serving version to write
@@ -157,13 +163,11 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // The warning has to be there for its absence of die() to mean anything.
   assert.match(src, /STALE TARGET/, "the ramp lost its stale-target warning");
   const staleBranch = src.slice(src.indexOf("STALE TARGET")).split("\n}\n")[0];
-  assert.equal(/\bdie\(/.test(staleBranch), false,
-    "a stale target must warn, never die — that would block the gotcha-24 repair path");
+  assert.equal(/\bdie\(/.test(staleBranch), false, "a stale target must warn, never die — that would block the gotcha-24 repair path");
 
   // And the diagnostic must not name a cause. It covers a file read, a spawn and
   // a shape check; blaming D1 sent the reader to check a healthy database.
-  assert.equal(/when D1 is reachable/.test(src), false,
-    "the catch-all note must not assert D1 is the cause — it cannot know that");
+  assert.equal(/when D1 is reachable/.test(src), false, "the catch-all note must not assert D1 is the cause — it cannot know that");
 });
 
 test("no ramp sample can hang, and a stall is never reported as an origin error", async () => {
@@ -182,30 +186,25 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   // setup. Every fetch on the ramp
   // path is in the second file now, so reading only the first would count zero
   // of each and pass by measuring nothing.
-  const src = [
-    await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8"),
-    await readFile(new URL("./tools/lib/version-probe.ts", ROOT), "utf8"),
-  ].join("\n");
+  const src = [await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8"), await readFile(new URL("./tools/lib/version-probe.ts", ROOT), "utf8")].join(
+    "\n",
+  );
 
   // Counted rather than matched once, so a SECOND fetch added later without a
   // timeout fails this instead of riding the first one's signal.
   const fetches = (src.match(/await fetch\(/g) || []).length;
   const timeouts = (src.match(/signal: AbortSignal\.timeout\(/g) || []).length;
   assert.ok(fetches > 0, "the ramp samples over the network — if this hits zero the test is measuring nothing");
-  assert.equal(timeouts, fetches,
-    `every network call in the ramp needs a request timeout: ${fetches} fetch(es), ${timeouts} with a signal`);
+  assert.equal(timeouts, fetches, `every network call in the ramp needs a request timeout: ${fetches} fetch(es), ${timeouts} with a signal`);
 
   // A timeout is only safe to add because a stall is classified apart from an
   // origin error. Conflated, a laptop's flaky wifi would trigger the ramp's
   // roll-back advice against a healthy release.
   assert.ok(/stalls\+\+/.test(src), "a failed request must count as a stall, not an error");
-  assert.ok(/errorVersions\.push/.test(src) && /stallReasons\.push/.test(src),
-    "errors and stalls must be reported through separate channels");
-  assert.ok(/not an origin fault/.test(src),
-    "the stall note must say whose fault it is not");
+  assert.ok(/errorVersions\.push/.test(src) && /stallReasons\.push/.test(src), "errors and stalls must be reported through separate channels");
+  assert.ok(/not an origin fault/.test(src), "the stall note must say whose fault it is not");
 
   // And a step nobody could measure must not pass as a step that succeeded —
   // at 100% that is what stops an unverified run from writing the changelog.
-  assert.ok(/if \(!s\.answered\)/.test(src),
-    "a sample where nothing answered must stop the ramp rather than be read as success");
+  assert.ok(/if \(!s\.answered\)/.test(src), "a sample where nothing answered must stop the ramp rather than be read as success");
 });

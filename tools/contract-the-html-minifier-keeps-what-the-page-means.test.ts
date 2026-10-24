@@ -5,21 +5,14 @@
 // rest of the build reads its output by (unquoted attributes, raw blocks).
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import {
-  assert,
-  ROOT,
-  test,
-} from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 
 const { minifyHtml } = await import("./lib/html-minify.ts");
 
 test("a boolean attribute keeps a value that names another state", () => {
   // minify-html wrote bare `hidden` here, which a find-in-page search cannot
   // reveal: the /garage/horizon until-found demo shipped broken.
-  assert.equal(
-    minifyHtml('<p hidden="until-found" id="t">x</p>'),
-    "<p hidden=until-found id=t>x",
-  );
+  assert.equal(minifyHtml('<p hidden="until-found" id="t">x</p>'), "<p hidden=until-found id=t>x");
   assert.equal(minifyHtml('<p hidden="hidden">x</p>'), "<p hidden>x", "a self-named value goes");
   assert.equal(minifyHtml('<p hidden="">x</p>'), "<p hidden>x", "an empty value goes");
   assert.equal(minifyHtml('<input disabled="disabled">'), "<input disabled>");
@@ -73,10 +66,7 @@ test("a raw element whose end tag never closes ends the document instead of hang
 test("attributes come out in the order and quoting the build's readers expect", () => {
   // csp-scan, link-integrity and client-assets all read unquoted values; this
   // is the shape they are tested against.
-  assert.equal(
-    minifyHtml('<a title="two words" href="/x" class="  a  b ">y</a>'),
-    '<a class="a b" title="two words" href=/x>y</a>',
-  );
+  assert.equal(minifyHtml('<a title="two words" href="/x" class="  a  b ">y</a>'), '<a class="a b" title="two words" href=/x>y</a>');
   assert.equal(minifyHtml('<img src="/i/a.avif" alt="" loading="eager">'), "<img alt src=/i/a.avif>", "a default value goes");
   assert.equal(minifyHtml("<p title='say \"hi\"'>x</p>"), "<p title='say \"hi\"'>x");
 });

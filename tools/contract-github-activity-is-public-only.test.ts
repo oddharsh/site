@@ -3,15 +3,17 @@
 // repository reaching a public card, and the tiers ranking by something other
 // than how much work went where. Both are asserted here, each with a control.
 import { assert, test } from "./contract-shared.ts";
-import {
-  githubQueries, normalizeCommits, normalizeIssues, normalizePrs, windowStart, GITHUB_USER,
-} from "../src/worker/github.ts";
+import { githubQueries, normalizeCommits, normalizeIssues, normalizePrs, windowStart, GITHUB_USER } from "../src/worker/github.ts";
 
 const SINCE = "2026-09-02";
 const pr = (repo, title, created, extra: Record<string, any> = {}) => ({
   repository_url: `https://api.github.com/repos/${repo}`,
   html_url: `https://github.com/${repo}/pull/1`,
-  title, created_at: created, state: "closed", pull_request: { merged_at: null }, ...extra,
+  title,
+  created_at: created,
+  state: "closed",
+  pull_request: { merged_at: null },
+  ...extra,
 });
 const commit = (repo, message, date, isPrivate = false) => ({
   repository: { full_name: repo, private: isPrivate },
@@ -33,15 +35,21 @@ test("every query names is:public, because the result cannot be filtered after",
 });
 
 test("a private commit never reaches the payload, and a missing flag counts as private", () => {
-  const out = normalizeCommits({
-    total_count: 3,
-    items: [
-      commit("oddharsh/site", "public one", "2026-10-01T00:00:00Z"),
-      commit("oddharsh/secret", "private one", "2026-10-01T00:00:00Z", true),
-      { ...commit("oddharsh/unknown", "no flag", "2026-10-01T00:00:00Z"), repository: { full_name: "oddharsh/unknown" } },
-    ],
-  }, SINCE);
-  assert.deepEqual(out.repos.map((r) => r.repo), ["oddharsh/site"]);
+  const out = normalizeCommits(
+    {
+      total_count: 3,
+      items: [
+        commit("oddharsh/site", "public one", "2026-10-01T00:00:00Z"),
+        commit("oddharsh/secret", "private one", "2026-10-01T00:00:00Z", true),
+        { ...commit("oddharsh/unknown", "no flag", "2026-10-01T00:00:00Z"), repository: { full_name: "oddharsh/unknown" } },
+      ],
+    },
+    SINCE,
+  );
+  assert.deepEqual(
+    out.repos.map((r) => r.repo),
+    ["oddharsh/site"],
+  );
 });
 
 test("PR repositories rank by volume, then recency, and count merged and open", () => {
@@ -54,7 +62,10 @@ test("PR repositories rank by volume, then recency, and count merged and open", 
       pr("c/three", "older lone", "2026-09-05T00:00:00Z"),
     ],
   });
-  assert.deepEqual(out.repos.map((r) => r.repo), ["a/one", "b/two", "c/three"]);
+  assert.deepEqual(
+    out.repos.map((r) => r.repo),
+    ["a/one", "b/two", "c/three"],
+  );
   assert.equal(out.repos[0].count, 2);
   assert.equal(out.repos[0].latest.title, "second", "latest is by date, not by array order");
   assert.equal(out.merged, 1);
@@ -65,12 +76,12 @@ test("PR repositories rank by volume, then recency, and count merged and open", 
 test("issues are newest first and a non-github URL is dropped", () => {
   const out = normalizeIssues({
     total_count: 2,
-    items: [
-      { ...pr("x/old", "old", "2026-09-03T00:00:00Z"), html_url: "https://evil.example/x" },
-      pr("y/new", "new", "2026-09-30T00:00:00Z"),
-    ],
+    items: [{ ...pr("x/old", "old", "2026-09-03T00:00:00Z"), html_url: "https://evil.example/x" }, pr("y/new", "new", "2026-09-30T00:00:00Z")],
   });
-  assert.deepEqual(out.items.map((i) => i.title), ["new", "old"]);
+  assert.deepEqual(
+    out.items.map((i) => i.title),
+    ["new", "old"],
+  );
   assert.equal(out.items[1].url, "");
   assert.equal(out.repoCount, 2);
 });

@@ -31,14 +31,27 @@ class ElementFixture {
     this.classes = new Set((attrs.class || "").split(" "));
     this.classList = {
       contains: (name) => this.classes.has(name),
-      toggle: (name, on) => { if (on) this.classes.add(name); else this.classes.delete(name); },
+      toggle: (name, on) => {
+        if (on) this.classes.add(name);
+        else this.classes.delete(name);
+      },
     };
   }
-  getAttribute(name) { return this.attrs[name] ?? null; }
-  setAttribute(name, value) { this.attrs[name] = value; }
-  hasAttribute(name) { return name === "hidden" ? this.hidden : name in this.attrs; }
-  closest(selector) { return selector === ".chip" && this.classes.has("chip") ? this : null; }
-  addEventListener(name, callback) { this.listeners[name] = callback; }
+  getAttribute(name) {
+    return this.attrs[name] ?? null;
+  }
+  setAttribute(name, value) {
+    this.attrs[name] = value;
+  }
+  hasAttribute(name) {
+    return name === "hidden" ? this.hidden : name in this.attrs;
+  }
+  closest(selector) {
+    return selector === ".chip" && this.classes.has("chip") ? this : null;
+  }
+  addEventListener(name, callback) {
+    this.listeners[name] = callback;
+  }
 }
 
 const fixtureEvent = (name, start) => {
@@ -47,50 +60,116 @@ const fixtureEvent = (name, start) => {
   return { card, time: new ElementFixture({ datetime: start }, "UTC fallback") };
 };
 
-function browser({ url = "https://aadhar.sh/serendipity", zone = "America/New_York", now = "2026-10-02T12:00:00Z", events = [fixtureEvent("NYC Friday", "2026-10-03T01:00:00Z"), fixtureEvent("NYC Saturday", "2026-10-03T16:00:00Z")], intlFails = false, detail = false }: Record<string, any> = {}) {
-  const search = new ElementFixture(), chips = new ElementFixture();
+function browser({
+  url = "https://aadhar.sh/serendipity",
+  zone = "America/New_York",
+  now = "2026-10-02T12:00:00Z",
+  events = [fixtureEvent("NYC Friday", "2026-10-03T01:00:00Z"), fixtureEvent("NYC Saturday", "2026-10-03T16:00:00Z")],
+  intlFails = false,
+  detail = false,
+}: Record<string, any> = {}) {
+  const search = new ElementFixture(),
+    chips = new ElementFixture();
   chips.children = ["all", "week", "weekend"].map((value) => new ElementFixture({ class: "chip", "data-when": value }));
-  const none = new ElementFixture(), group = new ElementFixture({ class: "grp" });
+  const none = new ElementFixture(),
+    group = new ElementFixture({ class: "grp" });
   let pool = events;
 
-  const docListeners: Record<string, () => void> = {}, winListeners: Record<string, any> = {};
-  const location = { href: url }, entries = [url];
+  const docListeners: Record<string, () => void> = {},
+    winListeners: Record<string, any> = {};
+  const location = { href: url },
+    entries = [url];
   let index = 0;
   const history = {
     state: { preserved: true },
-    pushState(state, _title, href) { assert.equal(state, this.state); entries.splice(++index); entries.push(href); location.href = href; },
-    replaceState(state, _title, href) { assert.equal(state, this.state); entries[index] = href; location.href = href; },
+    pushState(state, _title, href) {
+      assert.equal(state, this.state);
+      entries.splice(++index);
+      entries.push(href);
+      location.href = href;
+    },
+    replaceState(state, _title, href) {
+      assert.equal(state, this.state);
+      entries[index] = href;
+      location.href = href;
+    },
   };
   const document = {
-    querySelector: () => detail ? null : search,
-    getElementById: (id) => detail ? null : ({ "ev-chips": chips, "ev-none": none }[id] || null),
+    querySelector: () => (detail ? null : search),
+    getElementById: (id) => (detail ? null : { "ev-chips": chips, "ev-none": none }[id] || null),
     querySelectorAll: (selector) => {
       if (selector === "time[data-event-time]") return pool.map((e) => e.time);
       if (selector === ".ev[href]") return detail ? [] : pool.map((e) => e.card);
       if (selector === ".grp[data-grp]") return detail ? [] : [group];
       throw new Error(`Unexpected selector ${selector}`);
     },
-    addEventListener: (name, fn) => { docListeners[name] = fn; },
+    addEventListener: (name, fn) => {
+      docListeners[name] = fn;
+    },
   };
   const linkCards = () => {
     group.nextElementSibling = pool[0]?.card || null;
-    pool.forEach((e, i) => { e.card.nextElementSibling = pool[i + 1]?.card || null; });
+    pool.forEach((e, i) => {
+      e.card.nextElementSibling = pool[i + 1]?.card || null;
+    });
   };
   linkCards();
-  class Clock extends Date { static now() { return Date.parse(now); } }
-  const DateTimeFormat = function(locale, options) {
+  class Clock extends Date {
+    static now() {
+      return Date.parse(now);
+    }
+  }
+  const DateTimeFormat = function (locale, options) {
     if (intlFails) throw new Error("Local formatting unavailable");
     return new Intl.DateTimeFormat(locale, { ...options, timeZone: options?.timeZone || zone });
   };
-  runInNewContext(CLIENT, { document, location, history, URL, Date: Clock, Intl: { DateTimeFormat }, window: { addEventListener: (name, fn) => { winListeners[name] = fn; } } });
-  const travel = (delta) => { index += delta; location.href = entries[index]; winListeners.popstate(); };
+  runInNewContext(CLIENT, {
+    document,
+    location,
+    history,
+    URL,
+    Date: Clock,
+    Intl: { DateTimeFormat },
+    window: {
+      addEventListener: (name, fn) => {
+        winListeners[name] = fn;
+      },
+    },
+  });
+  const travel = (delta) => {
+    index += delta;
+    location.href = entries[index];
+    winListeners.popstate();
+  };
   return {
-    search, chips, none, group, events, location, entries,
-    type(q) { search.value = q; search.listeners.input({}); },
-    blur() { search.listeners.blur({}); },
-    click(when) { chips.listeners.click({ target: chips.children.find((c) => c.getAttribute("data-when") === when) }); },
-    back() { travel(-1); }, forward() { travel(1); },
-    hydrate(next) { pool = next; linkCards(); docListeners.island(); },
+    search,
+    chips,
+    none,
+    group,
+    events,
+    location,
+    entries,
+    type(q) {
+      search.value = q;
+      search.listeners.input({});
+    },
+    blur() {
+      search.listeners.blur({});
+    },
+    click(when) {
+      chips.listeners.click({ target: chips.children.find((c) => c.getAttribute("data-when") === when) });
+    },
+    back() {
+      travel(-1);
+    },
+    forward() {
+      travel(1);
+    },
+    hydrate(next) {
+      pool = next;
+      linkCards();
+      docListeners.island();
+    },
   };
 }
 
@@ -114,10 +193,7 @@ test("DST repetition retains the instant and uses each date's correct zone label
 });
 
 test("unavailable local formatting retains UTC labels and uses UTC weekend days", () => {
-  const events = [
-    fixtureEvent("NYC Friday", "2026-10-03T01:00:00Z"),
-    fixtureEvent("UTC Friday", "2026-10-02T20:00:00Z"),
-  ];
+  const events = [fixtureEvent("NYC Friday", "2026-10-03T01:00:00Z"), fixtureEvent("UTC Friday", "2026-10-02T20:00:00Z")];
   const b = browser({ intlFails: true, url: "https://aadhar.sh/serendipity?when=weekend", events });
   assert.equal(b.events[0].time.textContent, "UTC fallback");
   // Friday evening in New York is Saturday in UTC, so the fallback keeps it.
@@ -142,9 +218,11 @@ test("bookmarked filters restore before the island arrives and apply when it lan
 
 test("typing and date chips preserve unrelated URL state and restore on Back/Forward and reload", () => {
   const b = browser({ url: "https://aadhar.sh/serendipity?msg=Thanks#events" });
-  b.type("Sat"); b.type("Saturday");
+  b.type("Sat");
+  b.type("Saturday");
   assert.equal(b.entries.length, 2, "typing uses one history entry");
-  b.blur(); b.click("weekend");
+  b.blur();
+  b.click("weekend");
   const bookmarked = b.location.href;
   assert.equal(new URL(bookmarked).searchParams.get("q"), "Saturday");
   assert.equal(new URL(bookmarked).searchParams.get("msg"), "Thanks");
@@ -155,12 +233,14 @@ test("typing and date chips preserve unrelated URL state and restore on Back/For
   b.back();
   assert.equal(b.search.value, "");
   assert.ok(b.events.every((e) => !e.card.hidden));
-  b.forward(); b.forward();
+  b.forward();
+  b.forward();
   assert.equal(b.location.href, bookmarked);
   const reload = browser({ url: bookmarked });
   assert.equal(reload.search.value, "Saturday");
   assert.equal(reload.events[0].card.hidden, true);
-  b.click("all"); b.type("");
+  b.click("all");
+  b.type("");
   assert.equal(new URL(b.location.href).searchParams.has("when"), false);
   assert.equal(new URL(b.location.href).searchParams.has("q"), false);
 });

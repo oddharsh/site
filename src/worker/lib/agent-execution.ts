@@ -53,9 +53,10 @@ export function executionChecks(ev) {
   // something an outside observer can estimate. On this site one TypeError
   // inside a requestAnimationFrame pass cost every window its maximize control.
   const errs = (Number(ev.consoleErrors) || 0) + (Number(ev.pageErrors) || 0);
-  const agentScripts = errs === 0
-    ? { status: "pass", detail: `no uncaught script errors${engine}` }
-    : { status: "fail", detail: `${errs} uncaught script error${errs === 1 ? "" : "s"}${engine}${ev.firstError ? ": " + ev.firstError : ""}` };
+  const agentScripts =
+    errs === 0
+      ? { status: "pass", detail: `no uncaught script errors${engine}` }
+      : { status: "fail", detail: `${errs} uncaught script error${errs === 1 ? "" : "s"}${engine}${ev.firstError ? ": " + ev.firstError : ""}` };
 
   // Media. Scored on DECODE rather than on transfer: the AVIF tiles that broke
   // this site all returned 200, so a request-level view calls them healthy.

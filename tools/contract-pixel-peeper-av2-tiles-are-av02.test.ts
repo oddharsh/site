@@ -36,12 +36,18 @@ test("an option is labeled AV2 exactly when its file's image item is av02, and e
   const wasm = readFileSync(new URL(`../public/garage/av2/${WASM_NAME}`, import.meta.url));
   for (const o of formatOptions.filter((x) => x.src.endsWith(".avif"))) {
     const labeledAv2 = o.label.startsWith("AV2 ");
-    const got = await decode(tileBytes(o.src), { wasm }).then((d) => d, (e) => e);
+    const got = await decode(tileBytes(o.src), { wasm }).then(
+      (d) => d,
+      (e) => e,
+    );
     if (labeledAv2) {
       assert.ok(!(got instanceof Error), `${o.src} is labeled "${o.label}" but the AV2 decoder refused it: ${got instanceof Error ? got.message : ""}`);
       assert.deepEqual([got.width, got.height], [MANIFEST.tile, MANIFEST.tile], `${o.src}: an AV2 tile decodes to ${MANIFEST.tile}px square`);
     } else {
-      assert.ok(got instanceof Error && /not av02/.test(got.message), `${o.src} is labeled "${o.label}", so the page puts it in an <img>, but its image item is AV2`);
+      assert.ok(
+        got instanceof Error && /not av02/.test(got.message),
+        `${o.src} is labeled "${o.label}", so the page puts it in an <img>, but its image item is AV2`,
+      );
     }
   }
 });
@@ -52,11 +58,13 @@ test("no AV2 label sits on a file that isn't .avif", () => {
 
 test("every format call and every scored pool row holds its formats to one byte budget", () => {
   for (const t of MANIFEST.trials.filter((x) => x.axis === "format")) {
-    for (const o of t.options) assert.ok(Math.abs(o.bytes - t.budget) / t.budget <= BUDGET_TOL, `${t.crop} [${t.tier}] ${o.label}: ${o.bytes}B is more than 2% off ${t.budget}B`);
+    for (const o of t.options)
+      assert.ok(Math.abs(o.bytes - t.budget) / t.budget <= BUDGET_TOL, `${t.crop} [${t.tier}] ${o.label}: ${o.bytes}B is more than 2% off ${t.budget}B`);
   }
   for (const r of MANIFEST.format_pool ?? []) {
     for (const f of ["avif", "jxl", "av2"]) {
-      if (r[f]) assert.ok(Math.abs(r[f].bytes - r.budget) / r.budget <= BUDGET_TOL, `pool ${r.crop} [${r.tier}] ${f}: ${r[f].bytes}B is more than 2% off ${r.budget}B`);
+      if (r[f])
+        assert.ok(Math.abs(r[f].bytes - r.budget) / r.budget <= BUDGET_TOL, `pool ${r.crop} [${r.tier}] ${f}: ${r[f].bytes}B is more than 2% off ${r.budget}B`);
     }
   }
 });

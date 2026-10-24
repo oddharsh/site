@@ -28,7 +28,13 @@ import { DESKTOP_CHROME, PROFILES, assert, test } from "./contract-shared.ts";
 // the same rule webmention endpoint discovery applies to rel=webmention.
 function relTokens(tag) {
   const m = tag.match(/\brel\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i);
-  return m ? m[1].replace(/^["']|["']$/g, "").trim().split(/\s+/).map((t) => t.toLowerCase()) : [];
+  return m
+    ? m[1]
+        .replace(/^["']|["']$/g, "")
+        .trim()
+        .split(/\s+/)
+        .map((t) => t.toLowerCase())
+    : [];
 }
 
 test("every desktop profile link carries rel=me, which is how this domain proves it is ours", () => {
@@ -42,7 +48,7 @@ test("every desktop profile link carries rel=me, which is how this domain proves
     assert.ok(
       relTokens(tag).includes("me"),
       `${profile.label} lost rel=me. indielogin.com reads these to decide which provider can vouch for aadhar.sh, ` +
-      `so dropping the token silently removes this site's ability to sign in as itself.`
+        `so dropping the token silently removes this site's ability to sign in as itself.`,
     );
     checked++;
   }

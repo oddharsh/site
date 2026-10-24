@@ -14,9 +14,20 @@
 // import the renderer without a `typeof document` guard standing in for a
 // contract.
 
-
-type Write = { domain: string, key: string, type: "int"|"float"|"bool"|"string", value: string|number|boolean, host?: "current" };
-type Option = { id: string, group: string, label: string, note?: string, was?: string, restart: string[], writes?: Write[], raw?: string[], app?: string, sudo?: boolean, fullDiskAccess?: boolean };
+type Write = { domain: string; key: string; type: "int" | "float" | "bool" | "string"; value: string | number | boolean; host?: "current" };
+type Option = {
+  id: string;
+  group: string;
+  label: string;
+  note?: string;
+  was?: string;
+  restart: string[];
+  writes?: Write[];
+  raw?: string[];
+  app?: string;
+  sudo?: boolean;
+  fullDiskAccess?: boolean;
+};
 type Data = { options: Option[] };
 
 // What each `restart` token costs the visitor, and the line that pays it. The
@@ -33,10 +44,14 @@ const ACTIVATE = "/System/Library/PrivateFrameworks/SystemAdministration.framewo
 function shellValue(write) {
   const v = write.value;
   switch (write.type) {
-    case "bool": return `-bool ${v ? "true" : "false"}`;
-    case "int": return `-int ${Number(v)}`;
-    case "float": return `-float ${Number(v)}`;
-    default: return `-string '${String(v).replace(/'/g, "'\\''")}'`;
+    case "bool":
+      return `-bool ${v ? "true" : "false"}`;
+    case "int":
+      return `-int ${Number(v)}`;
+    case "float":
+      return `-float ${Number(v)}`;
+    default:
+      return `-string '${String(v).replace(/'/g, "'\\''")}'`;
   }
 }
 
@@ -51,7 +66,7 @@ export function writeLine(write) {
  * which is the committed macos.sh.
  *
  * */
-export function renderScript(data: Data, picked: Set<string>|null = null) {
+export function renderScript(data: Data, picked: Set<string> | null = null) {
   const chosen = data.options.filter((o) => !picked || picked.has(o.id));
   const out = [
     "#!/usr/bin/env bash",
@@ -69,7 +84,7 @@ export function renderScript(data: Data, picked: Set<string>|null = null) {
   // prompt cancelled halfway down would leave half a Mac configured.
   if (chosen.some((o) => o.sudo)) out.push("# The System rows run as root. Ask for the password now, before any write.", "sudo -v", "");
 
-  let group: string|null = null;
+  let group: string | null = null;
   for (const o of chosen) {
     if (o.group !== group) {
       group = o.group;
@@ -107,7 +122,7 @@ export function renderScript(data: Data, picked: Set<string>|null = null) {
 export function parseData(json) {
   const data = JSON.parse(json);
   if (!Array.isArray(data.options)) throw new Error("dotfiles-data: no options array");
-  return (data as Data);
+  return data as Data;
 }
 
 // ── the page ────────────────────────────────────────────────────────────────
@@ -116,7 +131,7 @@ export function parseData(json) {
 export function init() {
   const block = document.getElementById("dotfiles-data");
   const list = document.getElementById("df-list");
-  const out = (document.getElementById("df-out") as HTMLTextAreaElement|null);
+  const out = document.getElementById("df-out") as HTMLTextAreaElement | null;
   const count = document.getElementById("df-count");
   if (!block || !list || !out || !count) return;
   const data = parseData(block.textContent || "");
@@ -125,7 +140,7 @@ export function init() {
   // whole thing is createElement + textContent, though every string is ours;
   // the habit is cheaper than the exception.
 
-  let group: string|null = null;
+  let group: string | null = null;
   for (const o of data.options) {
     if (o.group !== group) {
       group = o.group;
@@ -154,16 +169,31 @@ export function init() {
     list.append(row);
   }
 
-  const boxes = () =>  ([...list.querySelectorAll("input[type=checkbox]")] as HTMLInputElement[]);
-  const picked = () => new Set(boxes().filter((b) => b.checked).map((b) => b.dataset.id || ""));
+  const boxes = () => [...list.querySelectorAll("input[type=checkbox]")] as HTMLInputElement[];
+  const picked = () =>
+    new Set(
+      boxes()
+        .filter((b) => b.checked)
+        .map((b) => b.dataset.id || ""),
+    );
   const render = () => {
     const set = picked();
     out.value = renderScript(data, set);
     count.textContent = `${set.size} of ${data.options.length} ticked`;
   };
   list.addEventListener("change", render);
-  document.getElementById("df-all")?.addEventListener("click", () => { boxes().forEach((b) => { b.checked = true; }); render(); });
-  document.getElementById("df-none")?.addEventListener("click", () => { boxes().forEach((b) => { b.checked = false; }); render(); });
+  document.getElementById("df-all")?.addEventListener("click", () => {
+    boxes().forEach((b) => {
+      b.checked = true;
+    });
+    render();
+  });
+  document.getElementById("df-none")?.addEventListener("click", () => {
+    boxes().forEach((b) => {
+      b.checked = false;
+    });
+    render();
+  });
   const copy = document.getElementById("df-copy");
   const copyOut = async () => {
     if (!copy) return;
@@ -174,8 +204,12 @@ export function init() {
       out.select();
       copy.textContent = "Select + copy";
     }
-    setTimeout(() => { copy.textContent = "Copy"; }, 1600);
+    setTimeout(() => {
+      copy.textContent = "Copy";
+    }, 1600);
   };
-  copy?.addEventListener("click", () => { void copyOut(); });
+  copy?.addEventListener("click", () => {
+    void copyOut();
+  });
   render();
 }

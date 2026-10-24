@@ -27,12 +27,13 @@ async function project(lintScript) {
 // `bun run test:node` runs this file under node, where process.execPath is node
 // and the bun to test is the one on PATH.
 const bun = process.versions.bun ? process.execPath : "bun";
-const lint = (cwd) => spawnSync(bun, ["lint"], {
-  cwd,
-  encoding: "utf8",
-  env: process.versions.bun ? { ...process.env, PATH: `${dirname(bun)}${delimiter}${process.env.PATH ?? ""}` } : process.env,
-  timeout: 60_000,
-});
+const lint = (cwd) =>
+  spawnSync(bun, ["lint"], {
+    cwd,
+    encoding: "utf8",
+    env: process.versions.bun ? { ...process.env, PATH: `${dirname(bun)}${delimiter}${process.env.PATH ?? ""}` } : process.env,
+    timeout: 60_000,
+  });
 
 test("the repo's lint script checks for the linter, runs the generator, then Bun's own linter, type-aware", async () => {
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
@@ -77,7 +78,10 @@ test("CONTROL: the guard names gotcha 67 and the installer for a bun without the
   const dir = await mkdtemp(join(tmpdir(), "bun-no-lint-"));
   const fake = join(dir, "bun");
   try {
-    await writeFile(fake, '#!/bin/sh\nif [ "$1" = "--revision" ]; then echo 1.4.3+26aa4e1a9; exit 0; fi\necho \'error: Script not found "lint"\' >&2\nexit 1\n');
+    await writeFile(
+      fake,
+      '#!/bin/sh\nif [ "$1" = "--revision" ]; then echo 1.4.3+26aa4e1a9; exit 0; fi\necho \'error: Script not found "lint"\' >&2\nexit 1\n',
+    );
     await chmod(fake, 0o755);
     const problem = bunLintProblem(fake);
     assert.ok(problem, "a bun that cannot lint was reported as able to");

@@ -33,14 +33,15 @@ export const LIFT: Array<[name: string, files: number, lines: number, what: stri
 // which is where the real cost hides and where nobody budgets.
 export const BASELINE = ["MCP server", "llms.txt", "agent discovery"];
 
-export const liftTotals = () => LIFT.reduce(
-  (acc, [name, files, lines]) => ({
-    files: acc.files + files,
-    lines: acc.lines + lines,
-    baseline: acc.baseline + (BASELINE.includes(name) ? lines : 0),
-  }),
-  { files: 0, lines: 0, baseline: 0 },
-);
+export const liftTotals = () =>
+  LIFT.reduce(
+    (acc, [name, files, lines]) => ({
+      files: acc.files + files,
+      lines: acc.lines + lines,
+      baseline: acc.baseline + (BASELINE.includes(name) ? lines : 0),
+    }),
+    { files: 0, lines: 0, baseline: 0 },
+  );
 
 // ── the audit ─────────────────────────────────────────────────────────────
 // Counted, never scored. Each door is one of three states and the third is the
@@ -62,8 +63,7 @@ export function scoreDoors(doors) {
 }
 
 const detailOf = (probe, whenOpen) =>
-  (probe.ok ? whenOpen : probe.unreadable ? (probe.why || probe.detail || "could not check")
-    : (probe.why || probe.detail || probe.wrongType || "not served"));
+  probe.ok ? whenOpen : probe.unreadable ? probe.why || probe.detail || "could not check" : probe.why || probe.detail || probe.wrongType || "not served";
 
 export async function agentReadyFrame(target, env, { self = false } = {}) {
   const doors = await readDoors(target, env).catch(() => null);
@@ -82,42 +82,49 @@ export async function agentReadyFrame(target, env, { self = false } = {}) {
     s(detailOf(probe, probe === doors.mcp ? `${doors.mcp.count} tools` : `${probe.bytes ?? "present"}${probe.bytes ? " bytes" : ""}`), "dim"),
   ]);
 
-  const body = rows(
-    kv("origin", doors.origin, INNER, { gutter: 10 }),
-    blank(),
-    rule(INNER, "doors a machine can walk through"),
-    ...doorRows,
-    blank(),
-    [s(`  ${score.open} of ${score.total} open`, score.open === score.total ? "ok" : "warn"),
-      s(score.unread ? `, ${score.unread} unreadable from here` : "", "dim")],
-  );
+  const body = rows(kv("origin", doors.origin, INNER, { gutter: 10 }), blank(), rule(INNER, "doors a machine can walk through"), ...doorRows, blank(), [
+    s(`  ${score.open} of ${score.total} open`, score.open === score.total ? "ok" : "warn"),
+    s(score.unread ? `, ${score.unread} unreadable from here` : "", "dim"),
+  ]);
 
   // The bill only makes sense for the origin that has the source tree.
-  const bill = self ? rows(
-    blank(),
-    rule(INNER, `what this cost to build (counted ${LIFT_CHECKED})`),
-    table({
-      cols: [{ title: "capability", width: 20 }, { title: "files", width: 5, align: "right" },
-        { title: "lines", width: 6, align: "right" }, { title: "buys" }],
-      rows: LIFT.map(([name, files, lines, buys]) => [name, String(files), String(lines), buys]),
-      width: INNER,
-    }),
-    [s(`${"total".padEnd(20)} ${String(totals.files).padStart(5)} ${String(totals.lines).padStart(6)}`, "strong")],
-    blank(),
-    ...wrap(`Baseline agent compatibility — an MCP server, an llms.txt, and the discovery files — is ${totals.baseline} lines of the ${totals.lines}. That part is a weekend. The rest is drift-proofing and the tools themselves, which is where the cost actually hides and where nobody budgets.`, INNER).map((row) => [s(row)]),
-    blank(),
-    ...wrap("The harder half is not in this table at all: it is the discipline of not lying to a caller. Every genuinely difficult problem here was an honesty problem, not a protocol one — a door that could not be checked reported as shut, a score computed without its inputs, a delta that was really plain zstd, an ETag that can never match. A site can be perfectly conformant and still mislead every agent that visits.", INNER).map((row) => [s(row, "dim")]),
-  ) : rows(
-    blank(),
-    [s("  add no url to see what this origin cost to build.", "dim")],
-  );
+  const bill = self
+    ? rows(
+        blank(),
+        rule(INNER, `what this cost to build (counted ${LIFT_CHECKED})`),
+        table({
+          cols: [
+            { title: "capability", width: 20 },
+            { title: "files", width: 5, align: "right" },
+            { title: "lines", width: 6, align: "right" },
+            { title: "buys" },
+          ],
+          rows: LIFT.map(([name, files, lines, buys]) => [name, String(files), String(lines), buys]),
+          width: INNER,
+        }),
+        [s(`${"total".padEnd(20)} ${String(totals.files).padStart(5)} ${String(totals.lines).padStart(6)}`, "strong")],
+        blank(),
+        ...wrap(
+          `Baseline agent compatibility — an MCP server, an llms.txt, and the discovery files — is ${totals.baseline} lines of the ${totals.lines}. That part is a weekend. The rest is drift-proofing and the tools themselves, which is where the cost actually hides and where nobody budgets.`,
+          INNER,
+        ).map((row) => [s(row)]),
+        blank(),
+        ...wrap(
+          "The harder half is not in this table at all: it is the discipline of not lying to a caller. Every genuinely difficult problem here was an honesty problem, not a protocol one — a door that could not be checked reported as shut, a score computed without its inputs, a delta that was really plain zstd, an ETag that can never match. A site can be perfectly conformant and still mislead every agent that visits.",
+          INNER,
+        ).map((row) => [s(row, "dim")]),
+      )
+    : rows(blank(), [s("  add no url to see what this origin cost to build.", "dim")]);
 
   return {
     title: `agent-ready — ${doors.origin}`,
     body: rows(body, bill),
     status: [
-      [s("doors ", "label"), s(`${score.open}/${score.total}`, score.open === score.total ? "ok" : "warn"),
-        s("  counted, never scored — a check that could not run is not a failure", "dim")],
+      [
+        s("doors ", "label"),
+        s(`${score.open}/${score.total}`, score.open === score.total ? "ok" : "warn"),
+        s("  counted, never scored — a check that could not run is not a failure", "dim"),
+      ],
     ],
   };
 }

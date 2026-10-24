@@ -64,9 +64,12 @@ test("every og:image and twitter:image in an authored page is a file in public/"
   // scanner that quietly stopped matching would report zero missing over zero
   // checked. 43 pages carried a card on 2026-10-16, each named twice (og + twitter).
   assert.ok(checked >= 70, `scanned only ${checked} card references; the scanner has stopped matching`);
-  assert.deepEqual(missing, [],
-    `these pages hand a crawler a card image that does not exist:\n  ${missing.join("\n  ")}\n`
-    + "  Generate it (docs/MAINTENANCE.md, Regenerate the OG / Twitter cards) or fix the extension.");
+  assert.deepEqual(
+    missing,
+    [],
+    `these pages hand a crawler a card image that does not exist:\n  ${missing.join("\n  ")}\n` +
+      "  Generate it (docs/MAINTENANCE.md, Regenerate the OG / Twitter cards) or fix the extension.",
+  );
 });
 
 // Worker-rendered pages carry their card URL in a template literal no page walk

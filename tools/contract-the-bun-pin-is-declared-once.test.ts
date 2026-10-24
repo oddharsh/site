@@ -1,7 +1,22 @@
 // ── the bun pin is declared once ─────────────────────────────────────────────
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
-import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
+import {
+  channelOf,
+  compareVersions,
+  interpretZstdProbe,
+  minimumReleaseAgeSeconds,
+  newestSeasonedCanary,
+  npmPlatform,
+  npmTarballUrl,
+  npmVersion,
+  parseVersion,
+  readPin,
+  releaseAsset,
+  releaseUrl,
+  runningMatchesPin,
+  writePin,
+} from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { calSuiteGate, contractSuiteGate, suiteArgs, suiteCounts, suiteCountsText } from "./lib/bun-gates.ts";
@@ -29,7 +44,11 @@ test("the pin lib reads the same string config/bun-pin.json holds, and package.j
   // and cannot resolve a canary in it (measured 2026-09-15, three probes), so
   // a second declaration there is a production build waiting to stop.
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
-  assert.equal(pkg.packageManager, undefined, "package.json must not carry packageManager; config/bun-pin.json is the declaration and the build image reads that field");
+  assert.equal(
+    pkg.packageManager,
+    undefined,
+    "package.json must not carry packageManager; config/bun-pin.json is the declaration and the build image reads that field",
+  );
 });
 
 test("writePin edits one field and reflows nothing else", async () => {
@@ -42,11 +61,7 @@ test("writePin edits one field and reflows nothing else", async () => {
     writePin(dir, "9.9.9");
     const after = await readFile(join(dir, "config", "bun-pin.json"), "utf8");
     assert.equal(readPin(dir).version, "9.9.9");
-    assert.equal(
-      after.replace('"bun": "9.9.9"', `"bun": "${pin.version}"`),
-      before,
-      "writePin changed something other than the version",
-    );
+    assert.equal(after.replace('"bun": "9.9.9"', `"bun": "${pin.version}"`), before, "writePin changed something other than the version");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -73,18 +88,21 @@ test("the zstd capability probe is declared once", async () => {
     // workflow test stripping `echo` lines, and as every other naive scanner
     // this repo has had to sharpen: searching source text for a token finds the
     // paragraph describing it too.
-    const code = body.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
-    assert.ok(
-      !/const\s+PROBE\s*=|zstdCompressSync\(/.test(code),
-      `${file} re-declares the zstd probe instead of importing ZSTD_DICTIONARY_PROBE`,
-    );
+    const code = body
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//"))
+      .join("\n");
+    assert.ok(!/const\s+PROBE\s*=|zstdCompressSync\(/.test(code), `${file} re-declares the zstd probe instead of importing ZSTD_DICTIONARY_PROBE`);
     assert.match(body, /from "\.\/lib\/bun-pin\.ts"/, `${file} must import the shared pin lib`);
   }
 
   // The teeth: the stripper must not be so eager that it would miss a real
   // re-declaration sitting in code.
-  const sample = ['// zstdCompressSync({ dictionary }) in prose', 'const PROBE = zstdCompressSync(x);'].join("\n");
-  const stripped = sample.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  const sample = ["// zstdCompressSync({ dictionary }) in prose", "const PROBE = zstdCompressSync(x);"].join("\n");
+  const stripped = sample
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("//"))
+    .join("\n");
   assert.match(stripped, /const\s+PROBE\s*=/, "the comment stripper ate a real declaration");
 });
 
@@ -131,7 +149,11 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
   assert.equal(runningMatchesPin("1.4.2", { version: "1.4.3", revision: "09bb5463" }).ok, false);
   assert.equal(runningMatchesPin("1.4.2-canary.20260913.1+09bb546", { version: "1.4.3", revision: "09bb5463058074ef" }).ok, true);
   assert.equal(runningMatchesPin("1.4.2-canary.20260913.1+09bb546", { version: "1.4.3", revision: "5fce36e1" }).ok, false);
-  assert.equal(runningMatchesPin("1.4.2-canary.20260913.1", { version: "1.4.3", revision: "09bb5463" }).ok, false, "a canary pin without its sha proves nothing");
+  assert.equal(
+    runningMatchesPin("1.4.2-canary.20260913.1", { version: "1.4.3", revision: "09bb5463" }).ok,
+    false,
+    "a canary pin without its sha proves nothing",
+  );
   assert.equal(npmPlatform("linux", "x64"), "bun-linux-x64");
   assert.equal(npmPlatform("darwin", "arm64"), "bun-darwin-aarch64");
   assert.equal(
@@ -148,16 +170,27 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
     readFile(new URL(".github/deploy-wrangler.sh", ROOT), "utf8"),
   ]).then(([installer, action, wrapper]) => {
     assert.match(installer, /config\/bun-pin\.json/, "the installer must read the pin from config/bun-pin.json");
-    assert.doesNotMatch(installer.replace(/^\s*#.*$/gm, ""), /packageManager/, "the installer must not read packageManager, which the build image also reads and cannot resolve a canary in");
+    assert.doesNotMatch(
+      installer.replace(/^\s*#.*$/gm, ""),
+      /packageManager/,
+      "the installer must not read packageManager, which the build image also reads and cannot resolve a canary in",
+    );
     assert.match(installer, /registry\.npmjs\.org\/@oven\/\$\{platform\}\//, "the installer must fetch from the npm platform package");
     assert.match(installer, /integrity/, "the installer must verify the registry's sha512");
     assert.match(installer, /package\/package\.json/, "the installer must read the tarball's own version, since a canary binary reports the next release");
     assert.match(installer, /--revision/, "the installer must check the binary's revision against the pin's sha");
-    for (const [name, body] of [["setup-bun", action], ["deploy-wrangler.sh", wrapper]]) {
+    for (const [name, body] of [
+      ["setup-bun", action],
+      ["deploy-wrangler.sh", wrapper],
+    ]) {
       assert.match(body, /bash \.github\/install-bun\.sh /, `${name} must install through the shared installer`);
       assert.doesNotMatch(body, /registry\.npmjs\.org|releases\/download/, `${name} must not carry its own download path`);
     }
-    assert.match(wrapper, /bun install --frozen-lockfile/, "the wrapper must lay out node_modules itself, since SKIP_DEPENDENCY_INSTALL turns the image's install off");
+    assert.match(
+      wrapper,
+      /bun install --frozen-lockfile/,
+      "the wrapper must lay out node_modules itself, since SKIP_DEPENDENCY_INSTALL turns the image's install off",
+    );
   });
 });
 
@@ -174,10 +207,7 @@ test("the release-age window is read from bunfig rather than restated", async ()
   assert.ok(declared >= 3600, `minimumReleaseAge is ${declared}s, which is the minutes-versus-seconds trap`);
 
   const bumper = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
-  assert.ok(
-    !new RegExp(`\\b${declared}\\b`).test(bumper),
-    "bump-bun-pin.ts hardcodes the window instead of reading bunfig.toml",
-  );
+  assert.ok(!new RegExp(`\\b${declared}\\b`).test(bumper), "bump-bun-pin.ts hardcodes the window instead of reading bunfig.toml");
 });
 
 test("the bumper walks the pin's channel and never crosses it", async () => {
@@ -192,7 +222,11 @@ test("the bumper walks the pin's channel and never crosses it", async () => {
   // gate 2 refused it every night for six nights while the job exited green.
   // Re-reading the tag is how that deadlock comes back.
   assert.match(body, /newestSeasonedCanary\(npmMeta, window\)/, "the canary target must come from the seasoned resolver, handed bunfig's window");
-  assert.doesNotMatch(body, /dist-tags"?\]?\??\.?\[?"?canary/, "the bumper must not read npm's canary dist-tag; it names a version the window refuses by construction");
+  assert.doesNotMatch(
+    body,
+    /dist-tags"?\]?\??\.?\[?"?canary/,
+    "the bumper must not read npm's canary dist-tag; it names a version the window refuses by construction",
+  );
   assert.match(body, /channelOf\(target\) !== channel/, "a target on the other channel must be refused");
   assert.match(body, /npmBunDist\(npmVersion\(target\)\)/, "a canary must be fetched with the registry's integrity, by the version npm names");
 
@@ -258,17 +292,20 @@ test("the canary resolver picks the newest dated canary already past the window,
   const p2 = newestSeasonedCanary(untimed, 24 * H, now);
   assert.ok(p2);
   assert.equal(p2.version, "1.4.2-canary.20260919.1");
-  assert.deepEqual(p2.skipped.map((s) => [npmVersion(s.version), s.ageSeconds === null]), [["1.4.2-canary.20260921.1", false], ["1.4.2-canary.20260920.1", true]]);
+  assert.deepEqual(
+    p2.skipped.map((s) => [npmVersion(s.version), s.ageSeconds === null]),
+    [
+      ["1.4.2-canary.20260921.1", false],
+      ["1.4.2-canary.20260920.1", true],
+    ],
+  );
 });
 
 test("the release asset names match what oven-sh/bun tags", () => {
   assert.equal(releaseAsset("linux", "x64"), "bun-linux-x64.zip");
   assert.equal(releaseAsset("darwin", "arm64"), "bun-darwin-aarch64.zip");
   assert.throws(() => releaseAsset("sunos", "sparc"), /no bun release asset known/); // a platform pair bun has no asset for
-  assert.equal(
-    releaseUrl("1.4.0", "bun-linux-x64.zip"),
-    "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip",
-  );
+  assert.equal(releaseUrl("1.4.0", "bun-linux-x64.zip"), "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip");
 });
 
 test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches an issue rather than a green run", async () => {
@@ -279,7 +316,10 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
   const args = suiteArgs(root);
   assert.equal(["bun", "test", ...args].join(" "), pkg.scripts.test.trim().split(/\s+/).join(" "), "the gate's arguments are the test script's, word for word");
-  assert.ok(args.some((a) => a.startsWith("--timeout=")), "the test script carries a --timeout; without one the gate runs on bun's 5s default");
+  assert.ok(
+    args.some((a) => a.startsWith("--timeout=")),
+    "the test script carries a --timeout; without one the gate runs on bun's 5s default",
+  );
   assert.ok(args.includes("--preload"), "the test script carries the network tripwire");
   const gates = await readFile(new URL("tools/lib/bun-gates.ts", ROOT), "utf8");
   assert.match(gates, /run\(exe, \["test", \.\.\.suiteArgs\(root\)\]/, "contractSuiteGate runs suiteArgs rather than a restated flag list");
@@ -290,7 +330,10 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
   try {
     await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test --timeout=12345 --preload ./p.ts tools/" } }));
     const fake = join(dir, "fake-bun");
-    await writeFile(fake, `#!/bin/sh\nif [ "$*" = "test --timeout=12345 --preload ./p.ts tools/" ]; then echo " 3 pass"; echo " 0 fail"; else echo "(fail) wrong flags: $*"; echo " 0 pass"; echo " 1 fail"; fi\n`);
+    await writeFile(
+      fake,
+      `#!/bin/sh\nif [ "$*" = "test --timeout=12345 --preload ./p.ts tools/" ]; then echo " 3 pass"; echo " 0 fail"; else echo "(fail) wrong flags: $*"; echo " 0 pass"; echo " 1 fail"; fi\n`,
+    );
     await chmod(fake, 0o755);
     const g = contractSuiteGate(fake, dir, 10_000);
     assert.ok(g.ok, `the gate did not hand bun the script's flags: ${g.detail}; ${(g.notes ?? []).join(" ")}`);
@@ -308,19 +351,30 @@ test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches 
   const yml = await readFile(new URL(".github/workflows/bun-pin.yml", ROOT), "utf8");
   assert.match(yml, /issues:\s*write/, "bun-pin.yml cannot file its issue");
   assert.equal((yml.match(/bun run bun:pin --write --json pin-report\.json/g) ?? []).length, 2, "both bumper invocations write the report");
-  assert.match(yml, /bun run timbrado report --target bun-pin --json pin-report\.json --exit "\$\{\{ steps\.pin\.outputs\.status \}\}"/, "the report goes through timbrado's reporter under its own target");
+  assert.match(
+    yml,
+    /bun run timbrado report --target bun-pin --json pin-report\.json --exit "\$\{\{ steps\.pin\.outputs\.status \}\}"/,
+    "the report goes through timbrado's reporter under its own target",
+  );
   const bumper = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
   const young = bumper.indexOf("is not proposable yet");
   const firstReport = bumper.indexOf('report("red"');
-  assert.ok(young > 0 && firstReport > young, "a candidate that is only too young must write no report; a green for it would close an issue about a gate that never ran");
+  assert.ok(
+    young > 0 && firstReport > young,
+    "a candidate that is only too young must write no report; a green for it would close an issue about a gate that never ran",
+  );
   for (const exit of ["fails a gate above", "is NOT proposable", "disagrees with its own tag", "fail the build 40 seconds in"]) {
     const at = bumper.indexOf(exit);
     assert.ok(at > 0, `the bumper no longer prints ${JSON.stringify(exit)}`);
-    assert.match(bumper.slice(at, at + 300), /red\(\);\s*process\.exit\(1\);/, `the ${JSON.stringify(exit)} exit writes no red report, so its gate never reaches the issue`);
+    assert.match(
+      bumper.slice(at, at + 300),
+      /red\(\);\s*process\.exit\(1\);/,
+      `the ${JSON.stringify(exit)} exit writes no red report, so its gate never reaches the issue`,
+    );
   }
 });
 
-test("suite gates read bun's summary rows, never a test name that happens to say \"1 fail\"", async () => {
+test('suite gates read bun\'s summary rows, never a test name that happens to say "1 fail"', async () => {
   // A passing test from #1113 is named "... a renamed D1 fails", and "D1 fails"
   // contains "1 fail". The unanchored regex every gate used took that as the
   // count, so bun:pin and canary:bun each filed a RED issue (#1122, #1124)

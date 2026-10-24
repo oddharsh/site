@@ -46,14 +46,15 @@ if (cf.error || cf.status !== 0) {
   process.exit(2);
 }
 
-const freePort = () => new Promise<number>((done, fail) => {
-  const s = createServer();
-  s.once("error", fail);
-  s.listen(0, "127.0.0.1", () => {
-    const { port } = s.address() as { port: number };
-    s.close(() => done(port));
+const freePort = () =>
+  new Promise<number>((done, fail) => {
+    const s = createServer();
+    s.once("error", fail);
+    s.listen(0, "127.0.0.1", () => {
+      const { port } = s.address() as { port: number };
+      s.close(() => done(port));
+    });
   });
-});
 
 const { links, dirs, skipped } = await stage();
 console.log(`dev: ${FARM}/ ready, ${links} links across ${dirs} merged director${dirs === 1 ? "y" : "ies"}`);
@@ -65,10 +66,11 @@ mkdirSync(REGISTRY, { recursive: true });
 // ports are free ones, since the site takes wrangler's defaults (gotcha 39:
 // another checkout's dev server can own the port you meant).
 const [port, inspector] = [await freePort(), await freePort()];
-const counter = spawn(process.execPath, [
-  WRANGLER, "dev", "-c", "counter/wrangler.jsonc",
-  "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", String(inspector),
-], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, WRANGLER_REGISTRY_PATH: REGISTRY } });
+const counter = spawn(
+  process.execPath,
+  [WRANGLER, "dev", "-c", "counter/wrangler.jsonc", "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", String(inspector)],
+  { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, WRANGLER_REGISTRY_PATH: REGISTRY } },
+);
 
 let site: ChildProcess | null = null;
 const stopAll = (code: number) => {
@@ -85,12 +87,18 @@ const ready = await new Promise<boolean>((done) => {
     for (const line of chunk.toString().split("\n")) {
       if (!line.trim()) continue;
       console.log(`[counter] ${line}`);
-      if (line.includes("Ready on")) { clearTimeout(timer); done(true); }
+      if (line.includes("Ready on")) {
+        clearTimeout(timer);
+        done(true);
+      }
     }
   };
   counter.stdout?.on("data", relay);
   counter.stderr?.on("data", relay);
-  counter.once("exit", () => { clearTimeout(timer); done(false); });
+  counter.once("exit", () => {
+    clearTimeout(timer);
+    done(false);
+  });
 });
 if (!ready) {
   console.error(`dev: aadhar-counter did not come up within ${READY_MS / 1000}s; the site would boot with COUNTER [not connected]`);

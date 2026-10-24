@@ -4,16 +4,12 @@
 // pages, which carry the same head the staged copies do, so the guarantees hold
 // without a build: every content page yields a headline and a sitemap date,
 // the block parses, and nothing in it can close its own script element.
-import {
-  assert,
-  existsSync,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, existsSync, readFileSync, test } from "./contract-shared.ts";
 
-const content = () => JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces
-  .filter((s) => s.kind === "content" && /^\/(garage|lwe)\//.test(s.path))
-  .filter((s) => existsSync(`src/pages${s.path}.html`));
+const content = () =>
+  JSON.parse(readFileSync("config/site-manifest.json", "utf8"))
+    .surfaces.filter((s) => s.kind === "content" && /^\/(garage|lwe)\//.test(s.path))
+    .filter((s) => existsSync(`src/pages${s.path}.html`));
 
 test("every Garage and LWE content page yields an Article with a headline, a date and the site's Person", async () => {
   const { articleLd, articleLdScript, injectArticleLd, PERSON } = await import("./lib/article-ld.ts");

@@ -19,16 +19,14 @@ import { readDocument } from "./lib/html-to-md.ts";
 // [label, cell content, expected TEXT-cell markdown, expected CODE-cell markdown]
 // The last two columns are what GFM must receive to render the second column back.
 const CASES = [
-  ["plain pipe",         "x|y",     "x\\|y",       "`x\\|y`"],
-  ["backslash + pipe",   "i\\|j",   "i\\\\\\|j",   "`i\\\\|j`"],
+  ["plain pipe", "x|y", "x\\|y", "`x\\|y`"],
+  ["backslash + pipe", "i\\|j", "i\\\\\\|j", "`i\\\\|j`"],
   ["2 backslash + pipe", "m\\\\|n", "m\\\\\\\\\\|n", "`m\\\\\\|n`"],
-  ["lone backslash",     "g\\h",    "g\\\\h",      "`g\\h`"],
-  ["trailing backslash", "t\\",     "t\\\\",       "`t\\`"],
+  ["lone backslash", "g\\h", "g\\\\h", "`g\\h`"],
+  ["trailing backslash", "t\\", "t\\\\", "`t\\`"],
 ];
 
-const twin = (cells) => readDocument(
-  `<html><body><div class="content"><table><tr><th>a</th><th>b</th></tr>${cells}</tr></table></div></body></html>`,
-).body;
+const twin = (cells) => readDocument(`<html><body><div class="content"><table><tr><th>a</th><th>b</th></tr>${cells}</tr></table></div></body></html>`).body;
 
 test("table cells escape pipes for GFM's two-stage unescape", () => {
   for (const [label, content, wantText, wantCode] of CASES) {
@@ -46,7 +44,10 @@ test("table cells escape pipes for GFM's two-stage unescape", () => {
 function delimiters(row) {
   let n = 0;
   for (let i = 0; i < row.length; i += 1) {
-    if (row[i] === "\\" && row[i + 1] === "|") { i += 1; continue; }
+    if (row[i] === "\\" && row[i + 1] === "|") {
+      i += 1;
+      continue;
+    }
     if (row[i] === "|") n += 1;
   }
   return n;

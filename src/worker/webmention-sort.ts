@@ -46,7 +46,7 @@ export const SORT_MODEL: ClefModel = "clef";
 export const SORT_DEADLINE_MS = 6000;
 
 export const SORT_LABELS = ["genuine", "listing", "spam"] as const;
-export type SortLabel = typeof SORT_LABELS[number];
+export type SortLabel = (typeof SORT_LABELS)[number];
 
 export const SORT_CRITERIA: Record<SortLabel, string> = {
   genuine: "A person engaging with the page: a post, reply, comment, like, bookmark, or a newsletter or forum item that says something about it.",
@@ -54,13 +54,15 @@ export const SORT_CRITERIA: Record<SortLabel, string> = {
   spam: "Spam: SEO or affiliate filler, scraped or machine-written copy, gambling, pharmacy, crypto promotion, link farms, or comment spam, where the link is incidental.",
 };
 
-export type SortInput = { kind?: string, source: string, title?: string, author?: string, excerpt?: string };
-export type MentionSort =
-  | { verdict: SortLabel, probabilities: Record<SortLabel, number> }
-  | { error: string };
+export type SortInput = { kind?: string; source: string; title?: string; author?: string; excerpt?: string };
+export type MentionSort = { verdict: SortLabel; probabilities: Record<SortLabel, number> } | { error: string };
 
 function host(source: string): string {
-  try { return new URL(source).hostname; } catch { return ""; }
+  try {
+    return new URL(source).hostname;
+  } catch {
+    return "";
+  }
 }
 
 /** The fields parseSource already produced, plus the source's host. The page
@@ -117,6 +119,8 @@ export function sortSubjectTag(sort: MentionSort): string {
 export function sortLine(sort: MentionSort): string {
   if ("error" in sort) return `Not sorted: Clef answered nothing usable (${sort.error}).`;
   const p = sort.probabilities;
-  const rest = SORT_LABELS.filter((l) => l !== sort.verdict).map((l) => `${l} ${p[l].toFixed(2)}`).join(", ");
+  const rest = SORT_LABELS.filter((l) => l !== sort.verdict)
+    .map((l) => `${l} ${p[l].toFixed(2)}`)
+    .join(", ");
   return `Clef reads this as ${sort.verdict} (${p[sort.verdict].toFixed(2)}); ${rest}. It only sorts; approving is still yours.`;
 }

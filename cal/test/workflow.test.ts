@@ -13,7 +13,6 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test"
 import { bootCal } from "./harness.ts";
 import { createBooking, getBooking, holdSlot, setStatus, listHeld } from "../src/booking.ts";
 
-
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
 let env: import("./harness.ts").CalEnv;
@@ -52,7 +51,9 @@ describe("BookingWorkflow expiry timer", () => {
   it("abandoned pending booking → timeout expires it and frees the slot", async () => {
     const b = await heldPending();
     await using instance = await introspectWorkflowInstance(b.id);
-    await instance.modify(async (m) => { await m.forceEventTimeout(WAIT_STEP); });
+    await instance.modify(async (m) => {
+      await m.forceEventTimeout(WAIT_STEP);
+    });
 
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });
     await instance.waitForStatus("complete");
@@ -63,7 +64,7 @@ describe("BookingWorkflow expiry timer", () => {
 
   it("host decision arrives → timer ends early and leaves the booking untouched", async () => {
     const b = await heldPending();
-    await setStatus(env, b.id, "confirmed");   // the route already confirmed it
+    await setStatus(env, b.id, "confirmed"); // the route already confirmed it
     await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => {
       await m.mockEvent({ type: "host-decision", payload: { resolved: true } });
@@ -78,9 +79,11 @@ describe("BookingWorkflow expiry timer", () => {
 
   it("timeout fires but the booking was already resolved → guard leaves it alone", async () => {
     const b = await heldPending();
-    await setStatus(env, b.id, "confirmed");   // resolved, but pretend the host-decision event was lost
+    await setStatus(env, b.id, "confirmed"); // resolved, but pretend the host-decision event was lost
     await using instance = await introspectWorkflowInstance(b.id);
-    await instance.modify(async (m) => { await m.forceEventTimeout(WAIT_STEP); });
+    await instance.modify(async (m) => {
+      await m.forceEventTimeout(WAIT_STEP);
+    });
 
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });
     await instance.waitForStatus("complete");

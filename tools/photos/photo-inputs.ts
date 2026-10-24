@@ -14,8 +14,7 @@ export async function photoInputs(
   { remote = false, published }: { remote?: boolean; published?: ReadonlySet<string> } = {},
 ): Promise<PhotoInput[]> {
   const files = new Set<string>();
-  const eligible = (file: string) => JPEG.has(extension(file)) || HEIF.has(extension(file)) ||
-    (published !== undefined && extension(file) === ".png");
+  const eligible = (file: string) => JPEG.has(extension(file)) || HEIF.has(extension(file)) || (published !== undefined && extension(file) === ".png");
   const include = async (file: string) => {
     if (published && !published.has(stemOf(file))) return;
     // Resolve directory aliases while retaining the requested filename/key.
@@ -57,7 +56,9 @@ export async function photoInputs(
       const entries = (await stat(dir)).isDirectory() ? await readdir(dir) : [];
       const direct = entries.filter((e) => extension(e) === ".jxl" && !jpegStems.has(stemOf(e)));
       if (direct.length) {
-        throw new Error(`remote ingest cannot re-ingest ${direct.map(stemOf).join(", ")}: the archive is JPEG XL encoded from the HIF, with no JPEG behind it. Rerender tiles with reencode-thumbnails and metadata with refresh-metadata.`);
+        throw new Error(
+          `remote ingest cannot re-ingest ${direct.map(stemOf).join(", ")}: the archive is JPEG XL encoded from the HIF, with no JPEG behind it. Rerender tiles with reencode-thumbnails and metadata with refresh-metadata.`,
+        );
       }
     }
   }
@@ -77,10 +78,9 @@ export async function photoInputs(
       plan.push({ stem, source: "", original: null, full: "" });
       continue;
     }
-    const heif = group.filter(file => HEIF.has(extension(file)));
-    const jpeg = group.filter(file => JPEG.has(extension(file)));
-    const pair = group.length === 2 && heif.length === 1 && jpeg.length === 1 &&
-      path.dirname(heif[0]) === path.dirname(jpeg[0]);
+    const heif = group.filter((file) => HEIF.has(extension(file)));
+    const jpeg = group.filter((file) => JPEG.has(extension(file)));
+    const pair = group.length === 2 && heif.length === 1 && jpeg.length === 1 && path.dirname(heif[0]) === path.dirname(jpeg[0]);
     if (group.length > 1 && !pair) {
       throw new Error(`ambiguous photo stem ${stem}; select one source or one same-folder HEIF/JPEG pair:\n  ${group.join("\n  ")}`);
     }
@@ -98,7 +98,16 @@ export async function photoInputs(
     if (remote && original) {
       const dir = path.dirname(original);
       for (const jxl of [path.join(`${dir}.r2`, `${stem}.jxl`), path.join(dir, `${stem}.jxl`)]) {
-        if (await access(jxl).then(() => true, () => false)) { original = jxl; full = path.basename(jxl); break; }
+        if (
+          await access(jxl).then(
+            () => true,
+            () => false,
+          )
+        ) {
+          original = jxl;
+          full = path.basename(jxl);
+          break;
+        }
       }
     }
     plan.push({ stem, source, original, full });
@@ -114,18 +123,24 @@ async function main() {
     plan = await photoInputs(inputs, { remote: process.env.REMOTE_RENDER_ONLY === "1" });
   } else if (mode === "rerender" && inputs.length === 2) {
     const [source, tiles] = inputs;
-    const published = new Set((await readdir(tiles)).filter(file => file.endsWith(".jpg"))
-      .map(file => stemOf(stemOf(file))));
+    const published = new Set((await readdir(tiles)).filter((file) => file.endsWith(".jpg")).map((file) => stemOf(stemOf(file))));
     plan = await photoInputs([source], { published });
   } else {
     throw new Error("usage: photo-inputs.ts ingest <file-or-dir>... | rerender <source-dir> <published-tiles-dir>");
   }
   // Four NUL-terminated fields per photo. Bash 3.2 can read this without
   // splitting spaces, tabs, newlines, or shell metacharacters in source paths.
-  process.stdout.write(plan.flatMap(({ source, original, full, stem }) => [source, original ?? "", full, stem])
-    .map(field => `${field}\0`).join(""));
+  process.stdout.write(
+    plan
+      .flatMap(({ source, original, full, stem }) => [source, original ?? "", full, stem])
+      .map((field) => `${field}\0`)
+      .join(""),
+  );
 }
 
 if (import.meta.main) {
-  main().catch(error => { console.error(`error: ${error.message}`); process.exitCode = 1; });
+  main().catch((error) => {
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
+  });
 }

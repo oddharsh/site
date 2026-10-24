@@ -50,8 +50,12 @@ export function serverError(request: Request): Response {
       cache: "no-store",
       headers: { vary: "accept" },
       body: html`<h1>The page cannot be displayed</h1>
-<p>Something broke on the server while it built <code>${url.pathname}</code>. The error is logged, and reloading may work.</p>${ray ? html`
-<p>If it keeps happening, <a href="/contact">get in touch</a> and quote ray <code>${ray}</code>.</p>` : ""}
+<p>Something broke on the server while it built <code>${url.pathname}</code>. The error is logged, and reloading may work.</p>${
+        ray
+          ? html`
+<p>If it keeps happening, <a href="/contact">get in touch</a> and quote ray <code>${ray}</code>.</p>`
+          : ""
+      }
 <p><a href="/">Back to the homepage</a></p>`,
     });
     return head ? new Response(null, page) : page;

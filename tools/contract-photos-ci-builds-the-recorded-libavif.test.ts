@@ -4,7 +4,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 // zenc's parity test compares its AVIF bytes with the avifenc on PATH, so it's
 // only as right as that CLI. The job used to take libavif from apt, and when
 // ubuntu-latest moved to 26.04 on 2026-10-21 that became 1.3.0, whose avifenc
-// writes gray PNGs ~4x dark (gotcha 83). The job now builds the version
+// writes gray PNGs ~4x dark (gotcha 84). The job now builds the version
 // config/tools.json records, statically, so neither the image nor the loader
 // picks the oracle. This fails if the tag and the record part, or if the
 // distro's libavif comes back.
@@ -35,7 +35,7 @@ test("photos: the job builds the libavif config/tools.json records for zenc", as
   assert.match(job, /^\s+LIBAVIF_COMMIT: [0-9a-f]{40}\s*$/m, "a tag can move; pin the commit it should resolve to");
 
   // The distro's package is the trap itself, not a fallback.
-  assert.doesNotMatch(job, /apt-get install[^\n]*\blibavif-(dev|bin)\b/, "the job installs the distro's libavif again (gotcha 83)");
+  assert.doesNotMatch(job, /apt-get install[^\n]*\blibavif-(dev|bin)\b/, "the job installs the distro's libavif again (gotcha 84)");
   // A shared build loses to the image's libavif.so.16 in the loader cache.
   assert.match(job, /-DBUILD_SHARED_LIBS=OFF/, "libavif must build static so the image's shared library can't load instead");
   assert.match(job, /LIBAVIF_STATIC=1/, "zenc must link the static libavif");

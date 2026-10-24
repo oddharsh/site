@@ -86,7 +86,7 @@ const SUBREQUEST_LIMIT_PATTERN = /too many subrequests/i;
  * is admitted only because a catch really does receive them.
  */
 export function isSubrequestLimit(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : asText(error) ?? "";
+  const message = error instanceof Error ? error.message : (asText(error) ?? "");
   return SUBREQUEST_LIMIT_PATTERN.test(message);
 }
 
@@ -173,21 +173,28 @@ export interface Budget {
  * recorded what happened being the call that failed. serendipity reserves 8
  * (CRON_BUDGET_HEADROOM).
  */
-export function createBudget(
-  cap: number,
-  opts: { reserve?: number } = {},
-): Budget {
+export function createBudget(cap: number, opts: { reserve?: number } = {}): Budget {
   const reserve = Math.max(0, opts.reserve ?? 0);
   const limit = Math.max(0, Math.floor(cap) - reserve);
   let spent = 0;
   let overrun = false;
 
   const ledger: Budget = {
-    get limit() { return limit; },
-    get spent() { return spent; },
-    get left() { return Math.max(0, limit - spent); },
-    get exhausted() { return spent >= limit; },
-    get overrun() { return overrun; },
+    get limit() {
+      return limit;
+    },
+    get spent() {
+      return spent;
+    },
+    get left() {
+      return Math.max(0, limit - spent);
+    },
+    get exhausted() {
+      return spent >= limit;
+    },
+    get overrun() {
+      return overrun;
+    },
 
     afford(n = 1) {
       const cost = Math.max(0, Math.floor(n));

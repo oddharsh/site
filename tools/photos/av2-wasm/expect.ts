@@ -21,7 +21,10 @@ const BUILD = path.resolve(i >= 0 ? process.argv[i + 1] : AV2_BUILD);
 const DIR = path.join(REPO, "public/garage/av2");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "av2-expect-"));
 
-const files = fs.readdirSync(DIR).filter((f) => f.endsWith("-av2.avif")).sort();
+const files = fs
+  .readdirSync(DIR)
+  .filter((f) => f.endsWith("-av2.avif"))
+  .sort();
 const expected: Record<string, { width: number; height: number; sha256: string }> = {};
 try {
   for (const f of files) {

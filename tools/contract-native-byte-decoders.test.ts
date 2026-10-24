@@ -25,16 +25,25 @@ test("Available-Dictionary selects the delta named by the digest's first 8 bytes
   const digest = Uint8Array.from({ length: 32 }, (_, i) => (i * 0x3b + 0x07) & 0xff);
   const tag = Buffer.from(digest).subarray(0, 8).toString("hex");
   const requested: any[] = [];
-  const env = { ASSETS: { async fetch(input) {
-    const path = new URL(typeof input === "string" ? input : input.url).pathname;
-    requested.push(path);
-    if (path === "/lwe/drivers.html.br") return new Response("brotli bytes", { headers: { etag: '"page"', "cache-control": "public, max-age=0, s-maxage=86400" } });
-    if (path === `/pd/lwe__drivers.${tag}.dcz`) return new Response("delta bytes");
-    return new Response("not found", { status: 404 });
-  } } };
-  const offer = (bytes) => serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "available-dictionary": `:${Buffer.from(bytes).toString("base64")}:` },
-  }), env);
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(typeof input === "string" ? input : input.url).pathname;
+        requested.push(path);
+        if (path === "/lwe/drivers.html.br")
+          return new Response("brotli bytes", { headers: { etag: '"page"', "cache-control": "public, max-age=0, s-maxage=86400" } });
+        if (path === `/pd/lwe__drivers.${tag}.dcz`) return new Response("delta bytes");
+        return new Response("not found", { status: 404 });
+      },
+    },
+  };
+  const offer = (bytes) =>
+    serveStaticPage(
+      new Request("https://aadhar.sh/lwe/drivers", {
+        headers: { "available-dictionary": `:${Buffer.from(bytes).toString("base64")}:` },
+      }),
+      env,
+    );
 
   const hit = await offer(digest);
   assert.equal(hit.headers.get("content-encoding"), "dcz");
@@ -43,7 +52,11 @@ test("Available-Dictionary selects the delta named by the digest's first 8 bytes
   // 31 bytes is no SHA-256, so no delta path is even asked for
   requested.length = 0;
   await offer(digest.subarray(0, 31));
-  assert.equal(requested.some((p) => p.startsWith("/pd/")), false, requested.join(" "));
+  assert.equal(
+    requested.some((p) => p.startsWith("/pd/")),
+    false,
+    requested.join(" "),
+  );
 });
 
 test("image_data decodes to the same bytes however its base64 is wrapped", async () => {
@@ -52,7 +65,13 @@ test("image_data decodes to the same bytes however its base64 is wrapped", async
   assert.match(b64, /[+/]/, "the fixture needs a character base64url spells differently");
   // the receipt's sha256 is the Worker hashing what it decoded; node hashes the original
   const want = createHash("sha256").update(bytes).digest("hex");
-  const env = { IMAGES: { async info() { return { format: "png", width: 1, height: 1 }; } } };
+  const env = {
+    IMAGES: {
+      async info() {
+        return { format: "png", width: 1, height: 1 };
+      },
+    },
+  };
 
   for (const [label, image_data] of [
     ["plain", b64],
@@ -80,16 +99,16 @@ test("image_data decodes to the same bytes however its base64 is wrapped", async
 test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", async () => {
   const realFetch = globalThis.fetch;
   const payment = { x402Version: 1, scheme: "exact", network: "base", payload: { memo: "caf\u00e9" } };
-  const env = ({
+  const env = {
     X402_PAY_TO: `0x${"12".repeat(20)}`,
     X402_FACILITATOR: "https://facilitator.test",
     // 404 on the q11 twin, so this test stays about the UTF-8 receipt. An asset
     // layer answering every path would hand back plain text as the "twin" and
     // the handler would label it br.
-    ASSETS: { fetch: async (req) => new URL(req.url).pathname.endsWith(".br")
-      ? new Response("not found", { status: 404 })
-      : new Response("the full corpus") },
-  } as any);
+    ASSETS: {
+      fetch: async (req) => (new URL(req.url).pathname.endsWith(".br") ? new Response("not found", { status: 404 }) : new Response("the full corpus")),
+    },
+  } as any;
   const pay = async (settled) => {
     const posts: any[] = [];
     testGlobals.fetch = async (input, init) => {
@@ -97,9 +116,13 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
       posts.push({ url, body: JSON.parse(init.body) });
       return Response.json(url.endsWith("/verify") ? { isValid: true } : settled);
     };
-    const res = await handleLlmsFull(new Request("https://aadhar.sh/llms-full.txt", {
-      headers: { "x-payment": Buffer.from(JSON.stringify(payment), "utf8").toString("base64") },
-    }), env, context());
+    const res = await handleLlmsFull(
+      new Request("https://aadhar.sh/llms-full.txt", {
+        headers: { "x-payment": Buffer.from(JSON.stringify(payment), "utf8").toString("base64") },
+      }),
+      env,
+      context(),
+    );
     return { res, posts };
   };
   try {
@@ -108,7 +131,10 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
     assert.equal(res.status, 200);
     assert.equal(await res.text(), "the full corpus");
     // atob handed JSON.parse Latin-1, so the facilitator was sent "cafÃ©"
-    assert.deepEqual(posts.map((p) => p.body.paymentPayload), [payment, payment]);
+    assert.deepEqual(
+      posts.map((p) => p.body.paymentPayload),
+      [payment, payment],
+    );
     // btoa threw on the check mark and the curly quotes, after /settle had moved the money
     assert.equal(Buffer.from(res.headers.get("x-payment-response") ?? "", "base64").toString("utf8"), JSON.stringify(receipt));
 
@@ -116,7 +142,9 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
     const ascii = { success: true, transaction: `0x${"cd".repeat(32)}`, network: "base" };
     const plain = await pay(ascii);
     assert.equal(plain.res.headers.get("x-payment-response"), btoa(JSON.stringify(ascii)));
-  } finally { testGlobals.fetch = realFetch; }
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });
 
 test("the cover proxy refuses a signature re-spelled in the standard alphabet", async () => {
@@ -124,10 +152,14 @@ test("the cover proxy refuses a signature re-spelled in the standard alphabet", 
   const env = { SERENDIPITY_DB: {}, COVER_SECRET: secret };
   const sign = (raw) => createHmac("sha256", secret).update(raw).digest("base64url");
   // a signature needs a "-" or "_" before it has a standard-alphabet spelling at all
-  let raw = "", sig = "";
-  for (let i = 0; !/[-_]/.test(sig); i++) { raw = `https://images.lumacdn.com/event-covers/${i}.jpg`; sig = sign(raw); }
-  const cover = (s) => handleSerendipity(new Request(
-    `https://aadhar.sh/serendipity/cover?u=${encodeURIComponent(raw)}&s=${encodeURIComponent(s)}`), env, context());
+  let raw = "",
+    sig = "";
+  for (let i = 0; !/[-_]/.test(sig); i++) {
+    raw = `https://images.lumacdn.com/event-covers/${i}.jpg`;
+    sig = sign(raw);
+  }
+  const cover = (s) =>
+    handleSerendipity(new Request(`https://aadhar.sh/serendipity/cover?u=${encodeURIComponent(raw)}&s=${encodeURIComponent(s)}`), env, context());
 
   const hadCaches = "caches" in globalThis;
   const realCaches = testGlobals.caches;
@@ -139,7 +171,8 @@ test("the cover proxy refuses a signature re-spelled in the standard alphabet", 
     const respelled = await cover(sig.replace(/-/g, "+").replace(/_/g, "/"));
     assert.equal(respelled.status, 403);
   } finally {
-    if (hadCaches) testGlobals.caches = realCaches; else delete testGlobals.caches;
+    if (hadCaches) testGlobals.caches = realCaches;
+    else delete testGlobals.caches;
   }
 });
 

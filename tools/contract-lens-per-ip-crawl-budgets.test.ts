@@ -1,12 +1,5 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
-import {
-  configText,
-  context,
-  testGlobals,
-  assert,
-  readFile,
-  test,
-} from "./contract-shared.ts";
+import { configText, context, testGlobals, assert, readFile, test } from "./contract-shared.ts";
 
 // These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.
 // The route they guard is the one that fetches third parties and spends Browser
@@ -32,9 +25,11 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
   // Two budget tables plus a singleton is three chances to typo a key into
   // nothing, and a `{...a, ...b}` that silently loses one still passes every
   // assertion below. Count what went in.
-  assert.equal(Object.keys(BUDGETS).length,
+  assert.equal(
+    Object.keys(BUDGETS).length,
     Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 4,
-    "two budgets share a key, so one of them is not being checked");
+    "two budgets share a key, so one of them is not being checked",
+  );
 
   // And one binding per budget ACROSS the tables, not just inside Lens's. Two
   // budgets on one binding means two published ceilings on one bucket, so the
@@ -53,8 +48,7 @@ test("every rate-limit ceiling matches the ratelimits declared in the site confi
   for (const [budget, { binding, max }] of Object.entries(BUDGETS)) {
     const rule = byName.get(binding);
     assert.ok(rule, `${config} has no ratelimit named ${binding} for budget ${budget}`);
-    assert.equal(rule.simple?.limit, max,
-      `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
+    assert.equal(rule.simple?.limit, max, `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
     // The binding supports 10 or 60 only, and every budget here is per-minute.
     // RATE_WINDOW_S is the same number as the Retry-After every 429 sends.
     const { RATE_WINDOW_S } = await import("../src/worker/lib/ratelimit.ts");
@@ -79,19 +73,32 @@ test("overBudget fails open without a limiter and closes when one says no", asyn
   // control, not authorization. validateLensTarget's SSRF guard has no fallback
   // and is what actually keeps this route safe.
   assert.equal(await overBudget(LENS_BUDGETS.inspect, req, {}), false);
-  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, { LENS_RL_INSPECT: {} }), false,
-    "a binding without .limit() is not a limiter");
+  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, { LENS_RL_INSPECT: {} }), false, "a binding without .limit() is not a limiter");
 
   // ...and open when the limiter throws. A limiter blip must cost the rate
   // limit, never the route: an unhandled throw here renders Cloudflare's HTML
   // 1101 page, which the caller then tries to JSON.parse.
-  assert.equal(await overBudget(LENS_BUDGETS.inspect, req, {
-    LENS_RL_INSPECT: { limit: () => { throw new Error("limiter down"); } },
-  }), false);
+  assert.equal(
+    await overBudget(LENS_BUDGETS.inspect, req, {
+      LENS_RL_INSPECT: {
+        limit: () => {
+          throw new Error("limiter down");
+        },
+      },
+    }),
+    false,
+  );
 
   // Closes when the limiter says so, and keys on the caller's IP.
   let seen: any = null;
-  const env = { LENS_RL_SHOT: { limit: (arg) => { seen = arg; return { success: false }; } } };
+  const env = {
+    LENS_RL_SHOT: {
+      limit: (arg) => {
+        seen = arg;
+        return { success: false };
+      },
+    },
+  };
   assert.equal(await overBudget(LENS_BUDGETS.shot, req, env), true);
   assert.deepEqual(seen, { key: "203.0.113.7" });
 
@@ -125,8 +132,13 @@ async function lensHandlers() {
   const { handleLensNlweb } = await import("../src/worker/lens-nlweb.ts");
   const { handleLensMarkdown } = await import("../src/worker/lens-markdown.ts");
   return {
-    shot: lens.handleLensShot, browser: lens.handleLensBrowser, "cloudflare-score": lens.handleLensFetch,
-    wire: handleLensWire, tools: handleLensTools, nlweb: handleLensNlweb, markdown: handleLensMarkdown,
+    shot: lens.handleLensShot,
+    browser: lens.handleLensBrowser,
+    "cloudflare-score": lens.handleLensFetch,
+    wire: handleLensWire,
+    tools: handleLensTools,
+    nlweb: handleLensNlweb,
+    markdown: handleLensMarkdown,
   };
 }
 
@@ -140,12 +152,21 @@ function refusingEnv(kv, budgets) {
     // budgets are what decide. Neither is ever called: a hit returns first and
     // a miss is refused first.
     BROWSER: {
-      quickAction: () => { throw new Error("a hit must not render"); },
-      fetch: () => { throw new Error("a hit must not open a session"); },
+      quickAction: () => {
+        throw new Error("a hit must not render");
+      },
+      fetch: () => {
+        throw new Error("a hit must not open a session");
+      },
     },
   };
   for (const { binding } of Object.values<{ binding: string }>(budgets)) {
-    env[binding] = { limit: () => { calls.push(binding); return { success: false }; } };
+    env[binding] = {
+      limit: () => {
+        calls.push(binding);
+        return { success: false };
+      },
+    };
   }
   return { env, calls };
 }
@@ -160,7 +181,9 @@ function fakeKv(entry) {
       if (entry instanceof Error) throw entry;
       return type === "arrayBuffer" ? new TextEncoder().encode("PNG").buffer : entry;
     },
-    put: async () => { throw new Error("nothing may be written on these paths"); },
+    put: async () => {
+      throw new Error("nothing may be written on these paths");
+    },
   };
 }
 
@@ -203,7 +226,7 @@ test("every cached lens charges its own budget on a miss, and quotes it", async 
     const res = await handlers[lens.name](new Request(`https://aadhar.sh${lens.url}${sep}url=https://example.com/`), env, context());
     assert.equal(res.status, 429, `${lens.name}: a miss over budget answered ${res.status}`);
     assert.equal(calls[0], LENS_BUDGETS[lens.budget].binding, `${lens.name}: the first budget charged was ${calls[0]}`);
-    assert.equal((await res.json()).error, budgetMessage((lens.budget as any)), `${lens.name}: the 429 is not the derived message`);
+    assert.equal((await res.json()).error, budgetMessage(lens.budget as any), `${lens.name}: the 429 is not the derived message`);
     assert.equal(res.headers.get("retry-after"), "60", `${lens.name}: a 429 over our own budget says when to come back`);
     assert.equal(res.headers.get("ratelimit"), `"${lens.budget}";r=0;t=60`, `${lens.name}: the refused policy has nothing left`);
     assert.equal(res.headers.get("ratelimit-policy"), `"${lens.budget}";q=${LENS_BUDGETS[lens.budget].max};w=60`);
@@ -233,7 +256,11 @@ test("/lens/fetch, /lens/compare.json and webmention say when to come back, too"
     assert.match(res.headers.get("ratelimit") || "", /^"(inspect|compare)";r=0;t=60$/, `${path}: RateLimit`);
   }
   // A refusal that is not a rate limit never claims one.
-  const bad = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?url=http://localhost/"), refusingEnv(fakeKv(undefined), LENS_BUDGETS).env, context());
+  const bad = await handleLensFetch(
+    new Request("https://aadhar.sh/lens/fetch?url=http://localhost/"),
+    refusingEnv(fakeKv(undefined), LENS_BUDGETS).env,
+    context(),
+  );
   assert.equal(bad.status, 400);
   assert.equal(bad.headers.get("retry-after"), null, "a bad target is not a rate limit");
   assert.equal(bad.headers.get("ratelimit"), null, "and claims no remaining count");
@@ -241,9 +268,15 @@ test("/lens/fetch, /lens/compare.json and webmention say when to come back, too"
   const { WEBMENTION_BUDGET, handleWebmention } = await import("../src/worker/webmention.ts");
   const { env } = refusingEnv(fakeKv(undefined), { webmention: WEBMENTION_BUDGET });
   const form = new URLSearchParams({ source: "https://example.com/post", target: "https://aadhar.sh/writing" });
-  const res = await handleWebmention(new Request("https://aadhar.sh/webmention", {
-    method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" },
-  }), env, context());
+  const res = await handleWebmention(
+    new Request("https://aadhar.sh/webmention", {
+      method: "POST",
+      body: form,
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+    }),
+    env,
+    context(),
+  );
   assert.equal(res.status, 429, `webmention answered ${res.status}: ${await res.clone().text()}`);
   assert.equal(res.headers.get("retry-after"), String(RATE_WINDOW_S));
   assert.equal(res.headers.get("ratelimit-policy"), `"webmention";q=${WEBMENTION_BUDGET.max};w=60`);
@@ -266,7 +299,12 @@ test("a cache read that throws is a miss, never the route's failure", async () =
 test("the pipeline caches what a lens reached and nothing it was refused", async () => {
   const { defineLens, lensJson } = await import("../src/worker/lens-pipeline.ts");
   const writes: any[] = [];
-  const kv = { get: async () => null, put: async (key, value, opts) => { writes.push({ key, value, opts }); } };
+  const kv = {
+    get: async () => null,
+    put: async (key, value, opts) => {
+      writes.push({ key, value, opts });
+    },
+  };
   let answer;
   const probe = defineLens({
     budget: "tools",
@@ -310,7 +348,7 @@ test("a lens is refused at definition when its spec breaks a rule the order depe
   // The shared browser ceiling is charged by `browser:` and never as a route's
   // own budget, or a route could bill it before the per-caller one.
   assert.throws(() => defineLens({ ...base, budget: "browserAll" }), /not a per-route budget/);
-  assert.throws(() => defineLens({ ...base, budget:  ("nope" as any) }), /not a per-route budget/);
+  assert.throws(() => defineLens({ ...base, budget: "nope" as any }), /not a per-route budget/);
   // Two lenses on one prefix would serve each other's answers.
   assert.throws(() => defineLens({ ...base, budget: "tools", cache: { prefix: "lens:md:", ttl: 1 } }), /declared twice/);
 });
@@ -322,17 +360,27 @@ test("every lens 429 is derived from LENS_BUDGETS, never typed", async () => {
   assert.equal(budgetMessage("wire"), "Wire traces are rate-limited to 2/min. Hang on a moment.");
   assert.equal(budgetMessage("browserAll"), "The shared browser budget (4/min across every visitor) is spent for this minute. Try again shortly.");
   for (const name of Object.keys(LENS_BUDGETS)) {
-    assert.ok(budgetMessage((name as any)).includes(`${LENS_BUDGETS[name].max}/min`), `${name}: the message does not quote its own ceiling`);
+    assert.ok(budgetMessage(name as any).includes(`${LENS_BUDGETS[name].max}/min`), `${name}: the message does not quote its own ceiling`);
   }
   // The doors that answer a lens refusal. A literal "N/min" or "N lookups a
   // minute" in their code is a ceiling restated by hand, which is the drift
   // this table exists to end: nine 429s carried typed numbers until 2026-10-02.
   // Comments are skipped, because they record measurements by design.
-  const DOORS = ["src/worker/lens.ts", "src/worker/lens-pipeline.ts", "src/worker/lens-wire.ts", "src/worker/lens-tools.ts",
-    "src/worker/lens-nlweb.ts", "src/worker/lens-markdown.ts", "src/worker/terminal.ts", "src/worker/lib/tools.ts"];
-  const typed = (src) => src.split("\n")
-    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-    .filter((line) => /(?<![$\w}])\d+\s*\/\s*min\b|\b\d+ lookups a minute/.test(line));
+  const DOORS = [
+    "src/worker/lens.ts",
+    "src/worker/lens-pipeline.ts",
+    "src/worker/lens-wire.ts",
+    "src/worker/lens-tools.ts",
+    "src/worker/lens-nlweb.ts",
+    "src/worker/lens-markdown.ts",
+    "src/worker/terminal.ts",
+    "src/worker/lib/tools.ts",
+  ];
+  const typed = (src) =>
+    src
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .filter((line) => /(?<![$\w}])\d+\s*\/\s*min\b|\b\d+ lookups a minute/.test(line));
   // The control: the scanner sees the shape it exists to refuse, and passes a
   // derived one.
   assert.equal(typed(`  error: "Lens comparisons are rate-limited to 4/min."`).length, 1);
@@ -370,8 +418,7 @@ test("documentTally counts substance, not framework payload", async () => {
 });
 
 test("the kitesurf selector is tried, and a rejection is remembered rather than reported", async () => {
-  const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } =
-    await import("../src/worker/lens-render.ts");
+  const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } = await import("../src/worker/lens-render.ts");
   const env = { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" };
   const realFetch = globalThis.fetch;
   const calls: any[] = [];
@@ -406,8 +453,7 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
 });
 
 test("the selector rides the browser-run path, which is the only one it works on", async () => {
-  const { restUrl, runBrowserAction, _resetKitesurfProbe } =
-    await import("../src/worker/lens-render.ts");
+  const { restUrl, runBrowserAction, _resetKitesurfProbe } = await import("../src/worker/lens-render.ts");
 
   // Both spellings ROUTE — probed unauthenticated against the real account id,
   // each answers error 10000 rather than 7003 "could not route to". So posting
@@ -427,7 +473,10 @@ test("the selector rides the browser-run path, which is the only one it works on
   const calls: any[] = [];
   try {
     _resetKitesurfProbe();
-    testGlobals.fetch = async (u) => { calls.push(String(u)); return new Response("{}", { status: 200 }); };
+    testGlobals.fetch = async (u) => {
+      calls.push(String(u));
+      return new Response("{}", { status: 200 });
+    };
     await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.ok(calls[0].includes("/browser-run/snapshot?browser=kitesurf"), calls[0]);
   } finally {
@@ -437,8 +486,7 @@ test("the selector rides the browser-run path, which is the only one it works on
 });
 
 test("a 200 is not evidence that kitesurf rendered, and is not reported as if it were", async () => {
-  const { runBrowserAction, _resetKitesurfProbe } =
-    await import("../src/worker/lens-render.ts");
+  const { runBrowserAction, _resetKitesurfProbe } = await import("../src/worker/lens-render.ts");
   const realFetch = globalThis.fetch;
 
   try {
@@ -448,10 +496,11 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     // The old code read that as confirmation and labelled the render `kitesurf`,
     // so a Chromium render was reported as Kitesurf on the one page whose entire
     // premise is showing what a machine actually saw.
-    testGlobals.fetch = async () => new Response(
-      JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
+    testGlobals.fetch = async () =>
+      new Response(JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     const run = await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
     assert.notEqual(run.engine, "kitesurf", "only a control that sees an invented engine name rejected can promote this label");
@@ -468,14 +517,22 @@ test("the binding is the kitesurf door, and its label is a bare kitesurf", async
   const goto = { waitUntil: "networkidle2", timeout: 18000 };
   const payload = { url: "https://example.com", viewport: { width: 1280, height: 800, deviceScaleFactor: 1 }, gotoOptions: goto };
   const env = {
-    CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok",
-    BROWSER: { quickAction: async (action, body) => { sent.push({ action, body }); return new Response("{}", { status: 200 }); } },
+    CF_ACCOUNT_ID: "acct",
+    BROWSER_RUN_TOKEN: "tok",
+    BROWSER: {
+      quickAction: async (action, body) => {
+        sent.push({ action, body });
+        return new Response("{}", { status: 200 });
+      },
+    },
   };
   try {
     // Measured 2026-09-28: the binding validates `browser` as an enum whose only
     // member is "kitesurf", and rejects an invented engine name. So a 200 from
     // this door IS Kitesurf, which the REST door has never been able to say.
-    testGlobals.fetch = async () => { throw new Error("REST must not be called while the binding exists"); };
+    testGlobals.fetch = async () => {
+      throw new Error("REST must not be called while the binding exists");
+    };
     const run = await runBrowserAction("snapshot", payload, env);
     assert.ok(run);
     assert.equal(run.engine, "kitesurf");
@@ -499,7 +556,13 @@ test("a refused request shape falls back to chromium once, and a spent budget do
   // left for Kitesurf to refuse by name.
   assert.equal(kitesurfPayload(payload).viewport.deviceScaleFactor, 2);
 
-  const cases = [{ status: 501, retries: true }, { status: 400, retries: true }, { status: 429, retries: false }, { status: 500, retries: false }, { status: 200, retries: false }];
+  const cases = [
+    { status: 501, retries: true },
+    { status: 400, retries: true },
+    { status: 429, retries: false },
+    { status: 500, retries: false },
+    { status: 200, retries: false },
+  ];
   for (const { status, retries } of cases) {
     const sent: any[] = [];
     const env = {
@@ -531,7 +594,14 @@ test("a refused request shape falls back to chromium once, and a spent budget do
 test("an explicit chromium request skips kitesurf on the binding", async () => {
   const { runBrowserAction } = await import("../src/worker/lens-render.ts");
   const sent: any[] = [];
-  const env = { BROWSER: { quickAction: async (_a, body) => { sent.push(body); return new Response("{}", { status: 200 }); } } };
+  const env = {
+    BROWSER: {
+      quickAction: async (_a, body) => {
+        sent.push(body);
+        return new Response("{}", { status: 200 });
+      },
+    },
+  };
   const run = await runBrowserAction("snapshot", { url: "https://example.com" }, env, { engine: "chromium" });
   assert.ok(run);
   assert.equal(sent.length, 1);
@@ -571,7 +641,14 @@ test("the shared browser ceiling bills everyone to one bucket, not per caller", 
   // visitors have to land in the same bucket, because the allowance they are
   // spending belongs to the account rather than to either of them.
   const keys: any[] = [];
-  const env = { LENS_RL_BROWSER_ALL: { limit: (arg) => { keys.push(arg.key); return { success: true }; } } };
+  const env = {
+    LENS_RL_BROWSER_ALL: {
+      limit: (arg) => {
+        keys.push(arg.key);
+        return { success: true };
+      },
+    },
+  };
   for (const ip of ["203.0.113.7", "198.51.100.4"]) {
     const req = new Request("https://aadhar.sh/lens/shot?url=https://example.com", { headers: { "cf-connecting-ip": ip } });
     await overBudget(LENS_BUDGETS.browserAll, req, env);
@@ -583,9 +660,10 @@ test("the shared browser ceiling bills everyone to one bucket, not per caller", 
   // 2026-08-06: free plan is 1 Quick Action per 10s account-wide, and `shot`
   // used to allow 8/min to a single IP.
   for (const name of ["shot", "browser"]) {
-    assert.ok(LENS_BUDGETS[name].max <= BROWSER_FREE_PLAN.perMinute,
-      `${name} allows ${LENS_BUDGETS[name].max}/min to one caller, over the account's ${BROWSER_FREE_PLAN.perMinute}/min`);
+    assert.ok(
+      LENS_BUDGETS[name].max <= BROWSER_FREE_PLAN.perMinute,
+      `${name} allows ${LENS_BUDGETS[name].max}/min to one caller, over the account's ${BROWSER_FREE_PLAN.perMinute}/min`,
+    );
   }
-  assert.ok(LENS_BUDGETS.browserAll.max <= BROWSER_FREE_PLAN.perMinute,
-    "the shared ceiling must sit under the account allowance it exists to protect");
+  assert.ok(LENS_BUDGETS.browserAll.max <= BROWSER_FREE_PLAN.perMinute, "the shared ceiling must sit under the account allowance it exists to protect");
 });
