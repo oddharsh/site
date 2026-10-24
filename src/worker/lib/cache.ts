@@ -1,5 +1,6 @@
 import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
+import { ogVideoFor } from "./og-video.ts";
 import { CACHEABLE_PREFIXES } from "../routes.ts";
 
 // lib/cache.ts: the worker's caching kit, one primitive surface where four
@@ -293,6 +294,11 @@ export function shouldUseWorkersCache(request, cacheablePaths) {
   // "has an accept header", since every browser sends one.
   if (wantsMarkdown(request)) return false;
   const url = new URL(request.url);
+  // A preview fetcher that gets an og:video clip gets its own copy of the page
+  // (lib/og-video.ts), so it skips the cache both ways: a hit would hand it the
+  // plain document, and a miss would store its copy for everyone else. `/` is
+  // the page where this bites, being the one clip page Workers Cache answers.
+  if (ogVideoFor(url.pathname, request.headers.get("user-agent"))) return false;
   if (!isCanonicalHost(url.hostname)) return false;
   if (url.search) return false;
   if (cacheablePaths.has(url.pathname)) return true;
