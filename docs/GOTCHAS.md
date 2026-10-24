@@ -789,3 +789,17 @@ skips it.
     `String.fromCodePoint(0x202e)`; a braced escape also survives. The check
     scans every tracked and untracked text file, so it fires before `git add`.
     Checked by: `tools/contract-no-source-file-carries-a-bidi-control.test.ts`.
+
+86. **A custom property named in a template literal loses its colour in the
+    build.** The build shortens every `--name` across the staged tree by
+    find-and-replace (`tools/lib/mangle-custom-properties.ts`), so
+    `--f-jxl:` becomes `--2u:`. A script that writes `var(--f-${fmt})` still
+    asks for `--f-jxl` at runtime, nothing defines it any more, and the stroke
+    or background falls back to nothing. The unbuilt page looks right, so a
+    preview of `src/` cannot catch it. `/pixel-peeper`'s format ladder drew
+    every curve colourless in its built page on 2026-10-23. Write each name
+    out whole (a `{jxl:"var(--f-jxl)"}` map), which the rename rewrites like
+    any other reference. The guard used to look only for dynamic
+    `setProperty` calls. It now also refuses `--name${`, comments included,
+    since the staged text can't tell a comment from a script.
+    Checked by: `tools/contract-mangle-refuses-template-built-names.test.ts`.

@@ -37,21 +37,32 @@ const REFERENCE = /(?:var|style)\(\s*(--[a-z0-9][a-z0-9-]*)/g;
 /** A first argument to those APIs that is NOT a literal, which would be unsafe. */
 const PROPERTY_API_DYNAMIC = /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*(?![`"'])[^)]/g;
 
+/** A property name finished by a template literal, `var(--f-${fmt})`. The
+ *  rename cannot see the name it becomes, so the reference keeps the long
+ *  form while its definition is shortened, and the value falls back to
+ *  nothing. No DOM call is involved, so PROPERTY_API_DYNAMIC misses it:
+ *  /pixel-peeper's format ladder drew colourless in a built page this way on
+ *  2026-10-23 and looked right in the unbuilt one (gotcha 86). */
+const TEMPLATE_NAME = /--[a-z0-9-]*\$\{/g;
+
 const matchAll = (re: RegExp, text: string): string[] => [...text.matchAll(re)].map((m) => m[1]);
 
 export const definitionsIn = (text: string): string[] => matchAll(DEFINITION, text);
 export const referencesIn = (text: string): string[] => matchAll(REFERENCE, text);
 
 /**
- * Throw if any file hands a property-name API something other than a literal.
+ * Throw if any file hands a property-name API something other than a literal,
+ * or finishes a property name with a template literal (TEMPLATE_NAME).
  * The rename is a whole-tree find-and-replace, so a name assembled at runtime
  * is the one input it cannot follow.
  */
 export function assertNoDynamicPropertyNames(files: Map<string, string>): void {
   const offenders: string[] = [];
   for (const [name, text] of files) {
-    for (const m of text.matchAll(PROPERTY_API_DYNAMIC)) {
-      offenders.push(`${name}: ${text.slice(m.index, m.index + 60).replace(/\s+/g, " ")}`);
+    for (const re of [PROPERTY_API_DYNAMIC, TEMPLATE_NAME]) {
+      for (const m of text.matchAll(re)) {
+        offenders.push(`${name}: ${text.slice(m.index, m.index + 60).replace(/\s+/g, " ")}`);
+      }
     }
   }
   if (offenders.length) {
