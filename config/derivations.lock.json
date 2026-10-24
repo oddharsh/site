@@ -996,6 +996,6 @@
     "public/images/metadata.json": "1bdcd007583755255510c7a8887f2ace3f9711eff4e9d5456b55fd0cad2e2d0d",
     "src/worker/lib/api-limits.ts": "853715505b474ddcb05f18232005634a8e37cfaa113ddc490d879a445e9ccd1c",
     "src/worker/lib/public-api.ts": "63aad87ba513b233fc5606b33d1cba0d611d5cfedeae3ff2597b334b77e3b6e6",
-    "tools/photos/shell-data.ts": "969301d00d075c0b98bc1c797a76ecaf2d8959637d80b387f9203b98de868db0"
+    "tools/photos/shell-data.ts": "dce5bf698abc428bdc05d66ffb5c00d41a8cb9aff4085cd7e91446702317c333"
   }
 }

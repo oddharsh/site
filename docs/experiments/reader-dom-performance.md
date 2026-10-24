@@ -31,6 +31,8 @@ The RSS runs each perform fifteen sweeps before requesting GC, alternating fresh
 
 The existing differential suite compares the fitted DOM with linkedom across **53 documents**, including ten captured external pages. It also checks serialized trees and SVG behavior. New tests cover edits, moves, replacements, clears, detached-node reuse, and first-match selection. The benchmark compares every Readability article field, Markdown, and control labels against the baseline before timing.
 
+The two benchmarks left the tree on 2026-10-24; restore them from `8c013511` (`lens-reader/test/bench-dom.ts`, `lens-reader/test/bench-dom-memory.ts`).
+
 From a candidate worktree with frozen root and Reader dependencies installed:
 
 ```sh

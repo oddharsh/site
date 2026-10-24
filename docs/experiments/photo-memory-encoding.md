@@ -60,6 +60,8 @@ one encoder path. JPEG trial reuse remains a benchmark-only experiment.
 
 ## Reproduce
 
+The harness left the tree on 2026-10-24; `git show 8c013511:tools/photos/experiments/bench-memory.ts` restores it.
+
 Use separate baseline and candidate worktrees at the same base, install the repository-pinned toolchain, and provide libavif development files through `pkg-config`. Build the baseline from the experiment base commit; the candidate now uses the default native module:
 
 ```sh

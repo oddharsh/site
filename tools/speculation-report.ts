@@ -10,8 +10,8 @@
 // NAVIGATED after being speculated rather than merely speculated. This reads
 // /ledger/speculation.json from production and prints the table that decision
 // needs. It writes nothing: the promotion itself is an edit to SPECULATION in
-// shell-data.ts, gated on tools/speculation-probe.ts showing the promoted rule
-// actually fetches.
+// shell-data.ts, gated on an origin-side count showing the promoted rule
+// actually fetches (gotcha 33).
 //
 //   bun run speculation:report                # last 30 days, from aadhar.sh
 //   bun run speculation:report -- --min 20    # only paths speculated 20+ times
@@ -75,5 +75,5 @@ const cold = rows.filter((r) => r.rate !== null && r.rate <= 0.05 && r.speculate
 console.log(`\ncandidates to promote (rate >= 50%): ${hot.length ? hot.map((r) => r.path).join(", ") : "none"}`);
 console.log(`candidates to exclude (rate <= 5% on ${MIN * 3}+ speculations): ${cold.length ? cold.map((r) => r.path).join(", ") : "none"}`);
 console.log(
-  "\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\n`bun run speculation:probe` shows the promoted rule reaching the origin. Read that file's note first.",
+  "\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\nan origin-side count shows the promoted rule reaching the origin. Read gotcha 33 first.",
 );
