@@ -314,8 +314,8 @@
       "outputs": [
         "public/garage/enc"
       ],
-      "unverifiable": "The inputs are source images held outside this repository and SEVEN external encoders at whatever version the machine has. config/tools.json records those versions and is the right place to ask whether they moved; a digest here would restate that without adding anything, because the source images can never be hashed from a checkout.",
-      "regenerate": "bash tools/photos/gen-encoding-grids.sh && bash tools/photos/gen-encoding-samples.sh"
+      "unverifiable": "The inputs are source images held outside this repository and SEVEN external encoders at whatever version the machine has. config/tools.json records those versions and is the right place to ask whether they moved; a digest here would restate that without adding anything, because the source images can never be hashed from a checkout. The jx-* crops encode nothing: they decode two R2 objects for XT509890, the repack it had until 2026-10-16 (only reencode-hif-archives.ts --backup still holds it) and the HIF-born file R2 serves now.",
+      "regenerate": "bash tools/photos/gen-encoding-grids.sh && bash tools/photos/gen-encoding-samples.sh && bun tools/photos/gen-jxl-source-crops.ts <XT509890.HIF> <repack.jxl> <direct.jxl>"
     }
   ],
   "writers": {
