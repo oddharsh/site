@@ -67,38 +67,18 @@
     })(tree);
     return n;
   }
+  // The Worker sends one shape here, status "lab-required": runtime listing
+  // needs Browser Run's Chrome-beta lab, which a snapshot cannot reach.
   function webmcp(webmcp, data) {
-    webmcp = webmcp || {};
-    var status =
-      webmcp.status === "available"
-        ? { text: "runtime tools", kind: "ok" }
-        : webmcp.status === "lab-required"
-          ? { text: "lab required", kind: "warn" }
-          : webmcp.status === "error"
-            ? { text: "probe error", kind: "warn" }
-            : { text: "not observed", kind: "off" };
     var source = data.agent && data.agent.webmcp && data.agent.webmcp.found ? "a source marker" : "no source marker";
-    var inner = '<div class="lx-cap">The HTTP scan found ' + source + ". Browser Run runtime discovery is a separate observation.</div>";
-    if (webmcp.status === "available") {
-      var tools = Array.isArray(webmcp.tools) ? webmcp.tools : [];
-      inner += tools.length
-        ? '<div class="lx-tags">' +
-          tools
-            .map((tool) => {
-              return '<span class="lx-tag">' + esc(tool.name || "unnamed tool") + "</span>";
-            })
-            .join("") +
-          "</div>"
-        : '<div class="lx-none">The runtime API answered, but listed no tools.</div>';
-      inner += '<div class="lx-cap" style="margin-top:6px">Discovery only. Lens does not call WebMCP tools.</div>';
-    } else {
-      inner += '<div class="lx-none">' + esc(webmcp.detail || "No runtime WebMCP tools were observed.") + "</div>";
-      inner +=
-        '<div class="lx-cap" style="margin-top:6px">Use <span class="lx-tag">node tools/lens-webmcp.ts ' +
-        esc(data.finalUrl || data.url) +
-        "</span> on the current machine for a Chrome-beta lab probe.</div>";
-    }
-    return section("Runtime WebMCP", status, "What a browser session can discover after the page runs.", inner);
+    var inner =
+      '<div class="lx-cap">The HTTP scan found ' +
+      source +
+      ". Browser Run runtime discovery is a separate observation.</div>" +
+      '<div class="lx-none">' +
+      esc((webmcp && webmcp.detail) || "No runtime WebMCP tools were observed.") +
+      "</div>";
+    return section("Runtime WebMCP", { text: "lab required", kind: "warn" }, "What a browser session can discover after the page runs.", inner);
   }
   // The pane's whole promise is disagreement ("reveals a JS dependency"), so
   // compute it instead of leaving two numbers in two panes for the reader to

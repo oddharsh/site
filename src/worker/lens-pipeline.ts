@@ -54,10 +54,9 @@ type LensBudgetDecl = {
   key?: string;
 };
 
-// Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
-// (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
-// Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
-// 429. The per-IP ceilings below were written against no such limit. `shot`
+// Browser Run's free plan is account-wide (BROWSER_FREE_PLAN in lens.ts, with
+// its 2026-08-06 measurement). The per-IP ceilings below were first written
+// against no such limit. `shot`
 // alone allowed 8/min to a SINGLE visitor, so one person could spend the whole
 // account's minute and the next visitor got a failure that read like a bug.
 //

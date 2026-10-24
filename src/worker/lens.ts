@@ -609,22 +609,17 @@ function lensMachineFragment(data, state) {
   );
 }
 
-function lensBrowserFragment(data) {
-  if (!data || !data.ok) {
-    return (
-      '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
-      '<div class="lx-cap">This is opt-in: browser execution is slower and can run page JavaScript. Runtime WebMCP discovery is reported separately and requires the Chrome-beta lab.</div>' +
-      '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>'
-    );
-  }
+// The no-JS floor of the Browser pane; the island replaces it once a run lands.
+function lensBrowserFragment() {
   return (
-    "<div class=\"lx-browser-intro\"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot's HTTP fetch and the visitor's Human view." +
-    '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div>' +
+    '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
+    '<div class="lx-cap">This is opt-in: browser execution is slower and can run page JavaScript. Runtime WebMCP discovery is reported separately and requires the Chrome-beta lab.</div>' +
     // The floor states what it cannot do rather than omitting it. The chips are
     // buttons that fetch, so interaction genuinely needs JavaScript, and a
     // reader with it off should learn that from the page instead of from its
     // absence.
-    '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div></div>'
+    '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div>' +
+    '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>'
   );
 }
 
@@ -1801,7 +1796,7 @@ footer a { color:var(--link); }
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
         <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>
-        <div class="lx-body" id="lx-browser-body">${lensBrowserFragment(null)}</div>
+        <div class="lx-body" id="lx-browser-body">${lensBrowserFragment()}</div>
       </section>
     </div>
 
@@ -2244,10 +2239,13 @@ const LENS_BROWSER = defineLens({
       // Dropping the image silently would read as "the browser took no shot",
       // which is a different observation. Say which one happened.
       screenshotDropped: shotTooBig ? Math.round(rawShot.length * 0.75) : 0,
-      // WebMCP discovery is currently a Chrome-beta lab capability, not a
-      // production Browser Run binding capability. The local helper performs
-      // the real runtime listing; this field keeps that boundary explicit.
-      webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.ts." },
+      // Runtime WebMCP listing needs Browser Run's Chrome-beta lab pool, which
+      // the Workers binding cannot reach; tools/lens-webmcp.ts is the owner's
+      // probe. This field keeps that boundary explicit.
+      webmcp: {
+        status: "lab-required",
+        detail: "Listing runtime WebMCP tools needs Browser Run's Chrome-beta lab, which this snapshot cannot reach, so none were looked for.",
+      },
       fetchedBy: "Cloudflare Browser Run",
       // WHICH engine rendered this. A reader comparing two snapshots needs to know
       // whether they came from the same one, and "Browser Run" alone stopped being
@@ -3550,22 +3548,12 @@ const LENS_BOT_VIEWS = [
   { key: "Claude-User", label: "Claude-User", owner: "Anthropic", role: "answers", ua: "Claude-User/1.0" },
 ];
 
-// `accept` defaults to the browser-shaped header every existing caller was
-// sending inline, so the bot-views tier is byte-identical. The Markdown lens
-// passes its own, because there the Accept header IS the instrument: it replays
-// the exact string a named agent client sends and reports which representation
-// came back. Both callers share this one function rather than growing a second
-// outbound path, for the reason the per-hop redirect check below exists.
-export async function lensFetchAsBot(
-  targetUrl,
-  env,
-  signal,
-  userAgent,
-  accept = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
-) {
+// The bot-views tier: lensFetch's browser-shaped headers under another
+// crawler's user agent.
+export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
   const headers = new Headers({
     "user-agent": userAgent,
-    accept,
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   });
   if (!URL.canParse(targetUrl)) throw new TypeError("Invalid URL");

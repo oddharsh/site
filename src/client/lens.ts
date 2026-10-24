@@ -2495,47 +2495,75 @@
     );
   }
 
-  function runReader() {
-    if (readerBusy || !data) return;
+  // The five lazy tabs (Reader, Wire, Tools, NLWeb, Markdown) share one shape:
+  // mark the tab busy, load its island once, run it for the scan on screen, and
+  // drop any reply that lands after the next scan, so site A's result never
+  // paints over site B's. A wire trace takes long enough that a second URL
+  // mid-run is the normal case. Each caller supplies only what differs: which
+  // island, how to start it, and what a reply or a failure leaves behind.
+  // `current` is an extra check on top of the URL (NLWeb's question).
+  function runLazyTab(t: {
+    island: "LensReader" | "LensWire" | "LensTools" | "LensNlweb" | "LensMarkdown";
+    src: string;
+    setBusy: (busy: boolean) => void;
+    start: (run: (...args: any[]) => any, targetUrl: string, done: (json: any) => void, failed: () => void) => void;
+    done: (json: any) => void;
+    failed?: () => void;
+    current?: () => boolean;
+    status?: boolean;
+  }) {
     var targetUrl = data.finalUrl || data.url;
-    readerBusy = true;
+    var sameScan = () => !!data && (data.finalUrl || data.url) === targetUrl;
+    var live = () => sameScan() && (!t.current || t.current());
+    function stop() {
+      t.setBusy(false);
+      renderMachine();
+    }
+    t.setBusy(true);
     renderMachine();
     function loaded() {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensReader) {
-        readerBusy = false;
-        renderMachine();
-        return;
-      }
-      window.LensReader.run(
-        data,
+      if (!sameScan()) return;
+      var island = window[t.island];
+      var run = island && island.run;
+      if (!run) return stop();
+      t.start(
+        run,
+        targetUrl,
         (json) => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          readerBusy = false;
-          readerData = json;
+          if (!live()) return;
+          t.setBusy(false);
+          t.done(json);
           renderMachine();
-          renderStatus();
+          if (t.status) renderStatus();
         },
         () => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          readerBusy = false;
+          if (!live()) return;
+          t.setBusy(false);
+          if (t.failed) t.failed();
           renderMachine();
         },
       );
     }
-    if (window.LensReader) {
-      loaded();
-      return;
-    }
+    if (window[t.island]) return loaded();
     var script = document.createElement("script");
-    script.src = "/lens-reader.js?v=1";
+    script.src = t.src;
     script.onload = loaded;
     script.onerror = () => {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      readerBusy = false;
-      renderMachine();
+      if (sameScan()) stop();
     };
     document.head.appendChild(script);
+  }
+
+  function runReader() {
+    if (readerBusy || !data) return;
+    runLazyTab({
+      island: "LensReader",
+      src: "/lens-reader.js?v=1",
+      setBusy: (b) => (readerBusy = b),
+      start: (run, _url, done, failed) => run(data, done, failed),
+      done: (json) => (readerData = json),
+      status: true,
+    });
   }
 
   // The Wire lens. Same three-state shape as Reader and the same lazy module,
@@ -2560,50 +2588,14 @@
 
   function runWire() {
     if (wireBusy || !data) return;
-    var targetUrl = data.finalUrl || data.url;
-    wireBusy = true;
-    renderMachine();
-    function loaded() {
-      // Every callback re-checks that the scan it was started for is still the
-      // one on screen. A wire trace is the slowest thing on this page, so a
-      // visitor who types a second URL mid-record is the normal case rather than
-      // the edge one, and a late reply must not paint site A's waterfall over
-      // site B's scan.
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensWire) {
-        wireBusy = false;
-        renderMachine();
-        return;
-      }
-      window.LensWire.run(
-        data,
-        (json) => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          wireBusy = false;
-          wireData = json;
-          renderMachine();
-          renderStatus();
-        },
-        () => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          wireBusy = false;
-          renderMachine();
-        },
-      );
-    }
-    if (window.LensWire) {
-      loaded();
-      return;
-    }
-    var script = document.createElement("script");
-    script.src = "/lens-wire.js?v=1";
-    script.onload = loaded;
-    script.onerror = () => {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      wireBusy = false;
-      renderMachine();
-    };
-    document.head.appendChild(script);
+    runLazyTab({
+      island: "LensWire",
+      src: "/lens-wire.js?v=1",
+      setBusy: (b) => (wireBusy = b),
+      start: (run, _url, done, failed) => run(data, done, failed),
+      done: (json) => (wireData = json),
+      status: true,
+    });
   }
 
   // The Tools lens. Opt-in like Reader and Wire, and for the same reason: every
@@ -2726,48 +2718,14 @@
 
   function runTools() {
     if (toolsBusy || !data) return;
-    var targetUrl = data.finalUrl || data.url;
-    toolsBusy = true;
-    renderMachine();
-    function loaded() {
-      // Same staleness guard as runWire: a visitor who types a second URL while
-      // this is in flight is normal, and a late reply must not paint origin A's
-      // catalogue over origin B's scan.
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensTools) {
-        toolsBusy = false;
-        renderMachine();
-        return;
-      }
-      window.LensTools.run(
-        targetUrl,
-        (json) => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          toolsBusy = false;
-          toolsData = json;
-          renderMachine();
-        },
-        () => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          toolsBusy = false;
-          toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" };
-          renderMachine();
-        },
-      );
-    }
-    if (window.LensTools) {
-      loaded();
-      return;
-    }
-    var script = document.createElement("script");
-    script.src = "/lens-tools.js?v=1";
-    script.onload = loaded;
-    script.onerror = () => {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      toolsBusy = false;
-      renderMachine();
-    };
-    document.head.appendChild(script);
+    runLazyTab({
+      island: "LensTools",
+      src: "/lens-tools.js?v=1",
+      setBusy: (b) => (toolsBusy = b),
+      start: (run, url, done, failed) => run(url, done, failed),
+      done: (json) => (toolsData = json),
+      failed: () => (toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" }),
+    });
   }
 
   // The NLWeb lens. Opt-in like Reader and Tools, and for a stronger reason than
@@ -2787,55 +2745,23 @@
 
   function runNlweb() {
     if (nlwebBusy || !data) return;
-    var targetUrl = data.finalUrl || data.url;
     // Read the box BEFORE the pane repaints into its pending state, or the
     // visitor's question is gone by the time the request is built.
     if (window.LensNlweb && window.LensNlweb._question) {
       nlwebQuery = window.LensNlweb._question(machineBody) || nlwebQuery;
     }
     var askedFor = nlwebQuery;
-    nlwebBusy = true;
-    renderMachine();
-    function loaded() {
-      // Same staleness guard as runTools, with one more thing to guard: a
-      // visitor may change the QUESTION as well as the URL while a request is in
-      // flight, and a late reply must not be labelled with the new question.
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensNlweb) {
-        nlwebBusy = false;
-        renderMachine();
-        return;
-      }
-      window.LensNlweb.run(
-        targetUrl,
-        askedFor,
-        (json) => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
-          nlwebBusy = false;
-          nlwebData = json;
-          renderMachine();
-        },
-        () => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
-          nlwebBusy = false;
-          nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" };
-          renderMachine();
-        },
-      );
-    }
-    if (window.LensNlweb) {
-      loaded();
-      return;
-    }
-    var script = document.createElement("script");
-    script.src = "/lens-nlweb.js?v=1";
-    script.onload = loaded;
-    script.onerror = () => {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      nlwebBusy = false;
-      renderMachine();
-    };
-    document.head.appendChild(script);
+    runLazyTab({
+      island: "LensNlweb",
+      src: "/lens-nlweb.js?v=1",
+      setBusy: (b) => (nlwebBusy = b),
+      // a visitor may change the QUESTION as well as the URL while a request is
+      // in flight, and a late reply must not be labelled with the new question
+      current: () => askedFor === nlwebQuery,
+      start: (run, url, done, failed) => run(url, askedFor, done, failed),
+      done: (json) => (nlwebData = json),
+      failed: () => (nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" }),
+    });
   }
 
   // The Markdown lens. Opt-in like the three above it, and metered like NLWeb
@@ -2856,47 +2782,14 @@
 
   function runMarkdown() {
     if (markdownBusy || !data) return;
-    var targetUrl = data.finalUrl || data.url;
-    markdownBusy = true;
-    renderMachine();
-    function loaded() {
-      // Same staleness guard as runTools: a visitor can scan a different URL
-      // while this is in flight, and a late reply must not be labelled with it.
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      if (!window.LensMarkdown) {
-        markdownBusy = false;
-        renderMachine();
-        return;
-      }
-      window.LensMarkdown.run(
-        targetUrl,
-        (json) => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          markdownBusy = false;
-          markdownData = json;
-          renderMachine();
-        },
-        () => {
-          if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-          markdownBusy = false;
-          markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" };
-          renderMachine();
-        },
-      );
-    }
-    if (window.LensMarkdown) {
-      loaded();
-      return;
-    }
-    var script = document.createElement("script");
-    script.src = "/lens-markdown.js?v=1";
-    script.onload = loaded;
-    script.onerror = () => {
-      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
-      markdownBusy = false;
-      renderMachine();
-    };
-    document.head.appendChild(script);
+    runLazyTab({
+      island: "LensMarkdown",
+      src: "/lens-markdown.js?v=1",
+      setBusy: (b) => (markdownBusy = b),
+      start: (run, url, done, failed) => run(url, done, failed),
+      done: (json) => (markdownData = json),
+      failed: () => (markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" }),
+    });
   }
 
   function runCloudflareScore() {
@@ -3719,13 +3612,12 @@
   }
 
   // View and lens switches only replace content inside the existing page window,
-  // and they now apply it directly. They used to route through a same-document
-  // View Transition, which had to be defused case by case: setVsChrome flipped
-  // its flag outside the callback because syncUrl read it synchronously, and
-  // setLens passed animate:false outright. Applying the change directly is what
-  // every caller was already steering toward. `animate` stays in both signatures
-  // because callers pass it positionally; it is inert.
-  function setView(v, animate?: any, writeHistory?: any) {
+  // so they apply it directly. A same-document View Transition was tried and
+  // dropped: it had to be defused case by case (setVsChrome flipped its flag
+  // outside the callback because syncUrl read it synchronously, and setLens
+  // turned the animation off outright), so every caller was already steering
+  // toward no transition.
+  function setView(v, writeHistory?: any) {
     if (["both", "human", "machine", "browser", "delta"].indexOf(v) < 0) v = "both";
     view = v;
     try {
@@ -3743,7 +3635,7 @@
       renderBrowser();
     }
   }
-  function setLens(l, animate?: any, writeHistory?: any) {
+  function setLens(l, writeHistory?: any) {
     lens = l;
     if (writeHistory !== false) syncUrl(true);
     [].forEach.call(document.querySelectorAll(".lx-tab"), (b) => {
@@ -3906,8 +3798,8 @@
   if (urlState.view !== "both") view = urlState.view;
   if (urlState.lens !== "anatomy") lens = urlState.lens;
   counterfactuals = urlState.counterfactuals;
-  setView(view, false, false);
-  setLens(lens, false, false);
+  setView(view, false);
+  setLens(lens, false);
 
   window.addEventListener("popstate", () => {
     var state = readUrlState();
@@ -3938,8 +3830,8 @@
       renderBrowser();
       statusBar.innerHTML = "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>";
     }
-    setView(view, true, false);
-    setLens(lens, false, false);
+    setView(view, false);
+    setLens(lens, false);
   });
 
   // deep link: /lens?url=… autoruns. Speculation safety: an autorun fires a
