@@ -1406,9 +1406,10 @@ below whenever they look unreferenced again:
   dig +short default._bimi.aadhar.sh TXT   # "v=BIMI1; l=https://aadhar.sh/bimi.svg"
   ```
 
-- **`design/styles.css`** is the design system's entry point, four `@import`s
-  over `design/tokens/`. Nothing the site serves links it (the site inlines only
-  the font tokens, per the byte-budget rule in CLAUDE.md). Its consumer is the
+- **`design/styles.css`** is the design system's entry point, three `@import`s
+  over `design/tokens/`, leaving out `fonts.css` on purpose (gotcha 88).
+  Nothing the site serves links it (the site inlines only the font tokens, per
+  the byte-budget rule in CLAUDE.md). Its consumer is the
   `aadhar-sh-design` skill package, which lists it in `globalCssPaths` and tells
   prototypes to link it. Check with:
 

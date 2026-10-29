@@ -2,7 +2,7 @@
 
 - **`DESIGN.md`** defines the Luna appearance and the guardrails against modernizing it.
 - **`tokens/`** holds the canonical colors, bevels, fonts, and typography. Change tokens here before updating `src/styles/luna.css`.
-- **`styles.css`** imports the four token files for the external `aadhar-sh-design` skill. Its consumer is documented in `docs/MAINTENANCE.md`.
+- **`styles.css`** imports three of the four token files for the external `aadhar-sh-design` skill. Its consumer is documented in `docs/MAINTENANCE.md`. `tokens/fonts.css` is reference only: loading it hides the installed Bold and Italic faces (gotcha 88).
 
 ## Retired plans
 
