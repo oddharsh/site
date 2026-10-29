@@ -10,6 +10,14 @@
 
    DO NOT add a `url(...)` source or swap any family here. Keeping these as
    local-only is the whole point.
+
+   REFERENCE ONLY: nothing may load this file (gotcha 88). A @font-face named
+   "Tahoma" replaces the installed Tahoma family, and each rule here is one
+   regular face claiming weights 400 to 700. Measured 2026-10-29 in Chrome on
+   macOS 27.2: bold Tahoma and bold-italic Trebuchet drew at regular weight,
+   and Verdana italic was regular slanted by the browser. WebKit matched the
+   real faces anyway, which is how it went unnoticed. The typography.css stacks
+   already name these families, so the browser finds every installed face.
    ============================================================================ */
 
 @font-face {

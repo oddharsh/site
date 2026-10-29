@@ -816,3 +816,17 @@ skips it.
     Keep bare Bun discovery, the package scripts, and harness discovery on the
     same directory so each validation path still runs the complete suite.
     Checked by: `tools/tests/contract-test-discovery.test.ts`.
+
+88. **A `local()` @font-face named after an installed font hides its Bold
+    and Italic.** `design/tokens/fonts.css` declares "Tahoma", "Verdana" and
+    the other house families as one regular face each, claiming weights 400
+    to 700. Loaded, those rules replace the installed family, so the browser
+    never sees Tahoma Bold or Verdana Italic. Measured 2026-10-29 in Chrome on
+    macOS 27.2: bold Tahoma and bold-italic Trebuchet drew at regular weight
+    (239.95 px against 276.84 px for the real bold), and Verdana italic was
+    regular slanted by the browser. WebKit matched the real faces anyway, so
+    a Safari check shows nothing wrong. `design/styles.css` imported it, which
+    put regular-weight title bars in every design-skill prototype viewed in
+    Chrome. The file stays as a reference; nothing loads it, and the
+    typography.css stacks name the families directly.
+    Checked by: `tools/tests/contract-design-fonts-stay-unloaded.test.ts`.

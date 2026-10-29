@@ -2,17 +2,19 @@
    aadhar.sh — design system entry point
    ----------------------------------------------------------------------------
    The Windows XP "Luna" (Blue) resto-mod, as a consumable design system.
-   This file is import-list ONLY — every token + font-face lives in the files
-   below. Consumers link THIS one file.
+   This file is import-list ONLY — every token lives in the files below.
+   Consumers link THIS one file.
 
    NOTE on the real site: aadhar.sh inlines its CSS per page (CSP + one-request
    perf). These tokens ARE that same source of truth, just shipped as a linkable
-   sheet for tooling/prototyping. The @font-face rules are LOCAL-ONLY (src:
-   local() — no uploaded binaries, no web fetch); native fonts only is a hard
-   brand rule.
+   sheet for tooling/prototyping.
+
+   tokens/fonts.css is left out on purpose, as luna.css leaves it out. Its
+   @font-face rules reuse the installed family names, which hides the real Bold
+   and Italic faces: in Chrome, bold Tahoma drew at regular weight and Verdana
+   italic came out as slanted regular (gotcha 88).
    ============================================================================ */
 
 @import "tokens/colors.css";
-@import "tokens/fonts.css";
 @import "tokens/typography.css";
 @import "tokens/bevels.css";
