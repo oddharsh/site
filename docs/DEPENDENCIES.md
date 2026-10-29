@@ -473,7 +473,7 @@ does not make a failed write safe to ignore.
   Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
   measurement that decided it. `bun lint --doctor` says which rules run
   natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.89.0 is the adapter the three rules vendored from
+- @oxlint/plugins 1.90.0 is the adapter the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
   `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
   the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
