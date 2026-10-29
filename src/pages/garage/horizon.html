@@ -571,7 +571,7 @@ placeholder
 .sy-out .hi { color: var(--warn); font-weight: bold; }
 .sy-out .lo { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
 /* card: html-in-canvas */
-/* ── HTML-in-Canvas (drawElement) demo ───────────────────────────────── */
+/* ── HTML-in-Canvas (drawElementImage) demo ───────────────────────────────── */
 .hic-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; align-items: start; }
 @media (max-width: 520px) { .hic-stage { grid-template-columns: 1fr; } }
 .hic-cap { font-size: var(--text-micro); color: var(--grey-48); margin: 0 0 4px; }
@@ -951,7 +951,7 @@ window.__horizonCaps = (function () {
       "corner-shape": function () { return (CSS.supports('corner-shape: squircle') || CSS.supports('corner-shape: superellipse(1)')); },
       "interpolate-size": function () { return (CSS.supports('interpolate-size: allow-keywords')); },
       "scheduler-yield": function () { return (!!(window.scheduler && typeof scheduler.yield === "function")); },
-      "html-in-canvas": function () { return (!!(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype && 'drawElement' in CanvasRenderingContext2D.prototype)); },
+      "html-in-canvas": function () { return (!!(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype && 'drawElementImage' in CanvasRenderingContext2D.prototype)); },
       "masonry": function () {
         // CSS.supports() can return false even when the feature IS live (Chrome
         // Canary "Grid Lanes" flag gates the value via a different path than
@@ -2046,93 +2046,75 @@ for (const t of tracks) {
     </section>
 
     <p class="note" style="margin:22px 0 0">
-      <strong>Even further out</strong>: flag-gated in Chrome, not shipped
-      by default in any engine. Bleeding edge. (To exercise the supported ones
-      above, flip the master switch in Canary:
-      <code>chrome://flags#enable-experimental-web-platform-features</code>.)
+      <strong>Further out</strong>: experiments and recent arrivals. Some still need
+      a flag in Chrome. To exercise flag-gated features, flip the master switch in Canary:
+      <code>chrome://flags#enable-experimental-web-platform-features</code>.
     </p>
 
     <section class="demo" data-cap="html-in-canvas">
       <h2>
         <span>HTML-in-Canvas <span class="mono">/ ctx.drawElementImage()</span></span>
-        <span class="stat trial">Origin trial Ch148-150 &middot; WICG</span>
+        <span class="stat chrome">Chrome 157 &middot; WICG</span>
       </h2>
       <p class="note">
         <a href="https://github.com/WebKit/standards-positions/issues" rel="external" class="wk non" style="margin:0 6px 0 0">WebKit: no position</a>
         Draws a <em>live, laid-out</em> DOM subtree straight into a 2D canvas
         with <code>ctx.drawElementImage(el, x, y)</code> (WebGL gets
-        <code>texElementImage2D</code>, WebGPU <code>copyElementImageToTexture</code>),
-        after opting the element in with a <code>layoutsubtree</code> attribute.
+        <code>texElementImage2D</code>, WebGPU <code>drawElementImageToTexture</code>),
+        with <code>content="drawable"</code> on the canvas and <code>drawable</code> on its child.
         The element keeps real text layout, fonts,
         and accessibility. Unlike <code>foreignObject</code>+SVG, it
         isn&apos;t tainted, doesn&apos;t silently drop styles, and can be
         composited, transformed, and post-processed pixel-by-pixel. Below: a
-        real XP title bar on the left, rasterized into the canvas on the right
-        and tilted: one source of truth, two surfaces.
+        real XP title bar, drawn inside the canvas and tilted.
       </p>
-      <div class="hic-stage">
-        <div>
-          <p class="hic-cap">live DOM (the source element)</p>
-          <div class="hic-src" id="hic-source">
-            <span>My Documents</span>
-            <span class="glyphs"><span>_</span><span>&#9633;</span><span>&times;</span></span>
-          </div>
+      <p class="hic-cap">A live HTML title bar, drawn into the canvas:</p>
+      <canvas class="hic-canvas" id="hic-canvas" width="320" height="120" content="drawable">
+        <div class="hic-src" id="hic-source" drawable>
+          <span>My Documents</span>
+          <span class="glyphs"><span>_</span><span>&#9633;</span><span>&times;</span></span>
         </div>
-        <div>
-          <p class="hic-cap"><code>drawElement</code> &rarr; canvas (skewed)</p>
-          <canvas class="hic-canvas" id="hic-canvas" width="320" height="120" aria-label="the title bar above, rasterized into a canvas and tilted"></canvas>
-          <p class="hic-note2">Same markup, now compositable pixels.</p>
-        </div>
-      </div>
+      </canvas>
       <p class="replaces">
-        On the site: this is the only sanctioned way to take the hand-built XP
+        On the site: this can take the hand-built XP
         chrome (the title bars, the contact-sheet photo frames, the Fuji
         LCD tooltip) and run it through canvas effects (a tilt, a CRT
         scanline pass, a drop-shadow bake) <em>without</em> re-drawing any of it
         in canvas primitives or shipping an html2canvas-style screenshotting
         library. Picture a one-off &quot;rendered on a 2006 CRT&quot; hero, or
-        baking a share-card OG image of the live now-playing list. But it is a
-        single-engine flag with no WebKit position, so it stays a garage toy:
+        baking a share-card OG image of the live now-playing list. Chrome shipped it in 157, and it stays a garage toy here:
         the homepage cannot depend on it for anything Safari/Firefox visitors
         need to see.
       </p>
       <details name="sketch">
-        <summary class="note" style="cursor:pointer">the call (what the canvas on the right is doing)</summary>
+        <summary class="note" style="cursor:pointer">the call (what the canvas is doing)</summary>
 <pre>const el  = document.getElementById("hic-source");
 const ctx = canvas.getContext("2d");
 
 // tilt the whole surface, then rasterize the LIVE element into it
 ctx.translate(20, 14);
 ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
-ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has layoutsubtree)
+ctx.drawElementImage(el, 0, 0);            // el is a drawable child of canvas
 
 // from here it's normal canvas: ctx.filter, getImageData, WebGL texElementImage2D…</pre>
       </details>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>drawElementImage</code> yet,
-        the canvas shows a placeholder instead of the live rasterization. It is in
-        origin trial in Chrome&nbsp;148 through 150; enable
-        <code>chrome://flags#canvas-draw-element</code> to see it for real.
+        the canvas shows a placeholder instead of the live rasterization.
       </p>
       <script>
       (function () {
         var c = document.getElementById("hic-canvas");
         if (!c || !c.getContext) return;
         var ctx = c.getContext("2d"), el = document.getElementById("hic-source");
-        // the primitive was renamed drawElement -> drawElementImage in the OT;
-        // prefer the new name, fall back to the old for pre-OT builds.
-        var draw = ctx && (typeof ctx.drawElementImage === "function" ? "drawElementImage"
-                 : typeof ctx.drawElement === "function" ? "drawElement" : null);
-        // The demo draws in a fixed 320x120 design space, but the canvas has CSS
-        // width:100% (no max-width), so it stretches wider than 320 and the fixed
-        // bitmap gets upscaled and reads soft. Size the backing store to the DISPLAYED
-        // width x devicePixelRatio (capped 2x) and scale the context so the 320x120
-        // drawing maps onto it at full device resolution.
+        if (!ctx) return;
+        var draw = typeof ctx.drawElementImage === "function";
         var LW = 320, LH = 120;
         function fit() {
           var dpr = Math.min(window.devicePixelRatio || 1, 2), cssW = c.clientWidth || LW;
           var scale = cssW / LW * dpr;
-          c.width = Math.round(LW * scale); c.height = Math.round(LH * scale);
+          var width = Math.round(LW * scale), height = Math.round(LH * scale);
+          if (c.width !== width || c.height !== height) { c.width = width; c.height = height; }
           ctx.setTransform(scale, 0, 0, scale, 0, 0);
         }
         function render() {
@@ -2142,20 +2124,57 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
               ctx.clearRect(0, 0, LW, LH);
               ctx.save(); ctx.translate(20, 14);
               ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
-              ctx[draw](el, 0, 0); ctx.restore(); return;
-            } catch (e) {}
+              ctx.drawElementImage(el, 0, 0); ctx.restore(); return;
+            } catch (e) { ctx.restore(); }
           }
           // unavailable here -> honest placeholder, not a confusing blank box
           ctx.fillStyle = "#f3f4f8"; ctx.fillRect(0, 0, LW, LH);
           ctx.fillStyle = "#7a808c"; ctx.textAlign = "center";
           ctx.font = "11px Tahoma, sans-serif";
           ctx.fillText("ctx.drawElementImage() unavailable", LW / 2, LH / 2 - 6);
-          ctx.fillText("enable #canvas-draw-element", LW / 2, LH / 2 + 12);
+          ctx.fillText("Try a browser that supports it", LW / 2, LH / 2 + 12);
         }
+        c.addEventListener("paint", render);
         render();
         window.addEventListener("resize", render);
       })();
       </script>
+    </section>
+
+    <section class="demo" id="canvas-text-metrics">
+      <h2><span>Enhanced Canvas TextMetrics <span class="mono">/ hit testing and selection</span></span><span class="stat trial">Chrome 159 planned</span></h2>
+      <p class="note">Canvas can measure text today. The <a href="https://chromestatus.com/feature/5075532483657728" rel="external">extended metrics</a> add character hit testing, selection rectangles and glyph clusters. Click the line to ask the browser which text offset sits there.</p>
+      <canvas id="metrics-canvas" width="500" height="60" style="max-width:100%;border:1px solid var(--frame)" aria-label="Canvas text reading My Documents. Click to inspect the text offset."></canvas>
+      <p class="note" id="metrics-output" aria-live="polite">Checking for enhanced text metrics.</p>
+      <p class="replaces">On the site: a canvas-based text editor would need this; the existing explainers keep their controls and prose in HTML. It is a useful companion to HTML-in-Canvas, which draws real elements into the scene.</p>
+      <script>
+      (function () {
+        var c = document.getElementById("metrics-canvas"), out = document.getElementById("metrics-output"), ctx = c.getContext("2d");
+        if (!ctx) { out.textContent = "Canvas is unavailable here."; return; }
+        ctx.font = "24px Tahoma, sans-serif";
+        ctx.fillText("My Documents", 20, 38);
+        var metrics = ctx.measureText("My Documents");
+        if (typeof metrics.getIndexFromOffset !== "function") { out.textContent = "Enhanced TextMetrics is unavailable in this browser."; return; }
+        out.textContent = "Click the text to inspect its offset.";
+        c.addEventListener("click", function (event) {
+          var rect = c.getBoundingClientRect(), x = (event.clientX - rect.left) * c.width / rect.width - 20;
+          out.textContent = "Text offset: " + metrics.getIndexFromOffset(x) + " (UTF-16 code units).";
+        });
+      })();
+      </script>
+    </section>
+
+    <section class="demo" id="offline-audio-chunks">
+      <h2><span>Offline audio <span class="mono">/ incremental rendering</span></span><span class="stat trial">Chrome 158 planned</span></h2>
+      <p class="note"><a href="https://chromestatus.com/feature/5109900936085504" rel="external">Incremental rendering</a> delivers an offline audio graph in chunks instead of allocating the whole output buffer up front. That matters when a long render would otherwise hold all its samples in memory.</p>
+      <p class="replaces">On the site: the <a href="/lwe/dac">DAC explainer</a> makes short audio examples, so it has no demonstrated memory problem to solve. Longer exports would be a better test. This card is a roadmap entry; there is no live probe here yet.</p>
+    </section>
+
+    <section class="demo" id="text-overflow-string">
+      <h2><span>text-overflow <span class="mono">/ custom marker</span></span><span class="stat chrome">Chrome 157</span></h2>
+      <p class="note">A <a href="https://chromestatus.com/feature/6294595288825856" rel="external">string value</a> lets a clipped line end with a chosen marker instead of the standard ellipsis. The full text remains in the document.</p>
+      <p style="width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-overflow:' [more]'">My Documents and other very long folder names</p>
+      <p class="replaces">On the site: taskbar labels already use an ellipsis. A custom marker is a matter of taste, and unsupported browsers keep the ellipsis above.</p>
     </section>
 
     <section class="demo" id="masonry" data-cap="masonry">
@@ -3143,7 +3162,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="patching-card">
       <h2>
         <span>Document patching <span class="mono">/ declarative partial updates</span></span>
-        <span class="stat chrome">Chrome 150 streaming &middot; methods flag</span>
+        <span class="stat chrome">Chrome 150 patching &middot; 157 insertion methods</span>
       </h2>
       <p class="note">
         Out-of-order HTML streaming and in-place DOM patching as a browser primitive
@@ -3162,8 +3181,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>streamHTML()</code> / <code>streamAppendHTML()</code> that return a
         <code>WritableStream</code>, and a <code>{ runScripts: true }</code> option
         that finally gives <code>createContextualFragment</code>&apos;s behaviour a
-        documented name. Chrome&nbsp;153, behind
-        <code>#enable-experimental-web-platform-features</code>.
+        documented name. Chrome lists the renewed insertion and streaming methods
+        for <a href="https://chromestatus.com/feature/5054329641893888" rel="external">157</a>.
       </p>
       <p class="note">
         <strong>Correction (2026-07-30):</strong> this card previously credited
@@ -5222,13 +5241,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="text-decoration-inset">
       <h2>
         <span>text-decoration-inset</span>
-        <span class="stat trial">Firefox 146 &middot; Safari TP 249 &middot; Chrome no</span>
+        <span class="stat trial">Firefox 146 &middot; Safari TP 249 &middot; Chrome 157</span>
       </h2>
       <p class="note">
         Shortens an underline in from both ends, so a rule can stop before the
         descenders and the padding rather than running the full width of the text run.
         Worth a card mostly for the shape of its adoption: <strong>Gecko shipped it
-        first</strong>, WebKit has it in preview, and Chrome hasn&apos;t started. Several of the 90 cards here are
+        first</strong>, WebKit has it in preview, and Chrome lists it for 157. Several cards here are
         WebKit-first, since Apple ships plenty nobody else has yet. This is the only one
         that is <em>Gecko</em>-first, which is a useful corrective to reading the
         frontier as a Chrome release-notes feed with a Safari column bolted on.
@@ -5238,7 +5257,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: marginal. The one place it would help is the Notepad and folder-index
         link styling, where an underline currently butts against adjacent punctuation.
         Filed as a taste improvement rather than anything structural, and it can ship the
-        day Chrome moves, since an unsupported <code>text-decoration-inset</code> is
+        as a progressive enhancement, since an unsupported <code>text-decoration-inset</code> is
         simply dropped and the underline stays full-width.
       </p>
       <p class="unsupported">No <code>text-decoration-inset</code> here, so the underline above runs edge to edge.</p>
@@ -7083,7 +7102,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <li><code>&lt;use href=&quot;icons.svg&quot;&gt;</code> with no <code>#fragment</code>: Chrome&nbsp;137 and Safari&nbsp;27 (per WebKit&apos;s release notes); Firefox no.</li>
         <li><code>context-fill</code> / <code>context-stroke</code>, so a marker or a <code>&lt;use&gt;</code> copy paints in its referrer&apos;s colour: Chrome&nbsp;124 and Firefox&nbsp;111. WebKit marks both keywords unimplemented. <a href="https://github.com/WebKit/standards-positions/issues/331" rel="external" class="wk non">WebKit: no position</a></li>
         <li>SVG filters ship everywhere and disagree in detail. One concrete gap: CSS <code>filter</code> on SVG elements works in Chrome&nbsp;89 and Firefox&nbsp;35; Safari ignores it.</li>
-        <li><code>getPathData()</code> / <code>setPathData()</code>: Firefox&nbsp;137 only; Chrome keeps it behind an experimental flag.</li>
+        <li><code>getPathData()</code> / <code>setPathData()</code>: Firefox&nbsp;137; Chrome lists the structured path data API for <a href="https://chromestatus.com/feature/4787972240179200" rel="external">159</a>.</li>
       </ul>
       <p class="note">The dots below use <code>fill=&quot;context-stroke&quot;</code>, so each should match its own line:</p>
       <svg class="id-ctx" viewBox="0 0 240 44" width="240" height="44" role="img" aria-label="Two lines whose end markers take the line colour through context-stroke">
@@ -8278,7 +8297,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     "corner-shape": "corner-shape",
     "interpolate-size": "calc-size()",
     "scheduler-yield": "scheduler.yield",
-    "html-in-canvas": "drawElement",
+    "html-in-canvas": "drawElementImage",
     "masonry": "masonry",
     "jpeg-xl": "jpeg-xl",
     "hdr-agtm": "HDR-AGTM",
