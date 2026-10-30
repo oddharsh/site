@@ -112,7 +112,9 @@ test("the /around crawl stays inside its ledger and still writes its history", a
     },
   });
 
-  await cronAround(env); // resolving at all is half the point: it used to reject
+  // Resolving at all is half the point: it used to reject. Said in words, so a
+  // rejection reads as this pin failing and not as a crash in the code under test.
+  await cronAround(env).catch((err) => assert.fail(`cronAround rejected (${err.message}): one neighbor's refused subrequest must not reject the whole crawl`));
 
   assert.ok(net.seen.length <= AROUND_SUBREQUEST_LIMIT, `the crawl made ${net.seen.length} requests against a ledger of ${AROUND_SUBREQUEST_LIMIT}`);
   // The control: this network really does ask for more than the ledger holds,

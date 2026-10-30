@@ -10,7 +10,8 @@
 // Each drift test carries its control in the same test: the unmodified fixture
 // produces zero failures, so the failure asserted is the mutation's and not
 // the fixture's. The declaration is the real config/infra.json throughout.
-import { assert, readFileSync, test } from "./contract-shared.ts";
+import { execFileSync } from "node:child_process";
+import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
 import { agentRepresentation, agentSurfaces } from "../lib/agent-representation.ts";
 import {
   AGENT_SURFACE_FLOOR,
@@ -32,6 +33,7 @@ import {
   compareZoneSetting,
   dnsKey,
   dnsQueries,
+  PROVISIONING_PINS,
   SHARED_DICTIONARY_SECTION,
   ZERO_RTT_SECTION,
 } from "../lib/infra-compare.ts";
@@ -253,6 +255,31 @@ test("tree tier: a declared deploy command that lost a provisioning pin fails, f
       assert.ok(failed[0].startsWith(`infra.json's release.${field} must pin ${flag} `), failed[0]);
     }
   }
+});
+
+// infra.json's two commands are not the only ones that publish. package.json
+// carries the owner's break-glass deploy:direct and deploy:version, each
+// auxiliary Worker carries its own deploy script, and aux-builds.ts writes the
+// deploy command those Workers' builds run. Nothing read any of them until the
+// deploy-direct-loses-provision-pin control dropped --x-provision=false from
+// deploy:direct and the whole suite stayed green.
+const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s+(?:[^&|;]*?\s)?(?:deploy|versions\s+upload)\b/;
+test("tree tier: every committed command that publishes a Worker pins provisioning off", () => {
+  const commands: [string, string][] = [];
+  const manifests = execFileSync("git", ["ls-files", "package.json", "*/package.json"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
+  for (const file of manifests) {
+    for (const [name, cmd] of Object.entries<string>(JSON.parse(readFileSync(new URL(file, ROOT), "utf8")).scripts ?? {})) {
+      if (PUBLISHES.test(cmd) && !cmd.includes("--dry-run")) commands.push([`${file} scripts.${name}`, cmd]);
+    }
+  }
+  const aux = readFileSync(new URL("tools/aux-builds.ts", ROOT), "utf8").match(/^const DEPLOY = "([^"]+)";$/m)?.[1];
+  assert.ok(aux && PUBLISHES.test(aux), 'tools/aux-builds.ts no longer declares `const DEPLOY = "..."`, so its Workers Builds command went unread');
+  commands.push(["tools/aux-builds.ts DEPLOY", aux]);
+
+  // 5 on 2026-10-29: deploy:direct, deploy:version, lwe-ask, lens-reader, aux-builds
+  assert.ok(commands.length >= 5, `found ${commands.length} publishing commands; the scan has stopped matching`);
+  const missing = commands.flatMap(([where, cmd]) => PROVISIONING_PINS.filter((f) => !cmd.includes(f)).map((f) => `${where} publishes without ${f}: ${cmd}`));
+  assert.deepEqual(missing, [], "a deploy path may never create Cloudflare resources; resources come from bun run infra:apply");
 });
 
 test("tree tier: a branch build that deploys, and a production command that only uploads, each fail", () => {
