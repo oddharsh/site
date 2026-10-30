@@ -88,8 +88,9 @@ photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
   cjxl Brotli-compresses metadata by default, which exif-sooc cannot read.
   About four minutes a photo.
 
-Browsers without JPEG XL (Chrome before 155, and Firefox until it turns it on,
-planned for 158) can't open an original; the grid tiers are unaffected. The
+Browsers without JPEG XL (Safari before 17, Chrome before 155, and Firefox
+before 158, which turned it on 2026-10-13) can't open an original; the grid
+tiers are unaffected. The
 tiers stay AVIF: a resize is a re-encode, so no tier can be lossless, and at
 matched bytes AVIF beat the transcode on 6 of 9 photos given the original
 pixels (/pixel-peeper).
