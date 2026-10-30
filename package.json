@@ -47,6 +47,7 @@
     "ua:survey": "bun tools/ua-survey.ts",
     "test": "bun test --parallel=4 --no-isolate --timeout=30000 --timings=config/test-timings.json --preload ./tools/lib/no-network.ts tools/tests/",
     "conflicts": "bun tools/conflict-triage.ts",
+    "inflight": "bun tools/inflight.ts",
     "deps:pin": "bun tools/bump-deps.ts",
     "deps:snapshot": "bun --no-install tools/dependency-snapshot.ts",
     "test:node": "node --import ./tools/lib/no-network.ts --test --test-isolation=none tools/tests/*.test.ts",
