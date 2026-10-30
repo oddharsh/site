@@ -380,6 +380,16 @@
    layout cost. The homepage also sets it inline, since luna lands after its
    first paint. */
 html{text-wrap:pretty}
+/* Touch. iOS draws a grey rounded flash over whatever a finger taps, which
+   reads as a modern overlay on a square XP bevel, so it's off and each control's
+   own :active state is the pressed feedback. Below 16px, iOS zooms the page when
+   a text field takes focus (the Run box is 12px), so touch screens get 16px
+   fields; !important because page rules like `#axp-run input` outrank a type
+   selector. Hover styles on controls sit behind `(hover: hover) and
+   (pointer: fine)`, the complement of hoist.ts's hoverCapable gate, or a tap
+   leaves them lit until the next tap lands elsewhere. */
+html{-webkit-tap-highlight-color:transparent}
+@media (--coarse) {:is(input:not([type]),input[type=text],input[type=week],textarea,select){font-size:16px !important}}
 /* text selection in XP's Highlight/HighlightText pair (#316AC5 on white text).
    Unstyled, macOS paints its own pale accent blue. Selecting inside a title bar
    reads blue on blue; XP did the same, so that stays. */
@@ -565,7 +575,7 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 .axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid var(--luna-44);border-right-color:var(--luna-34);border-bottom-color:var(--luna-34);border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 var(--luna-56),inset -1px -1px 0 var(--luna-31),3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
 .axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px var(--luna-30);background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.axp-acc>.tb .x{box-sizing:content-box;width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;margin:0;padding:0;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font:inherit;font-size:9px;color:inherit;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
+.axp-acc>.tb .x{box-sizing:content-box;width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;margin:0;padding:0;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font:inherit;font-size:9px;color:inherit;cursor:pointer}@media (hover: hover) and (pointer: fine) {.axp-acc>.tb .x:hover{filter:brightness(1.12)}}
 .axp-acc>.bd{padding:8px;background:var(--face)}
 .clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:var(--slate-26);letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:var(--slate-45);margin-top:3px;white-space:nowrap}
 /* windows drag by their title bar */
@@ -586,7 +596,8 @@ font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-st
 border-radius:0 9px 9px 0/0 14px 14px 0;margin-right:6px;
 background:linear-gradient(180deg,oklch(72% 0.17 142) 0%,oklch(63% 0.18 143) 8%,oklch(54% 0.18 144) 46%,oklch(50% 0.18 145) 52%,oklch(58% 0.17 143) 92%,oklch(45% 0.16 146) 100%);
 box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 147)}
-#axp-start:hover{filter:brightness(1.08)}#axp-start:active,#axp-start[aria-expanded=true]{filter:brightness(.92);box-shadow:inset 1px 1px 0 oklch(38% 0.13 147),inset -1px -1px 0 oklch(86% 0.13 140)}
+@media (hover: hover) and (pointer: fine) {#axp-start:hover{filter:brightness(1.08)}}
+#axp-start:active,#axp-start[aria-expanded=true]{filter:brightness(.92);box-shadow:inset 1px 1px 0 oklch(38% 0.13 147),inset -1px -1px 0 oklch(86% 0.13 140)}
 /* the ⌘K / Ctrl-K keycap badge — a small inset "key" reading on both the green */
 /* Start orb and the blue Run title bar (translucent white on either ground). */
 .axp-kbd{display:inline-flex;align-items:center;font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-style:normal;font-weight:bold;font-size:9px;line-height:1;letter-spacing:.02em;padding:2px 4px;border-radius:3px;color:oklch(100% 0 0);background:oklch(100% 0 0 / .18);border:1px solid oklch(100% 0 0 / .5);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .35);text-shadow:none;white-space:nowrap}
@@ -669,11 +680,11 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 /* where the little XP "system" tray bits actually lived, right of the engraved */
 /* separator. shared class so they line up identically. */
 .axp-trayico{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:8px;border-radius:3px;text-decoration:none;opacity:.85;cursor:pointer}
-.axp-trayico:hover{background:oklch(64% 0.15 254);opacity:1}
+@media (hover: hover) and (pointer: fine) {.axp-trayico:hover{background:oklch(64% 0.15 254);opacity:1}}
 .axp-trayico svg,.axp-trayico img{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* mute/unmute speaker, sits just left of System Properties; matches its tray styling */
 #axp-sound{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:.88}
-#axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}
+@media (hover: hover) and (pointer: fine) {#axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}}
 #axp-sound.muted{opacity:.5}
 #axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* First-interaction surfaces live beside their islands now: nav-run.css,
@@ -736,20 +747,34 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
   pointer-events: none; border-radius: 2px 2px 5px 5px;
 }
-:where(.title-bar .controls .min:hover), :where(.np-controls .min:hover), :where(.title-bar .controls .min:focus-visible), :where(.np-controls .min:focus-visible), :where(.title-bar .controls .max:hover), :where(.np-controls .max:hover), :where(.title-bar .controls .max:focus-visible), :where(.np-controls .max:focus-visible) {
+:where(.title-bar .controls .min:focus-visible), :where(.np-controls .min:focus-visible), :where(.title-bar .controls .max:focus-visible), :where(.np-controls .max:focus-visible) {
   border-color: #8fb4ff; background-color: #4fa4ff;
   background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, var(--blue-95) 82%, #1858c8 100%);
   outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(.title-bar .controls .min:hover), :where(.np-controls .min:hover), :where(.title-bar .controls .max:hover), :where(.np-controls .max:hover) {
+    border-color: #8fb4ff; background-color: #4fa4ff;
+    background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, var(--blue-95) 82%, #1858c8 100%);
+    outline: none;
+  }
 }
 /* CLOSE = red at rest */
 :where(.title-bar .controls .close), :where(.np-controls .close) {
   border-color: var(--red-59); background-color: var(--red-65);
   background-image: linear-gradient(180deg, var(--red-70) 0%, var(--red-65) 30%, var(--red-65) 52%, #e2552a 80%, var(--red-50) 100%);
 }
-:where(.title-bar .controls .close:hover), :where(.np-controls .close:hover), :where(.title-bar .controls .close:focus-visible), :where(.np-controls .close:focus-visible) {
+:where(.title-bar .controls .close:focus-visible), :where(.np-controls .close:focus-visible) {
   border-color: #ff7a66; background-color: #ff957c;
   background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
   box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(.title-bar .controls .close:hover), :where(.np-controls .close:hover) {
+    border-color: #ff7a66; background-color: #ff957c;
+    background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+    box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+  }
 }
 /* Keyboard focus adds XP's dotted focus rectangle inside the glyph, the one the
    Back/Forward pair draws. The hover tint alone was the only cue until
@@ -804,10 +829,12 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 .axp-histnav .axp-back::before { border-right-color: #fff; border-left-width: 0; }
 .axp-histnav .axp-fwd::before { border-left-color: #fff; border-right-width: 0; }
-.axp-histnav button:hover:not([disabled]) {
-  border-color: #8fb4ff; background-color: #4fa4ff;
-  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, var(--blue-95) 82%, #1858c8 100%);
-  outline: none;
+@media (hover: hover) and (pointer: fine) {
+  .axp-histnav button:hover:not([disabled]) {
+    border-color: #8fb4ff; background-color: #4fa4ff;
+    background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, var(--blue-95) 82%, #1858c8 100%);
+    outline: none;
+  }
 }
 .axp-histnav button:active:not([disabled]) { filter: brightness(.9); }
 .axp-histnav button:focus-visible { outline: 1px dotted #fff; outline-offset: -4px; }
@@ -845,7 +872,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   background: var(--grad-raised);
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px rgba(255,255,255,.4);
 }
-:where(.xp-button:hover:not(:disabled)) { border-color: #e9994a; box-shadow: inset 0 0 0 1px #fdd78b, 0 0 3px 1px rgba(255,199,60,.55); }
+@media (hover: hover) and (pointer: fine) {:where(.xp-button:hover:not(:disabled)) { border-color: #e9994a; box-shadow: inset 0 0 0 1px #fdd78b, 0 0 3px 1px rgba(255,199,60,.55); }}
 :where(.xp-button.default), :where(.xp-button:focus-visible) {
   border-color: #003c74; outline: none;
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #2c628b, 0 0 3px 1px rgba(44,98,139,.45);
