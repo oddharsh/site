@@ -46,6 +46,7 @@
     "controls": "bun tools/controls.ts",
     "derive:check": "bun tools/check-derivations.ts",
     "gotcha:next": "bun tools/gotcha-next.ts",
+    "ci:census": "bun tools/ci-census.ts",
     "ua:survey": "bun tools/ua-survey.ts",
     "test": "bun test --parallel=4 --no-isolate --timeout=30000 --timings=config/test-timings.json --preload ./tools/lib/no-network.ts tools/tests/",
     "conflicts": "bun tools/conflict-triage.ts",
