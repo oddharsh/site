@@ -34,8 +34,14 @@ observe:check, last 30 days to 2026-10-30T02:51:45Z
    places: Issues didn't record them, the automation isn't configured, or the
    routine ran and failed to file. I can't tell which yet. Issues is
    unreadable from this login, and the routine wasn't among the 20 routines
-   the claude.ai trigger API lists (that listing doesn't page, so this proves
-   nothing).
+   the claude.ai trigger API lists (that listing ignores its own cursor, so
+   this proves nothing). The routine has left no trace on GitHub either: no
+   issue, no `claude/workers-issue-*` branch. Its setup was a four-step
+   runbook across two web UIs (#1081, 2026-10-01). #1126 cut that runbook out
+   of CLAUDE.md three days later, and it now lives in `docs/MAINTENANCE.md`
+   under "Route Workers Issues to GitHub". A routine that runs without GitHub
+   access also leaves no trace, because its prompt ends the run with the issue
+   text instead of filing it.
 2. **Nothing has thrown since 2026-10-14.** The 7-day window shows the
    exception link SILENT. With no organic fault to carry, the downstream links
    go unexercised, so only a planted fault can prove them.
@@ -165,21 +171,24 @@ It exits 1 on anything but CAUGHT. It never polls faster than once a minute.
 GraphQL's rate limiter refused this session's queries after about a dozen
 reads in a few minutes, and the SQL API is probably metered the same way.
 
-Weekly is enough. The longest guard blindness #1487 found lasted 60 days, so
-weekly would catch the same class of failure about eight times sooner. It
-needs no Workers cron slot, and all five are taken. A GitHub Actions schedule
-could run it later, once CI holds a token that can read observability data.
+Every 8 days. #1081's runbook sets the automation to fire on the first
+occurrence and again only after 7 quiet days, so a drill that reuses one
+Issues fingerprint has to wait longer than that or the routine never sees it.
+The longest guard blindness #1487 found lasted 60 days, and an 8-day cadence
+catches that class of failure about seven times sooner. It needs no Workers
+cron slot, and all five are taken. A GitHub Actions schedule could run it
+later, once CI holds a token that can read observability data.
 
 ## Cost per drill and per year
 
-| | per drill | per year (weekly) |
+| | per drill | per year (every 8 days) |
 |---|---|---|
-| Worker invocations | 1 | 52 |
-| Observability events (logs + spans) | under 10 | under 520, against 200,000 a day |
-| Issues occurrences | 1 | 52 |
-| Routine runs | 1 | 52 |
-| GitHub comments | 1 | 52 |
-| Read-back queries | about 10 SQL, 1 GitHub | about 570 |
+| Worker invocations | 1 | 46 |
+| Observability events (logs + spans) | under 10 | under 460, against 200,000 a day |
+| Issues occurrences | 1 | 46 |
+| Routine runs | 1 | 46 |
+| GitHub comments | 1 | 46 |
+| Read-back queries | about 10 SQL, 1 GitHub | about 510 |
 
 ## Blast radius, worst case
 
@@ -211,7 +220,8 @@ could run it later, once CI holds a token that can read observability data.
    point at the automation. Two dashboard looks settle it: Workers, aadhar-sh,
    Issues, Automations (is a Claude Code destination configured?) and
    claude.ai/code/routines (does the triage routine exist, and has it ever
-   fired?). If nothing is configured, a drill would only rediscover that.
+   fired?). If nothing is configured, a drill would only rediscover that, and
+   the fix is the restored runbook in `docs/MAINTENANCE.md`.
 3. **Build the drill.** That means the route, `DRILL_TOKEN` (set with
    `bun run wrangler:site versions secret put`, then promoted), the routine's
    step 0, and `observe:drill`. The route ships through a normal PR and the
@@ -219,11 +229,11 @@ could run it later, once CI holds a token that can read observability data.
 
 ## Open questions the first drill answers
 
-- Does Issues fire the automation again for a recurring occurrence, or only for
-  a new fingerprint? The id varies the message, but Issues may group on the
-  stack. If it fires once per fingerprint, link 5 is proven once. After that,
-  each run would need the drill issue marked resolved in the dashboard to
-  re-arm it.
+- Does Issues group every drill into one fingerprint? The id varies the
+  message, but Issues may group on the stack. If it does, the 7-day recurrence
+  rule above is what re-arms the routine, and the 8-day cadence holds. If
+  each id makes a new fingerprint, every drill fires as a new issue and the
+  cadence could shorten.
 - Does `logs.traces.serviceName` hold the script name? The column comes from
   introspection, and `observe:check` assumes it does. A 403 has kept that
   query from running even once.

@@ -3,8 +3,9 @@
 This file is the saved prompt of the Claude Code routine that Cloudflare's
 Workers Issues automation fires. Paste everything below the line into the
 routine at claude.ai/code/routines when creating or updating it, and change it
-HERE first, so the prompt that runs is one somebody reviewed. CLAUDE.md
-(Observability, layer 4) has the setup runbook and why it is built this way.
+HERE first, so the prompt that runs is one somebody reviewed.
+docs/MAINTENANCE.md ("Route Workers Issues to GitHub") has the setup runbook
+and why it is built this way.
 
 ---
 

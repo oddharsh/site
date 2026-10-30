@@ -2327,6 +2327,37 @@ them. [`OBSERVABILITY-DRILL.md`](OBSERVABILITY-DRILL.md) has what each row
 means, what it found on 2026-10-29, and the planted-fault half that is still
 waiting on the owner.
 
+### Route Workers Issues to GitHub
+
+Workers Issues groups production errors into one record per bug. A Claude Code
+routine turns each into one GitHub issue labelled `workers-issue`, with the
+prompt committed at
+[`routines/workers-issue-triage.md`](routines/workers-issue-triage.md). The
+routine is the destination because it works on every plan. The generic
+webhook goes out as a Cloudflare Notifications webhook, which needs a Pro
+zone, and aadhar.sh is Free (#1081, 2026-10-01).
+
+Setup lives in two web UIs and has no API to declare it from, so nothing in
+the repo can tell whether it's done. `bun run observe:check --days 30` is the
+nearest check: a BROKEN `github workers-issue` row means exceptions happened
+and no issue was touched.
+
+1. At claude.ai/code/routines, create a routine on `oddharsh/site` with no
+   schedule, and paste in everything below the line of the prompt file.
+2. Add an API trigger and generate its token, which is shown once. Copy the
+   routine id (`trig_…`) and the token.
+3. In Cloudflare: Workers & Pages, Observability, Issues, Automations. Add a
+   Claude Code destination with that routine id and token, triggered on an
+   occurrence threshold of 1 and on recurrence after 7 days quiet.
+4. Give the routine GitHub access in its cloud session (an authenticated `gh`
+   or a GitHub connector on claude.ai), then read its first run log. Without
+   access, the prompt ends the run with the issue text as its final message,
+   so a run can succeed and leave nothing on GitHub.
+
+The `workers-issue` label is declared in `config/infra.json`; run
+`bun run labels:sync -- --confirm` before the first run, or the routine's
+first issue mints it with a random colour.
+
 ---
 
 ## The scripts (`tools/photos/`)
