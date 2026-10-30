@@ -1,8 +1,8 @@
 // ── every install is frozen, and every lockfile has a policy over it ─────────
-import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { minimumReleaseAgeSeconds } from "../lib/bun-pin.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -24,27 +24,16 @@ import { dirname, join } from "node:path";
 
 const root = fileURLToPath(ROOT);
 
-/** Workflow files, from `git ls-files` rather than a directory walk, so an
- *  untracked scratch copy cannot fail the run and a new workflow is covered by
- *  existing. */
+/** Workflow files, from git rather than a directory walk, so a new workflow is
+ *  covered by existing. Untracked ones count: one left out read green locally
+ *  and failed CI once committed (gotcha 90). */
 function workflows() {
-  const out = execFileSync("git", ["ls-files", "-z", ".github/workflows/*.yml"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-  return out.split("\0").filter(Boolean);
+  return repoFiles([".github/workflows/*.yml"]);
 }
 
 /** Directories holding a committed bun.lock, repo-relative, "" for the root. */
 function lockfileDirs() {
-  const out = execFileSync("git", ["ls-files", "-z", "bun.lock", "*/bun.lock"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-  return out
-    .split("\0")
-    .filter(Boolean)
-    .map((rel) => (rel.includes("/") ? dirname(rel) : ""));
+  return repoFiles(["bun.lock", "*/bun.lock"]).map((rel) => (rel.includes("/") ? dirname(rel) : ""));
 }
 
 /** A LINE-LEADING `#` is the only comment this drops, so a trailing `# note`

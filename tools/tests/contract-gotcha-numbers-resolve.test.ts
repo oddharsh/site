@@ -1,6 +1,7 @@
 // ── every "gotcha N" reference names exactly one entry ───────────────────────
 import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // The gotchas live in docs/GOTCHAS.md and code cites them by number. A number
 // that names two entries, or none, makes every citation of it ambiguous, and
@@ -44,9 +45,10 @@ test("every gotcha reference in the repository resolves to an entry", async () =
   const defined = new Set(await gotchaNumbers());
 
   // git grep rather than a directory walk, for the reason the shell-script
-  // census gives: it answers for the files this repository OWNS and stays right
-  // over the next vendored tree with no edit here.
-  const hits = execFileSync("git", ["grep", "-hoIEi", "gotchas? +#?[0-9]+"], {
+  // census gives: it answers for the files this repository owns and stays right
+  // over the next vendored tree with no edit here. `--untracked` so a new file
+  // counts before `git add` (gotcha 90).
+  const hits = execFileSync("git", ["grep", "--untracked", "-hoIEi", "gotchas? +#?[0-9]+"], {
     cwd: new URL(".", ROOT),
     encoding: "utf8",
     maxBuffer: 1 << 24,
@@ -106,18 +108,12 @@ test("every gotcha says what checks it, and every named check cites it back", as
   // 26 on 2026-10-14. Fewer means entries were relabelled `nothing`.
   assert.ok(named.length >= 20, `only ${named.length} gotchas name a check`);
 
-  const tracked = new Set(
-    execFileSync("git", ["ls-files"], {
-      cwd: new URL(".", ROOT),
-      encoding: "utf8",
-      maxBuffer: 1 << 24,
-    }).split("\n"),
-  );
+  const owned = new Set(repoFiles());
   const problems = entries.filter((e) => e.problem).map((e) => `gotcha ${e.n}: ${e.problem}`);
   for (const { n, files = [] } of entries) {
     for (const file of files) {
-      if (!tracked.has(file)) {
-        problems.push(`gotcha ${n}: ${file} is not a tracked file`);
+      if (!owned.has(file)) {
+        problems.push(`gotcha ${n}: ${file} is not a file in the repo`);
         continue;
       }
       const text = await readFile(new URL(file, ROOT), "utf8");

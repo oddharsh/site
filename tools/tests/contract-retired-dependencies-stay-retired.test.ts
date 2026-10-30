@@ -2,7 +2,7 @@
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { BAN_KINDS, binaryViolations, cargoLockViolations, cargoManifestViolations, inTree, npmViolations, sourceViolations } from "../lib/retired.ts";
-import { execFileSync } from "node:child_process";
+import { repoFiles } from "../lib/repo-files.ts";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(ROOT);
@@ -20,16 +20,15 @@ const root = fileURLToPath(ROOT);
 
 const ledger = JSON.parse(await readFile(new URL("config/retired.json", ROOT), "utf8"));
 
-/** Committed files matching a pathspec, from `git ls-files` rather than a walk.
+/** Files a commit would hold matching a pathspec, from git rather than a walk.
  *
  *  Same idiom as the shell-script and Worker-source censuses beside it, and for
  *  the same reason: a directory walk answers about the disk, which carries
- *  node_modules, .build and another session's scratch files. `git ls-files`
- *  answers about the repository.
+ *  node_modules and .build. Git answers about the repository, untracked files
+ *  included, since a new one is one `git add` from CI (gotcha 90).
  */
-function committed(...pathspec: any[]) {
-  const out = execFileSync("git", ["ls-files", "-z", ...pathspec], { cwd: root, encoding: "utf8" });
-  return out.split("\0").filter(Boolean);
+function committed(...pathspec: string[]) {
+  return repoFiles(pathspec, root);
 }
 
 test("every retirement is recorded with a replacement, a date and a measurement", () => {

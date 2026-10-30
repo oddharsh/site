@@ -2,11 +2,11 @@
 // Read tracked manifests and the installed resolution, including standalone
 // projects. Package-store directories can retain unused versions after an
 // install, so counting them says nothing about what a project will load.
-import { execFileSync } from "node:child_process";
 import { readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { repoFiles } from "./lib/repo-files.ts";
 import { COMMIT_PIN, STALE_INSTALL_REMEDY, installedSha, pinnedSha, wranglerPin } from "./lib/wrangler-provenance.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -83,13 +83,9 @@ if (pinKind === "commit") {
 }
 console.log(`root: Wrangler ${rootDeclared} (installed ${installed}, ${pinKind} pin)`);
 
-const manifests = execFileSync("git", ["ls-files", "-z", "--", "package.json", ":(glob)**/package.json"], {
-  cwd: ROOT,
-  encoding: "utf8",
-})
-  .split("\0")
-  .filter(Boolean);
-if (!manifests.includes("package.json")) throw new Error("Wrangler check found no tracked root package.json");
+// Untracked manifests count, so a new sub-project is checked before `git add` (gotcha 90).
+const manifests = repoFiles(["package.json", ":(glob)**/package.json"], ROOT);
+if (!manifests.includes("package.json")) throw new Error("Wrangler check found no root package.json");
 
 for (const manifest of manifests.filter((name) => name !== "package.json")) {
   const project = path.dirname(manifest);

@@ -166,10 +166,11 @@ const results = await pool(runnable, (c) =>
   isolate(c, async (root, env) => {
     const stale = plant(root, c);
     if (stale.length) return { c, verdict: "STALE", detail: stale.join("; "), r: null as Run | null };
-    // A created file is untracked, and the checks built on git grep or ls-files
-    // can't see an untracked file. CI sees it committed, so mark it
-    // intent-to-add (in the clone's private index) and test what CI tests.
-    const created = c.mutations.filter((m) => "create" in m).map((m) => m.file);
+    // A created file is untracked. CI sees it committed, so mark it
+    // intent-to-add (in the clone's private index) and test what CI tests,
+    // unless the control is about the local run before `git add`, which a
+    // git census that reads only the index can't see (gotcha 90).
+    const created = c.mutations.filter((m) => "create" in m && !m.untracked).map((m) => m.file);
     if (created.length) execFileSync("git", ["add", "-N", "--", ...created], { cwd: root, env: { ...process.env, ...env } });
     const r = await exec(c.run, root, env);
     if (r.code === 0) return { c, verdict: "BLIND", detail: "the check passed with the defect in place", r };

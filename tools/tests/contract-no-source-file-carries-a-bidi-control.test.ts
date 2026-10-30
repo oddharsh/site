@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // Gotcha 85. A bidi control (U+202A-202E, U+2066-2069, U+200E/F, U+061C)
 // reorders how a line DISPLAYS without changing what it parses as, which is
@@ -25,12 +26,10 @@ const BIDI = /\p{Bidi_Control}/gu;
 const HAS_BIDI = /\p{Bidi_Control}/u;
 
 /** Files the repo owns or is about to: tracked, intent-to-add, and untracked
- *  but not ignored. `--others` is what keeps a local run honest for a file
- *  nobody has `git add`ed yet, the trap that let #1410 pass locally and fail
- *  CI. Ignored trees (node_modules, target, vendored clones) stay out. */
+ *  but not ignored, the trap that let #1410 pass locally and fail CI
+ *  (gotcha 90). Ignored trees (node_modules, target, vendored clones) stay out. */
 export function candidateFiles(cwd: string): string[] {
-  const out = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd, encoding: "utf8" });
-  return [...new Set(out.split("\0").filter(Boolean))];
+  return repoFiles([], cwd);
 }
 
 type Hit = { file: string; line: number; col: number; cp: string };
