@@ -4,21 +4,23 @@
 // The verdicts and why each rule exists are in lib/observe-signals.ts; the
 // planted-fault half and the cost of each link are in docs/OBSERVABILITY-DRILL.md.
 //
-// CREDENTIAL. CLOUDFLARE_API_TOKEN when set, otherwise the wrangler OAuth login
-// (`wrangler auth token`). Measured 2026-10-29 with that login: GraphQL
-// (invocations) and the SQL API's Analytics Engine datasets answer; the SQL
-// API's logs.workersLogs, logs.traces and logs.issues answer 403
-// "Authorization error", because no wrangler OAuth scope grants observability
-// reads. Those rows print UNREADABLE with the reason rather than SILENT, so a
-// missing scope never reads as a quiet week. CI's site-ci-read token carries
-// neither Analytics nor observability read (config/infra.json), which is why
-// this is a workstation tool and not a validate step.
+// CREDENTIALS. Two logins, because neither reads everything (measured
+// 2026-10-30). The cf CLI's login (`bun run cf auth login`, lib/cf.ts) reads
+// the SQL API's logs.workersLogs, logs.traces and Analytics Engine datasets,
+// the Issues list and the Issues automations. The wrangler login answers 403
+// "Authorization error" on every logs.* dataset, since no wrangler OAuth scope
+// grants observability reads. cf has no GraphQL command, so invocations still
+// come from GraphQL with CLOUDFLARE_API_TOKEN, or the wrangler login when that
+// is unset. A refused read prints UNREADABLE with the reason rather than
+// SILENT, so a missing scope never reads as a quiet week. CI's site-ci-read
+// token carries no Analytics or observability read (config/infra.json), which
+// is why this is a workstation tool and not a validate step.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { CF_ACCOUNT } from "./lib/cf.ts";
+import { CF_ACCOUNT, cf } from "./lib/cf.ts";
 import { redactCredentials } from "./lib/redact.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { utcIso, verdicts, type Reading } from "./lib/observe-signals.ts";
+import { CADENCE_FRESH_HOURS, LEDGER_FRESH_HOURS, verdicts, type Reading } from "./lib/observe-signals.ts";
 
 const exec = promisify(execFile);
 const SCRIPT = "aadhar-sh";
@@ -27,8 +29,9 @@ const API = "https://api.cloudflare.com/client/v4";
 
 const flag = process.argv.indexOf("--days");
 const days = flag === -1 ? 7 : Number(process.argv[flag + 1]);
-// GraphQL and Workers Logs both keep 30 days at most on this plan, and the
-// value is inlined into SQL below, so it must be a small integer.
+// GraphQL keeps 30 days; Workers Logs and Traces keep 7, so a longer window
+// reads 7 days of them. The value is inlined into SQL below, so it must be a
+// small integer.
 if (!Number.isInteger(days) || days < 1 || days > 30) {
   console.error("observe-check: --days takes an integer from 1 to 30");
   process.exit(2);
@@ -56,16 +59,48 @@ async function post(bearer: string, path: string, body: unknown) {
   return JSON.parse(text);
 }
 
-// One count and newest timestamp from the SQL API. Account scope goes in the
-// request, never the SQL (the API refuses both at once). A sampled dataset
-// (every one here but logs.issues) refuses MAX and asks for APPROX_MAX; COUNT
-// is weighted for sampling by the API itself.
-async function sqlCount(bearer: string, from: string, time: string, where = "", sampled = true): Promise<Reading> {
+// A row count from the SQL API over the window, plus one over the last
+// `recentHours` when a freshness rule judges it (lib/observe-signals.ts says
+// why freshness is a count and never a newest timestamp). Account scope goes
+// in the request, never the SQL (the API refuses both at once). COUNT is
+// weighted for sampling by the API itself.
+async function sqlCount(from: string, time: string, where: string, recentHours?: number): Promise<Reading> {
+  const count = async (interval: string) => {
+    const query = `SELECT COUNT(*) AS n FROM ${from} WHERE ${time} >= NOW() - INTERVAL ${interval}${where ? ` AND ${where}` : ""}`;
+    const { data } = await cf(["analytics", "sql", "post", "--scope-account-tag", CF_ACCOUNT, "--query", query]);
+    return Number(data?.[0]?.n ?? 0);
+  };
   try {
-    const query = `SELECT COUNT(*) AS n, ${sampled ? "APPROX_MAX" : "MAX"}(${time}) AS last FROM ${from} WHERE ${time} >= NOW() - INTERVAL '${days}' DAY${where ? ` AND ${where}` : ""}`;
-    const { data } = await post(bearer, "/analytics/sql", { query, scope: { accountTag: CF_ACCOUNT } });
-    const n = Number(data?.[0]?.n ?? 0);
-    return { kind: "read", count: n, last: n > 0 ? utcIso(data[0].last) : null };
+    const [n, recent] = await Promise.all([count(`'${days}' DAY`), recentHours === undefined ? undefined : count(`'${recentHours}' HOUR`)]);
+    return { kind: "read", count: n, last: null, recent };
+  } catch (e) {
+    return unreadable(e);
+  }
+}
+
+// Exception Issues seen in the window: what an automation would hand the
+// routine. The Issues list rather than logs.issues, because Issues also
+// groups vulnerability scans (type "security", 12 of 15 issues on 2026-10-30),
+// and logs.issues has no type column to drop them by. `count` on an issue is
+// lifetime, so this counts issues, and `last` is the newest occurrence.
+async function exceptionIssues(): Promise<Reading> {
+  try {
+    const list: { lastObserved: number }[] = await cf(["observability", "issues", "list", "--service", SCRIPT, "--type", "exception", "--per-page", "100"]);
+    const seen = list.filter((i) => i.lastObserved >= since.getTime());
+    const newest = Math.max(...seen.map((i) => i.lastObserved));
+    return { kind: "read", count: seen.length, last: seen.length ? new Date(newest).toISOString() : null };
+  } catch (e) {
+    return unreadable(e);
+  }
+}
+
+// Account and service automations together: either kind would route an
+// aadhar-sh issue. A routine is the only destination this repo uses
+// (docs/MAINTENANCE.md, "Route Workers Issues to GitHub").
+async function automations(): Promise<Reading> {
+  try {
+    const { automations: list }: { automations: unknown[] } = await cf(["observability", "issues", "automations", "list"]);
+    return { kind: "read", count: list.length, last: null };
   } catch (e) {
     return unreadable(e);
   }
@@ -125,18 +160,18 @@ async function github(): Promise<Reading> {
   }
 }
 
-const bearer = await token();
-const [inv, logs, issues, spans, perfProbe, botLedger, gh] = await Promise.all([
-  invocations(bearer),
-  sqlCount(bearer, "logs.workersLogs", "timestamp", `scriptName = '${SCRIPT}'`),
-  sqlCount(bearer, "logs.issues", "timestamp", `scriptName = '${SCRIPT}'`, false),
-  sqlCount(bearer, "logs.traces", "startTime", `serviceName = '${SCRIPT}' AND spanName = 'cron.home_probe'`),
-  sqlCount(bearer, "events.analyticsEngine.aadhar_perf_probe", "timestamp"),
-  sqlCount(bearer, "events.analyticsEngine.aadhar_bot_ledger", "timestamp"),
+const [inv, logs, issues, routes, spans, perfProbe, botLedger, gh] = await Promise.all([
+  token().then(invocations, (e) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
+  sqlCount("logs.workersLogs", "timestamp", `scriptName = '${SCRIPT}'`),
+  exceptionIssues(),
+  automations(),
+  sqlCount("logs.traces", "startTime", `serviceName = '${SCRIPT}' AND spanName = 'cron.home_probe'`, CADENCE_FRESH_HOURS),
+  sqlCount("events.analyticsEngine.aadhar_perf_probe", "timestamp", "", CADENCE_FRESH_HOURS),
+  sqlCount("events.analyticsEngine.aadhar_bot_ledger", "timestamp", "", LEDGER_FRESH_HOURS),
   github(),
 ]);
 
-const rows = verdicts({ days, now, ...inv, logs, issues, github: gh, spans, perfProbe, botLedger });
+const rows = verdicts({ days, ...inv, logs, issues, automations: routes, github: gh, spans, perfProbe, botLedger });
 const width = Math.max(...rows.map((r) => r.signal.length));
 console.log(`observe:check, last ${days} days to ${now.toISOString()}`);
 for (const r of rows) console.log(`  ${r.verdict.padEnd(10)} ${r.signal.padEnd(width)}  ${r.detail}`);

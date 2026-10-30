@@ -12,53 +12,63 @@ It has two halves. The read-only half (`bun run observe:check`) ships now and
 plants nothing. The planting half is a design, and nothing in it gets built or
 deployed until the owner says yes.
 
-## What the read-only half found (2026-10-29)
+## What the read-only half found (2026-10-30)
 
 ```text
-observe:check, last 30 days to 2026-10-30T02:51:45Z
-  FIRED      invocations           167711
-  FIRED      exceptions            14, last 2026-10-14
-  UNREADABLE workers logs          HTTP 403 Authorization error
-  UNREADABLE workers issues        HTTP 403 Authorization error
-  BROKEN     github workers-issue  0, after 14 exceptions
-  UNREADABLE span cron.home_probe  HTTP 403 Authorization error
-  FIRED      ae PERF_PROBE         1526 of 1440 expected
-  FIRED      ae BOT_LEDGER         13958
+observe:check, last 7 days to 2026-10-30T14:09:55Z
+  FIRED      invocations           34178
+  SILENT     exceptions            0 thrown; Issues also records caught errors and 5xx responses
+  FIRED      workers logs          51430
+  FIRED      workers issues        3, last 2026-10-30T12:43:55.950Z
+  BROKEN     issues automation     0 configured, so 3 exception Issues went nowhere
+  BROKEN     github workers-issue  0, after 3 exception Issues
+  FIRED      span cron.home_probe  330 of 336 expected, 4 in the last 2h
+  FIRED      ae PERF_PROBE         336 of 336 expected, 4 in the last 2h
+  FIRED      ae BOT_LEDGER         6885, 735 in the last 24h
 ```
 
-1. **The chain is already broken somewhere past Cloudflare.** Workers Issues
-   went on with #1062 on 2026-09-30. From then to 2026-10-14, aadhar-sh threw
-   on 14 days (one cron exception a day, fixed by #1334). The `workers-issue`
-   label has never been put on a single GitHub issue. Cloudflare documents a
-   failed invocation as an Issues occurrence, so the break sits in one of three
-   places: Issues didn't record them, the automation isn't configured, or the
-   routine ran and failed to file. I can't tell which yet. Issues is
-   unreadable from this login, and the routine wasn't among the 20 routines
-   the claude.ai trigger API lists (that listing ignores its own cursor, so
-   this proves nothing). The routine has left no trace on GitHub either: no
-   issue, no `claude/workers-issue-*` branch. Its setup was a four-step
-   runbook across two web UIs (#1081, 2026-10-01). #1126 cut that runbook out
-   of CLAUDE.md three days later, and it now lives in `docs/MAINTENANCE.md`
-   under "Route Workers Issues to GitHub". A routine that runs without GitHub
-   access also leaves no trace, because its prompt ends the run with the issue
-   text instead of filing it.
-2. **Nothing has thrown since 2026-10-14.** The 7-day window shows the
-   exception link SILENT. With no organic fault to carry, the downstream links
-   go unexercised, so only a planted fault can prove them.
-3. **Logs, traces and Issues are unreadable from the workstation login.** The
-   SQL API lists `logs.workersLogs`, `logs.traces` and `logs.issues`, and each
-   answers `403 Authorization error` under the wrangler OAuth token, while
-   Analytics Engine datasets answer under the same token. Wrangler's 30 OAuth
-   scopes include none for observability. CI's `site-ci-read` token has no
-   Analytics or observability group at all (`config/infra.json`).
-4. **Analytics Engine is healthy and is its own canary.** PERF_PROBE wrote 336
-   of the 336 rows the :07/:37 cron should write in 7 days. BOT_LEDGER's newest
-   row was 47 seconds old.
+(The invocations row comes from a run a few minutes earlier; GraphQL's rate
+limiter refused this one, and the row printed UNREADABLE as it should.)
 
-Read the numbers with one caveat. The SQL API weights `COUNT(*)` by sample
-interval, so BOT_LEDGER reads 6,500 for the 7 days where the Analytics Engine
-SQL API's unweighted `count()` read 4,064 rows. The verdicts only compare a
-count to zero or to a floor, so either reading gives the same answer.
+1. **The break is the missing automation.** Workers Issues has recorded
+   faults since #1062 turned it on (2026-09-30): 15 active Issues on
+   aadhar-sh, 3 of them exceptions seen this week. The worst is "Too many
+   subrequests by single Worker invocation" on `/rn/tracks.html`, 353
+   occurrences since 2026-09-30, the latest at 12:43 UTC today. `cf
+   observability issues automations list` answers `[]` for the account and
+   for aadhar-sh. With nothing routing them, no Issue has ever reached the
+   triage routine, which is why the `workers-issue` label has never been
+   applied. Setup was a four-step runbook across two web UIs (#1081,
+   2026-10-01). #1126 cut it out of CLAUDE.md three days later. It's back in
+   `docs/MAINTENANCE.md` under "Route Workers Issues to GitHub".
+2. **GraphQL undercounts faults.** It counts invocations that ended in a
+   thrown exception: 13 in 30 days, all crons, the last on 2026-10-14. Issues
+   also counts caught errors and 5xx responses, so it saw the subrequest bug
+   353 times. The chain's upstream is Issues whenever Issues is readable.
+3. **The cf login reads everything but GraphQL.** Under the `cf` CLI's login,
+   the SQL API answers `logs.workersLogs`, `logs.traces` and the Analytics
+   Engine datasets, and the Issues and automations APIs answer too. Under the
+   wrangler login every `logs.*` dataset answers `403 Authorization error`,
+   because no wrangler OAuth scope grants observability reads. `cf` has no
+   GraphQL command, so invocations still read with `CLOUDFLARE_API_TOKEN` or
+   the wrangler login. CI's `site-ci-read` token has neither.
+4. **Analytics Engine and traces are healthy.** PERF_PROBE wrote 336 of the
+   336 rows the :07/:37 cron should write in 7 days, and Traces holds 330
+   `cron.home_probe` spans. Both had 4 in the last 2 hours, one per tick.
+
+Read the numbers with three caveats:
+
+- The SQL API weights `COUNT(*)` by sample interval. BOT_LEDGER reads 6,885
+  for 7 days, where the Analytics Engine SQL API's unweighted `count()` read
+  4,064 rows on 2026-10-29. The verdicts only compare a count to zero or to a floor,
+  so either reading gives the same answer.
+- A newest-timestamp read over a long window is wrong on traces. Over 7 days,
+  `APPROX_MAX` and `ORDER BY startTime DESC LIMIT 1` both put the newest
+  `cron.home_probe` span at 11:07, on three reads running. A 2-hour read
+  listed spans at 11:37 through 14:07. Freshness is therefore a count over a
+  short window, never a timestamp.
+- Workers Logs and Traces keep 7 days, so `--days 30` reads 7 days of them.
+  The span floor is capped at 7 days to match.
 
 ## The chain, link by link
 
@@ -169,7 +179,8 @@ deadline passes, and prints one line per link. Each line says CAUGHT, BLIND
 (deadline passed with nothing), or WRONG (something arrived without the id).
 It exits 1 on anything but CAUGHT. It never polls faster than once a minute.
 GraphQL's rate limiter refused this session's queries after about a dozen
-reads in a few minutes, and the SQL API is probably metered the same way.
+reads in a few minutes. The SQL API answered about 25 reads in 10 minutes
+through `cf` without refusing one, so the polling belongs there.
 
 Every 8 days. #1081's runbook sets the automation to fire on the first
 occurrence and again only after 7 quiet days, so a drill that reuses one
@@ -209,23 +220,25 @@ later, once CI holds a token that can read observability data.
 
 ## What the owner decides
 
-1. **A token that can read observability.** The drill's read-back and three
-   `observe:check` rows need it. I haven't measured which permission group
-   opens `logs.*` in the SQL API. Cloudflare's docs say product-level Workers
-   Metadata Read-Only covers "logs and traces". A workstation-only read token,
-   declared in `config/infra.json` beside `site-dns-write`, is the narrow
-   version. Adding that group to `site-ci-read` would let CI run the check,
-   and it stays read-only.
-2. **Whether to find the existing break first.** The 14 dropped exceptions
-   point at the automation. Two dashboard looks settle it: Workers, aadhar-sh,
-   Issues, Automations (is a Claude Code destination configured?) and
-   claude.ai/code/routines (does the triage routine exist, and has it ever
-   fired?). If nothing is configured, a drill would only rediscover that, and
-   the fix is the restored runbook in `docs/MAINTENANCE.md`.
+1. **Configure the automation, before any drill.** The runbook in
+   `docs/MAINTENANCE.md` has the steps. The drill can't prove a route that
+   doesn't exist, and this break needs no drill to see: `observe:check` reads
+   it today. `cf observability issues automations create` now exists, but it
+   takes a `policy-id` for the destination, and the Claude Code destination
+   with its routine token is still made in the dashboard.
+2. **Decide what to do about vulnerability scans.** 12 of the 15 active Issues
+   are scanner traffic (type `security`: wordpress, secret-files,
+   source-control probes), and they recur daily. The automation API shows no
+   type filter (2026-10-30). If the dashboard has none either, each scan Issue
+   fires the routine once and opens a `workers-issue` about a scanner. A line
+   in the routine prompt that closes `Potential vulnerability scan` Issues
+   without investigating would cover it.
 3. **Build the drill.** That means the route, `DRILL_TOKEN` (set with
    `bun run wrangler:site versions secret put`, then promoted), the routine's
    step 0, and `observe:drill`. The route ships through a normal PR and the
    release path. No drill runs before that PR merges and the owner says go.
+   It reads back with the `cf` login, so it needs no new token. Running it
+   from CI would need an observability read group on `site-ci-read`.
 
 ## Open questions the first drill answers
 
@@ -234,6 +247,3 @@ later, once CI holds a token that can read observability data.
   rule above is what re-arms the routine, and the 8-day cadence holds. If
   each id makes a new fingerprint, every drill fires as a new issue and the
   cadence could shorten.
-- Does `logs.traces.serviceName` hold the script name? The column comes from
-  introspection, and `observe:check` assumes it does. A 403 has kept that
-  query from running even once.
