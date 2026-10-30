@@ -687,7 +687,7 @@ skips it.
     files. A missing directory throws and fails the build; a wrong one passes
     silently while the summary line printed the registry's 74 entries. Give
     every walk-and-assert a floor on what it inspected, print the walked
-    count, and register a control that breaks the path (gotcha 89). Gotcha 55 is the
+    count, and register a control that breaks the path (gotcha 90). Gotcha 55 is the
     same split reaching `servedFiles()`.
     Checked by: `tools/build.ts`.
 
@@ -831,7 +831,19 @@ skips it.
     typography.css stacks name the families directly.
     Checked by: `tools/tests/contract-design-fonts-stay-unloaded.test.ts`.
 
-89. **A guard proven once goes blind without anyone noticing.** `validate`
+89. **Local dev serves gzip where production serves the brotli twin.** The
+    local asset layer recompresses the types it deems compressible to whatever
+    the client offered. A client that doesn't offer br (Node's fetch, a bare
+    `curl`) gets gzip, so a byte or timing number read off `bun run dev`
+    measures that gzip instead of the q11 twin production ships. Production
+    passes origin brotli through untouched. Offer it explicitly
+    (`-H 'accept-encoding: br'`) and confirm `content-encoding: br` before
+    trusting a local number. Measured 2026-10-29: with the offer removed, 22
+    of `routes:check`'s 25 br-pinned rows came back gzip; the other 3 are
+    types the local layer leaves alone.
+    Checked by: `tools/verify-routes.ts`.
+
+90. **A guard proven once goes blind without anyone noticing.** `validate`
     proves on every push that each guard passes on a good tree. Whether it
     still fails on its defect was proven once, by hand, in the PR that added
     it, and 20 commit bodies record such a "Controls:" run that never ran

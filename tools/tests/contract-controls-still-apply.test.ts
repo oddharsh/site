@@ -2,7 +2,7 @@
 // the text strands the control: `bun run controls` reads STALE, but that runs
 // in its own CI job after the PR that caused it is already green. This dry-runs
 // every plant against the tree in validate, in milliseconds, so the PR that
-// moves an anchor is the PR that updates its control (gotcha 89).
+// moves an anchor is the PR that updates its control (gotcha 90).
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CONTROLS, plant } from "../lib/controls.ts";

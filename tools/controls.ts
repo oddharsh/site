@@ -18,7 +18,7 @@
 // in place: the thing this exists to find), WRONG REASON (red, but not with
 // its own words, so a crash or another guard got there first), STALE (the
 // anchor moved; contract-controls-still-apply catches that one in validate).
-// Gotcha 89 is why this exists.
+// Gotcha 90 is why this exists.
 
 import { execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
