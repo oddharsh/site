@@ -47,7 +47,7 @@ test("every gotcha reference in the repository resolves to an entry", async () =
   // git grep rather than a directory walk, for the reason the shell-script
   // census gives: it answers for the files this repository owns and stays right
   // over the next vendored tree with no edit here. `--untracked` so a new file
-  // counts before `git add` (gotcha 90).
+  // counts before `git add` (gotcha 91).
   const hits = execFileSync("git", ["grep", "--untracked", "-hoIEi", "gotchas? +#?[0-9]+"], {
     cwd: new URL(".", ROOT),
     encoding: "utf8",

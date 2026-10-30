@@ -197,7 +197,7 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
   return { checked, problems };
 }
 
-/** Every bun lockfile a commit would hold (untracked ones too, gotcha 90),
+/** Every bun lockfile a commit would hold (untracked ones too, gotcha 91),
  *  and for each one the manifests it governs.
  *
  *  Both halves are derived rather than listed, and that is the point. The

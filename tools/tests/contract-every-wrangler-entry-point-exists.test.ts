@@ -189,7 +189,7 @@ test("Wrangler check follows every project's installed resolution", async () => 
     await symlink(join(dir, "node_modules/wrangler"), join(dir, "cal/node_modules/wrangler"));
     await write("node_modules/.bun/wrangler@unused/node_modules/wrangler/package.json", { version: "9.9.9" });
     run(0, /6 projects/); // Same physical install; the ignored, unused cache is not a consumer.
-    // An untracked project is one `git add` from CI, so it counts (gotcha 90).
+    // An untracked project is one `git add` from CI, so it counts (gotcha 91).
     await write("scratch/package.json", { devDependencies: { wrangler: "9.9.9" } });
     run(1, /scratch: declares Wrangler "9\.9\.9", which is not the root pin/);
     await rm(join(dir, "scratch"), { recursive: true });

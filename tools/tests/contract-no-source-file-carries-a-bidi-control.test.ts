@@ -27,7 +27,7 @@ const HAS_BIDI = /\p{Bidi_Control}/u;
 
 /** Files the repo owns or is about to: tracked, intent-to-add, and untracked
  *  but not ignored, the trap that let #1410 pass locally and fail CI
- *  (gotcha 90). Ignored trees (node_modules, target, vendored clones) stay out. */
+ *  (gotcha 91). Ignored trees (node_modules, target, vendored clones) stay out. */
 export function candidateFiles(cwd: string): string[] {
   return repoFiles([], cwd);
 }

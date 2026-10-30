@@ -853,10 +853,10 @@ skips it.
     all three. Register a guard's control in `tools/lib/controls.ts` with
     the words the guard prints, and run it before you call a check done. A
     control that plants a new file marks it intent-to-add, the way CI sees
-    it, unless it sets `untracked` to prove the local case (gotcha 90).
+    it, unless it sets `untracked` to prove the local case (gotcha 91).
     Checked by: `tools/tests/contract-controls-still-apply.test.ts`, `tools/controls.ts`.
 
-90. **A git census can't see a file nobody has `git add`ed.** Bare
+91. **A git census can't see a file nobody has `git add`ed.** Bare
     `git ls-files` and `git grep` read the index, so an agent who adds a
     file and runs `bun run test` reads green on a defect CI fails on once
     the file is committed. On 2026-10-29 the gotcha 16 guard passed locally

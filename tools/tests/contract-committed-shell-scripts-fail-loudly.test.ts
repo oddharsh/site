@@ -33,7 +33,7 @@ import { repoFiles } from "../lib/repo-files.ts";
  *  Git answers the question the test's own name asks, and it stays right for
  *  the next vendored tree without an edit here, since that tree is ignored.
  *  Untracked scripts are in scope: until 2026-10-29 they were left out, so a
- *  new script read green locally and failed CI once committed (gotcha 90).
+ *  new script read green locally and failed CI once committed (gotcha 91).
  */
 function shellScripts() {
   return repoFiles(["*.sh"]).map((rel) => new URL(rel, new URL(".", ROOT)));

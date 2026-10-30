@@ -77,7 +77,7 @@ for (const file of ["tools/photos/build inputs/line\nbreak.sh", ".github/check.s
       await put(file, "command -v undeclared-tool || exit 1\n");
       await put("tools/photos/vendor/downloaded.sh", "command -v vendor-tool || exit 1\n");
       // Untracked but not ignored is one `git add` from CI, so it counts
-      // before the add (gotcha 90). The ignored download never does.
+      // before the add (gotcha 91). The ignored download never does.
       for (const stage of ["untracked", "tracked"]) {
         if (stage === "tracked") git("add", "--", file);
         const result = cli();

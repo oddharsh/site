@@ -61,7 +61,7 @@ const REPO_PINNED = new Set(["node", "wrangler"]);
 // ── the shell corpus ─────────────────────────────────────────────────────────
 // Git owns the census at every depth, including the nested AVIF builder but
 // excluding its ignored downloads. Untracked scripts count, so a new one is
-// checked before `git add` (gotcha 90). A failed census or unreadable script
+// checked before `git add` (gotcha 91). A failed census or unreadable script
 // must fail the check.
 const scripts = repoFiles(["*.sh"], ROOT).sort();
 const source = new Map();

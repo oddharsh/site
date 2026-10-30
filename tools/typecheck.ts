@@ -13,7 +13,7 @@
 // With no arguments it checks every program except lens-reader's, which has its
 // own node_modules and runs from lens-reader/package.json with config paths as
 // arguments. A full run also checks that every source file, untracked ones
-// too (gotcha 90), belongs to some program and is named by one of its include
+// too (gotcha 91), belongs to some program and is named by one of its include
 // globs, because the type-aware lint only finds files a tsconfig names.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -173,7 +173,7 @@ function main() {
     // declaration beside it (tools/vendor-pretext.ts), so no program checks it.
     const NOT_SOURCE = ["src/dict/", "tools/fixtures/", "src/client/garage/pretext.lib.js"];
     // Untracked files count: a new module outside every program has to fail
-    // here before `git add`, not first in CI (gotcha 90).
+    // here before `git add`, not first in CI (gotcha 91).
     const owned = repoFiles([], REPO).filter((f) => /\.(?:js|mjs|cjs|ts)$/.test(f) && !NOT_SOURCE.some((prefix) => f.startsWith(prefix)));
     for (const config of SEPARATE) {
       for (const file of programFiles(REPO, config)) covered.add(file);

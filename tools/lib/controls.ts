@@ -31,7 +31,7 @@ export type Mutation =
   | { file: string; find: string; replace: string }
   /** Create `file` (it must not exist yet). The runner marks it
    *  intent-to-add, the way CI sees it committed; `untracked` leaves it out
-   *  of the index, the way a local run sees it before `git add` (gotcha 90). */
+   *  of the index, the way a local run sees it before `git add` (gotcha 91). */
   | { file: string; create: string; untracked?: boolean };
 
 export interface Control {
@@ -209,7 +209,7 @@ export const CONTROLS: Control[] = [
     run: ["bun", "run", "typecheck"],
     expect: /control-probe\.ts: 1 error\(s\), and the baseline has none for it/,
   },
-  // Gotcha 90: a new file before `git add`. Each leaves its file untracked, so
+  // Gotcha 91: a new file before `git add`. Each leaves its file untracked, so
   // it proves the local run sees what CI will see once the file is committed.
   // On 2026-10-29 one plant per converted scan (22) read BLIND 19 times on the
   // tree before the sweep (the bidi scan already read untracked files, and two
@@ -217,7 +217,7 @@ export const CONTROLS: Control[] = [
   {
     id: "untracked-script-skips-strict-mode",
     plants: "a new shell script, not yet added, without set -euo pipefail",
-    gotcha: 90,
+    gotcha: 91,
     mutations: [{ file: "tools/control-probe.sh", create: "#!/bin/sh\necho probe\n", untracked: true }],
     run: contract("contract-committed-shell-scripts-fail-loudly"),
     expect: /tools\/control-probe\.sh \(missing e, u, pipefail\)/,
@@ -225,7 +225,7 @@ export const CONTROLS: Control[] = [
   {
     id: "untracked-workflow-floats-its-install",
     plants: "a new workflow, not yet added, whose bun install drops --frozen-lockfile",
-    gotcha: 90,
+    gotcha: 91,
     mutations: [
       {
         file: ".github/workflows/control-probe.yml",
@@ -239,7 +239,7 @@ export const CONTROLS: Control[] = [
   {
     id: "untracked-file-cites-a-missing-gotcha",
     plants: "a new file, not yet added, citing a gotcha with no entry (the git grep half of the sweep)",
-    gotcha: 90,
+    gotcha: 91,
     // Built, like dangling-gotcha-citation above, so this file cites nothing.
     mutations: [{ file: "tools/control-probe.ts", create: `// gotcha ${999}\nexport {};\n`, untracked: true }],
     run: contract("contract-gotcha-numbers-resolve"),
@@ -248,7 +248,7 @@ export const CONTROLS: Control[] = [
   {
     id: "untracked-module-outside-every-program",
     plants: "a new .ts file, not yet added, that no tsconfig names, so the type-aware lint never reads it",
-    gotcha: 90,
+    gotcha: 91,
     mutations: [{ file: "public/control-probe.ts", create: "export const probe = 1;\n", untracked: true }],
     run: ["bun", "run", "typecheck"],
     expect: /public\/control-probe\.ts: belongs to no bun check program/,
@@ -256,7 +256,7 @@ export const CONTROLS: Control[] = [
   {
     id: "untracked-git-census-reads-the-index",
     plants: "a new check, not yet added, that collects files with bare git ls-files",
-    gotcha: 90,
+    gotcha: 91,
     // Built: written out, the argv would trip the census guard on this file.
     mutations: [
       {

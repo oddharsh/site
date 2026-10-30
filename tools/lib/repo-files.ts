@@ -5,7 +5,7 @@
 // is invisible to it. An agent who adds a module and runs `bun run test` reads
 // green, and CI, which sees the file committed, goes red. On 2026-10-29 the
 // gotcha 16 guard passed locally that way on a new src/worker/lib/*.ts that
-// imported cloudflare:workers, and #1410 hit the same trap (gotcha 90).
+// imported cloudflare:workers, and #1410 hit the same trap (gotcha 91).
 //
 // A directory walk is the wrong fix: it reads node_modules, .build and
 // vendored clones. `--others --exclude-standard` adds exactly the untracked

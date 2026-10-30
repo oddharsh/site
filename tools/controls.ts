@@ -169,7 +169,7 @@ const results = await pool(runnable, (c) =>
     // A created file is untracked. CI sees it committed, so mark it
     // intent-to-add (in the clone's private index) and test what CI tests,
     // unless the control is about the local run before `git add`, which a
-    // git census that reads only the index can't see (gotcha 90).
+    // git census that reads only the index can't see (gotcha 91).
     const created = c.mutations.filter((m) => "create" in m && !m.untracked).map((m) => m.file);
     if (created.length) execFileSync("git", ["add", "-N", "--", ...created], { cwd: root, env: { ...process.env, ...env } });
     const r = await exec(c.run, root, env);

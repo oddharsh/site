@@ -83,7 +83,7 @@ if (pinKind === "commit") {
 }
 console.log(`root: Wrangler ${rootDeclared} (installed ${installed}, ${pinKind} pin)`);
 
-// Untracked manifests count, so a new sub-project is checked before `git add` (gotcha 90).
+// Untracked manifests count, so a new sub-project is checked before `git add` (gotcha 91).
 const manifests = repoFiles(["package.json", ":(glob)**/package.json"], ROOT);
 if (!manifests.includes("package.json")) throw new Error("Wrangler check found no root package.json");
 

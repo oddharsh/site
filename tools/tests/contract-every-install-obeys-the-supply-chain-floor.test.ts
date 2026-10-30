@@ -26,7 +26,7 @@ const root = fileURLToPath(ROOT);
 
 /** Workflow files, from git rather than a directory walk, so a new workflow is
  *  covered by existing. Untracked ones count: one left out read green locally
- *  and failed CI once committed (gotcha 90). */
+ *  and failed CI once committed (gotcha 91). */
 function workflows() {
   return repoFiles([".github/workflows/*.yml"]);
 }

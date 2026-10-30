@@ -25,7 +25,7 @@ const ledger = JSON.parse(await readFile(new URL("config/retired.json", ROOT), "
  *  Same idiom as the shell-script and Worker-source censuses beside it, and for
  *  the same reason: a directory walk answers about the disk, which carries
  *  node_modules and .build. Git answers about the repository, untracked files
- *  included, since a new one is one `git add` from CI (gotcha 90).
+ *  included, since a new one is one `git add` from CI (gotcha 91).
  */
 function committed(...pathspec: string[]) {
   return repoFiles(pathspec, root);

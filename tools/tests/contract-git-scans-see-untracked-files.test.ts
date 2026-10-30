@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
 
-// Gotcha 90. A check that collects files with bare `git ls-files` or `git grep`
+// Gotcha 91. A check that collects files with bare `git ls-files` or `git grep`
 // reads the index, so a file nobody has `git add`ed is invisible to it and a
 // local run reads green on the defect CI then fails on. 21 scans did that until
 // 2026-10-29; repoFiles() and `git grep --untracked` see the file. This holds
