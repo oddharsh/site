@@ -30,7 +30,9 @@
 // pin AND under the canary; a row that differs is a `changed` verdict naming
 // the fix that arrived and the build it arrived in, which is the day this
 // becomes a bun worth pinning. A row landed in both is the reader's cue to
-// retire it.
+// retire it. VERDICT_WATCHES, since 2026-10-29, read the premises of this
+// repo's own declines the same way, and their rows name the memory file to
+// re-measure, which a verdict landed in both needs as much as a moved one.
 //
 // WHAT IT NEVER DOES. Write the pin, roll a dictionary, touch a credential.
 // It is an instrument. `.github/workflows/canary.yml` runs it nightly and
@@ -55,7 +57,17 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BUN_WATCHES, ensureTimbradoEngine, runWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import {
+  BUN_WATCHES,
+  VERDICT_WATCHES,
+  ensureTimbradoEngine,
+  runWatch,
+  type Watch,
+  type WatchResult,
+  watchMoved,
+  watchRow,
+  watchSignature,
+} from "./lib/upstream-watches.ts";
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, installedMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
@@ -239,10 +251,18 @@ step(calSuiteGate(candidate, ROOT));
 // makes a run red: it is a fix arriving, which is `changed`.
 console.log("\nwatches (pinned -> canary):");
 const mark = (v: boolean | null) => (v === null ? "?" : v ? "landed" : "not yet");
-for (const w of BUN_WATCHES) {
+const everyWatch: (Watch & { memory?: string })[] = [...BUN_WATCHES, ...VERDICT_WATCHES];
+for (const w of everyWatch) {
   const row = watchRow(w, runWatch(process.execPath, w), runWatch(candidate, w));
   watches.push(row);
-  const note = watchMoved(row) ? "  <-- moved" : row.pinned && row.candidate ? "  (in the pin too: retire this watch)" : "";
+  const reopen = w.memory ? `: re-measure ${w.memory}` : "";
+  const note = watchMoved(row)
+    ? `  <-- moved${reopen}`
+    : row.pinned && row.candidate
+      ? reopen
+        ? `  (in the pin too${reopen})`
+        : "  (in the pin too: retire this watch)"
+      : "";
   console.log(`  ${row.name.padEnd(46)} ${mark(row.pinned).padEnd(8)} -> ${mark(row.candidate).padEnd(8)}${note}`);
   if (row.pinned === null || row.candidate === null) console.log(`       ${row.detail}`);
 }

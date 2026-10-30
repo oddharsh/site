@@ -11,7 +11,8 @@
 //   5. the honest-false detector matches the page's own convention, and the
 //      shipped-card scanner finds the cards
 //   6. every upstream watch names a thread, RUNS on the pinned bun, and
-//      answers a boolean rather than "did not run"
+//      answers a boolean rather than "did not run" (verdict watches too, and
+//      a moved one's issue names the memory file that records the decline)
 //   7. timbrado itself is pinned to a full commit sha, so the frozen lockfile
 //      is the whole guarantee about which reporter runs
 //
@@ -25,11 +26,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { isTitleFor, marker, plan, render, title } from "timbrado/report";
-import { checkWatch } from "timbrado/watch";
+import { checkWatch, watchRow, watchSignature } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "../lib/browser-channel.ts";
 import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "../canary-browsers.ts";
-import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalProbe, runWatch } from "../lib/upstream-watches.ts";
+import { BUN_WATCHES, VERDICT_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalProbe, runWatch } from "../lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) =>
@@ -200,7 +201,7 @@ test("the honest-false detector matches the page's own convention, and finds the
 // 11.5s cold on 14 cores. Node honours the option too, and runs unclocked.
 test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", { timeout: 180_000 }, () => {
   const names = new Set();
-  for (const w of [...BUN_WATCHES, ...WRANGLER_WATCHES]) {
+  for (const w of [...BUN_WATCHES, ...VERDICT_WATCHES, ...WRANGLER_WATCHES]) {
     const problems = checkWatch({ script: "x", ...w });
     assert.deepEqual(problems, [], `${w.name}: ${problems.join("; ")}`);
     assert.ok(!names.has(w.name), `${w.name} is declared twice`);
@@ -212,11 +213,28 @@ test("every upstream watch names a thread, and every bun watch RUNS on the pinne
   // bun on PATH is the runtime then; CI's setup-bun puts the pin there. A
   // watch that reads `null` is decoration, whichever way the fix goes.
   const bun = process.versions.bun ? process.execPath : "bun";
-  for (const w of BUN_WATCHES) {
+  for (const w of [...BUN_WATCHES, ...VERDICT_WATCHES]) {
     assert.equal(w.runtime, "bun", `${w.name} must name its runtime for timbrado's runner`);
     const r = runWatch(bun, w);
     assert.ok(r.landed === true || r.landed === false, `${w.name} did not run under the pinned bun: ${r.detail}`);
     assert.ok(r.detail.length > 0, `${w.name} answered with no detail`);
+  }
+});
+
+test("a verdict watch that moves files an issue naming the memory file to re-measure", () => {
+  // The leg hands timbrado rows of name, issue and landed and nothing else, so
+  // the memory file reaches the issue only inside `landed`, and only because
+  // the reporter prints `landed means` for a moved row.
+  assert.ok(VERDICT_WATCHES.length >= 3, `only ${VERDICT_WATCHES.length} verdict watches; the list collapsed`);
+  for (const w of VERDICT_WATCHES) {
+    assert.match(w.memory, /^[a-z0-9-]+\.md$/, `${w.name} names its memory file as ${JSON.stringify(w.memory)}`);
+    const report = (pinned, candidate) => {
+      const row = watchRow(w, { landed: pinned, detail: "pin" }, { landed: candidate, detail: "canary" });
+      return render({ target: "bun", verdict: "changed", subject: {}, signature: `changed:${watchSignature(row)}`, watches: [row] });
+    };
+    assert.ok(report(false, true).includes(`\`${w.name}\` landed means: `), `${w.name} moved and the issue does not say what that means`);
+    assert.ok(report(false, true).includes(w.memory), `${w.name} moved and the issue does not name ${w.memory}`);
+    assert.ok(!report(false, false).includes("landed means"), `${w.name} did not move and the issue still explains it`);
   }
 });
 
@@ -265,7 +283,7 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
     ensureAt < leg.indexOf('"download failed"'),
     "the engine is asked for AFTER the canary download; a runner without cargo pays for the download first",
   );
-  assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
+  assert.ok(ensureAt < leg.indexOf("[...BUN_WATCHES, ...VERDICT_WATCHES]"), "the engine is asked for after the watch loop it exists for");
   assert.match(
     leg.slice(ensureAt, ensureAt + 400),
     /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/,
