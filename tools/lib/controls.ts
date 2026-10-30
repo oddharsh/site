@@ -8,7 +8,7 @@
 // blind in between: invariant 8c walked 0 of 39 pages for 60 days, the
 // conflict-marker scan read 0 of serendipity's 3 files for 55, and the
 // taskbar-floor check compared nothing for a day while every build printed a
-// warning (gotchas 79 and 80). Each was found by luck (gotcha 89).
+// warning (gotchas 79 and 80). Each was found by luck (gotcha 90).
 //
 // A control is that hand-run proof made permanent: a mutation that plants the
 // defect, the check that must catch it, and the words it must say when it
