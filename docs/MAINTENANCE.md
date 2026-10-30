@@ -2313,6 +2313,20 @@ checks the declarations in `TWIN_FACTS`, including the bot User-Agent. Update
 an authored twin when its page changes; the fact checks cover named claims,
 not every sentence.
 
+### Production observability
+
+```bash
+bun run observe:check             # did each signal fire in the last 7 days?
+bun run observe:check --days 30   # widen the window (GraphQL and logs keep 30)
+```
+
+It reads with `CLOUDFLARE_API_TOKEN`, or the wrangler login when that's unset,
+and exits 1 on any BROKEN row. Under the wrangler login, Workers Logs, Traces
+and Issues print UNREADABLE (403), because no wrangler OAuth scope can read
+them. [`OBSERVABILITY-DRILL.md`](OBSERVABILITY-DRILL.md) has what each row
+means, what it found on 2026-10-29, and the planted-fault half that is still
+waiting on the owner.
+
 ---
 
 ## The scripts (`tools/photos/`)

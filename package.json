@@ -39,6 +39,7 @@
     "routes:check:remote": "node tools/check-routes-harness.ts --remote",
     "infra:check": "bun tools/check-infra.ts",
     "infra:apply": "bun tools/apply-infra.ts",
+    "observe:check": "bun tools/observe-check.ts",
     "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
     "colors:drift": "bun tools/color-drift.ts",
