@@ -734,7 +734,7 @@ async function probe(r) {
       // /garage/feed.xml when br was not offered, and as br on all four when it
       // was. Production passes origin brotli through untouched (every /a/ asset
       // lands at exactly its q11 size), so this is the harness, and the row's
-      // claim is the one a real client makes: offer br, get the q11 twin.
+      // claim is the one a real client makes: offer br, get the q11 twin. Gotcha 89.
       headers: probeHeaders(r),
     });
     const ct = res.headers.get("content-type") || "";
