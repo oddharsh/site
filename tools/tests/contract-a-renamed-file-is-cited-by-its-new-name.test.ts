@@ -14,9 +14,9 @@
 // exists, so neither is flagged.
 import { ROOT, assert, test } from "./contract-shared.ts";
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { repoFiles } from "../lib/repo-files.ts";
 
 const NAME = /(?<![\w.-])([A-Za-z0-9_][A-Za-z0-9_.-]*)\.(?:mjs|cjs)\b/g;
 const SKIP = /(^|\/)(bun\.lock|package-lock\.json)$|^src\/dict\/|\.(br|dcz|dict|png|jpe?g|avif|jxl|webp|gif|pdf|woff2?|ico|mp4|zip|wasm|bin)$/i;
@@ -61,11 +61,9 @@ test("the matcher flags a renamed file's old name and leaves fixtures and live .
   );
 });
 
-test("every tracked file cites a renamed file by its new name", () => {
+test("every file cites a renamed file by its new name", () => {
   const root = fileURLToPath(ROOT);
-  const files = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 })
-    .split("\0")
-    .filter(Boolean);
+  const files = repoFiles([], root);
   // This file is skipped: HISTORY and the header have to spell the old names
   // to explain them. It passed locally on 2026-10-17 only because it was not
   // yet tracked, and the first CI run failed on its own six citations.
