@@ -107,7 +107,7 @@ Before that, `bun run inflight` names every open PR and live `claude/*`
 branch touching the files this branch touches, and any gotcha number, route
 row, derivation id or cron slot two of them claim differently. Those
 collisions merge cleanly and still need a renumber, so catch them before CI
-goes green.
+goes green. A SessionStart hook runs it for every Claude Code session here.
 
 ## Rotate Cal's calendar or approval secret
 

@@ -3,6 +3,8 @@
 //     bun run inflight                 this branch (commits and working tree)
 //     bun run inflight <path>...       those paths, or anything under them
 //
+// Every Claude Code session in this repo also runs it at startup and on resume.
+//
 // Several sessions work in this repo at once, often forked from one another,
 // and nothing told a session at startup what its siblings were changing. #1257
 // rebuilt #1255, and on 2026-10-29 #1486 and #1487 both added gotcha 89, then
@@ -323,4 +325,11 @@ async function main() {
   console.log(out.join("\n"));
 }
 
-if (import.meta.main) await main();
+// A SessionStart hook in .claude/settings.json runs this, and its stdout becomes
+// the session's first context. Anything unexpected prints one line and exits 0,
+// so a broken report never holds a session up.
+if (import.meta.main) {
+  await main().catch((error: unknown) => {
+    console.log(`inflight: could not run (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`);
+  });
+}
