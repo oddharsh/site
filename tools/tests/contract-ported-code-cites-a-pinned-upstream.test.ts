@@ -1,7 +1,7 @@
 // ── ported code links its upstream at a tag or a commit, never a branch ──────
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // When code here follows somebody else's (Pillow's FIND_EDGES, NLWeb's dialect
 // switch, buttcrack's quadgram counts, jpegli's masking), the comment links the
@@ -48,8 +48,7 @@ function upstreamRefs(source, { patch = false }: Record<string, any> = {}) {
 }
 
 function codeFiles() {
-  const out = execFileSync("git", ["ls-files", "-z", "--", ...CODE_ROOTS], { cwd: new URL(".", ROOT), encoding: "utf8" });
-  return out.split("\0").filter((rel) => rel && CODE_EXT.test(rel));
+  return repoFiles(CODE_ROOTS).filter((rel) => CODE_EXT.test(rel));
 }
 
 test("the ref matcher sees a branch link and passes a tag or sha (control)", () => {

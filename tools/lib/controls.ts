@@ -29,8 +29,10 @@ import { join } from "node:path";
 export type Mutation =
   /** Replace `find` with `replace`. `find` must occur exactly once. */
   | { file: string; find: string; replace: string }
-  /** Create `file` (it must not exist yet). */
-  | { file: string; create: string };
+  /** Create `file` (it must not exist yet). The runner marks it
+   *  intent-to-add, the way CI sees it committed; `untracked` leaves it out
+   *  of the index, the way a local run sees it before `git add` (gotcha 91). */
+  | { file: string; create: string; untracked?: boolean };
 
 export interface Control {
   /** kebab-case, unique; the CLI filters on substrings of it */
@@ -398,5 +400,65 @@ export const CONTROLS: Control[] = [
     mutations: [{ file: "tools/build.ts", find: "  const min = banner + code;", replace: '  const min = banner + (file === "nav-tips.js" ? src : code);' }],
     run: ["bun", "run", "routes:check"],
     expect: /\/nav-tips\.js +<- size \d+B > \d+B, 0\.8 of src\/client\/nav-tips\.ts/,
+  },
+
+  // Gotcha 91: a new file before `git add`. Each leaves its file untracked, so
+  // it proves the local run sees what CI will see once the file is committed.
+  // On 2026-10-29 one plant per converted scan (22) read BLIND 19 times on the
+  // tree before the sweep (the bidi scan already read untracked files, and two
+  // baselines could not run there) and CAUGHT 22 times after it. Five stay.
+  {
+    id: "untracked-script-skips-strict-mode",
+    plants: "a new shell script, not yet added, without set -euo pipefail",
+    gotcha: 91,
+    mutations: [{ file: "tools/control-probe.sh", create: "#!/bin/sh\necho probe\n", untracked: true }],
+    run: contract("contract-committed-shell-scripts-fail-loudly"),
+    expect: /tools\/control-probe\.sh \(missing e, u, pipefail\)/,
+  },
+  {
+    id: "untracked-workflow-floats-its-install",
+    plants: "a new workflow, not yet added, whose bun install drops --frozen-lockfile",
+    gotcha: 91,
+    mutations: [
+      {
+        file: ".github/workflows/control-probe.yml",
+        create: "name: probe\non: push\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun install\n",
+        untracked: true,
+      },
+    ],
+    run: contract("contract-every-install-obeys-the-supply-chain-floor"),
+    expect: /control-probe\.yml:\d+: - run: bun install/,
+  },
+  {
+    id: "untracked-file-cites-a-missing-gotcha",
+    plants: "a new file, not yet added, citing a gotcha with no entry (the git grep half of the sweep)",
+    gotcha: 91,
+    // Built, like dangling-gotcha-citation above, so this file cites nothing.
+    mutations: [{ file: "tools/control-probe.ts", create: `// gotcha ${999}\nexport {};\n`, untracked: true }],
+    run: contract("contract-gotcha-numbers-resolve"),
+    expect: /references to gotchas that do not exist: .*999/,
+  },
+  {
+    id: "untracked-module-outside-every-program",
+    plants: "a new .ts file, not yet added, that no tsconfig names, so the type-aware lint never reads it",
+    gotcha: 91,
+    mutations: [{ file: "public/control-probe.ts", create: "export const probe = 1;\n", untracked: true }],
+    run: ["bun", "run", "typecheck"],
+    expect: /public\/control-probe\.ts: belongs to no bun check program/,
+  },
+  {
+    id: "untracked-git-census-reads-the-index",
+    plants: "a new check, not yet added, that collects files with bare git ls-files",
+    gotcha: 91,
+    // Built: written out, the argv would trip the census guard on this file.
+    mutations: [
+      {
+        file: "tools/control-probe.ts",
+        create: `import { execFileSync } from "node:child_process";\nexport const probe = execFileSync("git", [${'"ls-files"'}, "-z"], { encoding: "utf8" });\n`,
+        untracked: true,
+      },
+    ],
+    run: contract("contract-git-scans-see-untracked-files"),
+    expect: /tools\/control-probe\.ts:2: export const probe = execFileSync/,
   },
 ];

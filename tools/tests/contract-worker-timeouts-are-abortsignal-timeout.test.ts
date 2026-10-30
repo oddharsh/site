@@ -1,7 +1,7 @@
 // ── Worker request deadlines are AbortSignal.timeout, and a timeout is named ──
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ROOT, assert, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // Every outbound deadline in the Worker code is `AbortSignal.timeout(ms)`. It
 // replaced 18 hand-rolled ones (an AbortController, a setTimeout that aborted
@@ -50,9 +50,7 @@ test("the matcher sees a hand-rolled abort timer (control)", () => {
 
 test("no Worker code arms its own abort timer", () => {
   const roots = ["src/worker", "cal/src", "serendipity", "counter/src", "lens-reader/src", "lwe-ask/src", "cf-garage/src"];
-  const files = execFileSync("git", ["ls-files", "-z", "--", ...roots], { cwd: new URL(".", ROOT), encoding: "utf8" })
-    .split("\0")
-    .filter((rel) => /\.(?:ts|js|mjs)$/.test(rel));
+  const files = repoFiles(roots).filter((rel) => /\.(?:ts|js|mjs)$/.test(rel));
   // FLOOR. An enumerator that returns nothing passes everything.
   assert.ok(files.length >= 100, `found only ${files.length} Worker source files; the enumerator is broken`);
   const offenders = files.filter((rel) => HAND_ROLLED.test(readFileSync(new URL(rel, new URL(".", ROOT)), "utf8")));

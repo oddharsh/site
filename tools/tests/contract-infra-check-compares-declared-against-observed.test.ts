@@ -10,8 +10,8 @@
 // Each drift test carries its control in the same test: the unmodified fixture
 // produces zero failures, so the failure asserted is the mutation's and not
 // the fixture's. The declaration is the real config/infra.json throughout.
-import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 import { agentRepresentation, agentSurfaces } from "../lib/agent-representation.ts";
 import {
   AGENT_SURFACE_FLOOR,
@@ -266,7 +266,7 @@ test("tree tier: a declared deploy command that lost a provisioning pin fails, f
 const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s+(?:[^&|;]*?\s)?(?:deploy|versions\s+upload)\b/;
 test("tree tier: every committed command that publishes a Worker pins provisioning off", () => {
   const commands: [string, string][] = [];
-  const manifests = execFileSync("git", ["ls-files", "package.json", "*/package.json"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
+  const manifests = repoFiles(["package.json", "*/package.json"]);
   for (const file of manifests) {
     for (const [name, cmd] of Object.entries<string>(JSON.parse(readFileSync(new URL(file, ROOT), "utf8")).scripts ?? {})) {
       if (PUBLISHES.test(cmd) && !cmd.includes("--dry-run")) commands.push([`${file} scripts.${name}`, cmd]);

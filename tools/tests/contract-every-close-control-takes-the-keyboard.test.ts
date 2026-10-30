@@ -10,7 +10,7 @@
 // native <button> already is. And the accessory window closes on Escape, the
 // way Run does.
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { repoFiles } from "../lib/repo-files.ts";
 import { assert, test } from "./contract-shared.ts";
 
 // A role="button" open tag that isn't a <button> and carries no tabindex.
@@ -28,9 +28,7 @@ test("the check flags the old Clock close and passes a focusable one (control)",
 });
 
 test("no source gives role=button to an element the keyboard can't reach", () => {
-  const files = execFileSync("git", ["ls-files", "src/client", "src/pages", "src/worker", "serendipity", "cal/src"], { encoding: "utf8" })
-    .split("\n")
-    .filter((f) => /\.(js|ts|html)$/.test(f));
+  const files = repoFiles(["src/client", "src/pages", "src/worker", "serendipity", "cal/src"]).filter((f) => /\.(js|ts|html)$/.test(f));
   assert.ok(files.length >= 100, `only ${files.length} source files listed`);
   const found = files.flatMap((f) => unreachable(readFileSync(f, "utf8")).map((t) => `${f}: ${t}`));
   assert.deepEqual(found, []);

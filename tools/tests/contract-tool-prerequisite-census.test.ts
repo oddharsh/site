@@ -41,6 +41,7 @@ async function fixture(run) {
     });
   try {
     await put("tools/check-tools.ts", await readFile(new URL("../check-tools.ts", import.meta.url), "utf8"));
+    await put("tools/lib/repo-files.ts", await readFile(new URL("../lib/repo-files.ts", import.meta.url), "utf8"));
     await put(
       "config/tools.json",
       JSON.stringify({
@@ -75,14 +76,15 @@ for (const file of ["tools/photos/build inputs/line\nbreak.sh", ".github/check.s
     await fixture(async ({ put, git, cli }) => {
       await put(file, "command -v undeclared-tool || exit 1\n");
       await put("tools/photos/vendor/downloaded.sh", "command -v vendor-tool || exit 1\n");
-      const untracked = cli();
-      assert.equal(untracked.status, 0, untracked.stderr);
-
-      git("add", "--", file);
-      const tracked = cli();
-      assert.equal(tracked.status, 1, tracked.stderr);
-      assert.ok(tracked.stderr.includes(`${file}: probes \`undeclared-tool\``), tracked.stderr);
-      assert.doesNotMatch(tracked.stderr, /vendor-tool/);
+      // Untracked but not ignored is one `git add` from CI, so it counts
+      // before the add (gotcha 91). The ignored download never does.
+      for (const stage of ["untracked", "tracked"]) {
+        if (stage === "tracked") git("add", "--", file);
+        const result = cli();
+        assert.equal(result.status, 1, `${stage}: ${result.stderr}`);
+        assert.ok(result.stderr.includes(`${file}: probes \`undeclared-tool\``), result.stderr);
+        assert.doesNotMatch(result.stderr, /vendor-tool/);
+      }
 
       // Node and Wrangler belong to the repository's existing runtime/package
       // pins, even when an owned shell entrypoint checks that they are present.

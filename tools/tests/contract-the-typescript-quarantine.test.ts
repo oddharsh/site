@@ -1,5 +1,6 @@
 // ── the TypeScript quarantine ───────────────────────────────────────────────
 import { ROOT, assert, readFile, readdir, remainderHolder, test, wranglerErrorLines } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
 // The migration quarantine is empty. Keep the restriction directly in source:
@@ -135,7 +136,6 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // exercises that boundary in both staging adapters and on development edits.
 test("script-level node commands stay declared alongside the module-level harness and browser-erasure boundaries", async () => {
   const { readFileSync } = await import("node:fs");
-  const { execFileSync } = await import("node:child_process");
   const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
   const nodeScripts = Object.entries<string>(pkg.scripts)
@@ -143,9 +143,7 @@ test("script-level node commands stay declared alongside the module-level harnes
     .map(([k]) => k)
     .sort();
   assert.deepEqual(nodeScripts, ["cpu:sweep", "routes:check", "routes:check:remote", "test:node"]);
-  const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" })
-    .split("\0")
-    .filter(Boolean);
+  const files = repoFiles(["*.sh", "**/*.sh", ".github/workflows/*.yml"], root);
   const spawns: any[] = [];
   for (const rel of files) {
     const code = readFileSync(`${root}${rel}`, "utf8")
@@ -473,13 +471,10 @@ test("every program declared null-safe still declares it", async () => {
 // `//` line and must survive; a test that failed on them would be unfixable
 // without deleting its own explanation. Gotcha 42.
 test("no .ts file carries a JSDoc type annotation, which TypeScript ignores", async () => {
-  const { execFileSync } = await import("node:child_process");
   const { fileURLToPath } = await import("node:url");
 
   const root = fileURLToPath(new URL("./", ROOT));
-  const files = execFileSync("git", ["ls-files", "*.ts"], { cwd: root, encoding: "utf8" })
-    .split("\n")
-    .filter((f) => f && !f.endsWith(".d.ts"));
+  const files = repoFiles(["*.ts"], root).filter((f) => !f.endsWith(".d.ts"));
 
   // A FLOOR, because a test that scanned nothing would agree with any tree.
   assert.ok(files.length >= 100, `only ${files.length} .ts files found — the enumeration is broken`);
