@@ -17,8 +17,9 @@ import test from "node:test";
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { repoFiles } from "../lib/repo-files.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -31,11 +32,9 @@ const BROKEN = [
 ];
 
 test("no module decides it is the entry point by comparing argv[1] to import.meta.url", async () => {
-  // git ls-files rather than a walk: the question is about files this repo
-  // OWNS, and a walk would have to re-learn every ignore rule to answer it.
-  const files = execFileSync("git", ["ls-files", "*.ts", "*.mjs", "*.js"], { cwd: ROOT, encoding: "utf8" })
-    .split("\n")
-    .filter(Boolean)
+  // git rather than a walk: the question is about files this repo owns, and a
+  // walk would have to re-learn every ignore rule to answer it.
+  const files = repoFiles(["*.ts", "*.mjs", "*.js"])
     // Test files are exempt: this one quotes both broken spellings above, and
     // the fixture below writes one on purpose. A rule that failed on its own
     // explanation could only be fixed by deleting the explanation.

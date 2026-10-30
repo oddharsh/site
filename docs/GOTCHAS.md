@@ -852,6 +852,18 @@ skips it.
     before #1390 and #1408 on 2026-10-29, `bun run controls` reads BLIND on
     all three. Register a guard's control in `tools/lib/controls.ts` with
     the words the guard prints, and run it before you call a check done. A
-    control that plants a new file marks it intent-to-add, because 21
-    contract scans read git and only the bidi scan sees an untracked file.
+    control that plants a new file marks it intent-to-add, the way CI sees
+    it, unless it sets `untracked` to prove the local case (gotcha 91).
     Checked by: `tools/tests/contract-controls-still-apply.test.ts`, `tools/controls.ts`.
+
+91. **A git census can't see a file nobody has `git add`ed.** Bare
+    `git ls-files` and `git grep` read the index, so an agent who adds a
+    file and runs `bun run test` reads green on a defect CI fails on once
+    the file is committed. On 2026-10-29 the gotcha 16 guard passed locally
+    on a new `src/worker/lib/*.ts` importing `cloudflare:workers`, and
+    #1410 hit the same trap. 21 scans in `tools/` read git that way; only
+    the bidi scan saw untracked files. Collect files with `repoFiles()`
+    from `tools/lib/repo-files.ts` (`--cached --others --exclude-standard`,
+    so ignored trees stay out) or pass `git grep --untracked`. A scan that
+    truly means the index takes a `tracked-only:` comment saying why.
+    Checked by: `tools/tests/contract-git-scans-see-untracked-files.test.ts`, `tools/controls.ts`.
