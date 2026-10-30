@@ -687,7 +687,7 @@ skips it.
     files. A missing directory throws and fails the build; a wrong one passes
     silently while the summary line printed the registry's 74 entries. Give
     every walk-and-assert a floor on what it inspected, print the walked
-    count, and break the path once to watch the floor fire. Gotcha 55 is the
+    count, and register a control that breaks the path (gotcha 90). Gotcha 55 is the
     same split reaching `servedFiles()`.
     Checked by: `tools/build.ts`.
 
@@ -842,3 +842,16 @@ skips it.
     of `routes:check`'s 25 br-pinned rows came back gzip; the other 3 are
     types the local layer leaves alone.
     Checked by: `tools/verify-routes.ts`.
+
+90. **A guard proven once goes blind without anyone noticing.** `validate`
+    proves on every push that each guard passes on a good tree. Whether it
+    still fails on its defect was proven once, by hand, in the PR that added
+    it, and 20 commit bodies record such a "Controls:" run that never ran
+    again. Gotcha 79's walks read zero files for 55 and 60 days, and the
+    taskbar floor compared nothing for a day. Re-run against the trees
+    before #1390 and #1408 on 2026-10-29, `bun run controls` reads BLIND on
+    all three. Register a guard's control in `tools/lib/controls.ts` with
+    the words the guard prints, and run it before you call a check done. A
+    control that plants a new file marks it intent-to-add, because 21
+    contract scans read git and only the bidi scan sees an untracked file.
+    Checked by: `tools/tests/contract-controls-still-apply.test.ts`, `tools/controls.ts`.

@@ -133,7 +133,10 @@ test("only the entrypoint and the workflow module import cloudflare:workers", ()
   // one. Anchor to a line that actually begins an import statement, which is the
   // same quote-versus-code distinction the CSP and link-integrity scanners had
   // to learn. `-E` for a real regex, and the floor below proves it still matches.
-  const out = execFileSync("git", ["grep", "-lE", '^\\s*import .*from "cloudflare:workers"', "--", "src/worker"], {
+  // `--untracked` because a new module is untracked until `git add`, and
+  // without it this passed locally on one importing cloudflare:workers
+  // (control worker-module-imports-cloudflare-workers, 2026-10-29).
+  const out = execFileSync("git", ["grep", "--untracked", "-lE", '^\\s*import .*from "cloudflare:workers"', "--", "src/worker"], {
     cwd: new URL(".", ROOT),
     encoding: "utf8",
   });
