@@ -9,19 +9,23 @@
 // parseStructured needs for a generated reply.
 //
 // The question is the same kind roles.ts asks Clef, so it follows the same
-// rules: one bio per request, the transport supplied by the caller, and the
-// decision whether this goes into the Worker left to the baseline tool
-// (tools/serendipity-company-baseline.ts), scored on hand labels.
+// rules: one bio per request, and the decision whether it goes into the Worker
+// left to the baseline tool (tools/serendipity-company-baseline.ts), scored on
+// hand labels. It earned that on 2026-10-30, so the cron's company pass
+// (extractCompanies in serendipity.ts) stores one answer per bio, the way
+// event-tags.ts stores one tag per event, and the roster reads it.
 //
 // The answer keeps `guess` and `p_null` beside `value`. Clairic nulls a value
 // when p_null passes null_threshold (0.5 by default), and keeping both lets
 // one run be scored at every threshold instead of one run per threshold.
 //
-// Pure and node-safe (gotcha 16).
+// Pure apart from askClairic's binding call, and node-safe (gotcha 16).
 
 import { asNumber, asText } from "../src/worker/lib/parse.ts";
+import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
+import { tagInputHash } from "./event-tags.ts";
 
-export const COMPANY_MODEL = "clairic";
+export const COMPANY_MODEL: ClefModel = "clairic";
 
 // The instructions name the cases the first pass on sample positions 0-59 read
 // wrong, so the model is told where the boundary is: a title or a verb glued to
@@ -67,3 +71,36 @@ export function parseCompanyAnswer(body: any): CompanyPrediction | null {
 export function companyAt(p: CompanyPrediction, threshold: number): string | null {
   return p.pNull <= threshold ? p.guess : null;
 }
+
+// The roster shows a company only when Clairic put the chance of "none" at or
+// under this. Measured 2026-10-30 on the held-out 60 bios: 0.1 gave 90%
+// precision and 85% recall, 0.3 gave 86% and 90%. A wrong company printed under
+// a named person costs more than a blank, so the stricter one. Every answer is
+// stored with its p_null, so moving this re-reads no bio.
+export const COMPANY_MAX_P_NULL = 0.1;
+
+/** sha256 over the whole request, as tagInputHash does for tags: the bio, the
+ *  instructions and the model all invalidate a stored answer. */
+export const companyInputHash = (request: ReturnType<typeof buildCompanyRequest>) => tagInputHash(request);
+
+// Clairic's measured median was 313 ms; the deadline is CLEF_TIMEOUT_MS's, for
+// its reason: a slow answer is asked again next tick, never waited on.
+const CLAIRIC_TIMEOUT_MS = 5000;
+
+/** One call through the shared transport. Never throws, so the pass can count
+ *  outcomes by cause. */
+export async function askClairic(
+  request: ReturnType<typeof buildCompanyRequest>,
+  env: ClefEnv,
+): Promise<{ prediction: CompanyPrediction } | { error: string }> {
+  const r = await runClef(env, COMPANY_MODEL, request, CLAIRIC_TIMEOUT_MS);
+  if ("error" in r) return r;
+  const prediction = parseCompanyAnswer(r.body);
+  return prediction ? { prediction } : { error: "unparseable" };
+}
+
+// Created on first use as well as by migration 0004, for EVENT_TAGS_DDL's
+// reason, and on one line for the same one. `company` is Clairic's guess even
+// when p_null is high, so a new threshold applies without asking again.
+export const ATTENDEE_COMPANIES_DDL =
+  "CREATE TABLE IF NOT EXISTS attendee_companies (attendee_id TEXT PRIMARY KEY REFERENCES attendees(id), company TEXT, p_null REAL NOT NULL, confidence REAL NOT NULL, model TEXT NOT NULL, input_hash TEXT NOT NULL, extracted_at TEXT NOT NULL DEFAULT (datetime('now')))";
