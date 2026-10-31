@@ -1,6 +1,7 @@
 // ── test-inputs: a diff selects the test files that opened what it changed ──
 import { assert, test } from "./contract-shared.ts";
-import { accesses, entry, lockPackages, packageOf, select, type InputMap } from "../test-inputs.ts";
+import { readFileSync } from "node:fs";
+import { accesses, entry, lockPackages, packageOf, select, suiteCommand, type InputMap } from "../test-inputs.ts";
 
 // tools/test-inputs.ts reads `strace -f -y` logs. These lines are that format,
 // trimmed: pid, syscall, args, and the result.
@@ -147,4 +148,13 @@ test("test-inputs: a lockfile change reruns the tests that loaded a package it m
   assert.deepEqual(run, ["tools/tests/built.test.ts", "tools/tests/git.test.ts", "tools/tests/new.test.ts"]);
   assert.equal(why["tools/tests/built.test.ts"], "loads oxc-minify, which the lockfile moved");
   assert.deepEqual(select(MAP, TESTS, { paths: ["bun.lock"] }).skip, [], "without the packages, bun.lock is global");
+});
+
+test("test-inputs: run is package.json's test script, narrowed to ./-anchored files or left whole", () => {
+  const { test: script } = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts;
+  assert.deepEqual(suiteCommand(script, null), script.split(" "), "unnarrowed, it is bun run test");
+  const narrowed = suiteCommand(script, ["tools/tests/a.test.ts"]);
+  assert.deepEqual(narrowed.slice(0, -1), script.split(" ").slice(0, -1), "the same flags");
+  assert.equal(narrowed.at(-1), "./tools/tests/a.test.ts", "a bare path would be a substring filter");
+  assert.throws(() => suiteCommand("bun test --parallel=4 tools/", ["tools/tests/a.test.ts"]), /can't be narrowed/);
 });
