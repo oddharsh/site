@@ -74,6 +74,7 @@
     "timbrado": "bun node_modules/timbrado/src/cli.ts",
     "node:pin": "bun tools/check-node-pin.ts",
     "speculation:report": "bun tools/speculation-report.ts",
+    "serendipity:companies": "bun tools/serendipity-company-baseline.ts",
     "serendipity:roles": "bun tools/serendipity-role-baseline.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
     "checkpoints:check": "bun tools/check-checkpoints.ts",
