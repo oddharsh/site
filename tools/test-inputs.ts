@@ -26,15 +26,15 @@ const ROOT = process.cwd();
 
 /**
  * A changed path here can move every test through how the suite runs rather
- * than what a test reads: the runner, its toolchain pins, the dependency tree
- * (node_modules reads aren't mapped), and this selector. Other workflow files
- * are ordinary inputs, since the tests that read them are traced reading them.
+ * than what a test reads: the runner, its toolchain pins, and this selector.
+ * Other workflow files are ordinary inputs, since the tests that read them are
+ * traced reading them. bun.lock is global only when the caller can't say which
+ * packages it moved.
  */
 export const GLOBAL = [
   /^\.github\/workflows\/ci\.yml$/,
   /^\.github\/actions\//,
   /^\.github\/install-bun\.sh$/,
-  /^bun\.lock$/,
   /^config\/bun-pin\.json$/,
   /^\.node-version$/,
   /^rust-toolchain\.toml$/,
@@ -44,7 +44,8 @@ export const GLOBAL = [
 // Outputs the suite reads but git doesn't hold. A read of one stands for the
 // inputs of the step that wrote it, traced as its own entry.
 export const PRODUCERS: Record<string, { dirs: string[]; command: string[] }> = {
-  "@build": { dirs: [".build"], command: ["bun", "run", "perf-budget"] },
+  // The build also writes the wrangler configs it derives from cloudflare.config.ts.
+  "@build": { dirs: [".build", ".wrangler.site.jsonc", ".wrangler.site.local.jsonc"], command: ["bun", "run", "perf-budget"] },
   "@types": { dirs: ["config/.generated", "cf-garage/.cloudflare"], command: ["bun", "tools/gen-runtime-types.ts", "--force"] },
 };
 
@@ -56,8 +57,11 @@ const SCRATCH = /(^|\/)\.wrangler(\/|$)/;
 // or renamed. Anything else git does against this repo makes a test always run.
 const TREE_ONLY = [/^ls-files\b/, /^rev-parse --(show-toplevel|show-prefix|git-dir|git-path|is-inside-work-tree)\b/, /^check-ignore\b/];
 
-/** `tree`: the test lists tracked files through git, so an added, removed or renamed file reruns it. */
-export type Entry = { reads: string[]; lists: string[]; uses: string[]; tree?: true; always?: string };
+/**
+ * `packages`: what it loaded from node_modules, by package name. `tree`: it
+ * lists tracked files through git, so an added, removed or renamed file reruns it.
+ */
+export type Entry = { reads: string[]; lists: string[]; uses: string[]; packages: string[]; tree?: true; always?: string };
 export type InputMap = { commit: string; files: Record<string, Entry> };
 
 /** A path a process touched, or (with `git`) a git call and the directory it ran against. */
@@ -72,13 +76,19 @@ const result = (args: string) => / = (-?\d+)(?:<[^>]*>)?(?: (E[A-Z]+))?(?: \(.*\
  */
 export function accesses(log: string, cwd: string): Access[] {
   const out: Access[] = [];
-  const cwds = new Map<string, string>(),
+  // A directory per process, shared by the threads that clone with CLONE_FS:
+  // libuv's pool threads open what the main thread's chdir pointed at.
+  const cwds = new Map<string, { dir: string }>(),
     gits = new Set<string>(),
     pending = new Map<string, (ret: string, errno?: string) => void>();
-  const dirOf = (pid: string) => cwds.get(pid) ?? cwd;
+  const cwdOf = (pid: string) => {
+    let box = cwds.get(pid);
+    if (!box) cwds.set(pid, (box = { dir: cwd }));
+    return box;
+  };
   // The child can run, and chdir, before strace prints the parent's clone returning.
-  const forked = (parent: string, child: string) => {
-    if (!cwds.has(child)) cwds.set(child, dirOf(parent));
+  const forked = (parent: string, child: string, sharesFs: boolean) => {
+    if (!cwds.has(child)) cwds.set(child, sharesFs ? cwdOf(parent) : { dir: cwdOf(parent).dir });
     if (gits.has(parent)) gits.add(child);
   };
   for (const line of log.split("\n")) {
@@ -101,7 +111,12 @@ export function accesses(log: string, cwd: string): Access[] {
       }
     };
     if (/^(clone3?|v?fork)$/.test(name)) {
-      finish((ret) => Number(ret) > 0 && forked(pid, ret));
+      finish((ret) => Number(ret) > 0 && forked(pid, ret, args.includes("CLONE_FS")));
+      continue;
+    }
+    if (name === "fchdir") {
+      const dir = /^\d+<([^>]+)>/.exec(args);
+      if (dir) finish((ret) => ret === "0" && (cwdOf(pid).dir = dir[1]));
       continue;
     }
     if (name === "getdents64") {
@@ -113,12 +128,11 @@ export function accesses(log: string, cwd: string): Access[] {
     const [raw] = strings;
     if (raw === undefined) continue;
     const dirfd = /^\d+<([^>]+)>,/.exec(args);
-    const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : dirOf(pid), raw);
-    if (name === "execve") {
-      if (!path.endsWith("/git")) continue;
+    const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : cwdOf(pid).dir, raw);
+    if (name === "execve" && path.endsWith("/git")) {
       // argv after argv[0]; `-C dir` moves where it runs, `-c k=v` doesn't.
       const argv = strings.slice(2);
-      let at = dirOf(pid);
+      let at = cwdOf(pid).dir;
       while (argv[0]?.startsWith("-")) {
         const flag = argv.shift();
         if (flag === "-C" && argv[0]) at = resolve(at, argv.shift() ?? "");
@@ -132,7 +146,7 @@ export function accesses(log: string, cwd: string): Access[] {
       continue;
     }
     if (name === "chdir") {
-      finish((ret) => ret === "0" && cwds.set(pid, path));
+      finish((ret) => ret === "0" && (cwdOf(pid).dir = path));
       continue;
     }
     const access: Access = { path, listed: false, missing: false, byGit: gits.has(pid) };
@@ -140,6 +154,12 @@ export function accesses(log: string, cwd: string): Access[] {
     finish((_, errno) => (access.missing = errno === "ENOENT"));
   }
   return out;
+}
+
+/** The package a node_modules path belongs to: the name after its last node_modules/. */
+export function packageOf(rel: string): string | null {
+  const names = [...rel.matchAll(/(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/.][^/]*)/g)];
+  return names.at(-1)?.[1] ?? null;
 }
 
 const within = (root: string, path: string) => {
@@ -155,7 +175,8 @@ const within = (root: string, path: string) => {
 export function entry(found: Access[], tracked: Set<string>, root: string): Entry {
   const reads = new Set<string>(),
     lists = new Set<string>(),
-    uses = new Set<string>();
+    uses = new Set<string>(),
+    packages = new Set<string>();
   let tree = false;
   let always: string | undefined;
   for (const { path, listed, missing, byGit, git } of found) {
@@ -167,7 +188,12 @@ export function entry(found: Access[], tracked: Set<string>, root: string): Entr
       else always ??= `runs git ${git.split(" ").slice(0, 2).join(" ")}`;
       continue;
     }
-    if (byGit || !rel || rel === ".git" || /(^|\/)node_modules(\/|$)/.test(rel) || SCRATCH.test(rel)) continue;
+    if (byGit || !rel || rel === ".git" || SCRATCH.test(rel)) continue;
+    if (/(^|\/)node_modules(\/|$)/.test(rel)) {
+      const name = packageOf(rel);
+      if (name) packages.add(name);
+      continue;
+    }
     if (rel.startsWith(".git/")) {
       always ??= "reads .git";
       continue;
@@ -181,7 +207,7 @@ export function entry(found: Access[], tracked: Set<string>, root: string): Entr
     else if (tracked.has(rel) || missing) reads.add(rel);
     else always ??= `reads untracked ${rel}`;
   }
-  const result: Entry = { reads: [...reads].sort(), lists: [...lists].sort(), uses: [...uses].sort() };
+  const result: Entry = { reads: [...reads].sort(), lists: [...lists].sort(), uses: [...uses].sort(), packages: [...packages].sort() };
   if (tree) result.tree = true;
   if (always) result.always = always;
   return result;
@@ -190,15 +216,27 @@ export function entry(found: Access[], tracked: Set<string>, root: string): Entr
 export type Selection = { run: string[]; skip: string[]; why: Record<string, string> };
 
 /**
- * The test files `changed` can reach. `filesMoved`: the change adds, removes or
- * renames a path. A test file missing from the map runs.
+ * `paths`: every path the change touches (a rename names both). `filesMoved`:
+ * it adds, removes or renames one. `packages`: the packages its bun.lock lines
+ * name; without it, a bun.lock change runs everything.
  */
-export function select(map: InputMap | null, tests: string[], changed: string[], filesMoved = false): Selection {
+export type Change = { paths: string[]; filesMoved?: boolean; packages?: string[] };
+
+/** Package names on the added and removed lines of a bun.lock diff. */
+export function lockPackages(diff: string): string[] {
+  const names = new Set<string>();
+  for (const [, name] of diff.matchAll(/^[+-]\s+"((?:@[^"/]+\/)?[^"/@][^"]*)":/gm)) names.add(name);
+  return [...names].sort();
+}
+
+/** The test files a change can reach. A test file missing from the map runs. */
+export function select(map: InputMap | null, tests: string[], { paths: changed, filesMoved = false, packages }: Change): Selection {
   const why: Record<string, string> = {};
   const all = (reason: string) => ({ run: tests, skip: [], why: Object.fromEntries(tests.map((t) => [t, reason])) });
   if (!map) return all("no input map");
-  const global = changed.find((c) => GLOBAL.some((g) => g.test(c)));
+  const global = changed.find((c) => GLOBAL.some((g) => g.test(c)) || (c === "bun.lock" && !packages));
   if (global) return all(`${global} changed`);
+  const moved = new Set(packages ?? []);
   const touched = new Set(changed),
     dirs = new Set(changed.map(dirname));
   for (const test of tests) {
@@ -213,7 +251,9 @@ export function select(map: InputMap | null, tests: string[], changed: string[],
         const reads = [e, ...used].flatMap((x) => x.reads),
           lists = [e, ...used].flatMap((x) => x.lists);
         const hit = reads.find((r) => touched.has(r)) ?? lists.find((l) => dirs.has(l));
+        const pkg = [e, ...used].flatMap((x) => x.packages ?? []).find((name) => moved.has(name));
         if (hit) why[test] = `reads ${hit}`;
+        else if (pkg) why[test] = `loads ${pkg}, which the lockfile moved`;
       }
     }
   }
@@ -265,12 +305,15 @@ if (import.meta.main) {
     for (const [name, { command }] of Object.entries(PRODUCERS)) {
       const { code, log } = await traced(command, dir, name);
       files[name] =
-        code === 0 ? entry(accesses(log, ROOT), tracked, ROOT) : { reads: [], lists: [], uses: [], always: `${command.join(" ")} exited ${code} under strace` };
+        code === 0
+          ? entry(accesses(log, ROOT), tracked, ROOT)
+          : { reads: [], lists: [], uses: [], packages: [], always: `${command.join(" ")} exited ${code} under strace` };
       files[name].uses = files[name].uses.filter((u) => u !== name);
     }
     await pool(testFiles(), Number(arg("--jobs") ?? 4), async (test) => {
       const { code, log } = await traced(["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=60000", test], dir, test);
-      files[test] = code === 0 ? entry(accesses(log, ROOT), tracked, ROOT) : { reads: [], lists: [], uses: [], always: `failed under strace (exit ${code})` };
+      files[test] =
+        code === 0 ? entry(accesses(log, ROOT), tracked, ROOT) : { reads: [], lists: [], uses: [], packages: [], always: `failed under strace (exit ${code})` };
     });
     rmSync(dir, { recursive: true, force: true });
     const map: InputMap = { commit: git("rev-parse", "HEAD").trim(), files };
@@ -284,12 +327,8 @@ if (import.meta.main) {
     // Against the commit the map was traced at, so main's later commits count as changes too.
     const status = map ? git("diff", "--name-status", map.commit, "HEAD").split("\n").filter(Boolean) : [];
     const changed = status.flatMap((line) => line.split("\t").slice(1));
-    const { run, skip, why } = select(
-      map,
-      testFiles(),
-      changed,
-      status.some((line) => /^[ADRC]/.test(line)),
-    );
+    const packages = map ? lockPackages(git("diff", map.commit, "HEAD", "--", "bun.lock")) : [];
+    const { run, skip, why } = select(map, testFiles(), { paths: changed, filesMoved: status.some((line) => /^[ADRC]/.test(line)), packages });
     console.error(`test-inputs: ${changed.length} changed path(s); running ${run.length} of ${run.length + skip.length} test files`);
     if (process.argv.includes("--why")) for (const t of run) console.error(`  ${t}: ${why[t]}`);
     console.log(run.join("\n"));
