@@ -103,6 +103,12 @@ lockfile, `bun run derive:check -- --lock` for `config/derivations.lock.json`.
 `bun run conflicts` says, per file, whether GitHub's web editor can take a
 conflict or it needs a local checkout.
 
+Before that, `bun run inflight` names every open PR and live `claude/*`
+branch touching the files this branch touches, and any gotcha number, route
+row, derivation id or cron slot two of them claim differently. Those
+collisions merge cleanly and still need a renumber, so catch them before CI
+goes green. A SessionStart hook runs it for every Claude Code session here.
+
 ## Rotate Cal's calendar or approval secret
 
 Run these from the repository root. `wrangler versions secret put` creates a
