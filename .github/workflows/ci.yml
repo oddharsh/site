@@ -254,8 +254,23 @@ jobs:
       - name: Wait for timbrado's engine
         wait: engine
 
+      # A pull request runs the test files its diff can reach, from the map
+      # test-inputs.yml traces nightly on main (a PR's cache scope falls back to
+      # main). Only a pull request restores one, so a push to main, the commit
+      # promote-production ships, runs the whole suite. Replayed over 40 merged
+      # PRs on 2026-10-31: 7,383 of 10,600 file runs; docs and design PRs ran
+      # 14 to 52 of 265 files, worker changes all of them.
+      - name: Restore the test input map
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: test-inputs.json
+          key: test-inputs-${{ github.sha }}
+          restore-keys: test-inputs-
+
+      # With no map, or a change to how the suite runs, this is `bun run test`.
       - name: Run the contract suite
-        run: bun run test
+        run: bun tools/test-inputs.ts run --map test-inputs.json
 
       # Every background step above joins here, and one that failed fails this
       # step by name. Actions would also join them implicitly before post-job
