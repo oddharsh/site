@@ -16,11 +16,16 @@
 // owns, the same tree. SKIP_PUSH_GATE=1 anywhere in the command skips it, for a
 // push that has to go out red (a branch CI should see fail, a WIP save).
 // A bug in the hook never blocks a push: anything thrown exits 0.
+//
+// A tree that passed once passes again, so a passing run is remembered by the
+// working tree's git tree id plus the bun that ran it, in this worktree's git
+// dir. Agents re-push an unchanged tree after a rebase, a PR body edit or a
+// second remote, and each of those paid the full gate again.
 
-import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { isAbsolute, relative, resolve } from "node:path";
+import { execFileSync, spawn } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 export const GATES = ["format:check", "typecheck", "pages:check", "derive:check", "lint"];
 
@@ -86,16 +91,54 @@ export function verdict(results: Result[]): string | null {
   ].join("\n");
 }
 
+/**
+ * The git tree id of what the gates would read: tracked and untracked files,
+ * staged or not, less what .gitignore drops. Built in a copy of the index, so
+ * the real one never moves. It writes blobs for changed files into the object
+ * store, which gc collects like any other loose object.
+ */
+export function treeId(root: string): string {
+  const git = (args: string[], env?: NodeJS.ProcessEnv) => execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+  const dir = mkdtempSync(join(tmpdir(), "push-gate-"));
+  try {
+    const index = resolve(root, git(["rev-parse", "--git-path", "index"]));
+    const scratch = join(dir, "index");
+    if (existsSync(index)) copyFileSync(index, scratch);
+    const env = { ...process.env, GIT_INDEX_FILE: scratch };
+    git(["add", "-A"], env);
+    return git(["write-tree"], env);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const MEMO_LINES = 50;
+const memoFile = (root: string) => resolve(root, execFileSync("git", ["rev-parse", "--git-path", "push-gate-passed"], { cwd: root, encoding: "utf8" }).trim());
+const readMemo = (file: string) => (existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean) : []);
+
+export function passedBefore(file: string, key: string): boolean {
+  return readMemo(file).includes(key);
+}
+
+export function remember(file: string, key: string) {
+  writeFileSync(file, [...readMemo(file).filter((k) => k !== key), key].slice(-MEMO_LINES).join("\n") + "\n");
+}
+
 if (import.meta.main) {
   try {
     const input = JSON.parse(readFileSync(0, "utf8")) as { cwd?: string; tool_input?: { command?: string } };
     const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
     const command = input.tool_input?.command ?? "";
     if (pushDir(command, input.cwd ?? root, root)) {
-      const message = verdict(await Promise.all(GATES.map((g) => run(g, root))));
-      if (message) {
-        process.stderr.write(message + "\n");
-        process.exit(2);
+      const memo = memoFile(root);
+      const key = `${treeId(root)} bun-${Bun.version}`;
+      if (!passedBefore(memo, key)) {
+        const message = verdict(await Promise.all(GATES.map((g) => run(g, root))));
+        if (message) {
+          process.stderr.write(message + "\n");
+          process.exit(2);
+        }
+        remember(memo, key);
       }
     }
   } catch {

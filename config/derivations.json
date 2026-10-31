@@ -345,6 +345,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/push-gate.ts": "writes only push-gate-passed in the worktree's git dir (git rev-parse --git-path), the tree ids that passed its gates, so a re-push of the same tree skips them. Never inside the tree, never committed or served.",
       "tools/controls.ts": "plants each guard's defect in a copy-on-write clone under a mkdtemp it deletes on exit, and writes the tree itself only under CI=true, where the checkout is private and every touched file is restored after its control. Nothing it writes is committed or served.",
       "tools/lib/controls.ts": "plant() writes the mutations of one control under the root its caller hands it, which tools/controls.ts makes a disposable clone (or the CI checkout, restored after); the contract suite calls it with dryRun, which writes nothing.",
       "tools/photos/og-video/record.ts": "writes recorded frames only under the scratch directory its caller names (bake.ts passes a mkdtemp it deletes after encoding), never into the tree. The shipped clips are bake.ts's job, which og/video declares.",
