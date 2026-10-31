@@ -33,10 +33,13 @@ test("test-inputs: a trace keeps repo reads, resolves *at directories, and names
     lists: ["src/pages"],
     uses: ["@build"],
   });
-  const git = entry(accesses(`103 execve("/usr/bin/git", ["git", "ls-files"], 0x7ffd /* 30 vars */) = 0`, ROOT), TRACKED, ROOT);
-  assert.equal(git.always, "runs git");
-  const untracked = entry(accesses(`104 openat(AT_FDCWD, "/repo/.wrangler/state.json", O_RDONLY) = 3`, ROOT), TRACKED, ROOT);
-  assert.equal(untracked.always, "reads untracked .wrangler/state.json");
+  const untracked = entry(accesses(`104 openat(AT_FDCWD, "/repo/.cache/state.json", O_RDONLY) = 3`, ROOT), TRACKED, ROOT);
+  assert.equal(untracked.always, "reads untracked .cache/state.json");
+  assert.deepEqual(
+    entry(accesses(`104 openat(AT_FDCWD, "/repo/counter/.wrangler/state/d1.sqlite", O_RDWR) = 3`, ROOT), TRACKED, ROOT).always,
+    undefined,
+    "wrangler state a test made for itself",
+  );
 });
 
 const MAP: InputMap = {
@@ -45,11 +48,56 @@ const MAP: InputMap = {
     "tools/tests/docs.test.ts": { reads: ["docs/GOTCHAS.md", "tools/tests/docs.test.ts"], lists: [], uses: [] },
     "tools/tests/pages.test.ts": { reads: ["tools/tests/pages.test.ts"], lists: ["src/pages"], uses: [] },
     "tools/tests/built.test.ts": { reads: ["tools/tests/built.test.ts"], lists: [], uses: ["@build"] },
-    "tools/tests/git.test.ts": { reads: [], lists: [], uses: [], always: "runs git" },
+    "tools/tests/git.test.ts": { reads: [], lists: [], uses: [], always: "runs git log" },
+    "tools/tests/ls.test.ts": { reads: [], lists: [], uses: [], tree: true },
     "@build": { reads: ["src/worker/index.ts"], lists: [], uses: [] },
   },
 };
-const TESTS = ["tools/tests/built.test.ts", "tools/tests/docs.test.ts", "tools/tests/git.test.ts", "tools/tests/new.test.ts", "tools/tests/pages.test.ts"];
+const TESTS = [
+  "tools/tests/built.test.ts",
+  "tools/tests/docs.test.ts",
+  "tools/tests/git.test.ts",
+  "tools/tests/ls.test.ts",
+  "tools/tests/new.test.ts",
+  "tools/tests/pages.test.ts",
+];
+
+test("test-inputs: a child keeps its parent's directory until it changes its own", () => {
+  const log = [
+    `200 clone3({flags=CLONE_VM|CLONE_VFORK, exit_signal=SIGCHLD}, 88 <unfinished ...>`,
+    `201 chdir("/tmp/fixture") = 0`,
+    `200 <... clone3 resumed>) = 201`,
+    `201 openat(AT_FDCWD, "metadata.json", O_RDONLY) = 3</tmp/fixture/metadata.json>`,
+    `200 openat(AT_FDCWD, "docs/GOTCHAS.md", O_RDONLY) = 4</repo/docs/GOTCHAS.md>`,
+  ].join("\n");
+  assert.deepEqual(
+    accesses(log, ROOT).map((a) => a.path),
+    ["/tmp/fixture/metadata.json", "/repo/docs/GOTCHAS.md"],
+  );
+  assert.deepEqual(entry(accesses(log, ROOT), TRACKED, ROOT).reads, ["docs/GOTCHAS.md"], "the fixture outside the repo isn't an input");
+});
+
+test("test-inputs: git is judged by the call and the repo it ran in", () => {
+  const git = (cwd: string, ...argv: string[]) =>
+    [
+      `300 chdir("${cwd}") = 0`,
+      `300 execve("/usr/bin/git", [${["git", ...argv].map((a) => JSON.stringify(a)).join(", ")}], 0x7ffd /* 30 vars */) = 0`,
+      `300 openat(AT_FDCWD, "/repo/.git/index", O_RDONLY) = 3`,
+    ].join("\n");
+  assert.deepEqual(entry(accesses(git("/repo", "ls-files", "-z"), ROOT), TRACKED, ROOT), { reads: [], lists: [], uses: [], tree: true });
+  assert.equal(entry(accesses(git("/repo", "log", "--format=%H"), ROOT), TRACKED, ROOT).always, "runs git log --format=%H");
+  assert.equal(
+    entry(accesses(git("/tmp/scratch", "-c", "user.name=t", "commit", "-qm", "x"), ROOT), TRACKED, ROOT).always,
+    undefined,
+    "a temp repo of the test's own",
+  );
+  assert.equal(entry(accesses(git("/tmp/scratch", "-C", "/repo", "log"), ROOT), TRACKED, ROOT).always, "runs git log", "-C moves it back into this repo");
+  assert.equal(
+    entry(accesses(`301 openat(AT_FDCWD, "/repo/.git/HEAD", O_RDONLY) = 3`, ROOT), TRACKED, ROOT).always,
+    "reads .git",
+    "a test reading .git itself",
+  );
+});
 
 test("test-inputs: a file a test reads but never imports selects it, and nothing else that doesn't read it", () => {
   const { run, why } = select(MAP, TESTS, ["docs/GOTCHAS.md"]);
@@ -64,8 +112,19 @@ test("test-inputs: a new file in a listed directory, and a source the build read
   assert.equal(select(MAP, TESTS, ["src/worker/index.ts"]).why["tools/tests/built.test.ts"], "reads src/worker/index.ts");
 });
 
+test("test-inputs: a test that lists tracked files reruns when the change adds or removes one", () => {
+  assert.ok(select(MAP, TESTS, ["src/new.ts"], true).run.includes("tools/tests/ls.test.ts"));
+  assert.ok(!select(MAP, TESTS, ["src/old.ts"], false).run.includes("tools/tests/ls.test.ts"), "an edit in place doesn't");
+});
+
 test("test-inputs: a global input, or no map, runs everything", () => {
   assert.deepEqual(select(MAP, TESTS, [".github/workflows/ci.yml"]).skip, []);
+  assert.notDeepEqual(select(MAP, TESTS, [".github/workflows/photos.yml"]).skip, [], "another workflow is an ordinary input");
   assert.deepEqual(select(null, TESTS, []).skip, []);
-  assert.deepEqual(select(MAP, TESTS, ["README.md"]).skip, ["tools/tests/built.test.ts", "tools/tests/docs.test.ts", "tools/tests/pages.test.ts"]);
+  assert.deepEqual(select(MAP, TESTS, ["README.md"]).skip, [
+    "tools/tests/built.test.ts",
+    "tools/tests/docs.test.ts",
+    "tools/tests/ls.test.ts",
+    "tools/tests/pages.test.ts",
+  ]);
 });

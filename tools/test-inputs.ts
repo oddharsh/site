@@ -20,76 +20,159 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const ROOT = process.cwd();
 
-/** A changed path here can move every test, through how the suite runs rather than what it reads. */
-export const GLOBAL = [/^\.github\//, /^bun\.lock$/, /^rust-toolchain\.toml$/, /^tools\/test-inputs\.ts$/];
+/**
+ * A changed path here can move every test through how the suite runs rather
+ * than what a test reads: the runner, its toolchain pins, the dependency tree
+ * (node_modules reads aren't mapped), and this selector. Other workflow files
+ * are ordinary inputs, since the tests that read them are traced reading them.
+ */
+export const GLOBAL = [
+  /^\.github\/workflows\/ci\.yml$/,
+  /^\.github\/actions\//,
+  /^\.github\/install-bun\.sh$/,
+  /^bun\.lock$/,
+  /^config\/bun-pin\.json$/,
+  /^\.node-version$/,
+  /^rust-toolchain\.toml$/,
+  /^tools\/test-inputs\.ts$/,
+];
 
 // Outputs the suite reads but git doesn't hold. A read of one stands for the
 // inputs of the step that wrote it, traced as its own entry.
-export const PRODUCERS: Record<string, { prefixes: string[]; command: string[] }> = {
-  "@build": { prefixes: [".build/"], command: ["bun", "run", "perf-budget"] },
-  "@types": { prefixes: ["config/.generated/", "cf-garage/.cloudflare/"], command: ["bun", "tools/gen-runtime-types.ts", "--force"] },
+export const PRODUCERS: Record<string, { dirs: string[]; command: string[] }> = {
+  "@build": { dirs: [".build"], command: ["bun", "run", "perf-budget"] },
+  "@types": { dirs: ["config/.generated", "cf-garage/.cloudflare"], command: ["bun", "tools/gen-runtime-types.ts", "--force"] },
 };
 
-export type Entry = { reads: string[]; lists: string[]; uses: string[]; always?: string };
+// State a test writes for itself and reads back: wrangler's local dev state.
+const SCRATCH = /(^|\/)\.wrangler(\/|$)/;
+
+// git calls whose answer depends on which files the tree holds, not on history
+// or content: a test that runs only these reruns when a file is added, removed
+// or renamed. Anything else git does against this repo makes a test always run.
+const TREE_ONLY = [/^ls-files\b/, /^rev-parse --(show-toplevel|show-prefix|git-dir|git-path|is-inside-work-tree)\b/, /^check-ignore\b/];
+
+/** `tree`: the test lists tracked files through git, so an added, removed or renamed file reruns it. */
+export type Entry = { reads: string[]; lists: string[]; uses: string[]; tree?: true; always?: string };
 export type InputMap = { commit: string; files: Record<string, Entry> };
 
-export type Access = { path: string; listed: boolean; missing: boolean; exec: boolean };
+/** A path a process touched, or (with `git`) a git call and the directory it ran against. */
+export type Access = { path: string; listed: boolean; missing: boolean; byGit: boolean; git?: string };
 
-/** Every path an strace -f -y log touched, with its *at directory resolved. Relative paths resolve against `cwd`. */
+const result = (args: string) => / = (-?\d+)(?:<[^>]*>)?(?: (E[A-Z]+))?(?: \(.*\))?$/.exec(args);
+
+/**
+ * Every path an strace -f -y log touched. *at calls resolve against their
+ * directory fd, and relative paths against the calling process's working
+ * directory, followed through fork and chdir from `cwd`.
+ */
 export function accesses(log: string, cwd: string): Access[] {
   const out: Access[] = [];
-  const pending = new Map<string, Access>();
+  const cwds = new Map<string, string>(),
+    gits = new Set<string>(),
+    pending = new Map<string, (ret: string, errno?: string) => void>();
+  const dirOf = (pid: string) => cwds.get(pid) ?? cwd;
+  // The child can run, and chdir, before strace prints the parent's clone returning.
+  const forked = (parent: string, child: string) => {
+    if (!cwds.has(child)) cwds.set(child, dirOf(parent));
+    if (gits.has(parent)) gits.add(child);
+  };
   for (const line of log.split("\n")) {
-    const resumed = /^(\d+)\s+<\.\.\. \w+ resumed>.*= (-1 E\w+|\S+)/.exec(line);
+    const resumed = /^(\d+)\s+<\.\.\. \w+ resumed>(.*)$/.exec(line);
     if (resumed) {
-      const access = pending.get(resumed[1]);
-      if (access) access.missing = resumed[2].startsWith("-1 ENOENT");
+      const done = result(resumed[2]);
+      if (done) pending.get(resumed[1])?.(done[1], done[2]);
       pending.delete(resumed[1]);
       continue;
     }
     const call = /^(\d+)\s+(\w+)\((.*)$/.exec(line);
     if (!call) continue;
     const [, pid, name, args] = call;
-    if (name === "getdents64") {
-      const dir = /^\d+<([^>]+)>/.exec(args);
-      if (dir) out.push({ path: dir[1], listed: true, missing: false, exec: false });
+    // Run now, or when the call resumes: strace -f splits a call another process interrupts.
+    const finish = (fn: (ret: string, errno?: string) => void) => {
+      if (args.endsWith("<unfinished ...>")) pending.set(pid, fn);
+      else {
+        const done = result(args);
+        if (done) fn(done[1], done[2]);
+      }
+    };
+    if (/^(clone3?|v?fork)$/.test(name)) {
+      finish((ret) => Number(ret) > 0 && forked(pid, ret));
       continue;
     }
-    const quoted = /"((?:[^"\\]|\\.)*)"/.exec(args);
-    if (!quoted) continue;
-    const raw = quoted[1].replace(/\\(.)/g, "$1");
+    if (name === "getdents64") {
+      const dir = /^\d+<([^>]+)>/.exec(args);
+      if (dir) out.push({ path: dir[1], listed: true, missing: false, byGit: gits.has(pid) });
+      continue;
+    }
+    const strings = [...args.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1].replace(/\\(.)/g, "$1"));
+    const [raw] = strings;
+    if (raw === undefined) continue;
     const dirfd = /^\d+<([^>]+)>,/.exec(args);
-    const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : cwd, raw);
-    const access: Access = { path, listed: false, missing: / = -1 ENOENT/.test(args), exec: name === "execve" };
+    const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : dirOf(pid), raw);
+    if (name === "execve") {
+      if (!path.endsWith("/git")) continue;
+      // argv after argv[0]; `-C dir` moves where it runs, `-c k=v` doesn't.
+      const argv = strings.slice(2);
+      let at = dirOf(pid);
+      while (argv[0]?.startsWith("-")) {
+        const flag = argv.shift();
+        if (flag === "-C" && argv[0]) at = resolve(at, argv.shift() ?? "");
+        else if (flag === "-c") argv.shift();
+      }
+      finish((ret) => {
+        if (ret !== "0") return;
+        gits.add(pid);
+        out.push({ path: at, listed: false, missing: false, byGit: true, git: argv.join(" ") });
+      });
+      continue;
+    }
+    if (name === "chdir") {
+      finish((ret) => ret === "0" && cwds.set(pid, path));
+      continue;
+    }
+    const access: Access = { path, listed: false, missing: false, byGit: gits.has(pid) };
     out.push(access);
-    if (args.endsWith("<unfinished ...>")) pending.set(pid, access);
+    finish((_, errno) => (access.missing = errno === "ENOENT"));
   }
   return out;
 }
 
+const within = (root: string, path: string) => {
+  const rel = relative(root, path);
+  return rel.startsWith("..") || isAbsolute(rel) ? null : rel;
+};
+
 /**
  * One test's entry from its accesses. `tracked` holds every path git tracks and
- * every directory above one.
+ * every directory above one. git's own reads are judged by the call, not path
+ * by path: what `git ls-files` opens under .git says nothing a test can see.
  */
 export function entry(found: Access[], tracked: Set<string>, root: string): Entry {
   const reads = new Set<string>(),
     lists = new Set<string>(),
     uses = new Set<string>();
+  let tree = false;
   let always: string | undefined;
-  for (const { path, listed, missing, exec } of found) {
-    if (exec && path.endsWith("/git")) always ??= "runs git";
-    const rel = relative(root, path);
-    if (!rel || rel.startsWith("..") || isAbsolute(rel)) continue;
-    if (/(^|\/)node_modules(\/|$)/.test(rel)) continue;
-    if (rel === ".git" || rel.startsWith(".git/")) {
+  for (const { path, listed, missing, byGit, git } of found) {
+    const rel = within(root, path);
+    if (git !== undefined) {
+      // A git call against a temp repo of the test's own says nothing about this one.
+      if (rel === null) continue;
+      if (TREE_ONLY.some((t) => t.test(git))) tree = true;
+      else always ??= `runs git ${git.split(" ").slice(0, 2).join(" ")}`;
+      continue;
+    }
+    if (byGit || !rel || rel === ".git" || /(^|\/)node_modules(\/|$)/.test(rel) || SCRATCH.test(rel)) continue;
+    if (rel.startsWith(".git/")) {
       always ??= "reads .git";
       continue;
     }
-    const producer = Object.entries(PRODUCERS).find(([, p]) => p.prefixes.some((pre) => rel.startsWith(pre)));
+    const producer = Object.entries(PRODUCERS).find(([, p]) => p.dirs.some((d) => rel === d || rel.startsWith(`${d}/`)));
     if (producer) {
       uses.add(producer[0]);
       continue;
@@ -99,14 +182,18 @@ export function entry(found: Access[], tracked: Set<string>, root: string): Entr
     else always ??= `reads untracked ${rel}`;
   }
   const result: Entry = { reads: [...reads].sort(), lists: [...lists].sort(), uses: [...uses].sort() };
+  if (tree) result.tree = true;
   if (always) result.always = always;
   return result;
 }
 
 export type Selection = { run: string[]; skip: string[]; why: Record<string, string> };
 
-/** The test files `changed` can reach. A test file missing from the map runs. */
-export function select(map: InputMap | null, tests: string[], changed: string[]): Selection {
+/**
+ * The test files `changed` can reach. `filesMoved`: the change adds, removes or
+ * renames a path. A test file missing from the map runs.
+ */
+export function select(map: InputMap | null, tests: string[], changed: string[], filesMoved = false): Selection {
   const why: Record<string, string> = {};
   const all = (reason: string) => ({ run: tests, skip: [], why: Object.fromEntries(tests.map((t) => [t, reason])) });
   if (!map) return all("no input map");
@@ -118,6 +205,7 @@ export function select(map: InputMap | null, tests: string[], changed: string[])
     const e = map.files[test];
     if (!e) why[test] = "not in the map";
     else if (e.always) why[test] = e.always;
+    else if (e.tree && filesMoved) why[test] = "lists tracked files, and the change adds or removes one";
     else {
       const used = e.uses.map((u) => map.files[u]);
       if (used.some((u) => !u || u.always)) why[test] = `uses ${e.uses.join(", ")}, which can't be mapped`;
@@ -147,7 +235,7 @@ function trackedSet(): Set<string> {
 function traced(command: string[], dir: string, name: string): Promise<{ code: number; log: string }> {
   const out = join(dir, name.replace(/\W/g, "_"));
   return new Promise((done) => {
-    const child = spawn("strace", ["-f", "-qq", "-y", "-s", "4096", "-e", "trace=%file,getdents64", "-o", out, ...command], {
+    const child = spawn("strace", ["-f", "-qq", "-y", "-s", "4096", "-e", "trace=%file,%process,getdents64", "-o", out, ...command], {
       cwd: ROOT,
       stdio: "ignore",
     });
@@ -194,8 +282,14 @@ if (import.meta.main) {
     const path = arg("--map");
     const map: InputMap | null = path && existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
     // Against the commit the map was traced at, so main's later commits count as changes too.
-    const changed = map ? git("diff", "--name-only", map.commit, "HEAD").split("\n").filter(Boolean) : [];
-    const { run, skip, why } = select(map, testFiles(), changed);
+    const status = map ? git("diff", "--name-status", map.commit, "HEAD").split("\n").filter(Boolean) : [];
+    const changed = status.flatMap((line) => line.split("\t").slice(1));
+    const { run, skip, why } = select(
+      map,
+      testFiles(),
+      changed,
+      status.some((line) => /^[ADRC]/.test(line)),
+    );
     console.error(`test-inputs: ${changed.length} changed path(s); running ${run.length} of ${run.length + skip.length} test files`);
     if (process.argv.includes("--why")) for (const t of run) console.error(`  ${t}: ${why[t]}`);
     console.log(run.join("\n"));
