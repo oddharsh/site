@@ -58,6 +58,7 @@
     "types:gen": "bun tools/gen-runtime-types.ts",
     "env:check": "bun tools/check-env.ts",
     "check:fast": "bun run --parallel lint typecheck test format:check",
+    "ci:trend": "bun tools/ci-trend.ts",
     "shell:roll": "bun tools/roll-shell-dictionary.ts",
     "pages:roll": "bun tools/roll-shell-dictionary.ts --pages",
     "family:roll": "bun tools/roll-shell-dictionary.ts --family",
