@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { photoInputs } from "../photos/photo-inputs.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -64,9 +65,7 @@ async function fixture(run) {
       "tools/lib/photo-indexes.ts",
       ...new Set<string>(declared),
     ];
-    for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" })
-      .split("\0")
-      .filter(Boolean)) {
+    for (const rel of repoFiles(corpus, REPO)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
     await put("trace", "");
@@ -289,6 +288,7 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     await put("CLAUDE.md", declaration.tools.map((t) => t.bin).join("\n"));
     await put("docs/MAINTENANCE.md", "fixture");
     await put("tools/check-tools.ts", await readFile(new URL("../check-tools.ts", import.meta.url), "utf8"));
+    await put("tools/lib/repo-files.ts", await readFile(new URL("../lib/repo-files.ts", import.meta.url), "utf8"));
     execFileSync("git", ["init", "-q"], { cwd: root, stdio: "pipe" });
     execFileSync("git", ["add", "."], { cwd: root, stdio: "pipe" });
     const cli = () =>

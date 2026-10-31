@@ -97,7 +97,7 @@ test("more than 50 identical errors are each counted", (t) => {
 
 test("Reader's partial baseline update preserves errors owed by other programs", (t) => {
   const { root, write } = fixture(t);
-  for (const file of ["tools/typecheck.ts", "tools/lib/jsonc.ts"]) {
+  for (const file of ["tools/typecheck.ts", "tools/lib/jsonc.ts", "tools/lib/repo-files.ts"]) {
     write(file, readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"));
   }
   write("tsconfig.json", { files: [], references: [{ path: "config/tsconfig.lens-reader.json" }] });

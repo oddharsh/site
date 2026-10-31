@@ -1178,8 +1178,6 @@ written, because a watch that reads true on its first run is watching nothing.
 | `bun-image-linear-light-resize` | oven-sh/bun#40510 (fix #40512) | `resize(w, h, { colorspace: "linear" })` changes the bytes |
 | `bun-image-keeps-16-bit-samples` | oven-sh/bun#30462 | a 16-bit PNG round-trips at depth 16 |
 | `fetch-honours-dispatcher` | oven-sh/bun#39247 (fix #39250) | `fetch(url, { dispatcher })` calls `dispatch()` |
-| `css-minifier-knows-the-seven-pseudo-elements` | oven-sh/bun#41120 | no `Invalid selector` on `::scroll-marker` and friends |
-| `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
 | `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
 | `workerd-exposes-temporal` | cloudflare/workerd#6907 | `tools/workerd-temporal-probe.ts` finds Temporal under production's compat settings, with a clock within a minute of `Date.now()` |
 

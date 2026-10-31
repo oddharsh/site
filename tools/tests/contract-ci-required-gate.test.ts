@@ -27,16 +27,22 @@ test("CI is one required job named validate that cannot be skipped or softened",
   // --gate, so a route over its ceiling fails the JOB; continue-on-error keeps
   // the RUN's conclusion success, because promote-production releases only a
   // successful run and a CPU regression must never hold up a release.
-  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "attest"]);
+  // `controls` (2026-10-29) plants each guard's defect and fails if the guard
+  // misses it. A blind guard is a finding about the checks, not about the
+  // commit, so it reports on the same terms as the CPU job.
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "controls", "attest"]);
+  for (const name of ["cpu-sweep", "controls"]) {
+    const job = workflow.jobs[name];
+    assert.equal(job["continue-on-error"], true, `${name} may fail its job, never the run promote-production waits on`);
+    assert.equal(job.needs, undefined, `nothing waits on ${name}, and it waits on nothing`);
+    assert.ok(
+      !Object.values<{ needs?: string | string[]; steps: { uses?: string; with?: Record<string, string> }[] }>(workflow.jobs).some((other) =>
+        [other.needs].flat().includes(name),
+      ),
+      `no job may need ${name}`,
+    );
+  }
   const report = workflow.jobs["cpu-sweep"];
-  assert.equal(report["continue-on-error"], true, "a CPU failure may fail its job, never the run promote-production waits on");
-  assert.equal(report.needs, undefined, "nothing waits on the report, and it waits on nothing");
-  assert.ok(
-    !Object.values<{ needs?: string | string[]; steps: { uses?: string; with?: Record<string, string> }[] }>(workflow.jobs).some((job) =>
-      [job.needs].flat().includes("cpu-sweep"),
-    ),
-    "no job may need the report",
-  );
   assert.ok(
     report.steps.some((step) => /cpu-sweep\.ts --gate/.test(step.run ?? "")),
     "the CPU job gates",
