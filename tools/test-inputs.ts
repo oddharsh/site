@@ -15,9 +15,15 @@
 // global input changed.
 //
 //   bun tools/test-inputs.ts trace --out map.json          Linux, strace on PATH
-//   bun tools/test-inputs.ts select --map map.json         files to run, one a line
+//   bun tools/test-inputs.ts select --map map.json --why   files to run, one a line
+//   bun tools/test-inputs.ts run --map map.json            the suite, narrowed
+//
+// `run` is validate's suite step. With no map (a push to main restores none),
+// or a map whose commit can't be fetched, or a global change, it runs the
+// whole suite exactly as `bun run test` does. Locally it reads the working
+// tree, untracked files included, so it shows what CI would run for an edit.
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -285,6 +291,44 @@ function traced(command: string[], dir: string, name: string): Promise<{ code: n
   });
 }
 
+/**
+ * package.json's `test` script, narrowed to `files`, or whole when `files` is
+ * null. Bun reads a bare argument as a path filter, so each file is ./-anchored.
+ */
+export function suiteCommand(script: string, files: string[] | null): string[] {
+  const argv = script.trim().split(/\s+/);
+  if (argv[0] !== "bun" || argv[1] !== "test" || argv.at(-1) !== "tools/tests/")
+    throw new Error(`package.json's test script no longer ends in tools/tests/, so it can't be narrowed: ${script}`);
+  return files ? [...argv.slice(0, -1), ...files.map((f) => `./${f}`)] : argv;
+}
+
+/** The map at `path` and what changed since its commit, in the working tree; null with a reason when it can't be read. */
+function sinceMap(path: string | undefined): { map: InputMap; change: Change } | { map: null; reason: string } {
+  if (!path || !existsSync(path)) return { map: null, reason: "no input map" };
+  const map: InputMap = JSON.parse(readFileSync(path, "utf8"));
+  try {
+    git("cat-file", "-e", `${map.commit}^{commit}`);
+  } catch {
+    // CI checks out one commit; the map's is on main, a fetch away.
+    try {
+      git("fetch", "--quiet", "--depth=1", "--no-tags", "origin", map.commit);
+    } catch {
+      return { map: null, reason: `the map's commit ${map.commit.slice(0, 8)} can't be fetched` };
+    }
+  }
+  // Against the map's commit, so main's later commits count as changes too.
+  const status = git("diff", "--name-status", map.commit).split("\n").filter(Boolean);
+  const untracked = git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean);
+  return {
+    map,
+    change: {
+      paths: [...status.flatMap((line) => line.split("\t").slice(1)), ...untracked],
+      filesMoved: untracked.length > 0 || status.some((line) => /^[ADRC]/.test(line)),
+      packages: lockPackages(git("diff", map.commit, "--", "bun.lock")),
+    },
+  };
+}
+
 async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>) {
   let i = 0;
   const worker = async () => {
@@ -323,19 +367,24 @@ if (import.meta.main) {
     const always = Object.entries(files).filter(([, e]) => e.always);
     console.log(`traced ${Object.keys(files).length} entries in ${Math.round((Date.now() - started) / 1000)} s; ${always.length} always run:`);
     for (const [name, e] of always) console.log(`  ${name}: ${e.always}`);
-  } else if (mode === "select") {
-    const path = arg("--map");
-    const map: InputMap | null = path && existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
-    // Against the commit the map was traced at, so main's later commits count as changes too.
-    const status = map ? git("diff", "--name-status", map.commit, "HEAD").split("\n").filter(Boolean) : [];
-    const changed = status.flatMap((line) => line.split("\t").slice(1));
-    const packages = map ? lockPackages(git("diff", map.commit, "HEAD", "--", "bun.lock")) : [];
-    const { run, skip, why } = select(map, testFiles(), { paths: changed, filesMoved: status.some((line) => /^[ADRC]/.test(line)), packages });
-    console.error(`test-inputs: ${changed.length} changed path(s); running ${run.length} of ${run.length + skip.length} test files`);
-    if (process.argv.includes("--why")) for (const t of run) console.error(`  ${t}: ${why[t]}`);
-    console.log(run.join("\n"));
+  } else if (mode === "select" || mode === "run") {
+    const since = sinceMap(arg("--map"));
+    const tests = testFiles();
+    const { run, skip, why } = since.map ? select(since.map, tests, since.change) : select(null, tests, { paths: [] });
+    const reason = since.map ? `${since.change.paths.length} changed path(s) since ${since.map.commit.slice(0, 8)}` : since.reason;
+    console.error(`test-inputs: ${reason}; running ${run.length} of ${tests.length} test files`);
+    if (mode === "select") {
+      if (process.argv.includes("--why")) for (const t of run) console.error(`  ${t}: ${why[t]}`);
+      console.log(run.join("\n"));
+    } else {
+      for (const t of run) console.log(`  ${t}: ${why[t]}`);
+      if (!run.length) process.exit(0);
+      const { test: script } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts;
+      const [command, ...args] = suiteCommand(script, skip.length ? run : null);
+      process.exit(spawnSync(command, args, { cwd: ROOT, stdio: "inherit" }).status ?? 1);
+    }
   } else {
-    console.error("usage: bun tools/test-inputs.ts trace --out FILE | select --map FILE [--why]");
+    console.error("usage: bun tools/test-inputs.ts trace --out FILE | select --map FILE [--why] | run --map FILE");
     process.exit(2);
   }
 }
