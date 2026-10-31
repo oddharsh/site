@@ -850,7 +850,10 @@ skips it.
     again. Gotcha 79's walks read zero files for 55 and 60 days, and the
     taskbar floor compared nothing for a day. Re-run against the trees
     before #1390 and #1408 on 2026-10-29, `bun run controls` reads BLIND on
-    all three. Register a guard's control in `tools/lib/controls.ts` with
+    all three. Writing 14 more that day found two live ones: gotcha 13's
+    source walker had read security.ts's typed inits as Responses since
+    #494 (70 days), and no check read the four deploy scripts outside
+    infra.json. Register a guard's control in `tools/lib/controls.ts` with
     the words the guard prints, and run it before you call a check done. A
     control that plants a new file marks it intent-to-add, the way CI sees
     it, unless it sets `untracked` to prove the local case (gotcha 91).
