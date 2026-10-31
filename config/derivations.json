@@ -345,6 +345,8 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/controls.ts": "plants each guard's defect in a copy-on-write clone under a mkdtemp it deletes on exit, and writes the tree itself only under CI=true, where the checkout is private and every touched file is restored after its control. Nothing it writes is committed or served.",
+      "tools/lib/controls.ts": "plant() writes the mutations of one control under the root its caller hands it, which tools/controls.ts makes a disposable clone (or the CI checkout, restored after); the contract suite calls it with dryRun, which writes nothing.",
       "tools/photos/og-video/record.ts": "writes recorded frames only under the scratch directory its caller names (bake.ts passes a mkdtemp it deletes after encoding), never into the tree. The shipped clips are bake.ts's job, which og/video declares.",
       "tools/photos/og-video/compare.ts": "writes its trial encodes, decoded frames and compare-<target>.json only under the scratch directory it is handed. It is the instrument that picked the knobs bake.ts ships with, and nothing it writes is committed or served.",
       "tools/cpu-sweep.ts": "writes only .build/cpu-sweep.json (or --out), a report of CPU per route on the bundle perf-budget just built, and appends its table to $GITHUB_STEP_SUMMARY when CI sets it. Only its own --replay reads the report back, and only when handed one; nothing is committed or served from it, and every run rewrites it whole.",

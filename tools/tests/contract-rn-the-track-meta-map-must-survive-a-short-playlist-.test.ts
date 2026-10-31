@@ -480,9 +480,9 @@ test("the art warm is capped, so one long playlist cannot drain the subrequest b
   };
   const urls = artWarmList(many, "https://aadhar.sh");
   assert.equal(urls.length, WARM_MAX_URLS);
-  // Workers Free allows 50 subrequests per invocation and the warm spends one
-  // per cold URL, so the cap has to fit inside that budget. It is asserted
-  // because an uncapped warm scales with a playlist anyone can lengthen.
+  // The list cap bounds the work a playlist anyone can lengthen asks for. It
+  // does NOT bound the subrequests: a cold URL costs up to 3, so 40 is past 50
+  // on its own, and the warm's ledger is what keeps it under (tested below).
   assert.ok(WARM_MAX_URLS <= 50);
 });
 
@@ -576,12 +576,95 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
     const res = await warmArtCache(payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
     await Promise.all(waits);
 
-    assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1 });
+    assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1, skipped: 0, spent: 9 });
     assert.equal(store.size, 1, "only the transformed cover may reach the cache");
   } finally {
     testGlobals.fetch = realFetch;
     if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
   }
+});
+
+// The Workers Free quota as the platform enforces it: cache.match, cache.put
+// and fetch all draw on the same 50 per invocation, and the 51st throws.
+// Local workerd enforces no cap (gotcha 36), so this fake is the only place the
+// warm's arithmetic meets the real ceiling before production.
+function cappedArtPlatform(cached: string[] = []) {
+  const store = new Map(cached.map((u): [string, Response] => [u, new Response(new Uint8Array([9]), { status: 200 })]));
+  let calls = 0;
+  const spend = () => {
+    if (++calls > 50) throw new Error("Too many subrequests by single Worker invocation.");
+  };
+  const caches = {
+    default: {
+      async match(req) {
+        spend();
+        const r = store.get(req.url);
+        return r ? r.clone() : undefined;
+      },
+      async put(req, res) {
+        spend();
+        store.set(req.url, res);
+      },
+    },
+  };
+  const fetch = async () => {
+    spend();
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+  };
+  return { store, caches, fetch, calls: () => calls };
+}
+
+async function warmOnPlatform(platform, payload) {
+  const realFetch = globalThis.fetch;
+  const hadCaches = "caches" in globalThis;
+  testGlobals.caches = platform.caches;
+  testGlobals.fetch = platform.fetch;
+  try {
+    const waits: any[] = [];
+    const res = await warmArtCache(payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
+    // allSettled, because a refused cache.put rejects inside waitUntil, and
+    // that unhandled rejection is exactly what production reported as an Issue.
+    const settled = await Promise.allSettled(waits);
+    return { res, rejected: settled.filter((s) => s.status === "rejected").length };
+  } finally {
+    testGlobals.fetch = realFetch;
+    if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
+  }
+}
+
+const fortyCovers = { tracks: Array.from({ length: 40 }, (_, i) => ({ image_url: `https://i.scdn.co/image/${artHash(i + 1)}`, artists: [] })) };
+
+// REGRESSION, 2026-10-30. The warm fanned out all 40 URLs at once, so a cold
+// colo spent 40 calls on cache.match, 10 on transforms, and had none left for
+// a single cache.put. 120 of 120 production traces read warmed 9-10, already 0:
+// the span counted puts the platform refused, and the warm stored nothing.
+test("a cold art warm stays under the subrequest cap and stores every cover it calls warmed", async () => {
+  const platform = cappedArtPlatform();
+  const { res, rejected } = await warmOnPlatform(platform, fortyCovers);
+
+  assert.equal(rejected, 0, "no cache.put may be refused by the cap");
+  // The ledger has to match what the platform counted, or its arithmetic is
+  // wrong somewhere a later change will find the hard way.
+  assert.equal(platform.calls(), res.spent, "the ledger must see every call the platform counted");
+  assert.equal(res.spent, 50 - 8, "the warm spends the cap less its reserve, and no more");
+  // Which lane lands the last affordable miss depends on interleaving, so the
+  // split is bounded rather than pinned: 42 units buy 14 cold covers at 3 each,
+  // less at most one wasted probe per other lane.
+  assert.ok(res.warmed >= 12 && res.warmed <= 14, `warmed ${res.warmed}`);
+  assert.equal(res.warmed + res.skipped, 40);
+  assert.equal(res.failed, 0);
+  assert.equal(platform.store.size, res.warmed, "every cover reported warmed must be in the cache");
+});
+
+// A hit costs 1, not 3. A ledger that reserved the worst case per URL would
+// stop a fully warm colo a third of the way down, at the same URL every time.
+test("a warm colo's art warm checks every URL, because a cache hit costs one call", async () => {
+  const urls = artWarmList(fortyCovers, "https://aadhar.sh");
+  const platform = cappedArtPlatform(urls);
+  const { res } = await warmOnPlatform(platform, fortyCovers);
+
+  assert.deepEqual(res, { warmed: 0, already: 40, untransformed: 0, failed: 0, skipped: 0, spent: 40 });
+  assert.equal(platform.calls(), 40);
 });
 
 test("rendered track rows re-host recognized art and pass everything else through", () => {

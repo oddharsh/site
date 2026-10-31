@@ -1,7 +1,8 @@
 import { signedFetch } from "./lib/botauth.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget, type Budget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -256,7 +257,19 @@ function artAttrs(kind: "track" | "artist", rawUrl): Html {
   return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
-export async function handleRnArt(request, env, ctx) {
+export function handleRnArt(request, env, ctx) {
+  return rnArt(request, env, ctx, {});
+}
+
+// `budget` is the art warm's ledger, charged at the moment each call is made:
+// 1 for the probe, then exactly 2 on a miss (the transform, then the put or the
+// fallback fetch, never both). Charging at the call rather than reserving the
+// worst case up front is what lets six concurrent lanes spend the ledger to the
+// last unit. A URL the ledger cannot afford answers `x-art-cache: skipped`.
+// A separate export for the same reason as rnTracksHtml: the router passes the
+// request URL in the fourth slot.
+export async function rnArt(request, env, ctx, opts: { budget?: Budget }) {
+  const skipped = () => new Response(null, { status: 503, headers: { "cache-control": "no-store", "x-art-cache": "skipped" } });
   const url = new URL(request.url);
   const m = ART_PATH.exec(url.pathname);
   if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
@@ -274,6 +287,7 @@ export async function handleRnArt(request, env, ctx) {
   const cache = caches.default;
   const cacheable = request.method === "GET";
   if (cacheable) {
+    if (opts.budget && !opts.budget.afford(1)) return skipped();
     const hit = await cache.match(request);
     if (hit) {
       const r = new Response(hit.body, hit);
@@ -282,6 +296,7 @@ export async function handleRnArt(request, env, ctx) {
     }
   }
 
+  if (opts.budget && !opts.budget.afford(2)) return skipped();
   const upstream = `https://i.scdn.co/image/${hash}`;
   // fit:scale-down never enlarges, so a source already smaller than the tier is
   // passed through at its own size instead of being upscaled into a bigger file
@@ -416,11 +431,31 @@ export function artWarmList(payload, origin) {
 //
 // Skipping the guard costs one `cache.match` per URL, because `handleRnArt`
 // ALREADY probes the cache first and returns the hit without transforming. So a
-// fully warm colo pays one cache lookup per URL (at most WARM_MAX_URLS) and zero
-// subrequests, which is the cheap case anyway. The guard bought a rounding error
-// and cost the feature.
+// fully warm colo pays one cache lookup per URL (at most WARM_MAX_URLS), which
+// is the cheap case anyway. The guard bought a rounding error and cost the
+// feature.
+//
+// THAT LOOKUP IS A SUBREQUEST, and so is the cache.put. On Workers Free the
+// Cache API shares fetch's 50 calls per invocation (Workers limits page, "Cache
+// API limits"). Until 2026-10-30 this fanned out all 40 URLs at once, so a cold
+// colo spent 40 on cache.match before the first transform, 10 on transforms,
+// and then every cache.put was refused. Production traces 2026-10-23 to 10-30:
+// 120 of 120 warms read warmed 9-10, failed 30-31, already 0, and the refused
+// puts were Workers Issue a40bfd76 (353 hits, all visitor GETs of this
+// fragment, none on the :07/:37 probe). The warm stored nothing at all. Now
+// rnArt charges a ledger at each call and skips what it cannot afford.
+//
+// Held back for what this invocation spends outside the ledger: a lapsed SWR
+// stamp rescrapes in its own waitUntil, ~7 subrequests (scrapePlaylistTracks).
+const WARM_BUDGET_RESERVE = 8;
+// Enough lanes that a cold colo finishes in a few transforms' time (~600ms
+// each). Lanes that probe at the same moment the ledger runs dry each waste
+// one probe, so a cold colo warms 12 to 14 covers a fragment miss, and the
+// next miss in that colo finds those as cheap hits and warms further down.
+const WARM_LANES = 6;
+
 export async function warmArtCache(payload, request, env, ctx) {
-  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0 };
+  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0, skipped: 0, spent: 0 };
   // `caches` is a BARE GLOBAL that may not be declared at all, and referencing
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
@@ -430,42 +465,49 @@ export async function warmArtCache(payload, request, env, ctx) {
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
 
-  const outcomes = await Promise.all(
-    urls.map(async (u) => {
-      try {
-        // Call the handler directly instead of fetching our own origin. A self
-        // fetch would cost a second worker invocation per cover to reach this
-        // same function, and `handleRnArt` already does its own cache.put.
-        const res = await handleRnArt(new Request(u), env, ctx);
-        // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
-        // and a tee branch nobody reads can back-pressure the branch being written
-        // to the cache. These are 5-19KB images, so buffering them is free.
-        if (res.body) await res.arrayBuffer();
-        // handleRnArt marks its own response, so the warm can report what it
-        // actually DID rather than how many URLs it considered. That distinction
-        // is the whole reason the broken guard went unnoticed: the old attribute
-        // counted intent, and intent looked identical to success.
-        //
-        // The same mistake survived one level down until 2026-10-09: anything
-        // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
-        // production that 502 is mostly the 50-subrequest cap: a cold cover costs
-        // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
-        // found nothing cached and tried all 40 (one CDG trace threw "Too many
-        // subrequests" while its span still read warmed 40). Only `miss` means a
-        // transformed cover went to cache.put. A 200 without it is the
-        // untransformed fallback, which is served but never stored.
-        const mark = res.headers.get("x-art-cache");
-        if (mark === "hit") return "already";
-        if (mark === "miss") return "warmed";
-        return res.ok ? "untransformed" : "failed";
-      } catch {
-        return "failed";
-      }
-    }),
-  );
+  const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: WARM_BUDGET_RESERVE });
+  const outcomes = await mapWithConcurrency(urls, WARM_LANES, async (u) => {
+    try {
+      // Call the handler directly instead of fetching our own origin. A self
+      // fetch would cost a second worker invocation per cover to reach this
+      // same function, and `handleRnArt` already does its own cache.put.
+      const res = await rnArt(new Request(u), env, ctx, { budget });
+      // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
+      // and a tee branch nobody reads can back-pressure the branch being written
+      // to the cache. These are 5-19KB images, so buffering them is free.
+      if (res.body) await res.arrayBuffer();
+      // handleRnArt marks its own response, so the warm can report what it
+      // actually DID rather than how many URLs it considered. That distinction
+      // is the whole reason the broken guard went unnoticed: the old attribute
+      // counted intent, and intent looked identical to success.
+      //
+      // The same mistake survived one level down until 2026-10-09: anything
+      // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
+      // production that 502 is mostly the 50-subrequest cap: a cold cover costs
+      // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
+      // found nothing cached and tried all 40 (one CDG trace threw "Too many
+      // subrequests" while its span still read warmed 40). Only `miss` means a
+      // transformed cover went to cache.put. A 200 without it is the
+      // untransformed fallback, which is served but never stored.
+      const mark = res.headers.get("x-art-cache");
+      if (mark === "hit") return "already";
+      if (mark === "miss") return "warmed";
+      if (mark === "skipped") return "skipped";
+      return res.ok ? "untransformed" : "failed";
+    } catch {
+      return "failed";
+    }
+  });
 
   const count = (o: string) => outcomes.filter((x) => x === o).length;
-  return { warmed: count("warmed"), already: count("already"), untransformed: count("untransformed"), failed: count("failed") };
+  return {
+    warmed: count("warmed"),
+    already: count("already"),
+    untransformed: count("untransformed"),
+    failed: count("failed"),
+    skipped: count("skipped"),
+    spent: budget.spent,
+  };
 }
 
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
@@ -601,17 +643,21 @@ export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
   if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(
       span("rn.art.warm", async (s) => {
-        const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
+        const { warmed, already, untransformed, failed, skipped, spent } = await warmArtCache(result.payload, request, env, ctx);
         // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
         // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
         // feature not running at all, and the first version of this span could not
         // tell those apart. That is precisely how the broken guard shipped green.
-        // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
-        // Images fallback; the four always sum to the URLs attempted.
+        // `skipped` is what the ledger declined to start, `untransformed` the
+        // Images fallback, and `failed` an upstream refusal or, if the ledger's
+        // count is wrong again, the subrequest cap (gotcha 36). The five always
+        // sum to the URLs considered.
         s.setAttribute("rn.art.warmed", warmed);
         s.setAttribute("rn.art.already", already);
         s.setAttribute("rn.art.untransformed", untransformed);
         s.setAttribute("rn.art.failed", failed);
+        s.setAttribute("rn.art.skipped", skipped);
+        s.setAttribute("budget.spent", spent);
       }).catch(() => {}),
     );
   }

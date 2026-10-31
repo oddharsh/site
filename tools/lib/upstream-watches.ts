@@ -194,35 +194,18 @@ export const BUN_WATCHES: Watch[] = [
       ${out('{ landed: called > 0, detail: called > 0 ? "dispatch() called " + called + "x" : "dispatch() never called; fetch went to the network: " + err }')}
     `,
   },
-  {
-    name: "css-minifier-knows-the-seven-pseudo-elements",
-    issue: "https://github.com/oven-sh/bun/issues/41120",
-    landed:
-      "`Bun.build({ minify: true })` on CSS naming ::details-content, ::picker(), ::checkmark, ::picker-icon, ::scroll-marker, ::scroll-marker-group and ::scroll-button() logs no `Invalid selector` warning (oven-sh/bun#41122 shipped four of the seven in 1.4.2)",
-    measured: "2026-09-15, bun 1.4.2: three warnings, the first on ::scroll-marker",
-    runtime: "bun",
-    script: `
-      await Bun.write("w.css", "a::details-content{c:d}b::picker(select){c:d}c::checkmark{c:d}d::picker-icon{c:d}e::scroll-marker{c:d}f::scroll-marker-group{c:d}g::scroll-button(*){c:d}");
-      const r = await Bun.build({ entrypoints: ["w.css"], minify: true, outdir: "out" });
-      const warned = r.logs.map((l) => String(l)).filter((l) => /Invalid selector/i.test(l));
-      ${out('{ landed: warned.length === 0, detail: warned.length ? warned.length + " warning(s): " + warned[0].replace(/^BuildMessage: /, "").slice(0, 90) : "no Invalid selector warning on the seven" }')}
-    `,
-  },
-  {
-    name: "css-minifier-lowercases-target-current",
-    issue: "https://github.com/oven-sh/bun/issues/42480",
-    landed:
-      "`:TARGET-CURRENT` is emitted lowercased like `:TARGET-WITHIN`, so two spellings of one selector merge to one rule (robobun adopted the fix as oven-sh/bun#42484, from oven-sh/bun#41139)",
-    measured: "2026-09-15, bun 1.4.2: `:TARGET-CURRENT` emitted verbatim beside a lowercased `:target-within`",
-    runtime: "bun",
-    script: `
-      await Bun.write("w.css", "x:TARGET-CURRENT{c:d}y:TARGET-WITHIN{c:d}");
-      await Bun.build({ entrypoints: ["w.css"], minify: true, outdir: "out" });
-      const css = await Bun.file("out/w.css").text();
-      const landed = css.includes(":target-current") && !css.includes(":TARGET-CURRENT");
-      ${out('{ landed, detail: "emitted " + JSON.stringify(css.trim().slice(0, 60)) }')}
-    `,
-  },
+  // RETIRED 2026-10-30: `css-minifier-knows-the-seven-pseudo-elements`. It
+  // watched oven-sh/bun#41120, which the owner closed 2026-10-19 after
+  // #41122 cleared four of the seven. The three warnings left are the
+  // ::scroll-marker family, and lightningcss 1.33.0 warns on them too
+  // (parcel-bundler/lightningcss#1321, open), so the fix belongs upstream of
+  // Bun's port. Re-read on 1.4.4-canary.1+5c6d4e2: 3 warnings. Nothing here
+  // builds CSS with Bun: tools/build.ts runs Lightning CSS directly.
+  // RETIRED 2026-10-30: `css-minifier-lowercases-target-current`. It
+  // watched oven-sh/bun#42480. Its fix #42484 closed unmerged 2026-10-27
+  // when #47025 consolidated the CSS parser PRs and left #41139 out as input
+  // nobody writes. Re-read on 1.4.4-canary.1+5c6d4e2: `:TARGET-CURRENT`
+  // still emitted verbatim beside `:target-within`.
   {
     // THIS ONE IS NOT A BUN FIX, and it moves through a different door. The
     // probe reads oxc-minify, which is pinned in package.json and bumped by

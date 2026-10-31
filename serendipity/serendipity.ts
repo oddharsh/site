@@ -28,6 +28,8 @@ import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askClef, buildTagRequest, tagInputHash } from "./event-tags.ts";
+import { ATTENDEE_COMPANIES_DDL, COMPANY_MAX_P_NULL, COMPANY_MODEL, askClairic, buildCompanyRequest } from "./companies.ts";
+import { ATTENDEE_ROLES_DDL, ROLE_MODEL, askRole, buildRoleRequest } from "./roles.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const html = (status, body) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -165,8 +167,47 @@ export function roleTier(text: string | null | undefined): { tier: string; point
 // 2026-09-23 the role existed for 15 of 19,733 people and a bio for 5,116, so
 // reading the role alone left the tiers dark for nearly everyone; read against a
 // 60-bio hand-labelled sample, the tiers were right on 24 of the 25 they matched.
+//
+// Clef's stored role, where the role pass has read the bio, decides the KIND
+// of work: on 2026-10-31 it read it at 96% precision and 92% recall on
+// held-out bios, where the tiers managed 83% and 52%. The tiers also rank
+// SENIORITY, which Clef does not answer, so for operator and engineer work the
+// first title tier in the bio still sets the points (Head of BD 60, CEO 90),
+// and the lowest title tier when it names none. Founder, investor and student
+// take their tiers' points. Researcher, creator, other and not_stated take
+// unmatched's 15, since no tier ever ranked those.
+const KIND_TIERS = new Set(["founder", "investor"]);
+const TIER_POINTS: Record<string, number> = Object.fromEntries(ROLE_TIERS.map(([tier, , points]) => [tier, points]));
+function titlePoints(bio: string): number {
+  for (const [tier, res, points] of ROLE_TIERS) if (!KIND_TIERS.has(tier) && res.some((re) => re.test(bio))) return points;
+  return TIER_POINTS.ic;
+}
+export function rolePoints(a): number {
+  // An enriched role, or a bio the role pass has not read: the tiers, as before.
+  if (a.role || !a.clef_role) return roleTier(a.role || a.bio_short).points;
+  switch (a.clef_role) {
+    case "founder":
+    case "investor":
+      return TIER_POINTS[a.clef_role];
+    case "student":
+      return TIER_POINTS.junior;
+    case "operator":
+    case "engineer":
+      return titlePoints(a.bio_short || "");
+    case "researcher":
+    case "creator":
+    case "other":
+    case "not_stated":
+      return 15;
+    default:
+      // A label this build does not know, stored before a ROLE_LABELS change
+      // and not yet re-asked: the tiers, as for an unread bio.
+      return roleTier(a.bio_short).points;
+  }
+}
+
 export function attendeeScore(a) {
-  let s = roleTier(a.role || a.bio_short).points;
+  let s = rolePoints(a);
   if (a.twitter_handle) s += 15;
   if (a.linkedin_handle || a.linkedin_url) s += 5;
   if (a.website) s += 5;
@@ -228,6 +269,38 @@ function db(env) {
 }
 
 // ── query layer: the SINGLE source of truth the pages and MCP both read ─────
+// Where a person works: what Exa enrichment found, else what Clairic read out
+// of their bio when it was sure enough (serendipity/companies.ts). Every
+// people read joins the two the same way, so search_people and get_event can
+// never disagree about one person.
+const WITH_CLAIRIC = {
+  company: `COALESCE(en.company, CASE WHEN ac.p_null <= ${COMPANY_MAX_P_NULL} THEN ac.company END) AS company`,
+  join: "LEFT JOIN enrichments en ON en.attendee_id = a.id LEFT JOIN attendee_companies ac ON ac.attendee_id = a.id",
+};
+const EXA_ONLY = { company: "en.company", join: "LEFT JOIN enrichments en ON en.attendee_id = a.id" };
+export type CompanySource = typeof EXA_ONLY;
+
+/** The bio passes create their tables on first use, and nothing migrates this
+ *  database, so between a deploy and the first tick after it a table can be
+ *  absent. That one error reruns the read without it, which is what the roster
+ *  showed before; any other error throws. Nested calls each own one table, so
+ *  either can be missing without hiding the other. */
+async function withTable<S>(table: string, present: S, absent: S, read: (s: S) => Promise<any>): Promise<any> {
+  try {
+    return await read(present);
+  } catch (err) {
+    if (!(err instanceof Error ? err.message : String(err)).includes(`no such table: ${table}`)) throw err;
+    return read(absent);
+  }
+}
+export const withCompanies = (read: (c: CompanySource) => Promise<any>) => withTable("attendee_companies", WITH_CLAIRIC, EXA_ONLY, read);
+
+// The kind of work Clef read out of the bio (serendipity/roles.ts), which
+// rolePoints ranks by. Only the roster reads ask for it.
+const WITH_ROLES = { role: "ar.role AS clef_role", join: "LEFT JOIN attendee_roles ar ON ar.attendee_id = a.id" };
+export type RoleSource = typeof WITH_ROLES;
+export const withRoles = (read: (r: RoleSource) => Promise<any>) => withTable("attendee_roles", WITH_ROLES, { role: "NULL AS clef_role", join: "" }, read);
+
 async function queryEvents(d) {
   return d
     .prepare(
@@ -250,20 +323,24 @@ async function queryEvent(d, id) {
   return d.prepare(`SELECT id, name, description, start_at, end_at, location, url, ticket_key, user_status FROM events WHERE id = ?`).get(id);
 }
 async function queryEventAttendees(d, id) {
-  return d
-    .prepare(
-      `SELECT a.id AS attendee_id, a.name, a.bio_short,
+  return withRoles((r) =>
+    withCompanies((c) =>
+      d
+        .prepare(
+          `SELECT a.id AS attendee_id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             ea.is_host,
             a.website, a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.bio AS enriched_bio, en.location,
+            ${c.company}, en.role, ${r.role}, en.bio AS enriched_bio, en.location,
             en.linkedin_url, en.enriched_at
        FROM event_attendees ea
        JOIN attendees a ON a.id = ea.attendee_id
-       LEFT JOIN enrichments en ON en.attendee_id = a.id
+       ${c.join} ${r.join}
       WHERE ea.event_id = ?`,
-    )
-    .all(id);
+        )
+        .all(id),
+    ),
+  );
 }
 async function queryContributors(d, id) {
   return d
@@ -1843,6 +1920,146 @@ async function handleTag(request, env, d) {
   return jsonResponse({ ok: !("skipped" in r), ...r });
 }
 
+// ── bio passes: Clairic reads the company, Clef the role, out of each bio ───
+// serendipity/companies.ts and roles.ts have the requests and the
+// measurements. Same shape as the tag pass: one answer per bio, stored beside
+// the hash of the request that produced it, asked again only when that hash
+// moves. The two passes share askOwedBios, so both walk the pool in one order.
+//
+// Never-asked bios first, people at an upcoming event first among them, then
+// the oldest answers, with no upcoming key: a big upcoming roster ranked
+// above them would hold the scan window for good. The oldest-first tail is what makes an instructions
+// change re-ask the whole pool through a bounded scan: every answer from
+// before the change is older than every answer after it. A bio edited after
+// its answer is re-asked only once its turn in that rotation comes round.
+//
+// 40 a run per pass, each one Workers AI call: 160 a day on the 6-hourly
+// tick, so the 5,116 bios of 2026-10-30 take about a month by cron alone and
+// the roster's upcoming people a tick or two. POST /serendipity/companies?n=45
+// (or /roles) by hand is the faster backfill.
+const BIO_PASS_DEFAULT = 40;
+const BIO_PASS_MAX = 45;
+const BIO_PASS_SCAN = 300;
+// Eight in flight, the width the baseline tools measured with no failures.
+// clef.ts records "Capacity temporarily exceeded" at 29 concurrent calls.
+const BIO_PASS_WIDTH = 8;
+
+/** The bios a pass owes an answer, asked `width` at a time. Each answer comes
+ *  back with the attendee and the hash its row must store; failures are
+ *  counted by cause. The table and stamp names are constants, never input. */
+async function askOwedBios<Q extends object, P>(
+  d,
+  limit: number,
+  pass: {
+    table: "attendee_companies" | "attendee_roles";
+    stamp: "extracted_at" | "classified_at";
+    build: (bio: string) => Q;
+    ask: (request: Q) => Promise<{ prediction: P } | { error: string }>;
+  },
+) {
+  const rows = await d
+    .prepare(
+      `SELECT a.id, a.bio_short, c.input_hash
+       FROM attendees a LEFT JOIN ${pass.table} c ON c.attendee_id = a.id
+      WHERE a.bio_short IS NOT NULL AND trim(a.bio_short) <> ''
+      ORDER BY (c.attendee_id IS NULL) DESC,
+               (c.attendee_id IS NULL AND EXISTS (SELECT 1 FROM event_attendees ea JOIN events e ON e.id = ea.event_id
+                        WHERE ea.attendee_id = a.id AND datetime(e.start_at) >= datetime('now'))) DESC,
+               c.${pass.stamp} ASC
+      LIMIT ?`,
+    )
+    .all(BIO_PASS_SCAN);
+  const owed: { id: string; request: Q; hash: string }[] = [];
+  for (const r of rows) {
+    const request = pass.build(r.bio_short);
+    const hash = await tagInputHash(request);
+    if (hash !== r.input_hash) owed.push({ id: r.id, request, hash });
+  }
+  const batch = owed.slice(0, limit);
+  const answered: { id: string; hash: string; prediction: P }[] = [];
+  const failed: Record<string, number> = {};
+  for (let i = 0; i < batch.length; i += BIO_PASS_WIDTH) {
+    const slice = batch.slice(i, i + BIO_PASS_WIDTH);
+    const results = await Promise.all(slice.map((o) => pass.ask(o.request)));
+    results.forEach((r, j) => {
+      if ("error" in r) failed[r.error] = (failed[r.error] || 0) + 1;
+      else answered.push({ id: slice[j].id, hash: slice[j].hash, prediction: r.prediction });
+    });
+  }
+  // `remaining` is bounded by the scan window, as in tagEvents.
+  return { scanned: rows.length, asked: batch.length, answered, failed, remaining: owed.length - answered.length };
+}
+
+export async function extractCompanies(d, env, limit) {
+  if (!env?.AI) return { skipped: "no AI binding" };
+  await d.raw.prepare(ATTENDEE_COMPANIES_DDL).run();
+  const r = await askOwedBios(d, limit, {
+    table: "attendee_companies",
+    stamp: "extracted_at",
+    build: buildCompanyRequest,
+    ask: (q) => askClairic(q, env),
+  });
+  const S = r.answered.map(({ id, hash, prediction: p }) =>
+    d.stmt(
+      `INSERT INTO attendee_companies (attendee_id, company, p_null, confidence, model, input_hash, extracted_at)
+       VALUES (?,?,?,?,?,?,datetime('now'))
+       ON CONFLICT(attendee_id) DO UPDATE SET company=excluded.company, p_null=excluded.p_null, confidence=excluded.confidence,
+         model=excluded.model, input_hash=excluded.input_hash, extracted_at=excluded.extracted_at`,
+      id,
+      p.guess,
+      p.pNull,
+      p.confidence,
+      COMPANY_MODEL,
+      hash,
+    ),
+  );
+  if (S.length) await d.batch(S);
+  // `named` is how many answers the roster will show.
+  const named = r.answered.filter(({ prediction: p }) => p.pNull <= COMPANY_MAX_P_NULL && p.guess).length;
+  return { scanned: r.scanned, asked: r.asked, extracted: S.length, named, failed: r.failed, remaining: r.remaining };
+}
+
+export async function classifyRoles(d, env, limit) {
+  if (!env?.AI) return { skipped: "no AI binding" };
+  await d.raw.prepare(ATTENDEE_ROLES_DDL).run();
+  const r = await askOwedBios(d, limit, {
+    table: "attendee_roles",
+    stamp: "classified_at",
+    build: buildRoleRequest,
+    ask: (q) => askRole(q, env),
+  });
+  const S = r.answered.map(({ id, hash, prediction: p }) =>
+    d.stmt(
+      `INSERT INTO attendee_roles (attendee_id, role, confidence, probabilities, model, input_hash, classified_at)
+       VALUES (?,?,?,?,?,?,datetime('now'))
+       ON CONFLICT(attendee_id) DO UPDATE SET role=excluded.role, confidence=excluded.confidence, probabilities=excluded.probabilities,
+         model=excluded.model, input_hash=excluded.input_hash, classified_at=excluded.classified_at`,
+      id,
+      p.role,
+      p.confidence,
+      JSON.stringify(p.probabilities),
+      ROLE_MODEL,
+      hash,
+    ),
+  );
+  if (S.length) await d.batch(S);
+  // `stated` is how many bios came back with a kind of work, which is what
+  // moves a person in the ranking.
+  const stated = r.answered.filter(({ prediction: p }) => p.role !== "not_stated").length;
+  return { scanned: r.scanned, asked: r.asked, classified: S.length, stated, failed: r.failed, remaining: r.remaining };
+}
+
+// secret-gated: POST /serendipity/companies[?n=40] and /serendipity/roles[?n=40],
+// secret in x-sync-key. Reached from the cron by self-dispatch, like /tag, so
+// each pass gets its own subrequest ceiling.
+async function handleBioPass(request, env, d, run: (d, env, limit: number) => Promise<object>) {
+  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
+  const limit = Math.min(BIO_PASS_MAX, Math.max(1, Number.isFinite(n) ? n : BIO_PASS_DEFAULT));
+  const r = await run(d, env, limit);
+  return jsonResponse({ ok: !("skipped" in r), ...r });
+}
+
 // The stored tags for a set of events, keyed by id. Its own query rather than a
 // join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
 // whole cost and stays untouched, and a database where event_tags does not exist
@@ -1942,9 +2159,9 @@ const CRON_DESC_LIMIT = 10;
 // against the account's plan before tuning it.
 // The ceiling itself is lib/budget.ts's SUBREQUEST_CAP_FREE, imported rather
 // than restated; contract-the-subrequest-budget fails if this file re-declares it.
-// Eight: the D1 batches, the two self-dispatches (enrich, tag) at one
-// subrequest each, and the sync-health record's one write.
-const CRON_BUDGET_HEADROOM = 8;
+// Ten: the D1 batches, the four self-dispatches (enrich, tag, companies,
+// roles) at one subrequest each, and the sync-health record's one write.
+const CRON_BUDGET_HEADROOM = 10;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - setCount * perSet - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
@@ -2030,6 +2247,31 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch | null) {
     // Counts only, for the cron log line. `failed` is keyed by cause, so a
     // missing gateway or a spent allocation reads by its code rather than as zero tags.
     return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// The bio passes, through the same door for the same reasons as dispatchTag:
+// one subrequest each here, and each pass in its own invocation. `named` and
+// `stated` are each pass's count of answers the roster will use.
+const BIO_PASS_COUNT = { companies: "named", roles: "stated" } as const;
+export async function dispatchBioPass(env, fetchImpl: EnrichFetch | null, pass: keyof typeof BIO_PASS_COUNT) {
+  if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  if (!env.AI) return { skipped: "no AI binding" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
+  const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
+  try {
+    const res = await fetchImpl(`${base}/serendipity/${pass}`, {
+      method: "POST",
+      headers: { "x-sync-key": env.SYNC_SECRET },
+    });
+    if (!res.ok) return { error: `${pass} ${res.status}` };
+    const body = await res.json();
+    const skipped = asText(body?.skipped);
+    if (skipped) return { skipped };
+    const count = BIO_PASS_COUNT[pass];
+    return { asked: body?.asked ?? null, [count]: body?.[count] ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -2296,8 +2538,8 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
   return span("serendipity.sync", async (s) => {
     const d = db(env);
     const at = new Date().toISOString();
-    // `descriptions`, `enrich` and `tag` are filled after the roster loop, so all
-    // three are declared here rather than bolted on: an object literal's shape is
+    // `descriptions`, `enrich`, `tag`, `companies` and `roles` are filled after the
+    // roster loop, so all five are declared here rather than bolted on: an object literal's shape is
     // fixed at the literal in TypeScript, and this is the log line's whole schema.
     const out: {
       events: any[];
@@ -2306,6 +2548,8 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
       descriptions: any;
       enrich?: any;
       tag?: any;
+      companies?: any;
+      roles?: any;
     } = { events: [], guests: [], skipped: [], descriptions: null };
     let sets: number | null = null;
     let budget: Budget | null = null;
@@ -2348,6 +2592,9 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
           // after descriptions on purpose: an event is only owed a tag once its
           // description has been attempted, so this tick's backfill is taggable now.
           out.tag = await dispatchTag(env, selfFetch);
+          // after the roster sweep, so this tick's new guests are already in the pool.
+          out.companies = await dispatchBioPass(env, selfFetch, "companies");
+          out.roles = await dispatchBioPass(env, selfFetch, "roles");
           // fetches + budget_exhausted are the two numbers that were missing while the
           // sweep was silently overspending. An exhausted budget is normal on a tick
           // holding a large roster; it is a problem only when it never clears.
@@ -2956,19 +3203,17 @@ function mcpEventSummary(e, tags: Map<string, any> | null = null) {
 // (two D1 subrequests total, no N+1).
 async function mcpSearchPeople(d, q, limit) {
   const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
-  const people = await d
-    .prepare(
-      `SELECT a.id, a.name, a.bio_short,
-            (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
-            a.website,
-            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.location, en.linkedin_url
-       FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+  const people = await withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)}
+       FROM attendees a ${c.join}
       WHERE a.name LIKE ? ESCAPE '\\'
       ORDER BY times_seen DESC, a.name ASC
       LIMIT ?`,
-    )
-    .all(term, limit);
+      )
+      .all(term, limit),
+  );
   if (!people.length) return [];
   const ids = people.map((p) => p.id);
   const ph = ids.map(() => "?").join(",");
@@ -3058,21 +3303,25 @@ async function mcpListContributors(d) {
 // who-overlaps-with-whom is already implicit in the public guest lists, this
 // just computes it). co-attendance counts hosts and guests alike: being at the
 // same event is the edge.
-const PUB_COLS = `a.id, a.name, a.bio_short,
+function pubCols(c: CompanySource) {
+  return `a.id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             a.website,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.location, en.linkedin_url`;
+            ${c.company}, en.role, en.location, en.linkedin_url`;
+}
 
 // best-match attendee for a name (most-seen wins ties).
 async function mcpResolvePerson(d, q) {
   const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
-  return d
-    .prepare(
-      `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+  return withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)} FROM attendees a ${c.join}
       WHERE a.name LIKE ? ESCAPE '\\' ORDER BY times_seen DESC, a.name ASC LIMIT 1`,
-    )
-    .get(term);
+      )
+      .get(term),
+  );
 }
 
 // who shows up across the most events (who you're seeing a lot); optional slice.
@@ -3085,17 +3334,19 @@ async function mcpFrequentPeople(d, when, limit) {
     binds.push(nowIso);
   }
   binds.push(limit);
-  const rows = await d
-    .prepare(
-      `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
+  const rows = await withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)}, COUNT(DISTINCT ea.event_id) AS events
        FROM attendees a
        JOIN event_attendees ea ON ea.attendee_id = a.id
        JOIN events e ON e.id = ea.event_id
-       LEFT JOIN enrichments en ON en.attendee_id = a.id
+       ${c.join}
       WHERE 1=1 ${filter}
       GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`,
-    )
-    .all(...binds);
+      )
+      .all(...binds),
+  );
   return rows.map((r) => {
     const o = mcpAttendee(r);
     o.events = Number(r.events);
@@ -3108,18 +3359,20 @@ async function mcpCoAttendees(d, q, limit) {
   const person = await mcpResolvePerson(d, q);
   if (!person) return null;
   const [rows, tot] = await Promise.all([
-    d
-      .prepare(
-        `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+    withCompanies((c) =>
+      d
+        .prepare(
+          `SELECT ${pubCols(c)}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
          FROM event_attendees ea
          JOIN attendees a ON a.id = ea.attendee_id
          JOIN events e ON e.id = ea.event_id
-         LEFT JOIN enrichments en ON en.attendee_id = a.id
+         ${c.join}
         WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
           AND ea.attendee_id != ?1
         GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`,
-      )
-      .all(person.id, limit),
+        )
+        .all(person.id, limit),
+    ),
     d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id),
   ]);
   return {
@@ -3150,9 +3403,9 @@ async function mcpConnections(d, minShared, limit) {
   if (!rows.length) return [];
   const ids = [...new Set(rows.flatMap((r) => [r.id1, r.id2]))];
   const ph = ids.map(() => "?").join(",");
-  const people = await d
-    .prepare(`SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`)
-    .all(...ids);
+  const people = await withCompanies((c) =>
+    d.prepare(`SELECT a.id, a.name, ${c.company}, en.role FROM attendees a ${c.join} WHERE a.id IN (${ph})`).all(...ids),
+  );
   const byId = new Map(people.map((p) => [p.id, { name: p.name, role: p.role || null, company: p.company || null }]));
   return rows.map((r) => ({
     a: byId.get(r.id1) || { name: "?" },
@@ -3606,6 +3859,8 @@ export async function handleSerendipity(request, env, ctx) {
       path === `${PREFIX}/sync-descriptions` ||
       path === `${PREFIX}/enrich` ||
       path === `${PREFIX}/tag` ||
+      path === `${PREFIX}/companies` ||
+      path === `${PREFIX}/roles` ||
       path === `${PREFIX}/cookies` ||
       path === `${PREFIX}/add-event`)
   ) {
@@ -3613,11 +3868,13 @@ export async function handleSerendipity(request, env, ctx) {
   }
 
   // secret-gated triggers (admin/cron): sync, description backfill, Exa
-  // enrichment, Clef tagging
+  // enrichment, Clef tagging, Clairic companies, Clef roles
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/tag`) return handleTag(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/companies`) return handleBioPass(request, env, d, extractCompanies);
+  if (request.method === "POST" && path === `${PREFIX}/roles`) return handleBioPass(request, env, d, classifyRoles);
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
   // so the response stays cacheable at the edge.

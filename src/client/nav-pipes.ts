@@ -7,9 +7,10 @@
 // comes back. Nothing here loads for a visitor who never goes idle.
 //
 // What it keeps from the original: pipes grow cell by cell through a 3D grid,
-// each one a random solid colour, turning at ball joints or elbows ("Mixed",
-// chosen per pipe), and the finished screen clears in a block dissolve before
-// the next round starts.
+// each one a random material from the OpenGL teapots table (emerald, brass,
+// cyan rubber), turning at ball joints or elbows ("Mixed", chosen per pipe),
+// with a 1 in 1000 chance that a ball joint is the Utah teapot instead, and the
+// finished screen clears in a block dissolve before the next round starts.
 //
 // What it does better, which is the point of rebuilding it:
 //   • RESPONSIVE GRID. XP drew one fixed grid into whatever screen it got. Each
@@ -24,9 +25,9 @@
 //   • INSTANT WAKE. XP tore down a fullscreen GL window before your desktop
 //     came back. The overlay here disappears on the first real input, and the
 //     click that woke it is swallowed so it cannot also open a link.
-//   • CHEAP. Every pipe piece is an INSTANCE of one of three meshes, so a frame
-//     is three draw calls however full the screen gets, and each new piece is a
-//     60-byte buffer upload.
+//   • CHEAP. Every pipe piece is an INSTANCE of one of four meshes, so a frame
+//     is four draw calls however full the screen gets, and each new piece is a
+//     52-byte buffer upload.
 //
 // Reduced motion renders one finished frame and holds it. No WebGL2 falls back
 // to XP's own "Blank" saver, a black screen, which is period-correct as well as
@@ -41,18 +42,37 @@ var R_BALL = 0.26; // ball joint radius
 var BEND = 1.6 * R_PIPE; // elbow bend radius; segments trim this much at a turn
 var GRACE_MS = 600; // mouse drift ignored right after the saver starts
 var DRIFT_PX = 6; // mouse movement that counts as the visitor coming back
+var TEA = 0.001; // chance a ball joint is the Utah teapot
+// Teapot units to cells. The body (radius 2) spans 0.88 and the spout and
+// handle reach 0.78 and 0.66, inside the 0.84 before a neighbouring pipe's
+// wall; at 0.15 it was too small to read as a teapot.
+var TEA_SCALE = 0.22;
 
-// XP's pipes were flat primaries under one hard light. Stored sRGB, used linear.
-var PALETTE = [
-  [0.9, 0.12, 0.1],
-  [0.12, 0.72, 0.18],
-  [0.16, 0.32, 0.95],
-  [0.96, 0.84, 0.12],
-  [0.84, 0.2, 0.84],
-  [0.1, 0.78, 0.84],
-  [0.96, 0.52, 0.1],
-  [0.82, 0.82, 0.82],
-].map((c) => c.map((v) => Math.pow(v, 2.2)));
+// The OpenGL Programming Guide's teapots table: ambient, diffuse, specular,
+// then shininess as a share of 128. 16 of its 24 entries: obsidian and the
+// blacks vanish on a black screen, the green, red and yellow plastics sink
+// nearly as far once lit, and silver and white plastic repeat chrome and white
+// rubber. Lit as stored, the way fixed-function GL lit it, with no linear
+// conversion in and no encode out: lighting it in linear light washed the
+// whole table to pastels (side by side on a seeded round, 2026-10-31).
+var MATERIALS = [
+  [0.0215, 0.1745, 0.0215, 0.07568, 0.61424, 0.07568, 0.633, 0.727811, 0.633, 0.6], // emerald
+  [0.135, 0.2225, 0.1575, 0.54, 0.89, 0.63, 0.316228, 0.316228, 0.316228, 0.1], // jade
+  [0.25, 0.20725, 0.20725, 1, 0.829, 0.829, 0.296648, 0.296648, 0.296648, 0.088], // pearl
+  [0.1745, 0.01175, 0.01175, 0.61424, 0.04136, 0.04136, 0.727811, 0.626959, 0.626959, 0.6], // ruby
+  [0.1, 0.18725, 0.1745, 0.396, 0.74151, 0.69102, 0.297254, 0.30829, 0.306678, 0.1], // turquoise
+  [0.329412, 0.223529, 0.027451, 0.780392, 0.568627, 0.113725, 0.992157, 0.941176, 0.807843, 0.21794872], // brass
+  [0.2125, 0.1275, 0.054, 0.714, 0.4284, 0.18144, 0.393548, 0.271906, 0.166721, 0.2], // bronze
+  [0.25, 0.25, 0.25, 0.4, 0.4, 0.4, 0.774597, 0.774597, 0.774597, 0.6], // chrome
+  [0.19125, 0.0735, 0.0225, 0.7038, 0.27048, 0.0828, 0.256777, 0.137622, 0.086014, 0.1], // copper
+  [0.24725, 0.1995, 0.0745, 0.75164, 0.60648, 0.22648, 0.628281, 0.555802, 0.366065, 0.4], // gold
+  [0, 0.1, 0.06, 0, 0.50980392, 0.50980392, 0.50196078, 0.50196078, 0.50196078, 0.25], // cyan plastic
+  [0, 0.05, 0.05, 0.4, 0.5, 0.5, 0.04, 0.7, 0.7, 0.078125], // cyan rubber
+  [0, 0.05, 0, 0.4, 0.5, 0.4, 0.04, 0.7, 0.04, 0.078125], // green rubber
+  [0.05, 0, 0, 0.5, 0.4, 0.4, 0.7, 0.04, 0.04, 0.078125], // red rubber
+  [0.05, 0.05, 0.05, 0.5, 0.5, 0.5, 0.7, 0.7, 0.7, 0.078125], // white rubber
+  [0.05, 0.05, 0, 0.5, 0.5, 0.4, 0.7, 0.7, 0.04, 0.078125], // yellow rubber
+].map((m) => m.map((v, i) => (i < 9 ? v : v * 128)));
 
 var DIRS = [
   [1, 0, 0],
@@ -70,21 +90,25 @@ layout(location=2) in vec3 iPos;
 layout(location=3) in vec3 iX;
 layout(location=4) in vec3 iY;
 layout(location=5) in vec3 iZ;
-layout(location=6) in vec3 iCol;
+layout(location=6) in float iMat;
 uniform mat4 uViewProj;
-out vec3 vN; out vec3 vW; out vec3 vCol;
+out vec3 vN; out vec3 vW; flat out int vMat;
 void main() {
   mat3 m = mat3(iX, iY, iZ);
   vec3 w = iPos + m * aPos;
-  // m scales the xy plane and z independently, and every mesh normal lies in
-  // that plane or along z, so the plain matrix carries normals correctly.
-  vN = m * aNrm; vW = w; vCol = iCol;
+  // m either scales uniformly (balls, elbows, the teapot) or scales the xy
+  // plane and z independently with every normal in that plane or along z
+  // (pipes), so the plain matrix carries normals correctly.
+  vN = m * aNrm; vW = w; vMat = int(iMat);
   gl_Position = uViewProj * vec4(w, 1.0);
 }`;
 var FRAG = `#version 300 es
 precision highp float;
-in vec3 vN; in vec3 vW; in vec3 vCol;
+in vec3 vN; in vec3 vW; flat in int vMat;
 uniform vec3 uEye;
+uniform vec3 uKa[${MATERIALS.length}];
+uniform vec3 uKd[${MATERIALS.length}];
+uniform vec4 uKs[${MATERIALS.length}]; // specular rgb, exponent in w
 out vec4 o;
 void main() {
   vec3 n = normalize(vN);
@@ -92,9 +116,10 @@ void main() {
   vec3 l = normalize(vec3(-0.45, 0.75, 0.9));
   float key = max(dot(n, l), 0.0);
   float fill = max(dot(n, normalize(vec3(0.6, -0.2, 0.5))), 0.0) * 0.18;
-  float spec = pow(max(dot(n, normalize(l + v)), 0.0), 42.0) * 0.65;
-  vec3 c = vCol * (0.12 + 0.8 * key + fill) + vec3(spec);
-  o = vec4(pow(c, vec3(1.0 / 2.2)), 1.0);
+  // Fixed-function GL gave faces turned from the light no highlight.
+  float spec = key > 0.0 ? pow(max(dot(n, normalize(l + v)), 0.0), uKs[vMat].w) : 0.0;
+  vec3 c = uKa[vMat] + uKd[vMat] * (0.1 + 0.8 * key + fill) + uKs[vMat].rgb * spec;
+  o = vec4(min(c, vec3(1.0)), 1.0);
 }`;
 var WIPE_VERT = `#version 300 es
 void main() {
@@ -197,6 +222,98 @@ function elbow(k, rings, S) {
       var p = r * (S + 1) + s,
         q = p + S + 1;
       ix.push(p, q, p + 1, p + 1, q, q + 1);
+    }
+  }
+  return mesh(v, ix);
+}
+
+// Newell's 1975 teapot in GLUT's compact form: ten bicubic patches over 127
+// control points, z up, spout along +x. Rim, body, lid and bottom are mirrored
+// into all four quadrants, handle and spout across y only, and a single mirror
+// reverses each row so every copy keeps the same orientation.
+var TEA_PATCHES = [
+  102, 103, 104, 105, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 24, 25, 26, 27, 29, 30, 31, 32,
+  33, 34, 35, 36, 37, 38, 39, 40, 96, 96, 96, 96, 97, 98, 99, 100, 101, 101, 101, 101, 0, 1, 2, 3, 0, 1, 2, 3, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+  116, 117, 118, 118, 118, 118, 124, 122, 119, 121, 123, 126, 125, 120, 40, 39, 38, 37, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 53, 54,
+  55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 28, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 80, 81, 82, 83, 84, 85, 86, 87, 88,
+  89, 90, 91, 92, 93, 94, 95,
+];
+var TEA_POINTS = [
+  0.2, 0, 2.7, 0.2, -0.112, 2.7, 0.112, -0.2, 2.7, 0, -0.2, 2.7, 1.3375, 0, 2.53125, 1.3375, -0.749, 2.53125, 0.749, -1.3375, 2.53125, 0, -1.3375, 2.53125,
+  1.4375, 0, 2.53125, 1.4375, -0.805, 2.53125, 0.805, -1.4375, 2.53125, 0, -1.4375, 2.53125, 1.5, 0, 2.4, 1.5, -0.84, 2.4, 0.84, -1.5, 2.4, 0, -1.5, 2.4, 1.75,
+  0, 1.875, 1.75, -0.98, 1.875, 0.98, -1.75, 1.875, 0, -1.75, 1.875, 2, 0, 1.35, 2, -1.12, 1.35, 1.12, -2, 1.35, 0, -2, 1.35, 2, 0, 0.9, 2, -1.12, 0.9, 1.12,
+  -2, 0.9, 0, -2, 0.9, -2, 0, 0.9, 2, 0, 0.45, 2, -1.12, 0.45, 1.12, -2, 0.45, 0, -2, 0.45, 1.5, 0, 0.225, 1.5, -0.84, 0.225, 0.84, -1.5, 0.225, 0, -1.5, 0.225,
+  1.5, 0, 0.15, 1.5, -0.84, 0.15, 0.84, -1.5, 0.15, 0, -1.5, 0.15, -1.6, 0, 2.025, -1.6, -0.3, 2.025, -1.5, -0.3, 2.25, -1.5, 0, 2.25, -2.3, 0, 2.025, -2.3,
+  -0.3, 2.025, -2.5, -0.3, 2.25, -2.5, 0, 2.25, -2.7, 0, 2.025, -2.7, -0.3, 2.025, -3, -0.3, 2.25, -3, 0, 2.25, -2.7, 0, 1.8, -2.7, -0.3, 1.8, -3, -0.3, 1.8,
+  -3, 0, 1.8, -2.7, 0, 1.575, -2.7, -0.3, 1.575, -3, -0.3, 1.35, -3, 0, 1.35, -2.5, 0, 1.125, -2.5, -0.3, 1.125, -2.65, -0.3, 0.9375, -2.65, 0, 0.9375, -2,
+  -0.3, 0.9, -1.9, -0.3, 0.6, -1.9, 0, 0.6, 1.7, 0, 1.425, 1.7, -0.66, 1.425, 1.7, -0.66, 0.6, 1.7, 0, 0.6, 2.6, 0, 1.425, 2.6, -0.66, 1.425, 3.1, -0.66, 0.825,
+  3.1, 0, 0.825, 2.3, 0, 2.1, 2.3, -0.25, 2.1, 2.4, -0.25, 2.025, 2.4, 0, 2.025, 2.7, 0, 2.4, 2.7, -0.25, 2.4, 3.3, -0.25, 2.4, 3.3, 0, 2.4, 2.8, 0, 2.475, 2.8,
+  -0.25, 2.475, 3.525, -0.25, 2.49375, 3.525, 0, 2.49375, 2.9, 0, 2.475, 2.9, -0.15, 2.475, 3.45, -0.15, 2.5125, 3.45, 0, 2.5125, 2.8, 0, 2.4, 2.8, -0.15, 2.4,
+  3.2, -0.15, 2.4, 3.2, 0, 2.4, 0, 0, 3.15, 0.8, 0, 3.15, 0.8, -0.45, 3.15, 0.45, -0.8, 3.15, 0, -0.8, 3.15, 0, 0, 2.85, 1.4, 0, 2.4, 1.4, -0.784, 2.4, 0.784,
+  -1.4, 2.4, 0, -1.4, 2.4, 0.4, 0, 2.55, 0.4, -0.224, 2.55, 0.224, -0.4, 2.55, 0, -0.4, 2.55, 1.3, 0, 2.55, 1.3, -0.728, 2.55, 0.728, -1.3, 2.55, 0, -1.3, 2.55,
+  1.3, 0, 2.4, 1.3, -0.728, 2.4, 0.728, -1.3, 2.4, 0, -1.3, 2.4, 0, 0, 0, 1.425, -0.798, 0, 1.5, 0, 0.075, 1.425, 0, 0, 0.798, -1.425, 0, 0, -1.5, 0.075, 0,
+  -1.425, 0, 1.5, -0.84, 0.075, 0.84, -1.5, 0.075,
+];
+
+function bernstein(t) {
+  var s = 1 - t;
+  return [s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t];
+}
+function bernsteinD(t) {
+  var s = 1 - t;
+  return [-3 * s * s, 3 * s * s - 6 * t * s, 6 * t * s - 3 * t * t, 3 * t * t];
+}
+
+// G x G quads per patch, centred on its own height (z 0 to 3.15), in teapot
+// units. Normals come from the patch derivatives, sampled just inside the edge
+// because the lid and bottom patches collapse to a point there.
+function teapot(G) {
+  var v: any[] = [],
+    ix: any[] = [];
+  for (var i = 0; i < 10; i++) {
+    for (var m = 0; m < (i < 6 ? 4 : 2); m++) {
+      var sx = m & 2 ? -1 : 1,
+        sy = m & 1 ? -1 : 1,
+        P: number[][] = [];
+      for (var j = 0; j < 16; j++) {
+        var k = j & 3,
+          c = TEA_PATCHES[i * 16 + j - k + (sx * sy < 0 ? 3 - k : k)] * 3;
+        P.push([TEA_POINTS[c] * sx, TEA_POINTS[c + 1] * sy, TEA_POINTS[c + 2] - 1.575]);
+      }
+      var base = v.length / 6;
+      for (var a = 0; a <= G; a++) {
+        for (var b = 0; b <= G; b++) {
+          var cu = Math.min(Math.max(a / G, 0.01), 0.99),
+            cw = Math.min(Math.max(b / G, 0.01), 0.99);
+          var Bu = bernstein(a / G),
+            Bw = bernstein(b / G),
+            Eu = bernstein(cu),
+            Ew = bernstein(cw),
+            Du = bernsteinD(cu),
+            Dw = bernsteinD(cw);
+          var pos = [0, 0, 0],
+            du = [0, 0, 0],
+            dw = [0, 0, 0];
+          for (var q = 0; q < 16; q++) {
+            for (var l = 0; l < 3; l++) {
+              pos[l] += Bu[q >> 2] * Bw[q & 3] * P[q][l];
+              du[l] += Du[q >> 2] * Ew[q & 3] * P[q][l];
+              dw[l] += Eu[q >> 2] * Dw[q & 3] * P[q][l];
+            }
+          }
+          // du x dw faces into the pot on these patches, so take dw x du
+          var n = [dw[1] * du[2] - dw[2] * du[1], dw[2] * du[0] - dw[0] * du[2], dw[0] * du[1] - dw[1] * du[0]],
+            len = Math.hypot(n[0], n[1], n[2]) || 1;
+          v.push(pos[0], pos[1], pos[2], n[0] / len, n[1] / len, n[2] / len);
+        }
+      }
+      for (var r = 0; r < G; r++) {
+        for (var s = 0; s < G; s++) {
+          var p0 = base + r * (G + 1) + s,
+            p1 = p0 + G + 1;
+          ix.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1);
+        }
+      }
     }
   }
   return mesh(v, ix);
@@ -354,9 +471,22 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
     var uT = gl.getUniformLocation(wipe, "uT"),
       uTile = gl.getUniformLocation(wipe, "uTile");
     var wipeVao = gl.createVertexArray();
+    gl.useProgram(prog);
+    gl.uniform3fv(
+      gl.getUniformLocation(prog, "uKa"),
+      MATERIALS.flatMap((m) => m.slice(0, 3)),
+    );
+    gl.uniform3fv(
+      gl.getUniformLocation(prog, "uKd"),
+      MATERIALS.flatMap((m) => m.slice(3, 6)),
+    );
+    gl.uniform4fv(
+      gl.getUniformLocation(prog, "uKs"),
+      MATERIALS.flatMap((m) => m.slice(6, 10)),
+    );
 
-    var FLOATS = 15; // pos 3 + basis 9 + colour 3
-    var kinds = [cylinder(18), sphere(10, 18), elbow(BEND / R_PIPE, 10, 18)].map((m) => {
+    var FLOATS = 13; // pos 3 + basis 9 + material 1
+    var kinds = [cylinder(18), sphere(10, 18), elbow(BEND / R_PIPE, 10, 18), teapot(8)].map((m) => {
       var vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
       var vb = gl.createBuffer();
@@ -373,7 +503,7 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
       gl.bindBuffer(gl.ARRAY_BUFFER, ib);
       for (var a = 0; a < 5; a++) {
         gl.enableVertexAttribArray(2 + a);
-        gl.vertexAttribPointer(2 + a, 3, gl.FLOAT, false, FLOATS * 4, a * 12);
+        gl.vertexAttribPointer(2 + a, a < 4 ? 3 : 1, gl.FLOAT, false, FLOATS * 4, a * 12);
         gl.vertexAttribDivisor(2 + a, 1);
       }
       gl.bindVertexArray(null);
@@ -381,7 +511,8 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
     });
     var CYL = kinds[0],
       BALL = kinds[1],
-      ELBOW = kinds[2];
+      ELBOW = kinds[2],
+      TEAPOT = kinds[3];
 
     // ── round state ───────────────────────────────────────────────────────────
     var X = 0,
@@ -427,18 +558,18 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
       return a[Math.floor(Math.random() * a.length)];
     }
 
-    function put(kind, i, pos, bx, by, bz, col) {
+    function put(kind, i, pos, bx, by, bz, mat) {
       tmp.set(pos, 0);
       tmp.set(bx, 3);
       tmp.set(by, 6);
       tmp.set(bz, 9);
-      tmp.set(col, 12);
+      tmp[12] = mat;
       gl.bindBuffer(gl.ARRAY_BUFFER, kind.ib);
       gl.bufferSubData(gl.ARRAY_BUFFER, i * FLOATS * 4, tmp);
     }
-    function add(kind, pos, bx, by, bz, col) {
+    function add(kind, pos, bx, by, bz, mat) {
       if (kind.count >= kind.cap) return -1;
-      put(kind, kind.count, pos, bx, by, bz, col);
+      put(kind, kind.count, pos, bx, by, bz, mat);
       return kind.count++;
     }
     function scale(v, s) {
@@ -452,12 +583,19 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
       var u = DIRS[(d + 2) % 6];
       return [u, cross(DIRS[d], u)];
     }
-    function ball(c, col) {
-      add(BALL, centre(c), [R_BALL, 0, 0], [0, R_BALL, 0], [0, 0, R_BALL], col);
+    function ball(c, mat) {
+      add(BALL, centre(c), [R_BALL, 0, 0], [0, R_BALL, 0], [0, 0, R_BALL], mat);
+    }
+    // Upright, spout along whichever of the two pipe directions is level (a
+    // 90 degree turn always has one), so it reads as a teapot from any angle.
+    function teapotAt(c, p) {
+      var x = DIRS[p.next][1] ? DIRS[p.d] : DIRS[p.next],
+        up = DIRS[2];
+      return add(TEAPOT, centre(c), scale(x, TEA_SCALE), scale(cross(up, x), TEA_SCALE), scale(up, TEA_SCALE), p.mat) >= 0;
     }
     function segment(p, len) {
       var s = sides(p.d);
-      put(CYL, p.seg, p.from, scale(s[0], R_PIPE), scale(s[1], R_PIPE), scale(DIRS[p.d], Math.max(len, 1e-4)), p.col);
+      put(CYL, p.seg, p.from, scale(s[0], R_PIPE), scale(s[1], R_PIPE), scale(DIRS[p.d], Math.max(len, 1e-4)), p.mat);
     }
 
     function spawn(p) {
@@ -470,13 +608,13 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
         p.dead = true;
         return;
       }
-      p.col = pick(PALETTE);
+      p.mat = Math.floor(Math.random() * MATERIALS.length);
       p.elbows = Math.random() < 0.5;
       p.c = c;
       claim(c);
       p.d = pick(exits(c));
       claim(step(c, p.d));
-      ball(c, p.col);
+      ball(c, p.mat);
       begin(p, 0);
     }
     // Start the segment from p.c toward p.d. The move OUT of the next cell is
@@ -506,7 +644,7 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
       segment(p, p.full);
       var n = step(p.c, p.d);
       if (p.next < 0) {
-        ball(n, p.col);
+        ball(n, p.mat);
         spawn(p);
         return;
       }
@@ -515,9 +653,9 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
         if (p.elbows) {
           var a = DIRS[p.d],
             b = DIRS[p.next];
-          add(ELBOW, centre(n), scale(a, R_PIPE), scale(b, R_PIPE), scale(cross(a, b), R_PIPE), p.col);
+          add(ELBOW, centre(n), scale(a, R_PIPE), scale(b, R_PIPE), scale(cross(a, b), R_PIPE), p.mat);
           trim = BEND;
-        } else ball(n, p.col);
+        } else if (Math.random() >= TEA || !teapotAt(n, p)) ball(n, p.mat);
       }
       p.c = n;
       p.d = p.next;
@@ -548,7 +686,7 @@ export function startPipes(options: { onExit?: () => void }): { stop: () => void
       claimed = 0;
       kinds.forEach((k) => {
         k.count = 0;
-        k.cap = cells.length + 64;
+        k.cap = k === TEAPOT ? 8 : cells.length + 64;
         gl.bindBuffer(gl.ARRAY_BUFFER, k.ib);
         gl.bufferData(gl.ARRAY_BUFFER, k.cap * FLOATS * 4, gl.DYNAMIC_DRAW);
       });
