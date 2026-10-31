@@ -1493,7 +1493,7 @@ bun run wrangler login                                         # Cloudflare auth
 bun run cf auth login                                          # Cloudflare auth for deploy:promote, D1 reads and KV seeding (tools/lib/cf.ts)
 
 # the study pages, which are NOT needed to add a photo
-brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
+brew install webp                                     # cwebp for the encoding grids
 ```
 Homebrew's `pkgconf` provides `pkg-config`, which resolves the native library.
 The optional source AVIF study build still needs `brew install cmake ninja`;
