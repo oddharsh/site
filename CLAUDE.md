@@ -7,7 +7,8 @@ bevels), with colors authored in OKLCH. `AGENTS.md` is a symlink to this file.
 Read the code before trusting prose, this file included. When you learn
 something that cost real time, add a gotcha to [docs/GOTCHAS.md](docs/GOTCHAS.md)
 rather than a paragraph here, and give it a check that fails when the mistake
-comes back (its `Checked by:` line names it).
+comes back (its `Checked by:` line names it). Take its number from
+`bun run gotcha:next`, which counts the numbers open PRs already hold.
 
 ## Layout
 
@@ -67,8 +68,10 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 - Labels worth applying by hand: `hashed-asset` (the diff re-mints an `/a/`
   URL, gotcha 35) and `release-path` (it touches what decides what ships).
 - The tree is formatted by `bun fmt`, scoped by `[fmt]` in `bunfig.toml`
-  (gotchas 71 to 74). A hook formats each file an agent edits; elsewhere run
-  `bun run format` before committing. A test that reads source text must
+  (gotchas 71 to 74). A hook formats each file an agent edits through Edit or
+  Write; elsewhere run `bun run format` before committing. Another hook
+  (`tools/push-gate.ts`) holds an agent's `git push` or `gh pr create` until
+  format, typecheck, lint, `pages:check` and `derive:check` pass, about 7 s. A test that reads source text must
   tolerate the formatter rewrapping it.
 - `validate` is the one required check: lint, format, typecheck, build under the perf
   budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
