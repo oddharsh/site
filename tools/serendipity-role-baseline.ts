@@ -73,7 +73,7 @@ const TIER_FITS: Record<string, readonly string[]> = {
   junior: ["student"],
 };
 
-type Bio = { id: string; bio: string };
+export type Bio = { id: string; bio: string };
 
 /** Precision over what the tiers matched, recall over bios that state a role. */
 export function scoreTiers(bios: readonly Bio[], labels: Record<string, string>) {
@@ -173,7 +173,7 @@ export function tierRecallOnTierable(bios: readonly Bio[], labels: Record<string
 }
 
 // ── the Workers AI transport ────────────────────────────────────────────────
-async function workersAiAuth(): Promise<{ token: string; account: string }> {
+export async function workersAiAuth(): Promise<{ token: string; account: string }> {
   const account = String((await siteConfig()).account_id);
   if (process.env.CLOUDFLARE_API_TOKEN) return { token: process.env.CLOUDFLARE_API_TOKEN, account };
   const { stdout } = await run(...wranglerCommand(["auth", "token", "--json"]), { cwd: ROOT });
@@ -223,13 +223,13 @@ async function classifyAll(bios: readonly Bio[], width = 8) {
 
 /** FNV-1a over the id, so a sample is the same people on every run and every
  *  machine without storing which people they were. */
-function fnv(s: string): number {
+export function fnv(s: string): number {
   let x = 2166136261;
   for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0;
   return x;
 }
 
-async function readBios(): Promise<Bio[]> {
+export async function readBios(): Promise<Bio[]> {
   const sql = "SELECT id, bio_short AS bio FROM attendees WHERE bio_short IS NOT NULL AND trim(bio_short) <> ''";
   return d1Rows(D1.serendipity, sql);
 }
