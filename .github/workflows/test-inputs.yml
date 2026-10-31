@@ -9,8 +9,6 @@ on:
   schedule:
     - cron: "40 7 * * *" # before ci-trend at 08:20 and the 09:00-10:05 jobs
   workflow_dispatch:
-  push:
-    branches: [claude/test-input-trace] # PROTOTYPE ONLY: drop before merge
 
 permissions:
   contents: read
