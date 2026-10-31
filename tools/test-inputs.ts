@@ -250,9 +250,11 @@ export function select(map: InputMap | null, tests: string[], { paths: changed, 
       else {
         const reads = [e, ...used].flatMap((x) => x.reads),
           lists = [e, ...used].flatMap((x) => x.lists);
-        const hit = reads.find((r) => touched.has(r)) ?? lists.find((l) => dirs.has(l));
+        const read = reads.find((r) => touched.has(r)),
+          listed = lists.find((l) => dirs.has(l));
         const pkg = [e, ...used].flatMap((x) => x.packages ?? []).find((name) => moved.has(name));
-        if (hit) why[test] = `reads ${hit}`;
+        if (read) why[test] = `reads ${read}`;
+        else if (listed) why[test] = `lists ${listed}`;
         else if (pkg) why[test] = `loads ${pkg}, which the lockfile moved`;
       }
     }
