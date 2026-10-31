@@ -28,6 +28,7 @@ import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askClef, buildTagRequest, tagInputHash } from "./event-tags.ts";
+import { ATTENDEE_COMPANIES_DDL, COMPANY_MAX_P_NULL, COMPANY_MODEL, askClairic, buildCompanyRequest, companyInputHash } from "./companies.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const html = (status, body) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -228,6 +229,30 @@ function db(env) {
 }
 
 // ── query layer: the SINGLE source of truth the pages and MCP both read ─────
+// Where a person works: what Exa enrichment found, else what Clairic read out
+// of their bio when it was sure enough (serendipity/companies.ts). Every
+// people read joins the two the same way, so search_people and get_event can
+// never disagree about one person.
+const WITH_CLAIRIC = {
+  company: `COALESCE(en.company, CASE WHEN ac.p_null <= ${COMPANY_MAX_P_NULL} THEN ac.company END) AS company`,
+  join: "LEFT JOIN enrichments en ON en.attendee_id = a.id LEFT JOIN attendee_companies ac ON ac.attendee_id = a.id",
+};
+const EXA_ONLY = { company: "en.company", join: "LEFT JOIN enrichments en ON en.attendee_id = a.id" };
+export type CompanySource = typeof EXA_ONLY;
+
+/** The company pass creates attendee_companies on first use, and nothing
+ *  migrates this database, so between a deploy and the first tick after it
+ *  the table can be absent. That one error reruns the read on enrichment
+ *  alone, which is what the roster showed before; any other error throws. */
+export async function withCompanies(read: (c: CompanySource) => Promise<any>): Promise<any> {
+  try {
+    return await read(WITH_CLAIRIC);
+  } catch (err) {
+    if (!/no such table: attendee_companies/.test(err instanceof Error ? err.message : String(err))) throw err;
+    return read(EXA_ONLY);
+  }
+}
+
 async function queryEvents(d) {
   return d
     .prepare(
@@ -250,20 +275,22 @@ async function queryEvent(d, id) {
   return d.prepare(`SELECT id, name, description, start_at, end_at, location, url, ticket_key, user_status FROM events WHERE id = ?`).get(id);
 }
 async function queryEventAttendees(d, id) {
-  return d
-    .prepare(
-      `SELECT a.id AS attendee_id, a.name, a.bio_short,
+  return withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT a.id AS attendee_id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             ea.is_host,
             a.website, a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.bio AS enriched_bio, en.location,
+            ${c.company}, en.role, en.bio AS enriched_bio, en.location,
             en.linkedin_url, en.enriched_at
        FROM event_attendees ea
        JOIN attendees a ON a.id = ea.attendee_id
-       LEFT JOIN enrichments en ON en.attendee_id = a.id
+       ${c.join}
       WHERE ea.event_id = ?`,
-    )
-    .all(id);
+      )
+      .all(id),
+  );
 }
 async function queryContributors(d, id) {
   return d
@@ -1843,6 +1870,96 @@ async function handleTag(request, env, d) {
   return jsonResponse({ ok: !("skipped" in r), ...r });
 }
 
+// ── company pass: Clairic reads where each attendee works out of their bio ──
+// serendipity/companies.ts has the request and the measurement. Same shape as
+// the tag pass: one answer per bio, stored beside the hash of the request that
+// produced it, asked again only when that hash moves.
+//
+// Never-asked bios first, people at an upcoming event first among them, then
+// the oldest answers, with no upcoming key: a big upcoming roster ranked
+// above them would hold the scan window for good. The oldest-first tail is what makes an instructions
+// change re-ask the whole pool through a bounded scan: every answer from
+// before the change is older than every answer after it. A bio edited after
+// its answer is re-asked only once its turn in that rotation comes round.
+//
+// 40 a run, each one Workers AI call: 160 a day on the 6-hourly tick, so the
+// 5,116 bios of 2026-10-30 take about a month by cron alone and the roster's
+// upcoming people a tick or two. POST /serendipity/companies?n=45 by hand is
+// the faster backfill.
+const COMPANY_DEFAULT = 40;
+const COMPANY_MAX = 45;
+const COMPANY_SCAN = 300;
+// Eight in flight, the width the baseline tool measured with no failures.
+// clef.ts records "Capacity temporarily exceeded" at 29 concurrent calls.
+const COMPANY_WIDTH = 8;
+
+export async function extractCompanies(d, env, limit) {
+  if (!env?.AI) return { skipped: "no AI binding" };
+  await d.raw.prepare(ATTENDEE_COMPANIES_DDL).run();
+  const rows = await d
+    .prepare(
+      `SELECT a.id, a.bio_short, c.input_hash
+       FROM attendees a LEFT JOIN attendee_companies c ON c.attendee_id = a.id
+      WHERE a.bio_short IS NOT NULL AND trim(a.bio_short) <> ''
+      ORDER BY (c.attendee_id IS NULL) DESC,
+               (c.attendee_id IS NULL AND EXISTS (SELECT 1 FROM event_attendees ea JOIN events e ON e.id = ea.event_id
+                        WHERE ea.attendee_id = a.id AND datetime(e.start_at) >= datetime('now'))) DESC,
+               c.extracted_at ASC
+      LIMIT ?`,
+    )
+    .all(COMPANY_SCAN);
+  const owed: { id: string; request: ReturnType<typeof buildCompanyRequest>; hash: string }[] = [];
+  for (const r of rows) {
+    const request = buildCompanyRequest(r.bio_short);
+    const hash = await companyInputHash(request);
+    if (hash !== r.input_hash) owed.push({ id: r.id, request, hash });
+  }
+  const batch = owed.slice(0, limit);
+  const results: Awaited<ReturnType<typeof askClairic>>[] = [];
+  for (let i = 0; i < batch.length; i += COMPANY_WIDTH) {
+    results.push(...(await Promise.all(batch.slice(i, i + COMPANY_WIDTH).map((o) => askClairic(o.request, env)))));
+  }
+  const S: any[] = [];
+  const failed: Record<string, number> = {};
+  let named = 0;
+  results.forEach((r, i) => {
+    if ("error" in r) {
+      failed[r.error] = (failed[r.error] || 0) + 1;
+      return;
+    }
+    const p = r.prediction;
+    if (p.pNull <= COMPANY_MAX_P_NULL && p.guess) named++;
+    S.push(
+      d.stmt(
+        `INSERT INTO attendee_companies (attendee_id, company, p_null, confidence, model, input_hash, extracted_at)
+       VALUES (?,?,?,?,?,?,datetime('now'))
+       ON CONFLICT(attendee_id) DO UPDATE SET company=excluded.company, p_null=excluded.p_null, confidence=excluded.confidence,
+         model=excluded.model, input_hash=excluded.input_hash, extracted_at=excluded.extracted_at`,
+        batch[i].id,
+        p.guess,
+        p.pNull,
+        p.confidence,
+        COMPANY_MODEL,
+        batch[i].hash,
+      ),
+    );
+  });
+  if (S.length) await d.batch(S);
+  // `named` is how many answers the roster will show; `remaining` is bounded by
+  // the scan window, as in tagEvents.
+  return { scanned: rows.length, asked: batch.length, extracted: S.length, named, failed, remaining: owed.length - S.length };
+}
+
+// secret-gated: POST /serendipity/companies[?n=40], secret in x-sync-key.
+// Reached from the cron by self-dispatch, like /tag, for its own ceiling.
+async function handleCompanies(request, env, d) {
+  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
+  const limit = Math.min(COMPANY_MAX, Math.max(1, Number.isFinite(n) ? n : COMPANY_DEFAULT));
+  const r = await extractCompanies(d, env, limit);
+  return jsonResponse({ ok: !("skipped" in r), ...r });
+}
+
 // The stored tags for a set of events, keyed by id. Its own query rather than a
 // join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
 // whole cost and stays untouched, and a database where event_tags does not exist
@@ -1942,9 +2059,9 @@ const CRON_DESC_LIMIT = 10;
 // against the account's plan before tuning it.
 // The ceiling itself is lib/budget.ts's SUBREQUEST_CAP_FREE, imported rather
 // than restated; contract-the-subrequest-budget fails if this file re-declares it.
-// Eight: the D1 batches, the two self-dispatches (enrich, tag) at one
-// subrequest each, and the sync-health record's one write.
-const CRON_BUDGET_HEADROOM = 8;
+// Nine: the D1 batches, the three self-dispatches (enrich, tag, companies) at
+// one subrequest each, and the sync-health record's one write.
+const CRON_BUDGET_HEADROOM = 9;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - setCount * perSet - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
@@ -2030,6 +2147,27 @@ export async function dispatchTag(env, fetchImpl: EnrichFetch | null) {
     // Counts only, for the cron log line. `failed` is keyed by cause, so a
     // missing gateway or a spent allocation reads by its code rather than as zero tags.
     return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// The company pass, through the same door for the same reasons as dispatchTag.
+export async function dispatchCompanies(env, fetchImpl: EnrichFetch | null) {
+  if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  if (!env.AI) return { skipped: "no AI binding" };
+  if (!fetchImpl) return { skipped: "no loopback binding" };
+  const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
+  try {
+    const res = await fetchImpl(`${base}/serendipity/companies`, {
+      method: "POST",
+      headers: { "x-sync-key": env.SYNC_SECRET },
+    });
+    if (!res.ok) return { error: `companies ${res.status}` };
+    const body = await res.json();
+    const skipped = asText(body?.skipped);
+    if (skipped) return { skipped };
+    return { asked: body?.asked ?? null, named: body?.named ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -2296,8 +2434,8 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
   return span("serendipity.sync", async (s) => {
     const d = db(env);
     const at = new Date().toISOString();
-    // `descriptions`, `enrich` and `tag` are filled after the roster loop, so all
-    // three are declared here rather than bolted on: an object literal's shape is
+    // `descriptions`, `enrich`, `tag` and `companies` are filled after the roster
+    // loop, so all four are declared here rather than bolted on: an object literal's shape is
     // fixed at the literal in TypeScript, and this is the log line's whole schema.
     const out: {
       events: any[];
@@ -2306,6 +2444,7 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
       descriptions: any;
       enrich?: any;
       tag?: any;
+      companies?: any;
     } = { events: [], guests: [], skipped: [], descriptions: null };
     let sets: number | null = null;
     let budget: Budget | null = null;
@@ -2348,6 +2487,8 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
           // after descriptions on purpose: an event is only owed a tag once its
           // description has been attempted, so this tick's backfill is taggable now.
           out.tag = await dispatchTag(env, selfFetch);
+          // after the roster sweep, so this tick's new guests are already in the pool.
+          out.companies = await dispatchCompanies(env, selfFetch);
           // fetches + budget_exhausted are the two numbers that were missing while the
           // sweep was silently overspending. An exhausted budget is normal on a tick
           // holding a large roster; it is a problem only when it never clears.
@@ -2956,19 +3097,17 @@ function mcpEventSummary(e, tags: Map<string, any> | null = null) {
 // (two D1 subrequests total, no N+1).
 async function mcpSearchPeople(d, q, limit) {
   const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
-  const people = await d
-    .prepare(
-      `SELECT a.id, a.name, a.bio_short,
-            (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
-            a.website,
-            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.location, en.linkedin_url
-       FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+  const people = await withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)}
+       FROM attendees a ${c.join}
       WHERE a.name LIKE ? ESCAPE '\\'
       ORDER BY times_seen DESC, a.name ASC
       LIMIT ?`,
-    )
-    .all(term, limit);
+      )
+      .all(term, limit),
+  );
   if (!people.length) return [];
   const ids = people.map((p) => p.id);
   const ph = ids.map(() => "?").join(",");
@@ -3058,21 +3197,25 @@ async function mcpListContributors(d) {
 // who-overlaps-with-whom is already implicit in the public guest lists, this
 // just computes it). co-attendance counts hosts and guests alike: being at the
 // same event is the edge.
-const PUB_COLS = `a.id, a.name, a.bio_short,
+function pubCols(c: CompanySource) {
+  return `a.id, a.name, a.bio_short,
             (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
             a.website,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
-            en.company, en.role, en.location, en.linkedin_url`;
+            ${c.company}, en.role, en.location, en.linkedin_url`;
+}
 
 // best-match attendee for a name (most-seen wins ties).
 async function mcpResolvePerson(d, q) {
   const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
-  return d
-    .prepare(
-      `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+  return withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)} FROM attendees a ${c.join}
       WHERE a.name LIKE ? ESCAPE '\\' ORDER BY times_seen DESC, a.name ASC LIMIT 1`,
-    )
-    .get(term);
+      )
+      .get(term),
+  );
 }
 
 // who shows up across the most events (who you're seeing a lot); optional slice.
@@ -3085,17 +3228,19 @@ async function mcpFrequentPeople(d, when, limit) {
     binds.push(nowIso);
   }
   binds.push(limit);
-  const rows = await d
-    .prepare(
-      `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
+  const rows = await withCompanies((c) =>
+    d
+      .prepare(
+        `SELECT ${pubCols(c)}, COUNT(DISTINCT ea.event_id) AS events
        FROM attendees a
        JOIN event_attendees ea ON ea.attendee_id = a.id
        JOIN events e ON e.id = ea.event_id
-       LEFT JOIN enrichments en ON en.attendee_id = a.id
+       ${c.join}
       WHERE 1=1 ${filter}
       GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`,
-    )
-    .all(...binds);
+      )
+      .all(...binds),
+  );
   return rows.map((r) => {
     const o = mcpAttendee(r);
     o.events = Number(r.events);
@@ -3108,18 +3253,20 @@ async function mcpCoAttendees(d, q, limit) {
   const person = await mcpResolvePerson(d, q);
   if (!person) return null;
   const [rows, tot] = await Promise.all([
-    d
-      .prepare(
-        `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+    withCompanies((c) =>
+      d
+        .prepare(
+          `SELECT ${pubCols(c)}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
          FROM event_attendees ea
          JOIN attendees a ON a.id = ea.attendee_id
          JOIN events e ON e.id = ea.event_id
-         LEFT JOIN enrichments en ON en.attendee_id = a.id
+         ${c.join}
         WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
           AND ea.attendee_id != ?1
         GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`,
-      )
-      .all(person.id, limit),
+        )
+        .all(person.id, limit),
+    ),
     d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id),
   ]);
   return {
@@ -3150,9 +3297,9 @@ async function mcpConnections(d, minShared, limit) {
   if (!rows.length) return [];
   const ids = [...new Set(rows.flatMap((r) => [r.id1, r.id2]))];
   const ph = ids.map(() => "?").join(",");
-  const people = await d
-    .prepare(`SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`)
-    .all(...ids);
+  const people = await withCompanies((c) =>
+    d.prepare(`SELECT a.id, a.name, ${c.company}, en.role FROM attendees a ${c.join} WHERE a.id IN (${ph})`).all(...ids),
+  );
   const byId = new Map(people.map((p) => [p.id, { name: p.name, role: p.role || null, company: p.company || null }]));
   return rows.map((r) => ({
     a: byId.get(r.id1) || { name: "?" },
@@ -3606,6 +3753,7 @@ export async function handleSerendipity(request, env, ctx) {
       path === `${PREFIX}/sync-descriptions` ||
       path === `${PREFIX}/enrich` ||
       path === `${PREFIX}/tag` ||
+      path === `${PREFIX}/companies` ||
       path === `${PREFIX}/cookies` ||
       path === `${PREFIX}/add-event`)
   ) {
@@ -3613,11 +3761,12 @@ export async function handleSerendipity(request, env, ctx) {
   }
 
   // secret-gated triggers (admin/cron): sync, description backfill, Exa
-  // enrichment, Clef tagging
+  // enrichment, Clef tagging, Clairic companies
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/tag`) return handleTag(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/companies`) return handleCompanies(request, env, d);
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
   // so the response stays cacheable at the edge.
