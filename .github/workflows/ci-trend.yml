@@ -1,0 +1,42 @@
+name: CI trend
+
+# The nightly read of tools/ci-trend.ts: jobs on main that got slower, workflows
+# that keep failing on main, and jobs that keep passing only on a rerun. A
+# signal fails this run, and a red scheduled run is what emails the owner.
+# The step log names each signal with its run IDs and commits, which is what an
+# agent picks up from (`bun run ci:trend --json` gives the same thing).
+#
+# It reads the Actions API and nothing else: about 150 job reads a night, under
+# GITHUB_TOKEN's 1,000 an hour. Nothing to install, since the tool imports only
+# node builtins.
+
+on:
+  schedule:
+    - cron: "20 8 * * *" # before perf-history at 09:00 and the 09:30-10:05 PR openers
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  trend:
+    name: CI trend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Read the trend
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -o pipefail
+          bun tools/ci-trend.ts --gate | tee -a "$GITHUB_STEP_SUMMARY"
