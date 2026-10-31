@@ -321,8 +321,9 @@ const JOB_EVIDENCE = {
       // AI, so reading it proves the POST crossed into a fresh invocation. A
       // global fetch would land on the stub, which the outbound loop refuses.
       assert.deepEqual(summary.tag, { skipped: "no AI binding" }, "the tag dispatch never reached the tag handler");
-      // The company pass is the same kind of self-dispatch, read the same way.
+      // The bio passes are the same kind of self-dispatch, read the same way.
       assert.deepEqual(summary.companies, { skipped: "no AI binding" }, "the company dispatch never reached the company handler");
+      assert.deepEqual(summary.roles, { skipped: "no AI binding" }, "the role dispatch never reached the role handler");
     },
     explains: (o) => o.host === LUMA_HOST,
   },
