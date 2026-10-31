@@ -7,7 +7,9 @@
 // A regex grows one phrasing at a time; a decision model reads "Growth @ Corgi"
 // and "runs GTM for a wallet" as the same kind of work without being told
 // either string. This module is the request and the parser. Whether it replaces
-// the regex is the baseline tool's call, scored on the same labels.
+// the regex is the baseline tool's call, scored on the same labels: on
+// 2026-10-31 it got 96% precision and 92% recall on the held-out half, where
+// the regex got 83% and 52% (the table is in the tool's header).
 //
 // The options ARE the baseline's labels, in its order, so a prediction and a
 // hand label are compared as equals rather than through a mapping table. They
@@ -27,18 +29,24 @@ import { readChoice } from "./event-tags.ts";
 export const ROLE_MODEL = "clef";
 
 // Criteria describe the work, not the words, and each one names the cases the
-// regex reads wrong so the model is told where the boundary is.
+// regex reads wrong so the model is told where the boundary is. The second
+// sentences were tuned on sample positions 0-59 on 2026-10-31, from what Clef
+// read wrong there: a company name or a title taken as founding, a fund's
+// research partner taken as a researcher, and a banker taken as an investor.
 export const ROLE_CRITERIA = Object.freeze({
-  founder: "Started or co-founded a company or project and runs it now: founder, cofounder, or a bio that says they are building their own company.",
-  investor: "Invests as their job: VC, angel, fund GP or partner, or an investing role at a fund. A founder who also angel invests is a founder.",
+  founder:
+    "Says they started or co-founded a company or project and run it now: founder, cofounder, or building their own company (building @x, building x.com). A title at a company, or a company name alone, is not evidence of founding.",
+  investor:
+    "Invests as their job: VC, angel, fund GP or partner, or any role at a fund, research partner and analyst included. A founder who also angel invests is a founder; an investment banker or trader is other.",
   operator:
-    "Runs a business function at a company they did not found: product, growth, sales, business development, marketing, GTM, partnerships, operations, community or general management, at any level.",
-  engineer: "Builds software, hardware or protocols as their job: engineer, developer, designer, smart contract or ML engineer.",
+    "Holds a business role at a company without saying they founded it: product, growth, sales, business development, marketing, GTM, partnerships, operations, events, ecosystem, community, developer relations, or a CEO, COO or CPO title, at any level. A one-word function such as Events or Community counts.",
+  engineer: "Builds software, hardware or protocols as their job: engineer, developer, engineering manager, designer, CTO, smart contract or ML engineer.",
   researcher: "Does research as their job: academic, ML, cryptography, economics or applied research, including PhD candidates.",
   student: "Is currently a student: undergraduate, master's, or bootcamp, with no other role stated as their main one.",
-  creator: "Makes media or culture as their work: writer, podcaster, artist, musician, filmmaker, content creator or influencer.",
-  other: "States what they do, and it is none of the roles above.",
-  not_stated: "Says nothing about what they do for work: interests, hobbies, a quote, a location or links only.",
+  creator: "Makes media or culture as their work: writer, podcaster, artist, musician, photographer, filmmaker, content creator or influencer.",
+  other:
+    "States what they do, and it is none of the roles above: a profession such as law or banking, an account for an event series or a company, or a mission with no role in it.",
+  not_stated: "Says nothing about what they do for work: interests, hobbies, a quote, a location, links, or a company or project name with no role.",
 });
 
 export type RoleLabel = keyof typeof ROLE_CRITERIA;
