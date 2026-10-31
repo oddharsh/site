@@ -118,6 +118,7 @@ import { fileURLToPath } from "node:url";
 import { HOLDOUT, TRAIN } from "./codec-knob-probe.ts";
 import { AV2_BUILD, AV2_BUILD_COMMAND, AV2_TUNED_BUILD } from "./av2-tone.ts";
 import { JXL_ARGS } from "./gen-pixel-peeper.ts";
+import { photoMetrics } from "./photo-metrics.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
@@ -199,17 +200,18 @@ type Row = { stem: string; budget: number; control: boolean; avif: Score; res: R
 async function sh(cmd: string[]): Promise<string> {
   const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
   const [out, err] = [await new Response(p.stdout).text(), await new Response(p.stderr).text()];
-  // butteraugli_main exits non-zero on a large distance and still prints both scores
-  if ((await p.exited) !== 0 && !cmd[0].endsWith("butteraugli_main")) throw new Error(`${path.basename(cmd[0])} failed:\n${err.slice(-600)}`);
+  if ((await p.exited) !== 0) throw new Error(`${path.basename(cmd[0])} failed:\n${err.slice(-600)}`);
   return out;
 }
-async function score(src: string, png: string): Promise<Score> {
-  const s2 = Number.parseFloat(await sh(["ssimulacra2", src, png]));
-  const b = await sh(["butteraugli_main", src, png, "--pnorm", "3"]);
-  const bu = Number.parseFloat(b.split("\n")[0] ?? "");
-  const bu3 = Number.parseFloat(/3-norm:\s*([\d.]+)/.exec(b)?.[1] ?? "");
-  if (![s2, bu, bu3].every(Number.isFinite)) throw new Error(`a metric printed no score for ${png}`);
-  return { s2, bu, bu3 };
+// photo-metrics since 2026-10-31. `--codec jxl --configs base` over the 38
+// default tiles, run once with libjxl's CLIs and once with this: the same
+// summary (wins 0/38 by s2 and 1/38 by 3-norm, mean Δs2 -7.56 both ways,
+// tier-weighted -7.36 against -7.35), no tile's win flipped, and the worst
+// gaps were 0.081 s2, 0.000007 max norm and 0.000001 3-norm. The verdicts in
+// this header were measured with libjxl and were not rerun.
+function score(src: string, png: string): Score {
+  const { s2, ba, ba3 } = photoMetrics(src, png);
+  return { s2, bu: ba, bu3: ba3 };
 }
 
 async function orientation(file: string): Promise<number> {
@@ -251,7 +253,7 @@ async function encodeAvm(ref: string, stem: string, cfg: string, qp: number): Pr
     png = out.replace(/\.avif$/, ".png");
   await sh([path.join(BUILD, "avifenc"), ...AVM, ...AVM_CONFIGS[cfg], "-a", `qp=${qp}`, ref, out]);
   await sh([path.join(BUILD, "avifdec"), out, png]);
-  return { knob: qp, bytes: fs.statSync(out).size, ...(await score(ref, png)) };
+  return { knob: qp, bytes: fs.statSync(out).size, ...score(ref, png) };
 }
 /** Bisect AV2's quantizer onto the budget (a higher qp writes a smaller file). */
 async function matchedAvm(ref: string, stem: string, cfg: string, budget: number, hint: number): Promise<Result> {
@@ -300,7 +302,7 @@ async function encodeJxl(ref: string, stem: string, cfg: string, knob: number): 
     await sh(["cjxl", ref, jxl, "-d", knob.toFixed(4), ...JXL_CONFIGS[cfg], "--quiet"]);
   }
   await sh(["djxl", jxl, png, "--quiet"]);
-  return { knob, bytes: fs.statSync(jxl).size, ...(await score(ref, png)) };
+  return { knob, bytes: fs.statSync(jxl).size, ...score(ref, png) };
 }
 /**
  * Bisect a JXL arm onto the budget, keeping the nearest encode on each side.
@@ -358,7 +360,7 @@ async function probe(src: string, stem: string, codec: Codec, configs: string[])
       res[c] = await matchedJxl(ref, stem, c, budget);
     }
   }
-  return { stem, budget, control, avif: await score(ref, avif.replace(/\.avif$/, ".png")), res };
+  return { stem, budget, control, avif: score(ref, avif.replace(/\.avif$/, ".png")), res };
 }
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;

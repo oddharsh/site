@@ -23,6 +23,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AV2_TUNED_BUILD } from "../av2-tone.ts";
+import { photoMetrics } from "../photo-metrics.ts";
 
 const HERE = import.meta.dir;
 const REPO = path.resolve(HERE, "../../..");
@@ -76,7 +77,6 @@ async function sh(cmd: string[]): Promise<string> {
 }
 const STEM = /^[A-Za-z0-9_-]+$/;
 const HASH8 = /^[0-9a-f]{8}$/;
-const s2 = async (ref: string, png: string) => Number.parseFloat(await sh(["ssimulacra2", ref, png]));
 
 async function sample(src: string, stem: string) {
   if (!STEM.test(stem)) throw new Error(`${JSON.stringify(stem)} is not a photo stem like XT507488`);
@@ -139,8 +139,12 @@ async function sample(src: string, stem: string) {
     srcBytes: fs.statSync(ref).size,
     qp: best,
     bpp: +((budget * 8) / 360000).toFixed(2),
-    av1S2: +(await s2(tile, av1png)).toFixed(2),
-    av2S2: +(await s2(tile, av2png)).toFixed(2),
+    // photo-metrics since 2026-10-31. Rerun on these 11 stems: the AV2 files came
+    // back byte-identical, libjxl's ssimulacra2 reproduced all 22 published
+    // scores, and photo-metrics left 1 of the 22 unchanged at 2 dp (worst gap
+    // 0.035, no stem's AV1/AV2 order flipped), so /garage/av2 carries its scores.
+    av1S2: +photoMetrics(tile, av1png).s2.toFixed(2),
+    av2S2: +photoMetrics(tile, av2png).s2.toFixed(2),
   };
 }
 
