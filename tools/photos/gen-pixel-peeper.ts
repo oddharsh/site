@@ -633,6 +633,11 @@ const toPng = (jpg: string, png: string): string => {
 // every rung, crop and best-option flag, and 34 of 55 shipped s2 figures moved,
 // by 0.13 at most. Before the switch, libjxl reproduced the committed quality
 // (24 of 24) and encoder (16 of 16) numbers exactly, so the scorer is the move.
+// The format axis, scored both ways on the same decodes (264 pairs, worst s2 gap
+// 0.12), picked the same winner on 43 of 43 pool calls by each metric. Its
+// regeneration also landed #1393's exact AVIF and AV2 decodes, which this axis
+// had waited on: AV2 rose about 1 point on identical bytes, and that, not the
+// scorer, flipped 9 of 40 calls' s2 winner.
 export const ssim2 = (ref: string, test: string): number => Number(photoMetrics(ref, test).s2.toFixed(2));
 export const butter = (ref: string, test: string): number => Number(photoMetrics(ref, test).ba.toFixed(3));
 function measure(refPng: string, jpg: string, tmp: string, both = true): [number, number | null] {
