@@ -17,16 +17,18 @@
 // the tiers: the baseline's TIER_FITS has to say which labels each tier is
 // right for, and the classifier is simply right or wrong.
 //
-// Pure and node-safe (gotcha 16). The caller supplies the transport: the
-// baseline tool posts to the Workers AI REST API from a workstation, and a
-// roster pass in the Worker would use env.AI the way event-tags.ts does.
+// Pure apart from askRole's binding call, and node-safe (gotcha 16). The
+// baseline tool posts to the Workers AI REST API from a workstation; the
+// cron's role pass (classifyRoles in serendipity.ts) uses env.AI through
+// askRole and stores one answer per bio, which attendeeScore ranks by.
 
 import { readChoice } from "./event-tags.ts";
+import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
 
 // "clef" for the reason event-tags.ts gives: classification quality over
-// latency, and this runs offline. A bio is short enough that flash's speed
+// latency, and this runs on a cron. A bio is short enough that flash's speed
 // buys nothing a person would notice either way.
-export const ROLE_MODEL = "clef";
+export const ROLE_MODEL: ClefModel = "clef";
 
 // Criteria describe the work, not the words, and each one names the cases the
 // regex reads wrong so the model is told where the boundary is. The second
@@ -85,3 +87,23 @@ export function parseRoleAnswer(body: any): RolePrediction | null {
   const r = readChoice(body?.answers?.role, ROLE_LABELS);
   return r ? { role: r.choice, confidence: r.confidence, probabilities: r.probabilities } : null;
 }
+
+// Clef's published p95 is 239 ms; the deadline is the tag pass's, for its
+// reason: a slow answer is asked again next tick, never waited on.
+const ROLE_TIMEOUT_MS = 5000;
+
+/** One call through the shared transport. Never throws, so the pass can count
+ *  outcomes by cause. */
+export async function askRole(request: ReturnType<typeof buildRoleRequest>, env: ClefEnv): Promise<{ prediction: RolePrediction } | { error: string }> {
+  const r = await runClef(env, ROLE_MODEL, request, ROLE_TIMEOUT_MS);
+  if ("error" in r) return r;
+  const prediction = parseRoleAnswer(r.body);
+  return prediction ? { prediction } : { error: "unparseable" };
+}
+
+// Created on first use as well as by migration 0005, for EVENT_TAGS_DDL's
+// reason, and on one line for the same one. The probabilities are kept so a
+// threshold, if one ever earns its place, applies without asking again; on
+// 2026-10-31 the best one was none.
+export const ATTENDEE_ROLES_DDL =
+  "CREATE TABLE IF NOT EXISTS attendee_roles (attendee_id TEXT PRIMARY KEY REFERENCES attendees(id), role TEXT NOT NULL, confidence REAL NOT NULL, probabilities TEXT, model TEXT NOT NULL, input_hash TEXT NOT NULL, classified_at TEXT NOT NULL DEFAULT (datetime('now')))";

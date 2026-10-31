@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { ATTENDEE_COMPANIES_DDL, askClairic, buildCompanyRequest, companyInputHash } from "../../serendipity/companies.ts";
-import { dispatchCompanies, extractCompanies, withCompanies } from "../../serendipity/serendipity.ts";
+import { dispatchBioPass, extractCompanies, withCompanies } from "../../serendipity/serendipity.ts";
 
 const answer = (guess: string | null, pNull: number) => ({
   answers: { company: { type: "text", p_null: pNull, confidence: 0.9, guess, value: pNull <= 0.5 ? guess : null } },
@@ -118,14 +118,18 @@ test("a people read falls back to enrichment only while attendee_companies is mi
 
 test("the cron's company dispatch reports counts and skips without a loopback", async () => {
   const env = { SYNC_SECRET: "s", AI: {} };
-  assert.deepEqual(await dispatchCompanies(env, null), { skipped: "no loopback binding" });
-  assert.deepEqual(await dispatchCompanies({ SYNC_SECRET: "s" }, null), { skipped: "no AI binding" });
+  assert.deepEqual(await dispatchBioPass(env, null, "companies"), { skipped: "no loopback binding" });
+  assert.deepEqual(await dispatchBioPass({ SYNC_SECRET: "s" }, null, "companies"), { skipped: "no AI binding" });
   const posted: any[] = [];
-  const ok = await dispatchCompanies(env, async (url, init) => {
-    posted.push({ url, key: init?.headers?.["x-sync-key"] });
-    return { ok: true, json: async () => ({ ok: true, scanned: 300, asked: 40, extracted: 40, named: 22, failed: {}, remaining: 260 }) };
-  });
+  const ok = await dispatchBioPass(
+    env,
+    async (url, init) => {
+      posted.push({ url, key: init?.headers?.["x-sync-key"] });
+      return { ok: true, json: async () => ({ ok: true, scanned: 300, asked: 40, extracted: 40, named: 22, failed: {}, remaining: 260 }) };
+    },
+    "companies",
+  );
   assert.deepEqual(ok, { asked: 40, named: 22, failed: {}, remaining: 260 });
   assert.deepEqual(posted, [{ url: "https://aadhar.sh/serendipity/companies", key: "s" }]);
-  assert.deepEqual(await dispatchCompanies(env, async () => ({ ok: false, status: 503, json: async () => ({}) })), { error: "companies 503" });
+  assert.deepEqual(await dispatchBioPass(env, async () => ({ ok: false, status: 503, json: async () => ({}) }), "companies"), { error: "companies 503" });
 });
