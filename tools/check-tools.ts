@@ -6,9 +6,10 @@
 // reconstruction of which executable produced each committed artifact.
 import { readFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { repoFiles } from "./lib/repo-files.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
@@ -59,9 +60,10 @@ const REPO_PINNED = new Set(["node", "wrangler"]);
 
 // ── the shell corpus ─────────────────────────────────────────────────────────
 // Git owns the census at every depth, including the nested AVIF builder but
-// excluding its ignored downloads. Stage new scripts before checking them.
-// A failed census or unreadable tracked script must fail the check.
-const scripts = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean).sort();
+// excluding its ignored downloads. Untracked scripts count, so a new one is
+// checked before `git add` (gotcha 91). A failed census or unreadable script
+// must fail the check.
+const scripts = repoFiles(["*.sh"], ROOT).sort();
 const source = new Map();
 for (const rel of scripts) source.set(rel, await readFile(path.join(ROOT, rel), "utf8"));
 

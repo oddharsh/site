@@ -11,6 +11,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 import {
   addCheckpoint,
   hashTiers,
@@ -139,9 +140,7 @@ test("no photo shell script calls jaq on a code line, and no tool declares it", 
   }
   // The ban itself reads every committed shell script rather than a list: a
   // hand-kept list is how the no-python ban missed two heredocs for a week.
-  const shells = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: fileURLToPath(ROOT), encoding: "utf8" })
-    .split("\0")
-    .filter(Boolean);
+  const shells = repoFiles(["*.sh"]);
   assert.ok(shells.length >= 13, `git ls-files found ${shells.length} shell scripts`);
   for (const rel of shells) assert.doesNotMatch(await codeOf(rel), /\bjaq\b/, `${rel} still calls jaq`);
   const tools = JSON.parse(await readFile(new URL("config/tools.json", ROOT), "utf8")).tools;

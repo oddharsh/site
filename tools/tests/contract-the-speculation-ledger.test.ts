@@ -191,7 +191,11 @@ export function responseRebuilds(src) {
       // init `init`, so a file-wide search lets one site's carry vouch for the
       // other: deleting the flag from one of them left this test green, which is
       // precisely the regression it is here to catch.
-      const decl = new RegExp(`(?:const|let|var)\\s+${init}\\s*=\\s*\\{`, "g");
+      // The type annotation is optional in the pattern because #494 (2026-08-20)
+      // typed both security.ts inits `: ResponseInit`. The old pattern then
+      // matched neither, read both as a Response init, and passed a dropped
+      // carry for 70 days (the encodebody-dropped-at-a-call-site control).
+      const decl = new RegExp(`(?:const|let|var)\\s+${init}\\s*(?::[^=;]+)?=\\s*\\{`, "g");
       let declAt = -1,
         m;
       while ((m = decl.exec(src)) !== null && m.index < i) declAt = m.index;

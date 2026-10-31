@@ -47,6 +47,7 @@ bun run --filter cal-aadhar-sh test
 bun run routes:check        # route oracle against an in-process Worker
 bun run derive:check        # derived artifacts still match their inputs (gotcha 46)
 bun run pages:check         # house-voice lint on page text (gotcha 32)
+bun run controls            # plant each guard's defect; fails if a guard misses it (gotcha 90)
 bun run wrangler:site <cmd> # wrangler against the site config (gotcha 48)
 bun run photos <paths>      # add photos: encode, upload to R2, index, caption
 ```
@@ -76,7 +77,9 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
   cal's tests.
 - Measure before you claim, and run the control that would show your
-  instrument can fail. Most gotchas are an instrument that couldn't.
+  instrument can fail. Most gotchas are an instrument that couldn't. When
+  the instrument is a check, write the control into `tools/lib/controls.ts`
+  so it reruns on every push instead of once in a PR body (gotcha 90).
 - Comments record what the code can't say: a decision and its measured
   reason, a constraint, what breaks if this changes. Read
   [docs/COMMENTS.md](docs/COMMENTS.md) before writing or cutting them.
