@@ -27,7 +27,6 @@
 // build and the contract suite all load the same file (docs/GOTCHAS.md gotcha 16).
 // The zstd ENCODER needs node:zlib and lives in tools/lib/dcz.ts.
 
-export const HASH8_HEX = 8;
 export const TAG_HEX = 16;
 
 const hexOf = (bytes: Uint8Array, count: number): string => {

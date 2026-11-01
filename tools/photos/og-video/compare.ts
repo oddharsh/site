@@ -10,6 +10,7 @@
 import { $ } from "bun";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { photoMetrics } from "../photo-metrics.ts";
 import { av1Flags } from "./encoders.ts";
 
 const out = process.argv[2];
@@ -22,11 +23,18 @@ const codecs = (process.env.CODECS ?? "h264,hevc,av1").split(",");
 const jsonPath = path.join(out, `compare-${target}.json`);
 const prev = existsSync(jsonPath) ? Object.fromEntries(JSON.parse(readFileSync(jsonPath, "utf8")).map((r) => [r.id, r])) : {};
 
-async function score(dir, decoded, picks) {
+// photo-metrics since 2026-10-31, on the owner's call to retire libjxl's CLIs
+// everywhere, and NOT rerun on clips: that needs record.ts's output and the
+// compiled helpers. The 2026-10-31 photo runs put fast-ssim2 within 0.002 of
+// libjxl on 1080px downscales and up to 0.32 on native-resolution crops; a UI
+// capture is neither, so the first rerun is its own measurement. photo-metrics
+// also ignores PNG colour chunks (iCCP, gAMA, sRGB), which libjxl honours, and
+// decode.swift writes these frames through ImageIO, which can tag them.
+function score(dir, decoded, picks) {
   let s = 0;
   for (const i of picks) {
     const f = `f${String(i).padStart(4, "0")}.png`;
-    s += Number((await $`ssimulacra2 ${path.join(dir, "frames", f)} ${path.join(decoded, f)}`.text()).trim());
+    s += photoMetrics(path.join(dir, "frames", f), path.join(decoded, f)).s2;
   }
   return s / picks.length;
 }
@@ -46,7 +54,7 @@ async function trial(dir, codec, k, picks) {
     await $`${bin("encode")} ${path.join(dir, "frames")} ${file} ${codec} 30 ${k}`.quiet();
     await $`${bin("decode")} mp4 ${file} ${dec} ${picks.join(",")}`.quiet();
   }
-  return { k, file, bytes: statSync(file).size, score: await score(dir, dec, picks) };
+  return { k, file, bytes: statSync(file).size, score: score(dir, dec, picks) };
 }
 
 // Bisect the knob for the cheapest setting that still clears the target.
@@ -84,7 +92,7 @@ for (const id of readdirSync(out).filter((d) => existsSync(path.join(out, d, "fr
   const picks = Array.from({ length: 6 }, (_, i) => Math.min(n - 1, Math.round(((i + 0.5) * n) / 6)));
   await $`${bin("y4m")} ${path.join(dir, "frames")} 30 > ${path.join(dir, "clip.y4m")}`.quiet();
   await $`${bin("decode")} y4m ${path.join(dir, "clip.y4m")} ${path.join(dir, "d", "ctl")} ${picks.join(",")}`.quiet();
-  const ctl = await score(dir, path.join(dir, "d", "ctl"), picks);
+  const ctl = score(dir, path.join(dir, "d", "ctl"), picks);
   const r = { ...prev[id], id, frames: n, ctl: ctl.toFixed(1) };
   for (const codec of codecs) {
     const b = await cheapest(dir, codec, picks);

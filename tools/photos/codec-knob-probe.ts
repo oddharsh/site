@@ -119,6 +119,7 @@ import {
   searchFmt,
   ssim2,
 } from "./gen-pixel-peeper.ts";
+import { photoMetrics } from "./photo-metrics.ts";
 
 // The baseline is whatever the format axis ships, so a variant's delta is the
 // delta the page would see if it were promoted.
@@ -349,13 +350,14 @@ function recompressed(
   return { bytes: b.bytes, d: b.q, s2: ssim2(ref, dec), bu: butter(ref, dec) };
 }
 
+// photo-metrics since 2026-10-31. Over 1,907 /pixel-peeper pairs its
+// butteraugli max norm sat within 0.00002 of butteraugli_main's and its 3-norm
+// within 0.000008, which moved 10 values at 3 dp and 14 at 4 dp. The ssimulacra2 beside it
+// (gen-pixel-peeper.ts's ssim2) moved more; its note has the numbers. The
+// verdicts in this header were measured with libjxl and were not rerun.
 function butterBoth(ref: string, dec: string): [number, number] {
-  const r = spawnSync("butteraugli_main", [ref, dec], { encoding: "utf8" });
-  const out = `${r.stdout ?? ""}`;
-  const max = Number.parseFloat(out.split("\n")[0] ?? "");
-  const p3 = Number.parseFloat(/3-norm:\s*([0-9.]+)/.exec(out)?.[1] ?? "");
-  if (!Number.isFinite(max) || !Number.isFinite(p3)) throw new Error(`butteraugli printed no scores: ${out.slice(0, 120)}`);
-  return [Number(max.toFixed(3)), Number(p3.toFixed(4))];
+  const { ba, ba3 } = photoMetrics(ref, dec);
+  return [Number(ba.toFixed(3)), Number(ba3.toFixed(4))];
 }
 
 /** Score an AVIF variant AT the budget: find the adjacent -q pair whose sizes
