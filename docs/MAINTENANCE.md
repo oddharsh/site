@@ -1508,14 +1508,16 @@ grid ingest does not use that build.
 sips is macOS-native and needs no install. Published-photo rerenders can use
 the remote workflow above; fresh ingestion needs the credentials described below.
 
-Ingesting a HIF photo, and `export-for-instagram.sh`, also want **ssimulacra2**
-and **butteraugli_main**, the two perceptual metrics they search quality
-against: `hif-archive.ts` uses them to find the smallest JPEG XL of the HIF
-that beats the old archive JPEG on both.
-Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
-`jpeg-xl` formula does not ship them, so there is no brew line for this row. The
-script falls back to `/opt/zerobrew/prefix/bin`, which is where this workstation's
-source build put them.
+Every photo tool that scores quality runs **photo-metrics**, the in-tree Rust
+crate at `tools/photos/photo-metrics` (SSIMULACRA2 and butteraugli in one
+process), and builds it on first use: `hif-archive.ts` to find the smallest
+JPEG XL of a HIF that beats the old archive JPEG on both metrics,
+`export-for-instagram.sh` for its quality search, and the probes and
+`/pixel-peeper` generators through `tools/photos/photo-metrics.ts`. The
+Instagram export also wants **djpeg** (`brew install jpeg-turbo`), because
+photo-metrics reads PNG and PNM only. libjxl's own `ssimulacra2` and
+`butteraugli_main` ship in the `jpeg-xl` bottle and are only the reference
+`photo-metrics-parity.ts` measures against.
 
 Run `bun run tools:check` before a pipeline session on a fresh machine. It
 checks the [declared executables](../config/tools.json) and reports missing tools
@@ -1957,7 +1959,9 @@ bun tools/photos/photo-metrics-parity.ts --limit 4
 ```
 `hif-archive.ts` scores every HIF archive with `photo-metrics`
 (`tools/photos/photo-metrics/`: fast-ssim2 for SSIMULACRA2, imazen's butteraugli
-for the 3-norm), built on first use. Its two pins are exact, and the dependabot
+for the 3-norm), built on first use. Since 2026-10-31 the Instagram export, the
+`/pixel-peeper` generators and the codec probes score with it too, so a pin
+move also changes their numbers the next time they run. Its two pins are exact, and the dependabot
 lane for that directory is a prompt to run this before merging. It replays
 `hif-archive.ts`'s own bisection with photo-metrics and with libjxl's
 `ssimulacra2` and `butteraugli_main`, and prints PASS only when every frame

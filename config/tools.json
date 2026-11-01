@@ -186,10 +186,12 @@
       "path": "tools/photos/photo-metrics/target/release/photo-metrics",
       "install": "cargo build --release --locked --manifest-path tools/photos/photo-metrics/Cargo.toml",
       "optional": true,
-      "optional_why": "BUILT ON DEMAND like zenc: hif-archive.ts runs the install command on its first score in a process, so an absent binary on a fresh checkout is repaired rather than installed by hand. A missing `cargo` is the blocking failure, and cargo is declared above",
-      "why": "SSIMULACRA2 (fast-ssim2) and butteraugli (imazen's port) in one process: the bar a HIF photo's JPEG XL archive has to clear, on both metrics (hif-archive.ts). It replaced libjxl's ssimulacra2 and butteraugli_main there after matching their cjxl distance on 20 of 20 HIFs",
+      "optional_why": "BUILT ON DEMAND like zenc: hif-archive.ts and photo-metrics.ts run the install command on their first score in a process, and export-for-instagram.sh runs it when the binary is missing, so an absent binary on a fresh checkout is repaired rather than installed by hand. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "why": "SSIMULACRA2 (fast-ssim2) and butteraugli (imazen's port) in one process, for every photo tool that scores: the bar a HIF photo's JPEG XL archive has to clear (hif-archive.ts, since 2026-10-14), the Instagram export's quality search, and the probes and page generators through photo-metrics.ts (since 2026-10-31). Each replaced libjxl's ssimulacra2 and butteraugli_main after the same decisions came back both ways",
       "required_by": [
-        "tools/photos/hif-archive.ts"
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/hif-archive.ts",
+        "tools/photos/photo-metrics.ts"
       ],
       "version": {
         "reports": false,
@@ -246,6 +248,20 @@
       },
       "bytes": true,
       "recorded": "4.1.5"
+    },
+    {
+      "bin": "djpeg",
+      "install": "brew install jpeg-turbo",
+      "why": "decodes each Instagram export candidate for photo-metrics, which reads PNG and PNM only. libjpeg-turbo is the decoder libjxl's ssimulacra2 linked, so the scores did not move: 84.89105760 from ssimulacra2 on the JPEG and on djpeg's PPM alike (2026-10-31)",
+      "required_by": [
+        "tools/photos/export-for-instagram.sh"
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "libjpeg-turbo version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "recorded": "3.2.1"
     },
     {
       "bin": "avifenc",
@@ -318,29 +334,31 @@
     },
     {
       "bin": "ssimulacra2",
-      "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against. The HIF archive bar moved to photo-metrics on 2026-10-14",
+      "install": "brew install jpeg-xl",
+      "optional": true,
+      "optional_why": "the ORACLE and nothing else: photo-metrics-parity.ts checks photo-metrics against it before a pin move. Every caller moved to photo-metrics by 2026-10-31, so a photo session without it loses nothing",
+      "why": "libjxl's SSIMULACRA2, the reference photo-metrics is measured against. brew's jpeg-xl bottle builds with JPEGXL_ENABLE_DEVTOOLS=ON and ships it (0.12.0, checked 2026-10-31)",
       "required_by": [
-        "tools/photos/export-for-instagram.sh",
         "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
-        "why": "This libjxl metric prints usage instead of exposing a version flag. Record its build when comparing quality-search results."
+        "why": "This libjxl metric prints usage instead of exposing a version flag. Record the jpeg-xl version beside a parity run, since it is the reference that run reads."
       },
       "bytes": false
     },
     {
       "bin": "butteraugli_main",
-      "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the second metric bounding that same search. The HIF archive bar moved to photo-metrics on 2026-10-14",
+      "install": "brew install jpeg-xl",
+      "optional": true,
+      "optional_why": "the ORACLE and nothing else, beside ssimulacra2 above",
+      "why": "libjxl's butteraugli, the reference photo-metrics is measured against. Ships in the same brew bottle as ssimulacra2",
       "required_by": [
-        "tools/photos/export-for-instagram.sh",
         "tools/photos/photo-metrics-parity.ts"
       ],
       "version": {
         "reports": false,
-        "why": "This libjxl metric has no version flag. Its build can affect the quality search even though it does not encode images itself."
+        "why": "This libjxl metric has no version flag. Record the jpeg-xl version beside a parity run, as for ssimulacra2."
       },
       "bytes": false
     },

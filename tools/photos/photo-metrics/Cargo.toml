@@ -2,7 +2,7 @@
 name = "photo-metrics"
 version = "0.1.0"
 edition = "2024"
-description = "SSIMULACRA2 and butteraugli for hif-archive.ts, from imazen's Rust ports instead of libjxl's ssimulacra2 and butteraugli_main CLIs. Same numbers, one process, no libjxl tools build."
+description = "SSIMULACRA2 and butteraugli for every photo tool that scores, from imazen's Rust ports instead of libjxl's ssimulacra2 and butteraugli_main CLIs. Same numbers, one process, no libjxl tools build."
 license = "AGPL-3.0-or-later"
 publish = false
 
