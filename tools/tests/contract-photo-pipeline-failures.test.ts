@@ -139,7 +139,6 @@ printf encoded > "$last"`,
     // except the -revert coefficient reorders gen-encoding-samples.sh writes its
     // scan-order twins with, which have no geometry in them.
     await command("mozjpeg/bin/jpegtran", 'echo "jpegtran $*" >> "$TRACE"; case "$*" in *-revert*) printf encoded; exit 0 ;; esac; exit 1');
-    await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     // The metrics answer per file so a test can make a HIF's direct encode
     // beat its JPEG bar (CAND_S2 above 95, CAND_BA below 0.5) or not. hif-archive.ts
     // scores its candidates as cand.png; the bar is base.png. It reaches this

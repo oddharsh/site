@@ -62,7 +62,10 @@ TMP="/tmp/encgrid-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 # the centred 96x96 crop: the encoder grid's slice (and z-crop.png)
 sips -c 96 96 "$DEST/c-png.png" --out "$TMP/crop.png" >/dev/null 2>&1
-ffmpeg -loglevel error -y -i "$TMP/crop.png" "$TMP/crop.ppm" 2>/dev/null   # cjpeg reads PPM, not PNG (sips BMP confuses it)
+# cjpeg reads PPM, not PNG (sips BMP confuses it). zenc writes the same P6
+# bytes ffmpeg did: 13 of 13 PNGs under garage/enc, this crop included,
+# matched an independent decode byte for byte on 2026-10-31.
+"$ZENC" frame "$TMP/crop.png" --out "$TMP/crop.ppm" >/dev/null
 cp "$TMP/crop.png" "$DEST/z-crop.png"
 sz(){ stat -f%z "$1"; }
 

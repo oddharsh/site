@@ -317,20 +317,6 @@
       "recorded": "1.6.0"
     },
     {
-      "bin": "ffmpeg",
-      "install": "brew install ffmpeg",
-      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
-      "required_by": [
-        "tools/photos/gen-encoding-grids.sh"
-      ],
-      "version": {
-        "flag": "-version",
-        "match": "ffmpeg version (\\d+\\.\\d+\\.\\d+)"
-      },
-      "bytes": true,
-      "recorded": "8.0.1"
-    },
-    {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the perceptual metric the Instagram export searches quality against. The HIF archive bar moved to photo-metrics on 2026-10-14",
