@@ -29,22 +29,28 @@ test("the matcher finds a hand-written size or family, and only that", () => {
   assert.deepEqual(lits(":root{--text-xs: 9pt;}"), [], "the token's own definition is a custom property");
 });
 
-test("the homepage defines every type token it reads, at typography.css's value", () => {
-  // The homepage loads luna.css without blocking first paint, so a size it reads
-  // through var() has to be defined in its own inline :root or the text paints
-  // at the browser default and jumps when luna lands.
+test("the homepage defines every token it reads, at the token files' value", () => {
+  // The homepage loads luna.css without blocking first paint, so a token it reads
+  // through var() has to be defined in its own inline :root or the rule falls
+  // back to the browser default and jumps when luna lands. Colour tokens went
+  // undefined here from #1196 (2026-10-06) to 2026-11-02 because this checked
+  // only --text-* and --font-*: no window frame, no title gradient, CLS 0.116.
   const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
-  const scale = new Map(
-    [...read("design/tokens/typography.css").matchAll(/(--(?:text|font)-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, "")]),
-  );
+  // First definition wins, so a @media (--p3) override never stands in for the base value.
+  const decls = (css) => {
+    const out = new Map();
+    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g))
+      if (!out.has(m[1])) out.set(m[1], m[2].replace(/\s+/g, ""));
+    return out;
+  };
+  const tokens = new Map(["colors", "bevels", "typography"].flatMap((f) => [...decls(read(`design/tokens/${f}.css`))]));
   const page = read("src/pages/index.html");
-  const root = /:root\{([^}]*)\}/.exec(page)?.[1] ?? "";
-  const inline = new Map([...root.matchAll(/(--(?:text|font)-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, "")]));
-  const used = new Set([...page.matchAll(/var\((--(?:text|font)-[a-z0-9-]+)\)/g)].map((m) => m[1]));
-  assert.ok(used.size >= 4, `the homepage reads ${used.size} type tokens`);
+  const inline = decls(/:root\{([^}]*)\}/.exec(page)?.[1] ?? "");
+  const used = new Set([...page.matchAll(/var\((--[a-z0-9-]+)\)/g)].map((m) => m[1]).filter((t) => tokens.has(t)));
+  assert.ok(used.size >= 30, `the homepage reads ${used.size} tokens`);
   for (const t of used) {
     assert.ok(inline.has(t), `src/pages/index.html reads var(${t}) but its inline :root does not define it`);
-    assert.equal(inline.get(t), scale.get(t), `src/pages/index.html inlines ${t} as ${inline.get(t)}; typography.css says ${scale.get(t)}`);
+    assert.equal(inline.get(t), tokens.get(t), `src/pages/index.html inlines ${t} as ${inline.get(t)}; design/tokens says ${tokens.get(t)}`);
   }
 });
 

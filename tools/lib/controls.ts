@@ -152,6 +152,13 @@ export const CONTROLS: Control[] = [
     expect: /@import of tokens\/fonts\.css/,
   },
   {
+    id: "homepage-reads-an-undefined-token",
+    plants: "the homepage's inline :root drops a colour token its first-paint CSS reads, so that colour paints at the browser default until luna.css lands",
+    mutations: [{ file: "src/pages/index.html", find: "  --ink:oklch(21.78% 0 0);\n", replace: "" }],
+    run: contract("contract-type-comes-from-the-tokens"),
+    expect: /reads var\(--ink\) but its inline :root does not define it/,
+  },
+  {
     id: "web-font-in-luna",
     plants: "luna.css downloads a face through @font-face url(), breaking the zero-font-bytes law",
     mutations: [
