@@ -159,14 +159,16 @@ export async function probeRevalidation(url, env) {
   if ("error" in first) return { ok: false, unreadable: true, why: first.error };
   if (!first.headers) return { ok: false, why: "no headers came back" };
 
-  const second = await probeHeaders(url, env);
   const etag = first.headers.etag;
   const lastMod = first.headers["last-modified"];
 
   const conditionalHeaders = {};
   if (etag) conditionalHeaders["if-none-match"] = etag;
   if (lastMod) conditionalHeaders["if-modified-since"] = lastMod;
-  const conditional = etag || lastMod ? await probeHeaders(url, env, conditionalHeaders) : null;
+  // #2 and #3 need only #1's validator, so they share a round trip. The
+  // markdown ask stays last: it can seed a shared cache with the other
+  // representation, which would read as a validator that changed.
+  const [second, conditional] = await Promise.all([probeHeaders(url, env), etag || lastMod ? probeHeaders(url, env, conditionalHeaders) : null]);
 
   const isHtml = (first.headers["content-type"] || "").includes("text/html");
   const negotiated = isHtml ? await probeHeaders(url, env, { accept: "text/markdown, text/plain;q=0.9" }) : null;
