@@ -17,6 +17,19 @@ const workflow = JSON.parse(
   ),
 );
 
+// The suite step: `bun run test`, narrowed on a pull request to the files its
+// diff can reach (tools/test-inputs.ts), and whole everywhere else.
+const SUITE = "bun tools/test-inputs.ts run --map test-inputs.json";
+
+test("only a pull request restores the map that narrows the suite, so main runs all of it", () => {
+  const { steps } = workflow.jobs.validate;
+  const restore = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/cache/restore@") && step.with?.path === "test-inputs.json");
+  assert.ok(restore >= 0, "validate restores the test input map");
+  assert.equal(steps[restore].if, "github.event_name == 'pull_request'", "a push to main must find no map and run the whole suite");
+  assert.equal(steps[restore].with["restore-keys"], "test-inputs-");
+  assert.ok(restore < steps.findIndex((step) => step.run === SUITE), "the map is in place before the suite reads it");
+});
+
 test("CI is one required job named validate that cannot be skipped or softened", () => {
   // `attest` (2026-10-01) signs the served manifest on a push to main. It is
   // not a check anybody requires, it needs validate, and it cannot fail the run;
@@ -71,7 +84,7 @@ test("validate still runs the checks that protect what ships", () => {
     "bun run derive:check",
     "bun run pages:check",
     "bun run routes:check",
-    "bun run test",
+    SUITE,
     "bun run --filter cal-aadhar-sh test",
   ]) {
     assert.ok(runs.includes(command), `validate no longer runs ${command}`);
@@ -110,7 +123,7 @@ test("background steps keep the three ordering edges and all join before the job
   // stays in the foreground so everything after it sees a finished tree.
   const build = at("bun run perf-budget");
   assert.notEqual(steps[build].background, true, "the build must finish before the manifest cut and the suite read .build/");
-  assert.ok(at("bun run test") > build, "the suite must start after the build it reads");
+  assert.ok(at(SUITE) > build, "the suite must start after the build it reads");
   assert.ok(at("bun run routes:check --prebuilt .build/.perfbudget") > build, "the route oracle loads the build's bundle");
 
   // lint and typecheck both open with the generator; it finishes, once, first.
@@ -123,7 +136,7 @@ test("background steps keep the three ordering edges and all join before the job
   // The suite needs timbrado's engine finished, not merely started.
   const engine = steps.find((step) => String(step.run ?? "").includes("ensureTimbradoEngine"));
   assert.ok(engine?.id, "the engine build needs an id to wait on");
-  assert.ok(!engine.background || waited(engine.id, at("bun run test")), "the suite must wait for timbrado's engine");
+  assert.ok(!engine.background || waited(engine.id, at(SUITE)), "the suite must wait for timbrado's engine");
 
   // Nothing ends the job unjoined: the last step waits for every background one.
   assert.ok(Object.hasOwn(steps.at(-1), "wait-all"), "validate must end with a wait-all, so a failed background check fails by name");

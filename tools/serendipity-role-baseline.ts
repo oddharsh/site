@@ -33,6 +33,24 @@
 // are out of sample for Clef until somebody tunes the criteria against one.
 // Tune on 0-59 if you must, and keep 60-119 as the number.
 //
+// Scored 2026-10-31. The September label files were lost, so the same 120
+// were labelled again, both halves before any tuning, and the regex rescored
+// on the new labels so the two meet as equals:
+//
+//                              tune 0-59           held-out 60-119
+//   regex                      88% P, 60% R        83% P, 52% R
+//   clef, untuned criteria     74% P, 70% R        not run
+//   clef, tuned on 0-59        93% P, 82% R        96% P, 92% R
+//
+// Clef at threshold 0, which is every answer that is not `not_stated`. 48 of
+// the held-out 60 state a role, so the 40-point recall gap is 19 bios. The
+// tuning wrote the labels' boundary rules into ROLE_CRITERIA (a company name
+// alone is not founding, a fund's research partner is an investor, DevRel and
+// a bare "Events" are operator work). Untuned, Clef answered `founder` for
+// titles at other people's companies. The labeller is stricter than in
+// September (the regex's held-out recall fell from 64% to 52% on the same
+// bios), so compare rows within one table, never across the two.
+//
 // Bios leave this machine for Workers AI under --clef, the same place the
 // Worker would send them. The token is CLOUDFLARE_API_TOKEN when set, else
 // wrangler's own OAuth login. Without labels it prints counts only, never a bio.

@@ -1,4 +1,5 @@
-// photo-metrics: SSIMULACRA2 and butteraugli for hif-archive.ts.
+// photo-metrics: SSIMULACRA2 and butteraugli for hif-archive.ts, and through
+// photo-metrics.ts and export-for-instagram.sh for every other photo tool.
 //
 //   photo-metrics <reference> <distorted>
 //

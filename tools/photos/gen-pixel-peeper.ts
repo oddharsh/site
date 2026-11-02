@@ -30,7 +30,7 @@
 //     bun tools/photos/gen-pixel-peeper.ts --only format --src <dir>   # measure on other originals
 //
 // Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
-// ssimulacra2, butteraugli_main, and the source folder. The format axis also
+// cargo for photo-metrics (built on first score), and the source folder. The format axis also
 // needs cjxl, djxl, avifenc, avifdec, and for AV2 the tuned av2-tone build
 // (`bun run av2:build`).
 //
@@ -70,6 +70,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AV2_BUILD_COMMAND, AV2_TUNED_BUILD } from "./av2-tone.ts";
+import { photoMetrics } from "./photo-metrics.ts";
 
 // ---------------------------------------------------------------- paths + tools
 
@@ -94,8 +95,6 @@ const CJPEG =
     const r = spawnSync("brew", ["--prefix", "mozjpeg"], { encoding: "utf8" });
     return path.join(r.status === 0 ? r.stdout.trim() : "/opt/homebrew/opt/mozjpeg", "bin", "cjpeg");
   })();
-const SSIMULACRA2 = which("ssimulacra2") ?? "/opt/zerobrew/prefix/bin/ssimulacra2";
-const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butteraugli_main";
 // The format axis. Each format is decoded by its own REFERENCE decoder for the
 // metrics, so a score describes the bitstream rather than a browser's decode.
 const CJXL = which("cjxl"),
@@ -626,13 +625,21 @@ const toPng = (jpg: string, png: string): string => {
   zenc(["frame", jpg, "--out", png]);
   return png;
 };
-const firstFloat = (tool: string, r: ReturnType<typeof run>): number => {
-  const m = /-?\d+\.\d+/.exec(r.stdout || "");
-  if (!m) throw new Error(`${tool} said: ${(r.stdout || "").trim()} ${(r.stderr || "").trim()}`);
-  return Number(m[0]);
-};
-export const ssim2 = (ref: string, test: string): number => Number(firstFloat("ssimulacra2", run([SSIMULACRA2, ref, test])).toFixed(2));
-export const butter = (ref: string, test: string): number => Number(firstFloat("butteraugli", run([BUTTERAUGLI, ref, test])).toFixed(3));
+// Both from photo-metrics since 2026-10-31, and the published numbers MOVED
+// with it: on these 320px native-resolution crops fast-ssim2 sits up to 0.21
+// from libjxl's ssimulacra2 (quality axis, 264 pairs; 221 change at 2 dp),
+// where 1080px downscales sit within 0.002. butteraugli stayed within 0.00002.
+// Rerun with --merge on quality, encoder, tradeoff and resample, the set kept
+// every rung, crop and best-option flag, and 34 of 55 shipped s2 figures moved,
+// by 0.13 at most. Before the switch, libjxl reproduced the committed quality
+// (24 of 24) and encoder (16 of 16) numbers exactly, so the scorer is the move.
+// The format axis, scored both ways on the same decodes (264 pairs, worst s2 gap
+// 0.12), picked the same winner on 43 of 43 pool calls by each metric. Its
+// regeneration also landed #1393's exact AVIF and AV2 decodes, which this axis
+// had waited on: AV2 rose about 1 point on identical bytes, and that, not the
+// scorer, flipped 9 of 40 calls' s2 winner.
+export const ssim2 = (ref: string, test: string): number => Number(photoMetrics(ref, test).s2.toFixed(2));
+export const butter = (ref: string, test: string): number => Number(photoMetrics(ref, test).ba.toFixed(3));
 function measure(refPng: string, jpg: string, tmp: string, both = true): [number, number | null] {
   const png = toPng(jpg, path.join(tmp, `${path.parse(jpg).name}-dec.png`));
   return [ssim2(refPng, png), both ? butter(refPng, png) : null];
@@ -1429,8 +1436,6 @@ function preflight(axes: string[]): void {
   const missing = [
     ["zenc", ZENC],
     ["mozjpeg cjpeg", CJPEG],
-    ["ssimulacra2", SSIMULACRA2],
-    ["butteraugli_main", BUTTERAUGLI],
   ]
     .filter(([, p]) => !fs.existsSync(p))
     .map(([n]) => n);

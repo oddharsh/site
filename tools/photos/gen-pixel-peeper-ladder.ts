@@ -39,11 +39,17 @@
 //     bun tools/photos/gen-pixel-peeper-ladder.ts --json out.json   # every point, butteraugli too
 //     bun tools/photos/gen-pixel-peeper-ladder.ts --from out.json   # rewrite ladder.json from a saved run
 //
-// WHAT IT FOUND, 2026-10-23, 11 photos (ssimulacra2; JPEG XL bytes as a share
-// of AVIF's at the same score, median per photo):
+// WHAT IT FOUND, 2026-10-31, 11 photos (ssimulacra2 from photo-metrics; JPEG
+// XL bytes as a share of AVIF's at the same score, median per photo):
 //                 s2 60   s2 70   s2 80   s2 90   s2 95   lossless
-//   crop           120%    114%    112%    109%    113%       68%
-//   resized        155%    145%    135%    124%    125%       74%
+//   crop           120%    114%    112%    109%    112%       66%
+//   resized        155%    145%    135%    124%    122%       74%
+// The 2026-10-23 run read 113% and 125% at s2 95 and 68% lossless. Scoring
+// the 2026-10-31 points with libjxl instead gives 113% and 123%, so the scorer
+// moved each s2 95 cell by one point and the rest is encoder drift since
+// (lossless bytes take no score). Over the run's 1,474 pairs fast-ssim2 sat up to
+// 0.32 from libjxl's ssimulacra2 and moved 1,116 values at 2 dp; butteraugli
+// stayed within 0.00002.
 // JPEG XL needed fewer bytes than AVIF on at most 3 of 11 crops at any lossy
 // score, and on none of the 11 resized frames. Lossless JPEG XL was also 90%
 // (crop) and 92% (resized) of lossless WebP. Every format's top lossy rung

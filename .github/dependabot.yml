@@ -114,8 +114,9 @@ updates:
       include: scope
 
   # hif-archive.ts scores every HIF archive with tools/photos/photo-metrics
-  # (fast-ssim2 + butteraugli, exact pins). A bump here can move archive
-  # decisions, so its PR is the prompt to re-measure against libjxl
+  # (fast-ssim2 + butteraugli, exact pins), and the Instagram export, the
+  # /pixel-peeper generators and the codec probes score with it too. A bump here
+  # can move archive decisions and published numbers, so its PR is the prompt to re-measure against libjxl
   # (photo-metrics/Cargo.toml says how) before merging, not a refresh to wave by.
   - package-ecosystem: cargo
     directory: "/tools/photos/photo-metrics"
