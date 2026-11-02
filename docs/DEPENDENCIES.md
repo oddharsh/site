@@ -660,7 +660,7 @@ the reason, rather than written here with the caret quietly dropped.
   whether it changes what the extractor DISCARDS, since the discard is the
   lens's whole artifact.
 
-  `linkedom` 0.18.14 is a DEV dependency as of 2026-08-23 and ships in nothing.
+  `linkedom` 0.18.15 is a DEV dependency as of 2026-08-23 and ships in nothing.
   It supplied the DOM that Workers lack, and it was several times the weight of
   the extractor it served: 65.27 KiB gzip of an 80.57 KiB Worker, measured by
   bundling each package alone under that project's wrangler config.
@@ -715,7 +715,7 @@ the reason, rather than written here with the caret quietly dropped.
 
   **Version 12 was deliberately REFUSED here until 2026-08-24, and the reason it
   is taken now is that a browser was finally asked.** The refusal read: its
-  WHATWG raw-text change breaks linkedom 0.18.14's self-closing-script
+  WHATWG raw-text change breaks linkedom 0.18.15's self-closing-script
   serialization in linkedom's own upstream suite. That is accurate about the
   suite and says nothing about which parse is right, which is the question this
   Worker actually has, because /lens exists to show what a machine saw rather
