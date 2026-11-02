@@ -462,6 +462,14 @@ export const CONTROLS: Control[] = [
     expect: /tools\/control-probe\.ts:2: export const probe = execFileSync/,
   },
   {
+    id: "verdict-watch-forgets-its-memory-file",
+    plants:
+      "a verdict watch whose landed sentence no longer names the memory file, so a moved row's issue says what landed but not which decline to re-measure",
+    mutations: [{ file: "tools/lib/upstream-watches.ts", find: ".map((w) => ({ ...w, landed:", replace: ".map((w) => ({ ...w, unused:" }],
+    run: [...contract("contract-canary-tripwire-proposes-nothing"), "-t", "a verdict watch that moves"],
+    expect: /moved and the issue does not name bun-minifier-not-a-swap\.md/,
+  },
+  {
     id: "suite-map-restored-on-main",
     plants: "validate restores the test input map on every event, so a push to main runs a narrowed suite",
     mutations: [
