@@ -23,14 +23,13 @@
 // them is referenced anywhere in the tree, which is what an identical count
 // proves.
 //
-// ONE FILE FOR THREE CONFIGS (it was four until cf-garage got its own, below),
-// and that is asserted rather than assumed. The
-// runtime section is a function of compatibility date and flags, and the four
-// Workers here sit on four different dates (2026-05-01 to 2026-07-02) with two
-// flag sets. Generated separately, their runtime sections came back
-// byte-identical below the header line. This script regenerates the two
-// auxiliary configs wrangler can read alongside the site's and FAILS if any
-// pair diverges, because that is the day the programs need a file each and a
+// A SHARED FILE IS ASSERTED rather than assumed. The runtime section is a
+// function of compatibility date and flags, and the Workers here sit on
+// different dates with different flag sets. On 2026-09-02, generated
+// separately, their runtime sections came back byte-identical below the header
+// line. The site now has its own file (AUX_OUT, below, says why), and this
+// script regenerates lwe-ask and lens-reader alongside it and FAILS if those
+// two diverge, because that is the day the programs need a file each and a
 // silent divergence would type one Worker against another's runtime.
 //
 // CF-GARAGE GETS ITS OWN FILE, FROM ITS OWN CONFIG, since 2026-09-26. It is the
@@ -102,7 +101,8 @@ export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
 export const AUX_OUT = join(REPO, "config", ".generated", "workers-runtime-aux.d.ts");
 const KEY_PREFIX = "// gen-runtime-types key ";
 
-// The site config is the one whose output ships; the others are the control.
+// Order is read below: the first writes OUT, the second writes AUX_OUT, and
+// every config after the second must generate the same surface as it.
 const CONFIGS = [
   { name: "site", config: "cloudflare.config.ts" },
   { name: "lwe-ask", config: "lwe-ask/cloudflare.config.ts" },
@@ -181,7 +181,7 @@ function generateCfGarage() {
     process.stderr.write(`${out.stdout ?? ""}${out.stderr ?? ""}`);
     throw new Error(
       `gen-runtime-types: \`wrangler build --x-new-config --x-cf-build-output\` in cf-garage/ exited ${out.status} ` +
-      `and left ${text ? `${text.length} bytes without a full Env + runtime surface` : "no file"} at cf-garage/.cloudflare/types/index.d.ts`,
+        `and left ${text ? `${text.length} bytes without a full Env + runtime surface` : "no file"} at cf-garage/.cloudflare/types/index.d.ts`,
     );
   }
   mkdirSync(dirname(CF_GARAGE_KEY), { recursive: true });
@@ -232,7 +232,8 @@ function generate(config: string, out: string) {
   if (!fields.compatibility_date) throw new Error(`gen-runtime-types: no compatibility date read from ${config}`);
   writeFileSync(runtimeConfig, JSON.stringify(fields));
   execFileSync(...wranglerCommand(["types", "-c", runtimeConfig, "--include-env=false", out]), {
-    cwd: REPO, stdio: ["ignore", "ignore", "inherit"],
+    cwd: REPO,
+    stdio: ["ignore", "ignore", "inherit"],
   });
   const text = readFileSync(out, "utf8");
   const at = text.indexOf(MARKER);
@@ -248,8 +249,8 @@ try {
     if (other.body !== aux.body) {
       throw new Error(
         `gen-runtime-types: ${other.config} generates a different runtime surface from ${aux.config} ` +
-        `(${other.body.length} vs ${aux.body.length} bytes). The shared auxiliary file no longer fits both; ` +
-        `give that program its own generated file rather than typing it against another Worker's runtime.`,
+          `(${other.body.length} vs ${aux.body.length} bytes). The shared auxiliary file no longer fits both; ` +
+          `give that program its own generated file rather than typing it against another Worker's runtime.`,
       );
     }
   }
@@ -261,7 +262,9 @@ try {
   writeFileSync(OUT, KEY_PREFIX + key + "\n" + site.text);
   writeFileSync(AUX_OUT, KEY_PREFIX + key + "\n" + aux.text);
   const header = site.text.split("\n").find((l) => l.startsWith("// Runtime types generated with")) ?? "";
-  console.log(`gen-runtime-types: ${site.body.length} bytes -> workers-runtime.d.ts, ${aux.body.length} bytes -> workers-runtime-aux.d.ts (${header.replace("// ", "")}; ${others.length + 1} auxiliary configs agree)`);
+  console.log(
+    `gen-runtime-types: ${site.body.length} bytes -> workers-runtime.d.ts, ${aux.body.length} bytes -> workers-runtime-aux.d.ts (${header.replace("// ", "")}; ${others.length + 1} auxiliary configs agree)`,
+  );
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

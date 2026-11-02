@@ -1,4 +1,4 @@
-// dict.js — the compression-dictionary oracle: will a browser ever actually use
+// dict.ts — the compression-dictionary oracle: will a browser ever actually use
 // the dictionary you are serving?
 //
 // ── why this is a lint and not a delta calculator ─────────────────────────
@@ -14,7 +14,9 @@
 // out confident and false, which is worse than not offering the feature.
 //
 // So the delta stays in build.ts, where real node computes it, and this route
-// does the half that is genuinely missing from the world.
+// does the half that is genuinely missing from the world. tools/lib/
+// upstream-watches.ts tracks the workerd fix (workerd-honours-zstd-dictionary,
+// cloudflare/workerd#7106) that would make a delta here honest.
 //
 // ── the half that is missing ──────────────────────────────────────────────
 // Compression dictionaries fail SILENTLY in the other direction too. Chromium
@@ -24,13 +26,14 @@
 // believe it is serving deltas. The rules that decide it are not written down
 // anywhere convenient, and they are not guessable.
 //
-// This encodes them, measured on this site (see CLAUDE.md and the local probe
-// recipe in MAINTENANCE.md) rather than inferred from the spec.
+// This encodes them, measured on this site rather than inferred from the spec.
 import { lensProbe } from "./lens.ts";
 
 // The verdicts a single rule can return. `veto` means the dictionary is dead;
 // `warn` means it works but not the way you probably intended.
-const VETO = "veto", WARN = "warn", OK = "ok";
+const VETO = "veto",
+  WARN = "warn",
+  OK = "ok";
 
 /**
  * The registration rules, in the order a reader should meet them.
@@ -45,25 +48,28 @@ export const RULES = [
   {
     id: "use-as-dictionary",
     title: "Use-As-Dictionary header",
-    check: (cc, headers) => (headers["use-as-dictionary"]
-      ? { verdict: OK, detail: headers["use-as-dictionary"].slice(0, 60) }
-      : { verdict: VETO, detail: "absent — nothing here is offered as a dictionary" }),
+    check: (cc, headers) =>
+      headers["use-as-dictionary"]
+        ? { verdict: OK, detail: headers["use-as-dictionary"].slice(0, 60) }
+        : { verdict: VETO, detail: "absent — nothing here is offered as a dictionary" },
   },
   {
     id: "no-store",
     title: "no-store",
-    check: (cc) => (cc.has("no-store")
-      ? { verdict: VETO, detail: "the resource may not be stored, so it cannot be kept as a dictionary" }
-      : { verdict: OK, detail: "absent" }),
+    check: (cc) =>
+      cc.has("no-store")
+        ? { verdict: VETO, detail: "the resource may not be stored, so it cannot be kept as a dictionary" }
+        : { verdict: OK, detail: "absent" },
   },
   {
     id: "no-cache",
     title: "no-cache",
     // Measured, not inferred. This one surprises people because no-cache does
     // not mean "do not store" anywhere else in HTTP — it means revalidate.
-    check: (cc) => (cc.has("no-cache")
-      ? { verdict: VETO, detail: "vetoes registration outright in Chromium, even though the bytes are still cached" }
-      : { verdict: OK, detail: "absent" }),
+    check: (cc) =>
+      cc.has("no-cache")
+        ? { verdict: VETO, detail: "vetoes registration outright in Chromium, even though the bytes are still cached" }
+        : { verdict: OK, detail: "absent" },
   },
   {
     id: "must-revalidate",
@@ -107,13 +113,13 @@ export const RULES = [
   {
     id: "s-maxage",
     title: "s-maxage",
-    check: (cc) => (cc.has("s-maxage")
-      ? { verdict: WARN, detail: "invisible here: s-maxage is a shared-cache directive and does not extend a browser's dictionary lifetime" }
-      : { verdict: OK, detail: "absent (would be ignored anyway)" }),
+    check: (cc) =>
+      cc.has("s-maxage")
+        ? { verdict: WARN, detail: "invisible here: s-maxage is a shared-cache directive and does not extend a browser's dictionary lifetime" }
+        : { verdict: OK, detail: "absent (would be ignored anyway)" },
   },
 ];
 
-/** `max-age=60, stale-while-revalidate=600` -> Map plus a has() for bare tokens. */
 export function parseCacheControl(value) {
   const map = new Map();
   for (const part of String(value || "").split(",")) {
@@ -169,7 +175,6 @@ export function auditConsumer(headers) {
   };
 }
 
-/** Fetch a target and audit it, through Lens's guarded, signed, capped fetcher. */
 export async function auditUrl(target, env) {
   const probe = await lensProbe(target, env);
   if (probe?.error) return { ok: false, unreadable: true, why: String(probe.error).slice(0, 80) };

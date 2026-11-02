@@ -33,13 +33,23 @@ import { readFileSync } from "node:fs";
 import { gateClass, paintGate, type PaintGate } from "../lib/jpeg-paint-gate.ts";
 
 const args = process.argv.slice(2);
-const flag = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+const flag = (name: string) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
 const origin = (flag("--origin") ?? "https://aadhar.sh").replace(/\/$/, "");
 const maxPct = Number(flag("--max") ?? 10);
 const prefix = Number(flag("--prefix-mb") ?? 3) * 1024 * 1024;
-const index = JSON.parse(readFileSync(new URL("../../src/worker/photo-index.json", import.meta.url), "utf8")) as Record<string, { full: string; size?: number }>;
+const index = JSON.parse(readFileSync(new URL("../../src/worker/photo-index.json", import.meta.url), "utf8")) as Record<
+  string,
+  { full: string; size?: number }
+>;
 const only = flag("--stems")?.split(",");
-for (const s of only ?? []) if (!index[s]) { console.error(`archive-gate: ${s} is not in the photo index`); process.exit(2); }
+for (const s of only ?? [])
+  if (!index[s]) {
+    console.error(`archive-gate: ${s} is not in the photo index`);
+    process.exit(2);
+  }
 // The gate is a JPEG rule. An original moved to JPEG XL is skipped: Chrome
 // painted the lossless JPEG XL copy of a progressive JPEG from 5% of the file
 // (2026-09-27), the same point as the progressive JPEG it came from.
@@ -65,24 +75,45 @@ async function one(stem: string) {
   }
 }
 const queue = [...stems];
-await Promise.all(Array.from({ length: 8 }, async () => { while (queue.length) await one(queue.shift()!); }));
+await Promise.all(
+  Array.from({ length: 8 }, async () => {
+    while (queue.length) await one(queue.shift()!);
+  }),
+);
 rows.sort((a, b) => a.stem.localeCompare(b.stem));
 
-if (args.includes("--json")) { console.log(JSON.stringify(rows, null, 1)); process.exit(rows.some((r) => r.kind === "unread") ? 2 : 0); }
-const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length % 2 ? s[s.length >> 1] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; };
+if (args.includes("--json")) {
+  console.log(JSON.stringify(rows, null, 1));
+  process.exit(rows.some((r) => r.kind === "unread") ? 2 : 0);
+}
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[s.length >> 1] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+};
 console.log(`archive-gate: ${rows.length} archives from ${origin}, prefix ${prefix / 1048576} MB`);
 for (const kind of [...new Set(rows.map((r) => r.kind))].sort()) {
   const group = rows.filter((r) => r.kind === kind);
   const pcts = group.map((r) => r.pct).filter((p): p is number => p !== null);
-  const spread = kind === "baseline" ? "one scan, top rows first" : pcts.length ? `first paint median ${median(pcts).toFixed(3)}%, max ${Math.max(...pcts).toFixed(3)}%` : "no first paint read";
+  const spread =
+    kind === "baseline"
+      ? "one scan, top rows first"
+      : pcts.length
+        ? `first paint median ${median(pcts).toFixed(3)}%, max ${Math.max(...pcts).toFixed(3)}%`
+        : "no first paint read";
   console.log(`  ${String(group.length).padStart(4)}  ${kind.padEnd(36)} ${spread}`);
 }
 const unread = rows.filter((r) => r.kind === "unread");
 const late = rows.filter((r) => r.kind !== "unread" && r.kind !== "baseline" && (r.pct === null || r.pct > maxPct));
 const baseline = rows.filter((r) => r.kind === "baseline");
 for (const r of unread) console.log(`  unread   ${r.stem}: ${r.error}`);
-for (const r of late) console.log(`  late     ${r.stem}: ${r.pct === null ? `no paint within ${prefix / 1048576} MB` : `${r.pct.toFixed(2)}%`} of ${(r.size / 1e6).toFixed(1)} MB, scans ${r.scans.join(" ")}`);
+for (const r of late)
+  console.log(
+    `  late     ${r.stem}: ${r.pct === null ? `no paint within ${prefix / 1048576} MB` : `${r.pct.toFixed(2)}%`} of ${(r.size / 1e6).toFixed(1)} MB, scans ${r.scans.join(" ")}`,
+  );
 for (const r of baseline) console.log(`  baseline ${r.stem}: one scan, paints top rows down`);
 if (unread.length) process.exit(2);
-if (late.length || baseline.length) { console.log(`FAIL: ${late.length} late, ${baseline.length} baseline`); process.exit(1); }
+if (late.length || baseline.length) {
+  console.log(`FAIL: ${late.length} late, ${baseline.length} baseline`);
+  process.exit(1);
+}
 console.log(`PASS: every archive paints within ${maxPct}%`);

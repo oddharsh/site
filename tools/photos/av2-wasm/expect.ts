@@ -1,6 +1,6 @@
 // expect.ts: record what NATIVE AVM decodes each shipped AV2 file to.
 //
-// CI has no AVM build, so contract-av2-decoder-matches-avm.test.mjs can't run
+// CI has no AVM build, so contract-av2-decoder-matches-avm.test.ts can't run
 // the reference decoder itself. This runs it here, at full depth, and writes the
 // sha256 of each file's decoded samples (Y, U, V as avifdec's Y4M lays them out,
 // two little-endian bytes a sample above 8-bit) to expected.json. The test then
@@ -21,7 +21,10 @@ const BUILD = path.resolve(i >= 0 ? process.argv[i + 1] : AV2_BUILD);
 const DIR = path.join(REPO, "public/garage/av2");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "av2-expect-"));
 
-const files = fs.readdirSync(DIR).filter((f) => f.endsWith("-av2.avif")).sort();
+const files = fs
+  .readdirSync(DIR)
+  .filter((f) => f.endsWith("-av2.avif"))
+  .sort();
 const expected: Record<string, { width: number; height: number; sha256: string }> = {};
 try {
   for (const f of files) {

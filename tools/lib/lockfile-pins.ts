@@ -53,13 +53,13 @@
 // the bump and left the lockfile's resolution ahead of it. Every dependabot PR
 // that needs a `main` merge is a candidate, so this is a cadence rather than an
 // accident, the same argument docs/DEPENDENCIES.md's prose check rests on.
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { EXACT_PIN } from "./dependency-docs.ts";
 import { parseJsonc } from "./jsonc.ts";
+import { repoFiles } from "./repo-files.ts";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -68,11 +68,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 export const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const;
 
 // A scanner that has quietly stopped matching must not report a clean pass over
-// nothing. 16 pins are checked today (11 root devDependencies plus the `sharp`
-// override, 3 lens-reader dependencies plus the `htmlparser2` override); the
-// floor sits far enough below that a deliberate removal does not trip it and a
+// nothing. 10 pins are checked on 2026-10-15, after oxlint and oxlint-tsgolint
+// left the root devDependencies (16 when this was written);
+// the floor sits below that so a deliberate removal does not trip it and a
 // broken walk does.
-export const FLOOR_PINS = 12;
+export const FLOOR_PINS = 8;
 
 export type LockfileManifest = { manifest: string; wsKey: string; pkg: Record<string, unknown> };
 export type LockfileInput = { lock: string; parsed: Record<string, unknown>; manifests: LockfileManifest[] };
@@ -120,31 +120,30 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
           declarations.push({ field, name, pin, mirror: asMap(ws[field])[name] });
         }
       }
-      // `overrides` is the root manifest's alone, and bun mirrors it outside the
-      // workspace blocks. A non-root workspace declaring one is not something
-      // bun honours, so it is not something this can hold it to.
+      // Root overrides and the shared catalog are mirrored outside workspace
+      // blocks. Their exact pins need the same resolution check as direct pins.
       if (wsKey === "") {
-        for (const [name, spec] of Object.entries(asMap(pkg.overrides))) {
-          const pin = asText(spec);
-          if (pin === null || !EXACT_PIN.test(pin)) continue;
-          declarations.push({ field: "overrides", name, pin, mirror: lockOverrides[name] });
+        for (const field of ["overrides", "catalog"]) {
+          for (const [name, spec] of Object.entries(asMap(pkg[field]))) {
+            const pin = asText(spec);
+            if (pin === null || !EXACT_PIN.test(pin)) continue;
+            const mirror = field === "overrides" ? lockOverrides[name] : asMap(parsed.catalog)[name];
+            declarations.push({ field, name, pin, mirror });
+          }
         }
       }
 
       for (const { field, name, pin, mirror } of declarations) {
         checked.push({ lock, manifest, name, field, pin });
-        const where = `${lock} ${field === "overrides" ? "overrides" : `workspaces[${JSON.stringify(wsKey)}].${field}`}`;
+        const where = `${lock} ${["overrides", "catalog"].includes(field) ? field : `workspaces[${JSON.stringify(wsKey)}].${field}`}`;
 
         if (mirror === undefined) {
-          problems.push(
-            `${manifest} declares ${field}.${name} at ${pin} and ${where} does not record it. ` +
-            `Run \`bun update ${name}\` and commit ${lock}.`,
-          );
+          problems.push(`${manifest} declares ${field}.${name} at ${pin} and ${where} does not record it. ` + `Run \`bun update ${name}\` and commit ${lock}.`);
         } else if (mirror !== pin) {
           problems.push(
             `${manifest} declares ${field}.${name} at ${pin} but ${where} mirrors ${JSON.stringify(mirror)}. ` +
-            `Run \`bun update ${name}\` and commit ${lock}. ` +
-            `(A frozen install DOES catch this one, so it is a lockfile nobody has reinstalled from.)`,
+              `Run \`bun update ${name}\` and commit ${lock}. ` +
+              `(A frozen install DOES catch this one, so it is a lockfile nobody has reinstalled from.)`,
           );
         }
 
@@ -164,7 +163,7 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
           // understands.
           problems.push(
             `${manifest} declares ${field}.${name} at ${pin} and ${lock} resolves no package by that name. ` +
-            `If bun has changed how it keys resolutions, fix tools/lib/lockfile-pins.ts rather than the pin.`,
+              `If bun has changed how it keys resolutions, fix tools/lib/lockfile-pins.ts rather than the pin.`,
           );
           continue;
         }
@@ -172,15 +171,15 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
         if (version === null) {
           problems.push(
             `${lock} resolves ${name} to something that is not a \`${name}@<version>\` entry, ` +
-            `while ${manifest} pins it at ${pin}. Read the lockfile entry before trusting any install from it.`,
+              `while ${manifest} pins it at ${pin}. Read the lockfile entry before trusting any install from it.`,
           );
           continue;
         }
         if (version !== pin) {
           problems.push(
             `${manifest} pins ${name} at ${pin} and ${lock} RESOLVES ${version}. ` +
-            `A frozen install exits 0 on this and installs ${version}; so does a plain \`bun install\`. ` +
-            `Run \`bun update ${name}\` and commit ${lock}, because a reinstall does not repair it.`,
+              `A frozen install exits 0 on this and installs ${version}; so does a plain \`bun install\`. ` +
+              `Run \`bun update ${name}\` and commit ${lock}, because a reinstall does not repair it.`,
           );
         }
       }
@@ -190,28 +189,28 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
   if (checked.length < floor) {
     problems.push(
       `only ${checked.length} exact pin(s) were checked against a lockfile, below the floor of ${floor}. ` +
-      `The walk has probably stopped finding manifests rather than the tree having shrunk; ` +
-      `check readLockfilePins in tools/lib/lockfile-pins.ts.`,
+        `The walk has probably stopped finding manifests rather than the tree having shrunk; ` +
+        `check readLockfilePins in tools/lib/lockfile-pins.ts.`,
     );
   }
 
   return { checked, problems };
 }
 
-/** Every COMMITTED bun lockfile, and for each one the manifests it governs.
+/** Every bun lockfile a commit would hold (untracked ones too, gotcha 91),
+ *  and for each one the manifests it governs.
  *
  *  Both halves are derived rather than listed, and that is the point. The
- *  lockfile set comes from `git ls-files`, so a new sub-project is covered the
- *  day it is committed; the manifest set comes from each lockfile's own
+ *  lockfile set comes from git, so a new sub-project is covered the day its
+ *  bun.lock lands on disk; the manifest set comes from each lockfile's own
  *  `workspaces` keys, so a new workspace is covered by the lockfile that
  *  already had to record it. A hand-kept list (SUB_MANIFEST_POLICY is one) goes
- *  stale without failing anything: it names four manifests while the root
- *  lockfile governs five workspaces, so `lwe-ask` and `serendipity` sit outside
- *  it today and inside this.
+ *  stale without failing anything: it names four package.json manifests while
+ *  the root lockfile governs five workspaces, so `lwe-ask` and `serendipity`
+ *  sit outside it today and inside this.
  */
 export function readLockfilePins(root: string = REPO_ROOT): LockfileInput[] {
-  const listed = execFileSync("git", ["ls-files", "-z", "bun.lock", "*/bun.lock"], { cwd: root, encoding: "utf8" });
-  const locks = listed.split("\0").filter(Boolean).sort();
+  const locks = repoFiles(["bun.lock", "*/bun.lock"], root).sort();
 
   return locks.map((lock) => {
     const parsed = parseJsonc(readFileSync(path.join(root, lock), "utf8"));

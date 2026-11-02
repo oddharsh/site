@@ -1,5 +1,6 @@
-// reading.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// reading.ts: /reading, the links I save on Curius, fetched as AadharshBot,
+// cached in KV, and listed with their Hacker News threads.
+
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/cache.ts";
@@ -12,24 +13,18 @@ import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
 
-// ── /reading — a native, Luna-styled mirror of my Curius reading list ──
-// Curius (the social reading-list app) exposes a clean JSON API per user. We
-// pull it through AadharshBot (the same signed, identified crawler the rest of
-// the site uses), normalize it down to what we render, and KV-cache the result
-// so a page load costs zero Curius hits. The canonical list still lives at
-// curius.app; this is the on-site, view-source-able copy.
 export const CURIUS_USER_ID = 5766;
 
-export const CURIUS_HANDLE   = "aadharsh-pannirselvam";
+export const CURIUS_HANDLE = "aadharsh-pannirselvam";
 
 export const CURIUS_CACHE_KEY = "curius:links";
 
-export const CURIUS_TTL = 21600;
+export const CURIUS_TTL = 21600; // 6h: the list moves a few times a day at most
 
-   // 6h — the list moves a few times a day at most
 export async function fetchCuriusLinks(env) {
   const out = [];
-  const PER = 30, MAX_PAGES = 8;   // 30/page; cap the crawl so a runaway can't loop
+  const PER = 30,
+    MAX_PAGES = 8; // 30/page; cap the crawl so a runaway can't loop
   // ONE shared deadline across the whole crawl (not per-page): Curius measured
   // ~3s/page, so a full 8-page serial crawl could otherwise hang ~13s. This
   // aborts the whole thing at ~3.5s and returns whatever pages arrived. In
@@ -45,16 +40,20 @@ export async function fetchCuriusLinks(env) {
       });
       if (!res.ok) break;
       data = await res.json();
-    } catch (_e) { break; }   // abort (deadline) or network error → stop, return what we have
+    } catch (_e) {
+      break;
+    } // abort (deadline) or network error → stop, return what we have
     const saved = Array.isArray(data && data.userSaved) ? data.userSaved : [];
     if (!saved.length) break;
     for (const it of saved) {
       if (!it || !it.link) continue;
       let domain = "";
-      try { domain = new URL(it.link).hostname.replace(/^www\./, ""); } catch (_e) {}
+      try {
+        domain = new URL(it.link).hostname.replace(/^www\./, "");
+      } catch (_e) {}
       out.push({
-        title:   (it.title || it.link).replace(/\s+/g, " ").trim().slice(0, 200),
-        link:    it.link,
+        title: (it.title || it.link).replace(/\s+/g, " ").trim().slice(0, 200),
+        link: it.link,
         domain,
         snippet: (it.snippet || "").replace(/\s+/g, " ").trim().slice(0, 280),
         favorite: !!it.favorite,
@@ -62,12 +61,13 @@ export async function fetchCuriusLinks(env) {
         // the passages I highlighted while reading — the best part to surface
         highlights: (Array.isArray(it.highlights) ? it.highlights : [])
           .map((h) => (h && h.highlight ? h.highlight.replace(/\s+/g, " ").trim() : ""))
-          .filter(Boolean).slice(0, 3),
+          .filter(Boolean)
+          .slice(0, 3),
       });
     }
-    if (saved.length < PER) break;   // short page = last page
+    if (saved.length < PER) break; // short page = last page
   }
-  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || "")));  // newest first
+  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || ""))); // newest first
   return out;
 }
 
@@ -91,11 +91,10 @@ export async function getCuriusCached(request, env, ctx) {
   // no cached value at all — true first run or right after a bust — builds inline.
   // non-empty guard: a transient Curius failure must not blank a good stale list.
   //
-  // cacheTtl 900: this was the one swrKV caller passing none, while both siblings
-  // (rn 1800, dyno 300) pass one, and no argument was recorded for the difference.
-  // 900 adds 15 minutes to a list that already refreshes every 6 hours, so 4% on
-  // its own window. It has to clear 300 to do anything, because handleReading sits
-  // behind cachedRender at max-age=300 and this read only runs on an edge miss. The
+  // cacheTtl 900, beside rn's 1800 and dyno's 300: it adds 15 minutes to a list
+  // that already refreshes every 6 hours, so 4% on its own window. It has to
+  // clear 300 to do anything, because handleReadingList sits behind cachedRender
+  // at max-age=300 and this read only runs on an edge miss. The
   // bust is unaffected for whoever runs it: ?bust= deletes both keys and rebuilds
   // inline in the same request, and evicts that colo's edge entry too.
   return swrKV(env, ctx, CURIUS_CACHE_KEY, CURIUS_TTL, () => buildCuriusPayload(env), {
@@ -122,8 +121,8 @@ export const LIST_URL = READING_LIST_URL;
 const LIST_CACHE = "public, max-age=300";
 
 // A screenful of rows for the placeholder, and the placeholder model the SAME
-// renderer draws them from (lib/island.ts, rule 1). The live list is ~150 rows
-// and does not need to match: nothing visible follows the island.
+// renderer draws them from (lib/island.ts, rule 1). The live list runs far
+// longer and does not need to match: nothing visible follows the island.
 const PENDING_ROWS = 6;
 const PENDING_MODEL = {
   pending: true,
@@ -140,7 +139,7 @@ async function readReadingList(request, env, ctx): Promise<{ response: Response;
   const [payload, hn] = await Promise.all([
     getCuriusCached(request, env, ctx).catch(() => ({ items: [], fetchedAt: new Date().toISOString() })),
     // Promise.resolve, because with no store bound the ternary is a bare null
-    // and `.then` on it threw; the per-request page carried the same bug.
+    // and `.then` on it threw.
     Promise.resolve(env?.RN_KV ? env.RN_KV.get(HN_MAP_KEY, { type: "json", cacheTtl: 900 }) : null).then(readHnMap, () => ({})),
   ]);
   const ok = Array.isArray(payload?.items) && payload.items.length > 0;
@@ -157,7 +156,9 @@ export async function refreshReadingList(request, env, ctx) {
   if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const { ok, response } = await readReadingList(request, env, ctx);
   if (ok) {
-    try { await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone())); } catch {}
+    try {
+      await caches.default.put(edgeKey(url.origin, LIST_URL, env), await withWeakEtag(response.clone()));
+    } catch {}
   }
   return response;
 }
@@ -177,12 +178,14 @@ export async function handleReadingList(request, env, ctx) {
 export async function handleReading(request, env, ctx) {
   if (new URL(request.url).searchParams.has("bust")) {
     const busted = await refreshReadingList(request, env, ctx);
-    try { await busted?.body?.cancel(); } catch {}
+    try {
+      await busted?.body?.cancel();
+    } catch {}
   }
   return serveBuiltPage(request, env, {
     headers: {
-      "cache-control":   PAGE_CACHE_CONTROL,
-      "link":            SHELL_PRELOAD_LINK,
+      "cache-control": PAGE_CACHE_CONTROL,
+      "link": SHELL_PRELOAD_LINK,
       "referrer-policy": "strict-origin-when-cross-origin",
     },
     live: () => renderReadingPage(),
@@ -198,10 +201,11 @@ export async function handleReading(request, env, ctx) {
 // defaults (the reasoning cal's slotLabels rests on). Built on first use, so a
 // request that never renders the list doesn't pay for them.
 let rowDates: { month: Intl.DateTimeFormat; day: Intl.DateTimeFormat } | undefined;
-const readingDates = () => rowDates ??= {
-  month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
-  day:   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
-};
+const readingDates = () =>
+  (rowDates ??= {
+    month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    day: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+  });
 
 /** The island: the count bar, the rows and the footer, or the placeholder. */
 export function renderReadingList(payload, hn: HnMap = {}): Html {
@@ -211,11 +215,13 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
   const fetched = payload?.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
 
-  let listHtml, discussed = 0;
+  let listHtml,
+    discussed = 0;
   if (!count) {
     listHtml = `<div class="rd-empty">Couldn't reach Curius just now — the list refills on the next sync. It always lives at <a href="${esc(profile)}" rel="external" target="_blank">curius.app/${esc(CURIUS_HANDLE)}</a>.</div>`;
   } else {
-    let curMonth = "", parts = [];
+    let curMonth = "",
+      parts = [];
     const dates = readingDates();
     for (const it of items) {
       const d = it.created ? new Date(it.created) : null;
@@ -244,8 +250,9 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
         `<div class="rd-item">` +
           `<div class="rd-head">${title}${star}</div>` +
           `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}${hnLink}</div>` +
-          snip + hls +
-        `</div>`
+          snip +
+          hls +
+          `</div>`,
       );
     }
     listHtml = parts.join("");
@@ -256,8 +263,8 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
     : `${count} link${count === 1 ? "" : "s"}${discussed ? ` &middot; ${discussed} discussed on Hacker News` : ""}${fetched ? ` &middot; last synced ${fetched}` : ""}`;
   return unsafeHtml(
     `<div class="rd-bar">${bar} &middot; source: Curius, via AadharshBot</div>` +
-    listHtml +
-    `<footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>`,
+      listHtml +
+      `<footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>`,
   );
 }
 

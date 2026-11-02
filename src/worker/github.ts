@@ -33,9 +33,9 @@ import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 
 export const GITHUB_USER = "oddharsh";
 export const GITHUB_CACHE_KEY = "github:activity:v1";
-const GITHUB_TTL = 3600;          // an hour; three searches an hour at most
+const GITHUB_TTL = 3600; // an hour; three searches an hour at most
 export const WINDOW_DAYS = 30;
-const PER_PAGE = 100;             // search's maximum, one page per tier
+const PER_PAGE = 100; // search's maximum, one page per tier
 const API = "https://api.github.com";
 const REPO_PREFIX = API + "/repos/";
 
@@ -48,7 +48,7 @@ export type GithubActivity = {
   user: string;
   fetchedAt: string;
   windowDays: number;
-  since: string;   // YYYY-MM-DD, the window's first day
+  since: string; // YYYY-MM-DD, the window's first day
   prs: {
     total: number;
     merged: number;
@@ -71,8 +71,7 @@ export type GithubActivity = {
 const text = (v: unknown): string => asText(v) ?? "";
 const clip = (s: unknown, n: number) => text(s).replace(/\s+/g, " ").trim().slice(0, n);
 const day = (iso: unknown) => text(iso).slice(0, 10);
-const repoOf = (repositoryUrl: unknown) =>
-  text(repositoryUrl).startsWith(REPO_PREFIX) ? text(repositoryUrl).slice(REPO_PREFIX.length) : "";
+const repoOf = (repositoryUrl: unknown) => (text(repositoryUrl).startsWith(REPO_PREFIX) ? text(repositoryUrl).slice(REPO_PREFIX.length) : "");
 // Only a github.com URL reaches the payload. Nothing renders these as links
 // today, but an agent reading /github.json might follow one.
 const ghUrl = (u: unknown) => (text(u).startsWith("https://github.com/") ? text(u) : "");
@@ -81,13 +80,15 @@ const totalOf = (body: unknown) => Math.max(0, Math.trunc(asNumber(asRecord(body
 
 /** Pull requests, newest first, grouped by repository and ranked by volume. */
 export function normalizePrs(body: unknown): GithubActivity["prs"] {
-  const prs: Pr[] = items(body).map((it) => ({
-    repo: repoOf(it?.repository_url),
-    title: clip(it?.title, 140),
-    url: ghUrl(it?.html_url),
-    state: (it?.pull_request?.merged_at ? "merged" : it?.state === "open" ? "open" : "closed") as PrState,
-    at: text(it?.created_at),
-  })).filter((p) => p.repo && p.title);
+  const prs: Pr[] = items(body)
+    .map((it) => ({
+      repo: repoOf(it?.repository_url),
+      title: clip(it?.title, 140),
+      url: ghUrl(it?.html_url),
+      state: (it?.pull_request?.merged_at ? "merged" : it?.state === "open" ? "open" : "closed") as PrState,
+      at: text(it?.created_at),
+    }))
+    .filter((p) => p.repo && p.title);
   const byRepo = new Map<string, { repo: string; count: number; merged: number; open: number; latest: Pr }>();
   for (const p of prs) {
     const g = byRepo.get(p.repo) ?? { repo: p.repo, count: 0, merged: 0, open: 0, latest: p };
@@ -108,13 +109,16 @@ export function normalizePrs(body: unknown): GithubActivity["prs"] {
 
 /** Issues, newest first. Titles carry the content here, so they stay a list. */
 export function normalizeIssues(body: unknown): GithubActivity["issues"] {
-  const list: Issue[] = items(body).map((it) => ({
-    repo: repoOf(it?.repository_url),
-    title: clip(it?.title, 140),
-    url: ghUrl(it?.html_url),
-    state: (it?.state === "open" ? "open" : "closed") as Issue["state"],
-    at: text(it?.created_at),
-  })).filter((i) => i.repo && i.title).sort((a, b) => b.at.localeCompare(a.at));
+  const list: Issue[] = items(body)
+    .map((it) => ({
+      repo: repoOf(it?.repository_url),
+      title: clip(it?.title, 140),
+      url: ghUrl(it?.html_url),
+      state: (it?.state === "open" ? "open" : "closed") as Issue["state"],
+      at: text(it?.created_at),
+    }))
+    .filter((i) => i.repo && i.title)
+    .sort((a, b) => b.at.localeCompare(a.at));
   return { total: totalOf(body), repoCount: new Set(list.map((i) => i.repo)).size, items: list };
 }
 
@@ -129,7 +133,8 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
       message: clip(text(it?.commit?.message).split("\n")[0], 140),
       url: ghUrl(it?.html_url),
       at: text(it?.commit?.author?.date),
-    })).filter((c) => c.repo && c.message);
+    }))
+    .filter((c) => c.repo && c.message);
   const byRepo = new Map<string, { repo: string; count: number; latest: Commit }>();
   for (const c of list) {
     const g = byRepo.get(c.repo) ?? { repo: c.repo, count: 0, latest: c };
@@ -148,8 +153,7 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
 
 export function githubQueries(since: string) {
   const u = GITHUB_USER;
-  const issues = (q: string) =>
-    `${API}/search/issues?q=${encodeURIComponent(q)}&sort=created&order=desc&per_page=${PER_PAGE}`;
+  const issues = (q: string) => `${API}/search/issues?q=${encodeURIComponent(q)}&sort=created&order=desc&per_page=${PER_PAGE}`;
   return {
     prs: issues(`author:${u} is:pr is:public -user:${u} created:>=${since}`),
     issues: issues(`author:${u} is:issue is:public -user:${u} created:>=${since}`),
@@ -174,7 +178,10 @@ async function buildGithubActivity(env): Promise<GithubActivity> {
       headers: { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" },
       signal,
     });
-    if (!res.ok) { await res.body?.cancel(); throw new Error(`GitHub search ${res.status}`); }
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new Error(`GitHub search ${res.status}`);
+    }
     return res.json();
   };
   const [prs, issues, commits] = await Promise.all([get(q.prs), get(q.issues), get(q.commits)]);
@@ -190,8 +197,10 @@ async function buildGithubActivity(env): Promise<GithubActivity> {
 }
 
 const isActivity = (p: unknown): p is GithubActivity =>
-  !!asRecord(p) && Array.isArray((p as GithubActivity).prs?.repos) &&
-  Array.isArray((p as GithubActivity).issues?.items) && Array.isArray((p as GithubActivity).commits?.repos);
+  !!asRecord(p) &&
+  Array.isArray((p as GithubActivity).prs?.repos) &&
+  Array.isArray((p as GithubActivity).issues?.items) &&
+  Array.isArray((p as GithubActivity).commits?.repos);
 
 export async function handleGithubJson(request, env, ctx) {
   let payload: GithubActivity | null = null;
@@ -206,12 +215,21 @@ export async function handleGithubJson(request, env, ctx) {
   if (!payload) {
     // Only reachable before the first good build ever lands in KV. The infotip
     // falls back to the plain shortcut card on anything but a 200.
-    return jsonResponse({ pending: true, note: "GitHub activity has not been read yet" }, 503,
-      { "retry-after": "300", "x-robots-tag": "noindex" }, { pretty: false });
+    return jsonResponse(
+      { pending: true, note: "GitHub activity has not been read yet" },
+      503,
+      { "retry-after": "300", "x-robots-tag": "noindex" },
+      { pretty: false },
+    );
   }
-  return jsonResponse(payload, 200, {
-    "cache-control": "public, max-age=300",
-    "x-robots-tag": "noindex",
-    "access-control-allow-origin": "*",
-  }, { pretty: false });
+  return jsonResponse(
+    payload,
+    200,
+    {
+      "cache-control": "public, max-age=300",
+      "x-robots-tag": "noindex",
+      "access-control-allow-origin": "*",
+    },
+    { pretty: false },
+  );
 }

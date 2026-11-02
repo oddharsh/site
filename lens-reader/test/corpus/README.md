@@ -1,7 +1,7 @@
 # Real-world parity corpus
 
 Ten pages captured from the open web on 2026-08-23, stored Brotli'd
-(3.69 MiB raw, 435 KiB compressed) and read by `test/dom-differential.test.mjs`
+(3.69 MiB raw, 435 KiB compressed) and read by `test/dom-differential.test.ts`
 through `node:zlib`.
 
 They exist because the repository's own 38 documents are one author's HTML and
@@ -25,7 +25,7 @@ first version of `src/dom.ts` got wrong. No capture can catch it: serialization
 reads `localName`, and Readability only compares `tagName` against HTML names.
 Reverting the fix passes all 48 documents and both byte-for-byte gates. The
 control that does catch it is the direct oracle assertion at the end of
-`dom-differential.test.mjs`. Before trusting a capture to guard a property, break
+`dom-differential.test.ts`. Before trusting a capture to guard a property, break
 the property and check the capture goes red.
 
 They are FROZEN fixtures rather than live fetches on purpose. A parity gate that

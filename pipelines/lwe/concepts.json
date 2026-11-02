@@ -1,5 +1,5 @@
 {
-  "_comment": "Registry for the Learning With Errors section. One entry per concept. This is the single source of truth that drives the buddy list (src/pages/lwe/index.html), the nav.js Run destinations, and the sitemap. `node pipelines/lwe/generate.mjs wire` rewrites the marked regions from this file. Pages themselves are generated from pipelines/lwe/specs/<id>.json via `node pipelines/lwe/generate.mjs page <id>`. Voice rule for all displayed copy here: no em dashes, straight apostrophes, no emojis.",
+  "_comment": "Registry for the Learning With Errors section. One entry per concept. This is the single source of truth that drives the buddy list (src/pages/lwe/index.html), the nav.js Run destinations, and the sitemap. `node pipelines/lwe/generate.ts wire` rewrites the marked regions from this file. Pages themselves are generated from pipelines/lwe/specs/<id>.json via `node pipelines/lwe/generate.ts page <id>`. Voice rule for all displayed copy here: no em dashes, straight apostrophes, no emojis.",
   "concepts": [
     {
       "id": "fhe",
@@ -76,7 +76,7 @@
       "path": "/lwe/utf8",
       "status": "online",
       "buddyName": "UTF-8",
-      "pm": "ASCII vs UTF-32 vs UTF-8: bytes, code points, 中文",
+      "pm": "ASCII vs UTF-32 vs UTF-8: bytes, code points, <span lang=\"zh\">中文</span>",
       "navHint": "text encoding, ascii, utf-32, utf-8, live byte demos",
       "accent": "#9a6a16",
       "accentSoft": "#fbf3dd",
@@ -276,6 +276,30 @@
       "nameColor": "#8a2413",
       "lastmod": "2026-08-21",
       "buddyClass": "fuse",
+      "badge": "chat",
+      "hasAsk": true
+    },
+    {
+      "id": "smoothing",
+      "title": "font smoothing",
+      "path": "/lwe/smoothing",
+      "status": "online",
+      "buddyName": "smoothing",
+      "pm": "AppleFontSmoothing 0 to 3, subpixel vs greyscale, and why external monitors blur",
+      "navHint": "macOS font smoothing: AppleFontSmoothing, subpixel vs greyscale, ClearType",
+      "accent": "#3d5a80",
+      "accentSoft": "var(--surface-desktop)",
+      "glyph": "a",
+      "glyphSize": 16,
+      "glyphFont": "Georgia, serif",
+      "picGrad": [
+        "#6b88b0",
+        "#3d5a80"
+      ],
+      "picBorder": "#2c4462",
+      "nameColor": "#2c4462",
+      "lastmod": "2026-10-23",
+      "buddyClass": "fsm",
       "badge": "chat",
       "hasAsk": true
     }

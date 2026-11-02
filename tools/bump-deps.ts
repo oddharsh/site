@@ -12,9 +12,9 @@
 // CURRENT tree, which is what the workflow wants (a fresh checkout per group);
 // locally, run it on a clean branch.
 //
-// --ignore-scripts ON EVERY INSTALL, for the reason the old relock tool gave.
-// The packages being bumped ARE the toolchain (oxlint, oxc-minify, wrangler's
-// neighbours), and the workflow later holds a token that can push. bun runs
+// --ignore-scripts ON EVERY INSTALL. The packages being bumped ARE the
+// toolchain (oxc-minify, lightningcss, wrangler's neighbours), and the workflow
+// later holds a token that can push. bun runs
 // lifecycle scripts only for `trustedDependencies` (esbuild, sharp, workerd),
 // and this flag shuts that last door, so no newly published code executes in
 // the job. Resolution does not depend on scripts, so the lockfile is
@@ -118,8 +118,10 @@ function rewriteDocPins() {
 }
 
 function prBody(group: string, bumps: Bump[]) {
-  const rows = bumps.map((b) =>
-    `| [\`${b.pkg}\`](https://www.npmjs.com/package/${b.pkg}?activeTab=versions) | ${b.from} | **${b.to}** | ${b.type} | ${b.manifests.map((m) => `\`${m}\``).join(", ")} |`);
+  const rows = bumps.map(
+    (b) =>
+      `| [\`${b.pkg}\`](https://www.npmjs.com/package/${b.pkg}?activeTab=versions) | ${b.from} | **${b.to}** | ${b.type} | ${b.manifests.map((m) => `\`${m}\``).join(", ")} |`,
+  );
   return [
     `Moves the \`${group}\` group to the newest versions that are at least as old as \`bunfig.toml\`'s \`minimumReleaseAge\`.`,
     "",
@@ -151,7 +153,10 @@ for (const g of groups) {
 if (!groups.length) console.log(`nothing to bump: ${names.length} packages checked`);
 
 if (JSON_OUT) {
-  writeFileSync(JSON_OUT, JSON.stringify({ groups: groups.map((g) => ({ name: g, branch: branchFor(g), bumps: bumps.filter((b) => b.group === g) })) }, null, 2) + "\n");
+  writeFileSync(
+    JSON_OUT,
+    JSON.stringify({ groups: groups.map((g) => ({ name: g, branch: branchFor(g), bumps: bumps.filter((b) => b.group === g) })) }, null, 2) + "\n",
+  );
 }
 
 if (WRITE) {

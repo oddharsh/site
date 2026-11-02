@@ -1,4 +1,4 @@
-// gen-repo-card.mjs — the GitHub social preview for this repository.
+// gen-repo-card.ts — the GitHub social preview for this repository.
 //
 // GitHub wants 1280x640 and crops toward the middle in some unfurls, so nothing
 // load-bearing sits within 40px of an edge. Two variants, because the repo card
@@ -6,7 +6,7 @@
 //
 //   desktop   the LIVE homepage at 2:1. Says "the repo is this site" with no
 //             copy at all: desktop icons, the window, the taskbar, real photos.
-//             NOT deterministic — the homepage draws a random 12 of 158 photos
+//             NOT deterministic — the homepage draws a random 12 of its photos
 //             per request, so every regeneration ships a different grid.
 //   card      a composed Luna window on the Bliss wallpaper: big name, one line
 //             of subtitle, four measured facts. Reads at thumbnail size, where
@@ -32,7 +32,8 @@ const PAGES = path.join(ROOT, "src/pages");
 const STYLES = path.join(ROOT, "src/styles");
 const PUBLIC = path.join(ROOT, "public");
 const BASE = (process.env.CARD_BASE || "https://aadhar.sh").replace(/\/$/, "");
-const CARD_W = 1280, CARD_H = 640;
+const CARD_W = 1280,
+  CARD_H = 640;
 
 const argv = process.argv.slice(2);
 const outIdx = argv.indexOf("--out");
@@ -111,12 +112,7 @@ async function facts() {
     readFile(path.join(ROOT, "config/site-manifest.json"), "utf8"),
     readFile(path.join(PUBLIC, "images/hashes.json"), "utf8"),
   ]);
-  return [
-    `${JSON.parse(manifest).surfaces.length} surfaces`,
-    `${Object.keys(JSON.parse(hashes)).length} photos`,
-    "0 font bytes",
-    "brotli q11 + zstd deltas",
-  ];
+  return [`${JSON.parse(manifest).surfaces.length} surfaces`, `${Object.keys(JSON.parse(hashes)).length} photos`, "0 font bytes", "brotli q11 + zstd deltas"];
 }
 
 function cardHtml({ wallpaper, icon, tokenCss, chips }) {
@@ -171,9 +167,7 @@ function cardHtml({ wallpaper, icon, tokenCss, chips }) {
            hand-written HTML, and one Cloudflare Worker serving all of it.</p>
         <div class="chips">${chips.map((c) => `<span class="chip">${c}</span>`).join("")}</div>
       </div>
-      <div class="status"><span class="cell grow">Ready</span>${
-        ["Cloudflare Workers"].map((c) => `<span class="cell">${c}</span>`).join("")
-      }</div>
+      <div class="status"><span class="cell grow">Ready</span>${["Cloudflare Workers"].map((c) => `<span class="cell">${c}</span>`).join("")}</div>
     </div>
   </div></body></html>`;
 }
@@ -217,4 +211,7 @@ async function main() {
   console.log(`\nchips: ${chips.join(" · ")}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

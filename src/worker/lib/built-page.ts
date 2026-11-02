@@ -15,11 +15,11 @@
 //            dev` and the contract suite. The build refuses to ship without
 //            the file, so production never takes this arm.
 //
-// Before this module the same six steps (build the header set, serveStaticPage,
-// test for 404, cancel the body, render, loop the headers back on) were written
-// at 18 routes, and five of them negotiated Markdown by hand so the twin kept
-// the page's noindex. The representation engine is still serveStaticPage; this
-// is the seam above it that knows a page has a fallback.
+// The representation engine is serveStaticPage; this is the seam above it that
+// knows a page has a fallback. Routes call it so none hand-rolls the six steps
+// (build the header set, serveStaticPage, test for 404, cancel the body, render,
+// loop the headers back on), and none negotiates Markdown by hand, which is how
+// a twin would lose the page's noindex.
 import { serveStaticPage } from "./assets.ts";
 
 type Awaitable<T> = T | Promise<T>;
@@ -37,7 +37,9 @@ export async function serveBuiltPage(request: Request, env, page: BuiltPage = {}
   }
   const built = await serveStaticPage(request, env, { headers: page.headers });
   if (built.status !== 404 || !page.live) return built;
-  try { await built.body?.cancel(); } catch {}
+  try {
+    await built.body?.cancel();
+  } catch {}
   return withPagePolicy(await page.live(), page.headers);
 }
 

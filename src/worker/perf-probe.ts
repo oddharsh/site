@@ -1,6 +1,7 @@
 // Sample the homepage fragment handlers at :07/:37 for a per-version latency
 // series in Analytics Engine. The measurement sees the cron's colo and the
 // handlers' I/O; it does not measure browser load time or synchronous CPU.
+
 import { handlePhotoGrid } from "./home.ts";
 import { rnTracksHtml } from "./rn.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
@@ -20,8 +21,14 @@ export async function cronHomeProbe(env, ctx) {
     const time = async (fn) => {
       const s = Date.now();
       let r;
-      try { r = await fn(); } catch { return null; }
-      try { await r.body?.cancel(); } catch {}
+      try {
+        r = await fn();
+      } catch {
+        return null;
+      }
+      try {
+        await r.body?.cancel();
+      } catch {}
       return Date.now() - s;
     };
     // warm: false, because the art warm is a visitor-colo side effect that runs

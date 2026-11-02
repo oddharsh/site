@@ -1,57 +1,55 @@
 # Aadharsh Pannirselvam
 
-resume@aadhar.sh · [aadhar.sh](https://aadhar.sh) (check out [/lwe](https://aadhar.sh/lwe) and the source for the site) · aadharsh.eth · [@oddhash](https://x.com/oddhash)
+resume@aadhar.sh · [aadhar.sh](https://aadhar.sh) · [aadhar.sh/lwe](https://aadhar.sh/lwe) · [github.com/oddharsh](https://github.com/oddharsh) · [@oddhash](https://x.com/oddhash)
 
 Plain-text mirror of resume.pdf (the canonical copy). Structured data lives in resume.json.
 
+I notice technology, take it apart to understand it, and write up what's inside. Obsessive about feel and performance: I live on beta and canary builds, give feedback, and lately ship the fixes. By day I invest in that frontier at Archetype, and the writing is part of that job; the rest of the time I tinker and play.
+
+## Tinkering and Building with Technology
+
+**Learning With Errors** · [aadhar.sh/lwe](https://aadhar.sh/lwe)
+Builder & Writer · May 2026 to Present.
+
+- Interactive technical explainers written as conversations: inline demos you can poke, a pop quiz at the end of each one. FHE, MPC, TEEs, UTF-8: hard things taught the way you'd actually pick them up, by taking them apart.
+- Garage study: disassembled thumbnail encoding: AVIF vs JPEG vs jpegli at the byte level, bytes-per-pixel benchmarks from my own measurements, plus experiments in image optimization, minifiers, and dictionary-based content compressors.
+- Among the first 10 solvers of Paradigm's Kryptos-style CTF puzzles, cracked with a group ideating constantly, AI in the loop. The Vigenère explainer above came out of that rabbit hole.
+
+**Open-source contributor**
+June 2026 to Present.
+
+- Fixed the WebMCP standard on EmDash (a WordPress replacement) so hosted content is legible to AI agents, tracing the agent-readable web down to the protocol.
+- Improved the JavaScript minifier on Bun and Oxc, taking apart how code gets smaller.
+- [Found that workerd's zstd silently dropped its dictionary option, filed it, and wrote the fix, pricing it against production first: 21.9% off 13 pages at roughly 0.2 ms of CPU each.](https://github.com/cloudflare/workerd/pull/7106)
+- More merged work in the same lanes: Compression Dictionary Transport in web-platform-tests and MDN, and image-codec PRs into jxl-rs (libjxl) and zenjpeg.
+- Built houseguest, my personal software factory: a Claude Code plugin that makes my OSS contributions repeatable so PRs land mergeable, still being tweaked as I contribute more.
+- Thinking hard about how OSS maintenance evolves as AI-generated issues and PRs get cheap: what happens to feedback loops, and whether canaries and nightlies become the review process. I run both constantly.
+
+**Internal tooling** · shipped & maintained
+Archetype.
+
+- Surveyed agent frameworks, then built a firmwide Slack AI agent on DigitalOcean Kubernetes around an open-source, extensible base, folding in lessons from each framework and my own tools. Plus a 20-skill sidekick toolkit; people across the firm use both daily, and I maintain them from usage metrics, feedback, what people build, and security developments.
+
+## Noticing, Learning About, and Advocating for Technology
+
+**Archetype** · Principal, New York, NY
+October 2023 to Present.
+
+- [Wrote the 3-part "Privacy 2.0" series on privacy-enhancing technologies (TEEs, MPC, FHE, obfuscation), long-form research at the AI/crypto intersection that shaped the fund's applied-cryptography thesis.](https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i)
+- Treated diligence as deep technical education: dug into parallel execution for distributed systems, eval design, model architectures, and audio processing for voice models. I learn the machinery first, then the market.
+- Mapped the agent-readable web: evangelized agent payment rails, onchain agents, and app-chain design through hands-on work with open-source builders.
+- Host and curate dinners and events gathering top technical people across cryptography, formal verification, and privacy, and have spoken on panels and MC'ed events in the space, including an Oxford-style debate on onchain agents.
+
+**Galaxy** · Analyst, Ventures Team, New York, NY
+Summers 2022 and 2023.
+
+- Diligence on Mysten's Series A: benchmarked Sui's Move-based state concurrency model against Solana's parallelism and consensus protocol, applying broad distributed systems principles, and wrote internal directives on separated fee markets, applying game-theoretic principles and data.
+
 ## Education
 
-**University of Chicago** · Chicago, IL
-A.B. Economics, minor in Data Science. 3.81 GPA. June 2024.
+**University of Chicago**
+A.B. Economics, minor in Data Science, 3.81 · 2024.
 
-## Experience
+## Skills & Current Puzzles
 
-**Archetype** · New York, NY
-Research Analyst -> Analyst -> Associate -> Principal. October 2023 to Present.
-- Investments: TACEO, Turnkey. Portfolio companies worked closely with: Ritual, Opacity, Odyn.
-- Conduct sourcing, diligence, and decision for investments in Archetype's Fund II and III, most focused on applied cryptography.
-- Wrote the 3-part "Privacy 2.0" series on PETs (TEEs, MPC, FHE) and co-authored investment theses on archetype.fund.
-- Built, deployed, and maintain a firm-wide Slack AI agent on DigitalOcean Kubernetes, plus its 20-skill local sidekick toolkit.
-- Work with Archetype's portfolio companies across funds to direct strategy on product, marketing, and engineering.
-- Forecasted the results of the USBTC-Hut8 merger in the context of BTC, HPC/AI, and power-grid pricing dynamics.
-
-**Galaxy** · New York, NY
-Analyst, Ventures Team. Summers 2022 and 2023 (June to August).
-- Conducted market sourcing, diligence, and decision for technical investments in Galaxy's Principal Investments Fund.
-- Researched a taxonomy of Move-based chains as part of diligence into Mysten's Series A round in 2022.
-- Analyzed cross-chain stablecoin bridging and modeled impermanent loss between staking and providing AMM liquidity.
-- Wrote future-facing theses on mechanism design for Proposer-Builder-separated fee markets and protocols in response to MEV.
-
-**Benzinga Crypto** · Detroit, MI (Remote)
-Blockchain Analyst. January to June 2022.
-- Wrote educational content on blockchain, DeFi, and Web3 spanning technical topics such as IPFS and ZK proofs.
-- Researched trends in the blockchain space to produce comparative content, focused on investment opportunities.
-- Used Glassnode's on-chain data analytics to generate graphics and keywords to maximize article traffic.
-
-**Flipside Crypto** · Boston, MA
-Data Science. May to September 2021.
-- Analyzed cross-chain Ethereum bridges and price data, published in OurNetwork Issue #91.
-- Developed bounties and evaluated submissions for 3,100+ community researchers on Compound, Uniswap, and Yearn.
-- Learned SQL and web scraping to validate and update tokenomic data on Snowflake across multiple chains and protocols.
-
-## Leadership & Extracurricular
-
-**ChicagoDAO** · Chicago, IL
-External Governance Team, Maker Lead. March 2022 to June 2024.
-- Managed the DAO's Uniswap, Compound, and MakerDAO token delegations, evaluating and designing governance proposals.
-- Worked with Prof. Anthony Lee Zhang to build and maintain relations with alumni in crypto and decentralized systems.
-
-**Blockchain Chicago** · Chicago, IL
-Co-Founder, Instructor. August 2021 to June 2024.
-- Built development and business curriculum with other universities' clubs to support members' DeFi literacy.
-- Outlined a DAO for post-education ventures and collaborations with blockchain clubs at Booth and UChicago Law.
-
-**Oeconomica** · Chicago, IL
-Researcher, Labor and Consumption Cohort. October 2021 to February 2022.
-- Designed and co-authored an original research paper on labor and consumption impacts downstream of COVID.
-- Honed econometric and data-analysis skills (in R) to evaluate economic literature and validate research methods.
+TypeScript, Python, SQL · Claude Code, Codex · Taking apart: image codecs, compression dictionaries, agent-readable web.

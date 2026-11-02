@@ -33,9 +33,12 @@ export function paintGate(b: Uint8Array): PaintGate {
   while (i + 4 <= b.length) {
     if (b[i] !== 0xff) throw new Error(`lost marker sync at byte ${i}`);
     const m = b[i + 1];
-    if (m === 0xff) { i++; continue; }  // fill byte
+    if (m === 0xff) {
+      i++;
+      continue;
+    } // fill byte
     const len = (b[i + 2] << 8) | b[i + 3];
-    if (i + 2 + len > b.length) return out;  // header cut off by the prefix
+    if (i + 2 + len > b.length) return out; // header cut off by the prefix
     if (isSof(m)) {
       out.sof = m;
       out.components = b[i + 9];
@@ -44,11 +47,17 @@ export function paintGate(b: Uint8Array): PaintGate {
     if (m === 0xda) {
       const ns = b[i + 4];
       const inScan: number[] = [];
-      for (let k = 0; k < ns; k++) { inScan.push(b[i + 5 + k * 2]); started.add(b[i + 5 + k * 2]); }
+      for (let k = 0; k < ns; k++) {
+        inScan.push(b[i + 5 + k * 2]);
+        started.add(b[i + 5 + k * 2]);
+      }
       const p = i + 5 + ns * 2;
       out.scans.push(`${inScan.join(",")}:${b[p]}-${b[p + 1]}`);
       const data = i + 2 + len;
-      if (ids.length && ids.every((c) => started.has(c))) { out.gate = data; return out; }
+      if (ids.length && ids.every((c) => started.has(c))) {
+        out.gate = data;
+        return out;
+      }
       // Skip entropy-coded data: a 0xff there is followed by a stuffed 0x00 or
       // an RSTn, and any other marker ends the scan.
       let j = data;

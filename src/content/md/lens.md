@@ -18,14 +18,14 @@ Three, and a scan fills them from one fetch.
   reader when it does not. Framability is read from the target's own
   `X-Frame-Options` and `Content-Security-Policy: frame-ancestors`, so this
   costs no extra probe.
-- **Machine** is the raw response and the eight lenses below.
+- **Machine** is the raw response and the eleven lenses below.
 - **Browser** renders the page after JavaScript and reports the word gap against
   the HTTP response.
 
 `Delta` and `Compare` are the two synthesis views. Compare scans two URLs
 head-to-head against one rubric.
 
-## The eight lenses
+## The eleven lenses
 
 Each is phrased as the question it answers rather than as a practitioner noun.
 
@@ -38,6 +38,9 @@ Each is phrased as the question it answers rather than as a practitioner noun.
 | Model cost | what reading this page costs a language model |
 | Who's allowed | robots.txt, AI rules, terms |
 | Agent doors | MCP, OAuth, API catalog, agent cards |
+| What it accepts | the MCP tools it lists, read as a form and never called |
+| What it answers | one real question to its NLWeb `/ask` door, graded |
+| What agents get | what seven named agent clients' Accept headers get back |
 | Agent-ready? | the readiness score, and the rubric behind it |
 
 **Reader's guess runs a third-party extractor and reports the gap between what

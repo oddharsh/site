@@ -1,4 +1,4 @@
-// gen-feeds.mjs — RSS 2.0 feeds for the three authored sections.
+// gen-feeds.ts — RSS 2.0 feeds for the three authored sections.
 //
 // WHY BUILD OUTPUT. A feed is a pure function of the registry, the sitemap's
 // dates, and posts.json, all of which the build already has in hand. Generating
@@ -25,8 +25,11 @@ const SITE = "https://aadhar.sh";
 /** RSS is XML, and five characters decide whether it parses. */
 function xmlEscape(value) {
   return String(value ?? "")
-    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 /** RFC 822, which RSS 2.0 requires. A bare ISO date is not valid pubDate. */
@@ -66,13 +69,17 @@ export function renderFeed({ title, description, path, items }) {
     <atom:link href="${SITE}${xmlEscape(path)}/feed.xml" rel="self" type="application/rss+xml"/>
     <description>${xmlEscape(description)}</description>
     <language>en</language>
-${newest ? `    <lastBuildDate>${rfc822(newest)}</lastBuildDate>\n` : ""}${entries.map((item) => `    <item>
+${newest ? `    <lastBuildDate>${rfc822(newest)}</lastBuildDate>\n` : ""}${entries
+    .map(
+      (item) => `    <item>
       <title>${xmlEscape(item.title)}</title>
       <link>${SITE}${xmlEscape(item.path)}</link>
       <guid isPermaLink="true">${SITE}${xmlEscape(item.path)}</guid>
       <pubDate>${rfc822(item.date)}</pubDate>
       <description>${xmlEscape(item.description)}</description>
-    </item>`).join("\n")}
+    </item>`,
+    )
+    .join("\n")}
   </channel>
 </rss>
 `;
@@ -84,10 +91,6 @@ export const FEEDS = [
   { path: "/lwe", section: "lwe", title: "aadhar.sh — learning with errors", description: "Chat-style explainers with live demos." },
 ];
 
-/**
- * Build every feed from the committed sources.
- *
- */
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));
   const dates = sitemapDates(readFileSync(`${root}/public/sitemap.xml`, "utf8"));
@@ -105,16 +108,17 @@ export function buildFeeds(root = ".") {
 
   const out = new Map();
   for (const feed of FEEDS) {
-    const items = feed.section === "writing"
-      ? writingItems
-      : manifest.surfaces
-        .filter((surface) => surface.section === feed.section && surface.kind === "content" && surface.path !== feed.path)
-        .map((surface) => ({
-          path: surface.path,
-          title: surface.title,
-          description: surface.description || surface.hint || "",
-          date: dates.get(surface.path),
-        }));
+    const items =
+      feed.section === "writing"
+        ? writingItems
+        : manifest.surfaces
+            .filter((surface) => surface.section === feed.section && surface.kind === "content" && surface.path !== feed.path)
+            .map((surface) => ({
+              path: surface.path,
+              title: surface.title,
+              description: surface.description || surface.hint || "",
+              date: dates.get(surface.path),
+            }));
     out.set(`${feed.path}/feed.xml`, renderFeed({ ...feed, items }));
   }
   return out;

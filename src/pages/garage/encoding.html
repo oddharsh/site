@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/thumbnail encoding study</title>
@@ -93,19 +93,24 @@
 .zen-table td { vertical-align: top; }
 .zen-results { min-width: 480px; max-width: 620px; }
 .enc-ships { line-height: 1.6; }
+/* the two-kinds-of-.jxl figure: HIF, then each file, with each file's error map under it */
+.jx-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 560px; }
+.jx-grid .jx-err { grid-column-start: 2; }
+.jx-table { max-width: 620px; }
+.jx-table td { vertical-align: top; }
 
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div id="loupe" popover="manual" class="loupe" aria-hidden="true"><div class="bar"><span>loupe</span><span class="z">3.2&times;</span></div><div class="glass" id="loupe-glass"></div></div>
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/thumbnail encoding study</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail ends a chain of choices: <em>format,
@@ -337,9 +342,10 @@
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
       the worker streams a median 21.6&nbsp;MB progressive JPEG from R2 (since October 2026 as its
       lossless JPEG XL copy, about 8% smaller), and that single file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
-      structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
-      Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
-      here emits layered AVIF anyway. So the format that wins every byte comparison on this page
+      structurally cannot do this</b>. Its layered mode caps at four stages, paints early only in
+      Chromium, and is staged rather than incremental the way a JPEG scan script is. On the tiles it
+      costs 6 to 10% more bytes (<a href="#layered-avif">measured below</a>), so nothing here emits
+      it. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is a progressive JPEG.</p>
 
@@ -517,6 +523,35 @@
     <p class="note">The screenshots were 400&times;600, where a 1:8 preview already looks nearly final, so
       the early frames would read blurrier full-screen.</p>
 
+    <h3 id="layered-avif">Layered AVIF on the tiles <span class="badge review">measured</span></h3>
+    <p class="note">That table tried layered AVIF on the archive. The tiles are the AVIF that actually
+      ships, so the question was asked again there. A layered AVIF stores a small first layer, then
+      the real image coded as a prediction from it, the way video codes a P-frame. Three recipes ran on
+      16 shipped 600px tiles, each held to the shipped tile&apos;s SSIMULACRA2 so only the bytes move:</p>
+    <table class="enc-table">
+      <thead><tr><th>recipe</th><th>layer 0 ends at</th><th>bytes at the same quality</th></tr></thead>
+      <tbody>
+        <tr><td><code>avifenc --progressive</code></td><td class="num">1,346 B (6.5%)</td><td class="num">+10.1%</td></tr>
+        <tr><td><code>--layered</code>, 1/8-scale preview</td><td class="num">429 B (2.2%)</td><td class="num">+6.0%</td></tr>
+        <tr><td><code>--layered</code>, 1/4-scale preview</td><td class="num">566 B (3.1%)</td><td class="num">+7.3%</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Each cell is the median of the 16. The <code>--progressive</code> preset costs most
+      because its first layer is a full-size frame at quality 2. The 1/8 recipe comes from
+      <a href="https://jakearchibald.com/2025/present-and-future-of-progressive-image-rendering/" rel="external">Jake
+      Archibald&apos;s post on progressive rendering</a>.</p>
+    <p class="note">The held-open server then asked what each engine paints. Chrome 156 draws layer 0 the
+      moment its last byte lands: on three tiles, nothing one byte earlier and a blur exactly at the
+      boundary, for both recipes. WebKit 27.2, the engine inside Safari, decodes the same file and
+      paints nothing until the final byte, like a single-layer AVIF. Firefox wouldn&apos;t launch on
+      this machine the day of the test; Jake reports the same Chromium-only result.</p>
+    <p class="note"><b>So the tiles stay single-layer.</b> The median tile in the sample is
+      19&nbsp;KB. A preview would cost every visitor about 6% more bytes so Chrome can show a coloured
+      blur until the rest arrives, and Safari would pay the same bytes for nothing. Shipping it would
+      also re-mint every <code>/i/</code> URL. If Safari or Firefox starts painting layer 0
+      (<a href="https://github.com/web-platform-tests/interop/issues/1459" rel="external">an Interop 2027
+      proposal</a> asks for it), the trade changes and the tiles are worth testing again.</p>
+
     <p class="note"><b>Where this lands: nothing changes.</b> The tiles stay AVIF. Every browser that
       decodes JPEG XL also decodes AVIF, and AVIF wins at these sizes, so a JPEG XL
       <code>&lt;source&gt;</code> would either never be picked or make the tiles worse. The JPG
@@ -531,7 +566,71 @@
       holds and nothing varies on <code>Accept</code>. The JPEG survives: <code>djxl</code>
       rebuilds it byte for byte, which every upload proves with <code>cmp</code> before it lands. The
       old <code>.jpg</code> links answer 301. The cost is a browser without JPEG XL, which can&apos;t
-      open an original: Chrome before 155, and Firefox until it turns JPEG XL on (planned for 158).</p>
+      open an original: Safari before 17, Chrome before 155, and Firefox before 158, which turned
+      JPEG XL on 2026-10-13.</p>
+
+    <h3>Two files called <code>.jxl</code></h3>
+    <p class="note">Moving the archive taught one thing the byte tables above couldn&apos;t: a
+      <code>.jxl</code> holds something different depending on what went in. A JPEG goes in with its
+      own DCT coefficients. cjxl keeps them, adds a 602-byte reconstruction box (<code>jbrd</code>),
+      and <code>djxl -J</code> hands back the original file, every byte of it.</p>
+    <p class="note">A HIF carries HEVC and an AVIF carries AV1, each with its own transforms and
+      block sizes, so neither leaves coefficients JPEG XL can adopt and no lossless repack exists.
+      cjxl won&apos;t even open either file (<code>Getting pixel data failed</code>), because it
+      reads neither container.</p>
+    <p class="note">So the HIF goes through sips to a 16-bit PNG first, and what comes out is a new
+      lossy encode at a distance somebody has to choose. (The site keeps no AVIF originals, so for
+      AVIF the refusal is all I checked.)</p>
+    <div class="enc-table-scroll">
+      <table class="enc-table jx-table">
+        <thead><tr><th></th><th>from a JPEG</th><th>from a HIF (or an AVIF)</th></tr></thead>
+        <tbody>
+          <tr><td>cjxl reads</td><td>the <code>.jpg</code> itself</td><td>decoded pixels, since it can&apos;t open a <code>.HIF</code> or an <code>.avif</code></td></tr>
+          <tr><td>keeps</td><td>the JPEG&apos;s coefficients: 8 bits, 4:2:2 chroma, 8&times;8 blocks</td><td>the HIF&apos;s full depth, recoded in JPEG XL&apos;s own XYB colour space</td></tr>
+          <tr><td>costs</td><td>nothing against the JPEG</td><td>one new lossy generation</td></tr>
+          <tr><td>way back</td><td><code>djxl -J</code> rebuilds the JPEG byte for byte</td><td>none: <code>-J</code> refuses, and a plain <code>djxl x.jpg</code> quietly writes a fresh 12.7&nbsp;MB JPEG</td></tr>
+          <tr><td>metadata</td><td>rides inside the JPEG</td><td>copied from the HIF by exif-sooc, because sips keeps 40 of 75 tags and drops every Fujifilm maker note</td></tr>
+          <tr><td>XT509890</td><td>17.6&nbsp;MB, from a 19.4&nbsp;MB JPEG</td><td>16.0&nbsp;MB, at distance <code>0.179</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">That asymmetry made the HIF route look like a bargain. Encoding from the HIF skips
+      the <code>q100</code> JPEG, a second lossy generation cut to 8 bits, and the first sweep
+      (2026-10-08) put the saving at 33%.</p>
+    <p class="note">It scored the old archive through <code>djpeg</code>, though, and a visitor never
+      sees that decode. R2 serves the repack, and a JPEG XL decoder rebuilds the same coefficients
+      more precisely: 1.9 to 3.5 SSIMULACRA2 better on 6 of 6 photos. jxl-rs, the decoder Chrome
+      ships, lands within 0.05 of libjxl.</p>
+    <p class="note">The repack decodes better than the JPEG inside it, so the bar had to move.
+      Against the repack as a browser decodes it, 102 HIF archives still shrank when re-encoded
+      from the HIF: <b>9.8%</b> in total, 2.07 to 1.86&nbsp;GB, each winning on both metrics. The
+      other 16 kept their repack, because the smallest encode that beat it was no smaller; R2 has
+      held the new files since 2026-10-16.</p>
+    <p class="note">At 1:1 the two files look the same, which is the whole job of an archive. Below
+      are two 160-pixel crops of XT509890 at full resolution: the HIF, then each file R2 has served
+      for it. Under each file sits its difference from the HIF, multiplied 32 times. The loupe works
+      on all of them.</p>
+    <div class="enc-grid jx-grid">
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>HIF</b> the reference</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-jpeg.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the JPEG</b> until 10-16<span class="enc-sz">17.6 MB</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the HIF</b> now<span class="enc-sz">16.0 MB</span></figcaption></figure>
+        <figure class="enc-card jx-err"><img src="/garage/enc/jx-scaffold-from-jpeg-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-scaffold-from-hif-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+    </div>
+    <div class="enc-grid jx-grid">
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>HIF</b> the reference</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-jpeg.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the JPEG</b> until 10-16<span class="enc-sz">17.6 MB</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-hif.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>from the HIF</b> now<span class="enc-sz">16.0 MB</span></figcaption></figure>
+        <figure class="enc-card jx-err"><img src="/garage/enc/jx-paint-from-jpeg-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/jx-paint-from-hif-err.png" alt="" width="160" height="160" loading="lazy" decoding="async"><figcaption><b>error</b> &times;32</figcaption></figure>
+    </div>
+    <p class="note">On the scaffold both files miss in the same place, the colour edges along each
+      bar. The yellow paint pulls them apart: there the encode from the HIF moves as much red and
+      green as the repack and far more blue, 2.10 steps RMS against 0.65. That fits XYB, which spends
+      the fewest bits on blue because the eye resolves the least detail there.</p>
+    <p class="note">Both metrics still call the HIF-born file closer, at SSIMULACRA2 93.40 against
+      93.36 and butteraugli 0.143 against 0.189. <code>tools/photos/gen-jxl-source-crops.ts</code>
+      rebuilds the crops from the two R2 files.</p>
 
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
@@ -545,11 +644,12 @@
         (+5.6%, +6.5% and +7.0% on the 600, 400 and 200 tiles) and scores 1.3 to 1.7 higher: the
         equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
         <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
-      <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
-        the HIF&apos;s native sensor chroma, and the scan order is the point at 20&nbsp;MB. The true HEIF
-        originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
-        rearranged to progressive by <code>jpegtran</code> on the way up: a lossless reorder of the
-        same coefficients.</li>
+      <li><b>Full-res originals in R2 as JPEG XL</b>, one progressive file per photo. A JPG-source
+        original is the camera&apos;s file, rearranged by <code>jpegtran</code> and repacked by cjxl,
+        both lossless, so <code>djxl -J</code> rebuilds it. A HIF photo&apos;s is encoded from the HIF
+        at the fewest bytes that beat its old <code>q100 4:2:2</code> JPEG as a browser decodes it.
+        When nothing smaller wins, it stays that JPEG&apos;s repack. The true HEIF originals stay on
+        local disk.</li>
     </ul>
 
     <footer>
@@ -559,7 +659,7 @@
 
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -755,7 +855,7 @@
         {
           "t": "At 20 MB the loading order is the whole experience, and AVIF can't paint incrementally like JPEG.",
           "ok": true,
-          "why": "Both facts hold at once. The archive is one bare file with no picture element, so scan order IS the loading experience. AVIF wins every byte comparison here and still loses that property: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
+          "why": "Both facts hold at once. The archive is one bare file with no picture element, so scan order IS the loading experience. AVIF wins every byte comparison here and still loses that property: its layered mode caps at four stages, paints early only in Chromium, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is a progressive JPEG, stored since October 2026 as its lossless JPEG XL copy, because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply the smaller file there.",
@@ -776,6 +876,6 @@
 </script>
 <script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="28"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="29"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

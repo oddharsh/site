@@ -9,9 +9,9 @@
 //
 // The rule that forced this is anti-slop/no-runtime-typeof, and its argument is
 // the right one: parse input where it enters, then branch on a value you can
-// trust. This repo declares ZERO runtime dependencies and the Worker bundle
-// sits on a 204.24 KiB baseline, so a schema library was not the way to get
-// there. These are the primitives instead, and they are deliberately dull.
+// trust. This repo declares ZERO runtime dependencies and watches the Worker
+// bundle's size (tools/perf-budget.ts), so a schema library was not the way to
+// get there. These are the primitives instead, and they are deliberately dull.
 //
 // The rule is OFF for this file alone, in .oxlintrc.json. That is not a
 // loophole: a hand-rolled parser is made of `typeof` by construction, so the
@@ -23,20 +23,20 @@
 export function asText(value: unknown): string | null;
 export function asText<F>(value: unknown, fallback: F): string | F;
 export function asText(value: unknown, fallback: unknown = null): unknown {
-	return typeof value === "string" && value !== "" ? value : fallback;
+  return typeof value === "string" && value !== "" ? value : fallback;
 }
 
 /** A finite number, or `fallback`. NaN and Infinity are not numbers here. */
 export function asNumber(value: unknown): number | null;
 export function asNumber<F>(value: unknown, fallback: F): number | F;
 export function asNumber(value: unknown, fallback: unknown = null): unknown {
-	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 /** A plain object, or null. Arrays are NOT records: `{}` and `[]` both answer
  *  "object" to typeof, and every caller here means the first one. */
 export const asRecord = (value: unknown): Record<string, unknown> | null =>
-	(value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null);
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 
 /** An array, or an empty one, so callers can map without a guard. */
 export const asList = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
@@ -54,7 +54,11 @@ export const asScalarText = (value: unknown): string => {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") return String(value);
   if (value === null || value === undefined) return "";
-  try { return JSON.stringify(value) ?? ""; } catch { return ""; }
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return "";
+  }
 };
 
 /** Is this callable? The binding-shaped question rather than the data-shaped

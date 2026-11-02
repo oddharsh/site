@@ -22,9 +22,11 @@
 //             fetch, validateLensTarget on every hop BEFORE the request, then
 //             the identity's gate for that hop.
 //   injected  env.OUTBOUND_TRANSPORT replaces the global fetch on the network
-//             adapter and on the robots bootstrap (lib/botauth.ts). Nothing in
-//             the Worker sets it. Validation, robots and signing still run in
-//             front of it, so a fake network tests the policy, never around it.
+//             adapter and on the robots bootstrap (lib/botauth.ts). In the
+//             Worker only around.ts sets it, to a subrequest meter
+//             (lib/budget.ts) wrapped around the real fetch. Validation, robots
+//             and signing still run in front of it, so a fake network tests
+//             the policy, never around it.
 //
 // A REFUSAL IS A VALUE. A hop the URL policy rejects, a redirect chain past
 // `maxHops`, and a robots.txt that says no each come back as `{ ok: false,
@@ -59,9 +61,7 @@ import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetc
 //                   it to ask what a named crawler token receives. It still
 //                   obeys AadharshBot's robots opt-out, because a diagnostic
 //                   identity cannot be a back door around our own.
-export type OutboundIdentity =
-  | { as: "aadharshbot"; postQuantum?: boolean }
-  | { as: "unsigned-probe" };
+export type OutboundIdentity = { as: "aadharshbot"; postQuantum?: boolean } | { as: "unsigned-probe" };
 
 export type OutboundRequest = {
   method: "GET" | "POST";
@@ -83,9 +83,7 @@ export type OutboundRefusal =
   // `cause` is the BotPolicyError a throwing caller would have seen.
   | { ok: false; reason: "robots"; error: string; cause: BotPolicyError };
 
-export type OutboundRead =
-  | { ok: true; via: "self" | "network"; response: Response; finalUrl: string; hops: number }
-  | OutboundRefusal;
+export type OutboundRead = { ok: true; via: "self" | "network"; response: Response; finalUrl: string; hops: number } | OutboundRefusal;
 
 // The self adapter, or null when this env has no way to dispatch in-process.
 // SELF_FETCH is route() itself; ASSETS is the pre-enhancement static tree.
@@ -110,13 +108,15 @@ export async function outboundRead(url: string, env, request: OutboundRequest): 
   // An unparseable URL is not ours. It falls through to the network adapter,
   // whose hop-0 check refuses it as a value before any request.
   let hostname = "";
-  try { hostname = new URL(url).hostname; } catch { /* not self */ }
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    /* not self */
+  }
 
   const self = dispatchesToSelf(hostname, env) ? selfAdapter(env) : null;
   if (self) {
-    const selfHeaders = identity.as === "aadharshbot"
-      ? await botHeaders(url, env, { headers, sign: false })
-      : headers;
+    const selfHeaders = identity.as === "aadharshbot" ? await botHeaders(url, env, { headers, sign: false }) : headers;
     const response = await self(new Request(url, { method, headers: selfHeaders, ...withBody }));
     return { ok: true, via: "self", response, finalUrl: url, hops: 0 };
   }

@@ -1,5 +1,7 @@
 // One Clef call through the Workers AI binding, shared by every decision this
-// site asks Clef for (serendipity/event-tags.ts, lens-walls.ts).
+// site asks Clef for (serendipity/event-tags.ts, lens-walls.ts), and by the bio
+// extraction it asks Clairic for (serendipity/companies.ts), which speaks the
+// same System One API.
 //
 // Clef speaks TypeSafe's System One API: a state, typed questions, typed answers
 // with calibrated probabilities. What lives here is the transport the callers
@@ -15,8 +17,8 @@
  *  whose `run` is typed by a model catalog that may not name Clef yet, and it is
  *  what a test hands in. */
 export type AiRunner = { run: (model: string, input: unknown, options?: unknown) => Promise<unknown> };
-export type ClefEnv = { AI?: AiRunner | null, AI_GATEWAY?: string };
-export type ClefModel = "clef" | "clef-flash";
+export type ClefEnv = { AI?: AiRunner | null; AI_GATEWAY?: string };
+export type ClefModel = "clef" | "clef-flash" | "clairic";
 
 /** The binding's third argument: through the named gateway, uncached, or no
  *  gateway at all when AI_GATEWAY is empty. A wrong or deleted gateway FAILS the
@@ -42,8 +44,7 @@ export function classifyAiError(err: unknown): string {
 
 /** One call, raced against `timeoutMs`. The body is returned unparsed, since
  *  each caller validates the answers against its own options. */
-export async function runClef(env: ClefEnv, model: ClefModel, request: unknown, timeoutMs: number):
-  Promise<{ body: unknown } | { error: string }> {
+export async function runClef(env: ClefEnv, model: ClefModel, request: unknown, timeoutMs: number): Promise<{ body: unknown } | { error: string }> {
   if (!env.AI) return { error: "no AI binding" };
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {

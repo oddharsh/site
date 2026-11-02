@@ -1,4 +1,4 @@
-// wrangler-bin.mjs — how a tool in this repo spawns wrangler.
+// wrangler-bin.ts — how a tool in this repo spawns wrangler.
 //
 // The rule is one line: NAME NO PACKAGE MANAGER. Every tool here runs under
 // whatever runtime invoked it, and the tree it runs in may be a bun tree or a
@@ -51,10 +51,11 @@ export const WRANGLER_ENTRY = join(REPO, "node_modules", "wrangler", "bin", "wra
 // Builds image both install from.
 const NODE = process.versions.bun ? "node" : process.execPath;
 
-// The return is a TUPLE. Every caller spreads it into an exec (`exec(...wranglerCommand([...]))`),
-// and inference widens the pair to (string | string[])[], which has no arity, so
-// each of those spreads reads as "A spread argument must either have a tuple
-// type or be passed to a rest parameter". Six of them, across four tools.
+// The return is a TUPLE. Every caller spreads it into an exec
+// (`exec(...wranglerCommand([...]))`), and inference widens the pair to
+// (string | string[])[], which has no arity, so each of those spreads reads as
+// "A spread argument must either have a tuple type or be passed to a rest
+// parameter".
 /**
  * [command, argv] for spawning the pinned wrangler under node.
  */

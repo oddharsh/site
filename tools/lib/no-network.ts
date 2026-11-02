@@ -33,7 +33,7 @@
 // machine: the checks that genuinely read the wire (`infra:check`, `dcz:check`,
 // `routes:check:remote`) are their own scripts and never run under `bun test`.
 //
-// To stub one test, follow the convention already in ~10 files here:
+// To stub one test, follow the convention the contract tests already use:
 //
 //   const realFetch = globalThis.fetch;
 //   try { testGlobals.fetch = async () => new Response("...", { status: 200 }); ... }
@@ -62,7 +62,11 @@ const escaped: string[] = state.escaped;
 // in the report: an escape to something unparseable is an escape.
 
 const urlOf = (input) => {
-  try { return new Request(input as any).url; } catch { return String(input); }
+  try {
+    return new Request(input as any).url;
+  } catch {
+    return String(input);
+  }
 };
 
 const arm = () => {
@@ -71,7 +75,7 @@ const arm = () => {
   // `fetch(u).then(...)` with no await would otherwise get an exception from a
   // line it never guarded, which is a different failure than the one reported.
   //
-  // Assigned through the loose alias for the reason contract-shared.mjs gives at
+  // Assigned through the loose alias for the reason contract-shared.ts gives at
   // `testGlobals`: bun types `globalThis.fetch` as `typeof fetch`, which carries
   // a `preconnect` method, and a double that refuses every request has no
   // business implementing it. This is a partial stand-in being installed on a
@@ -81,36 +85,41 @@ const arm = () => {
     escaped.push(url);
     throw new TypeError(
       `the test suite tried to fetch ${url}. Stub globalThis.fetch for this test ` +
-      `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
+        `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
     );
   };
 
   process.on("exit", () => {
     if (escaped.length === 0) return;
 
-    // counts by host, filled as refusals arrive
     const counts = new Map<string, number>();
     for (const url of escaped) {
       let host = "(unparseable)";
-      try { host = new URL(url).host; } catch { /* keep the placeholder */ }
+      try {
+        host = new URL(url).host;
+      } catch {
+        /* keep the placeholder */
+      }
       counts.set(host, (counts.get(host) ?? 0) + 1);
     }
 
-    process.stderr.write([
-      "",
-      `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
-      "",
-      ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
-      "",
-      "  first few:",
-      ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
-      "",
-      "  Every one was REFUSED, so nothing left the machine, and a test that",
-      "  caught the refusal may well have passed. That is why this fails at exit",
-      "  rather than trusting the throw to be noticed.",
-      "  Stub globalThis.fetch in the offending test; the header here says how.",
-      "",
-    ].join("\n") + "\n");
+    process.stderr.write(
+      [
+        "",
+        `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
+        "",
+        ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
+        "",
+        "  first few:",
+        ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
+        "",
+        "  Every one was REFUSED, so nothing left the machine, and a test that",
+        "  caught the refusal may well have passed. That is why this fails at exit",
+        "  rather than trusting the throw to be noticed.",
+        "  Stub globalThis.fetch in the offending test; the header here says how.",
+        "",
+      ].join("\n") + "\n",
+    );
 
     // Set rather than thrown: an exception raised in an exit hook is reported
     // as a crash in the harness instead of as this message, and the message is

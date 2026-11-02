@@ -1,4 +1,4 @@
-// inject-og-meta.mjs — wire each garage + lwe page, and each registered page
+// inject-og-meta.ts — wire each garage + lwe page, and each registered page
 // directory, to its OG card image.
 //
 // Adds twitter:card=summary_large_image + og:image/twitter:image (absolute) so a
@@ -6,8 +6,8 @@
 // that already has twitter:card, and re-points og:image if the card path changed.
 // Anchored after the page's existing og:url line (every page has one).
 //
-//     node tools/photos/inject-og-meta.ts          # write
-//     node tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
+//     bun tools/photos/inject-og-meta.ts          # write
+//     bun tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
 
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -19,11 +19,11 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../.
 // Same split as gen-og-cards.ts: www/ is gone, and the cards and the documents
 // live in different trees now. See that file's header for what the stale
 // constant cost.
-const PUBLIC = path.join(ROOT, "public");    // the baked cards
-const PAGES = path.join(ROOT, "src/pages");  // the documents whose <head> gets the meta
+const PUBLIC = path.join(ROOT, "public"); // the baked cards
+const PAGES = path.join(ROOT, "src/pages"); // the documents whose <head> gets the meta
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
-// diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
+// diagnostic/test harnesses that get no card (must match gen-og-cards.ts)
 const EXCLUDE = new Set(["garage-vt-b", "garage-vt-check"]);
 
 function block(id, alt) {
@@ -45,7 +45,9 @@ function altFor(html, id) {
   return (t + ", live demo screenshotted").replace(/"/g, "&quot;");
 }
 
-let missing = 0, wrote = 0, skipped = 0;
+let missing = 0,
+  wrote = 0,
+  skipped = 0;
 
 // One page, one card, whatever shape of directory it came from. `alt` overrides
 // the synthesised line for pages whose card is not a demo screenshot.
@@ -57,11 +59,22 @@ async function wire(file, id, alt?) {
     missing++;
     return;
   }
-  if (/name="twitter:card"/.test(html)) { skipped++; return; }
+  if (/name="twitter:card"/.test(html)) {
+    skipped++;
+    return;
+  }
 
   const anchor = html.match(/<meta\s+property="og:url"[^>]*>/i);
-  if (!anchor) { console.log(`  ✗ ${id}: no og:url anchor to insert after`); missing++; return; }
-  if (CHECK) { console.log(`  · ${id}: would add card meta`); missing++; return; }
+  if (!anchor) {
+    console.log(`  ✗ ${id}: no og:url anchor to insert after`);
+    missing++;
+    return;
+  }
+  if (CHECK) {
+    console.log(`  · ${id}: would add card meta`);
+    missing++;
+    return;
+  }
 
   const ins = anchor[0] + "\n" + block(id, alt || altFor(html, id));
   html = html.replace(anchor[0], ins);
@@ -81,7 +94,7 @@ for (const section of ["garage", "lwe"]) {
   }
 }
 
-// page directories: one index.html at a top-level route (see og-pages.mjs)
+// page directories: one index.html at a top-level route (see og-pages.ts)
 for (const p of OG_PAGE_DIRS) {
   await wire(path.join(PAGES, p.dir, "index.html"), p.id, p.alt);
 }

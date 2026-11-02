@@ -103,6 +103,12 @@ lockfile, `bun run derive:check -- --lock` for `config/derivations.lock.json`.
 `bun run conflicts` says, per file, whether GitHub's web editor can take a
 conflict or it needs a local checkout.
 
+Before that, `bun run inflight` names every open PR and live `claude/*`
+branch touching the files this branch touches, and any gotcha number, route
+row, derivation id or cron slot two of them claim differently. Those
+collisions merge cleanly and still need a renumber, so catch them before CI
+goes green. A SessionStart hook runs it for every Claude Code session here.
+
 ## Rotate Cal's calendar or approval secret
 
 Run these from the repository root. `wrangler versions secret put` creates a
@@ -205,6 +211,10 @@ rotation and treat all previously emailed links as compromised.
    report the new version, runs the advisory `dcz:check`, and dispatches
    `dictionary-roll.yml`. There is no automatic ramp or rollback since
    2026-09-28; roll back from a workstation with `bun run deploy:promote --rollback`.
+5. If the release carried a changelog entry, record it in D1 from a
+   workstation once step 4 passes: `bun run checkpoints:record`. Nothing above
+   writes D1, because CI's Cloudflare token is read-only.
+   [Release a change](#release-a-change) has the detail.
 
 ### Auxiliary Workers deploy themselves (from 2026-10-05)
 
@@ -395,7 +405,7 @@ saving; that editor is the only thing anywhere that checks this syntax.
 per-request keys `deploy:promote` sends and collapse every sampled sweep onto one
 version, which the ramp reads as a dead deploy. That fails closed rather than
 shipping anything bad, and it aborts healthy releases until someone works out why,
-so `check-infra.mjs` asserts the exemption and a contract test pins it against the
+so `check-infra.ts` asserts the exemption and a contract test pins it against the
 header the sampler actually sends.
 
 `ip.src` rather than the cookie Cloudflare's docs prefer. A cookie means minting
@@ -427,8 +437,9 @@ For eight weeks before that they served nothing: `aadhar-sh` exported the
 `Counter` Durable Object, Cloudflare generates no version URLs for a Worker
 that implements one, and every version carried `has_preview: false` while
 every config said previews were on. Moving `Counter` to `aadhar-counter`
-fixed it. CLAUDE.md, "Preview URLs SERVE since 2026-09-29" and "Moving Counter
-out", have the diagnosis and the move. **Keep this Worker free of Durable
+fixed it. The diagnosis and the move are in the CLAUDE.md sections "Preview
+URLs SERVE since 2026-09-29" and "Moving Counter out", cut in #1126 and still
+readable with `git show c3af691b^:CLAUDE.md`. **Keep this Worker free of Durable
 Objects**, or every preview URL goes back to a 404 that says nothing about why.
 The one-read check is the version's `has_preview`:
 
@@ -478,7 +489,7 @@ Both derive a config with `tools/gen-remote-config.ts` and never commit it
 (`.wrangler.remote.jsonc`, gitignored). Your Worker code still runs locally; the
 binding calls hop to the real resource.
 
-`routes:check:remote` un-skips the six rows `verify-routes.mjs` marks `remote`
+`routes:check:remote` un-skips the six rows `verify-routes.ts` marks `remote`
 (`/lens/fetch`, `/lens/shot`, `/around/json`, `/photos`, `/images/full/<key>`),
 whose assertions depend on content a local Worker structurally cannot have.
 Plain `bun run routes:check` stays the CI gate and stays honest about what it
@@ -566,7 +577,7 @@ matters:
 2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
    Deploy command → `bash .github/deploy-wrangler.sh versions upload
    --x-provision=false --x-auto-create=false`, the string declared in
-   `infra.json` and exact-matched by `check-infra.mjs`. Leave Build command
+   `infra.json` and exact-matched by `check-infra.ts`. Leave Build command
    blank and the non-production command alone (it already uploads).
 3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
 
@@ -783,7 +794,7 @@ the time.
   it off and DNS promises a protocol the edge cannot speak, while the DNS tier
   stays green because the record itself never changed.
 - **Compression on**, because the performance budget is denominated in
-  compressed bytes and `perf-budget.mjs` compresses locally, so it would keep
+  compressed bytes and `perf-budget.ts` compresses locally, so it would keep
   passing while real visitors stopped getting compressed responses.
 - **HSTS** exact-matched like SPF and DMARC, because it is hand-chosen policy.
   Raising `max-age` is fine and should update the declaration.
@@ -820,7 +831,7 @@ perf-budget runs it on the prebuilt bundle the dry-run already produced, so it
 adds no second build. Reading on 2026-08-04: **~8 ms active against a 400 ms
 platform limit**.
 
-Read it for what it is. The baseline comment in `perf-budget.mjs` already
+Read it for what it is. The baseline comment in `perf-budget.ts` already
 established by hand that bundle bytes are two orders of magnitude away from being
 a latency problem, and its caveat still holds: `check startup` ranks frames but
 does not cost them, and it profiles a local machine whose CPU is not
@@ -839,7 +850,7 @@ a flamegraph.
 **It is not the regression tripwire, and it used to be described as one here.**
 That job belongs to the deterministic numbers: the bundle gzip, the per-module
 attribution, and the wire-size diff below. Diffing two draws from a 2.6x-spread
-distribution manufactures findings, which is why `perf-snapshot.mjs` records
+distribution manufactures findings, which is why `perf-snapshot.ts` records
 neither this reading nor anything else sampled.
 
 This also closes out an older open question. The standing conclusion that cold
@@ -847,7 +858,7 @@ start here is not eval-bound came from a 2026-07-28 experiment where lazy route
 imports bought nothing but +27 KB of wrappers, which was an argument from bundle
 structure. The startup profile measures it directly and agrees.
 
-The bundle baseline itself lives in `perf-budget.mjs` with its full history (86 →
+The bundle baseline itself lives in `perf-budget.ts` with its full history (86 →
 129.23 → 204.24 KiB gzip) and the argument for each move. Read that comment
 before treating a breach as a regression; two of the three moves were legitimate
 growth, and it also records why the dry-run number and the `check startup` number
@@ -902,6 +913,22 @@ under 4 ms, half the gate. Delete the entry.
 **When a route gets dearer on purpose:** raise its `ceilingMs` in the same PR and
 say why in `why`. Each ceiling is the highest of 14 scaled CI runs plus 20%.
 
+To see what a budget edit does to a run you already have, without sampling
+again, `node tools/cpu-sweep.ts --replay .build/cpu-sweep.json --budget <file> --gate`
+judges that run's recorded samples on the CPU model it ran on. It exits 2 if the
+edit would re-sample a route the run sampled once.
+
+**When a route fails on a PR that didn't touch the Worker:** a step smaller than
+the route's spread passed its own PR and is failing the ones after it (gotcha
+81). Pull the route's reading and the control's from 30 or more CPU jobs:
+`gh run list --workflow ci.yml`, then the `CPU per route` job's id from
+`gh api repos/oddharsh/site/actions/runs/<run>/jobs`, then
+`gh run view --job <id> --log`. The logs API refuses those logs because they
+hold escape sequences, and some runs' logs label the step `UNKNOWN STEP`, so
+grep for the table's rows. Sort the readings by time to find the
+merge where the step landed, then re-fit `ceilingMs` from the conclusive runs
+after it and record them in the row's `measured`.
+
 **When the warning names a CPU model with no factor:** collect two runs on it
 (rerun the job until it lands there twice; the units line names the model) and
 two or more on an EPYC 7763. Take each route confirmed in all of them (5
@@ -919,7 +946,7 @@ fallback, and `/coffee/availability.json` answers 503 without its calendar secre
 ### The wire-size diff (the differential half)
 
 Everything above is ABSOLUTE: a number against a constant somebody typed. That
-constant rots, and the baseline history in `perf-budget.mjs` is the receipt — 86
+constant rots, and the baseline history in `perf-budget.ts` is the receipt — 86
 → 129.23 → 204.24 KiB, with the 129.23 era spent permanently in breach while CI
 printed "hard checks green" over it. The 204.24 baseline set on 2026-08-04 was
 itself already firing by 2026-08-08 (258.34 KiB observed at `295ee97`).
@@ -968,7 +995,7 @@ because nothing drew the slope.
 
 `.github/workflows/perf-history.yml` runs at 09:00 UTC, skips when nothing was
 committed in 25 hours, records a snapshot of `main`, reduces it to one JSONL line
-(`perf-snapshot.mjs row`, ~430 bytes), and appends it to **`perf-history`**, an
+(`perf-snapshot.ts row`, ~430 bytes), and appends it to **`perf-history`**, an
 orphan branch holding `history.jsonl` and a README. `/garage/dyno` renders it, SWR-cached
 in KV for 6h.
 
@@ -993,7 +1020,7 @@ Three things about the page, all about honesty rather than looks:
   so a chart that draws itself on the server costs one `<svg>` and no exceptions.
   Point tooltips are native `<title>` elements.
 - **Hand-entered history is drawn dashed.** `src/worker/dyno-seed.json`
-  carries the four points from `perf-budget.mjs`'s baseline comment so the page
+  carries the four points from `perf-budget.ts`'s baseline comment so the page
   is useful before the series fills up. They live in the repo rather than seeded
   into the branch so every hand-entered number goes through PR review, and they
   render differently from measured ones because a number somebody typed into a
@@ -1151,8 +1178,6 @@ written, because a watch that reads true on its first run is watching nothing.
 | `bun-image-linear-light-resize` | oven-sh/bun#40510 (fix #40512) | `resize(w, h, { colorspace: "linear" })` changes the bytes |
 | `bun-image-keeps-16-bit-samples` | oven-sh/bun#30462 | a 16-bit PNG round-trips at depth 16 |
 | `fetch-honours-dispatcher` | oven-sh/bun#39247 (fix #39250) | `fetch(url, { dispatcher })` calls `dispatch()` |
-| `css-minifier-knows-the-seven-pseudo-elements` | oven-sh/bun#41120 | no `Invalid selector` on `::scroll-marker` and friends |
-| `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
 | `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
 | `workerd-exposes-temporal` | cloudflare/workerd#6907 | `tools/workerd-temporal-probe.ts` finds Temporal under production's compat settings, with a clock within a minute of `Date.now()` |
 
@@ -1262,9 +1287,8 @@ release path; this workflow is advisory by construction and holds only a
 GITHUB token with `issues: write`.
 
 `CHROME_CHANNEL` is the one knob shared with every other Playwright probe here
-(`csp:sweep`, `speculation:probe`, `lens-seed`, the OG
-cards, ...): `CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary,
-and unset means the stable Chrome it always meant.
+(`csp:sweep`, `lens-seed`, the OG cards, ...):
+`CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary, and unset means the stable Chrome it always meant.
 
 ## Re-run the user-agent survey (`/garage/useragent`)
 
@@ -1278,7 +1302,7 @@ publish a new run, refresh `src/data/ua-survey.json`, then re-embed the compact
 copy in `pipelines/garage/specs/useragent.json` under `pageJs` and regenerate:
 
 ```bash
-node pipelines/garage/generate.mjs page useragent && bun run gen:shell
+node pipelines/garage/generate.ts page useragent && bun run gen:shell
 ```
 
 **Read the control rows before reading anything else.** Every target carries a
@@ -1319,7 +1343,7 @@ under "What the automation does, and why it stopped".
 
 The [LWE guide](../pipelines/lwe/README.md) and
 [Garage guide](../pipelines/garage/README.md) own the creation steps. Both use
-[`page-contract.mjs`](../pipelines/content/page-contract.mjs) for the editorial
+[`page-contract.ts`](../pipelines/content/page-contract.ts) for the editorial
 card and three-to-seven-question understanding check.
 
 Render the selected page with its generator and register the surface in
@@ -1386,9 +1410,10 @@ below whenever they look unreferenced again:
   dig +short default._bimi.aadhar.sh TXT   # "v=BIMI1; l=https://aadhar.sh/bimi.svg"
   ```
 
-- **`design/styles.css`** is the design system's entry point, four `@import`s
-  over `design/tokens/`. Nothing the site serves links it (the site inlines only
-  the font tokens, per the byte-budget rule in CLAUDE.md). Its consumer is the
+- **`design/styles.css`** is the design system's entry point, three `@import`s
+  over `design/tokens/`, leaving out `fonts.css` on purpose (gotcha 88).
+  Nothing the site serves links it (the site inlines only the font tokens, per
+  the byte-budget rule in CLAUDE.md). Its consumer is the
   `aadhar-sh-design` skill package, which lists it in `globalCssPaths` and tells
   prototypes to link it. Check with:
 
@@ -1465,7 +1490,7 @@ when the remote job is unavailable.
 ```bash
 # the photo pipeline
 brew install mozjpeg libavif pkgconf          # JPEG tools plus native AVIF library and build discovery
-brew install jpeg-xl jpeg-turbo               # cjxl/djxl for the JPEG XL originals; djpeg decodes a HIF archive's bar
+brew install jpeg-xl                          # cjxl/djxl for the JPEG XL originals and a HIF archive's bar
 # Grid tiers use libavif directly from zenc. avifenc is the parity reference;
 # zenc --avif-version reports the library and codec actually linked at runtime
 # (the zenc-avif entry in config/tools.json).
@@ -1474,7 +1499,7 @@ bun run wrangler login                                         # Cloudflare auth
 bun run cf auth login                                          # Cloudflare auth for deploy:promote, D1 reads and KV seeding (tools/lib/cf.ts)
 
 # the study pages, which are NOT needed to add a photo
-brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
+brew install webp                                     # cwebp for the encoding grids
 ```
 Homebrew's `pkgconf` provides `pkg-config`, which resolves the native library.
 The optional source AVIF study build still needs `brew install cmake ninja`;
@@ -1483,14 +1508,16 @@ grid ingest does not use that build.
 sips is macOS-native and needs no install. Published-photo rerenders can use
 the remote workflow above; fresh ingestion needs the credentials described below.
 
-Ingesting a HIF photo, and `export-for-instagram.sh`, also want **ssimulacra2**
-and **butteraugli_main**, the two perceptual metrics they search quality
-against: `hif-archive.ts` uses them to find the smallest JPEG XL of the HIF
-that beats the old archive JPEG on both.
-Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
-`jpeg-xl` formula does not ship them, so there is no brew line for this row. The
-script falls back to `/opt/zerobrew/prefix/bin`, which is where this workstation's
-source build put them.
+Every photo tool that scores quality runs **photo-metrics**, the in-tree Rust
+crate at `tools/photos/photo-metrics` (SSIMULACRA2 and butteraugli in one
+process), and builds it on first use: `hif-archive.ts` to find the smallest
+JPEG XL of a HIF that beats the old archive JPEG on both metrics,
+`export-for-instagram.sh` for its quality search, and the probes and
+`/pixel-peeper` generators through `tools/photos/photo-metrics.ts`. The
+Instagram export also wants **djpeg** (`brew install jpeg-turbo`), because
+photo-metrics reads PNG and PNM only. libjxl's own `ssimulacra2` and
+`butteraugli_main` ship in the `jpeg-xl` bottle and are only the reference
+`photo-metrics-parity.ts` measures against.
 
 Run `bun run tools:check` before a pipeline session on a fresh machine. It
 checks the [declared executables](../config/tools.json) and reports missing tools
@@ -1549,7 +1576,7 @@ photo. Two flags on the same command:
 $EDITOR src/worker/albums.ts
 # 2. register the page: path "/<slug>", section "photos", then project it
 $EDITOR config/site-manifest.json && bun run gen:manifest
-#    plus one Run-palette row in src/client/nav-run.js, a sitemap.xml <url>,
+#    plus one Run-palette row in src/client/nav-run.ts, a sitemap.xml <url>,
 #    "/<slug>" and "/<slug>/" in cloudflare.config.ts runWorkerFirst (gotcha 26:
 #    each album costs two rows), and a row in tools/verify-routes.ts
 # 3. ingest with the flags
@@ -1637,7 +1664,7 @@ only sees photos that are already live.
 ```bash
 export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 ```
-`check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
+`check-photo-pipeline.ts` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
 ### Release a change
@@ -1654,18 +1681,31 @@ projection, so it needs no D1, no wrangler and no account selection. Commit it
 with the work. `/updates` and `/restore` render from that file at build time, so
 the entry ships with the deploy it describes instead of needing a second one.
 
-`bun run deploy:promote` records the staged rows in D1 when traffic reaches
-**100%** — the one place that knows traffic actually moved. A ramp that stops at
-10% leaves the entry staged, which is exactly what it is. `bun run
-checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
-tail of unreleased entries, and fails on anything else: behind, mismatched, or a
-gap in the tail.
+D1 holds the record of what **shipped**, and since 2026-09-28 (#1002) nothing
+on the release path writes it. Production traffic moves when Workers Builds
+deploys a promoted commit at 100%, and CI's Cloudflare token is read-only by
+rule. So after a release that carried an entry, once the promote workflow's
+`after-release` job reports the new version serving, record it from a
+workstation:
+```bash
+bun run checkpoints:check    # names any entry production carries that D1 lacks
+bun run checkpoints:record   # fetches origin/production, inserts those rows
+```
+"Released" means present in `origin/production`'s copy of
+`src/worker/checkpoints.json` (`tools/lib/checkpoints.ts`), so a stale working
+tree can't hide a row or record a title that never shipped. `--record` inserts
+oldest first and stops at the first failure, so a rerun continues where it
+stopped. It refuses to run in CI.
 
-Production traffic moves when Workers Builds deploys a promoted commit at 100%.
-A workstation `bun run deploy:promote` is the only thing that splits it. Nothing
-writes the D1 changelog rows since the ramp was deleted on 2026-09-28, so
-`checkpoints:check` reports released entries as staged until that table is
-retired or written by hand.
+`checkpoints:check` allows the projection to run AHEAD of D1 by a contiguous
+tail of entries production doesn't carry yet (staged), and fails on anything
+else: behind, mismatched, a gap in the tail, or a released entry D1 lacks. A
+manual `bun run deploy:promote` to 100% still writes the row itself, but normal
+releases don't run it.
+
+Measured 2026-10-17: D1 and the projection agree at v195 (2026-09-12, #793),
+and no entry has been staged since, across 540 commits on `main`. So no row is
+missing yet; the newest `/updates` entry is 35 days older than what serves.
 
 ### Kitesurf for the Browser view
 `/lens/browser` (the Browser view) renders on Kitesurf, Cloudflare's WASM browser
@@ -1896,18 +1936,19 @@ so pick variants rather than running the whole list.
 ```bash
 bun run av2:build
 bun run av2:wasm
-bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems XT507488,XT507525,XT508319,XT507399
+bun tools/photos/av2-wasm/samples.ts --src "<originals>" --stems L1000069_3,L1009919_2,L1009920,XT500071,XT500084,XT507399,XT507488,XT507525,XT508194,XT508319,XT509063
 bun tools/photos/av2-wasm/expect.ts
 ```
 `av2:wasm` runs av2-tone's `wasm/build.sh`, which needs `emcc` (`brew install
 emscripten`) and the AVM source the first command fetches. It writes
 `public/garage/av2/av2dec.<sha8>.wasm`; then set `WASM_URL` in
-`src/client/garage/av2-decode.js` to the name it prints. The emscripten version
+`src/client/garage/av2-decode.ts` to the name it prints. The emscripten version
 decides the bytes: av2-tone's `wasm/build.sh` records the one that minted the
 shipped file. `samples.ts` re-encodes
-the page's AV2 thumbnails and refuses a photo whose shipped AVIF it can't
+the page's AV2 thumbnails with the tuned build (per-segment QM plus
+`tool-unlock=6`, TCQ and the IST/CCTX search), and refuses a photo whose shipped AVIF it can't
 reproduce byte for byte. `expect.ts` records what native AVM decodes each file
-to, and `contract-av2-decoder-matches-avm.test.mjs` holds the shipped WebAssembly
+to, and `contract-av2-decoder-matches-avm.test.ts` holds the shipped WebAssembly
 to it, so re-run it after any AV2 file or the `.wasm` changes. Moving the AVM pin
 changes the bitstream the decoder reads, so re-encode the samples with it.
 
@@ -1932,7 +1973,9 @@ bun tools/photos/photo-metrics-parity.ts --limit 4
 ```
 `hif-archive.ts` scores every HIF archive with `photo-metrics`
 (`tools/photos/photo-metrics/`: fast-ssim2 for SSIMULACRA2, imazen's butteraugli
-for the 3-norm), built on first use. Its two pins are exact, and the dependabot
+for the 3-norm), built on first use. Since 2026-10-31 the Instagram export, the
+`/pixel-peeper` generators and the codec probes score with it too, so a pin
+move also changes their numbers the next time they run. Its two pins are exact, and the dependabot
 lane for that directory is a prompt to run this before merging. It replays
 `hif-archive.ts`'s own bisection with photo-metrics and with libjxl's
 `ssimulacra2` and `butteraugli_main`, and prints PASS only when every frame
@@ -2257,9 +2300,9 @@ the cheap ones. Cut spans on the surface that emits them.
 
 Run `./tools/photos/bump-version.sh <slug> "<title>"` inside the release PR. It
 stages the next entry in `src/worker/checkpoints.json` and performs no network
-or D1 write. Commit that entry with the change it describes. The full ramp
-records it in D1 after traffic reaches 100%; see the
-[release path](#cicd-release-path). Keep the `/sw.js` unregister stub: it still
+or D1 write. Commit that entry with the change it describes. After the release
+serves, `bun run checkpoints:record` copies it into D1 from a workstation; see
+[Release a change](#release-a-change). Keep the `/sw.js` unregister stub: it still
 cleans up old service-worker installations and carries no version counter.
 
 ---

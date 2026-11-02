@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list</title>
@@ -36,7 +36,7 @@
 .hf-table{border-collapse:collapse;font-size:var(--text-micro);width:100%;min-width:560px}
 .hf-table th{text-align:left;background:var(--surface-desktop);border:1px solid #c8d2e2;padding:4px 7px;font-family:var(--font-caption);color:var(--slate-38);position:sticky;top:0}
 .hf-table td{border:1px solid var(--slate-90);padding:4px 7px;vertical-align:top;line-height:1.45}
-.hf-table tr:nth-child(even) td{background:var(--paper-cool)}
+.hf-table tbody tr:nth-child(odd) td{background:var(--paper-cool)}
 .hf-table code{font-size:var(--text-2xs);font-family:var(--font-mono)}
 .hf-here td{background:#fdf6e0 !important;box-shadow:inset 3px 0 0 #e0a72c}
 .hf-tag{display:inline-block;font-size:var(--text-3xs);padding:0 5px;border-radius:8px;background:var(--slate-92);color:#3d4d68;white-space:nowrap}
@@ -56,13 +56,13 @@
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/hidden-flags</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
 <h1>Flags the docs don't list</h1>
 <p class="garage-intro"><a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> 4.125.0 carries nineteen flags marked hidden, so they appear in no help output and no documentation page. Reading them is easy. The hard part is that an option a tool silently ignores and an option it honours produce the same <a class="term" data-t="exit-code" href="https://en.wikipedia.org/wiki/Exit_status" title="The number a program reports when it finishes; 0 means success and anything else signals an error." rel="external">exit code</a>, the same output, and the same success. This page is about the control that separates those two, why it usually costs nothing, and four times the difference decided something real on this site.</p>
 
@@ -101,7 +101,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p><a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">Dictionary compression</a> takes a <code>dictionary</code> option. <a class="term" data-t="nodejs" href="https://en.wikipedia.org/wiki/Node.js" title="A program that runs JavaScript outside the browser, widely used for servers and build tools." rel="external">Node 26</a> honours it. <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Workers</a> ignore it for <a class="term" data-t="zstd" href="https://en.wikipedia.org/wiki/Zstd" title="Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit." rel="external">zstd</a> and say nothing. <a class="term" data-t="bun" href="https://en.wikipedia.org/wiki/Bun_(software)" title="A JavaScript runtime that also bundles a package manager, bundler and test runner, built to work as a replacement for Node.js." rel="external">Bun</a> ignored it through 1.3.14 and fixed it in <a href="https://github.com/oven-sh/bun/pull/34427" rel="external">oven-sh/bun#34427</a>. Every one of those failures is silent, because a frame compressed <em>without</em> a dictionary still decodes perfectly <em>with</em> one. Nothing throws. The only symptom is a byte count that never got smaller.</p>
 <p>The control is four lines and it needs no deploy: compress one target three times, with no dictionary, with the right one, and with a deliberately wrong one. An engine that honours the option prints a smaller number for the right dictionary alone. An engine that ignores it prints the same number three times.</p>
 <div class="hf-scroll"><table class="hf-table hf-static">
-  <tr><th>engine</th><th>no dictionary</th><th>right dictionary</th><th>verdict</th></tr>
+  <thead><tr><th scope="col">engine</th><th scope="col">no dictionary</th><th scope="col">right dictionary</th><th scope="col">verdict</th></tr></thead>
   <tr><td>node 26</td><td>70 B</td><td>18 B</td><td class="hf-ok">honours it</td></tr>
   <tr><td>workerd</td><td colspan="2">same number three times</td><td class="hf-no">ignores it</td></tr>
   <tr><td>bun through 1.3.14</td><td colspan="2">same number three times</td><td class="hf-no">ignored it</td></tr>
@@ -149,7 +149,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </div>
+  </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
 </div>
 
@@ -284,10 +284,12 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
     var head = document.createElement("tr");
     ["flag", "alias", "group", "what it says it does"].forEach(function (h) {
       var th = document.createElement("th");
+      th.scope = "col";
       th.textContent = h;
       head.appendChild(th);
     });
-    table.appendChild(head);
+    table.createTHead().appendChild(head);
+    var tableRows = table.createTBody();
     var shown = 0;
     FLAGS.forEach(function (row) {
       if (!matches(row)) return;
@@ -312,7 +314,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       var c4 = document.createElement("td");
       c4.textContent = row.d;
       [c1, c2, c3, c4].forEach(function (c) { tr.appendChild(c); });
-      table.appendChild(tr);
+      tableRows.appendChild(tr);
     });
     if (count) {
       count.textContent = shown === FLAGS.length
@@ -351,10 +353,12 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
     var head = document.createElement("tr");
     ["what you see", "what it means"].forEach(function (t) {
       var th = document.createElement("th");
+      th.scope = "col";
       th.textContent = t;
       head.appendChild(th);
     });
-    tbl.appendChild(head);
+    tbl.createTHead().appendChild(head);
+    var caseRows = tbl.createTBody();
     c.table.forEach(function (pair) {
       var tr = document.createElement("tr");
       pair.forEach(function (cell) {
@@ -362,7 +366,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
         td.textContent = cell;
         tr.appendChild(td);
       });
-      tbl.appendChild(tr);
+      caseRows.appendChild(tr);
     });
     var cost = document.createElement("p");
     cost.className = "hf-cost";
@@ -524,6 +528,6 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 </script>
 <script src="/quiz.js" defer></script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="28"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="29"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

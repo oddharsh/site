@@ -33,7 +33,7 @@ function years(seconds: number): string {
   return words[n];
 }
 
-// The /bot page's document style, shared by all four. Tokens only.
+// The /bot page's document style, shared by all four.
 const CSS = `/*min*/
   h2 { font-family: var(--font-caption); font-size: var(--text-h2); color: var(--blue-40); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: var(--rule); margin-top: 8px; }
@@ -77,7 +77,6 @@ function page({ route, title, description, body }: { route: string; title: strin
   });
 }
 
-// ── /about ───────────────────────────────────────────────────────────────────
 export function renderAboutPage() {
   return page({
     route: "/about",
@@ -87,8 +86,10 @@ export function renderAboutPage() {
     <h1>About</h1>
     <p class="lede">
       I'm Aadharsh Pannirselvam. I research and invest at
-      <a href="https://www.archetype.fund/" rel="external">Archetype</a>, a crypto-native
-      venture firm, and I build this site by hand in the meantime.
+      <a href="https://www.archetype.fund/" rel="external">Archetype</a>, a venture firm
+      focused on all things programmable, and I build this site by hand (and prompt) in
+      the meantime as a way of learning about web technologies and where engineering is
+      culturally heading.
     </p>
 
     <h2>Work</h2>
@@ -138,7 +139,6 @@ export function renderAboutPage() {
   });
 }
 
-// ── /contact ─────────────────────────────────────────────────────────────────
 export function renderContactPage() {
   return page({
     route: "/contact",
@@ -165,7 +165,7 @@ export function renderContactPage() {
       <a href="/coffee/availability.json">/coffee/availability.json</a>.
     </p>
 
-    <h2>Report a security issue</h2>
+    <h2 id="security">Report a security issue</h2>
     <p>
       The disclosure contacts and scope are in
       <a href="/.well-known/security.txt">/.well-known/security.txt</a> (RFC 9116), and
@@ -199,8 +199,9 @@ export function renderContactPage() {
 // speculation.ts (Analytics Engine), serendipity/serendipity.ts (the one
 // cookie, contributor cookies, attendees), cal/src/booking.ts (90-day
 // bookings), webmention.ts, ask-rank.ts and lwe-ask (AI Gateway),
-// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts.
-export const PRIVACY_REVIEWED = "2026-10-13";
+// whoareyou.ts (RDAP), lens.ts (isitagentready, KV caches), representation.ts,
+// pixel-peeper-crowd.ts.
+export const PRIVACY_REVIEWED = "2026-10-15";
 
 export function renderPrivacyPage() {
   return page({
@@ -242,6 +243,16 @@ export function renderPrivacyPage() {
       counter stores a single number.
     </p>
 
+    <h2>The guestbook</h2>
+    <p>
+      <a href="/guestbook">/guestbook</a> is the one place the site stores an IP address, and it
+      publishes it. A program that signs it by POSTing a name and a reason has its IP address,
+      user agent, network, country and any <code>Signature-Agent</code> header recorded from the
+      request and shown on the page and in <code>/guestbook.json</code>, beside what it wrote.
+      Nothing is recorded for a visitor that doesn't sign, and a browser on another site can't
+      sign for its reader.
+    </p>
+
     <h2>Cookies and browser storage</h2>
     <p>
       The site sets one cookie, <code>${UID_COOKIE}</code>, and only on
@@ -261,6 +272,10 @@ export function renderPrivacyPage() {
       <li><strong>A webmention</strong>: the source and target URLs, the author's name and
         URL, the title and an excerpt. Cloudflare Workers AI checks it for spam, and it is
         emailed to me. It is deleted when I decline it or the source stops linking here.</li>
+      <li><strong>A finished <a href="/pixel-peeper">/pixel-peeper</a> run</strong>: which
+        tile you picked on each call, the tiles it showed, your score and the date. Nothing
+        about who played is stored with it. It joins the pooled counts every result screen
+        draws, and it can't be removed afterward because nothing ties it to you.</li>
       <li><strong>A question</strong> to <a href="/ask">/ask</a> or an
         <a href="/lwe">/lwe</a> explainer: it goes to Cloudflare Workers AI through
         Cloudflare AI Gateway, which logs requests. Answers to explainer questions are
@@ -296,8 +311,7 @@ export function renderPrivacyPage() {
   });
 }
 
-// ── /developers ──────────────────────────────────────────────────────────────
-// Generated from the code it documents: the endpoint list and the curl lines
+// /developers is generated from the code it documents: the endpoint list and the curl lines
 // from lib/public-api.ts (the same descriptions /openapi.json is written from),
 // the limits from LENS_BUDGETS and ASK_BUDGET (the budgets the handlers spend),
 // and the error example from missJson, the function that writes a real 404.
@@ -321,8 +335,10 @@ export function renderDevelopersPage() {
     <p>${lead}</p>
     <pre><code>${lines.join("\n")}</code></pre>`;
   });
-  const endpoints = OPERATIONS.map((op) => html`
-      <li><a href="${exampleUrl(op)}">${op.method === "post" ? "POST " : ""}${op.path}</a> (<code>${op.operationId}</code>): ${op.summary}.</li>`);
+  const endpoints = OPERATIONS.map(
+    (op) => html`
+      <li><a href="${exampleUrl(op)}">${op.method === "post" ? "POST " : ""}${op.path}</a> (<code>${op.operationId}</code>): ${op.summary}.</li>`,
+  );
 
   return page({
     route: "/developers",
@@ -391,8 +407,10 @@ export function renderDevelopersPage() {
       purpose, for the reason beside it, so a readiness audit that marks one missing is
       reading a decision this site already made.
     </p>
-    <dl class="fields">${LEAVES_OUT.map(({ what, why }) => html`
-      <dt>${what}</dt><dd>${why}</dd>`)}
+    <dl class="fields">${LEAVES_OUT.map(
+      ({ what, why }) => html`
+      <dt>${what}</dt><dd>${why}</dd>`,
+    )}
     </dl>
 
     <h2>Pages as Markdown</h2>

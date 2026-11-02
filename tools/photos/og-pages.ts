@@ -1,11 +1,11 @@
-// og-pages.mjs — the top-level PAGE DIRECTORIES that get an OG card, as one list
+// og-pages.ts: the top-level PAGE DIRECTORIES that get an OG card, as one list
 // both halves of the card pipeline read.
 //
-// There are three static shapes under public/ and the card pipeline only knew
+// There are three page shapes under src/pages/ and the card pipeline only knew
 // about one of them:
 //
 //   SECTION       many .html files under one directory (garage/, lwe/). Walked by
-//                 gen-og-cards.mjs and inject-og-meta.mjs directly.
+//                 gen-og-cards.ts and inject-og-meta.ts directly.
 //   PAGE DIR      one index.html, its own top-level route, no section index
 //                 (access/, pixel-peeper/). Invisible to that walk, which is why
 //                 /access shipped without a card.
@@ -17,11 +17,11 @@
 // the local static server, and unlike a worker route its meta CAN be injected.
 //
 // One list rather than two: EXCLUDE already lives in both scripts held together
-// by a "must match gen-og-cards.mjs" comment, and that is the drift this avoids.
+// by a "must match gen-og-cards.ts" comment, and that is the drift this avoids.
 //
 // Every page dir on disk is registered. The per-page capture config (hero
 // selectors, and the preset click /pixel-peeper needs to get off its intro
-// screen) lives in gen-og-cards.mjs's HERO table with every other page's, so
+// screen) lives in gen-og-cards.ts's HERO table with every other page's, so
 // this file stays the roster and nothing else.
 export const OG_PAGE_DIRS = [
   {
@@ -32,8 +32,12 @@ export const OG_PAGE_DIRS = [
     // library on every request and a regeneration changes every photo.
     id: "home",
     dir: "",
-    alt: "The aadhar.sh homepage as a Windows XP window: Aadharsh Pannirselvam's name "
-       + "and one-line bio above a contact sheet of his photographs.",
+    // Since 2026-10-24 the card is the first frame of the homepage's og:video
+    // (an XP-style boot screen), so the still a fetcher shows before it plays is
+    // the clip's own start. gen-og-cards.ts skips a page that names `bakedBy`.
+    bakedBy: "tools/photos/og-video/bake.ts",
+    alt:
+      "An XP-style boot screen on black: Pannirselvam above a large aadhar.sh with an orange .sh, " + "and three blue chunks crossing a rounded progress bar.",
   },
   {
     id: "access",
@@ -42,8 +46,9 @@ export const OG_PAGE_DIRS = [
     // line the injector synthesises would describe this card as a demo. It is a
     // map, and the alt should say what is actually in the picture. Count-agnostic
     // on purpose: the board grows, and an alt naming a number goes stale silently.
-    alt: "A Windows XP Device Manager window listing the flavors of language-model access "
-       + "as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.",
+    alt:
+      "A Windows XP Device Manager window listing the flavors of language-model access " +
+      "as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.",
   },
   {
     id: "pixel-peeper",
@@ -51,15 +56,17 @@ export const OG_PAGE_DIRS = [
     // Deliberately count-agnostic: the exam picks a two-way or three-way trial at
     // random on every load, so the card is not deterministic and any alt naming a
     // number goes stale the next time someone regenerates it.
-    alt: "A Windows XP window asking which looks best, showing the same photograph side by side "
-       + "at different compression settings, with a hint to hover and pixel-peep.",
+    alt:
+      "A Windows XP window asking which looks best, showing the same photograph side by side " +
+      "at different compression settings, with a hint to hover and pixel-peep.",
   },
   {
     id: "dotfiles",
     dir: "dotfiles",
     // A checklist rather than a demo, so the synthesised "live demo" line would
     // misdescribe it. Count-agnostic like the other two: options get added.
-    alt: "A Windows XP Advanced settings list of macOS defaults, grouped into folders for "
-       + "Keyboard, Trackpad and Appearance, every box ticked and each row showing its factory value.",
+    alt:
+      "A Windows XP Advanced settings list of macOS defaults, grouped into folders for " +
+      "Keyboard, Trackpad and Appearance, every box ticked and each row showing its factory value.",
   },
 ];

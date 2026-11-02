@@ -18,8 +18,9 @@
   // would be under node globals, since both files run on Workers.
   "compilerOptions": {
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
+    // Erasable syntax only, for the reason tsconfig.json gives (+0 diagnostics
+    // here, measured 2026-10-17).
+    "erasableSyntaxOnly": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",

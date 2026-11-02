@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// perf-snapshot.mjs — record the built tree's wire sizes, and diff two recordings.
+// perf-snapshot.ts — record the built tree's wire sizes, and diff two recordings.
 //
-// This is the DIFFERENTIAL half of the performance story. perf-budget.mjs asks
+// This is the DIFFERENTIAL half of the performance story. perf-budget.ts asks
 // "is this number over a line somebody drew?"; this asks "did this change move
 // it, and by how much?" The two answer different questions and neither replaces
 // the other, but the diff is the one that cannot go stale.
 //
-// The reason it exists is written into perf-budget.mjs's own baseline history:
+// The reason it exists is written into perf-budget.ts's own baseline history:
 // WORKER_BASELINE_GZIP_KIB sat at 129.23 while the real number was 204.24, so
 // the advisory fired on EVERY run for months and CI printed "hard checks green"
 // over it. A hand-maintained constant rots by construction — it records the
@@ -98,7 +98,7 @@ async function walk(dir, filter) {
 async function record(outPath, label) {
   // One dry-run gives three things at once: the built tree (via build.command),
   // the bundle's gzip total, and per-module attribution from esbuild's metafile.
-  // perf-budget.mjs runs the same command; they are separate processes because
+  // perf-budget.ts runs the same command; they are separate processes because
   // one gates the deploy and the other reports on it, and coupling them would
   // mean a snapshot failure could redden a PR.
   // WRANGLER'S ENTRY DIRECTLY, through whatever node is running this file, so
@@ -114,10 +114,7 @@ async function record(outPath, label) {
   // builds two commits that can disagree about which manager exists.
   let dryOut = "";
   try {
-    dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run",
-      "--outdir", DRYRUN_OUT,
-      "--metafile",
-    ])), { encoding: "utf8" });
+    dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", DRYRUN_OUT, "--metafile"])), { encoding: "utf8" });
   } catch (e) {
     dryOut = `${e.stdout || ""}\n${e.stderr || ""}`;
   }
@@ -127,9 +124,13 @@ async function record(outPath, label) {
   // the build produced.
   type Sizes = { raw?: number; gzip?: number; brotli?: number; br?: number };
   const snapshot: {
-    schema: typeof SCHEMA; label: string; subject: string;
+    schema: typeof SCHEMA;
+    label: string;
+    subject: string;
     worker: { gzipBytes: number | null; modules: Record<string, number> };
-    assets: Record<string, Sizes>; pages: Record<string, Sizes>; wire: Record<string, Sizes>;
+    assets: Record<string, Sizes>;
+    pages: Record<string, Sizes>;
+    wire: Record<string, Sizes>;
     dcz: { count: number; bytes: number; dictionaryBrotliBytes: number };
     [more: string]: any;
   } = {
@@ -151,8 +152,9 @@ async function record(outPath, label) {
   // gzip total alone can only pose as a question.
   try {
     const meta = JSON.parse(await readFile(`${DRYRUN_OUT}/bundle-meta.json`, "utf8"));
-    const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
-      .find(([n]) => n.endsWith(".js") && !n.endsWith(".map"));
+    const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][]).find(
+      ([n]) => n.endsWith(".js") && !n.endsWith(".map"),
+    );
     for (const [name, v] of Object.entries(entry?.[1]?.inputs ?? {})) {
       snapshot.worker.modules[name] = v.bytesInOutput ?? 0;
     }
@@ -176,10 +178,12 @@ async function record(outPath, label) {
   // rather than recompressing: this is what actually goes over the wire.
   for (const name of await walk(`${BUILD}/a`, (f) => !f.endsWith(".br") && !f.endsWith(".dict"))) {
     let br = null;
-    try { br = (await readFile(`${BUILD}/a/${name}.br`)).length; } catch {}
+    try {
+      br = (await readFile(`${BUILD}/a/${name}.br`)).length;
+    } catch {}
     const raw = (await readFile(`${BUILD}/a/${name}`)).length;
-    // The understanding-check payloads (build.ts step 5d) are one file per page,
-    // 38 of them. They fold into ONE row, because the nightly series keeps every
+    // The understanding-check payloads (build.ts step 5d) are one file per page.
+    // They fold into ONE row, because the nightly series keeps every
     // asset key forever and a key per page would triple its width for a number a
     // reader wants as a total: what a visitor who reaches the quiz pays.
     if (/^quiz-[\w-]+\.[0-9a-f]{8}\.json$/.test(name)) {
@@ -228,16 +232,14 @@ async function record(outPath, label) {
   // 2026-08-20, which is why both halves are checked.
   const mods = Object.keys(snapshot.worker.modules).length;
   if (n === 0 || mods === 0) {
-    console.error(`perf-snapshot: FAILED — recorded ${n} files and ${mods} modules, so the dry-run did not build. Its output ended:\n${dryOut.trim().slice(-800)}`);
+    console.error(
+      `perf-snapshot: FAILED — recorded ${n} files and ${mods} modules, so the dry-run did not build. Its output ended:\n${dryOut.trim().slice(-800)}`,
+    );
     process.exit(1);
   }
   await writeFile(outPath, `${JSON.stringify(snapshot, null, 2)}\n`);
   console.log(`perf-snapshot: recorded ${snapshot.label} — ${n} files, ${mods} modules -> ${outPath}`);
 }
-
-// ---------------------------------------------------------------------------
-// compare
-// ---------------------------------------------------------------------------
 
 const kib = (b) => `${(b / 1024).toFixed(2)} KiB`;
 const signed = (b) => `${b > 0 ? "+" : ""}${(b / 1024).toFixed(2)} KiB`;
@@ -318,16 +320,16 @@ function section(title, rows, base, head, pick, { unit = "Brotli", floor = 0 } =
   else out.push(`_No single file moved by ${kib(floor)} or more._`, "");
   if (collapsed.length) {
     const net = collapsed.reduce((n, r) => n + r.delta, 0);
-    out.push(`<sub>Plus ${collapsed.length} file${collapsed.length === 1 ? "" : "s"} under the ${kib(floor)} floor, net ${signed(net)} — usually content-hash churn in \`/a/\` references, counted in the total above.</sub>`, "");
+    out.push(
+      `<sub>Plus ${collapsed.length} file${collapsed.length === 1 ? "" : "s"} under the ${kib(floor)} floor, net ${signed(net)} — usually content-hash churn in \`/a/\` references, counted in the total above.</sub>`,
+      "",
+    );
   }
   return out.join("\n");
 }
 
 async function compare(basePath, headPath, outPath) {
-  const [base, head] = await Promise.all([
-    readFile(basePath, "utf8").then(JSON.parse),
-    readFile(headPath, "utf8").then(JSON.parse),
-  ]);
+  const [base, head] = await Promise.all([readFile(basePath, "utf8").then(JSON.parse), readFile(headPath, "utf8").then(JSON.parse)]);
 
   const parts = [
     "<!-- perf-snapshot-diff -->",
@@ -388,10 +390,7 @@ async function compare(basePath, headPath, outPath) {
   if (baseDictionary === headDictionary) {
     parts.push(`Family dictionary acquisition: no change, ${kib(headDictionary)} q11.`, "");
   } else {
-    parts.push(
-      `Family dictionary acquisition: ${kib(baseDictionary)} → ${kib(headDictionary)} q11 (${signed(headDictionary - baseDictionary)}).`,
-      "",
-    );
+    parts.push(`Family dictionary acquisition: ${kib(baseDictionary)} → ${kib(headDictionary)} q11 (${signed(headDictionary - baseDictionary)}).`, "");
   }
   if (base.dcz.count === head.dcz.count && base.dcz.bytes === head.dcz.bytes) {
     parts.push(`\`pd/\`: no change. ${head.dcz.count} deltas, ${kib(head.dcz.bytes)} total.`, "");
@@ -401,7 +400,10 @@ async function compare(basePath, headPath, outPath) {
       "",
     );
     if (head.dcz.count < base.dcz.count) {
-      parts.push(`⚠️ Delta COUNT dropped by ${base.dcz.count - head.dcz.count}. A page that loses its delta falls back to the family dictionary silently — check whether that is intended.`, "");
+      parts.push(
+        `⚠️ Delta COUNT dropped by ${base.dcz.count - head.dcz.count}. A page that loses its delta falls back to the family dictionary silently — check whether that is intended.`,
+        "",
+      );
     }
   }
 
@@ -409,10 +411,6 @@ async function compare(basePath, headPath, outPath) {
   if (outPath) await writeFile(outPath, `${md}\n`);
   else console.log(md);
 }
-
-// ---------------------------------------------------------------------------
-// row — reduce a snapshot to one JSONL line for the trend series
-// ---------------------------------------------------------------------------
 
 // Keys are short because this file is appended to forever and read by a Worker
 // that bundles nothing to parse it. One row is ~400 bytes, so a year of dailies
@@ -452,8 +450,6 @@ async function row(snapshotPath, date) {
   console.log(JSON.stringify(line));
 }
 
-// ---------------------------------------------------------------------------
-
 const [mode, ...rest] = process.argv.slice(2);
 const flag = (name) => {
   const i = rest.indexOf(name);
@@ -462,15 +458,24 @@ const flag = (name) => {
 const positional = rest.filter((a, i) => !a.startsWith("--") && !(i > 0 && rest[i - 1].startsWith("--")));
 
 if (mode === "record") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs record <out.json> [--label <name>]"); process.exit(2); }
+  if (!positional[0]) {
+    console.error("usage: perf-snapshot.ts record <out.json> [--label <name>]");
+    process.exit(2);
+  }
   await record(positional[0], flag("--label"));
 } else if (mode === "compare") {
-  if (positional.length < 2) { console.error("usage: perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
+  if (positional.length < 2) {
+    console.error("usage: perf-snapshot.ts compare <base.json> <head.json> [--out <file.md>]");
+    process.exit(2);
+  }
   await compare(positional[0], positional[1], flag("--out"));
 } else if (mode === "row") {
-  if (!positional[0]) { console.error("usage: perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
+  if (!positional[0]) {
+    console.error("usage: perf-snapshot.ts row <snapshot.json> [--date YYYY-MM-DD]");
+    process.exit(2);
+  }
   await row(positional[0], flag("--date"));
 } else {
-  console.error("usage: perf-snapshot.mjs record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
+  console.error("usage: perf-snapshot.ts record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
   process.exit(2);
 }

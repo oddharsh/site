@@ -10,7 +10,7 @@
 //   |--------------------------------|----------------------------------------|
 //   | lunaPage (lib/chrome.ts)       | calls titleBar() per request or build  |
 //   | serendipity's shell            | calls titleBar()                       |
-//   | the 44 static pages            | gen:shell writes titleBar() into the   |
+//   | the static pages in src/pages  | gen:shell writes titleBar() into the   |
 //   |                                | source between axp:window markers      |
 //   | pipelines/{garage,lwe}         | call titleBar() when scaffolding       |
 //

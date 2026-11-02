@@ -1,15 +1,12 @@
-// lens-render.js — WHICH browser engine answers a Quick Action, and the shape
-import { isCallable } from "./lib/parse.ts";
+// lens-render.ts — WHICH browser engine answers a Quick Action, and the shape
 // of what came back.
 //
-// This file used to carry a whole second rendering route (/lens/rendered) before
-// anyone read lens-browser.js properly. /lens/browser already renders after
-// JavaScript, already asks for content, screenshot, markdown and the
-// accessibility tree in ONE Quick Action, and its deltaStrip already computes
-// the HTTP-versus-rendered word gap with an honest bail when the render was
-// truncated. The second route was a thinner copy of a better thing, at the cost
-// of an extra subrequest. It is gone; what survives is the part that was
-// genuinely missing.
+// There is no second rendering route here on purpose. /lens/browser already
+// renders after JavaScript, already asks for content, screenshot, markdown and
+// the accessibility tree in ONE Quick Action, and src/client/lens-browser.ts's
+// deltaStrip already computes the HTTP-versus-rendered word gap with an honest
+// bail when the render was truncated. A /lens/rendered route (removed) was a
+// thinner copy of that at the cost of an extra subrequest.
 //
 // ── the engines ───────────────────────────────────────────────────────────
 //   kitesurf — Cloudflare's WASM browser engine, built for agents rather than
@@ -18,11 +15,10 @@ import { isCallable } from "./lib/parse.ts";
 //              quickAction(action, { ...payload, browser: "kitesurf" }).
 //   chromium — the binding without that key, and the fallback below.
 //
-// The binding door is new, and this header said the opposite until 2026-09-28.
-// Probed 2026-08-06, passing `browser` returned
-// {"code":"unrecognized_keys","keys":["browser"]} for any value. Re-probed
-// 2026-09-28 against the production binding, every case carrying an invalid
-// `url` so nothing rendered:
+// The binding accepts `browser` since at least 2026-09-28 (on 2026-08-06 it
+// returned {"code":"unrecognized_keys","keys":["browser"]} for any value).
+// Probed 2026-09-28 against the production binding, every case carrying an
+// invalid `url` so nothing rendered:
 //
 //   browser: "kitesurf"                  Invalid URL, and nothing else
 //   browser: "definitely-not-an-engine"  Invalid URL + invalid_value: expected "kitesurf"
@@ -60,7 +56,7 @@ import { isCallable } from "./lib/parse.ts";
 // ignores an unrecognised query parameter answers 200. A dropped opt-in and an
 // honoured one are the same response.
 //
-// ── what a REST 200 proves, which is less than this file used to claim ────
+// ── what a REST 200 proves ────────────────────────────────────────────────
 // A 400 on the attempt carrying the selector still means the parameter is dead
 // here, and is still remembered for the isolate. A 200 means only that the call
 // succeeded. It does NOT mean Kitesurf served it: the documented envelope is
@@ -79,18 +75,21 @@ import { isCallable } from "./lib/parse.ts";
 // browser-minutes a day, so a once-per-isolate control would spend the budget
 // measuring itself and black out the feature it was checking.
 
-// Per-isolate memo: null = untested, false = REST rejected the selector. Not
-// persisted, because it is a fact about an API during a beta.
-// TRI-STATE, and the annotation is what makes it one: `let x = null` infers the
-// type `null`, so both assignments below were errors and the isolate-level memo
-// this implements could not be written down. null is "not probed yet", false is
-// "the endpoint refused the selector", true is "a call carrying it came back
-// clean". Only false suppresses the retry, which is why `!== false` is the
-// guard rather than a truthiness check.
+import { isCallable } from "./lib/parse.ts";
+
+// Per-isolate memo, not persisted, because it is a fact about an API during a
+// beta. TRI-STATE (the annotation keeps tsc from inferring `null`): null is "not
+// probed yet", false is "the endpoint refused the selector", true is "a call
+// carrying it came back clean". Only false suppresses the retry, which is why
+// `!== false` is the guard rather than a truthiness check.
 let kitesurfParamLive: boolean | null = null;
 
-export function _resetKitesurfProbe() { kitesurfParamLive = null; }
-export function _kitesurfParamLive() { return kitesurfParamLive; }
+export function _resetKitesurfProbe() {
+  kitesurfParamLive = null;
+}
+export function _kitesurfParamLive() {
+  return kitesurfParamLive;
+}
 
 const REST_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
@@ -104,8 +103,7 @@ export const restUrl = (accountId, action, engine?) =>
 // Either door counts. A deployment holding only a REST token still renders, so
 // a guard that insists on the BINDING would 503 a working configuration.
 export const hasRenderEngine = (env) =>
-  Boolean((env && env.BROWSER && isCallable(env.BROWSER.quickAction))
-    || (env && env.CF_ACCOUNT_ID && env.BROWSER_RUN_TOKEN));
+  Boolean((env && env.BROWSER && isCallable(env.BROWSER.quickAction)) || (env && env.CF_ACCOUNT_ID && env.BROWSER_RUN_TOKEN));
 
 // Runs a Quick Action and reports which engine served it. Returns a Response so
 // callers keep their own status/JSON handling — /lens/browser has four distinct
@@ -128,14 +126,12 @@ export async function runBrowserAction(action, payload, env, { engine = "kitesur
   // door the moment the parameter turned out to be dead, silently demoting every
   // later render to the binding. Only the PARAMETER is conditional.
   const tryEngine = engine === "kitesurf" && kitesurfParamLive !== false;
-  const call = (withEngine) => fetch(
-    restUrl(env.CF_ACCOUNT_ID, action, withEngine ? "kitesurf" : ""),
-    {
+  const call = (withEngine) =>
+    fetch(restUrl(env.CF_ACCOUNT_ID, action, withEngine ? "kitesurf" : ""), {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${env.BROWSER_RUN_TOKEN}` },
       body: JSON.stringify(payload),
-    },
-  );
+    });
   let response = await call(tryEngine);
   // A 400 on the attempt CARRYING the selector is the signal that the beta
   // parameter is not live here. Retry once without it rather than report the
@@ -171,20 +167,21 @@ export function kitesurfPayload(payload) {
 // plain node. Coarse on purpose: both sides of any comparison run through the
 // SAME function, so a systematic undercount cancels and only the difference is
 // ever claimed.
-const stripped = (html) => String(html || "")
-  .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-  .replace(/<!--[\s\S]*?-->/g, " ")
-  .replace(/<[^>]+>/g, " ")
-  .replace(/&(?:nbsp|#160);/gi, " ")
-  .replace(/\s+/g, " ")
-  .trim();
+const stripped = (html) =>
+  String(html || "")
+    .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(?:nbsp|#160);/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const countMatches = (html, re) => (String(html || "").match(re) || []).length;
 
 // Words are the honest axis and the rest are structure. Bytes are deliberately
 // NOT a comparison axis here: a framework's inlined payload swings them wildly
 // while changing nothing a reader or a parser gets, which is the same reason
-// lens-browser.js's deltaStrip already leads with words.
+// src/client/lens-browser.ts's deltaStrip already leads with words.
 export function documentTally(html) {
   const text = stripped(html);
   return {

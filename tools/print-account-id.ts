@@ -6,8 +6,8 @@
 // pick one non-interactively. Without it the ramp dies with "More than one
 // account available", which reads exactly like a bad credential and is not.
 //
-// The id is NOT a secret — it is committed in cloudflare.config.ts and again in
-// config/infra.json — so the only question is where CI should read it from. A
+// The id is NOT a secret (cloudflare.config.ts commits it as `accountId`), so
+// the only question is where CI should read it from. A
 // repo variable would be dashboard state that no config here can derive and that
 // infra:check cannot see, which is the same argument that keeps the Workers
 // Builds commands declared. So this reads the deploy config itself: the account

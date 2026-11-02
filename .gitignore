@@ -26,7 +26,7 @@
 # restricted to directories would leave them unignored.
 .dev-assets
 
-# the remote-bindings twin (scripts/gen-remote-config.mjs). Derived on demand from
+# the remote-bindings twin (tools/gen-remote-config.ts). Derived on demand from
 # .wrangler.site.jsonc / .wrangler.dev.jsonc, and it lives at the ROOT rather than under
 # .build/ because wrangler resolves main + assets.directory relative to the config
 # file. Never commit it: its bindings point at PRODUCTION KV/R2/Browser.

@@ -14,8 +14,9 @@
 // effects and is tree-shaken away. The marker tripwire in build.ts step 3 turns
 // that into a failed build (`lens-browser.js: minified output lost the
 // "LensBrowser" marker`), which is the reason every script row in
-// tools/lib/client-assets.ts carries one. The islands communicate through globals on purpose, so `true` here is the same
-// decision as `mangle.toplevel: false` seen from the tree-shaker's side.
+// tools/lib/client-assets.ts carries one. The islands communicate through
+// globals on purpose, so `true` here is the same decision as
+// `mangle.toplevel: false` seen from the tree-shaker's side.
 //
 // `propertyReadSideEffects: false` and `unknownGlobalSideEffects: false` were
 // measured the same day at -17 B and 0 B across the 19 client assets (brotli

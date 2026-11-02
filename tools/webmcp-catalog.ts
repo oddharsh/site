@@ -103,7 +103,7 @@ if (site.length === 0) {
   console.error(`webmcp:check: ${ORIGIN}/mcp listed no tools, so every page would read as matching`);
   process.exit(2);
 }
-const lens = lensPageToolNames(readFileSync(new URL("../src/client/lens-webmcp.js", import.meta.url), "utf8"));
+const lens = lensPageToolNames(readFileSync(new URL("../src/client/lens-webmcp.ts", import.meta.url), "utf8"));
 
 const browser = await chromium.launch({ channel: chromeChannel(), headless: true, args: [FLAG] });
 console.log(`webmcp:check: ${ORIGIN}, Chrome ${browser.version()}, control ok, /mcp lists ${site.length}, Lens declares ${lens.length}`);

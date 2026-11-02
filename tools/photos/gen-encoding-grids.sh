@@ -43,12 +43,12 @@ fi
 # axis this page teaches. add-photos.sh already resolves jpegtran this way.
 #
 # READ THIS BEFORE REGENERATING. The committed grids were produced by the bare
-# (libjpeg-turbo) cjpeg, so the first run after this fix SHRINKS the mozjpeg
-# cell from 1371 to 940 bytes, and that breaks the page's narrative rather than
-# just its label: /lwe/encoding walks four encoders "in the order the site
-# adopted them" and says each "squeezes a little harder than the last", which
-# stops being true when mozjpeg (940 B) lands under zenjpeg (980 B) on this
-# crop. Sizes on that page are measured live from these files, so the images
+# (libjpeg-turbo) cjpeg, so the first run with mozjpeg's cjpeg SHRINKS the
+# mozjpeg cell from 1371 to 940 bytes, and that breaks the page's narrative
+# rather than just its label: /lwe/encoding walks four encoders "in the order the
+# site adopted them" and says each "squeezes a little harder than the last",
+# which stops being true when mozjpeg (940 B) lands under zenc (972 B committed
+# on 2026-10-16) on this crop. Sizes on that page are measured live from these files, so the images
 # and the copy disagree the moment you regenerate. Update the copy in the same
 # commit, or do not regenerate.
 MOZ_CJPEG="$(brew --prefix mozjpeg)/bin/cjpeg"
@@ -62,7 +62,10 @@ TMP="/tmp/encgrid-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 # the centred 96x96 crop: the encoder grid's slice (and z-crop.png)
 sips -c 96 96 "$DEST/c-png.png" --out "$TMP/crop.png" >/dev/null 2>&1
-ffmpeg -loglevel error -y -i "$TMP/crop.png" "$TMP/crop.ppm" 2>/dev/null   # cjpeg reads PPM, not PNG (sips BMP confuses it)
+# cjpeg reads PPM, not PNG (sips BMP confuses it). zenc writes the same P6
+# bytes ffmpeg did: 13 of 13 PNGs under garage/enc, this crop included,
+# matched an independent decode byte for byte on 2026-10-31.
+"$ZENC" frame "$TMP/crop.png" --out "$TMP/crop.ppm" >/dev/null
 cp "$TMP/crop.png" "$DEST/z-crop.png"
 sz(){ stat -f%z "$1"; }
 

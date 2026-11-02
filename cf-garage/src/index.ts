@@ -1,5 +1,6 @@
-// cf-garage — backend for the /garage/cloudflare demo. Exercises four free-tier
-// Cloudflare platform features live, one endpoint each. Routed at
+// cf-garage: backend for the /garage/cloudflare demo. Exercises five Workers
+// Free platform features live (Durable Objects, Workers AI, Browser Run, Workers
+// Logs, tracing); the page demos four and parks Browser Run. Routed at
 // aadhar.sh/garage/cf/* (ahead of the site Worker). Every request logs a
 // structured line (Workers Logs, feature #4).
 
@@ -10,10 +11,11 @@ const json = (obj, status = 200) => jsonResponse(obj, status, { "access-control-
 
 // ── custom-span helpers (Workers tracing) ─────────────────────────────────
 // ctx.tracing.enterSpan(name, fn) records a span (with parent-child nesting)
-// when tracing is enabled in wrangler.toml; the span lands in the Observability
-// trace viewer. We degrade to running fn with a no-op span if the API isn't
-// present, and we time every span locally too — so /garage/cf/trace can return
-// the waterfall and the demo page can draw it without the dashboard.
+// when tracing is enabled (`observability.traces` in cloudflare.config.ts); the
+// span lands in the Observability trace viewer. We degrade to running fn with a
+// no-op span if the API isn't present, and we time every span locally too, so
+// /garage/cf/trace can return the waterfall and the demo page can draw it
+// without the dashboard.
 async function inSpan(tr, name, fn) {
   // Capability probe on the injected tracer (gotcha 16's seam). This Worker is
   // deployed on its own and imports only leaf helpers from src/worker/lib.
@@ -23,35 +25,37 @@ async function inSpan(tr, name, fn) {
 }
 async function timedSpan(tr, name, t0, spans, fn) {
   const start = Date.now() - t0;
-  try { return await inSpan(tr, name, fn); }
-  finally { spans.push({ name, start, dur: Date.now() - t0 - start }); }
+  try {
+    return await inSpan(tr, name, fn);
+  } finally {
+    spans.push({ name, start, dur: Date.now() - t0 - start });
+  }
 }
 
 // ── Durable Object: an atomic, strongly-consistent counter ────────────────
-// SQLite-backed (the free-tier DO flavour). Unlike the KV counter on the
-// homepage (eventually consistent + 1k writes/day cap), this increments exactly
-// once per call with no race — the canonical DO use case.
+// SQLite-backed (the free-tier DO flavour). Unlike KV (eventually consistent,
+// 1,000 writes a day on Workers Free), this increments exactly once per call
+// with no race, the canonical DO use case.
 export class Counter {
-  // Declared rather than left implicit, which is what a .ts file needs and a
-  // .js file inferred. Same shape as the site Worker's own counter.ts, and the
-  // bare field declaration is inside the erasable subset: that file lives under
-  // `erasableSyntaxOnly` and compiles.
+  // Same shape as aadhar-counter's Counter (counter/src/counter.ts). A bare
+  // field declaration is inside the `erasableSyntaxOnly` subset.
   state: DurableObjectState;
 
-  constructor(state: DurableObjectState) { this.state = state; }
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
   async fetch(request) {
     const url = new URL(request.url);
     // The type argument is what makes `n += 1` below legal: DO storage answers
     // `unknown` for a key it cannot know the shape of, and this one holds the
     // count it was written with.
     let n = (await this.state.storage.get<number>("n")) || 0;
-    // one-time idempotent seed — migrate a starting value (e.g. the old KV count)
+    // one-time idempotent seed: migrate a starting value (e.g. the old KV count)
     // in without ever clobbering a counter that's already live.
     if (url.searchParams.has("seed")) {
       if (!(await this.state.storage.get("seeded"))) {
-        // `get` answers `string | null` even behind the `has` above, and the old
-        // call leaned on `parseInt(null)` coercing to NaN for the `|| 0` to catch.
-        // `?? ""` reaches the same 0 by a route that is written down.
+        // `get` answers `string | null` even behind the `has` above; `?? ""`
+        // sends a missing value to the `|| 0`.
         n = parseInt(url.searchParams.get("seed") ?? "", 10) || 0;
         await this.state.storage.put("n", n);
         await this.state.storage.put("seeded", true);
@@ -80,8 +84,7 @@ export default {
 
     // Feature #4 — Workers Logs: structured line per request, captured + filterable
     // in the dashboard (200k events/day free). We log the feature + outcome below.
-    const log = (extra) =>
-      console.log(JSON.stringify({ path, ua: (request.headers.get("user-agent") || "").slice(0, 48), ...extra }));
+    const log = (extra) => console.log(JSON.stringify({ path, ua: (request.headers.get("user-agent") || "").slice(0, 48), ...extra }));
 
     try {
       // Feature #1 — Durable Objects: atomic counter
@@ -93,11 +96,12 @@ export default {
         return json({ ok: true, count: n });
       }
 
-      // One-time migration helper: seed the "homepage-visits" Counter instance from
-      // the old KV count, so when the homepage's COUNTER binding goes live it picks up
-      // where KV left off instead of resetting to zero. Idempotent — the DO only seeds
-      // once, so re-calls are no-ops. Same DO instance the homepage _worker.js addresses
-      // (DO identity = namespace + name), so seeding here lands there.
+      // One-time migration helper: seeds this namespace's "homepage-visits"
+      // instance from the old KV count. Idempotent, since the DO only seeds once.
+      // It no longer reaches the homepage. The homepage bound this namespace
+      // cross-script until 2026-07-01 (5af65648), and its counter now lives in
+      // aadhar-counter's own namespace (src/worker/counter.ts), which carried
+      // the count over separately. DO identity is namespace + name.
       if (path === "/garage/cf/seed-homepage") {
         const seed = parseInt(url.searchParams.get("n") || "0", 10) || 0;
         const id = env.COUNTER.idFromName("homepage-visits");
@@ -111,32 +115,42 @@ export default {
       if (path === "/garage/cf/caption") {
         const stem = (url.searchParams.get("img") || "XT508165").replace(/[^A-Za-z0-9_-]/g, "");
         const img = await fetch(`${ORIGIN}/images/${stem}.jpg`);
-        if (!img.ok) { log({ feature: "workers-ai", err: "thumb-missing" }); return json({ ok: false, error: "thumbnail not found" }, 404); }
+        if (!img.ok) {
+          log({ feature: "workers-ai", err: "thumb-missing" });
+          return json({ ok: false, error: "thumbnail not found" }, 404);
+        }
         const bytes = [...new Uint8Array(await img.arrayBuffer())];
         // ?mode=alt → tight, factual alt text (used to bake <img alt> for the grid).
         // default → the vivid demo caption. alt text shouldn't editorialize or guess.
-        const prompt = url.searchParams.get("mode") === "alt"
-          ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
-          : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
-        // routed through the AI Gateway named in AI_GATEWAY (see wrangler.toml), which
+        const prompt =
+          url.searchParams.get("mode") === "alt"
+            ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
+            : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
+        // routed through the AI Gateway named in AI_GATEWAY (cloudflare.config.ts), which
         // is what buys the per-model token counts and cost attribution the Workers Logs
         // line below cannot express: `log()` knows how long the call took, never what it
         // cost. DELIBERATELY no cacheTtl. This endpoint's default request is byte-identical
         // on every click, so any cache would make the demo a replay after the first
         // visitor — the same caption forever, and a neuron counter that never moves.
         // The button promises the model runs fresh, so it runs fresh.
-        const out = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-          image: bytes,
-          prompt,
-          max_tokens: 64,
-        }, env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined);
+        const out = await env.AI.run(
+          "@cf/llava-hf/llava-1.5-7b-hf",
+          {
+            image: bytes,
+            prompt,
+            max_tokens: 64,
+          },
+          env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined,
+        );
         // The runtime types name `description` alone for an image-to-text model.
         // `response` stays as the fallback it always was (a text-generation shape
         // some models answer in), read through a widened type so typing `env` did
         // not quietly change what the demo does.
-        let caption = (out.description || (out as { response?: string }).response || "").trim()
+        let caption = (out.description || (out as { response?: string }).response || "")
+          .trim()
           .replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "")
-          .replace(/\s+/g, " ").trim();
+          .replace(/\s+/g, " ")
+          .trim();
         if (caption) caption = caption[0].toUpperCase() + caption.slice(1);
         log({ feature: "workers-ai", stem, mode: url.searchParams.get("mode") || "demo", chars: caption.length, ms: Date.now() - t0 });
         return json({ ok: true, stem, caption });
@@ -151,8 +165,7 @@ export default {
       if (path === "/garage/cf/screenshot") {
         if (url.searchParams.get("go") !== "1") {
           log({ feature: "browser-rendering", step: "parked-noop", ms: Date.now() - t0 });
-          return json({ ok: false, parked: true,
-            error: "Browser Run is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
+          return json({ ok: false, parked: true, error: "Browser Run is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
         }
         let target = url.searchParams.get("url") || ORIGIN;
         if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN; // SSRF guard
@@ -168,7 +181,8 @@ export default {
           // while waitForTimeout, actionTimeout and cacheTTL each returned the
           // url error ALONE, individually and together. All three are accepted.
           // Run that control again before adding a sixth key; "the docs list it"
-          // is what the Kitesurf `browser` key also had.
+          // is what the Kitesurf `browser` key also had (refused as
+          // unrecognized; src/worker/lens-recipes.ts).
           screenshot = await env.BROWSER.quickAction("screenshot", {
             url: target,
             viewport: { width: 900, height: 600, deviceScaleFactor: 1 },
@@ -191,8 +205,14 @@ export default {
         // /lens/shot made and corrected.
         if (screenshot.status === 429) {
           log({ feature: "browser-rendering", step: "budget-spent", ms: Date.now() - t0 });
-          return json({ ok: false, budget: true,
-            error: "Browser Run is rate-limited right now (free plan: 6/min account-wide, 10 min/day, shared with /lens). Try again shortly." }, 429);
+          return json(
+            {
+              ok: false,
+              budget: true,
+              error: "Browser Run is rate-limited right now (free plan: 6/min account-wide, 10 min/day, shared with /lens). Try again shortly.",
+            },
+            429,
+          );
         }
         const ctype = screenshot.headers.get("content-type") || "";
         if (!screenshot.ok || !ctype.startsWith("image/")) {
@@ -203,10 +223,9 @@ export default {
         // carries no content-length (measured against the real binding twice on
         // 2026-08-16, 218,085 and 198,858 bytes, neither announced), so reading
         // the header logged `bytes: undefined` on every success and the field
-        // vanished from Workers Logs. Puppeteer's page.screenshot() handed back a
-        // Buffer and this line has always reported a real number. A screenshot is
-        // bounded by the 900x600 viewport, so holding one is cheaper than losing
-        // the only size signal this feature emits.
+        // vanished from Workers Logs. A screenshot is bounded by the 900x600
+        // viewport, so holding one is cheaper than losing the only size signal
+        // this feature emits. test/screenshot.test.ts pins the byte count.
         const png = await screenshot.arrayBuffer();
         log({ feature: "browser-rendering", target, bytes: png.byteLength, ms: Date.now() - t0 });
         return new Response(png, {
@@ -225,15 +244,15 @@ export default {
       // a subrequest, a compute loop), each in its own span with attributes,
       // and return the locally-timed waterfall for the demo page to render.
       if (path === "/garage/cf/trace") {
-        const tr = ctx && ctx.tracing;                 // present when the runtime supports it
-  // Capability probe on the injected tracer; separate Worker, own bundle.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+        const tr = ctx && ctx.tracing; // present when the runtime supports it
+        // Capability probe on the injected tracer; separate Worker, own bundle.
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof
         const available = !!(tr && typeof tr.enterSpan === "function");
         const tt = Date.now();
         const spans = [];
         // The three probes below fill this one key at a time, so its shape is
         // declared here rather than inferred from an empty literal.
-        const facts: { counter?: any, bytes?: number, checksum?: number } = {};
+        const facts: { counter?: any; bytes?: number; checksum?: number } = {};
         const out = await inSpan(tr, "handleTrace", async (root) => {
           if (root.setAttribute) root.setAttribute("url.path", path);
           // 1 — Durable Object peek (read-only, no increment)
@@ -248,7 +267,10 @@ export default {
           facts.bytes = await timedSpan(tr, "fetch.llms_txt", tt, spans, async (s) => {
             const r = await fetch(`${ORIGIN}/llms.txt`, { cf: { cacheTtl: 60 } });
             const txt = await r.text();
-            if (s.setAttribute) { s.setAttribute("http.status", r.status); s.setAttribute("bytes", txt.length); }
+            if (s.setAttribute) {
+              s.setAttribute("http.status", r.status);
+              s.setAttribute("bytes", txt.length);
+            }
             return txt.length;
           });
           // 3 — pure compute, no IO (shows a non-network span in the waterfall)
@@ -274,7 +296,7 @@ export default {
       // and each of those throws with internal names in the text (the DO class,
       // the model, the upstream URL). The demo is about the features working, so
       // the failure line only has to say which one didn't.
-      log({ path, error: String(e && e.message || e).slice(0, 200), ms: Date.now() - t0 });
+      log({ path, error: String((e && e.message) || e).slice(0, 200), ms: Date.now() - t0 });
       return json({ ok: false, error: "this feature failed — the details are in Workers Logs" }, 502);
     }
   },

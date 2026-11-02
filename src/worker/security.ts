@@ -26,15 +26,15 @@ import { islandPreload } from "./lib/island.ts";
 export function handleSecurityJson(request) {
   const cf = request.cf || {};
   const body = JSON.stringify({
-    colo:         cf.colo || "—",
+    colo: cf.colo || "—",
     httpProtocol: cf.httpProtocol || "—",
-    tlsVersion:   cf.tlsVersion || "—",
+    tlsVersion: cf.tlsVersion || "—",
   });
   return new Response(body, {
     headers: {
-      "content-type":    "application/json; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
-      "x-robots-tag":    "noindex",
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store, must-revalidate",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });
@@ -126,7 +126,7 @@ dl.sc-grid dd{margin:0;color:var(--slate-26);font-family:var(--font-mono);font-s
     closeTitle: "back to System Properties",
     closeLabel: "back to System Properties",
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });

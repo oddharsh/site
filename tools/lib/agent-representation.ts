@@ -16,9 +16,10 @@
 //     but a browser with.
 //
 // One rule, read by three checks that each see a different tree: build.ts
-// (does the build hold the twin), the route oracle (does a local Worker
-// negotiate it), and check-infra's agent-markdown tier (does production). It
-// imports nothing, so the node-run oracle can load it.
+// through gen-md-twins.ts (does the build hold the twin), the route oracle
+// (does a local Worker negotiate it), and check-infra's agent markdown
+// coverage (does production). It imports nothing, so the node-run oracle can
+// load it.
 
 export type AgentSurface = { path: string; kind?: string; mimeType?: string; flags?: { agents?: boolean } };
 

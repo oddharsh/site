@@ -76,11 +76,12 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
 
   // A slot is RESERVED at the script's OPEN tag and filled by the text handler
   // afterwards, which is what keeps document order exact without needing to know
-  // when the element closed. The obvious shape is el.onEndTag(), and this avoids
-  // it deliberately: it is the newest HTMLRewriter API this module would need,
-  // lib/link-integrity.ts (the other parser caller) exercises none of it, and
-  // this build has to run in three places — a workstation, a GitHub runner, and
-  // Cloudflare's build image — only two of which anything here can measure.
+  // when the element closed. The obvious shape is el.onEndTag(), and this
+  // avoided it deliberately: it was the newest HTMLRewriter API this module
+  // would need, and this build has to run in three places (a workstation, a
+  // GitHub runner, and Cloudflare's build image), only two of which anything
+  // here can measure. tools/lib/prose-fold.ts has since called onEndTag inside
+  // the same build, so that reason is weaker than when it was written.
   type Slot = { body: string[] } | { srcdoc: string; label: string };
   const items: Slot[] = [];
   const handlers: string[] = [];
@@ -104,7 +105,7 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
         if (srcdoc) items.push({ srcdoc: decodeCharRefs(srcdoc), label: `${label}: <${tag} srcdoc>` });
 
         if (tag !== "script") return;
-        if (el.getAttribute("src") !== null) return;      // external: covered by 'self'
+        if (el.getAttribute("src") !== null) return; // external: covered by 'self'
         if (!isExecutableType((el.getAttribute("type") || "").toLowerCase())) return;
 
         // Reserved here, so an EMPTY <script></script> still gets its slot and

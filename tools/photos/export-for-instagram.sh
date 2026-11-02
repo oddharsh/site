@@ -93,8 +93,8 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ZENC_DIR="$SCRIPT_DIR/zenc"
 ZENC="$ZENC_DIR/target/release/zenc"
-SSIMULACRA2="$(command -v ssimulacra2 || echo /opt/zerobrew/prefix/bin/ssimulacra2)"
-BUTTERAUGLI="$(command -v butteraugli_main || echo /opt/zerobrew/prefix/bin/butteraugli_main)"
+METRICS_DIR="$SCRIPT_DIR/photo-metrics"
+METRICS="$METRICS_DIR/target/release/photo-metrics"
 
 OUT="$HOME/Desktop/ig-export"
 WIDTH=1080
@@ -141,7 +141,6 @@ DRY=0
 
 LADDER="60 70 75 80 85 88 90 92 95"
 
-# ── arguments ─────────────────────────────────────────────────────────
 ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -176,31 +175,47 @@ whole() {  # whole <flag> <value>
 whole --width "$WIDTH"; whole --qmax "$QMAX"; whole --qmin "$QMIN"
 [ "$QMIN" -le "$QMAX" ] || { echo "error: --qmin ($QMIN) is above --qmax ($QMAX)" >&2; exit 1; }
 
-# ── preconditions ─────────────────────────────────────────────────────
-for cmd in sips exif-sooc; do
+for cmd in sips exif-sooc djpeg; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not found in PATH" >&2; exit 1; }
 done
 
 source "$SCRIPT_DIR/require-exif-sooc.sh"
-for tool in "$SSIMULACRA2" "$BUTTERAUGLI"; do
-  [ -x "$tool" ] || { echo "error: $(basename "$tool") not found (brew install jpeg-xl)" >&2; exit 1; }
-done
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
   cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2
 fi
+if [ ! -x "$METRICS" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  echo "building photo-metrics (ssimulacra2 + butteraugli) — first run only…" >&2
+  cargo build --release --locked --manifest-path "$METRICS_DIR/Cargo.toml" >&2
+fi
 
 TMP="$(mktemp -d "/tmp/ig-export-$$-XXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
-# ── helpers ───────────────────────────────────────────────────────────
 # float comparison, since the shell only does integers
 ge() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a>=b)}'; }
 le() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a<=b)}'; }
 
-s2()  { "$SSIMULACRA2" "$1" "$2" 2>/dev/null | awk 'NR==1{printf "%.2f", $1}'; }
-ba()  { "$BUTTERAUGLI" "$1" "$2" 2>/dev/null | awk 'NR==1{printf "%.3f", $1}'; }
+# score <ref.png> <candidate.jpg> prints "<ssimulacra2> <butteraugli max>".
+# photo-metrics replaced libjxl's ssimulacra2 and butteraugli_main here on
+# 2026-10-31. djpeg is libjpeg-turbo, the decoder libjxl's tools read a JPEG
+# with: ssimulacra2 scores the .jpg and djpeg's .ppm identically (84.89105760),
+# where `zenc frame` would have moved it 0.006. Parity on 21 photos from the
+# inbox (every 9th), old script against new, both -n: the same q on 21 of 21 at
+# the default -t 84 and on 21 of 21 at -t 78 --ba-max 2.0. Over --calibrate's
+# 189 rungs the worst gaps were 0.093 ssimulacra2 and 0.000023 butteraugli, and
+# one clear/miss call flipped against targets 70, 78, 84 and 90: XT500257 q75
+# reads 69.9968 to libjxl (70.00, clears 70) and 69.9875 here (69.99, misses).
+# The closest call at 84 was XT508887, which cleared at 84.01 (libjxl 84.02).
+score() {
+  local ppm="${2%.jpg}.ppm"
+  djpeg -outfile "$ppm" "$2" && "$METRICS" "$1" "$ppm" 2>/dev/null |
+    awk '{ match($0, /"s2":[-0-9.e]+/); s = substr($0, RSTART + 5, RLENGTH - 5)
+           match($0, /"ba":[-0-9.e]+/); b = substr($0, RSTART + 5, RLENGTH - 5)
+           printf "%.2f %.3f", s, b }'
+}
 kb()  { awk -v b="$1" 'BEGIN{printf "%.1f KB", b/1024}'; }
 pct() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%+.0f%%", (a-b)*100/b}'; }
 
@@ -250,10 +265,8 @@ orient_ops() {
 # ssimulacra2 point out of an encode, and it was feeding that search a reference
 # that had already lost more than the search could ever win back.
 #
-# GAMMA IS NOT THE ONLY DEFECT, and the first draft of this comment claimed it
-# was. It said box is what sips was approximating so the swap is gamma alone.
-# Measured against five encoded-sRGB kernels on the same frame, sips matches
-# NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
+# GAMMA IS NOT THE ONLY DEFECT. Measured against five encoded-sRGB kernels on
+# the same frame, sips matches NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
 # lanczos 58.72. A real kernel family difference puts one of those near 90, and
 # a flat low cluster means the thing being compared is not a clean filter.
 #
@@ -284,8 +297,8 @@ orient_ops() {
 # Which AXIS to cap is the subtle half, and it survives the rewrite unchanged
 # because zenc reads the same stored pixels sips wrote: a frame the camera
 # tagged Orientation 5-8 is stored on its side, so capping its stored width
-# would cap the delivered HEIGHT. Same swap rule as metadata.json's (CLAUDE.md
-# gotcha 6), applied before the rotation rather than after.
+# would cap the delivered HEIGHT. Same swap rule as metadata.json's (gotcha 6,
+# docs/GOTCHAS.md), applied before the rotation rather than after.
 #
 # ROTATION STAYS ON sips. `-r` and `-f` move samples without inventing any, so
 # there is no averaging to get wrong, and they run on the 1080px output rather
@@ -294,7 +307,6 @@ prepare_reference() {  # prepare_reference <src> <out.png>
   local src="$1" ref="$2" o ops axis w h
   o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
-  # One spawn for both, the same shape dims() below already used.
   srcdims=$(sips -g pixelWidth -g pixelHeight "$src" 2>/dev/null)
   w=$(printf '%s\n' "$srcdims" | awk '/pixelWidth/{print $2}')
   h=$(printf '%s\n' "$srcdims" | awk '/pixelHeight/{print $2}')
@@ -307,8 +319,7 @@ prepare_reference() {  # prepare_reference <src> <out.png>
     *)       axis="--width"  ;;
   esac
   # `--width N` is a CAP rather than a target, so a source already inside it
-  # passes through untouched and there is no branch to keep in step. That is why
-  # the old if/else is gone rather than translated.
+  # passes through untouched and there is no branch to keep in step.
   local mid="$TMP/$(basename "$ref" .png)-mid.tiff"
   sips -s format tiff "$src" --out "$mid" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
   "$ZENC" resize "$mid" "$axis" "$WIDTH" --filter box --out "$ref" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
@@ -326,7 +337,6 @@ prepare_reference() {  # prepare_reference <src> <out.png>
 
 dims() { sips -g pixelWidth -g pixelHeight "$1" 2>/dev/null | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w"x"h}'; }
 
-# does this encode clear every gate it was given?
 clears() {  # clears <s2> <ba>
   ge "$1" "$TARGET" || return 1
   [ -z "$BA_MAX" ] || le "$2" "$BA_MAX" || return 1
@@ -351,7 +361,6 @@ finish() {  # finish <candidate.jpg> <stem> <source> — place it, metadata hand
   mkdir -p "$OUT" && cp "$cand" "$dest" && stat -f%z "$dest"
 }
 
-# ── enumerate inputs ──────────────────────────────────────────────────
 SOURCES="$TMP/sources.txt"; : > "$SOURCES"
 for arg in "${ARGS[@]}"; do
   if [ -d "$arg" ]; then
@@ -368,7 +377,6 @@ sort -u "$SOURCES" -o "$SOURCES"
 TOTAL=$(wc -l < "$SOURCES" | tr -d ' ')
 [ "$TOTAL" -gt 0 ] || { echo "no eligible photos found in input(s)" >&2; exit 1; }
 
-# ── report the run before it starts ───────────────────────────────────
 case "$MODE" in
   search)    echo "searching $TOTAL file(s) for the lowest q clearing ssimulacra2 >= $TARGET${BA_MAX:+ and butteraugli <= $BA_MAX}" ;;
   max)       echo "encoding $TOTAL file(s) flat at q$QMAX — the mode for handing Instagram a source it will re-encode" ;;
@@ -387,7 +395,6 @@ while IFS= read -r f; do
   fi
   size=$(dims "$ref")
 
-  # ---- calibrate: every rung as a real file, next to the reference ----
   if [ "$MODE" = calibrate ]; then
     dir="$OUT/$stem-ladder"
     [ "$DRY" -eq 0 ] && { mkdir -p "$dir"; cp "$ref" "$dir/original.png"; }
@@ -396,7 +403,7 @@ while IFS= read -r f; do
     for q in $LADDER; do
       cand="$TMP/$stem-$q.jpg"
       "$ZENC" "$ref" "$cand" -q "$q" --yuv "$YUV" >/dev/null 2>&1 || continue
-      b=$(stat -f%z "$cand"); sc=$(s2 "$ref" "$cand"); bc=$(ba "$ref" "$cand")
+      b=$(stat -f%z "$cand"); read -r sc bc <<< "$(score "$ref" "$cand")"
       mark=""; clears "$sc" "$bc" && mark="← clears $TARGET"
       printf "    %-4s %-11s %-8s %-8s %s\n" "$q" "$(kb "$b")" "$sc" "$bc" "$mark"
       [ "$DRY" -eq 0 ] && cp "$cand" "$dir/q$q.jpg"
@@ -405,32 +412,26 @@ while IFS= read -r f; do
     OK=$((OK+1)); continue
   fi
 
-  # ---- the q95 baseline, so the search can report what it saved ----
+  # The q95 baseline, so the search can report what it saved.
   top="$TMP/$stem-top.jpg"
   "$ZENC" "$ref" "$top" -q "$QMAX" --yuv "$YUV" >/dev/null 2>&1 || { echo "  $stem — encode failed"; FAIL=$((FAIL+1)); continue; }
   top_bytes=$(stat -f%z "$top")
 
-  # ---- max: no search, hand over the cleanest source ----
   if [ "$MODE" = max ]; then
-    sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
+    read -r sc bc <<< "$(score "$ref" "$top")"
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
     printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %s\n" "$stem" "$size" "$QMAX" "$(kb "$out_bytes")" "$sc" "$bc"
     OK=$((OK+1)); continue
   fi
 
-  # ---- search: smallest q clearing every gate ----
-  # both gates move monotonically with q, so bisection is sound: every q above a
+  # Search for the smallest q clearing every gate. Both gates move monotonically with q, so bisection is sound: every q above a
   # passing one also passes, every q below a failing one also fails.
   lo=$QMIN; hi=$QMAX; best=""; best_s2=""; best_ba=""; best_file=""
   while [ "$lo" -le "$hi" ]; do
     mid=$(( (lo + hi) / 2 ))
     cand="$TMP/$stem-try.jpg"
     "$ZENC" "$ref" "$cand" -q "$mid" --yuv "$YUV" >/dev/null 2>&1 || break
-    sc=$(s2 "$ref" "$cand")
-    # butteraugli runs inside the loop only when it is actually a gate. Left on
-    # unconditionally it doubled the metric cost of every probe to produce a
-    # number nothing read until the winner was already picked.
-    if [ -n "$BA_MAX" ]; then bc=$(ba "$ref" "$cand"); else bc=""; fi
+    read -r sc bc <<< "$(score "$ref" "$cand")"
     if clears "$sc" "$bc"; then
       best=$mid; best_s2=$sc; best_ba=$bc
       best_file="$TMP/$stem-best.jpg"; cp "$cand" "$best_file"
@@ -443,7 +444,7 @@ while IFS= read -r f; do
   if [ -z "$best" ]; then
     # nothing in range clears it. ship the ceiling and say so rather than
     # silently writing a file that misses the bar you asked for.
-    sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
+    read -r sc bc <<< "$(score "$ref" "$top")"
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
     printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %-7s MISSED target %s at q%s\n" \
       "$stem" "$size" "$QMAX" "$(kb "$out_bytes")" "$sc" "$bc" "$TARGET" "$QMAX"
@@ -451,7 +452,6 @@ while IFS= read -r f; do
   fi
 
   best_bytes=$(stat -f%z "$best_file")
-  [ -n "$best_ba" ] || best_ba=$(ba "$ref" "$best_file")
   if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$best_file" "$stem" "$f"); else out_bytes=$best_bytes; fi
   printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %-7s %s vs q%s\n" \
     "$stem" "$size" "$best" "$(kb "$out_bytes")" "$best_s2" "$best_ba" "$(pct "$best_bytes" "$top_bytes")" "$QMAX"

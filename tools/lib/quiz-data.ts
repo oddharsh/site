@@ -25,32 +25,29 @@ import { minifyJsonScript } from "./json-script.ts";
 // The capture groups are the attributes on either side of the id and the body.
 // Same close-tag rule as tools/check-page-contracts.ts, so the authoring check
 // and the extraction agree on where a payload ends.
-const QUIZ_BLOCK = new RegExp(
-  `<script\\b([^>]*?)\\s+id=(?:"luq-data"|luq-data)(?=[\\s>])([^>]*)>([\\s\\S]*?)${closeTagSource("script")}`,
-  "gi",
-);
+const QUIZ_BLOCK = new RegExp(`<script\\b([^>]*?)\\s+id=(?:"luq-data"|luq-data)(?=[\\s>])([^>]*)>([\\s\\S]*?)${closeTagSource("script")}`, "gi");
 
 // One page, one file, and the name says which. `garage/encoding.html` becomes
 // `quiz-garage-encoding`, an `index.html` takes its directory's name. Flat,
 // because the shell dictionary tooling reads /a/ names as [\w-]+.
 export const quizBase = (rel: string): string => {
-  const key = rel.replace(/\.html$/, "").replace(/(^|\/)index$/, "").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "");
+  const key = rel
+    .replace(/\.html$/, "")
+    .replace(/(^|\/)index$/, "")
+    .replace(/[^\w-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return `quiz-${key || "home"}`;
 };
 
 // The staged path the served document references. `name` is the file under
-// public/a/, `hash8` the content hash that names it.
+// public/a/, named by the content hash of `bytes`.
 export type QuizFile = { url: string; name: string; bytes: Buffer };
 
 // Pull one page's payload out. Returns null for a page with no quiz, throws for a
 // page with two (the browser would read the first; the contract says one) or for
 // one that was already extracted, since running this twice over a staged tree is
 // a build-order bug rather than a no-op.
-export function extractQuizData(
-  html: string,
-  rel: string,
-  hash8: (bytes: Buffer) => string,
-): { html: string; file: QuizFile } | null {
+export function extractQuizData(html: string, rel: string, hash8: (bytes: Buffer) => string): { html: string; file: QuizFile } | null {
   const matches = [...html.matchAll(QUIZ_BLOCK)];
   if (!matches.length) return null;
   if (matches.length > 1) throw new Error(`${rel}: ${matches.length} luq-data blocks; the quiz contract is exactly one`);

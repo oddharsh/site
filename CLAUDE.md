@@ -7,7 +7,8 @@ bevels), with colors authored in OKLCH. `AGENTS.md` is a symlink to this file.
 Read the code before trusting prose, this file included. When you learn
 something that cost real time, add a gotcha to [docs/GOTCHAS.md](docs/GOTCHAS.md)
 rather than a paragraph here, and give it a check that fails when the mistake
-comes back (its `Checked by:` line names it).
+comes back (its `Checked by:` line names it). Take its number from
+`bun run gotcha:next`, which counts the numbers open PRs already hold.
 
 ## Layout
 
@@ -22,11 +23,11 @@ comes back (its `Checked by:` line names it).
 | `cal/`, `serendipity/` | modules the site Worker serves at `/coffee` and `/serendipity` |
 | `counter/` | `aadhar-counter`, which owns the `Counter` Durable Object |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | separately deployed auxiliary Workers (TypeScript config, gotcha 41) |
-| `tools/` | the build, the contract tests (`contract-*.test.mjs`), checks, generators, `photos/` |
+| `tools/` | the build, the contract tests (`tests/contract-*.test.ts`), checks, generators, `photos/` |
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |
 | `design/` | the Luna design system; `tokens/` and `DESIGN.md` are canonical |
-| `docs/` | runbooks: `MAINTENANCE.md`, `DEPENDENCIES.md`, `PHOTO-PIPELINE.md`, `GOTCHAS.md` |
+| `docs/` | runbooks: `MAINTENANCE.md`, `DEPENDENCIES.md`, `PHOTO-PIPELINE.md`, `GOTCHAS.md`, `COMMENTS.md` |
 
 Does a build step transform the file? Then it belongs in `src/`. Does it ship
 byte for byte? Then it's `public/`. The site config is `cloudflare.config.ts` +
@@ -37,14 +38,16 @@ byte for byte? Then it's `public/`. The site config is `cloudflare.config.ts` +
 ```bash
 bun run dev                 # cf dev on config/dev + Counter beside it (needs `bun add -g cf`)
 bun run build               # stage .build/ (minify, hash /a/ assets, twins, dictionaries)
-bun run check:fast          # lint + typecheck + test, in parallel
-bun run lint                # oxlint, type-aware
+bun run check:fast          # lint + format + typecheck + test, in parallel
+bun run lint                # bun lint (built in), type-aware
+bun run format              # bun fmt; `format:check` is what validate runs
 bun run typecheck
 bun run test                # contract suite under bun; `test:node` runs it under node
 bun run --filter cal-aadhar-sh test
 bun run routes:check        # route oracle against an in-process Worker
 bun run derive:check        # derived artifacts still match their inputs (gotcha 46)
 bun run pages:check         # house-voice lint on page text (gotcha 32)
+bun run controls            # plant each guard's defect; fails if a guard misses it (gotcha 90)
 bun run wrangler:site <cmd> # wrangler against the site config (gotcha 48)
 bun run photos <paths>      # add photos: encode, upload to R2, index, caption
 ```
@@ -64,10 +67,22 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   session that opened the PR claims it; a second claim takes the watch over.
 - Labels worth applying by hand: `hashed-asset` (the diff re-mints an `/a/`
   URL, gotcha 35) and `release-path` (it touches what decides what ships).
-- `validate` is the one required check: lint, typecheck, build under the perf
-  budget, `derive:check`, `routes:check`, the contract suite and cal's tests.
+- The tree is formatted by `bun fmt`, scoped by `[fmt]` in `bunfig.toml`
+  (gotchas 71 to 74). A hook formats each file an agent edits through Edit or
+  Write; elsewhere run `bun run format` before committing. Another hook
+  (`tools/push-gate.ts`) holds an agent's `git push` or `gh pr create` until
+  format, typecheck, lint, `pages:check` and `derive:check` pass, about 7 s. A test that reads source text must
+  tolerate the formatter rewrapping it.
+- `validate` is the one required check: lint, format, typecheck, build under the perf
+  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
+  cal's tests.
 - Measure before you claim, and run the control that would show your
-  instrument can fail. Most gotchas are an instrument that couldn't.
+  instrument can fail. Most gotchas are an instrument that couldn't. When
+  the instrument is a check, write the control into `tools/lib/controls.ts`
+  so it reruns on every push instead of once in a PR body (gotcha 90).
+- Comments record what the code can't say: a decision and its measured
+  reason, a constraint, what breaks if this changes. Read
+  [docs/COMMENTS.md](docs/COMMENTS.md) before writing or cutting them.
 
 ## Release path
 

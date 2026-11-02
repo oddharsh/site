@@ -1,6 +1,6 @@
 # Around
 
-A dashboard of the neighbourhood. A cron crawls a roster of crypto venture
+A dashboard of the neighbourhood. A cron crawls a roster of venture firm
 homepages, identified as `AadharshBot/1.0 (+https://aadhar.sh/bot)`, and reports
 what each one answered.
 

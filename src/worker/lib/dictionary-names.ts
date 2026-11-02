@@ -27,9 +27,6 @@
 // build and the contract suite all load the same file (docs/GOTCHAS.md gotcha 16).
 // The zstd ENCODER needs node:zlib and lives in tools/lib/dcz.ts.
 
-// ── tags ────────────────────────────────────────────────────────────────────
-
-export const HASH8_HEX = 8;
 export const TAG_HEX = 16;
 
 const hexOf = (bytes: Uint8Array, count: number): string => {
@@ -38,8 +35,6 @@ const hexOf = (bytes: Uint8Array, count: number): string => {
   return out;
 };
 
-// The 16-hex tag that names a dictionary in every delta filename, from that
-// dictionary's raw SHA-256 digest.
 export function tagOfDigest(digest: Uint8Array): string {
   if (digest.length !== 32) throw new Error(`dictionary tag: expected a 32-byte SHA-256 digest, got ${digest.length} bytes`);
   return hexOf(digest, TAG_HEX / 2);
@@ -59,12 +54,12 @@ export function tagFromAvailableDictionary(raw: string | null | undefined): stri
   if (!m) return null;
   try {
     const digest = Uint8Array.fromBase64(m[1]);
-    if (digest.length !== 32) return null;       // not a SHA-256 digest
+    if (digest.length !== 32) return null;
     return tagOfDigest(digest);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
-
-// ── /a/<base>.<hash8>.<ext>: shell assets that can carry a delta ────────────
 
 // js, css and the icon sprite. A delta exists only for these (DICTIONARY_TYPES
 // in lib/assets.ts gates the same set on the serving side).
@@ -79,28 +74,21 @@ export function parseShellAsset(name: string): ShellAsset | null {
   return m ? { base: m[1], hash8: m[2], ext: m[3], name } : null;
 }
 
-export const shellAssetName = (asset: { base: string; hash8: string; ext: string }): string =>
-  `${asset.base}.${asset.hash8}.${asset.ext}`;
-
-// ── /a/page-family.<hash8>.dict ─────────────────────────────────────────────
+export const shellAssetName = (asset: { base: string; hash8: string; ext: string }): string => `${asset.base}.${asset.hash8}.${asset.ext}`;
 
 const FAMILY_DICTIONARY = /^page-family\.([0-9a-f]{8})\.dict$/;
 
 export const familyDictionaryName = (hash8: string): string => `page-family.${hash8}.dict`;
 
-// The dictionary's hash8 from its file name, or null when the name is not one.
 export function parseFamilyDictionary(name: string): string | null {
   return name.match(FAMILY_DICTIONARY)?.[1] ?? null;
 }
-
-// ── /ad/<base>.<hash8>.<tag16>.dcz ──────────────────────────────────────────
 
 const SHELL_DELTA = /^(.+)\.([0-9a-f]{8})\.([0-9a-f]{16})\.dcz$/;
 
 // The file under /ad/ holding `asset` encoded against the dictionary `tag` names.
 // The extension is deliberately absent: a base never ships under two types.
-export const shellDeltaName = (asset: { base: string; hash8: string }, tag: string): string =>
-  `${asset.base}.${asset.hash8}.${tag}.dcz`;
+export const shellDeltaName = (asset: { base: string; hash8: string }, tag: string): string => `${asset.base}.${asset.hash8}.${tag}.dcz`;
 
 export function parseShellDelta(name: string): { base: string; hash8: string; tag: string } | null {
   const m = name.match(SHELL_DELTA);
@@ -115,13 +103,10 @@ export function shellDeltaPath(pathname: string, tag: string): string | null {
   return asset ? `/ad/${shellDeltaName(asset, tag)}` : null;
 }
 
-// ── /pd/<slug>.<tag16>.dcz and the committed snapshots ──────────────────────
-
 // slug: the asset path with separators folded, so it survives as one filename
 // segment. `garage/index.html` -> `garage__index`; an extensionless stem
 // (`garage/index`) gives the same answer, which is what lets the Worker call it.
-export const pageSlug = (assetPath: string): string =>
-  assetPath.replace(/\.html$/, "").replace(/\//g, "__");
+export const pageSlug = (assetPath: string): string => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
 const PAGE_DELTA = /^(.+)\.([0-9a-f]{16})\.dcz$/;
 const PAGE_SNAPSHOT = /^(.+)\.([0-9a-f]{16})\.html\.br$/;
@@ -143,7 +128,7 @@ export function parsePageSnapshot(name: string): { slug: string; tag: string; na
 }
 
 // The reader's half. The build names a delta after the ASSET path; a request
-// carries only the ROUTE, and `html_handling: "drop-trailing-slash"` makes those
+// carries only the ROUTE, and `htmlHandling: "drop-trailing-slash"` makes those
 // differ for exactly one shape: a section index, where /garage is served by
 // garage/index.html. So a route has two candidate assets, and the delta is at
 // whichever one the build staged.
@@ -155,11 +140,9 @@ export function pageDeltaPaths(rel: string, tag: string): string[] {
   return [rel, `${rel}/index`].map((stem) => `/pd/${pageDeltaName(pageSlug(stem), tag)}`);
 }
 
-// ── the dcz frame (RFC 9842) ────────────────────────────────────────────────
-
-// A dcz body is the dictionary's SHA-256 in a Zstandard SKIPPABLE frame (magic
-// 0x184D2A5E little-endian, a 4-byte LE length of 32, then the raw digest),
-// followed by the zstd frame itself. Being valid zstd, that prefix is skipped by
+// A dcz body (RFC 9842) is the dictionary's SHA-256 in a Zstandard SKIPPABLE
+// frame (magic 0x184D2A5E little-endian, a 4-byte LE length of 32, then the raw
+// digest), followed by the zstd frame itself. Being valid zstd, that prefix is skipped by
 // any conforming decoder, which is what lets `zstd -d -D dict` round-trip the
 // whole file.
 export const DCZ_MAGIC = 0x184d2a5e;
@@ -180,8 +163,6 @@ export function dczHeader(digest: Uint8Array): Uint8Array {
   return header;
 }
 
-// The dictionary digest a dcz body names and the zstd frame after it, or null
-// when the bytes do not open with a well-formed header.
 export function parseDcz<T extends Uint8Array>(bytes: T): { digest: T; frame: T } | null {
   if (bytes.length < DCZ_HEADER_BYTES) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

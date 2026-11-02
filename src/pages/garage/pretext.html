@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/pretext: DOM-free text measurement</title>
@@ -56,13 +56,13 @@ li { margin: 3px 0; }
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon play" aria-hidden="true"></span>aadhar.sh/garage/pretext: DOM-free text measurement</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
-  <div class="content prose">
+  <main id="main" class="content prose">
     <h1>pretext: text measurement off the DOM <span class="badge idle">watching</span></h1>
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
@@ -96,7 +96,7 @@ li { margin: 3px 0; }
     <h2>2 · The technique, live</h2>
     <p class="note">
       This runs <strong>the real <a href="https://github.com/chenglou/pretext" rel="external">pretext</a></strong>
-      (v0.0.7, vendored locally; see the closing note on keeping its bytes
+      (v1.0.0, vendored locally; see the closing note on keeping its bytes
       off every other page). Left: the browser laying the text out and reporting
       <code>offsetHeight</code> (a reflow). Right: pretext&apos;s <code>layout()</code>
       over a one-time <code>prepare()</code>, same line count, zero DOM. Drag
@@ -126,7 +126,7 @@ li { margin: 3px 0; }
     <p class="note">
       The thing a width-only measure can&apos;t do: text whose available width
       <em>changes per line</em>. pretext&apos;s <code>layoutNextLine(prepared,
-      cursor, width)</code> lays out one line at a time, so you feed it a narrow
+      width, cursor)</code> lays out one line at a time, so you feed it a narrow
       width while the line sits beside the floated box and the full width once the
       text clears it. The result is real shaped wrapping, drawn to a canvas, no DOM. Drag
       the box bigger and watch the text reflow around it:
@@ -145,8 +145,9 @@ li { margin: 3px 0; }
       Here&apos;s the gap a 30-line re-creation falls into. A naïve
       <code>split(/\s+/)</code> assumes spaces separate words, so CJK (which
       has none) becomes one giant token that overflows, and scripts it can&apos;t
-      segment get mangled. pretext segments by grapheme via
-      <code>Intl.Segmenter</code> and breaks the same string correctly:
+      segment get mangled. pretext finds graphemes with the browser&apos;s own
+      character rules and, since 1.0, breaks lines with a port of that
+      browser&apos;s line breaker, so it breaks the same string where the browser does:
     </p>
     <div class="grid2" style="border:1px solid oklch(80% 0.02 250);border-radius:4px;overflow:hidden">
       <div class="col"><h3>naïve <code>split(/\\s+/)</code></h3><div class="flow i18n-out naive" id="i18n-naive"></div></div>
@@ -189,15 +190,25 @@ li { margin: 3px 0; }
         system Tahoma/Verdana, no webfont, which is also why the demo above
         agrees so closely.)</li>
       <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line breaking; font rendering is out of scope. <code>system-ui</code> is
-        explicitly unsafe for accuracy on macOS.</li>
+        explicitly unsafe for accuracy on macOS, and the README asks for a named
+        font per script, since a fallback font can measure differently. Tahoma has
+        no Chinese glyphs, so section 4 leans on fallback.</li>
       <li><strong>CSS subset.</strong> Only <code>white-space: normal/pre-wrap</code>,
         a few break modes, pixel <code>letter-spacing</code>; no
         <code>font-feature-settings</code> / optical sizing.</li>
       <li><strong>It&apos;s a JS layout path</strong> that must mirror the
-        browser&apos;s CSS line-breaker. That cuts against this site&apos;s whole
-        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model
-        that can drift from the real engine.</li>
-      <li><strong>Deps:</strong> <code>Intl.Segmenter</code> + Canvas 2D (both
+        browser&apos;s CSS line-breaker. Since 1.0 it ships a port of each
+        engine&apos;s own breaker and its data (Chrome, Safari, Firefox), so lines
+        break where the browser breaks them in many more cases, and each port is
+        pinned to a release: its Safari rules follow Safari 27, and Safari 26 breaks
+        differently around curly quotes. That still cuts against this site&apos;s
+        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model of
+        the real engine that has to keep up with it.</li>
+      <li><strong>Bytes.</strong> Those ports carry each browser&apos;s
+        line-break and grapheme tables, so 1.0 weighs about 35&nbsp;KB brotli
+        where 0.0.7 weighed 12. It loads on this page only, after the page itself has loaded.</li>
+      <li><strong>Deps:</strong> Canvas 2D and Unicode property escapes, plus
+        <code>Intl.Segmenter</code> for Thai, Lao, Khmer and Myanmar text (all
         broadly shipped now, incl. Safari).</li>
     </ul>
 
@@ -212,10 +223,10 @@ li { margin: 3px 0; }
     <p class="replaces">
       <strong>On the dependency:</strong> this page runs the real
       <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>,
-      bundled to a single 12&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
+      bundled to a single 35&nbsp;KB-brotli <a class="term" data-t="es-module" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules" title="JavaScript's built-in module format, where files share code through import and export statements." rel="external">ES module</a> and <em>vendored <a class="term" data-t="same-origin" href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy" title="The browser rule that treats a page's own scheme, host and port as one site, and limits what pages from other origins can read." rel="external">same-origin</a></em>
       at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
       <code>'self'</code>, the existing <a class="term" data-t="csp" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP" title="A header that tells the browser which sources a page may load scripts, styles and other resources from, to block injected code." rel="external">CSP</a> needs <em>no change</em>, so
-      pretext&apos;s bytes load only when you open this page and never touch the
+      pretext&apos;s bytes load only after this page has loaded and never touch the
       homepage or any other page. The only other demo here that&apos;s mine is the
       naïve <code>split(/\\s+/)</code> wrapper in section 4, kept deliberately bad
       to show the gap.
@@ -227,20 +238,45 @@ li { margin: 3px 0; }
     </footer>
     <hr>
     <section id="luq" aria-label="understanding check"></section>
-  </div>
+  </main>
 </div>
 
 <script type="module">
-// The real @chenglou/pretext (v0.0.7), vendored same-origin at ./pretext.lib.js
+// The real @chenglou/pretext (v1.0.0), vendored same-origin at ./pretext.lib.js
 // (dynamic import in a try/catch so a load failure degrades gracefully, and so
-// its bytes never touch any other page). Needs Intl.Segmenter + Canvas 2D.
+// its bytes never touch any other page, or this page's load). Needs Canvas 2D;
+// since 1.0 it wants Intl.Segmenter only for Thai, Lao, Khmer and Myanmar,
+// which nothing here uses.
 (async () => {
   const FONT = '15px Tahoma, Verdana, Geneva, sans-serif';
   const LINE_H = 22;
   const setNote = (id, msg) => { const e = document.getElementById(id); if (e) e.textContent = msg; };
   const esc = (s) => s.replace(/[&<]/g, c => c === "&" ? "&amp;" : "&lt;");
 
-  if (!("Segmenter" in Intl)) { setNote("agree", "Intl.Segmenter isn't available in this browser, so pretext can't run here."); return; }
+  // The 35 KB import waits for the load event, then for the demos to come
+  // within one scrollport of view, or for a touch on a demo control, whichever
+  // is first. One promise, so both triggers fire the import once. The observer
+  // roots at the nearest scroll container: a rootMargin on the viewport doesn't
+  // reach into a scrolling <main>, which is what holds this page's content.
+  let racePending = false;
+  await new Promise((go) => {
+    const touch = (e) => { if (e.type === "click" && e.currentTarget.id === "race") racePending = true; go(); };
+    for (const id of ["width", "fwidth", "race"]) {
+      const el = document.getElementById(id);
+      for (const type of ["pointerdown", "focusin", "click"]) el.addEventListener(type, touch, { once: true });
+    }
+    const watch = () => {
+      const demos = document.querySelector(".measure-wrap");
+      let root = demos.parentElement;
+      while (root && root !== document.body && !/auto|scroll/.test(getComputedStyle(root).overflowY)) root = root.parentElement;
+      const io = new IntersectionObserver((seen) => {
+        if (seen.some((s) => s.isIntersecting)) { io.disconnect(); go(); }
+      }, { root: root === document.body ? null : root, rootMargin: "100% 0px" });
+      io.observe(demos);
+    };
+    if (document.readyState === "complete") watch(); else addEventListener("load", watch, { once: true });
+  });
+
   let PT;
   try { PT = await import("./pretext.lib.js"); }
   catch (e) { setNote("agree", "pretext failed to load (" + e + ")."); return; }
@@ -274,7 +310,7 @@ li { margin: 3px 0; }
   slider.addEventListener("input", render1); render1();
 
   // ── demo 2: race, re-layout many times (resize / virtualization pattern) ──
-  document.getElementById("race").addEventListener("click", () => {
+  const race = () => {
     const out = document.getElementById("race-out"), N = 2000; let i, sink = 0;
     let t0 = performance.now();
     for (i = 0; i < N; i++) { domFlow.style.width = (220 + (i * 7) % 360) + "px"; sink += domFlow.offsetHeight; }
@@ -285,7 +321,9 @@ li { margin: 3px 0; }
     render1();
     out.innerHTML = "DOM reflow: " + domMs.toFixed(1) + " ms &nbsp;·&nbsp; pretext layout(): " + ptMs.toFixed(1) +
       " ms &nbsp;·&nbsp; <b>" + (ptMs > 0 ? (domMs / ptMs).toFixed(0) : "∞") + "× faster</b> &nbsp;(" + N + " re-layouts)";
-  });
+  };
+  document.getElementById("race").addEventListener("click", race);
+  if (racePending) race();          // a click that arrived while pretext loaded
 
   // ── demo 3: dynamic wrap, flow around a floated box (variable width per line) ──
   const FSAMPLE = "Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below: shaped wrapping with no DOM, recomputed live as you resize the float.";
@@ -303,13 +341,13 @@ li { margin: 3px 0; }
     fctx.font = FONT; fctx.fillStyle = "#1a1a1a"; fctx.textBaseline = "alphabetic";
     fbox.style.width = imgPx + "px"; fbox.style.height = imgPx + "px";
     const floatBottom = PAD + imgPx, innerW = stageW - PAD * 2;
-    let cursor = { segmentIndex: 0, graphemeIndex: 0 }, y = PAD, guard = 0;
+    let cursor, y = PAD, guard = 0;   // no cursor yet: layoutNextLine starts at the top
     while (y < STAGE_H - 4 && guard++ < 100) {
       const beside = y < floatBottom;
       const x = beside ? PAD + imgPx + GAP : PAD;
       const w = beside ? innerW - imgPx - GAP : innerW;
       if (w < 24) { y += FLH; continue; }
-      const line = layoutNextLine(fprep, cursor, w);
+      const line = layoutNextLine(fprep, w, cursor);
       if (!line) break;
       fctx.fillText(line.text, x, y + 15);
       cursor = line.end; y += FLH;
@@ -333,11 +371,24 @@ li { margin: 3px 0; }
     if (cur) lines.push(cur);
     return lines.map(t => ({ text: t, over: mcx.measureText(t).width > maxW }));
   }
+  // Each script run carries its language, so a screen reader switches voice for
+  // the Chinese and the Arabic, and <bdi> keeps the Arabic's right-to-left
+  // order from reordering the English around it. Runs only, after layout, so
+  // the measured lines are the same ones either way.
+  const RUNS = /([\p{Script=Han}\u3000-\u303f\uff00-\uffef]+)|(\p{Script=Arabic}+(?:\s+\p{Script=Arabic}+)*)/gu;
+  function marked(t) {
+    let out = "", at = 0;
+    for (const m of t.matchAll(RUNS)) {
+      out += esc(t.slice(at, m.index)) + (m[1] ? `<span lang="zh-Hans">${esc(m[1])}</span>` : `<bdi lang="ar">${esc(m[2])}</bdi>`);
+      at = m.index + m[0].length;
+    }
+    return out + esc(t.slice(at));
+  }
   const naiveEl = document.getElementById("i18n-naive"), ptEl = document.getElementById("i18n-pretext");
   if (naiveEl && ptEl) {
-    naiveEl.innerHTML = naiveLines(I18N, W18).map(l => `<div class="ln${l.over ? " over" : ""}">${esc(l.text)}</div>`).join("");
+    naiveEl.innerHTML = naiveLines(I18N, W18).map(l => `<div class="ln${l.over ? " over" : ""}">${marked(l.text)}</div>`).join("");
     const lr = layoutWithLines(prepareWithSegments(I18N, FONT), W18, LINE_H);
-    ptEl.innerHTML = lr.lines.map(l => `<div class="ln">${esc(l.text)}</div>`).join("");
+    ptEl.innerHTML = lr.lines.map(l => `<div class="ln">${marked(l.text)}</div>`).join("");
   }
 })();
 </script>
@@ -418,7 +469,7 @@ li { margin: 3px 0; }
         {
           "t": "It assumes spaces separate words, so CJK text with no spaces becomes one giant token that overflows the line",
           "ok": true,
-          "why": "That's the gap a 30-line toy falls into. pretext segments graphemes with Intl.Segmenter, so it finds break points the regex never sees."
+          "why": "That's the gap a 30-line toy falls into. pretext breaks lines with a port of the browser's own line breaker, so it finds the breaks between CJK characters that the regex never sees."
         },
         {
           "t": "Canvas measureText can't return widths for CJK glyphs, so the naive version has nothing to work with",
@@ -430,7 +481,7 @@ li { margin: 3px 0; }
         },
         {
           "t": "pretext handles it by breaking non-Latin text after every character, a fallback the naive version skips",
-          "why": "It segments by grapheme via Intl.Segmenter, which also keeps emoji and ZWJ clusters intact. A blind per-character break would mangle those."
+          "why": "It breaks only where the browser's line breaker allows, between graphemes found by the browser's own rules, which keep emoji and ZWJ clusters intact. A blind per-character break would mangle those."
         }
       ]
     },
@@ -461,6 +512,6 @@ li { margin: 3px 0; }
 </script>
 <script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="28"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="29"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

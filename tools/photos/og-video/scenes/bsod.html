@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- bsod.html: the homepage card crashes to an XP-style stop screen, dumps
+     memory, and comes back. A recording scene for record.ts, never served.
+     The layout and the blue are the stop screen's; every word is this site's,
+     not Microsoft's. 6.6 s, started by body.go so frame 0 is the og:image. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { margin: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; overflow: hidden; background: #000; }
+      #scene { position: relative; width: 1200px; height: 630px; overflow: hidden; background: #000; }
+      .card, .stop { position: absolute; inset: 0; }
+      .card { background: url("../../../../public/og/home.jpg") center / cover no-repeat; }
+      /* #0000AA is the stop screen's own blue, 80 columns of mono on it */
+      .stop { opacity: 0; background: #0000aa; color: #fff; padding: 34px 46px; font: bold 17.5px/23px "Courier New", Courier, monospace; }
+      /* pre on the paragraphs only: on the container, the newlines between them
+         became blank lines and pushed the dump off the bottom */
+      .stop p { white-space: pre; }
+      .stop p + p { margin-top: 23px; }
+      #pct { display: inline-block; min-width: 3ch; }
+
+      /* timeline, 6.6 s: card 0-0.6, a hard cut to blue, dump 1.1-4.6, black, card back 5.0-6.0 */
+      body.go .card { animation: card 6.6s linear both; }
+      body.go .stop { animation: stop 6.6s steps(1, end) both; }
+      @keyframes card { 0%, 9% { opacity: 1; } 9.1%, 75.8% { opacity: 0; } 90.9%, 100% { opacity: 1; } }
+      @keyframes stop { 0% { opacity: 0; } 9.1% { opacity: 1; } 72.7% { opacity: 0; } }
+    </style>
+  </head>
+  <body>
+    <div id="scene">
+      <div class="stop">
+        <p>A problem has been detected and this link preview has stopped so your scroll can keep going.</p>
+        <p>OG_VIDEO_NOT_LESS_OR_EQUAL</p>
+        <p>If this is the first time you've seen this card, tap it. If this card appears again, follow these steps:</p>
+        <p>Check that your phone decodes HEVC in hardware. Ask Discord about AV1. If the problem continues, open aadhar.sh and look at the photos instead.</p>
+        <p>Technical information:</p>
+        <p>*** STOP: 0x000000AA (0xC0FFEE00,0x00000080,0x0001E0A6,0x20261023)</p>
+        <p>*** og-video.ts - Address 0x0000BEEF base at 0x0000F00D, DateStamp 6539f0a1</p>
+        <p>Beginning dump of physical memory Dumping physical memory to disk: <span id="pct">0</span></p>
+      </div>
+      <div class="card"></div>
+    </div>
+    <script>
+      // The dump counter: 0 to 100 in steps of 5 between 1.1 s and 4.4 s after
+      // body.go, slow first and quicker at the end. Driven off performance.now so
+      // the screencast records whatever the clock says.
+      const pct = document.getElementById("pct");
+      new MutationObserver(() => {
+        if (!document.body.classList.contains("go")) return;
+        const t0 = performance.now();
+        const tick = () => {
+          const t = (performance.now() - t0) / 1000;
+          const f = Math.min(1, Math.max(0, (t - 1.1) / 3.3));
+          pct.textContent = String(Math.floor((100 * (0.4 * f + 0.6 * f * f)) / 5) * 5);
+          if (t < 6.6) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    </script>
+  </body>
+</html>

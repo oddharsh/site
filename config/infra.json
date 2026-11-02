@@ -129,7 +129,7 @@
         "`true` expression would overwrite a client-supplied key, and the ramp's own",
         "split probe sends one key per request precisely so it can still observe the",
         "split from a single IP. Clobber that and every intermediate step reads 40",
-        "of 40 on one version, which deploy-promote.mjs treats as a dead ramp. It",
+        "of 40 on one version, which deploy-promote.ts treats as a dead ramp. It",
         "fails CLOSED (a false abort, never a bad release) and deploy-promote names",
         "this rule in that error for exactly that reason."
       ],
@@ -184,6 +184,33 @@
       "setting": "shared_dictionary_mode",
       "value": "passthrough",
       "why": "the dcz shell, family and per-page dictionary tiers all rely on Cloudflare forwarding the dictionary headers and encodings, which the docs say it stops doing when this is disabled"
+    },
+    "ciphers": {
+      "$comment": [
+        "NOT DECLARED, and this block records why rather than leaving the gap",
+        "unexplained. The specification.website audit (2026-10-17) cites RFC 10015",
+        "(July 2026): a TLS 1.2 server MUST NOT select RSA key exchange. This zone",
+        "does. Measured 2026-10-17 with openssl 3 and -tls1_2: AES128-GCM-SHA256 and",
+        "AES256-SHA256 (static RSA, served on the 2048-bit GTS WR1 certificate) and",
+        "AES128-SHA, ECDHE-RSA-AES128-SHA and ECDHE-ECDSA-AES128-SHA (CBC) all",
+        "negotiate. TLS 1.0 and 1.1 are refused.",
+        "",
+        "The fix would be the zone setting `ciphers` set to ECDHE with AEAD only:",
+        "ECDHE-ECDSA-AES128-GCM-SHA256, ECDHE-ECDSA-AES256-GCM-SHA384,",
+        "ECDHE-ECDSA-CHACHA20-POLY1305 and the three ECDHE-RSA twins. Cloudflare",
+        "gates that setting behind Advanced Certificate Manager, a paid add-on on",
+        "every plan (docs, updated 2026-10-15), and this zone is on Free Website",
+        "(the zone API, 2026-10-17). So no declaration and no probe: a check that",
+        "can only go green by buying an add-on is a permanent red line.",
+        "",
+        "Two ways out, both the owner's call. Buy ACM and declare `value` below,",
+        "with an edge probe that AES128-GCM-SHA256 fails to negotiate. Or raise",
+        "`min_tls_version` to 1.3, which IS writable on Free and removes static RSA",
+        "and CBC by construction (TLS 1.3 has neither), at the cost of every",
+        "TLS-1.2-only client and crawler."
+      ],
+      "setting": "ciphers",
+      "status": "blocked-on-plan"
     }
   },
 
@@ -268,6 +295,25 @@
       "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
       "why": "BIMI logo for inbox display. This record is the ONLY consumer of public/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
       "consumer": "public/bimi.svg"
+    },
+    {
+      "name": "aadhar.sh",
+      "type": "CAA",
+      "match": "contains",
+      "expect": [
+        "0 issue \"letsencrypt.org\"",
+        "0 issue \"pki.goog; cansignhttpexchanges=yes\"",
+        "0 issue \"sectigo.com\"",
+        "0 issue \"ssl.com\"",
+        "0 issuewild \"letsencrypt.org\"",
+        "0 issuewild \"pki.goog; cansignhttpexchanges=yes\"",
+        "0 issuewild \"sectigo.com\"",
+        "0 issuewild \"ssl.com\"",
+        "0 iodef \"mailto:security@aadhar.sh\""
+      ],
+      "why": "Names the CAs that may issue for this zone, and where a CA reports a refused request. Absent until 2026-10-17 (the specification.website audit), which let any public CA issue for aadhar.sh. The owner created these nine that day: issue and issuewild for the four CAs Cloudflare's certificate-authorities reference lists for Universal SSL and backup certificates, in its exact strings, plus iodef. Google Trust Services issues today (WE1 for the ECDSA certificate, WR1 for the RSA one, both seen on the wire 2026-10-17). Sectigo only signs backup certificates, and a set that refuses it fails the day Cloudflare swaps one in.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns part of this RRset. Once the zone held any CAA it added four records nobody wrote, hidden from the dashboard and the DNS API: issue and issuewild for comodoca.com and for \"digicert.com; cansignhttpexchanges=yes\". Both authoritative nameservers served all 13 on 2026-10-17, and that is not the set Cloudflare's CAA page says it adds. Exact-matching the 9 fails against 13; exact-matching all 13 would have infra:apply POST Cloudflare's own records. So this asserts ours are present and leaves Cloudflare's to Cloudflare, and infra:apply leaves CAA alone, as it does every `contains` record.",
+      "pairs_with": "public/.well-known/security.txt, whose Contact is the same mailbox the iodef reports to."
     }
   ],
 
@@ -283,7 +329,7 @@
     "d1_databases": [
       { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log. Single source for both /restore and /updates, which is what stops those two pages drifting apart." },
       { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." },
-      { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
+      { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, the outbound send ledger, /pixel-peeper's pooled picks and /guestbook's signatures. Deliberately NOT aadhar-restore: this is mutable content written by strangers, where checkpoints is the site's own append-only history." }
     ],
     "vectorize_indexes": [
       { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/cloudflare.config.ts", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
@@ -296,7 +342,7 @@
       { "name": "aadhar-sh", "config": "cloudflare.config.ts", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/cloudflare.config.ts", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
       { "name": "lwe-ask", "config": "lwe-ask/cloudflare.config.ts", "why": "The /lwe/ask RAG endpoints." },
-      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+      { "name": "lens-reader", "config": "lens-reader/cloudflare.config.ts", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and src/dom.ts plus htmlparser2 supplying one adds ~46 KiB gzip (measured 2026-08-23, when src/dom.ts replaced linkedom) to a site bundle already over its 204.24 KiB budget. Size is the only reason: run_worker_first's 100-rule cap no longer argues for the split, since /lens/read sits under the site's /lens/* row. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {
@@ -556,7 +602,7 @@
         "id": "compression-on",
         "target": "homepage",
         "assert": { "compression": ["zstd", "br", "gzip"] },
-        "why": "The performance budget is denominated in compressed bytes (CLAUDE.md pins the homepage at ~15.4KB zstd; perf-budget.mjs measures gzip and Brotli envelopes). Lose compression at the zone and those numbers quietly stop describing anything real, while perf-budget.mjs keeps passing because it compresses locally."
+        "why": "The performance budget is denominated in compressed bytes (CLAUDE.md pins the homepage at ~15.4KB zstd; perf-budget.ts measures gzip and Brotli envelopes). Lose compression at the zone and those numbers quietly stop describing anything real, while perf-budget.ts keeps passing because it compresses locally."
       },
       {
         "id": "compression-prefers-brotli",
@@ -595,7 +641,7 @@
         "assert": {
           "bodyLacks": ["/.webmcp/bridge.js"]
         },
-        "why": "Cloudflare's WebMCP bridge is off in the dashboard (Agent Readiness, Labs) and src/client/webmcp.js registers this origin's tools instead, which is what carries the tool annotations the browser would otherwise drop and what gates a tool that writes behind a human. This check exists for the ORDER rather than for the toggle: /whoareyou and /security both state, in prose, that every script on the page is a file in this repository, and that claim is false for as long as the edge is still injecting. Dashboard first, prose second, exactly like the Workers Builds deploy command. Two things follow from the injection being edge-side. Re-enabling it in the dashboard silently makes two pages lie, and nothing in the tree could see that, which is the same argument app-owns-security-headers makes above. And the bridge never reached / at all, because that document is served as a dcz delta and HTMLRewriter cannot rewrite one, so the homepage registered zero tools while every other page registered 25 (gotcha 20 inverted)."
+        "why": "Cloudflare's WebMCP bridge is off in the dashboard (Agent Readiness, Labs) and src/client/webmcp.ts registers this origin's tools instead, which is what carries the tool annotations the browser would otherwise drop and what gates a tool that writes behind a human. This check exists for the ORDER rather than for the toggle: /whoareyou and /security both state, in prose, that every script on the page is a file in this repository, and that claim is false for as long as the edge is still injecting. Dashboard first, prose second, exactly like the Workers Builds deploy command. Two things follow from the injection being edge-side. Re-enabling it in the dashboard silently makes two pages lie, and nothing in the tree could see that, which is the same argument app-owns-security-headers makes above. And the bridge never reached / at all, because that document is served as a dcz delta and HTMLRewriter cannot rewrite one, so the homepage registered zero tools while every other page registered 25 (gotcha 20 inverted)."
       },
       {
         "id": "speed-brain-off",
@@ -620,6 +666,19 @@
         "request": { "accept": "text/markdown" },
         "assert": { "headerContains": { "content-type": "text/html" } },
         "why": "Watches what markdown-for-agents-off only infers. A /writing post has no Markdown twin on purpose (its .txt is the agent representation), so the worker answers `Accept: text/markdown` there with the HTML page. With the zone feature on, the edge converts that HTML and the response arrives as text/markdown, so content-type alone tells the two apart, and it reads the conversion directly instead of a header Cloudflare chooses to attach. Added 2026-10-11, after Cloudflare's 2026-10-09 release moved conversion in-process and stopped sending x-markdown-tokens, x-original-tokens and Content-Length on converted responses: the homepage check leans on content-signal still being injected, and that release promises nothing about it. If posts ever gain twins this fails by design; point it at another page without one rather than deleting it."
+      },
+      {
+        "id": "security-txt-from-repo",
+        "target": "security-txt",
+        "assert": {
+          "headerEquals": {
+            "x-frame-options": "DENY"
+          },
+          "headerContains": {
+            "content-type": "text/plain"
+          }
+        },
+        "why": "/.well-known/security.txt is public/.well-known/security.txt since 2026-10-17, so its Expires and Policy are in git and a contract test (contract-security-txt-expires-60-days-out) fails 60 days before the date lapses. Until then Cloudflare's dashboard security.txt (Security Center) answered at the edge, ahead of the Worker, with an Expires of 2027-05-19 that nothing in this tree could see. That copy still answers until it is deleted, and it would keep shadowing the repo file. x-frame-options is the discriminator: the Worker sets DENY on everything it serves, and the edge feature's response carried no such header (measured 2026-10-17: content-type, HSTS and nosniff only). Same shape as app-owns-security-headers: a file the repo ships is not a file the visitor gets."
       }
     ]
   },
@@ -636,7 +695,7 @@
       "Workers Builds has a REST API, the permission is `Workers Builds Configuration`, and it has a",
       "READ variant — so verifying this costs a read-only scope and needs no",
       "exception to the rule that nothing in this repo holds a token that can",
-      "write. check-infra.mjs reads the live triggers and fails on drift.",
+      "write. check-infra.ts reads the live triggers and fails on drift.",
       "",
       "Add `Workers Builds Configuration:Read` to the CI token (a sixth read alongside Account",
       "Settings, Workers Scripts, Workers KV Storage, Workers R2 Storage, and D1).",
@@ -667,7 +726,7 @@
       "missed it, because the rule ENUMERATED three deploy paths (`pnpm run",
       "deploy:direct`, `bun run deploy:version`, and the dashboard Deploy command) while",
       "a branch build is a fourth. Enumerating is what let one hide, so the",
-      "checks in check-infra.mjs now walk both commands from a single list.",
+      "checks in check-infra.ts now walk both commands from a single list.",
       "",
       "A branch build is the worst place for this to sit rather than the most",
       "harmless one. A feature branch is where an id-less binding gets written in",
@@ -701,7 +760,7 @@
     "build_command": "",
     "$comment_npx": [
       "These two RECORD strings typed into the Cloudflare dashboard rather than",
-      "commands this repo runs, and check-infra.mjs compares them against the",
+      "commands this repo runs, and check-infra.ts compares them against the",
       "live values. So editing either one here first fails the next infra:check",
       "on drift it invented itself, and since `validate` is a required check,",
       "that blocks its own merge. The order is dashboard FIRST, this file second.",
@@ -860,7 +919,7 @@
         "either way; what changes is that no PAT needs minting.",
         "",
         "Being logged in buys nothing on its own, which is the trap.",
-        "check-infra.mjs reads process.env.GITHUB_TOKEN and never shells out to",
+        "check-infra.ts reads process.env.GITHUB_TOKEN and never shells out to",
         "gh, so a workstation with a good `gh auth login` still reports this tier",
         "as an unverifiable 401. Hand it the token: `GITHUB_TOKEN=$(gh auth",
         "token) bun run infra:check`. Measured minutes apart on one machine, the",
@@ -999,7 +1058,7 @@
         "zero or by one, so no threshold separates a clean repository from a",
         "compromised one. Coverage is held by the scan failing CLOSED on anything",
         "it cannot classify, and by the fixtures in",
-        "tools/contract-every-action-reference-under-github-is-pinned.test.mjs.",
+        "tools/tests/contract-every-action-reference-under-github-is-pinned.test.ts.",
         "",
         "Local `./` references are RESOLVED, never exempted. There are 12 and each",
         "one has its target action file located and scanned, transitively, which",

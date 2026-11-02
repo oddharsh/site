@@ -13,9 +13,11 @@
 // skip set and merge), and a contract test held two of the copies together by
 // regexing cp() calls out of build.ts. The copies had already drifted: the
 // build's collision walk skipped one derived path where its copy skipped
-// three, and dev's skip set never applied at all (see linkServedTree).
-import { copyFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
+// three, and dev's skip set missed single-owner directories (linkServedTree
+// now handles that case).
+import { copyFile, readFile, writeFile, mkdir, readdir, rm, rmdir, stat, symlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
+import { browserJavaScripts } from "./browser-source.ts";
 import { cloneTree } from "./clone-tree.ts";
 
 // What a root HOLDS decides which questions it answers. The test for where a
@@ -37,8 +39,7 @@ export const SERVED_ROOTS: readonly ServedRoot[] = [
   { dir: "src/styles", holds: "styles" },
 ];
 
-const rootsHolding = (...kinds: ServedRoot["holds"][]): string[] =>
-  SERVED_ROOTS.filter((root) => kinds.includes(root.holds)).map((root) => root.dir);
+const rootsHolding = (...kinds: ServedRoot["holds"][]): string[] => SERVED_ROOTS.filter((root) => kinds.includes(root.holds)).map((root) => root.dir);
 
 // Three projections of the one declaration. They answer different questions,
 // so they stay three names rather than one list with callers picking indexes.
@@ -57,15 +58,11 @@ export const AUTHORED_ROOTS: readonly string[] = rootsHolding("bytes", "document
 // import, so a contract test holds that file to this projection.
 export const BROWSER_IMPORT_ROOTS: readonly string[] = rootsHolding("client", "styles", "bytes");
 
-// Source paths the build DERIVES rather than stages (build.ts steps 1a, 1a2).
+// Source paths the build DERIVES rather than stages (build.ts phase 1a).
 // Nothing writes them into the source tree any more, so a file at one of them
 // can only be a leftover from an older checkout, and staging it would make the
 // served tree depend on whatever a given machine happens to still hold.
-export const DERIVED_PATHS: readonly string[] = [
-  "public/images/meta",
-  "public/images/exif.json",
-  "public/images/fingerprints.json",
-];
+export const DERIVED_PATHS: readonly string[] = ["public/images/meta", "public/images/exif.json", "public/images/fingerprints.json"];
 
 export type ServedTreePlan = {
   // The roots that were merged, in order.
@@ -117,8 +114,9 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
     if (provided) provided.push(root);
     else directories.set(rel, [root]);
     for (const entry of await readdir(resolve(cwd, root, rel), { withFileTypes: true })) {
-      const child = rel ? `${rel}/${entry.name}` : entry.name;
-      const source = `${root}/${child}`;
+      const authored = rel ? `${rel}/${entry.name}` : entry.name;
+      const source = `${root}/${authored}`;
+      const child = root === "src/client" && authored.endsWith(".ts") && !authored.endsWith(".d.ts") ? authored.replace(/\.ts$/, ".js") : authored;
       if (derived.has(source)) {
         skipped.push(source);
         continue;
@@ -142,8 +140,13 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
     // A root renamed out from under this list is the failure dev-stage was
     // first written to repair (dev named a deleted `www` for a day after the
     // 2026-08-18 split). Fail by NAME rather than plan a partial tree.
-    const ok = await stat(resolve(cwd, root)).then((s) => s.isDirectory()).catch(() => false);
-    if (!ok) throw new Error(`served-tree: root "${root}" does not exist. Has the served tree been rearranged again? Update SERVED_ROOTS in tools/lib/served-tree.ts.`);
+    const ok = await stat(resolve(cwd, root))
+      .then((s) => s.isDirectory())
+      .catch(() => false);
+    if (!ok)
+      throw new Error(
+        `served-tree: root "${root}" does not exist. Has the served tree been rearranged again? Update SERVED_ROOTS in tools/lib/served-tree.ts.`,
+      );
     await walk(root, "");
   }
 
@@ -154,7 +157,7 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
 
 type AdapterOptions = { cwd?: string };
 
-// The first root (public/, about 900 of the 1,000 staged files) cloned whole
+// The first root (public/, 994 of the 1,102 staged files on 2026-10-16) cloned whole
 // with one clonefile(2) where the platform allows (tools/lib/clone-tree.ts),
 // then held to the plan: the derived paths the plan skips are deleted from the
 // clone, and the clone must hold exactly the plan's files from that root and no
@@ -166,14 +169,17 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
   await rmdir(out).catch(() => {}); // an empty destination may exist; a full one fails the clone
   if (!(await cloneTree(resolve(cwd, root), out))) return null;
   const prefix = `${root}/`;
-  await Promise.all(plan.skipped.filter((p) => p.startsWith(prefix))
-    .map((p) => rm(resolve(out, p.slice(prefix.length)), { recursive: true, force: true })));
+  await Promise.all(plan.skipped.filter((p) => p.startsWith(prefix)).map((p) => rm(resolve(out, p.slice(prefix.length)), { recursive: true, force: true })));
   const want = new Set([...plan.files].filter(([rel, source]) => source === `${prefix}${rel}`).map(([rel]) => rel));
-  let same = true, seen = 0;
+  let same = true,
+    seen = 0;
   for (const entry of await readdir(out, { recursive: true, withFileTypes: true })) {
     if (entry.isDirectory()) continue;
     const rel = relative(out, resolve(entry.parentPath, entry.name)).split("\\").join("/");
-    if (entry.isSymbolicLink() || !want.has(rel)) { same = false; break; }
+    if (entry.isSymbolicLink() || !want.has(rel)) {
+      same = false;
+      break;
+    }
     seen++;
   }
   if (same && seen === want.size) return root;
@@ -184,16 +190,32 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
 // THE BUILD ADAPTER: copy every planned file to `dest`. Directories are made
 // first, from the plan's union, so no two copies race through mkdir for a
 // directory several roots share, and an empty authored directory still ships.
+async function clientScripts(plan: ServedTreePlan, cwd: string): Promise<Map<string, string>> {
+  const sources = await Promise.all(
+    [...plan.files]
+      .filter(([served, source]) => source.endsWith(".ts") && served.endsWith(".js"))
+      .map(async ([, source]): Promise<[string, string]> => [source, await readFile(resolve(cwd, source), "utf8")]),
+  );
+  return browserJavaScripts(new Map(sources));
+}
+
 const COPY_WIDTH = 64;
-export async function copyServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ files: number; dirs: number; cloned: string | null }> {
+export async function copyServedTree(
+  plan: ServedTreePlan,
+  dest: string,
+  options: AdapterOptions = {},
+): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
+  const scripts = await clientScripts(plan, cwd);
   const cloned = await cloneFirstRoot(plan, out, cwd);
   await Promise.all([...plan.directories.keys()].map((dir) => mkdir(resolve(out, dir), { recursive: true })));
   const pending = cloned ? [...plan.files].filter(([rel, source]) => source !== `${cloned}/${rel}`) : [...plan.files];
   const worker = async () => {
     for (let next = pending.pop(); next; next = pending.pop()) {
-      await copyFile(resolve(cwd, next[1]), resolve(out, next[0]));
+      if (next[1].endsWith(".ts") && next[0].endsWith(".js")) {
+        await writeFile(resolve(out, next[0]), scripts.get(next[1])!);
+      } else await copyFile(resolve(cwd, next[1]), resolve(out, next[0]));
     }
   };
   await Promise.all(Array.from({ length: COPY_WIDTH }, worker));
@@ -208,18 +230,17 @@ export async function copyServedTree(plan: ServedTreePlan, dest: string, options
 //     because a symlink can only point at one of them
 //
 // One more case makes a real directory: a single-owner directory that holds a
-// skipped (derived) path. A whole-directory symlink would expose the leftover,
-// which is what dev-stage.ts did until this module: its skip set only ran
-// inside merged directories, and public/images is not one, so a leftover
-// public/images/meta was served in dev while the comment above it said it
-// could not be. On a checkout with no leftovers the farm is link-for-link what
-// it was.
+// skipped (derived) path. A whole-directory symlink would expose the leftover:
+// public/images has one owner, so a symlinked public/images would serve a
+// leftover public/images/meta in dev. On a checkout with no leftovers every
+// single-owner directory is still one link.
 //
 // Links are relative, so `ls -l .dev-assets` names the directory a file
 // authors in.
 export async function linkServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ links: number; dirs: number }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
+  const scripts = await clientScripts(plan, cwd);
 
   const children = new Map<string, Set<string>>();
   const adopt = (path: string) => {
@@ -236,7 +257,9 @@ export async function linkServedTree(plan: ServedTreePlan, dest: string, options
   let dirs = 0;
   const link = async (served: string, source: string) => {
     const at = served ? resolve(out, served) : out;
-    await symlink(relative(dirname(at), resolve(cwd, source)), at);
+    if (source.endsWith(".ts") && served.endsWith(".js")) {
+      await writeFile(at, scripts.get(source)!);
+    } else await symlink(relative(dirname(at), resolve(cwd, source)), at);
     links++;
   };
   const hidesSkipped = (source: string) => plan.skipped.some((path) => path.startsWith(`${source}/`));
@@ -244,7 +267,11 @@ export async function linkServedTree(plan: ServedTreePlan, dest: string, options
   const place = async (dir: string): Promise<void> => {
     const providers = plan.directories.get(dir) ?? [];
     const source = dir ? `${providers[0]}/${dir}` : providers[0];
-    if (providers.length === 1 && !hidesSkipped(source)) {
+    if (
+      providers.length === 1 &&
+      !hidesSkipped(source) &&
+      ![...plan.files].some(([served, authored]) => authored.startsWith(`${source}/`) && authored.endsWith(".ts") && served.endsWith(".js"))
+    ) {
       await link(dir, source);
       return;
     }

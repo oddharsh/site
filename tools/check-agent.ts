@@ -1,4 +1,4 @@
-// check-agent.mjs — is this site agent-accessible IN PRACTICE?
+// check-agent.ts — is this site agent-accessible IN PRACTICE?
 //
 // Every other agent check here reads a declaration: the route oracle sweeps
 // routes, gen-mcp-cards diffs a card against tools/list, build.ts counts the
@@ -26,7 +26,7 @@
 // browser lenses for the rest of the day on its first run.
 //
 // ── the control, and why it is not optional in spirit ─────────────────────
-// gotcha 15 and gotcha 33 in CLAUDE.md are both the same lesson learned the
+// gotcha 15 and gotcha 33 (docs/GOTCHAS.md) are both the same lesson learned the
 // expensive way: an instrument that reports a browser feature as missing is
 // usually broken itself. A Playwright harness reported Cloudflare's own origin
 // as ignoring Early Hints, and an agent-driven tab reported a working
@@ -38,8 +38,7 @@
 // ── what it does NOT do ───────────────────────────────────────────────────
 // It does not gate CI. This reaches a third-party playground over the network
 // on every run, so as a required check it would redden PRs on somebody else's
-// outage. It is a workstation control in the same idiom as kitesurf:check and
-// bun:pin. Run it when touching client JavaScript, the photo pipeline, or
+// outage. It is a workstation control in the same idiom as bun:pin. Run it when touching client JavaScript, the photo pipeline, or
 // anything the shell projects into every document.
 
 import { readFile } from "node:fs/promises";
@@ -62,7 +61,9 @@ const WANT_JSON = process.argv.includes("--json");
 // client-hydrated, and the two consoles that build their own DOM.
 const SAMPLE = ["/", "/writing", "/garage", "/garage/horizon", "/lens", "/coffee", "/around"];
 
-const log = (m) => { if (!WANT_JSON) console.log(m); };
+const log = (m) => {
+  if (!WANT_JSON) console.log(m);
+};
 
 /**
  * Words a plain GET yields, with scripts and styles removed and tags stripped.
@@ -87,7 +88,9 @@ const head = async (url) => {
   try {
     const r = await fetch(url, { redirect: "follow" });
     return { ok: r.ok, status: r.status, type: r.headers.get("content-type") || "" };
-  } catch { return { ok: false, status: 0, type: "" }; }
+  } catch {
+    return { ok: false, status: 0, type: "" };
+  }
 };
 
 /** The site-wide discovery probes. These are per-ORIGIN, so they run once. */
@@ -107,7 +110,9 @@ async function probeDeclared() {
     });
     const j = await r.json();
     mcp = Array.isArray(j?.result?.tools) && j.result.tools.length > 0;
-  } catch { mcp = false; }
+  } catch {
+    mcp = false;
+  }
 
   let robotsAllowsAgents = null;
   try {
@@ -117,7 +122,9 @@ async function probeDeclared() {
       // A crude but honest read: a global disallow-everything with no allow.
       robotsAllowsAgents = !/^\s*disallow:\s*\/\s*$/im.test(t) || /^\s*allow:/im.test(t);
     }
-  } catch { /* leave null: unread is not the same as hostile */ }
+  } catch {
+    /* leave null: unread is not the same as hostile */
+  }
 
   return { llmsTxt: llms.ok, agentCard: card.ok && mcpCard.ok, mcp, sitemap: sitemap.ok, robotsAllowsAgents };
 }
@@ -125,7 +132,9 @@ async function probeDeclared() {
 /** Evidence one engine produces for one URL. */
 async function renderOnce(page, url) {
   const errs = [];
-  const onConsole = (m) => { if (m.type() === "error") errs.push(m.text().slice(0, 160)); };
+  const onConsole = (m) => {
+    if (m.type() === "error") errs.push(m.text().slice(0, 160));
+  };
   const onPageError = (e) => errs.push("pageerror: " + String(e).slice(0, 160));
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
@@ -160,7 +169,10 @@ async function renderOnce(page, url) {
         imagesWithAlt: imgs.filter((i) => (i.getAttribute("alt") || "").trim().length > 0).length,
         imagesDecorative: imgs.filter((i) => i.hasAttribute("alt") && !(i.getAttribute("alt") || "").trim()).length,
         imagesMissingAlt: imgs.filter((i) => !i.hasAttribute("alt")).length,
-        brokenSrc: imgs.filter((i) => i.naturalWidth === 0).map((i) => (i.currentSrc || i.src || "").split("/").pop()).slice(0, 4),
+        brokenSrc: imgs
+          .filter((i) => i.naturalWidth === 0)
+          .map((i) => (i.currentSrc || i.src || "").split("/").pop())
+          .slice(0, 4),
         maximize,
       };
     });
@@ -206,12 +218,14 @@ async function main() {
 
   for (const route of routes) {
     const url = `${ORIGIN}${route}`;
-    const raw = await fetch(url).then((r) => r.text()).catch(() => "");
+    const raw = await fetch(url)
+      .then((r) => r.text())
+      .catch(() => "");
     const k = await renderOnce(kpage, url);
     const c = cpage ? await renderOnce(cpage, url) : null;
 
     // The Markdown twin is the one discovery surface that is PER ROUTE, so it
-    // is probed here rather than with the site-wide four. `/` publishes its
+    // is probed here rather than with the site-wide probes. `/` publishes its
     // hand-written twin at /index.md; everything else appends .md.
     const twinUrl = route === "/" ? `${ORIGIN}/index.md` : `${ORIGIN}${route.replace(/\/$/, "")}.md`;
     const twin = await head(twinUrl);
@@ -230,8 +244,18 @@ async function main() {
     // strongest signal this script produces.
     const notes: string[] = [];
     if (k.failed) notes.push(`navigation failed: ${k.failed}`);
-    if (k.consoleErrors) notes.push(c && c.consoleErrors === 0 ? `${k.consoleErrors} script error(s), Chrome control CLEAN` : `${k.consoleErrors} script error(s)${c ? ", control also errored" : ", no control"}`);
-    if (k.brokenImages) notes.push(c && c.brokenImages === 0 ? `${k.brokenImages}/${k.totalImages} images failed to decode, Chrome control decoded all` : `${k.brokenImages}/${k.totalImages} images failed to decode`);
+    if (k.consoleErrors)
+      notes.push(
+        c && c.consoleErrors === 0
+          ? `${k.consoleErrors} script error(s), Chrome control CLEAN`
+          : `${k.consoleErrors} script error(s)${c ? ", control also errored" : ", no control"}`,
+      );
+    if (k.brokenImages)
+      notes.push(
+        c && c.brokenImages === 0
+          ? `${k.brokenImages}/${k.totalImages} images failed to decode, Chrome control decoded all`
+          : `${k.brokenImages}/${k.totalImages} images failed to decode`,
+      );
     if (k.maximize === "dead") notes.push(c && c.maximize === "wired" ? "window controls DEAD, wired in Chrome control" : "window controls dead");
 
     const bad = Boolean(k.failed) || checks.agentScripts.status === "fail" || checks.agentMedia.status === "fail";
@@ -242,7 +266,9 @@ async function main() {
 
     if (!WANT_JSON) {
       const status = [checks.agentScripts, checks.agentMedia].map((x) => x.status[0].toUpperCase()).join("");
-      console.log(`${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} scripts:${checks.agentScripts.status.padEnd(7)} media:${checks.agentMedia.status.padEnd(7)} legible:${legible === null ? "?" : legible + "%"}${twinOk ? "" : "  no-twin"}`);
+      console.log(
+        `${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} scripts:${checks.agentScripts.status.padEnd(7)} media:${checks.agentMedia.status.padEnd(7)} legible:${legible === null ? "?" : legible + "%"}${twinOk ? "" : "  no-twin"}`,
+      );
       void status;
       for (const n of notes) console.log(`        ${n}`);
       if (k.brokenSrc?.length) console.log(`        first broken: ${k.brokenSrc.join(", ")}`);
@@ -262,7 +288,9 @@ async function main() {
   const mediaFails = rows.filter((r) => r.checks.agentMedia.status === "fail").length;
   const noTwin = rows.filter((r) => !r.twin).length;
   console.log(`\n${rows.length} route(s): ${scriptFails} with script failures, ${mediaFails} with undecodable media, ${noTwin} with no Markdown twin`);
-  console.log(`declared surfaces: llms.txt ${declared.llmsTxt ? "yes" : "NO"}, agent card ${declared.agentCard ? "yes" : "NO"}, MCP ${declared.mcp ? "yes" : "NO"}, sitemap ${declared.sitemap ? "yes" : "NO"}`);
+  console.log(
+    `declared surfaces: llms.txt ${declared.llmsTxt ? "yes" : "NO"}, agent card ${declared.agentCard ? "yes" : "NO"}, MCP ${declared.mcp ? "yes" : "NO"}, sitemap ${declared.sitemap ? "yes" : "NO"}`,
+  );
   console.log("\nthe /lens Agent-ready? tab scores these same two checks, plus twenty declared ones, for any URL.");
   console.log(failures ? `\n${failures} route(s) with a real defect. See the notes above.` : "\nno defects on any route.");
   process.exit(failures ? 1 : 0);

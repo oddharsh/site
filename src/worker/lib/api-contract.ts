@@ -29,13 +29,11 @@ import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts"
 
 const DOCS = "https://aadhar.sh/developers";
 
-/** The documented operations on one path, keyed by path for the hot check. */
 const BY_PATH: ReadonlyMap<string, readonly Operation[]> = OPERATIONS.reduce((m, op) => {
   m.set(op.path, [...(m.get(op.path) ?? []), op]);
   return m;
 }, new Map<string, Operation[]>());
 
-/** The methods a documented path answers, in Allow order. */
 export function allowedMethods(ops: readonly Operation[]): string[] {
   const methods = new Set(ops.map((op) => op.method.toUpperCase()));
   if (methods.has("GET")) methods.add("HEAD");
@@ -43,7 +41,6 @@ export function allowedMethods(ops: readonly Operation[]): string[] {
   return ["GET", "HEAD", "POST", "OPTIONS"].filter((m) => methods.has(m));
 }
 
-/** The paths whose every operation bills the shared read budget. */
 const READ_BUDGETED: ReadonlySet<string> = new Set([...BY_PATH].filter(([, ops]) => ops.every(sharesReadBudget)).map(([path]) => path));
 const READ_POLICY_HEADER = rateLimitPolicy(...READ_POLICY);
 
@@ -53,22 +50,29 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
   if (!ops) return null;
   const allow = allowedMethods(ops);
   if (!allow.includes(request.method)) {
-    return contractError(405, "method_not_allowed",
+    return contractError(
+      405,
+      "method_not_allowed",
       `${pathname} does not answer ${request.method}. It answers ${allow.join(", ")}.`,
-      { allow }, { allow: allow.join(", ") });
+      { allow },
+      { allow: allow.join(", ") },
+    );
   }
   // OPTIONS is a question about the API rather than a read of it, so it is free.
-  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && await overBudget(API_READ_BUDGET, request, env)) {
-    return contractError(429, "rate_limited",
+  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
+    return contractError(
+      429,
+      "rate_limited",
       `Over the read budget of ${API_READ_BUDGET.max} requests a minute per caller. Retry after the Retry-After seconds.`,
-      {}, rateLimitedHeaders(...READ_POLICY));
+      {},
+      rateLimitedHeaders(...READ_POLICY),
+    );
   }
   return null;
 }
 
 const SERVICE_DESC = `<${OPENAPI_PATH}>; rel="service-desc"; type="application/vnd.oai.openapi+json"`;
 
-/** The response with the API-wide headers on it. Untouched off the API paths. */
 export function withApiContract(response: Response, pathname: string): Response {
   if (!BY_PATH.has(pathname)) return response;
   // Rebuilt with the response as its own init, which keeps encodeBody (gotcha 13);

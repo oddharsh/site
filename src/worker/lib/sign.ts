@@ -21,10 +21,5 @@ export async function verify(message, signature, secret) {
 }
 
 async function importKey(secret) {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false, ["sign", "verify"]
-  );
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }

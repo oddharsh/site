@@ -1,15 +1,11 @@
-// lib/text.js — the one tokenizer, and the scoring primitives built on it.
+// lib/text.ts — the one tokenizer, and the scoring primitives built on it.
 //
-// Extracted from search.js when queryPhotos needed the same treatment. The site
+// Extracted from search.ts when queryPhotos needed the same treatment. The site
 // search had tokenized and field-weighted since it was written; the photo query
 // never did, and matched `q` as ONE contiguous substring against a haystack of
 // five joined fields. So "classic chrome bridge" could not match a Classic
-// Chrome photo of a bridge — not because the words were missing, but because
-// they were not ADJACENT in the order the join happened to produce.
-//
-// photos.js deliberately imports this rather than search.js: search.js pulls in
-// lib/chrome.js and lib/cache.js to render its page, and the photo query has no
-// business dragging a page renderer into its module graph.
+// Chrome photo of a bridge: the words were all there, just not ADJACENT in the
+// order the join happened to produce.
 
 // No ICU on a request path. Measured in node on 2026-10-07, a cold
 // /ledger/lines.html took 10.8ms against 2.0ms once ICU was warm, and that
@@ -35,8 +31,13 @@ export const groupThousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!
 // (length > 1 drops "a"/"I", 12 terms caps the fan-out), so it moved houses
 // without changing.
 export function terms(query, max = 12) {
-  return String(query || "").toLowerCase().trim().slice(0, 160)
-    .split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 1).slice(0, max);
+  return String(query || "")
+    .toLowerCase()
+    .trim()
+    .slice(0, 160)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((term) => term.length > 1)
+    .slice(0, max);
 }
 
 // Words that carry intent in a sentence and none in a query. The photo-specific
@@ -48,29 +49,100 @@ export function terms(query, max = 12) {
 // chrome" wants to match on the film simulation, and a stray match against the
 // word "shot" inside a caption is noise, not signal.
 export const STOPWORDS = new Set([
-  "a", "an", "the", "of", "in", "on", "at", "with", "and", "or", "to", "for",
-  "from", "by", "is", "are", "was", "were", "be", "it", "its", "that", "this",
-  "these", "those", "as", "into", "over", "some", "any", "all", "me", "my",
-  "you", "your", "i", "we", "us",
+  "a",
+  "an",
+  "the",
+  "of",
+  "in",
+  "on",
+  "at",
+  "with",
+  "and",
+  "or",
+  "to",
+  "for",
+  "from",
+  "by",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "it",
+  "its",
+  "that",
+  "this",
+  "these",
+  "those",
+  "as",
+  "into",
+  "over",
+  "some",
+  "any",
+  "all",
+  "me",
+  "my",
+  "you",
+  "your",
+  "i",
+  "we",
+  "us",
   // How an agent phrases a question. searchSiteRanked's own comment used "what
   // does he think about agents" as the example of a query stopwords rescue, and
   // not one of its filler words was in this set until 2026-09-23, so it searched
   // all six. Matching is SUBSTRING, so "he" hits nearly every page ("the",
   // "when") and every term is one more scan of the whole corpus: 1.33ms for that
   // query on a laptop against 30us for "zstd", measured by instruction count.
-  "what", "which", "who", "how", "why", "when", "where", "does", "do", "did",
-  "has", "have", "had", "he", "him", "his", "she", "her", "they", "them",
-  "their", "about",
+  "what",
+  "which",
+  "who",
+  "how",
+  "why",
+  "when",
+  "where",
+  "does",
+  "do",
+  "did",
+  "has",
+  "have",
+  "had",
+  "he",
+  "him",
+  "his",
+  "she",
+  "her",
+  "they",
+  "them",
+  "their",
+  "about",
   // the photo-domain half
-  "photo", "photos", "photograph", "photographs", "picture", "pictures",
-  "image", "images", "shot", "shots", "pic", "pics", "show", "showing",
-  "find", "search", "look", "looking", "get", "give", "want",
+  "photo",
+  "photos",
+  "photograph",
+  "photographs",
+  "picture",
+  "pictures",
+  "image",
+  "images",
+  "shot",
+  "shots",
+  "pic",
+  "pics",
+  "show",
+  "showing",
+  "find",
+  "search",
+  "look",
+  "looking",
+  "get",
+  "give",
+  "want",
 ]);
 
 // A deliberately shallow stem: strip a trailing plural "s" and nothing else.
 // Real stemming (Porter, Snowball) would fold "lighting" into "light" and
-// "buildings" into "build", which is right for a large corpus and wrong for 158
-// captions where precision beats recall — an over-eager stem here silently
+// "buildings" into "build", which is right for a large corpus and wrong for a
+// few hundred captions where precision beats recall — an over-eager stem here silently
 // merges distinct subjects and there is no ranking depth to recover from it.
 export function normalize(term) {
   const value = String(term || "").toLowerCase();
@@ -95,7 +167,7 @@ export function queryTerms(query, max = 12) {
 // to match on.
 //
 // A plain substring test looks right and fails on real metadata, in both
-// directions. Measured against this archive's 158 records:
+// directions. Measured when the archive held 158 records:
 //
 //   FALSE HITS — "Color Chrome Effect" is in EVERY Fuji recipe card, so a
 //   substring query for "chrome" touched all 158. Boundary matching keeps that
@@ -198,7 +270,10 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
     let bestField = null;
     for (const [name, weight] of weights) {
       if (skip?.has(pairKey(term, name))) continue;
-      if (weight > best && fieldMatches(fields[name], term)) { best = weight; bestField = name; }
+      if (weight > best && fieldMatches(fields[name], term)) {
+        best = weight;
+        bestField = name;
+      }
     }
     if (best) {
       score += best;
@@ -212,10 +287,10 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
 // Which (term, field) pairs carry no information, because that field matches
 // the term in most of the corpus.
 //
-// The case that forced this: every Fuji recipe card contains "Exposure
-// Compensation", so a query for "long exposure" matched "exposure" in 151 of
-// 158 recipe cards. Nothing is a long exposure in this archive — the longest
-// shutter is well under a second — yet the query returned the whole archive,
+// The case that forced this, when the archive held 158 photos: every Fuji
+// recipe card contains "Exposure Compensation", so a query for "long exposure"
+// matched "exposure" in 151 of 158 recipe cards. Nothing was a long exposure
+// then (the longest shutter was well under a second), yet the query returned the whole archive,
 // ranked by a term that told you nothing.
 //
 // Deliberately per FIELD rather than per term. Dropping "chrome" outright
@@ -234,7 +309,7 @@ export function scoreFields(fields, weights, queryTermList, skip = null) {
 // the archive, so it was ignored" survives being explained. A logarithm does not.
 // Returns BOTH the suppression set and the per-term verdict, because the caller
 // needs the second and must not have to reconstruct it. An earlier version
-// returned only the set and left photos.js to work out which terms had been
+// returned only the set and left photos.ts to work out which terms had been
 // suppressed by re-deriving the key format — which it got wrong (a space where
 // this file writes a NUL), so the ranking silently reported nothing suppressed
 // while suppression was working fine. The encoding is now private to this file.
@@ -251,8 +326,10 @@ export function commonPairs(records, weights, queryTermList, { threshold = 0.9, 
       let df = 0;
       for (const fields of records) if (fieldMatches(fields[name], term)) df += 1;
       if (!df) continue;
-      if (df / records.length >= threshold) { skip.add(pairKey(term, name)); suppressed = true; }
-      else informative = true;
+      if (df / records.length >= threshold) {
+        skip.add(pairKey(term, name));
+        suppressed = true;
+      } else informative = true;
     }
     // Suppressed everywhere it appeared, and informative nowhere: the term is
     // in the corpus and tells you nothing about which part. A term that appears

@@ -49,7 +49,10 @@ const texts = new Map<string, string>();
 const lineOf = (file: string, offset: number | null, index: number) => {
   if (offset === null) return null;
   if (!texts.has(file)) texts.set(file, readFileSync(new URL(file, ROOT), "utf8"));
-  return texts.get(file)!.slice(0, offset + index).split("\n").length;
+  return texts
+    .get(file)!
+    .slice(0, offset + index)
+    .split("\n").length;
 };
 for (const s of cssSources(ROOT)) {
   // The desktop shell is stamped into every page from src/worker/lib/desktop.ts,
@@ -92,7 +95,10 @@ if (process.argv.includes("--json")) {
   const strip = ({ lab: _, ...h }: Hit) => h;
   console.log(JSON.stringify({ near: near.map(strip), shared: shared.map((c) => c.map(strip)) }, null, 1));
 } else {
-  const byToken = Map.groupBy(near.sort((a, b) => a.dE - b.dE), (h) => h.token);
+  const byToken = Map.groupBy(
+    near.sort((a, b) => a.dE - b.dE),
+    (h) => h.token,
+  );
   console.log(`${hits.length} literals outside the tokens; ${near.length} within ${COPY_DE}–${JND} of one (write the token, or keep it on purpose):\n`);
   for (const [token, hs] of [...byToken].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${token}  ${hs.length}`);

@@ -1,13 +1,13 @@
-// availability.js — read the host's calendar as an ICS feed, compute free
+// availability.ts: read the host's calendar as an ICS feed, compute free
 // intervals within configured working hours, slice into bookable slots.
 //
 // ICS parsing here reads DTSTART / DTEND on VEVENT blocks to determine "busy",
-// and EXPANDS recurring events (RRULE). The RRULE gap had teeth: Google/iCloud
-// secret-ICS feeds emit a standing weekly meeting as ONE VEVENT carrying its
-// RRULE, so seeing only the first occurrence meant every later week's slot looked
-// free and was bookable over a real meeting. We now expand FREQ=DAILY|WEEKLY|
-// MONTHLY|YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (weekly), and honor EXDATE, out
-// to RRULE_HORIZON_DAYS and capped at RRULE_MAX_INSTANCES per rule.
+// and EXPANDS recurring events (RRULE). Google/iCloud secret-ICS feeds emit a
+// standing weekly meeting as ONE VEVENT carrying its RRULE, so reading only the
+// first occurrence leaves every later week's slot bookable over a real meeting.
+// FREQ=DAILY|WEEKLY|MONTHLY|YEARLY expand with INTERVAL, COUNT, UNTIL, BYDAY
+// (weekly) and EXDATE, out to RRULE_HORIZON_DAYS and capped at
+// RRULE_MAX_INSTANCES per rule.
 //
 // Known deviations: occurrences step in UTC, so a recurrence across a DST
 // boundary can land an hour off; unsupported RRULE shapes keep only the base
@@ -23,44 +23,42 @@ import { span } from "../../src/worker/lib/trace.ts";
 // Every accumulator below needs it explicitly, because an empty array literal
 // infers `never[]` under strictNullChecks: TypeScript only lets an array evolve
 // from its pushes while that flag is off.
-export type Interval = { start: number, end: number };
+export type Interval = { start: number; end: number };
 
 // The last-good calendar snapshot as stored in KV. `busy` is optional because
 // every reader already defaults it, and that default is load-bearing rather than
 // defensive: an older deploy's entry may predate the field.
-type BusySnapshot = { ts?: number, busy?: Interval[] };
+type BusySnapshot = { ts?: number; busy?: Interval[] };
 
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
-// The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
-// the whole page on it AND returned [] on failure — which silently made EVERY
-// slot look free during an outage, a double-booking risk. fetchBusySWR keeps the
+// The ICS upstream can be slow or briefly down. Answering [] on a failed fetch
+// would make EVERY slot look free during an outage, a double-booking risk, and
+// blocking on the fetch would gate the whole page on it. fetchBusySWR keeps the
 // last-good PARSED busy[] in KV with a timestamp, caps the upstream fetch with a
-// hard deadline so a slow origin can't gate the page, and falls back to the
-// snapshot when the fetch fails. It returns freshness metadata so the booking
-// path can fail CLOSED — never confirm a slot against a calendar we can't vouch
-// for. The GET page, by contrast, renders happily from a stale snapshot.
-export const BUSY_KEY = "cal:busy";            // KV: { busy:[{start,end}], ts }
-export const CAL_FRESH_MS = 5 * 60_000;        // snapshot is "fresh" under 5 min
-export const CAL_DEADLINE_MS = 2_000;          // hard cap on a blocking ICS fetch
-export const BOOK_MAX_STALE_MS = 15 * 60_000;  // booking refuses a calendar older than this
+// hard deadline, and falls back to the snapshot when the fetch fails. It returns
+// freshness metadata so the booking path can fail CLOSED: never confirm a slot
+// against a calendar we can't vouch for. The GET page, by contrast, renders
+// happily from a stale snapshot.
+export const BUSY_KEY = "cal:busy"; // KV: { busy:[{start,end}], ts }
+export const CAL_FRESH_MS = 5 * 60_000; // snapshot is "fresh" under 5 min
+export const CAL_DEADLINE_MS = 2_000; // hard cap on a blocking ICS fetch
+export const BOOK_MAX_STALE_MS = 15 * 60_000; // booking refuses a calendar older than this
 
 // returns { busy, ageMs, ok, source }. ok:false only when there is neither a live
-// fetch nor any stored snapshot — that is the signal for the booking path to
-// refuse. source is one of fresh | live | stale | none (surfaced in Server-Timing).
-// Traced on `source`, which is the single most diagnostic value in this module
-// and until now existed only in a Server-Timing header on whichever request
-// happened to produce it — so there was no history of it at all.
+// fetch nor any stored snapshot: that is the signal for the booking path to
+// refuse. source is one of fresh | live | stale | none (the slots fragment also
+// sends it as x-cal-source). Traced on `source`, the single most diagnostic value
+// in this module, because a response header keeps no history of it.
 //
 // The case that matters is source:"none" with ok:false. That is the fail-closed
 // branch: no fresh calendar, no live fetch, and no stored snapshot, so /book 503s
 // rather than risk booking over a meeting it cannot see. Correct behavior, and
-// completely silent — the way you learned it happened was a person telling you
-// they couldn't book a coffee. It is now a span attribute, which makes "how often
-// did booking refuse last week" a query.
+// otherwise silent to everyone but the guest who couldn't book. As a span
+// attribute, "how often did booking refuse last week" is a query.
 //
 // Both catch blocks below swallow their reason by design (a KV blip and a dead
-// ICS feed both just mean "fall back"). The reason is now recorded before it is
-// discarded, so a week of source:"stale" can be traced to which of the two.
+// ICS feed both just mean "fall back"). Each records the reason on the span
+// first, so a week of source:"stale" can be traced to which of the two.
 export async function fetchBusySWR(env, ctx, { allowStale = false } = {}) {
   return span("cal.busy", (s) => fetchBusySWRInner(env, ctx, allowStale, s), {
     "cal.allow_stale": allowStale,
@@ -71,7 +69,9 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   const kv = env.BOOKINGS;
   const now = Date.now();
   let snap: BusySnapshot | null = null;
-  try { snap = kv ? await kv.get(BUSY_KEY, "json") : null; } catch (e) {
+  try {
+    snap = kv ? await kv.get(BUSY_KEY, "json") : null;
+  } catch (e) {
     s.setAttribute("cal.snapshot_read_error", (e && e.message) || String(e));
   }
   // Read once into a local: `Number.isFinite` is not a type guard, so it cannot
@@ -103,7 +103,7 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
     // A null ctx is legitimate here (cal's own tests call with none).
-  if (ctx && isCallable(ctx.waitUntil)) {
+    if (ctx && isCallable(ctx.waitUntil)) {
       // The whole refresh already belongs to waitUntil here, so let it await its
       // own KV write instead of registering a nested background task.
       ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env, null)).catch(() => {}));
@@ -135,7 +135,7 @@ async function refreshBusy(env, ctx) {
   const url = env.ICAL_URL;
   if (!url) throw new Error("no ICAL_URL");
   const r = await fetch(url, {
-    cf: { cacheTtl: 300, cacheEverything: true },  // 5min edge cache in front of KV
+    cf: { cacheTtl: 300, cacheEverything: true }, // 5min edge cache in front of KV
     signal: AbortSignal.timeout(CAL_DEADLINE_MS),
   });
   if (!r.ok) throw new Error(`ICS ${r.status}`);
@@ -159,7 +159,7 @@ function parseICS(text) {
   const lines = unfolded.split(/\r?\n/);
 
   const now = Date.now();
-  const windowStart = now - 2 * 86_400_000;                    // catch an in-progress recurrence
+  const windowStart = now - 2 * 86_400_000; // catch an in-progress recurrence
   const windowEnd = now + RRULE_HORIZON_DAYS * 86_400_000;
 
   const busy: Interval[] = [];
@@ -189,12 +189,16 @@ function parseICS(text) {
     const [, key, params = "", value] = m;
 
     if (key === "DTSTART") dtstart = parseICSDate(value, params);
-    if (key === "DTEND")   dtend   = parseICSDate(value, params);
-    if (key === "STATUS")  status  = value;
-    if (key === "TRANSP")  transp  = value;
-    if (key === "RRULE")   rrule   = value;
+    if (key === "DTEND") dtend = parseICSDate(value, params);
+    if (key === "STATUS") status = value;
+    if (key === "TRANSP") transp = value;
+    if (key === "RRULE") rrule = value;
     // EXDATE can carry several comma-separated values, and repeat across lines
-    if (key === "EXDATE") for (const v of value.split(",")) { const t = parseICSDate(v, params); if (Number.isFinite(t)) exdates.add(t); }
+    if (key === "EXDATE")
+      for (const v of value.split(",")) {
+        const t = parseICSDate(v, params);
+        if (Number.isFinite(t)) exdates.add(t);
+      }
   }
   return busy;
 }
@@ -208,8 +212,16 @@ export const RRULE_MAX_INSTANCES = 400;
 const DOW = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 const DAY_MS = 86_400_000;
 
-function addMonthsUTC(ms, n) { const d = new Date(ms); d.setUTCMonth(d.getUTCMonth() + n); return d.getTime(); }
-function addYearsUTC(ms, n)  { const d = new Date(ms); d.setUTCFullYear(d.getUTCFullYear() + n); return d.getTime(); }
+function addMonthsUTC(ms, n) {
+  const d = new Date(ms);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return d.getTime();
+}
+function addYearsUTC(ms, n) {
+  const d = new Date(ms);
+  d.setUTCFullYear(d.getUTCFullYear() + n);
+  return d.getTime();
+}
 
 // Expand one VEVENT into busy intervals. A non-recurring event yields its single
 // interval; a recurring one yields every occurrence whose START falls within
@@ -224,23 +236,34 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
   // An RRULE is a semicolon-separated bag of KEY=VALUE, so the keys are whatever
   // the calendar sent: FREQ, INTERVAL, COUNT, UNTIL, BYDAY and the rest.
   const R: Record<string, string> = {};
-  for (const part of rrule.split(";")) { const i = part.indexOf("="); if (i > 0) R[part.slice(0, i).toUpperCase()] = part.slice(i + 1); }
+  for (const part of rrule.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0) R[part.slice(0, i).toUpperCase()] = part.slice(i + 1);
+  }
   const freq = (R.FREQ || "").toUpperCase();
   const interval = Math.max(1, parseInt(R.INTERVAL, 10) || 1);
   const count = R.COUNT ? parseInt(R.COUNT, 10) : null;
   const until = R.UNTIL ? parseICSDate(R.UNTIL, "") : null;
-  if (["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].indexOf(freq) === -1) return [iv(dtstart)];  // unknown FREQ → base only
+  if (["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].indexOf(freq) === -1) return [iv(dtstart)]; // unknown FREQ → base only
 
   const out: Interval[] = [];
-  let n = 0;   // occurrence index (counts toward COUNT even before the window)
-  // returns false when the series is exhausted (UTIL / COUNT / cap / past window)
+  let n = 0; // occurrence index (counts toward COUNT even before the window)
+  // true once the series is exhausted (UNTIL / COUNT / cap / past the window)
   const stop = (start) => (until && start > until) || (count != null && n >= count) || n >= RRULE_MAX_INSTANCES || start > windowEnd;
-  const emit = (start) => { if (!ex.has(start) && start >= windowStart && start <= windowEnd) out.push(iv(start)); n++; };
+  const emit = (start) => {
+    if (!ex.has(start) && start >= windowStart && start <= windowEnd) out.push(iv(start));
+    n++;
+  };
 
-  const byday = R.BYDAY ? R.BYDAY.split(",").map((s) => DOW[s.trim().slice(-2).toUpperCase()]).filter((x) => x != null).sort((a, b) => a - b) : null;
+  const byday = R.BYDAY
+    ? R.BYDAY.split(",")
+        .map((s) => DOW[s.trim().slice(-2).toUpperCase()])
+        .filter((x) => x != null)
+        .sort((a, b) => a - b)
+    : null;
 
   if (freq === "WEEKLY" && byday && byday.length) {
-    const weekSunday = dtstart - new Date(dtstart).getUTCDay() * DAY_MS;   // whole-day shift keeps time-of-day
+    const weekSunday = dtstart - new Date(dtstart).getUTCDay() * DAY_MS; // whole-day shift keeps time-of-day
     // fast-forward whole blocks that end before the window, so a weekly meeting from
     // long ago doesn't burn the instance budget before reaching today. n advances by
     // one block's worth of occurrences so COUNT/cap stay roughly honest.
@@ -254,7 +277,7 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
       if (weekBase - 7 * DAY_MS > windowEnd) break;
       for (const dow of byday) {
         const occ = weekBase + dow * DAY_MS;
-        if (occ < dtstart) continue;      // before the series actually starts
+        if (occ < dtstart) continue; // before the series actually starts
         if (stop(occ)) return out;
         emit(occ);
       }
@@ -264,13 +287,14 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
 
   const stepMs = freq === "DAILY" ? interval * DAY_MS : freq === "WEEKLY" ? interval * 7 * DAY_MS : 0;
   const advance = (k) =>
-    freq === "MONTHLY" ? addMonthsUTC(dtstart, k * interval) :
-    freq === "YEARLY"  ? addYearsUTC(dtstart, k * interval) :
-                         dtstart + k * stepMs;
+    freq === "MONTHLY" ? addMonthsUTC(dtstart, k * interval) : freq === "YEARLY" ? addYearsUTC(dtstart, k * interval) : dtstart + k * stepMs;
   // fast-forward arithmetic freqs into the window (monthly/yearly steps are large,
   // so from k=0 they reach the window in well under the cap even from years back).
   let k = 0;
-  if (stepMs && windowStart > dtstart) { k = Math.floor((windowStart - dtstart) / stepMs); n = k; }
+  if (stepMs && windowStart > dtstart) {
+    k = Math.floor((windowStart - dtstart) / stepMs);
+    n = k;
+  }
   for (; ; k++) {
     const occ = advance(k);
     if (stop(occ)) break;
@@ -289,7 +313,9 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
 function parseICSDate(value, params = "") {
   // YYYYMMDD all-day events — treat as full UTC day
   if (/^\d{8}$/.test(value)) {
-    const y = +value.slice(0, 4), m = +value.slice(4, 6) - 1, d = +value.slice(6, 8);
+    const y = +value.slice(0, 4),
+      m = +value.slice(4, 6) - 1,
+      d = +value.slice(6, 8);
     return Date.UTC(y, m, d);
   }
   // YYYYMMDDTHHMMSSZ or YYYYMMDDTHHMMSS
@@ -297,11 +323,11 @@ function parseICSDate(value, params = "") {
   if (!m) return NaN;
   const [, Y, M, D, h, min, s, Z] = m;
   const ms = Date.UTC(+Y, +M - 1, +D, +h, +min, +s);
-  if (Z) return ms;                          // explicit UTC — already correct
+  if (Z) return ms; // explicit UTC — already correct
   // local time: shift by the TZID zone's offset at this instant. the wall clock
   // was read as if UTC, so adding the offset (positive = west of UTC) lands the
   // real instant: 14:30 in a UTC-4 zone becomes 18:30Z. NaN (floating or an
-  // unknown TZID we can't resolve) falls back to the old treat-as-UTC behavior.
+  // unknown TZID we can't resolve) falls back to reading the time as UTC.
   const tzid = (/;TZID=([^:;,]+)/.exec(params) || [])[1];
   const offMin = icsZoneOffsetMinutes(ms, tzid);
   return Number.isFinite(offMin) ? ms + offMin * 60000 : ms;
@@ -314,7 +340,9 @@ function icsZoneOffsetMinutes(ms, tzid) {
   if (!tzid) return NaN;
   try {
     return tzOffsetMinutes(new Date(ms), tzid);
-  } catch { return NaN; }
+  } catch {
+    return NaN;
+  }
 }
 
 // generate bookable slots from now+min_notice through max_lookahead.
@@ -332,51 +360,47 @@ function icsZoneOffsetMinutes(ms, tzid) {
 // daily limit zeroed out availability for anyone with a busy calendar.
 // returns [{start, end}, ...] in unix-ms.
 export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) {
-  const tz       = env.HOST_TIMEZONE;
+  const tz = env.HOST_TIMEZONE;
   const minNotice = +env.MIN_NOTICE_HOURS * 3600_000;
   const lookahead = +env.MAX_LOOKAHEAD_DAYS * 86400_000;
-  const slotMin   = +env.SLOT_MINUTES;
+  const slotMin = +env.SLOT_MINUTES;
   const bufferMin = +env.BUFFER_MINUTES;
-  const stepMs    = (slotMin + bufferMin) * 60_000;
-  const slotMs    = slotMin * 60_000;
+  const stepMs = (slotMin + bufferMin) * 60_000;
+  const slotMs = slotMin * 60_000;
   const workStart = +env.WORKING_HOURS_START;
-  const workEnd   = +env.WORKING_HOURS_END;
-  const workDays  = env.WORKING_DAYS.split(",").map(n => +n);
+  const workEnd = +env.WORKING_HOURS_END;
+  const workDays = env.WORKING_DAYS.split(",").map((n) => +n);
 
   const now = Date.now();
   const earliest = now + minNotice;
-  const latest   = now + lookahead;
+  const latest = now + lookahead;
 
-  // limits — bookings already pending+confirmed within a day/week count
-  const dailyLimit  = +env.DAILY_LIMIT;
+  const dailyLimit = +env.DAILY_LIMIT;
   const weeklyLimit = +env.WEEKLY_LIMIT;
 
-  // build slots by walking each day in the lookahead window in HOST_TIMEZONE.
-  // for each day, generate slot starts at every (slotMin+bufferMin) interval
-  // between workStart and workEnd, filter conflicts.
   // a slot is unbookable if it overlaps EITHER a real calendar event or an
   // existing coffee booking. limits, below, only count the coffee bookings.
   const conflicts = [...busy, ...bookings];
 
   const slots: Interval[] = [];
-  const dayCounts = {};   // YYYY-MM-DD → count of coffee bookings (pending+confirmed)
-  const weekCounts = {};  // YYYY-WW → count
+  const dayCounts = {}; // YYYY-MM-DD → count of coffee bookings (pending+confirmed)
+  const weekCounts = {}; // YYYY-WW → count
 
   for (const b of bookings) {
     const k = ymd(b.start, tz);
-    dayCounts[k]  = (dayCounts[k]  || 0) + 1;
+    dayCounts[k] = (dayCounts[k] || 0) + 1;
     weekCounts[yw(b.start, tz)] = (weekCounts[yw(b.start, tz)] || 0) + 1;
   }
 
   let cursorDay = startOfDay(now, tz);
   for (let d = 0; d < +env.MAX_LOOKAHEAD_DAYS + 1; d++) {
-    const dayStart = addDays(cursorDay, d);
+    const dayStart = localDayAfter(cursorDay, d, tz);
     const dow = dayOfWeek(dayStart, tz);
     if (!workDays.includes(dow)) continue;
 
     const dayKey = ymd(dayStart, tz);
     const weekKey = yw(dayStart, tz);
-    if ((dayCounts[dayKey]  || 0) >= dailyLimit)  continue;
+    if ((dayCounts[dayKey] || 0) >= dailyLimit) continue;
     if ((weekCounts[weekKey] || 0) >= weeklyLimit) continue;
 
     // local working hours on this day
@@ -386,7 +410,7 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
 
     while (t + slotMs <= endOfWork) {
       const slotStart = t;
-      const slotEnd   = t + slotMs;
+      const slotEnd = t + slotMs;
       t += stepMs;
 
       if (slotStart < earliest || slotEnd > latest) continue;
@@ -422,7 +446,7 @@ function intersectsAny(start, end, intervals) {
 // Workers runtime runs in UTC, where the two readings are identical: 1.08
 // million old-against-new comparisons under TZ=UTC (nine zones, every 37
 // minutes of 2026 and each DST transition minute by minute, bun and node) found
-// no difference. cal/test/availability.test.js pins the helpers against known
+// no difference. cal/test/availability.test.ts pins the helpers against known
 // values at both 2026 New York transitions, in any process zone.
 const ZONE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
 function zoneFormatter(tz: string): Intl.DateTimeFormat {
@@ -431,9 +455,14 @@ function zoneFormatter(tz: string): Intl.DateTimeFormat {
     // Throws RangeError on an unknown zone, as toLocaleString did; callers that
     // tolerate junk TZIDs (icsZoneOffsetMinutes) catch it.
     f = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz, hourCycle: "h23",
-      year: "numeric", month: "numeric", day: "numeric",
-      hour: "numeric", minute: "numeric", second: "numeric",
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
     });
     ZONE_FORMATTERS.set(tz, f);
   }
@@ -445,7 +474,14 @@ function wallParts(ms: number, tz: string) {
   // exactly what a UTC formatter would (whole seconds, milliseconds dropped).
   if (tz === "UTC") {
     const d = new Date(ms);
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds() };
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
+      hour: d.getUTCHours(),
+      minute: d.getUTCMinutes(),
+      second: d.getUTCSeconds(),
+    };
   }
   const p = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0 };
   for (const { type, value } of zoneFormatter(tz).formatToParts(ms)) {
@@ -463,7 +499,7 @@ function wallAsUtc(ms: number, tz: string): number {
 const pad2 = (n: number) => String(n).padStart(2, "0");
 function ymd(ms, tz) {
   const p = wallParts(ms, tz);
-  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;  // YYYY-MM-DD, as en-CA formatted it
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`; // YYYY-MM-DD, as en-CA formatted it
 }
 function yw(ms, tz) {
   // approximate ISO week — fine for our daily/weekly limit purposes
@@ -480,7 +516,15 @@ function startOfDay(ms, tz) {
   // local midnight, expressed as unix-ms
   return atLocalHour(Date.parse(ymd(ms, tz) + "T00:00:00Z"), tz, 0);
 }
-function addDays(ms, days) { return ms + days * 86400000; }
+// Local midnight `days` calendar days after the local midnight `dayStartMs`. A
+// fixed 24h step drifts an hour at each DST change: from 2026-10-24, nine steps
+// land on 2026-11-01 23:00 EST, so dayOfWeek reads the day before the one
+// atLocalHour (which takes the UTC date) builds slots on. A 14-day window hid
+// Monday 2026-11-02 and offered Saturday 2026-11-07. Noon of the target day
+// sits inside that day on either side of a change, so snap from there.
+function localDayAfter(dayStartMs, days, tz) {
+  return startOfDay(dayStartMs + days * 86400000 + 12 * 3600000, tz);
+}
 function atLocalHour(dayStartMs, tz, hour) {
   // return the unix-ms for `hour:00` local time on the day containing dayStartMs.
   // does the rough thing by adding hour*3600000 to a UTC midnight, then
@@ -492,7 +536,16 @@ function atLocalHour(dayStartMs, tz, hour) {
 }
 // Test seam, never called by the worker: the helpers above are module-private,
 // and the test pins them against known offsets and day boundaries.
-export const TZ_HELPERS_FOR_TEST = { ymd, yw, dayOfWeek, startOfDay, atLocalHour, tzOffsetMinutes, icsZoneOffsetMinutes };
+export const TZ_HELPERS_FOR_TEST = {
+  ymd,
+  yw,
+  dayOfWeek,
+  startOfDay,
+  localDayAfter,
+  atLocalHour,
+  tzOffsetMinutes,
+  icsZoneOffsetMinutes,
+};
 
 function tzOffsetMinutes(date, tz) {
   // distance between UTC and local at this instant, in minutes (positive = west of UTC)

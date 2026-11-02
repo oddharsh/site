@@ -1,7 +1,8 @@
 import { signedFetch } from "./lib/botauth.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget, type Budget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -18,7 +19,7 @@ import { span } from "./lib/trace.ts";
 // updating from a shortcut / curl:
 //   https://aadhar.sh/rn/set?secret=<RN_BUST_SECRET>&url=<new playlist url>
 //
-// required binding:  RN_KV (cloudflare.config.ts kv_namespaces)
+// required binding:  RN_KV (cloudflare.config.ts)
 // required env:      RN_BUST_SECRET (Worker secret)
 //
 // if KV is empty (first deploy, or you deliberately cleared it), the
@@ -32,8 +33,8 @@ export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3
 // CACHEABLE_PATHS (routes.ts) at s-maxage=600 and so only reads KV on a miss. And it
 // stays inside the 1800 getTracksSWR already spends on the payload this id
 // selects, so the pointer can never be the stalest thing in the chain. /rn itself
-// is `no-store`, so before this every redirect paid a central round trip for 22
-// characters.
+// is `no-store`, so without a colo cache every redirect pays a central round trip
+// for 22 characters.
 //
 // Two readers deliberately opt OUT below: cronEnrichTracks (off the request path,
 // and it should enrich the playlist that is set NOW) and /rn/admin (a read-back of
@@ -68,8 +69,8 @@ export async function handleRn(request, env, ctx) {
   return new Response(null, {
     status: 302,
     headers: {
-      "location":        await playlistUrl(env),
-      "cache-control":   "no-store, must-revalidate",
+      "location": await playlistUrl(env),
+      "cache-control": "no-store, must-revalidate",
       "referrer-policy": "no-referrer",
     },
   });
@@ -87,35 +88,32 @@ async function playlistUrl(env) {
 // from spotify's public embed pages — three tiers of scrape:
 //
 //   1. playlist embed → gives the ordered track list (IDs, titles, durations,
-//      explicit flag, audio preview URLs)
+//      explicit flag, audio preview URLs). Inline, in scrapePlaylistTracks.
 //   2. track embed    → gives the album cover URL + the artist list with
 //      stable Spotify URIs (the playlist embed only has a joined "Artist A,
-//      Artist B" subtitle string with no IDs)
-//   3. artist embed   → gives the artist's profile picture
+//      Artist B" subtitle string with no IDs). Cron, in cronEnrichTracks.
+//   3. artist embed   → gives the artist's profile picture. Cron, same pass.
 //
-// the artist payload is cached in KV under `artist:<id>` with a long TTL
+// the artist payload is cached in KV under `artist:<id>` for ARTIST_KV_TTL
 // since artist photos rarely change; subsequent playlist refreshes don't
-// re-scrape known artists. tracks themselves are cached under
-// `tracks:<playlist-id>` for 1 hour so per-page-load cost is zero.
+// re-scrape known artists. tracks themselves live under `tracks:<playlist-id>`,
+// fresh for RN_TRACKS_TTL and served stale past it (getTracksSWR), so
+// per-page-load cost is zero.
 //
 // shape returned:
-//   { playlist_id, playlist_name,
+//   { playlist_id, playlist_name, fetched_at,
 //     tracks: [{ id, title, artists_text, artists: [{id, name, spotify_url,
 //                image_url}], image_url, song_link_url, spotify_url,
 //                duration_ms, preview_url, is_explicit }] }
 //
 // force-refresh with /rn/tracks?bust=<RN_BUST_SECRET>.
-// Spotify scrape goes through signedFetch (lib/botauth.js): the AadharshBot UA
+// Spotify scrape goes through signedFetch (lib/botauth.ts): the AadharshBot UA
 // plus a required Web Bot Auth signature (RFC 9421). If the signing key is not
 // available, the scrape fails closed instead of making an unsigned request.
 // The embed pages are public + cacheable, so neither the UA nor the signature
 // affects what Spotify serves.
-export const RN_TRACKS_TTL  = 3600;
-
-            // 1h: playlist tracks payload
-export const ARTIST_KV_TTL  = 30 * 86400;
-
-      // 30d: artist profile (rarely changes)
+export const RN_TRACKS_TTL = 3600; // 1h: playlist tracks payload
+export const ARTIST_KV_TTL = 30 * 86400; // 30d: artist profile (rarely changes)
 
 // Spotify serves the same art under several interchangeable CDN aliases, and
 // this file asks for art in two independent places: the per-track embed (tier 2)
@@ -153,7 +151,9 @@ export function canonicalArtUrl(raw) {
       u.hostname = "i.scdn.co";
       return u.toString();
     }
-  } catch { /* not parseable as a URL: leave it alone rather than guess */ }
+  } catch {
+    /* not parseable as a URL: leave it alone rather than guess */
+  }
   return raw;
 }
 
@@ -214,7 +214,9 @@ export function spotifyArtHash(raw) {
     if (u.hostname !== "i.scdn.co") return null;
     const id = u.pathname.slice("/image/".length);
     return u.pathname.startsWith("/image/") && ART_HASH.test(id) ? id : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // The one hover resource, built server-side and handed over as an attribute
@@ -226,20 +228,17 @@ export function artUrls(raw) {
   const at = (w, ext) => `/rn/art/${hash}-${w}-${ART_VERSION}.${ext}`;
   const avif2x = at(240, "avif");
   // `warm` names the same URL the browser gets, so warmArtCache never needs to
-  // reverse-engineer a browser attribute.
-  // One browser URL, also the exact URL the background warm fills. The old
-  // markup paired this AVIF with a JPEG img.src fallback and a 120w candidate.
-  // Rebuilding the hover card made current Chromium log the chosen resource on
-  // every pass, and left two representations in one tiny 120px surface. 240px
-  // is the 2x display tier and is already the warmed canonical artifact.
+  // reverse-engineer a browser attribute. One URL: 240px AVIF is the 2x display
+  // tier of the 120px card. Pairing it with a JPEG img.src fallback and a 120w
+  // candidate made current Chromium log the chosen resource on every rebuild of
+  // the hover card, for two representations of one tiny surface.
   return { src: avif2x, warm: avif2x };
 }
 
 // The hover attributes for one art URL — and NOTHING when the art cannot be
 // re-hosted, which is the half that lets the CSP be honest.
 //
-// Until #182 this fell back to the original Spotify URL, which was right while
-// img-src still allowed those hosts. It no longer does: img-src is 'self' data:,
+// No fallback to the original Spotify URL: since #182 img-src is 'self' data:,
 // so emitting a spotifycdn URL here would produce a frame the browser refuses to
 // load, and a broken image is a worse answer than no image. Dropping the
 // attribute lands the row on paths that already exist and already read well —
@@ -258,7 +257,19 @@ function artAttrs(kind: "track" | "artist", rawUrl): Html {
   return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
-export async function handleRnArt(request, env, ctx) {
+export function handleRnArt(request, env, ctx) {
+  return rnArt(request, env, ctx, {});
+}
+
+// `budget` is the art warm's ledger, charged at the moment each call is made:
+// 1 for the probe, then exactly 2 on a miss (the transform, then the put or the
+// fallback fetch, never both). Charging at the call rather than reserving the
+// worst case up front is what lets six concurrent lanes spend the ledger to the
+// last unit. A URL the ledger cannot afford answers `x-art-cache: skipped`.
+// A separate export for the same reason as rnTracksHtml: the router passes the
+// request URL in the fourth slot.
+export async function rnArt(request, env, ctx, opts: { budget?: Budget }) {
+  const skipped = () => new Response(null, { status: 503, headers: { "cache-control": "no-store", "x-art-cache": "skipped" } });
   const url = new URL(request.url);
   const m = ART_PATH.exec(url.pathname);
   if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
@@ -271,11 +282,12 @@ export async function handleRnArt(request, env, ctx) {
   }
 
   // The public URL already carries hash + width + version, so it IS the cache
-  // key; none of the ?av= indirection photos.js needs applies to an address that
+  // key; none of the ?av= indirection photos.ts needs applies to an address that
   // names its own bytes.
   const cache = caches.default;
   const cacheable = request.method === "GET";
   if (cacheable) {
+    if (opts.budget && !opts.budget.afford(1)) return skipped();
     const hit = await cache.match(request);
     if (hit) {
       const r = new Response(hit.body, hit);
@@ -284,12 +296,11 @@ export async function handleRnArt(request, env, ctx) {
     }
   }
 
+  if (opts.budget && !opts.budget.afford(2)) return skipped();
   const upstream = `https://i.scdn.co/image/${hash}`;
   // fit:scale-down never enlarges, so a source already smaller than the tier is
   // passed through at its own size instead of being upscaled into a bigger file
-  // than the original. q82 mirrors the neighbourhood the photo pipeline settled
-  // on rather than Cloudflare's default 85, on art that is a 120px hover
-  // affordance rather than something anyone will pixel-peep.
+  // than the original.
   let res: Response | null = null;
   try {
     res = await fetch(upstream, {
@@ -309,7 +320,9 @@ export async function handleRnArt(request, env, ctx) {
       // at 240px would have been the wrong test and reads ~5 points harsher.
       cf: { image: { width, fit: "scale-down", format: ext === "jpg" ? "jpeg" : "avif", quality: 63 } },
     });
-  } catch { res = null; }
+  } catch {
+    res = null;
+  }
 
   // Every way the transform can fail lands here, and they are not exotic: the
   // Images Free plan returns 9422 once 5,000 unique transformations are used up
@@ -321,7 +334,11 @@ export async function handleRnArt(request, env, ctx) {
   let transformed = true;
   if (!res || !res.ok) {
     transformed = false;
-    try { res = await fetch(upstream); } catch { res = null; }
+    try {
+      res = await fetch(upstream);
+    } catch {
+      res = null;
+    }
   }
   if (!res || !res.ok) {
     return new Response("upstream unavailable", { status: 502, headers: { "cache-control": "no-store" } });
@@ -332,19 +349,17 @@ export async function handleRnArt(request, env, ctx) {
   // when the transform actually ran. A fallback body is Spotify's original JPEG
   // whatever the path claims, and labelling that as AVIF would break the one
   // path that exists to keep things working.
-  headers.set("content-type", transformed ? ART_EXT[ext] : (res.headers.get("content-type") || "image/jpeg"));
+  headers.set("content-type", transformed ? ART_EXT[ext] : res.headers.get("content-type") || "image/jpeg");
   // Only a TRANSFORMED response earns a year. An untransformed fallback is the
   // symptom of a temporary condition (a monthly allowance, a zone toggle), and
   // pinning it immutable would outlive the cause by eleven months.
-  headers.set("cache-control", transformed
-    ? "public, max-age=31536000, immutable"
-    : "public, max-age=300");
+  headers.set("cache-control", transformed ? "public, max-age=31536000, immutable" : "public, max-age=300");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-art-transformed", transformed ? "1" : "0");
   const out = new Response(res.body, { status: 200, headers });
   if (cacheable && ctx && transformed) {
     // store a clean clone, then mark THIS response a miss — same tee as
-    // photos.js, so the cached copy never carries the marker.
+    // photos.ts, so the cached copy never carries the marker.
     ctx.waitUntil(cache.put(request, out.clone()));
     out.headers.set("x-art-cache", "miss");
   }
@@ -380,7 +395,7 @@ export async function handleRnArt(request, env, ctx) {
 export const WARM_MAX_URLS = 40;
 
 // The URL set one warm may touch, as a PURE function so it is testable without
-// a `caches` global (contract-tests.mjs runs under plain node, gotcha 16).
+// a `caches` global (the contract suite also runs under plain node, gotcha 16).
 //
 // Covers first, then artist pictures. Both are hover surfaces, but a track row
 // is the whole row while an artist link is a few words inside it, so covers earn
@@ -391,7 +406,7 @@ export function artWarmList(payload, origin) {
   const add = (raw) => {
     const art = artUrls(raw);
     // No hash means no re-hosted URL to warm: a mosaic collage cover, or a shape
-    // rn.js has not learned yet. artAttrs already emits nothing for those, so no
+    // this file has not learned yet. artAttrs already emits nothing for those, so no
     // request is coming and there is nothing to prepare for.
     if (art && seen.size < WARM_MAX_URLS) seen.add(origin + art.warm);
   };
@@ -400,9 +415,8 @@ export function artWarmList(payload, origin) {
   return [...seen];
 }
 
-// THERE IS NO SET-WIDE GUARD, and the one that used to be here is why this
-// feature shipped doing nothing. It probed `urls[0]` and returned early on a
-// hit, on the stated premise that "these URLs are minted and warmed together,
+// THERE IS NO SET-WIDE GUARD, on purpose. Probing `urls[0]` and returning early
+// on a hit rests on the premise that "these URLs are minted and warmed together,
 // so the first one being present means this colo has already paid for this
 // playlist." That premise is false, and measurably so: a single HOVER warms one
 // URL, `/rn/art` responses are `immutable, max-age=31536000`, and the first
@@ -417,25 +431,47 @@ export function artWarmList(payload, origin) {
 //
 // Skipping the guard costs one `cache.match` per URL, because `handleRnArt`
 // ALREADY probes the cache first and returns the hit without transforming. So a
-// fully warm colo pays ~28 cache lookups and zero subrequests, which is the
-// cheap case anyway. The guard bought a rounding error and cost the feature.
+// fully warm colo pays one cache lookup per URL (at most WARM_MAX_URLS), which
+// is the cheap case anyway. The guard bought a rounding error and cost the
+// feature.
+//
+// THAT LOOKUP IS A SUBREQUEST, and so is the cache.put. On Workers Free the
+// Cache API shares fetch's 50 calls per invocation (Workers limits page, "Cache
+// API limits"). Until 2026-10-30 this fanned out all 40 URLs at once, so a cold
+// colo spent 40 on cache.match before the first transform, 10 on transforms,
+// and then every cache.put was refused. Production traces 2026-10-23 to 10-30:
+// 120 of 120 warms read warmed 9-10, failed 30-31, already 0, and the refused
+// puts were Workers Issue a40bfd76 (353 hits, all visitor GETs of this
+// fragment, none on the :07/:37 probe). The warm stored nothing at all. Now
+// rnArt charges a ledger at each call and skips what it cannot afford.
+//
+// Held back for what this invocation spends outside the ledger: a lapsed SWR
+// stamp rescrapes in its own waitUntil, ~7 subrequests (scrapePlaylistTracks).
+const WARM_BUDGET_RESERVE = 8;
+// Enough lanes that a cold colo finishes in a few transforms' time (~600ms
+// each). Lanes that probe at the same moment the ledger runs dry each waste
+// one probe, so a cold colo warms 12 to 14 covers a fragment miss, and the
+// next miss in that colo finds those as cheap hits and warms further down.
+const WARM_LANES = 6;
+
 export async function warmArtCache(payload, request, env, ctx) {
-  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0 };
+  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0, skipped: 0, spent: 0 };
   // `caches` is a BARE GLOBAL that may not be declared at all, and referencing
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
-  // class lib/parse.js cannot cover.
+  // class lib/parse.ts cannot cover.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (!ctx || typeof caches === "undefined") return none;
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
 
-  const outcomes = await Promise.all(urls.map(async (u) => {
+  const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: WARM_BUDGET_RESERVE });
+  const outcomes = await mapWithConcurrency(urls, WARM_LANES, async (u) => {
     try {
       // Call the handler directly instead of fetching our own origin. A self
       // fetch would cost a second worker invocation per cover to reach this
       // same function, and `handleRnArt` already does its own cache.put.
-      const res = await handleRnArt(new Request(u), env, ctx);
+      const res = await rnArt(new Request(u), env, ctx, { budget });
       // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
       // and a tee branch nobody reads can back-pressure the branch being written
       // to the cache. These are 5-19KB images, so buffering them is free.
@@ -456,12 +492,22 @@ export async function warmArtCache(payload, request, env, ctx) {
       const mark = res.headers.get("x-art-cache");
       if (mark === "hit") return "already";
       if (mark === "miss") return "warmed";
+      if (mark === "skipped") return "skipped";
       return res.ok ? "untransformed" : "failed";
-    } catch { return "failed"; }
-  }));
+    } catch {
+      return "failed";
+    }
+  });
 
   const count = (o: string) => outcomes.filter((x) => x === o).length;
-  return { warmed: count("warmed"), already: count("already"), untransformed: count("untransformed"), failed: count("failed") };
+  return {
+    warmed: count("warmed"),
+    already: count("already"),
+    untransformed: count("untransformed"),
+    failed: count("failed"),
+    skipped: count("skipped"),
+    spent: budget.spent,
+  };
 }
 
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
@@ -474,13 +520,16 @@ function trackResponse(payload, status = 200, format = "json") {
   if (format === "html") {
     // The homepage's tracks island (lib/island.ts): islandResponse carries the
     // x-island marker that proves this body is OUR fragment, since a 500, 522 or
-    // 1101 from the edge is also text/html and also resolves fine. It was a
-    // private x-rn-fragment marker checked by a hand-written hydrator until the
-    // homepage moved onto the one island convention. Unlike the default island
-    // this fragment is cacheable, because the playlist is shared by everyone.
-    return islandResponse(renderTrackListHtml(payload), {
-      "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-    }, status);
+    // 1101 from the edge is also text/html and also resolves fine. Unlike the
+    // default island this fragment is cacheable, because the playlist is shared
+    // by everyone.
+    return islandResponse(
+      renderTrackListHtml(payload),
+      {
+        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
+      },
+      status,
+    );
   }
   return jsonResponse(payload, status, { ...publicJsonHeaders(status), "x-robots-tag": "noindex" }, { pretty: false });
 }
@@ -574,8 +623,10 @@ export async function handleRnTracks(request, env, ctx) {
 // The route calls handleRnTracksHtml. `rnTracksHtml(..., { warm: false })` is
 // for callers that are not a visitor, which today means the :07/:37 perf probe.
 // It is a separate export rather than a fourth parameter on the handler because
-// the router passes the request URL in that slot. The warm spends one Images fetch per cold URL, up to
-// WARM_MAX_URLS of them, in whatever invocation called this. From the probe
+// the router passes the request URL in that slot.
+//
+// The warm spends one Images fetch per cold URL, up to WARM_MAX_URLS of them,
+// in whatever invocation called this. From the probe
 // that invocation is the cron tick cronEnrichTracks runs in, so after a playlist
 // swap (every URL new, every URL cold) the warm spent the tick's 50 subrequests
 // before enrichment could, and enrichment's ledger could not see it. Measured on
@@ -590,25 +641,31 @@ export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
   const result = await loadRnTracks(request, env, ctx);
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
-    ctx.waitUntil(span("rn.art.warm", async (s) => {
-      const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
-      // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
-      // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
-      // feature not running at all, and the first version of this span could not
-      // tell those apart. That is precisely how the broken guard shipped green.
-      // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
-      // Images fallback; the four always sum to the URLs attempted.
-      s.setAttribute("rn.art.warmed", warmed);
-      s.setAttribute("rn.art.already", already);
-      s.setAttribute("rn.art.untransformed", untransformed);
-      s.setAttribute("rn.art.failed", failed);
-    }).catch(() => {}));
+    ctx.waitUntil(
+      span("rn.art.warm", async (s) => {
+        const { warmed, already, untransformed, failed, skipped, spent } = await warmArtCache(result.payload, request, env, ctx);
+        // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
+        // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
+        // feature not running at all, and the first version of this span could not
+        // tell those apart. That is precisely how the broken guard shipped green.
+        // `skipped` is what the ledger declined to start, `untransformed` the
+        // Images fallback, and `failed` an upstream refusal or, if the ledger's
+        // count is wrong again, the subrequest cap (gotcha 36). The five always
+        // sum to the URLs considered.
+        s.setAttribute("rn.art.warmed", warmed);
+        s.setAttribute("rn.art.already", already);
+        s.setAttribute("rn.art.untransformed", untransformed);
+        s.setAttribute("rn.art.failed", failed);
+        s.setAttribute("rn.art.skipped", skipped);
+        s.setAttribute("budget.spent", spent);
+      }).catch(() => {}),
+    );
   }
   return res;
 }
 
-// The HTML representation is intentionally the same row shape used by the
-// homepage rewriter. JSON remains the machine-facing contract; HTML is the
+// The HTML representation is the row shape the homepage's tracks island
+// inserts. JSON remains the machine-facing contract; HTML is the
 // browser-facing hypermedia representation.
 export function renderTrackListHtml(payload): Html {
   const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
@@ -619,18 +676,21 @@ export function renderTrackListHtml(payload): Html {
   // was told the playlist is empty when the scrape actually broke.
   if (payload?.error) return html`<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>`;
   if (!tracks.length) return html`<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>`;
-  return joinHtml(tracks.map(t => {
-    const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
-    const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
-    return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
-      t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY}${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
+  return joinHtml(
+    tracks.map((t) => {
+      const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
+      const artistsText = t.artists_text || (t.artists || []).map((a) => a.name).join(", ");
+      return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
+        t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY
+      }${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
       <a href="${t.song_link_url}" target="_blank" rel="noopener">${
         dur ? html`<span class="np-duration">${dur}</span>` : EMPTY
       }<span class="np-title">${t.title}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
         t.is_explicit ? html`<span class="np-explicit">E</span>` : EMPTY
       }</a>
     </li>`;
-  }));
+    }),
+  );
 }
 
 // The Markdown representation, served at /rn.md and at /rn under
@@ -664,7 +724,7 @@ export function renderTrackListMarkdown(payload, target) {
   } else {
     body = [`## ${tracks.length} track${tracks.length === 1 ? "" : "s"}`, ""];
     tracks.forEach((t, i) => {
-      const artists = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+      const artists = t.artists_text || (t.artists || []).map((a) => a.name).join(", ");
       const dur = t.duration_ms ? ` (${fmtDuration(t.duration_ms)})` : "";
       const explicit = t.is_explicit ? " [E]" : "";
       const link = t.song_link_url || t.spotify_url;
@@ -692,8 +752,8 @@ export async function handleRnMarkdown(request, env, ctx) {
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
   const headers: Record<string, string> = {
-    "content-type":           "text/markdown; charset=utf-8",
-    "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
+    "content-type": "text/markdown; charset=utf-8",
+    "cache-control": negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
     "x-content-type-options": "nosniff",
   };
   if (negotiated) headers.vary = "accept";
@@ -708,17 +768,26 @@ export async function handleRnMarkdown(request, env, ctx) {
 
 function linkifyArtists(artists, fallbackText): Html {
   if (Array.isArray(artists) && artists.length) {
-    return joinHtml(artists.map(a => {
-      const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
-    }), ", ");
+    return joinHtml(
+      artists.map((a) => {
+        const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
+      }),
+      ", ",
+    );
   }
   const raw = fallbackText || asText(artists, "");
   if (!raw) return EMPTY;
-  return joinHtml(String(raw).split(/,\s*/).filter(Boolean).map(name => {
-    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-    return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
-  }), ", ");
+  return joinHtml(
+    String(raw)
+      .split(/,\s*/)
+      .filter(Boolean)
+      .map((name) => {
+        const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
+      }),
+    ", ",
+  );
 }
 
 function fmtDuration(ms) {
@@ -732,8 +801,8 @@ function fmtDuration(ms) {
 // `tracks:<pid>` persists with NO TTL (a visitor never
 // catches an empty hole when the hour lapses), and its KV metadata carries the
 // write time the freshness window is measured from. lapsed stamp, so serve
-// stale now and rescrape on ctx.waitUntil. used by both /rn/tracks and the
-// homepage prerender, so whichever gets hit keeps the payload warm.
+// stale now and rescrape on ctx.waitUntil. used by /rn/tracks, /rn.md, the
+// terminal and the MCP tools, so whichever gets hit keeps the payload warm.
 export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean } = {}) {
   // cacheTtl 1800: this is the homepage's slowest TTFB-gating read (204ms cold on
   // 2026-07-27), and the key is write-rarely by construction. A playlist swap
@@ -749,34 +818,28 @@ export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean 
   });
 }
 
-// Traced tier by tier. This function is the single most expensive thing the
-// worker can do — one embed fetch for the playlist, then ONE PER TRACK, then one
-// per uncached artist — and it runs only on a cold SWR miss or a manual bust, so
-// it is both rare and the thing you want the receipt for when a homepage
-// fragment takes seconds. Each tier's fetches are auto-instrumented as children;
-// the tier spans are what make 30 sibling fetches legible as three phases.
+// Traced phase by phase (rn.scrape.playlist, rn.scrape.meta). It runs only on a
+// cold SWR miss or a manual bust, so it is both rare and the thing you want the
+// receipt for when a homepage fragment takes seconds. Each phase's fetches are
+// auto-instrumented as children of its span.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // tier 1: playlist embed → ordered track list
-  const playlistEntity = await span(
-    "rn.scrape.playlist",
-    () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env),
-    { "rn.playlist_id": playlistId },
-  );
+  const playlistEntity = await span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId });
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
-    .filter(t => asText(t?.uri, "").startsWith("spotify:track:"))
-    .map(t => {
+    .filter((t) => asText(t?.uri, "").startsWith("spotify:track:"))
+    .map((t) => {
       const id = t.uri.slice("spotify:track:".length);
       return {
         id,
-        title:         t.title    || "",
-        artists_text:  t.subtitle || "",   // raw "A, B" string kept for back-compat
-        spotify_url:   `https://open.spotify.com/track/${id}`,
+        title: t.title || "",
+        artists_text: t.subtitle || "", // raw "A, B" string kept for back-compat
+        spotify_url: `https://open.spotify.com/track/${id}`,
         song_link_url: `https://song.link/s/${id}`,
-        duration_ms:   asNumber(t.duration),
-        preview_url:   t.audioPreview?.url || null,
-        is_explicit:   !!t.isExplicit,
+        duration_ms: asNumber(t.duration),
+        preview_url: t.audioPreview?.url || null,
+        is_explicit: !!t.isExplicit,
       };
     });
 
@@ -795,17 +858,19 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
     let known: Record<string, StoredTrackMeta> = {};
     try {
       known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
-    } catch { /* a missing map means every cover is pending, never an error */ }
+    } catch {
+      /* a missing map means every cover is pending, never an error */
+    }
     s.setAttribute("rn.meta_known", Object.keys(known).length);
     return known;
   });
 
-  const tracks = baseTracks.map(t => withTrackMeta(t, meta[t.id]));
+  const tracks = baseTracks.map((t) => withTrackMeta(t, meta[t.id]));
   return {
-    playlist_id:   playlistId,
+    playlist_id: playlistId,
     playlist_name: playlistEntity.name || "rn",
     tracks,
-    fetched_at:    new Date().toISOString(),
+    fetched_at: new Date().toISOString(),
   };
 }
 
@@ -818,7 +883,7 @@ function withTrackMeta(track, meta) {
     image_url: meta?.image_url || null,
     // `checked` is enrichment bookkeeping (see cronEnrichTracks), so it stays
     // in the map and out of the payload /rn/tracks serves.
-    artists:   Array.isArray(meta?.artists) ? meta.artists.map(({ checked: _checked, ...a }) => a) : [],
+    artists: Array.isArray(meta?.artists) ? meta.artists.map(({ checked: _checked, ...a }) => a) : [],
   };
 }
 
@@ -847,8 +912,8 @@ function withTrackMeta(track, meta) {
 // was right and the code had moved. The ledger cannot see subrequests nobody
 // routes through it either, which is what `budget.overrun` is for: the platform
 // refusing while the count shows headroom means this comment is wrong again.
-const TRACK_META_KEY       = "trackmeta:v1";
-const ENRICH_TRACK_BUDGET  = 6;
+const TRACK_META_KEY = "trackmeta:v1";
+const ENRICH_TRACK_BUDGET = 6;
 const ENRICH_ARTIST_BUDGET = 6;
 // Held back for the two payload writes at the end, plus slack. A tick that
 // spends its last subrequest cannot save the work it just did, so the failure
@@ -885,9 +950,9 @@ function readStoredArtist(raw: unknown): StoredArtist[] {
   if (!a || id === null) return [];
   const artist: StoredArtist = {
     id,
-    name:        asText(a.name, ""),
+    name: asText(a.name, ""),
     spotify_url: asText(a.spotify_url, `https://open.spotify.com/artist/${id}`),
-    image_url:   asText(a.image_url),
+    image_url: asText(a.image_url),
   };
   const checked = asNumber(a.checked);
   if (checked !== null) artist.checked = checked;
@@ -901,14 +966,14 @@ function trackMetaFromEntity(e): StoredTrackMeta {
     image_url: canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null),
     artists: Array.isArray(e?.artists)
       ? e.artists
-          .filter(a => asText(a?.uri, "").startsWith("spotify:artist:"))
-          .map(a => {
+          .filter((a) => asText(a?.uri, "").startsWith("spotify:artist:"))
+          .map((a) => {
             const id = a.uri.slice("spotify:artist:".length);
             return {
               id,
-              name:        a.name || "",
+              name: a.name || "",
               spotify_url: `https://open.spotify.com/artist/${id}`,
-              image_url:   null,
+              image_url: null,
             };
           })
       : [],
@@ -1000,29 +1065,38 @@ export async function cronEnrichTracks(env, ctx) {
       // an entry written before this field existed is stamped rather than
       // deleted, so the upgrade cannot itself become the outage it prevents.
       const seen = meta[id].seen;
-      if (seen === undefined) { meta[id].seen = now; continue; }
-      if (now - seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
+      if (seen === undefined) {
+        meta[id].seen = now;
+        continue;
+      }
+      if (now - seen > TRACK_META_MAX_AGE_MS) {
+        delete meta[id];
+        pruned++;
+      }
     }
 
-    const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
-    let trackScraped = 0, trackFailed = 0;
-    await Promise.all(pendingTracks.map(async id => {
-      // Charged at DISPATCH, not on success: the subrequest is spent the moment
-      // the fetch goes out, whether or not it comes back.
-      budget.charge(1);
-      try {
-        meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
-        trackScraped++;
-      } catch (e) {
-        // THE LINE THIS WHOLE LEDGER EXISTS FOR. This was `catch { trackFailed++ }`,
-        // and on 2026-08-15 a 21-track scrape crossed the 50-subrequest ceiling
-        // and threw into it once per remaining track. That reported 15 upstream
-        // failures over a payload of nulls, twice, and both times it was read as
-        // Spotify being flaky. A ceiling is never this track's fault.
-        if (budget.fault(e) === "cap") capped = true;
-        else trackFailed++;   // stays pending, retried next tick
-      }
-    }));
+    const pendingTracks = live.filter((id) => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
+    let trackScraped = 0,
+      trackFailed = 0;
+    await Promise.all(
+      pendingTracks.map(async (id) => {
+        // Charged at DISPATCH, not on success: the subrequest is spent the moment
+        // the fetch goes out, whether or not it comes back.
+        budget.charge(1);
+        try {
+          meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
+          trackScraped++;
+        } catch (e) {
+          // THE LINE THIS WHOLE LEDGER EXISTS FOR. This was `catch { trackFailed++ }`,
+          // and on 2026-08-15 a 21-track scrape crossed the 50-subrequest ceiling
+          // and threw into it once per remaining track. That reported 15 upstream
+          // failures over a payload of nulls, twice, and both times it was read as
+          // Spotify being flaky. A ceiling is never this track's fault.
+          if (budget.fault(e) === "cap") capped = true;
+          else trackFailed++; // stays pending, retried next tick
+        }
+      }),
+    );
 
     // Artists on the LIVE tracks, including ones added before this tick: an
     // artist whose photo failed last tick is pending until it lands, and it is
@@ -1038,7 +1112,7 @@ export async function cronEnrichTracks(env, ctx) {
     // cache's own TTL, so an artist who uploads a photo is read again.
     const pendingArtists = new Map();
     for (const id of liveSet) {
-      for (const a of (meta[id]?.artists || [])) {
+      for (const a of meta[id]?.artists || []) {
         const checked = asNumber(a.checked);
         const settled = a.image_url || (checked !== null && now - checked < ARTIST_KV_TTL * 1000);
         if (!settled && !pendingArtists.has(a.id)) pendingArtists.set(a.id, a.name || "");
@@ -1048,7 +1122,9 @@ export async function cronEnrichTracks(env, ctx) {
     }
 
     const resolved = new Map();
-    let artistCached = 0, artistScraped = 0, artistFailed = 0;
+    let artistCached = 0,
+      artistScraped = 0,
+      artistFailed = 0;
 
     // A KV read is a subrequest too, which is the half of this ceiling everyone
     // forgets: the outage that started all this spent 37 fetches and 30 KV
@@ -1073,35 +1149,40 @@ export async function cronEnrichTracks(env, ctx) {
       // `?.` covers the no-read and failed-read paths with the miss path, since
       // all three mean the same thing here: this artist is still pending.
       const hit = asRecord(cachedArtists?.get(artistKey(id)));
-      if (!hit) { toScrape.push(id); continue; }
+      if (!hit) {
+        toScrape.push(id);
+        continue;
+      }
       artistCached++;
       resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
     }
 
-    await Promise.all(toScrape.map(async id => {
-      const key = artistKey(id);
-      budget.charge(1);
-      try {
-        const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
-        artistScraped++;
-        // 320px: the tooltip renders at 120x120 (luna.css pins
-        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
-        // and 320 is the smallest Spotify tier that clears it without paying
-        // the 640px hero weight. The tier DOWN is 160, which goes soft on
-        // retina, so there is no cheaper correct answer among Spotify's sizes.
-        const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
-        const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-        const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
-        resolved.set(id, rec);
-        if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
-      } catch (e) {
-        if (budget.fault(e) === "cap") capped = true;
-        else artistFailed++;
-      }
-    }));
+    await Promise.all(
+      toScrape.map(async (id) => {
+        const key = artistKey(id);
+        budget.charge(1);
+        try {
+          const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
+          artistScraped++;
+          // 320px: the tooltip renders at 120x120 (luna.css pins
+          // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
+          // and 320 is the smallest Spotify tier that clears it without paying
+          // the 640px hero weight. The tier DOWN is 160, which goes soft on
+          // retina, so there is no cheaper correct answer among Spotify's sizes.
+          const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
+          const pick = imgs.find((i) => i.maxWidth === 320) || imgs.find((i) => i.maxWidth === 160) || imgs[0] || null;
+          const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
+          resolved.set(id, rec);
+          if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
+        } catch (e) {
+          if (budget.fault(e) === "cap") capped = true;
+          else artistFailed++;
+        }
+      }),
+    );
 
     for (const id of Object.keys(meta)) {
-      meta[id].artists = (meta[id].artists || []).map(a => {
+      meta[id].artists = (meta[id].artists || []).map((a) => {
         const hit = resolved.get(a.id);
         return hit ? { ...a, image_url: hit.image_url || null, name: a.name || hit.name, checked: now } : a;
       });
@@ -1111,14 +1192,11 @@ export async function cronEnrichTracks(env, ctx) {
     // visible without waiting for the SWR sentinel to lapse. The payload write
     // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
     // read, and this pass did not read it.
-    const next = { ...payload, tracks: payload.tracks.map(t => withTrackMeta(t, meta[t.id])) };
+    const next = { ...payload, tracks: payload.tracks.map((t) => withTrackMeta(t, meta[t.id])) };
     budget.charge(2);
-    await Promise.all([
-      env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
-      env.RN_KV.put(cacheKey, JSON.stringify(next)),
-    ]);
+    await Promise.all([env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)), env.RN_KV.put(cacheKey, JSON.stringify(next))]);
 
-    const covered = live.filter(id => meta[id]?.image_url).length;
+    const covered = live.filter((id) => meta[id]?.image_url).length;
     s.setAttribute("rn.tracks_total", live.length);
     s.setAttribute("rn.tracks_covered", covered);
     s.setAttribute("rn.track_scraped", trackScraped);
@@ -1144,14 +1222,15 @@ export async function cronEnrichTracks(env, ctx) {
 
 // shared Spotify embed scraper. fetches https://open.spotify.com/embed/<kind>/<id>
 // where kind is "playlist" | "track" | "artist", parses the SSR'd __NEXT_DATA__
-// blob, and returns the top-level entity. used by tiers 1-3 above.
+// blob, and returns the top-level entity. used by tier 1 (scrapePlaylistTracks)
+// and tiers 2-3 (cronEnrichTracks), both above.
 // cf.cacheTtl gives us automatic Cloudflare edge caching per URL so concurrent
 // playlist refreshes don't multiply the upstream load.
 //
 // retry behavior: a small fraction of track embeds were returning HTML that
 // parses but lacks visualIdentity/artists (Spotify treating CF egress IPs
 // differently? regional A/B test? unclear). worse, the bad response gets
-// cached at the CF edge for 24h because of cacheEverything+cacheTtl above,
+// cached at the CF edge for 24h because of cacheEverything+cacheTtl below,
 // so the bad state sticks across worker invocations. on a failed extraction
 // (parse error OR missing both visualIdentity and artists), retry once
 // with cacheTtl: 0 + a cache-busting query param to force a fresh fetch.
@@ -1173,12 +1252,12 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
       // not apply Spotify's crawl policy to these public playlist/art lookups.
       // signedFetch confines it to the three embed URL shapes on every hop.
       robots: "spotify-embed",
-      // 5s deadline. scrapePlaylistTracks fans out to dozens of these embeds in
-      // Promise.all, and one stuck fetch used to hang its whole branch. A timeout
-      // throws into the same empty-entity path any embed failure already takes.
+      // 5s deadline. cronEnrichTracks fans these embeds out under Promise.all,
+      // and one stuck fetch would hang its whole branch. A timeout throws into
+      // the same empty-entity path any embed failure already takes.
       signal: AbortSignal.timeout(5000),
       cf: fresh
-        ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache (retry + every playlist fetch)
+        ? { cacheTtl: 0, cacheEverything: false } // bypass CF cache (retry + every playlist fetch)
         : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (track/artist embeds)
     });
     if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
@@ -1200,12 +1279,12 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
   // if the entity is empty-ish on a track / artist fetch (no name AND no
   // visualIdentity), it's almost certainly a bad cached response — retry
   // once bypassing CF's edge cache. cheap to test, expensive to be wrong.
-  const looksEmpty = !entity || (
-    !entity.name &&
-    !entity.visualIdentity &&
-    !(Array.isArray(entity.artists) && entity.artists.length) &&
-    !(Array.isArray(entity.trackList) && entity.trackList.length)
-  );
+  const looksEmpty =
+    !entity ||
+    (!entity.name &&
+      !entity.visualIdentity &&
+      !(Array.isArray(entity.artists) && entity.artists.length) &&
+      !(Array.isArray(entity.trackList) && entity.trackList.length));
   if (looksEmpty) {
     entity = await tryOnce(true);
   }
@@ -1262,7 +1341,7 @@ export async function handleRnSet(request, env) {
   const url = new URL(request.url);
   const params = await readParams(request, url);
   const secret = params.get("secret") || "";
-  const target = params.get("url")    || "";
+  const target = params.get("url") || "";
 
   if (!secretMatches(secret, env.RN_BUST_SECRET)) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
@@ -1274,8 +1353,7 @@ export async function handleRnSet(request, env) {
     target.match(/open\.spotify\.com\/playlist\/([0-9A-Za-z]{22})/) ||
     target.match(/^([0-9A-Za-z]{22})$/);
   if (!m) {
-    return setPage(400, "bad url",
-      "couldn't find a 22-character playlist id in <code>" + esc(target) + "</code>.");
+    return setPage(400, "bad url", "couldn't find a 22-character playlist id in <code>" + esc(target) + "</code>.");
   }
   const id = m[1];
 
@@ -1288,9 +1366,12 @@ export async function handleRnSet(request, env) {
   // instant this write returns.
   await env.RN_KV.put("playlist-id", id);
 
-  return setPage(200, "updated",
+  return setPage(
+    200,
+    "updated",
     `<code>/rn</code> now points to <a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">open.spotify.com/playlist/${esc(id)}</a>.<br>` +
-    `<small><a href="/rn/admin?secret=${esc(secret)}">&larr; back to admin</a></small>`);
+      `<small><a href="/rn/admin?secret=${esc(secret)}">&larr; back to admin</a></small>`,
+  );
 }
 
 // gather params from query string, form body, or JSON body — query wins ties.
@@ -1315,7 +1396,6 @@ export async function readParams(request, url) {
   return out;
 }
 
-// ── tiny period-correct confirmation page ───────────────────────────
 export function setPage(status, title, bodyHtml) {
   const pageTitle = `aadhar.sh/rn/set/${title}`;
   return lunaPage({
@@ -1338,7 +1418,7 @@ export function setPage(status, title, bodyHtml) {
 `),
     cache: "no-store",
     headers: {
-      "x-robots-tag":  "noindex",
+      "x-robots-tag": "noindex",
     },
   });
 }

@@ -17,7 +17,10 @@ export default {
     }
     if (new URL(request.url).pathname === "/spin") {
       const start = process.cpuUsage();
-      for (;;) { const d = process.cpuUsage(start); if ((d.user + d.system) / 1000 >= 12) break; }
+      for (;;) {
+        const d = process.cpuUsage(start);
+        if ((d.user + d.system) / 1000 >= 12) break;
+      }
     }
     return new Response("ok");
   },

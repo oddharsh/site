@@ -11,7 +11,8 @@
 // CONTENT-ONLY representation in the served manifest ci.yml signs (#1073): its
 // Markdown twin, which the build derives from the prose alone with scripts and
 // controls stripped, or a writing post's .txt source, or for a file that IS its
-// content (/resume.pdf) the file itself. 56 of 56 sitemap pages have one.
+// content (/resume.pdf) the file itself. 56 of 56 sitemap pages had one on
+// 2026-10-01.
 //
 // The key is public by design: the protocol proves ownership by serving it at
 // /<key>.txt on the host, so it lives in this tree like any other static file.
@@ -31,7 +32,11 @@ export function sitemapPaths(xml: string, host: string): string[] {
   const paths: string[] = [];
   for (const [, loc] of xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)) {
     let url: URL;
-    try { url = new URL(loc); } catch { continue; }
+    try {
+      url = new URL(loc);
+    } catch {
+      continue;
+    }
     if (url.protocol === "https:" && url.host === host) paths.push(url.pathname || "/");
   }
   return paths;
@@ -68,12 +73,19 @@ export function submission(host: string, urlList: string[]) {
 /** What each status the protocol defines means, and whether it is a success. */
 export function readStatus(status: number): { ok: boolean; meaning: string } {
   switch (status) {
-    case 200: return { ok: true, meaning: "accepted" };
-    case 202: return { ok: true, meaning: "accepted, key validation pending" };
-    case 400: return { ok: false, meaning: "bad request: the payload is malformed" };
-    case 403: return { ok: false, meaning: "forbidden: the key file is missing or does not match" };
-    case 422: return { ok: false, meaning: "unprocessable: a URL does not belong to the host" };
-    case 429: return { ok: false, meaning: "too many requests: treated as spam" };
-    default: return { ok: false, meaning: `unexpected status ${status}` };
+    case 200:
+      return { ok: true, meaning: "accepted" };
+    case 202:
+      return { ok: true, meaning: "accepted, key validation pending" };
+    case 400:
+      return { ok: false, meaning: "bad request: the payload is malformed" };
+    case 403:
+      return { ok: false, meaning: "forbidden: the key file is missing or does not match" };
+    case 422:
+      return { ok: false, meaning: "unprocessable: a URL does not belong to the host" };
+    case 429:
+      return { ok: false, meaning: "too many requests: treated as spam" };
+    default:
+      return { ok: false, meaning: `unexpected status ${status}` };
   }
 }

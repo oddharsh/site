@@ -42,15 +42,16 @@ export default defineConfig({
     },
 
     // Intercepts /lens/read* ahead of the site Worker, exactly the way cf-garage
-    // intercepts /garage/cf/*. This is a ROUTE and not a `run_worker_first`
-    // entry, which is the whole reason the feature lives in its own script: that
-    // list is a hard 100 (docs/GOTCHAS.md gotcha 26).
+    // intercepts /garage/cf/*. A zone route is matched before the site's
+    // `run_worker_first` list is consulted, so this takes no row there (gotcha
+    // 26). Why the feature is a separate script at all is in src/index.ts's
+    // header: bundle size.
     triggers: [triggers.fetch({ pattern: "aadhar.sh/lens/read*", zone: "aadhar.sh" })],
 
     env: {
       // Per-IP budget, mirroring the /lens/* family. Extraction is pure CPU with
       // one upstream fetch, so this is cheaper than Browser Run and dearer than a
-      // parse: the ceiling sits between /lens/browser (4/min) and /lens/fetch
+      // parse: the ceiling sits between /lens/browser (3/min) and /lens/fetch
       // (30/min).
       READER_RL: bindings.rateLimit({ namespace: "3001", simple: { limit: 10, period: 60 } }),
     },

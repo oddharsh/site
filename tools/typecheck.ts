@@ -12,14 +12,15 @@
 //
 // With no arguments it checks every program except lens-reader's, which has its
 // own node_modules and runs from lens-reader/package.json with config paths as
-// arguments. A full run also checks that every tracked source file belongs to
-// some program and is named by one of its include globs, because oxlint's
-// type-aware pass only finds files a tsconfig names.
-import { execFileSync, spawnSync } from "node:child_process";
+// arguments. A full run also checks that every source file, untracked ones
+// too (gotcha 91), belongs to some program and is named by one of its include
+// globs, because the type-aware lint only finds files a tsconfig names.
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { repoFiles } from "./lib/repo-files.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASELINE = join(REPO, "config/ts-baseline.json");
@@ -30,7 +31,7 @@ const OWNS: Record<string, string[]> = {
   "config/tsconfig.json": ["src/worker/", "cal/", "serendipity/", "counter/"],
   "config/tsconfig.browser.json": ["src/client/", "public/", "pipelines/"],
   "config/tsconfig.tools.json": ["tools/", "pipelines/"],
-  "config/tsconfig.sw.json": ["src/client/sw.js", "src/client/sw-globals.d.ts"],
+  "config/tsconfig.sw.json": ["src/client/sw.ts", "src/client/sw-globals.d.ts"],
   "config/tsconfig.lwe-ask.json": ["lwe-ask/"],
   "config/tsconfig.cf-garage.json": ["cf-garage/"],
   "config/tsconfig.cf-garage-test.json": ["cf-garage/test/"],
@@ -46,7 +47,9 @@ function check(root: string, config: string, flags: string[], executable: string
   // --no-pretty output listed all 80 of 80 without it (measured 2026-10-06 on
   // bbdc5a519), but the baseline counts lines, so it must not depend on that.
   const result = spawnSync(executable, ["check", "-p", config, "--no-pretty", "--all", ...flags], {
-    encoding: "utf8", cwd: root, maxBuffer: 64 << 20,
+    encoding: "utf8",
+    cwd: root,
+    maxBuffer: 64 << 20,
   });
   const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
   // A Bun that predates the checker reads `check` as a package.json script.
@@ -54,15 +57,26 @@ function check(root: string, config: string, flags: string[], executable: string
     throw new Error(`${executable} has no \`bun check\` (gotcha 52); install the pinned Bun with \`bash .github/install-bun.sh ~/.bun/bin\``);
   }
   const diagnostics = (result.stdout ?? "").split("\n").filter((line) => /^.+?\(\d+,\d+\): error TS\d+:/.test(line));
-  if (result.error || result.signal || result.status === null ||
-      (result.status !== 0 && (result.status !== 1 || diagnostics.length === 0)) ||
-      diagnostics.some((line) => /\.json\(\d+,\d+\): error TS\d+:/.test(line)) ||
-      /Stopped before type checking|error TS\d+:/.test((result.stdout ?? "").split("\n").filter((line) => !diagnostics.includes(line)).join("\n")) ||
-      /Stopped before type checking/.test(result.stderr ?? "")) {
+  if (
+    result.error ||
+    result.signal ||
+    result.status === null ||
+    (result.status !== 0 && (result.status !== 1 || diagnostics.length === 0)) ||
+    diagnostics.some((line) => /\.json\(\d+,\d+\): error TS\d+:/.test(line)) ||
+    /Stopped before type checking|error TS\d+:/.test(
+      (result.stdout ?? "")
+        .split("\n")
+        .filter((line) => !diagnostics.includes(line))
+        .join("\n"),
+    ) ||
+    /Stopped before type checking/.test(result.stderr ?? "")
+  ) {
     throw new Error(`bun check could not complete ${config}:\n${result.error?.message ?? output.trim().slice(-1200)}`);
   }
-  const files = (result.stdout ?? "").split("\n")
-    .filter((line) => line.startsWith(`${root}/`)).map((line) => line.slice(root.length + 1));
+  const files = (result.stdout ?? "")
+    .split("\n")
+    .filter((line) => line.startsWith(`${root}/`))
+    .map((line) => line.slice(root.length + 1));
   if (files.length === 0) throw new Error(`${config} holds no files; bun check did not read the program:\n${output.trim().slice(-600)}`);
   return { files, diagnostics };
 }
@@ -98,15 +112,24 @@ export function baselineProblems(actual: Record<string, number>, declared: Recor
 export function coverageProblems(owned: string[], covered: Set<string>, named: Set<string>) {
   return owned.flatMap((file) => {
     if (!covered.has(file)) return [`${file}: belongs to no bun check program; add it to the include of the program whose globals match how it runs`];
-    if (!named.has(file)) return [`${file}: reached only through imports; name it in an include so oxlint's type-aware pass checks it`];
+    if (!named.has(file)) return [`${file}: reached only through imports; name it in an include so the type-aware lint checks it`];
     return [];
   });
 }
 
+/** Every program the root tsconfig.json references, in its order. */
+export function referencedPrograms(root = REPO) {
+  return (parseJsonc(readFileSync(join(root, "tsconfig.json"), "utf8")).references as { path: string }[]).map((r) => r.path);
+}
+
+/** What a run with no arguments checks: the references minus the ones with their own node_modules. */
+export function defaultPrograms(root = REPO) {
+  return referencedPrograms(root).filter((c) => !SEPARATE.includes(c));
+}
+
 function main() {
   if (!process.versions.bun) throw new Error("run this checker with bun tools/typecheck.ts");
-  const referenced = (parseJsonc(readFileSync(join(REPO, "tsconfig.json"), "utf8")).references as { path: string }[])
-    .map((r) => r.path);
+  const referenced = referencedPrograms();
   const unknown = referenced.filter((c) => !(c in OWNS));
   if (unknown.length) {
     console.error(`typecheck: tsconfig.json references ${unknown.join(", ")}, which tools/typecheck.ts has no owner for`);
@@ -116,7 +139,7 @@ function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   const update = process.argv.includes("--update");
   const full = args.length === 0;
-  const programs = full ? referenced.filter((c) => !SEPARATE.includes(c)) : args;
+  const programs = full ? defaultPrograms() : args;
 
   const counts = new Map<string, number>();
   const covered = new Set<string>();
@@ -146,10 +169,12 @@ function main() {
   const problems = baselineProblems(actual, declared, inScope);
 
   if (full) {
-    const NOT_SOURCE = ["src/dict/", "tools/fixtures/"];
-    const owned = execFileSync("git", ["ls-files"], { encoding: "utf8", cwd: REPO })
-      .split("\n")
-      .filter((f) => /\.(?:js|mjs|cjs|ts)$/.test(f) && !NOT_SOURCE.some((prefix) => f.startsWith(prefix)));
+    // The vendored pretext bundle is minified upstream code with its own
+    // declaration beside it (tools/vendor-pretext.ts), so no program checks it.
+    const NOT_SOURCE = ["src/dict/", "tools/fixtures/", "src/client/garage/pretext.lib.js"];
+    // Untracked files count: a new module outside every program has to fail
+    // here before `git add`, not first in CI (gotcha 91).
+    const owned = repoFiles([], REPO).filter((f) => /\.(?:js|mjs|cjs|ts)$/.test(f) && !NOT_SOURCE.some((prefix) => f.startsWith(prefix)));
     for (const config of SEPARATE) {
       for (const file of programFiles(REPO, config)) covered.add(file);
     }
@@ -169,7 +194,9 @@ function main() {
 }
 
 if (import.meta.main) {
-  try { main(); } catch (error) {
+  try {
+    main();
+  } catch (error) {
     console.error(`typecheck: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   }

@@ -1,6 +1,7 @@
-// lib/crawl.js — bounded, identified document reads shared by AadharshBot
+// lib/crawl.ts — bounded, identified document reads shared by AadharshBot
 // utilities. This module never stores a response body; callers receive only the
 // bounded text needed to extract evidence plus a digest of the bytes observed.
+
 import { signedFetch } from "./botauth.ts";
 import type { BotRequestOptions } from "./botauth.ts";
 import { DEFAULT_CRAWL_BODY_CAP, readResponseCapped } from "./public-fetch.ts";
@@ -31,12 +32,7 @@ export { DEFAULT_CRAWL_BODY_CAP, readResponseCapped, sha256Hex } from "./public-
 // returned only for the current parser; persistence callers should keep the
 // digest and normalized signals, not the raw third-party text.
 export async function crawlDocument(targetUrl, env, opts: BotRequestOptions & { maxBytes?: number; timeoutMs?: number } = {}) {
-  const {
-    maxBytes = DEFAULT_CRAWL_BODY_CAP,
-    timeoutMs = 4000,
-    signal,
-    ...fetchOpts
-  } = opts;
+  const { maxBytes = DEFAULT_CRAWL_BODY_CAP, timeoutMs = 4000, signal, ...fetchOpts } = opts;
   const started = Date.now();
   const response = await signedFetch(targetUrl, env, {
     ...fetchOpts,

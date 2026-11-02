@@ -1,0 +1,7 @@
+# Commits that only reformat, so blame should look past them. GitHub reads
+# this file on its own; for local `git blame`, run once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Each entry is a full sha and the PR that made it.
+
+# style: format the tree with bun fmt, and keep it formatted (#1379)
+bf9329d785aa3b174dc3cc97241663da07b941f5

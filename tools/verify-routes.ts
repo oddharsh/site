@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// verify-routes.mjs — the route oracle for aadhar.sh.
+// verify-routes.ts — the route oracle for aadhar.sh.
 //
 // Curls every known route and asserts status + content-type (+ a body marker
-// where it's cheap and stable). This is the regression tripwire for the repo
-// reorg: capture a golden baseline against production, then re-run after every
-// phase. If a route's status or content-type drifts, the reorg broke something.
+// where it's cheap and stable). If a route's status or content-type drifts,
+// something broke routing.
 //
 //   node tools/verify-routes.ts [baseUrl]      # default https://aadhar.sh
 //   node tools/verify-routes.ts http://localhost:8788
@@ -19,31 +18,43 @@
 // merge instead of only after a deploy. A local base drops the rows tagged
 // `remote` (see below); everything else is asserted identically.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
 import { twinOracleRows } from "./lib/client-assets.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
-// Naming it means moving this script again costs one line instead of 57.
 const ROOT = new URL("../", import.meta.url);
-
 
 const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 
-// No request may hang the sweep. probe() has always been unbounded, which is
-// survivable against the edge but not against a local Worker holding a socket
-// open on a binding it cannot reach (the BROWSER one does exactly that).
+// No request may hang the sweep. An unbounded probe is survivable against the
+// edge but not against a local Worker holding a socket open on a binding it
+// cannot reach (the BROWSER one does exactly that).
 const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 
 // Build-output assertions (minified shells + luna.css + the .src twins) only hold
 // against a real deploy. Local `wrangler dev` serves the readable public/ tree
 // (unminified, no .src twins), so those checks are gated to non-localhost bases.
 // VERIFY_BUILT=1 forces them back on for a local base pointed at .build/public,
-// which is what check-routes-harness.mjs does: there the built tree IS the tree
+// which is what check-routes-harness.ts does: there the built tree IS the tree
 // under test, so the "deploy bypassed build.ts" tripwire can fire pre-merge.
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
 const isProd = !isLocal;
 const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
+
+// A row's `readable` names the repo source its response is minified from. The
+// response must come in at most this fraction of that file's size, read at
+// check time, so a deploy that served the source itself (ratio 1.0) fails.
+// It replaced fixed byte caps on 2026-10-17. A cap has to sit between two sizes
+// that both move, and nav.js's did not. Its readable source was 102,009 B when
+// the 65,000 cap was set (2026-08-11) and 49,704 B a week later, once its
+// islands split out; it measured 61,284 B on 2026-10-17. A bypass passed the
+// size check all that time, leaving only the banner marker. A ratio holds the gap
+// by construction. The loosest row measured 0.60 (nav-tips.js), so 0.8 leaves
+// room for the minifier to do worse. A manual run against production from a
+// checkout whose sources have drifted from the deployed ones moves the ratio
+// too; real budgets live in perf-budget.ts.
+const MINIFIED_MAX_RATIO = 0.8;
 
 // VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
@@ -54,12 +65,13 @@ const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 // bindings need a token that can write and CI holds a read-only one.
 const remoteRows = isProd || process.env.VERIFY_REMOTE === "1";
 
-// Real identifiers that exist in the repo today (see writing/posts.json + images/).
+// Real identifiers that exist in the repo (see src/content/writing/posts.json +
+// public/images/).
 const SLUG = "in-flux";
-const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
-const META = "L1000069_3";             // /images/meta/<stem>.json
-const FULL = "L1000069_3.jxl";         // /images/full/<key>, a lossless JPEG XL original
-const FULL_JPEG = "L1000069_3.jpg";    // the JPEG it replaced, which 301s to it
+const THUMB = "L1000069_3-400.avif"; // legacy thumb shape (now a 301 into /i/)
+const META = "L1000069_3"; // /images/meta/<stem>.json
+const FULL = "L1000069_3.jxl"; // /images/full/<key>, a lossless JPEG XL original
+const FULL_JPEG = "L1000069_3.jpg"; // the JPEG it replaced, which 301s to it
 
 // the content-addressed twin of META's main avif, read from the same
 // hashes.json the worker bakes manifests from, so this row tracks re-encodes.
@@ -74,6 +86,8 @@ try {
 //     may be an array of acceptable prefixes (e.g. Pages says application/javascript,
 //     Workers-assets says text/javascript for the same .js file — both are valid).
 // marker: a substring that must appear in the body (text routes only).
+// location: the path a redirect's Location must name, query aside (the probe
+//     adds a cache-buster). Status alone passes a redirect to the wrong place.
 // cors: the exact Access-Control-Allow-Origin the response must carry. For a
 //     document whose spec requires it: a missing header fails no other column.
 // flaky: true = record the result but never fail the run (external/rate-limited).
@@ -85,8 +99,17 @@ try {
 const ROUTES = [
   // A signed directory requires the production secret. Local contract tests
   // exercise GET/HEAD proofs, key mismatch, and the missing-key 503 with fixtures.
-  { path: "/.well-known/http-message-signatures-directory", status: 200,
-    ct: "application/http-message-signatures-directory+json", marker: '"keys"', remote: true },
+  {
+    path: "/.well-known/http-message-signatures-directory",
+    status: 200,
+    ct: "application/http-message-signatures-directory+json",
+    marker: '"keys"',
+    remote: true,
+  },
+  // From the repo since 2026-10-17. Production answers from Cloudflare's
+  // Security Center until that copy is deleted; infra.json's
+  // security-txt-from-repo watches the edge, this row watches the file.
+  { path: "/.well-known/security.txt", status: 200, ct: "text/plain", marker: "Policy: https://aadhar.sh/contact#security" },
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
   // The homepage's two per-visit halves are islands (lib/island.ts). These rows
   // pin both mounts in the served document, and the fragment rows pin what
@@ -106,19 +129,57 @@ const ROUTES = [
   // Microsoft Copilot send. It answered text/html until 2026-08-27, on an origin
   // that passed every Markdown conformance check on the public list, which is
   // the gap /lens/markdown exists to make visible.
-  { path: "/garage/horizon", status: 200, ct: "text/markdown",
-    headers: { accept: "text/markdown, text/html, */*" } },
+  { path: "/garage/horizon", status: 200, ct: "text/markdown", headers: { accept: "text/markdown, text/html, */*" } },
   // The control that must never flip with it. A browser names no text/markdown
   // at all, so the same path on the same build still answers HTML.
-  { path: "/garage/horizon", status: 200, ct: "text/html",
-    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" } },
   // An explicit refusal is still a refusal, and order never overrides a q-value.
-  { path: "/garage/horizon", status: 200, ct: "text/html",
-    headers: { accept: "text/html, text/markdown;q=0" } },
-  { path: "/garage/horizon", status: 200, ct: "text/html",
-    headers: { accept: "text/markdown;q=0, */*;q=1" } },
-  { path: "/garage/horizon", status: 200, ct: "text/html",
-    headers: { accept: "text/markdown;q=0.2, text/html;q=0.8, */*;q=1" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/html, text/markdown;q=0" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/markdown;q=0, */*;q=1" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html", headers: { accept: "text/markdown;q=0.2, text/html;q=0.8, */*;q=1" } },
+  // og:video (lib/og-video.ts): the two fetchers that play a clip get one in
+  // the codec each decodes, and the clip answers Range, which the asset layer
+  // ignores (gotcha 83). The person row is the control: same path, no rewrite.
+  {
+    path: "/garage/encoding",
+    status: 200,
+    ct: "text/html",
+    headers: { "user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" },
+    marker: "/og/video/garage-encoding.av1.webm",
+  },
+  {
+    path: "/garage/encoding",
+    status: 200,
+    ct: "text/html",
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0",
+    },
+    marker: "/og/video/garage-encoding.hevc.mp4",
+  },
+  // `/` takes a different handler (routeHomepage) and, in production, Workers
+  // Cache in front of it, which this local harness never engages because its
+  // host isn't canonical. The cache bail is the contract test's to check.
+  {
+    path: "/",
+    status: 200,
+    ct: "text/html",
+    headers: { "user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" },
+    marker: "/og/video/home.av1.webm",
+  },
+  {
+    path: "/",
+    status: 200,
+    ct: "text/html",
+    headers: {
+      "user-agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0",
+    },
+    marker: "/og/video/home.hevc.mp4",
+  },
+  { path: "/og/video/home.hevc.mp4", status: 206, ct: "video/mp4", headers: { range: "bytes=0-99" } },
+  { path: "/og/video/garage-encoding.hevc.mp4", status: 206, ct: "video/mp4", headers: { range: "bytes=0-99" } },
+  { path: "/og/video/garage-encoding.av1.webm", status: 200, ct: "video/webm" },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
@@ -151,8 +212,7 @@ const ROUTES = [
   // generated ones below are: the .md URL proves the build staged it, the
   // negotiated form proves routeSecurity reaches it.
   { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },
-  { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
-    marker: "http-message-signatures-directory" },
+  { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "http-message-signatures-directory" },
   // A built document since 2026-09-29. A local Worker holds no signing key, so
   // the island answers the can't-reach-Curius panel; the footer rides in it.
   { path: "/reading", status: 200, ct: "text/html", marker: "data-island=/reading/list.html", fullPage: true },
@@ -177,13 +237,14 @@ const ROUTES = [
   // and the fragment always carries a day. /coffee/pick is the no-script page
   // with the same list inline.
   { path: "/coffee", status: 200, ct: "text/html", marker: "data-island=/coffee/slots.html", fullPage: true },
+  { path: "/coffee/", status: 301, location: "/coffee" }, // routeDropSlash, not cal's root as a duplicate 200
   { path: "/coffee/slots.html", status: 200, ct: "text/html", marker: "xp-day-label", fragment: true },
   { path: "/coffee/pick", status: 200, ct: "text/html", marker: 'id="bookform"' },
   { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/updates.json", status: 200, ct: "application/json" },
-  // /perf renders from a series fetched off the machine-owned `perf-history`
+  // /garage/dyno renders from a series fetched off the machine-owned `perf-history`
   // branch. The local harness has no KV and GitHub is unreachable from it, so
   // these rows assert the DEGRADED path on purpose: the seeded baseline history
   // is bundled, so the page must still render a chart with the fetch failing.
@@ -195,57 +256,83 @@ const ROUTES = [
   { path: "/garage/dyno", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "on the rollers" },
   { path: "/garage/dyno.json", status: 200, ct: "application/json" },
   // The old names, kept because `agents: true` published them and the well-known
-  // cards carrying that projection are cached 30 days. An exact ROUTES entry beats
-  // the /garage/<page> PREFIX, so these must not fall through to the asset layer.
+  // cards carrying that projection are cached 30 days. Each is an exact route in
+  // routes.ts that 301s to its /garage/dyno name, so neither may fall through to
+  // the asset layer.
   { path: "/perf", status: 301 },
   { path: "/perf.json", status: 301 },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
-  { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
+  { path: "/lens/", status: 301, location: "/lens" }, // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens-boot.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
   { path: "/lens-webmcp.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
-  // maxBytes is a "did the build actually minify this" tripwire, not a byte
-  // budget: the authored sheet is ~74 KB, so anything near that means the build
-  // was bypassed. Raised 45,000 -> 50,000 when the Explorer chrome added 3.5 KB
-  // of rules (563 B brotli). Keep it comfortably under the unminified size, or
-  // it stops detecting the thing it exists to detect.
-  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 50000 : undefined },
+  // `readable` is the minification tripwire (see MINIFIED_MAX_RATIO): 43,643 B
+  // served against a 99,322 B source on 2026-10-17.
+  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", readable: builtOutput ? "src/styles/luna.css" : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
-  // build-output oracle (prod only — dev serves the readable public/ tree): a
-  // deploy that skipped build.ts ships the readable 98KB nav.js with no banner
-  // and 404s every .src twin. These are the tripwire for that exact bypass.
-  //
-  // 50,000 -> 65,000 when the shell infotips landed: the minified shell reached
-  // 49,759 B and a 241-byte gap turns a bypass tripwire into an accidental byte
-  // budget, failing on whichever unrelated change happens to cross it. The
-  // number that matters is the one this detects — a readable nav.js is ~98 KB,
-  // so 65,000 still catches the bypass with room for the shell to grow. If real
-  // byte pressure is the concern, perf-budget.mjs is where a budget belongs.
-  ...(builtOutput ? [
-    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 65000 },
-    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 25000 },
-    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/nav-pipes.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 20000 },
-    { path: "/nav-tips.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
-    { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
-    // Every client script's readable twin serves and still carries the marker the
-    // build holds its minified copy to: one row per script in the client asset
-    // registry. 11 of these 23 were hand-written here until 2026-10-02.
-    // /lwe/ask.src.js has its own row further down, which also asserts its twin.
-    ...twinOracleRows().filter((row) => row.path !== "/lwe/ask.src.js").map((row) => ({ ...row })),
-    // /terminal.js and /terminal.src.js used to be asserted here — the console
-    // was the one client script whose absence was invisible on its own page.
-    // Both are gone, and so is /terminal itself (410 since 2026-09-16).
-    { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
-  ] : []),
-  // Representation contracts: the machine paths stay fixed even if a caller
-  // sends a browser Accept header; the HTML paths are explicit fragments.
-  // both reach a third party as AadharshBot, so both need RN_SIGNING_KEY_JWK.
-  // Locally that secret is absent and /lens/fetch answers its own 502 with
-  // "AadharshBot signing key is unavailable" — honest, but not this assertion.
+  // build-output oracle (prod only, since dev serves the readable public/ tree):
+  // a deploy that skipped build.ts ships each shell script as its readable
+  // source with no banner and 404s every .src twin. The banner marker and the
+  // `readable` size check are two independent tripwires for that bypass.
+  // Measured 2026-10-17, served (minified) against readable source, in bytes:
+  //   nav.js 19,106 / 61,284   nav-run.js 16,573 / 33,459   nav-tray.js 6,239 / 11,135
+  //   nav-pipes.js 10,266 / 22,560   nav-tips.js 6,718 / 11,251   tooltip.js 7,001 / 26,824
+  ...(builtOutput
+    ? [
+        { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", readable: "src/client/nav.ts" },
+        {
+          path: "/nav-run.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/nav-run.ts",
+        },
+        {
+          path: "/nav-tray.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/nav-tray.ts",
+        },
+        {
+          path: "/nav-pipes.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/nav-pipes.ts",
+        },
+        {
+          path: "/nav-tips.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/nav-tips.ts",
+        },
+        {
+          path: "/tooltip.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/tooltip.ts",
+        },
+        // Every client script's readable twin serves and still carries the marker the
+        // build holds its minified copy to: one row per script in the client asset
+        // registry. /lwe/ask.src.js has its own row further down, which also
+        // asserts its twin.
+        ...twinOracleRows()
+          .filter((row) => row.path !== "/lwe/ask.src.js")
+          .map((row) => ({ ...row })),
+        { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
+      ]
+    : []),
+  // Representation contracts: a machine path keeps its type even when a caller
+  // sends a browser Accept header. /lens/fetch and /lens/shot both reach a third
+  // party as AadharshBot, so both need RN_SIGNING_KEY_JWK. Locally that secret is
+  // absent and /lens/fetch answers its own 502 with "AadharshBot signing key is
+  // unavailable": honest, but not this assertion.
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" }, remote: true },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true, remote: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
@@ -268,32 +355,48 @@ const ROUTES = [
   { path: "/mcp", status: 405, ct: "application/json" },
   // A listed resource read covers dispatcher injection and identity bytes:
   // Horizon normally serves a precompressed document.
-  { path: "/mcp", method: "POST", status: 200, ct: "application/json",
-    headers: { "content-type": "application/json" }, marker: "<h1>Horizon",
-    body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }) },
+  {
+    path: "/mcp",
+    method: "POST",
+    status: 200,
+    ct: "application/json",
+    headers: { "content-type": "application/json" },
+    marker: "<h1>Horizon",
+    body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }),
+  },
   // The music resource is the one listed surface whose HTML representation
   // leaves the site, so this row is what proves the read asks for the declared
   // Markdown rather than following the browser's Spotify redirect.
-  { path: "/mcp", method: "POST", status: 200, ct: "application/json",
-    headers: { "content-type": "application/json" }, marker: "# Right now",
-    body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
-  // An empty batch is invalid, not an all-notification batch to accept silently.
+  {
+    path: "/mcp",
+    method: "POST",
+    status: 200,
+    ct: "application/json",
+    headers: { "content-type": "application/json" },
+    marker: "# Right now",
+    body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }),
+  },
   // A built document since 2026-09-25 (lib/island.ts): the marker is the island
   // mount. The fragment row only pins the shape, because the harness's local D1
   // carries no serendipity schema, so the pool read fails and the fragment
   // answers 503 without the island marker, which is the loader's failure arm.
   { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
+  { path: "/serendipity/", status: 301, location: "/serendipity" }, // routeDropSlash, not a duplicate 200
   { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
   // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
   { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
-  ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
-    headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
+  // An empty batch is invalid, not an all-notification batch to accept silently.
+  ...["/mcp", "/serendipity/mcp"].map((path) => ({
+    path,
+    method: "POST",
+    status: 200,
+    ct: "application/json",
+    headers: { "content-type": "application/json" },
+    body: "[]",
+    marker: "Invalid Request",
+  })),
 
   // ── the terminal programs ──────────────────────────────────────────────
-  // The first marker is a BOX-DRAWING character rather than prose, and that is
-  // deliberate: the failure these rows exist to catch is width math breaking,
-  // and a bottom-left corner only reaches the body if a complete frame was
-  // drawn. A row asserting a word would pass on a frame with no border at all.
   // `plain=1` keeps every assertion off the ANSI escapes.
   // The console page retired 2026-09-16. 410, and the body names the exchange it
   // used to show, so an old link is told where to go rather than shrugged at.
@@ -371,7 +474,7 @@ const ROUTES = [
   // go red the day the farm learned to build them.
   { path: "/lens/markdown?url=https://aadhar.sh/bot", status: 200, ct: "application/json", marker: "claude-code" },
   // The SSRF guard on this route specifically, same reasoning as the nlweb row:
-  // a blocked host is refused before any of the ten fetches leave.
+  // a blocked host is refused before any fetch leaves.
   { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set.
   // NO `encoding` pin here, deliberately, and the reason generalises to the
@@ -403,7 +506,7 @@ const ROUTES = [
   { path: "/ledger/rum.js", status: 404 },
   { path: "/ledger/rum", status: 404 },
   { path: "/writing", status: 200, ct: "text/html" },
-  { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
+  { path: "/writing/", status: 301, location: "/writing" }, // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json", encoding: "br" },
@@ -414,8 +517,7 @@ const ROUTES = [
   // because an empty local KV still produces a valid document (the payload's
   // error state is prose, not a failure).
   { path: "/rn.md", status: 200, ct: "text/markdown", marker: "https://aadhar.sh/rn/tracks" },
-  { path: "/rn", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
-    marker: "https://aadhar.sh/rn/tracks" },
+  { path: "/rn", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "https://aadhar.sh/rn/tracks" },
   // 503 with no playlist set (an empty local KV), 200 with one; the
   // .html fragment below keeps its 200 either way
   { path: "/rn/tracks", status: [200, 503], ct: "application/json", headers: { accept: "text/html" } },
@@ -449,14 +551,15 @@ const ROUTES = [
   { path: "/.well-known/mcp", status: 301 },
   { path: "/garage/resampe", status: 404, ct: "text/plain", marker: "/garage/resample" },
   // An API-shaped miss (.json, /api/, /v1/) answers JSON to a client that does
-  // not name HTML (this sweep sends */*), and keeps the text page for a browser.
+  // not name HTML (this sweep sends */*), and gets the HTML page in a browser.
   { path: "/.well-known/ai-plugin.json", status: 404, ct: "application/json", marker: "/sitemap.xml" },
-  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/plain", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
-  { path: "/v1/nope", status: 404, ct: "application/json", marker: "\"code\": \"not_found\"" },
+  { path: "/.well-known/ai-plugin.json", status: 404, ct: "text/html", headers: { accept: "text/html,*/*;q=0.8" }, marker: "/sitemap.xml" },
+  { path: "/garage/resampe", status: 404, ct: "text/html", headers: { accept: "text/html,*/*;q=0.8" }, marker: 'href="/garage/resample"' },
+  { path: "/v1/nope", status: 404, ct: "application/json", marker: '"code": "not_found"' },
   // The API contract (lib/api-contract.ts): a wrong method is a JSON 405. There
   // is no version to pin (LEAVES_OUT in lib/public-api.ts), so a pin changes nothing.
   { path: "/search.json?q=fhe", method: "DELETE", status: 405, ct: "application/json", marker: "method_not_allowed" },
-  { path: "/search.json?q=fhe", status: 200, ct: "application/json", headers: { "api-version": "1999-01-01" }, marker: "\"results\"" },
+  { path: "/search.json?q=fhe", status: 200, ct: "application/json", headers: { "api-version": "1999-01-01" }, marker: '"results"' },
   // The anonymous OAuth surfaces left on 2026-10-13 (LEAVES_OUT): every endpoint
   // is keyless, so there was nothing for their tokens to unlock.
   { path: "/.well-known/oauth-protected-resource", status: 404 },
@@ -464,9 +567,9 @@ const ROUTES = [
   { path: "/oauth2/token", status: 404 },
   // the same miss in the format an agent asked for (lib/http.ts negotiation)
   { path: "/garage/resampe", status: 404, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# 404 Not Found" },
-  { path: "/garage/resampe", status: 404, ct: "application/json", headers: { accept: "application/json" }, marker: "\"code\": \"not_found\"" },
+  { path: "/garage/resampe", status: 404, ct: "application/json", headers: { accept: "application/json" }, marker: '"code": "not_found"' },
   // the OpenAPI description is a static file, and the usual guesses point at it
-  { path: "/openapi.json", status: 200, ct: "application/json", marker: "\"operationId\"" },
+  { path: "/openapi.json", status: 200, ct: "application/json", marker: '"operationId"' },
   { path: "/swagger.json", status: 301 },
   // and so do the usual guesses at the developer guide
   { path: "/docs", status: 301 },
@@ -492,7 +595,7 @@ const ROUTES = [
   { path: "/images/manifest.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
-  // the SOOC original: ~5GB of R2 that is deliberately not in the repo.
+  // the original archive (a lossless JPEG XL in R2), deliberately not in the repo.
   { path: `/images/full/${FULL}`, status: 200, ct: "image/jxl", remote: true },
   // its retired JPEG URL redirects from the bundled index, before R2 is asked
   { path: `/images/full/${FULL_JPEG}`, status: 301 },
@@ -501,15 +604,16 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
-  { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
+  // routeDropSlash; the asset layer's drop-trailing-slash would 307 (gotcha 78)
+  { path: "/garage/", status: 301, location: "/garage" },
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
-  { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads (was z-jl90 until zenjpeg replaced jpegli in the ladder)
+  { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" }, // the JPEG cell /lwe/encoding actually loads
   { path: "/lwe", status: 200, ct: "text/html" },
-  { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
+  { path: "/lwe/", status: 301, location: "/lwe" }, // routeDropSlash, as /garage/
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
   { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
   { path: "/pixel-peeper/manifest.json", status: 200, ct: "application/json" },
@@ -530,14 +634,14 @@ const ROUTES = [
   // built and then not served. feed.xml is the control for the design decision in
   // that function: headers come from the PLAIN asset, so the application/rss+xml
   // that _headers sets on the .xml path must survive a body that came from the .br.
-  { path: "/garage/horizon.md", status: 200, ct: "text/markdown", encoding: "br" },     // page prefix, extension bail
-  { path: "/lwe/llms.txt", status: 200, ct: "text/plain", encoding: "br" },             // page prefix, .txt
-  { path: "/garage/feed.xml", status: 200, ct: "application/rss+xml", encoding: "br" },  // page prefix, _headers type survives
-  { path: "/images/exif.json", status: 200, ct: "application/json", encoding: "br" },    // /images/<index>.json prefix
+  { path: "/garage/horizon.md", status: 200, ct: "text/markdown", encoding: "br" }, // page prefix, extension bail
+  { path: "/lwe/llms.txt", status: 200, ct: "text/plain", encoding: "br" }, // page prefix, .txt
+  { path: "/garage/feed.xml", status: 200, ct: "application/rss+xml", encoding: "br" }, // page prefix, _headers type survives
+  { path: "/images/exif.json", status: 200, ct: "application/json", encoding: "br" }, // /images/<index>.json prefix
   { path: "/images/meta/L1000069_3.json", status: 200, ct: "application/json", encoding: "br" }, // existing meta route
-  { path: "/search-index.json", status: 200, ct: "application/json", encoding: "br" },   // exact route
-  { path: "/llms.txt", status: 200, ct: "text/plain", encoding: "br" },                  // exact route, _headers 30d rule
-  { path: "/sitemap.xml", status: 200, ct: "application/xml", encoding: "br" },          // exact route
+  { path: "/search-index.json", status: 200, ct: "application/json", encoding: "br" }, // exact route
+  { path: "/llms.txt", status: 200, ct: "text/plain", encoding: "br" }, // exact route, _headers 30d rule
+  { path: "/sitemap.xml", status: 200, ct: "application/xml", encoding: "br" }, // exact route
   // The five shapes that joined on 2026-09-16, each a different door into the
   // same lookup: a section's script (minified now, with its readable twin), a
   // vendored library under a section, a section page's readable twin, a ROOT
@@ -580,9 +684,9 @@ const ROUTES = [
 const AGENT_ROWS = (() => {
   if (!builtOutput) return [];
   const { surfaces } = JSON.parse(readFileSync(new URL("config/site-manifest.json", ROOT), "utf8"));
-  const covered = new Set(ROUTES
-    .filter((r) => /text\/markdown/.test(r.headers?.accept ?? "") && !/q=0(?![.\d])/.test(r.headers?.accept ?? ""))
-    .map((r) => r.path));
+  const covered = new Set(
+    ROUTES.filter((r) => /text\/markdown/.test(r.headers?.accept ?? "") && !/q=0(?![.\d])/.test(r.headers?.accept ?? "")).map((r) => r.path),
+  );
   const rows = agentSurfaces(surfaces)
     .filter((s) => !covered.has(s.path))
     .map((s) => ({ path: s.path, status: 200, ct: agentRepresentation(s), headers: { accept: "text/markdown" }, remote: false }));
@@ -630,19 +734,20 @@ async function probe(r) {
       // /garage/feed.xml when br was not offered, and as br on all four when it
       // was. Production passes origin brotli through untouched (every /a/ asset
       // lands at exactly its q11 size), so this is the harness, and the row's
-      // claim is the one a real client makes: offer br, get the q11 twin.
+      // claim is the one a real client makes: offer br, get the q11 twin. Gotcha 89.
       headers: probeHeaders(r),
     });
     const ct = res.headers.get("content-type") || "";
-    let body = "", bytes = null;
+    let body = "",
+      bytes = null;
     // read the body when we need a marker or a size assertion on a text response
-    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+    if ((r.marker || r.readable || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
       const full = await res.text();
       bytes = Buffer.byteLength(full);
       body = full.slice(0, 200000);
     }
     const okStatus = statusOk(r.status, res.status);
-    const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
+    const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some((c) => ct.startsWith(c)) : ct.startsWith(r.ct));
     // `encoding` pins the content-encoding the Worker put on the wire. It exists
     // for the q11 twins: a twin that is built, uploaded and never served still
     // returns a correct body of the right type, only larger, and every other
@@ -653,12 +758,12 @@ async function probe(r) {
     const okMarker = !r.marker || body.includes(r.marker);
     const cors = res.headers.get("access-control-allow-origin");
     const okCors = !r.cors || cors === r.cors;
-    const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
+    const location = res.headers.get("location");
+    const okLocation = !r.location || (location !== null && new URL(location, base).pathname === r.location);
+    const maxBytes = r.readable ? Math.floor(statSync(new URL(r.readable, ROOT)).size * MINIFIED_MAX_RATIO) : null;
+    const okBytes = maxBytes === null || (bytes !== null && bytes <= maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
-    // pointing at the readable .src.html twin ahead of it. That banner reached
-    // /lens on 2026-07-31, when minification stopped being homepage-only; the
-    // homepage had carried it for a while without tripping this, because only
-    // /lens and /search assert fullPage and /search is rendered per request.
+    // pointing at the readable .src.html twin ahead of it.
     //
     // Allowing a leading comment is safe rather than a loosened contract. Per the
     // HTML5 "initial" insertion mode a comment before DOCTYPE is legal and does
@@ -674,33 +779,57 @@ async function probe(r) {
     //
     // What is genuinely given up is that a TRUNCATED response no longer looks
     // different from a complete one at the last byte. The oracle still catches
-    // truncation through maxBytes and the marker assertions, which is where it
-    // was really being caught; this line only ever caught it by accident.
-    const okFullPage = !r.fullPage || (
-      /^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) &&
-      /<html\b/i.test(body) &&
-      /<head\b/i.test(body) &&
-      /<body\b/i.test(body)
-    );
-    const okFragment = !r.fragment || (
-      !/<(?:!doctype|html|head|body)\b/i.test(body) &&
-      (!r.fragmentRoot || body.includes(r.fragmentRoot))
-    );
-    const pass = okStatus && okCt && okEnc && okMarker && okCors && okBytes && okFullPage && okFragment;
-    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    // truncation through the marker assertions, which is where it was really
+    // being caught; this line only ever caught it by accident. (The size check
+    // can't: it is an upper bound, and a truncated body passes it.)
+    const okFullPage =
+      !r.fullPage || (/^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) && /<html\b/i.test(body) && /<head\b/i.test(body) && /<body\b/i.test(body));
+    const okFragment = !r.fragment || (!/<(?:!doctype|html|head|body)\b/i.test(body) && (!r.fragmentRoot || body.includes(r.fragmentRoot)));
+    const pass = okStatus && okCt && okEnc && okMarker && okCors && okLocation && okBytes && okFullPage && okFragment;
+    return {
+      path: r.path,
+      status: res.status,
+      ct,
+      enc,
+      wantEnc: r.encoding,
+      cors,
+      wantCors: r.cors,
+      location,
+      wantLocation: r.location,
+      okLocation,
+      pass,
+      flaky: !!r.flaky,
+      okStatus,
+      okCt,
+      okEnc,
+      okMarker,
+      okCors,
+      okBytes,
+      okFullPage,
+      okFragment,
+      bytes,
+      want: r.status,
+      wantCt: r.ct,
+      marker: r.marker,
+      maxBytes,
+      readable: r.readable,
+    };
   } catch (e) {
-    return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
+    return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String((e && e.message) || e), want: r.status };
   }
 }
 
 async function main() {
   const all = [...ROUTES, ...AGENT_ROWS];
-  const routes = all.filter(r => !(r.remote && !remoteRows));
+  const routes = all.filter((r) => !(r.remote && !remoteRows));
   const skipped = all.length - routes.length;
-  console.log(`\nRoute oracle vs ${base}` +
-    (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") +
-    (isLocal && remoteRows ? "  (remote bindings: production KV/R2/Browser)" : "") +
-    "\n" + "=".repeat(60));
+  console.log(
+    `\nRoute oracle vs ${base}` +
+      (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") +
+      (isLocal && remoteRows ? "  (remote bindings: production KV/R2/Browser)" : "") +
+      "\n" +
+      "=".repeat(60),
+  );
   const results: Awaited<ReturnType<typeof probe>>[] = [];
   // small concurrency to be quick without hammering the edge
   const queue = [...routes];
@@ -711,23 +840,28 @@ async function main() {
     }
   });
   await Promise.all(workers);
-  results.sort((a, b) => routes.findIndex(x => x.path === a.path) - routes.findIndex(x => x.path === b.path));
+  results.sort((a, b) => routes.findIndex((x) => x.path === a.path) - routes.findIndex((x) => x.path === b.path));
 
   let hardFails = 0;
   for (const r of results) {
-    const tag = r.pass ? "PASS" : (r.flaky ? "flaky" : "FAIL");
+    const tag = r.pass ? "PASS" : r.flaky ? "flaky" : "FAIL";
     if (!r.pass && !r.flaky) hardFails++;
-    const why = r.pass ? "" : [
-      r.okStatus === false ? `status ${r.status}!=${JSON.stringify(r.want)}` : "",
-      r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
-      r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
-      r.okMarker === false ? `missing marker "${r.marker}"` : "",
-      r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
-      r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
-      r.okFullPage === false ? "full-page contract missing document wrapper" : "",
-      r.okFragment === false ? "fragment contract returned a document wrapper" : "",
-      r.error ? `err ${r.error}` : "",
-    ].filter(Boolean).join(", ");
+    const why = r.pass
+      ? ""
+      : [
+          r.okStatus === false ? `status ${r.status}!=${JSON.stringify(r.want)}` : "",
+          r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
+          r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
+          r.okMarker === false ? `missing marker "${r.marker}"` : "",
+          r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
+          r.okLocation === false ? `location "${r.location || "none"}" does not name ${r.wantLocation}` : "",
+          r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B, ${MINIFIED_MAX_RATIO} of ${r.readable} (unminified? build bypassed?)` : "",
+          r.okFullPage === false ? "full-page contract missing document wrapper" : "",
+          r.okFragment === false ? "fragment contract returned a document wrapper" : "",
+          r.error ? `err ${r.error}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);
   }
 
@@ -736,9 +870,8 @@ async function main() {
   // Deleted 2026-08-23 along with the committed aadhar.sh copy, on this evidence:
   //
   //   - the ROUTES table is the expectation and it is strictly richer. Every row
-  //     asserts a status, the only four without a content-type are 301s where it
-  //     is meaningless, and rows carry things a recording cannot (status UNIONS
-  //     like [200, 503], `flaky`, body markers, byte caps).
+  //     asserts a status, and rows carry things a recording cannot (status
+  //     UNIONS like [200, 503], `flaky`, body markers, byte caps).
   //   - regenerating it against production after eight months found 52 new rows,
   //     0 removed, and exactly ONE differing row: /coffee/availability.json at
   //     503 rather than 200, which is the calendar fail-closed path the table

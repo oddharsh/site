@@ -3,15 +3,15 @@
 // prerendering earlier? (bun run speculation:report)
 //
 // The shell's Speculation Rules prerender every same-origin link on hover
-// ("moderate", tools/photos/shell-data.ts). Chrome caps eager and moderate rules
-// at two prefetches and two prerenders at a time, so promoting a link to an
-// earlier eagerness is a budget decision, and the ledger is the only evidence
-// that says which links get NAVIGATED after being speculated rather than merely
-// speculated. This reads /ledger/speculation.json from production and prints
-// the table that decision needs. It writes nothing: the promotion itself is an
-// edit to SPECULATION in shell-data.ts, gated on tools/speculation-probe.ts
-// showing the promoted rule actually fetches (an eager prefetch rule was
-// measured fetching NOTHING twice before it was deleted; see that file).
+// ("moderate", tools/photos/shell-data.ts). Chrome holds moderate rules to 2
+// prefetches and 2 prerenders at a time (oldest evicted first) and eager rules
+// to 50 and 10, so promoting a link to an earlier eagerness is a budget
+// decision, and the ledger is the only evidence that says which links get
+// NAVIGATED after being speculated rather than merely speculated. This reads
+// /ledger/speculation.json from production and prints the table that decision
+// needs. It writes nothing: the promotion itself is an edit to SPECULATION in
+// shell-data.ts, gated on an origin-side count showing the promoted rule
+// actually fetches (gotcha 33).
 //
 //   bun run speculation:report                # last 30 days, from aadhar.sh
 //   bun run speculation:report -- --min 20    # only paths speculated 20+ times
@@ -38,17 +38,25 @@ const isDocument = (p: string) => !p.startsWith("/a/") && !/\.[a-z0-9]+$/i.test(
 const all = report.rows || [];
 const hidden = all.filter((r) => !isDocument(r.path)).length;
 const rows = all.filter((r) => isDocument(r.path) && r.speculated >= MIN);
-console.log(`speculation ledger, last ${report.window_days} days, document paths speculated ${MIN}+ times (${rows.length} of ${all.length}; ${hidden} sub-resource rows hidden)\n`);
+console.log(
+  `speculation ledger, last ${report.window_days} days, document paths speculated ${MIN}+ times (${rows.length} of ${all.length}; ${hidden} sub-resource rows hidden)\n`,
+);
 console.log("path".padEnd(34), "prefetch".padStart(9), "prerender".padStart(10), "activated".padStart(10), "rate".padStart(7));
 for (const r of rows) {
-  console.log(r.path.slice(0, 34).padEnd(34), String(r.prefetch).padStart(9), String(r.prerender).padStart(10), String(r.activated).padStart(10), (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7));
+  console.log(
+    r.path.slice(0, 34).padEnd(34),
+    String(r.prefetch).padStart(9),
+    String(r.prerender).padStart(10),
+    String(r.activated).padStart(10),
+    (r.rate === null ? "n/a" : `${(r.rate * 100).toFixed(0)}%`).padStart(7),
+  );
 }
 // The recommendation is deliberately narrow. A high activation rate on a
 // moderate rule says the hover already predicts the click; promoting that link
 // to "eager" buys the time between the link scrolling into view and the hover,
-// and costs one of Chrome's two concurrent prerender slots. A LOW rate is the
-// louder finding: it is a link the site is rendering for nobody, and the fix is
-// an exclusion, which costs nothing.
+// and costs one of the eager pool's 10 prerender slots. A LOW rate is the
+// louder finding: it is a link the site is rendering for nobody, and the fix
+// is an exclusion, which costs nothing.
 // THE GRADER CHECK, before any recommendation. Until 2026-09-29 the numerator
 // had no working instrument (the header beacon never shipped; see
 // src/worker/speculation.ts), so every rate read 0% and the exclusion rule below
@@ -66,4 +74,6 @@ const hot = rows.filter((r) => r.rate !== null && r.rate >= 0.5);
 const cold = rows.filter((r) => r.rate !== null && r.rate <= 0.05 && r.speculated >= MIN * 3);
 console.log(`\ncandidates to promote (rate >= 50%): ${hot.length ? hot.map((r) => r.path).join(", ") : "none"}`);
 console.log(`candidates to exclude (rate <= 5% on ${MIN * 3}+ speculations): ${cold.length ? cold.map((r) => r.path).join(", ") : "none"}`);
-console.log("\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\n`bun run speculation:probe` shows the promoted rule reaching the origin. Read that file's note first.");
+console.log(
+  "\nA promotion is an edit to SPECULATION in tools/photos/shell-data.ts, and it ships only after\nan origin-side count shows the promoted rule reaching the origin. Read gotcha 33 first.",
+);

@@ -3,7 +3,7 @@
 // model bump, a different floor, a longer option text) is scored the same way.
 //
 //   bun run build            # the corpus is build output (.build/public/search-index.json)
-//   bun run ask:eval         # 30 questions, lexical vs Clef, MRR and hit@1
+//   bun run ask:eval         # 29 questions, lexical vs Clef, MRR and hit@1
 //
 // Each question names the page that should answer it. The questions were
 // written by the person who built the ranking, after reading the corpus, so a
@@ -11,7 +11,8 @@
 // the mix: easy keyword questions the ranking must not break, paraphrases, and
 // four whose page shares no word with the question at all.
 //
-// Measured 2026-10-01: lexical MRR 0.777, hit@1 22/30; Clef over the whole
+// Measured 2026-10-01, on the 30 questions it had then (one left with the
+// cota-wec album in #1222): lexical MRR 0.777, hit@1 22/30; Clef over the whole
 // corpus MRR 0.983, hit@1 29/30, one call per question, median 1.26 s. The
 // lexical columns are this script's own run of the real searchSiteRanked.
 //
@@ -70,7 +71,7 @@ export function reciprocalRank(order: readonly string[], want: readonly string[]
   return i < 0 ? 0 : 1 / (i + 1);
 }
 
-async function workersAiAuth(): Promise<{ token: string, account: string }> {
+async function workersAiAuth(): Promise<{ token: string; account: string }> {
   const account = String((await siteConfig()).account_id);
   if (process.env.CLOUDFLARE_API_TOKEN) return { token: process.env.CLOUDFLARE_API_TOKEN, account };
   const { stdout } = await run(...wranglerCommand(["auth", "token", "--json"]), { cwd: ROOT });
@@ -91,26 +92,40 @@ if (import.meta.main) {
   const { token, account } = await workersAiAuth();
   const url = `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${ASK_MODEL}`;
 
-  let lexMrr = 0, clefMrr = 0, lexTop = 0, clefTop = 0, failed = 0;
+  let lexMrr = 0,
+    clefMrr = 0,
+    lexTop = 0,
+    clefTop = 0,
+    failed = 0;
   const ms: number[] = [];
   for (const [query, want] of ASK_EVAL) {
     const lexical = (await searchSiteRanked(env, query, 10)).results.map((r) => r.url);
     const { request, ids } = buildAskRequest(query, records);
     const t0 = performance.now();
     const res = await fetch(url, {
-      method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify(request), signal: AbortSignal.timeout(60_000),
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(60_000),
     }).catch(() => null);
     const body: any = res ? await res.json().catch(() => null) : null;
     let clef: string[] = [];
     if (body?.success) {
       ms.push(performance.now() - t0);
       const p = body.result.answers?.best?.probabilities || {};
-      clef = ids.map((id, i) => ({ url: records[i].url, p: Number(p[id]) || 0 })).sort((a, b) => b.p - a.p).map((x) => x.url);
+      clef = ids
+        .map((id, i) => ({ url: records[i].url, p: Number(p[id]) || 0 }))
+        .sort((a, b) => b.p - a.p)
+        .map((x) => x.url);
     } else failed++;
-    lexMrr += reciprocalRank(lexical, want); clefMrr += reciprocalRank(clef, want);
-    lexTop += want.includes(lexical[0]) ? 1 : 0; clefTop += want.includes(clef[0]) ? 1 : 0;
-    const at = (order: string[]) => { const i = order.slice(0, 10).findIndex((u) => want.includes(u)); return i < 0 ? " -" : String(i + 1).padStart(2); };
+    lexMrr += reciprocalRank(lexical, want);
+    clefMrr += reciprocalRank(clef, want);
+    lexTop += want.includes(lexical[0]) ? 1 : 0;
+    clefTop += want.includes(clef[0]) ? 1 : 0;
+    const at = (order: string[]) => {
+      const i = order.slice(0, 10).findIndex((u) => want.includes(u));
+      return i < 0 ? " -" : String(i + 1).padStart(2);
+    };
     console.log(`${at(lexical)} ${at(clef)}  ${query}`);
   }
   const n = ASK_EVAL.length;

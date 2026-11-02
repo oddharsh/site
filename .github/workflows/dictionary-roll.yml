@@ -31,7 +31,17 @@ name: Dictionary roll
 # say, and never push to a protected branch. The difference is the destination.
 # perf-history writes to a machine-owned branch nothing builds from; dictionaries
 # have to reach `main`, and `main`'s ruleset has ZERO bypass actors on purpose.
-# So this opens a PR and stops. A bot PR is still a PR.
+# So this opens a PR. A bot PR is still a PR.
+#
+# The PR arms auto-merge as it opens (owner call, 2026-10-24), and the reason is
+# the header above again: a roll that waits on a human goes stale, and over the
+# week before, roll PRs waited between 10 minutes and 2.4 days for a merge that
+# was never a judgment. Auto-merge doesn't bypass anything. GitHub merges only
+# once the `main` ruleset is satisfied, so `validate` still has to pass on the
+# roll's own build, and a red roll stays open for a human like any other PR.
+# A roll moves no served URL (the deltas live under /ad/ and /pd/, and the
+# family dictionary keeps its URL until it drifts), so the release a merge
+# triggers dispatches a roll that finds nothing and stops.
 
 on:
   schedule:
@@ -175,8 +185,13 @@ jobs:
           bun run dcz:check
           \`\`\`
 
-          Merging is a human call, because \`main\` takes no bypass actors."
+          Auto-merge is armed: this merges itself once \`validate\` passes. A failing roll stays open for a human."
           fi
+
+          # Every run, not just the one that opens the PR, so a PR opened before
+          # this step existed (or one a human disarmed and the roll then moved)
+          # comes back under it. Arming an already-armed PR is a no-op.
+          gh pr merge "$BRANCH" --auto --squash
 
       - name: Summary
         run: |
@@ -184,7 +199,7 @@ jobs:
             echo "### Dictionary roll"
             echo
             if [ "${{ steps.diff.outputs.changed }}" = "true" ]; then
-              echo "Rolled against production; PR on \`chore/dictionary-roll\`."
+              echo "Rolled against production; PR on \`chore/dictionary-roll\`, auto-merge armed."
             else
               echo "No change: the committed sets already cover what production is serving."
             fi

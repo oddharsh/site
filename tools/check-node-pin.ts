@@ -3,7 +3,7 @@
 //
 // WHY THIS IS NOT A BUMPER, WHICH IS THE WHOLE DESIGN.
 //
-// `bun:pin` exists because `packageManager` names an EXACT bun that nothing
+// `bun:pin` exists because config/bun-pin.json names an EXACT bun that nothing
 // updates, and because that bun compiles the site. Neither is true here, and
 // copying the bumper across would have built the wrong tool:
 //
@@ -31,7 +31,7 @@
 // TWO TIERS, the same split infra:check and tools:check use.
 //
 //   tree      no network, and it lives in
-//             contract-the-node-pin-is-declared-once.test.mjs rather than here,
+//             contract-the-node-pin-is-declared-once.test.ts rather than here,
 //             so `validate` already runs it: the pin is a bare major, the
 //             `engines` floor agrees with it, and every workflow reads the file
 //             instead of naming a version.
@@ -151,7 +151,9 @@ const report = {
 if (asJson) {
   console.log(JSON.stringify(report, null, 2));
 } else {
-  console.log(`.node-version: ${pinnedMajor}  (${phase})${pretend ? "   [--pretend, the tree says " + readFileSync(join(ROOT, ".node-version"), "utf8").trim() + "]" : ""}`);
+  console.log(
+    `.node-version: ${pinnedMajor}  (${phase})${pretend ? "   [--pretend, the tree says " + readFileSync(join(ROOT, ".node-version"), "utf8").trim() + "]" : ""}`,
+  );
   if (phase === "current" && lts) console.log(`  enters Active LTS ${entry.lts}, in ${daysBetween(today, lts)} days`);
   if (phase === "active-lts" && maintenance) console.log(`  Active LTS until ${entry.maintenance}, ${daysBetween(today, maintenance)} days`);
   if (phase === "maintenance") console.log(`  security fixes only since ${entry.maintenance}`);

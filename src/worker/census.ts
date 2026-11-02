@@ -9,7 +9,7 @@ import { CENSUS_TABLE_URL } from "./routes.ts";
 import { SPARK } from "./lib/tui.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
-// crypto-VC audience cares about. Agent-native infra, AI labs, publishers
+// VC audience cares about. Agent-native infra, AI labs, publishers
 // building walls, an indie hand-built site, and the bare baseline. `label` is the
 // storage key + display name; `url` is exactly what gets scanned.
 export const CENSUS_ROSTER = [
@@ -36,12 +36,12 @@ async function ensureCensusTable(env) {
   // so the series is one point per scan day. Kept separate from the deploy-log
   // `checkpoints` table that shares this D1 database.
   await env.RESTORE_DB.exec(
-    "CREATE TABLE IF NOT EXISTS lens_census (ts INTEGER, ymd TEXT, host TEXT, url TEXT, tier TEXT, score INTEGER, level INTEGER, doors INTEGER, verdict TEXT, surfaces TEXT, PRIMARY KEY (host, ymd))"
+    "CREATE TABLE IF NOT EXISTS lens_census (ts INTEGER, ymd TEXT, host TEXT, url TEXT, tier TEXT, score INTEGER, level INTEGER, doors INTEGER, verdict TEXT, surfaces TEXT, PRIMARY KEY (host, ymd))",
   );
   // The sweep's own record: one row per roster host per census day, saying how
   // far that host got. See CENSUS_RUN_UPSERT for why it exists.
   await env.RESTORE_DB.exec(
-    "CREATE TABLE IF NOT EXISTS lens_census_runs (ymd TEXT, host TEXT, ts INTEGER, stage TEXT, outcome TEXT, detail TEXT, PRIMARY KEY (ymd, host))"
+    "CREATE TABLE IF NOT EXISTS lens_census_runs (ymd TEXT, host TEXT, ts INTEGER, stage TEXT, outcome TEXT, detail TEXT, PRIMARY KEY (ymd, host))",
   );
 }
 
@@ -49,12 +49,9 @@ async function ensureCensusTable(env) {
 // lens_census, and every one of them left no trace a person could read a day
 // later. The dispatcher counted its failures on a span, spans live in Workers
 // Logs, and Workers Logs keep 3 days on Free, so by the time anyone noticed the
-// table had stopped moving the only evidence had expired. The failure that did
-// it on 2026-09-27 was `workflows.api.error.workflow.not_found`: the Workflow
-// this dispatches into did not exist in the account until 2026-09-28T21:10:36Z,
-// because nothing on the ramped release path ever registered it (see
-// census-workflow.ts). The dot in the instance id (#952) was real too, and was
-// never the only thing standing between a Sunday and a row.
+// table had stopped moving the only evidence had expired.
+// contract-census-records-every-dispatch has the incident and holds this
+// record to it.
 //
 // So each host gets one row a day in D1, which keeps it as long as the census
 // itself. The dispatcher writes stage `dispatch` (dispatched, duplicate,
@@ -81,10 +78,11 @@ const detailOf = (e) => ((e && e.message) || (e == null ? null : String(e)))?.sl
 async function recordScan(env, ymd, host, outcome, detail) {
   try {
     await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), "scan", outcome, detail).run();
-  } catch (_e) { /* the span still carries the outcome */ }
+  } catch (_e) {
+    /* the span still carries the outcome */
+  }
 }
 
-// Pull the metrics the census tracks out of a full lens envelope.
 function censusMetrics(site, r, ts, ymd) {
   const terms = (r && r.terms) || {};
   const readiness = (r && r.readiness) || {};
@@ -101,7 +99,10 @@ function censusMetrics(site, r, ts, ymd) {
     webBotAuth: !!(d.webBotAuth && d.webBotAuth.ok),
   };
   return {
-    ts, ymd, host: site.label, url: site.url,
+    ts,
+    ymd,
+    host: site.label,
+    url: site.url,
     tier: (terms.spectrum && terms.spectrum.tier) || "unknown",
     score: readiness.overall == null ? null : readiness.overall,
     level: readiness.level == null ? null : readiness.level,
@@ -114,16 +115,9 @@ function censusMetrics(site, r, ts, ymd) {
 // The weekly job, in three pieces below: a per-host scan, a Workflow instance
 // that runs exactly one of them, and a dispatcher that creates sixteen.
 //
-// THIS COMMENT USED TO PREDICT THE BUG AND THEN SHIP IT. It said the sweep ran
-// "in small concurrent batches", that the per-host catch "is correct (one dead
-// host must not abort the sweep) and it is also the exact mechanism by which a
-// roster of 16 could quietly become a roster of 3", and that the fix was to
-// record roster size against rows written so each failed host names itself.
-// Every word was right except the conclusion. The instrumentation went in,
-// nobody read it, and the roster became 3 for six straight weeks.
-//
-// The counter could not have shown the worse half anyway. Four concurrent scans
-// spent ~128 subrequests against a ceiling of 50, and because every probe in
+// A counter of rows written against roster size was tried first, and the
+// roster still read 3 of 16 for six straight weeks. It could not have shown
+// the worse half anyway. Four concurrent scans spent ~128 subrequests against a ceiling of 50, and because every probe in
 // lens.ts swallows its own error into `{ ok: false }`, the hosts that DID write
 // wrote a refusal as a score. Twelve missing rows is a gap you can see; three
 // deflated rows is a time series that looks healthy and is wrong.
@@ -157,9 +151,7 @@ function censusMetrics(site, r, ts, ymd) {
  *
  * A GENERIC WALK rather than a list of probe fields, because a list of fields
  * is the thing that rots: the next probe added to originDiscovery is covered by
- * existing. `Object(v) === v` is the object test that needs no `typeof`, and
- * `isSubrequestLimit` takes `unknown` safely, so a body string or a null is
- * simply skipped. Bodies are strings and are never descended into.
+ * existing.
  *
  * The walk itself lives in lib/budget.ts as `subrequestLimitIn`, since
  * 2026-09-30, because lens.ts needs the same question answered before it
@@ -179,10 +171,7 @@ export function censusCapHit(result: unknown, maxDepth = 6): boolean {
  * a ceiling of 50 per invocation on Workers Free. Two hosts do not fit, and the
  * sweep this replaces ran FOUR concurrently.
  *
- * `ts` and `ymd` are passed in rather than computed here, so every host in one
- * sweep lands on a single census day no matter when its instance actually runs.
- * A Workflow payload has to be serialisable and stable across retries anyway,
- * which is the same requirement from the other direction.
+ * `ts` and `ymd` come from the dispatcher (census-workflow.ts says why).
  */
 export async function censusScanOne(env, site, ts, ymd) {
   return span("census.host", async (s) => {
@@ -205,7 +194,7 @@ export async function censusScanOne(env, site, ts, ymd) {
       await env.RESTORE_DB.batch([
         env.RESTORE_DB.prepare(
           "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
-          "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces"
+            "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces",
         ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
         env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), "scan", "written", null),
       ]);
@@ -306,7 +295,9 @@ async function cronCensusInner(env, sSweep) {
   const ts = Date.now();
   const ymd = new Date(ts).toISOString().slice(0, 10);
 
-  let created = 0, duplicate = 0, failed = 0;
+  let created = 0,
+    duplicate = 0,
+    failed = 0;
   const record: Array<[string, string, string | null]> = [];
   for (const site of CENSUS_ROSTER) {
     try {
@@ -317,7 +308,11 @@ async function cronCensusInner(env, sSweep) {
       created++;
       record.push([site.label, "dispatched", null]);
     } catch (e) {
-      if (isDuplicateInstance(e)) { duplicate++; record.push([site.label, "duplicate", null]); continue; }
+      if (isDuplicateInstance(e)) {
+        duplicate++;
+        record.push([site.label, "duplicate", null]);
+        continue;
+      }
       failed++;
       sSweep.setAttribute("census.error", (e && e.message) || String(e));
       record.push([site.label, "dispatch_failed", detailOf(e)]);
@@ -327,8 +322,9 @@ async function cronCensusInner(env, sSweep) {
   // One batch for all sixteen rows, so the invocation spends 2 + 16 + 1
   // subrequests. A refused record costs the record and never the sweep.
   try {
-    await env.RESTORE_DB.batch(record.map(([host, outcome, detail]) =>
-      env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)));
+    await env.RESTORE_DB.batch(
+      record.map(([host, outcome, detail]) => env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)),
+    );
     sSweep.setAttribute("census.recorded", record.length);
   } catch (e) {
     sSweep.setAttribute("census.record_error", (e && e.message) || String(e));
@@ -350,12 +346,13 @@ export async function fetchCensusGrouped(env) {
   if (!env.RESTORE_DB) return null;
   await ensureCensusTable(env);
   const { results } = await env.RESTORE_DB.prepare(
-    "SELECT ts, ymd, host, url, tier, score, level, doors, verdict, surfaces FROM lens_census ORDER BY host, ts"
+    "SELECT ts, ymd, host, url, tier, score, level, doors, verdict, surfaces FROM lens_census ORDER BY host, ts",
   ).all();
   const rows = results || [];
   if (!rows.length) return { hosts: [], snapshots: 0, firstYmd: null, lastYmd: null };
   const byHost = new Map();
-  let firstYmd = null, lastYmd = null;
+  let firstYmd = null,
+    lastYmd = null;
   const days = new Set();
   for (const row of rows) {
     days.add(row.ymd);
@@ -364,21 +361,28 @@ export async function fetchCensusGrouped(env) {
     byHost.getOrInsertComputed(row.host, () => []).push(row);
   }
   const order = CENSUS_ROSTER.map((s) => s.label);
-  const hosts = [...byHost.entries()].map(([host, series]) => {
-    series.sort((a, b) => a.ts - b.ts);
-    const first = series[0], last = series[series.length - 1];
-    return {
-      host, url: last.url, first, last, series,
-      scoreSeries: series.map((s) => (s.score == null ? 0 : s.score)),
-      delta: (last.score != null && first.score != null) ? last.score - first.score : 0,
-    };
-  }).sort((a, b) => {
-    // rank by latest score desc, unknown/null last, ties keep roster order
-    const sa = a.last.score == null ? -1 : a.last.score;
-    const sb = b.last.score == null ? -1 : b.last.score;
-    if (sb !== sa) return sb - sa;
-    return order.indexOf(a.host) - order.indexOf(b.host);
-  });
+  const hosts = [...byHost.entries()]
+    .map(([host, series]) => {
+      series.sort((a, b) => a.ts - b.ts);
+      const first = series[0],
+        last = series[series.length - 1];
+      return {
+        host,
+        url: last.url,
+        first,
+        last,
+        series,
+        scoreSeries: series.map((s) => (s.score == null ? 0 : s.score)),
+        delta: last.score != null && first.score != null ? last.score - first.score : 0,
+      };
+    })
+    .sort((a, b) => {
+      // rank by latest score desc, unknown/null last, ties keep roster order
+      const sa = a.last.score == null ? -1 : a.last.score;
+      const sb = b.last.score == null ? -1 : b.last.score;
+      if (sb !== sa) return sb - sa;
+      return order.indexOf(a.host) - order.indexOf(b.host);
+    });
   return { hosts, snapshots: days.size, firstYmd, lastYmd };
 }
 
@@ -410,15 +414,15 @@ export async function fetchCensusLastSweep(env) {
   if (!env.RESTORE_DB) return null;
   // No ensure here: handleCensusJson reads fetchCensusGrouped first, which does.
   const { results } = await env.RESTORE_DB.prepare(
-    "SELECT ymd, host, ts, stage, outcome, detail FROM lens_census_runs WHERE ymd = (SELECT MAX(ymd) FROM lens_census_runs)"
+    "SELECT ymd, host, ts, stage, outcome, detail FROM lens_census_runs WHERE ymd = (SELECT MAX(ymd) FROM lens_census_runs)",
   ).all();
   return summarizeCensusRuns(results || []);
 }
 
 function sparkline(series) {
   if (!series || !series.length) return "";
-  if (series.length === 1) return SPARK[Math.min(7, Math.round(series[0] / 100 * 7))];
-  return series.map((v) => SPARK[Math.max(0, Math.min(7, Math.round((v || 0) / 100 * 7)))]).join("");
+  if (series.length === 1) return SPARK[Math.min(7, Math.round((series[0] / 100) * 7))];
+  return series.map((v) => SPARK[Math.max(0, Math.min(7, Math.round(((v || 0) / 100) * 7)))]).join("");
 }
 
 const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", unknown: "off" };
@@ -430,47 +434,122 @@ export function censusExhibitHtml(grouped) {
   // what a sweep reports on. Nothing in it is a claim about any site.
   if (grouped === PENDING_CENSUS) {
     const cell = "…";
-    const rows = CENSUS_ROSTER.map(() => '<tr aria-hidden="true"><td class="cx-site">' + cell + "</td><td>" + cell + '</td><td class="cx-num">' + cell +
-      '</td><td class="cx-num">' + cell + '</td><td class="cx-num">' + cell + '</td><td class="cx-spark">' + cell + '</td><td class="cx-surfs">' + cell + "</td></tr>").join("");
-    return '<div class="cx-meta">' + cell + "</div>" +
+    const rows = CENSUS_ROSTER.map(
+      () =>
+        '<tr aria-hidden="true"><td class="cx-site">' +
+        cell +
+        "</td><td>" +
+        cell +
+        '</td><td class="cx-num">' +
+        cell +
+        '</td><td class="cx-num">' +
+        cell +
+        '</td><td class="cx-num">' +
+        cell +
+        '</td><td class="cx-spark">' +
+        cell +
+        '</td><td class="cx-surfs">' +
+        cell +
+        "</td></tr>",
+    ).join("");
+    return (
+      '<div class="cx-meta">' +
+      cell +
+      "</div>" +
       '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
       "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
-      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+      "</tr></thead><tbody>" +
+      rows +
+      "</tbody></table></div>"
+    );
   }
   if (!grouped || !grouped.hosts.length) {
     return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run; an owner can seed it immediately with the refresh key.</div>';
   }
-  const rows = grouped.hosts.map((h) => {
-    const last = h.last;
-    const tier = last.tier || "unknown";
-    const scoreTxt = last.score == null ? "—" : last.score;
-    const arrow = h.delta > 0 ? '<span class="cx-up">▲' + h.delta + "</span>" : h.delta < 0 ? '<span class="cx-down">▼' + Math.abs(h.delta) + "</span>" : (h.series.length > 1 ? '<span class="cx-flat">•</span>' : "");
-    // The stored column is JSON of whatever the sweep recorded, so the shape is
-    // declared here rather than inferred from an empty initializer.
-    let surf: Partial<Record<"llms" | "md" | "mcp" | "agents" | "jsonld" | "webBotAuth", unknown>> = {};
-    try { surf = JSON.parse(last.surfaces || "{}"); } catch (_e) {}
-    const chips = [
-      surf.llms ? "llms.txt" : "", surf.md ? "markdown" : "", surf.mcp ? "MCP" : "",
-      surf.agents ? "AGENTS.md" : "", surf.jsonld ? "JSON-LD" : "", surf.webBotAuth ? "WebBotAuth" : "",
-    ].filter(Boolean).map((c) => '<span class="cx-surf">' + escHtml(c) + "</span>").join("");
-    return '<tr>' +
-      '<td class="cx-site"><a href="/lens?url=' + escAttr(encodeURIComponent(h.url)) + '">' + escHtml(h.host) + "</a></td>" +
-      '<td><span class="lx-badge ' + (TIER_KIND[tier] || "off") + '">' + escHtml(tier) + "</span></td>" +
-      '<td class="cx-num"><b>' + escHtml(scoreTxt) + "</b>" + (scoreTxt === "—" ? "" : "<span>/100</span>") + " " + arrow + "</td>" +
-      '<td class="cx-num">' + (last.level == null ? "—" : "L" + last.level) + "</td>" +
-      '<td class="cx-num">' + last.doors + "</td>" +
-      '<td class="cx-spark" title="' + escAttr(h.scoreSeries.join(" → ")) + '">' + escHtml(sparkline(h.scoreSeries)) + "</td>" +
-      '<td class="cx-surfs">' + (chips || '<span class="cx-none">none</span>') + "</td>" +
-      "</tr>";
-  }).join("");
-  const span = grouped.firstYmd === grouped.lastYmd
-    ? "one snapshot, " + escHtml(grouped.firstYmd)
-    : grouped.snapshots + " snapshots, " + escHtml(grouped.firstYmd) + " → " + escHtml(grouped.lastYmd);
-  return '<div class="cx-meta">' + grouped.hosts.length + " sites &middot; " + span + " &middot; re-scanned weekly, honestly, as AadharshBot</div>" +
+  const rows = grouped.hosts
+    .map((h) => {
+      const last = h.last;
+      const tier = last.tier || "unknown";
+      const scoreTxt = last.score == null ? "—" : last.score;
+      const arrow =
+        h.delta > 0
+          ? '<span class="cx-up">▲' + h.delta + "</span>"
+          : h.delta < 0
+            ? '<span class="cx-down">▼' + Math.abs(h.delta) + "</span>"
+            : h.series.length > 1
+              ? '<span class="cx-flat">•</span>'
+              : "";
+      // The stored column is JSON of whatever the sweep recorded, so the shape is
+      // declared here rather than inferred from an empty initializer.
+      let surf: Partial<Record<"llms" | "md" | "mcp" | "agents" | "jsonld" | "webBotAuth", unknown>> = {};
+      try {
+        surf = JSON.parse(last.surfaces || "{}");
+      } catch (_e) {}
+      const chips = [
+        surf.llms ? "llms.txt" : "",
+        surf.md ? "markdown" : "",
+        surf.mcp ? "MCP" : "",
+        surf.agents ? "AGENTS.md" : "",
+        surf.jsonld ? "JSON-LD" : "",
+        surf.webBotAuth ? "WebBotAuth" : "",
+      ]
+        .filter(Boolean)
+        .map((c) => '<span class="cx-surf">' + escHtml(c) + "</span>")
+        .join("");
+      return (
+        "<tr>" +
+        '<td class="cx-site"><a href="/lens?url=' +
+        escAttr(encodeURIComponent(h.url)) +
+        '">' +
+        escHtml(h.host) +
+        "</a></td>" +
+        '<td><span class="lx-badge ' +
+        (TIER_KIND[tier] || "off") +
+        '">' +
+        escHtml(tier) +
+        "</span></td>" +
+        '<td class="cx-num"><b>' +
+        escHtml(scoreTxt) +
+        "</b>" +
+        (scoreTxt === "—" ? "" : "<span>/100</span>") +
+        " " +
+        arrow +
+        "</td>" +
+        '<td class="cx-num">' +
+        (last.level == null ? "—" : "L" + last.level) +
+        "</td>" +
+        '<td class="cx-num">' +
+        last.doors +
+        "</td>" +
+        '<td class="cx-spark" title="' +
+        escAttr(h.scoreSeries.join(" → ")) +
+        '">' +
+        escHtml(sparkline(h.scoreSeries)) +
+        "</td>" +
+        '<td class="cx-surfs">' +
+        (chips || '<span class="cx-none">none</span>') +
+        "</td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+  const span =
+    grouped.firstYmd === grouped.lastYmd
+      ? "one snapshot, " + escHtml(grouped.firstYmd)
+      : grouped.snapshots + " snapshots, " + escHtml(grouped.firstYmd) + " → " + escHtml(grouped.lastYmd);
+  return (
+    '<div class="cx-meta">' +
+    grouped.hosts.length +
+    " sites &middot; " +
+    span +
+    " &middot; re-scanned weekly, honestly, as AadharshBot</div>" +
     '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
     "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
-    "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
-    '<div class="cx-foot">Readiness is the same transparent rubric the <a href="/lens">Readiness lens</a> runs, minus bot-view sampling. Score trend is one mark per weekly snapshot. Machine-readable twin: <a href="/lens/census.json">/lens/census.json</a>.</div>';
+    "</tr></thead><tbody>" +
+    rows +
+    "</tbody></table></div>" +
+    '<div class="cx-foot">Readiness is the same transparent rubric the <a href="/lens">Readiness lens</a> runs, minus bot-view sampling. Score trend is one mark per weekly snapshot. Machine-readable twin: <a href="/lens/census.json">/lens/census.json</a>.</div>'
+  );
 }
 
 export const CENSUS_CSS = `/*min*/
@@ -482,34 +561,34 @@ export const CENSUS_CSS = `/*min*/
 .cx-site a { font-family:var(--font-mono); color:oklch(40% 0.11 255); text-decoration:none; }
 .cx-site a:hover { text-decoration:underline; }
 .cx-num { font-family:var(--font-mono); white-space:nowrap; color:oklch(30% 0.04 255); }
-.cx-num span { color:var(--grey-60); font-size:var(--text-3xs); }
+.cx-num span { color:var(--ink-faint); font-size:var(--text-3xs); }
 .cx-up { color:oklch(45% 0.14 150); margin-left:3px; }
 .cx-down { color:oklch(52% 0.19 27); margin-left:3px; }
 .cx-flat { color:var(--ink-faint); margin-left:3px; }
 .cx-spark { font-family:var(--font-mono); font-size:var(--text-h2); letter-spacing:1px; color:oklch(45% 0.12 255); }
 .cx-surfs { line-height:1.7; }
 .cx-surf { font-family:var(--font-mono); font-size:var(--text-3xs); color:oklch(35% 0.06 150); background:oklch(95% 0.03 150); border:1px solid oklch(82% 0.05 150); border-radius:3px; padding:0 5px; margin:0 3px 2px 0; display:inline-block; }
-.cx-none { color:var(--grey-60); font-size:var(--text-2xs); }
+.cx-none { color:var(--ink-faint); font-size:var(--text-2xs); }
 .cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid var(--slate-88); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
 .cx-foot a { color:var(--link); }
 .cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
 
-// GET /lens/census — the standalone exhibit page (SSR, no-JS friendly, machines
-// welcome). ?refresh=<CENSUS_KEY> triggers a scan now (owner-only), so the first
-// snapshot doesn't have to wait for the weekly cron.
+// GET /lens/census?refresh=<CENSUS_KEY>: the owner-only view that triggers a
+// sweep now, so the first snapshot doesn't have to wait for the weekly cron.
+// index.ts diverts only a ?refresh request here; the plain page is the built
+// shell below.
 export async function handleCensus(request, env, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.get("refresh");
   let banner = html``;
   if (refresh) {
     if (secretMatches(refresh, env.CENSUS_KEY)) {
-      // ONE sweep path now. This used to run its own cursor-and-batch variant
-      // because a fetch invocation's waitUntil gets only ~30s past the
-      // response, and a 16-host in-line sweep blows through that. Dispatching
-      // costs 19 subrequests and no crawling, so it fits inside the grace with
-      // room to spare, and the owner's manual pass and the cron are the same
-      // code. Two sweep implementations is how the roster quietly became four.
+      // ONE sweep path: the owner's manual pass and the cron run the same
+      // dispatcher. A fetch invocation's waitUntil gets only ~30s past the
+      // response, too little for a 16-host in-line sweep, and dispatching costs
+      // 19 subrequests and no crawling, so it fits inside the grace with room
+      // to spare.
       ctx.waitUntil(cronCensus(env));
       banner = html`<div class="cx-banner ok">Census refresh triggered: one Workflow instance per roster host, 16 in all, each with its own subrequest budget. Reload in a minute or two as they land.</div>`;
     } else {
@@ -536,7 +615,6 @@ function censusExhibit(grouped) {
   return unsafeHtml(censusExhibitHtml(grouped));
 }
 
-/** The island: the census table, read from D1 for this request. */
 export async function handleCensusTable(request, env) {
   const grouped = await fetchCensusGrouped(env);
   return islandResponse(censusExhibit(grouped), { "cache-control": "public, max-age=300, s-maxage=900" });
@@ -544,10 +622,16 @@ export async function handleCensusTable(request, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderCensusPage() {
-  const mount = islandMount("cx-island", TABLE_URL, censusExhibit(PENDING_CENSUS),
-    html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`);
-  return censusPage(html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
-    { head: islandPreload(TABLE_URL), scripts: islandScript() });
+  const mount = islandMount(
+    "cx-island",
+    TABLE_URL,
+    censusExhibit(PENDING_CENSUS),
+    html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`,
+  );
+  return censusPage(
+    html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
+    { head: islandPreload(TABLE_URL), scripts: islandScript() },
+  );
 }
 
 // One page frame for both renders, so the live refresh view and the baked shell
@@ -558,9 +642,12 @@ function censusPage(exhibit, extra = {}) {
     path: "The Other Web · census",
     route: "/lens/census",
     width: 900,
-    description: "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
+    description:
+      "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
     robots: "index, follow",
-    css: CENSUS_CSS + `/*min*/
+    css:
+      CENSUS_CSS +
+      `/*min*/
 .cx-fail { display:none; font-size:var(--text-micro); color:var(--ink-dim); margin:8px 0 0; }
 #cx-island[data-state="failed"] + .cx-fail { display:block; }
 .cx-banner { margin:0 0 12px; padding:7px 10px; border-radius:3px; font-size:var(--text-xs); }
@@ -587,7 +674,6 @@ footer a { color:var(--link); }
   });
 }
 
-// GET /lens/census.json — the machine twin: the same grouped series as JSON.
 export async function handleCensusJson(request, env) {
   // A D1 failure used to escape as Cloudflare's HTML 1101 page from a JSON
   // endpoint. It answers in the endpoint's own error shape instead.
@@ -603,20 +689,34 @@ export async function handleCensusJson(request, env) {
   // row last landed, and `lastSweep` says what the latest sweep did, including
   // a sweep that landed nothing.
   const lastSweep = await fetchCensusLastSweep(env).catch((e) => ({ error: detailOf(e) }));
-  return jsonResponse({
-    ok: true,
-    roster: CENSUS_ROSTER.length,
-    snapshots: grouped.snapshots,
-    firstYmd: grouped.firstYmd,
-    lastYmd: grouped.lastYmd,
-    lastSweep,
-    sites: grouped.hosts.map((h) => ({
-      host: h.host, url: h.url,
-      tier: h.last.tier, score: h.last.score, level: h.last.level,
-      doors: h.last.doors, verdict: h.last.verdict,
-      delta: h.delta,
-      surfaces: (() => { try { return JSON.parse(h.last.surfaces || "{}"); } catch (_e) { return {}; } })(),
-      series: h.series.map((s) => ({ ymd: s.ymd, score: s.score, tier: s.tier, doors: s.doors })),
-    })),
-  }, 200, { "cache-control": "public, max-age=300, s-maxage=900" });
+  return jsonResponse(
+    {
+      ok: true,
+      roster: CENSUS_ROSTER.length,
+      snapshots: grouped.snapshots,
+      firstYmd: grouped.firstYmd,
+      lastYmd: grouped.lastYmd,
+      lastSweep,
+      sites: grouped.hosts.map((h) => ({
+        host: h.host,
+        url: h.url,
+        tier: h.last.tier,
+        score: h.last.score,
+        level: h.last.level,
+        doors: h.last.doors,
+        verdict: h.last.verdict,
+        delta: h.delta,
+        surfaces: (() => {
+          try {
+            return JSON.parse(h.last.surfaces || "{}");
+          } catch (_e) {
+            return {};
+          }
+        })(),
+        series: h.series.map((s) => ({ ymd: s.ymd, score: s.score, tier: s.tier, doors: s.doors })),
+      })),
+    },
+    200,
+    { "cache-control": "public, max-age=300, s-maxage=900" },
+  );
 }

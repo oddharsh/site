@@ -61,13 +61,13 @@ export function islandResponse(body: Html, headers: Record<string, string> = {},
   return new Response(body.html, {
     status,
     headers: {
-      "content-type":           "text/html; charset=utf-8",
-      "cache-control":          "no-store, must-revalidate",
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, must-revalidate",
       "x-content-type-options": "nosniff",
       // Worth fetching, worthless in an index: a bare fragment is not a page.
-      "x-robots-tag":           "noindex",
+      "x-robots-tag": "noindex",
       "content-security-policy": ISLAND_CSP,
-      [ISLAND_MARKER]:          "1",
+      [ISLAND_MARKER]: "1",
       ...headers,
     },
   });

@@ -16,8 +16,9 @@
   // from it.
   "compilerOptions": {
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
+    // Erasable syntax only, for the reason tsconfig.json gives (+0 diagnostics
+    // here, measured 2026-10-17).
+    "erasableSyntaxOnly": true,
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -35,5 +36,5 @@
     "strictNullChecks": true,
     "strict": false
   },
-  "include": ["../cf-garage/test/**/*.mjs"]
+  "include": ["../cf-garage/test/**/*.ts"]
 }

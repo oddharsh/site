@@ -3,7 +3,7 @@
 //
 // The tools exercise WORKER code, so they touch workerd's surface even though
 // they run on bun. `caches.default` is workerd's named cache and has no lib.dom
-// equivalent; four test files reference it because the Worker does.
+// equivalent; test files reference it because the Worker does.
 //
 // `kid` is RFC 7517 §4.5 and every JWK this repo signs with carries one. TS's
 // JsonWebKey omits it, which is a gap in the lib rather than in the key.

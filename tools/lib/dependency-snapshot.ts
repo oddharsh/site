@@ -152,7 +152,14 @@ export function snapshotResolved(parsed: Record<string, unknown>) {
 
 /** The request body for POST /repos/{owner}/{repo}/dependency-graph/snapshots.
  *  One correlator for both lockfiles, so each submission replaces the last. */
-export function buildSnapshot({ lockfiles, sha, ref, runId, scanned, repoUrl }: {
+export function buildSnapshot({
+  lockfiles,
+  sha,
+  ref,
+  runId,
+  scanned,
+  repoUrl,
+}: {
   lockfiles: { path: string; parsed: Record<string, unknown> }[];
   sha: string;
   ref: string;

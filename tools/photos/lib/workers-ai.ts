@@ -5,9 +5,8 @@
 // Both scripts ask the same model (@cf/llava-hf/llava-1.5-7b-hf) about the same
 // bytes (the committed public/i/<stem>.<hash8>.jpg, which is exactly what
 // production serves), under different prompts. Until 2026-09-15 they were two
-// copies of this call in two languages, one of them Python, and the prompt
-// comment in each said "keep in sync" with the other. A shared function is the
-// version of that instruction that cannot be forgotten.
+// copies of this call held together by a "keep in sync" comment; a shared
+// function is the version of that instruction that cannot be forgotten.
 import fs from "node:fs";
 
 export const MODEL = "@cf/llava-hf/llava-1.5-7b-hf";

@@ -3,18 +3,13 @@
 //
 // Keeps config/bun-pin.json current, because NOTHING ELSE DOES.
 //
-// Dependabot owns five ecosystems here and none of them owns this string. The
-// npm updater bumps `@types/bun` and never the runtime; the `bun` ecosystem
-// would not help either, since it reads bun.lock rather than the field. So the
-// one version with no updater is the one that compiles the site: cloudflare.config.ts
+// No updater owns this string. `deps:pin` bumps `@types/bun` and never the
+// runtime, and Dependabot's `bun` ecosystem would not help either, since it
+// reads bun.lock rather than the field (docs/DEPENDENCIES.md). So the one
+// version with no updater is the one that compiles the site: wrangler.config.ts
 // builds with `bun tools/build.ts`, and `/a/` and `/i/` URLs are content
 // addressed, so the pinned bun decides what every returning visitor's cached
 // dictionary is keyed against.
-//
-// THE ANCESTOR of this script is `.github/workflows/bun-release-watch.yml` on
-// the unmerged `ci/bun-release-watch` branch, which asked one question ("has bun
-// 1.4 shipped, so the migration can resume") and answered it on 2026-08-20. This
-// asks the general form and, unlike that one, does not stop at noticing.
 //
 // FIVE GATES, ordered so the cheapest disqualifier runs first. Gate 3 is the
 // only one that can be true and invisible at the same time, which is why it
@@ -44,6 +39,10 @@
 //      updater for every repository on a current bun and did it silently, by
 //      discarding the file and writing the old format back. A runtime that
 //      changes the lockfile format is a migration rather than a bump.
+//  4b. Does its `bun check` print what Microsoft's tsc prints, on every
+//      program `bun run typecheck` checks? Since 1.4.3 the checker and the
+//      type-aware lint ship inside the binary, so a pin bump is also a
+//      checker bump. Seconds, so it runs before the builds.
 //   5. Is the build output BYTE-IDENTICAL, and does the suite still pass? The
 //      real bar, and higher than "the build succeeds": one differing byte mints
 //      a different URL, orphans every a-dict snapshot naming the old hash, and
@@ -75,6 +74,7 @@
 // Without it, a run that reports "nothing to do" on a day when the pin is
 // already current proves only that the comparison ran.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,15 +95,19 @@ import {
 } from "./lib/bun-pin.ts";
 import {
   type Gate,
+  TSC_REFERENCE,
   bunIdentity,
   byteIdenticalBuildGate,
+  checkerAgreementGate,
   contractSuiteGate,
   downloadBun,
+  downloadTsc,
   lockfileFormatGate,
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
 import { ensureTimbradoEngine } from "./lib/upstream-watches.ts";
+import { defaultPrograms } from "./typecheck.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".bun-candidate");
@@ -246,8 +250,12 @@ if (!target && channel === "canary") {
   }
   target = seasoned.version;
   if (seasoned.skipped.length) {
-    const ages = seasoned.skipped.map((s) => `${npmVersion(s.version)} (${s.ageSeconds === null ? "no publish time" : `${(s.ageSeconds / 3600).toFixed(0)} h`})`);
-    console.log(`skipping ${seasoned.skipped.length} newer canar${seasoned.skipped.length === 1 ? "y" : "ies"} inside bunfig's ${(window / 3600).toFixed(0)} h window: ${ages.join(", ")}`);
+    const ages = seasoned.skipped.map(
+      (s) => `${npmVersion(s.version)} (${s.ageSeconds === null ? "no publish time" : `${(s.ageSeconds / 3600).toFixed(0)} h`})`,
+    );
+    console.log(
+      `skipping ${seasoned.skipped.length} newer canar${seasoned.skipped.length === 1 ? "y" : "ies"} inside bunfig's ${(window / 3600).toFixed(0)} h window: ${ages.join(", ")}`,
+    );
   }
 }
 
@@ -292,7 +300,13 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
     const onNpm = npmVersion(target);
     const known = Boolean(npmMeta.versions?.[onNpm]);
     publishedAt = npmMeta.time?.[onNpm] ? Date.parse(npmMeta.time[onNpm]) : null;
-    record("npm carries the release", known, known ? `bun@${onNpm} published ${npmMeta.time?.[onNpm] ?? "at an unstated time"}` : `the registry has no bun@${onNpm} yet, so half the resolvers cannot see it`);
+    record(
+      "npm carries the release",
+      known,
+      known
+        ? `bun@${onNpm} published ${npmMeta.time?.[onNpm] ?? "at an unstated time"}`
+        : `the registry has no bun@${onNpm} yet, so half the resolvers cannot see it`,
+    );
   }
 }
 
@@ -306,11 +320,7 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
   } else {
     const ageSeconds = Math.floor((Date.now() - publishedAt) / 1000);
     const hours = (ageSeconds / 3600).toFixed(0);
-    record(
-      "older than the install policy's window",
-      ageSeconds >= window,
-      `${hours} h old against bunfig's ${(window / 3600).toFixed(0)} h`,
-    );
+    record("older than the install policy's window", ageSeconds >= window, `${hours} h old against bunfig's ${(window / 3600).toFixed(0)} h`);
   }
 }
 
@@ -369,16 +379,12 @@ try {
   // the identity is the tarball's own package.json, and the revision is printed
   // because it is what an upstream bug report needs.
   const identity = bunIdentity(candidate);
-  const packaged = channel === "stable"
-    ? identity.version
-    : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
+  const packaged = channel === "stable" ? identity.version : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
   // The canary tarball's manifest names the version WITH its build sha, so it
   // equals the whole pin; a release tarball names the bare version, which is
   // the whole pin too. The binary's revision is the second witness.
   const sha = target.split("+")[1] ?? "";
-  const same = channel === "stable"
-    ? packaged === target
-    : packaged === target && identity.revision.includes(`+${sha}`);
+  const same = channel === "stable" ? packaged === target : packaged === target && identity.revision.includes(`+${sha}`);
   record(
     channel === "stable" ? "the asset reports the version it is tagged with" : "the tarball and the binary both name the pinned canary",
     same,
@@ -408,6 +414,27 @@ if (!gate(zstdGate(candidate))) {
 gate(lockfileReadGate(candidate, ROOT));
 gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
 
+// ---------------------------------------------------------------------------
+// 4b. the checker, against Microsoft's tsc (lib/bun-gates.ts says why)
+// ---------------------------------------------------------------------------
+// The same gate the canary runs. Here a disagreement holds the pin, so the day
+// Bun ports a newer TypeScript is the day someone reads the diff and bumps
+// TSC_REFERENCE. The Worker programs need gen-runtime-types first, as
+// `bun run typecheck` does; it and the download run on the pinned side, so a
+// failure in either is the instrument.
+try {
+  const gen = spawnSync(process.execPath, ["tools/gen-runtime-types.ts"], { cwd: ROOT, encoding: "utf8" });
+  if (gen.status !== 0)
+    throw new Error(`the pinned bun could not generate the runtime types:\n${`${gen.stderr}\n${gen.stdout}`.trim().split("\n").slice(-4).join("\n")}`);
+  const tsc = await downloadTsc(join(WORK, "tsc"));
+  gate(checkerAgreementGate(candidate, process.execPath, tsc, ROOT, defaultPrograms(ROOT)));
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  console.error(`bun:pin: no tsc ${TSC_REFERENCE} reference to compare bun check against`);
+  if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  process.exit(2);
+}
+
 if (results.some((r) => !r.ok)) {
   console.log(`\nbun:pin: ${target} fails a gate above. Not proposing it.`);
   if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
@@ -421,7 +448,6 @@ if (results.some((r) => !r.ok)) {
 gate(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
 gate(contractSuiteGate(candidate, ROOT));
 
-// ---------------------------------------------------------------------------
 if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
 
 const failed = results.filter((r) => !r.ok);
@@ -432,8 +458,8 @@ if (failed.length) {
   process.exit(1);
 }
 
-// `@types/bun` is DEPENDABOT'S, and the two are allowed to disagree for a day.
-// DEPENDENCIES.md already worked this through: the release-age policy delayed
+// `@types/bun` is `deps:pin`'s, and the two are allowed to disagree for a day.
+// docs/DEPENDENCIES.md already worked this through: the release-age policy delayed
 // the types pin behind the runtime once and it caught up on its own, which is a
 // wait rather than a fork. Say it, never enforce it.
 const types = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies?.["@types/bun"];

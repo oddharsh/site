@@ -2,12 +2,12 @@
 // Read tracked manifests and the installed resolution, including standalone
 // projects. Package-store directories can retain unused versions after an
 // install, so counting them says nothing about what a project will load.
-import { execFileSync } from "node:child_process";
 import { readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMMIT_PIN, STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
+import { repoFiles } from "./lib/repo-files.ts";
+import { COMMIT_PIN, STALE_INSTALL_REMEDY, installedSha, pinnedSha, wranglerPin } from "./lib/wrangler-provenance.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -16,7 +16,7 @@ async function readJson(relativePath) {
 }
 
 const rootPackage = await readJson("package.json");
-const rootPin = process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "";
+const rootPin = process.env.WRANGLER_VERSION || wranglerPin(rootPackage);
 // TWO PIN SHAPES, both exact. A release is a plain `4.131.1`. A COMMIT of
 // workers-sdk main is a pkg.pr.new tarball URL naming the sha
 // (`https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`), which is
@@ -40,14 +40,14 @@ try {
   process.exit(1);
 }
 
-const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.dependencies?.wrangler || "";
+const rootDeclared = wranglerPin(rootPackage);
 
 // For a release the expected version is the pin; for a commit it is whatever
 // the tarball carries, so `expected` is the installed version and the version
-// comparison below cannot fail for a commit pin. It is NOT the assertion for
-// that shape, and this comment used to imply it was. Two commits of main carry
-// the same version routinely, so the pin is asserted twice by its sha instead:
-// against the install's store path, and against the lockfile.
+// comparison below cannot fail for a commit pin, and it is NOT the assertion
+// for that shape. Two commits of main carry the same version routinely, so the
+// pin is asserted twice by its sha instead: against the install's store path,
+// and against the lockfile.
 const expected = pinKind === "release" ? rootPin.replace(/^v/, "") : installed;
 if (pinKind === "invalid") {
   errors.push(`root package must declare an exact Wrangler version or a pkg.pr.new commit URL, got ${JSON.stringify(rootPin)}`);
@@ -67,38 +67,41 @@ if (pinKind === "commit") {
     // Fail closed. A commit pin whose install records no sha is an install we
     // cannot identify, and passing it is exactly the self-agreeing check this
     // block exists to replace.
-    errors.push(`root: node_modules/wrangler resolves to ${rootManifest}, which names no workers-sdk commit, so the install cannot be matched to the pin @${pinned}; run \`${STALE_INSTALL_REMEDY}\``);
+    errors.push(
+      `root: node_modules/wrangler resolves to ${rootManifest}, which names no workers-sdk commit, so the install cannot be matched to the pin @${pinned}; run \`${STALE_INSTALL_REMEDY}\``,
+    );
   } else if (onDisk !== pinned) {
-    errors.push(`root: node_modules holds wrangler@${onDisk} (${installed}) but package.json pins @${pinned}; that is a stale install, run \`${STALE_INSTALL_REMEDY}\``);
+    errors.push(
+      `root: node_modules holds wrangler@${onDisk} (${installed}) but package.json pins @${pinned}; that is a stale install, run \`${STALE_INSTALL_REMEDY}\``,
+    );
   }
   // The lockfile has to name the same tarball, or the install and the pin
   // are two different wranglers that happen to share a version number.
   const lock = await readFile(path.join(ROOT, "bun.lock"), "utf8");
-  if (!lock.includes(`"wrangler@${rootPin}"`)) errors.push(`root: bun.lock does not resolve wrangler to ${rootPin}; run \`bun install\` so the lockfile records that tarball`);
+  if (!lock.includes(`"wrangler@${rootPin}"`))
+    errors.push(`root: bun.lock does not resolve wrangler to ${rootPin}; run \`bun install\` so the lockfile records that tarball`);
 }
 console.log(`root: Wrangler ${rootDeclared} (installed ${installed}, ${pinKind} pin)`);
 
-const manifests = execFileSync("git", ["ls-files", "-z", "--", "package.json", ":(glob)**/package.json"], {
-  cwd: ROOT, encoding: "utf8",
-}).split("\0").filter(Boolean);
-if (!manifests.includes("package.json")) throw new Error("Wrangler check found no tracked root package.json");
+// Untracked manifests count, so a new sub-project is checked before `git add` (gotcha 91).
+const manifests = repoFiles(["package.json", ":(glob)**/package.json"], ROOT);
+if (!manifests.includes("package.json")) throw new Error("Wrangler check found no root package.json");
 
 for (const manifest of manifests.filter((name) => name !== "package.json")) {
   const project = path.dirname(manifest);
   const pkg = await readJson(manifest);
-  // EQUALITY, not absence, since 2026-09-28. The `cf` CLI finds a project's dev
-  // server by reading THAT project's manifest and does not walk up to the
-  // workspace root, so cf-garage has to name wrangler for `cf build` to run at
-  // all. A declaration is allowed when it is the root pin byte for byte, and
-  // only as a devDependency; under bun's isolated linker the same URL resolves
-  // to the same store entry, which the realpath check below still asserts.
-  // Absence could never catch a root bump leaving a project behind, because no
-  // project could name a version; equality can.
+  // cf discovers a dev server through each project's own manifest. Catalog
+  // references keep that declaration while sharing one root pin and install.
   for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
-    const declared = pkg[kind]?.wrangler;
-    if (declared === undefined) continue;
-    if (kind !== "devDependencies") errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
-    else if (declared !== rootDeclared) errors.push(`${project}: declares Wrangler ${JSON.stringify(declared)}, which is not the root pin ${JSON.stringify(rootDeclared)}`);
+    const spec = pkg[kind]?.wrangler;
+    const declared = spec === "catalog:" ? rootPackage.catalog?.wrangler : spec;
+    if (spec === undefined) continue;
+    if (rootPackage.devDependencies?.wrangler === "catalog:" && spec !== "catalog:")
+      errors.push(`${project}: declares a second Wrangler pin; use catalog: to share catalog.wrangler`);
+    if (kind !== "devDependencies")
+      errors.push(`${project}: declares Wrangler under ${kind}; only devDependencies may name it, and only as the root pin ${rootDeclared}`);
+    else if (declared !== rootDeclared)
+      errors.push(`${project}: declares Wrangler ${JSON.stringify(declared)}, which is not the root pin ${JSON.stringify(rootDeclared)}`);
   }
   try {
     const resolved = await realpath(createRequire(path.join(ROOT, manifest)).resolve("wrangler/package.json"));

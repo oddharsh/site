@@ -13,7 +13,7 @@
 # bundles. Hoisting would blur exactly the line that split is drawing.
 #
 # It also preserves the shape the undici note in package.json reasons about,
-# with one correction recorded there: that note was written for a HOISTED
+# with one correction recorded in docs/TOOLCHAIN-DECISIONS.md: that note was written for a HOISTED
 # layout and talks about winning a race for "the hoisted position". Under an
 # isolated linker there is no single such position. The floors still hold.
 linker = "isolated"
@@ -52,7 +52,7 @@ minimumReleaseAge = 86400
 # CI's frozen install instead, so read the registry's `time` field for the
 # PINNED version before deleting its line.
 # ONE PACKAGE FAMILY, since 2026-09-15, and the reason is the wrangler pin.
-# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main, taken
+# `catalog.wrangler` is a pkg.pr.new COMMIT of workers-sdk main, taken
 # at zero hours old by construction, and each such commit names the exact
 # `workerd` it was built against. workerd is the same publisher one step
 # removed and it releases most days, so wrangler main is routinely a day ahead
@@ -104,7 +104,7 @@ minimumReleaseAgeExcludes = [
 # so a bare `bun test` sweeps the same files green, sequentially, at roughly
 # twice the wall clock and under the runner's own 5s per-test default. Those
 # flags live in the script for the same reason the preload is stated there, and
-# package.json's comment:test-parallel carries the measurements, the isolation
+# docs/TOOLCHAIN-DECISIONS.md carries the measurements, the isolation
 # argument and the control that come with them.
 
 #
@@ -116,9 +116,54 @@ minimumReleaseAgeExcludes = [
 # it now builds inside node_modules/av2-tone, which bun test never walks.
 
 [test]
-root = "tools"
+root = "tools/tests"
 preload = ["./tools/lib/no-network.ts"]
-pathIgnorePatterns = [
-  "tools/photos/libavif/src/**",
-  "tools/photos/libavif/build/**",
+pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
+
+# bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) formats the tree:
+# `bun run format` writes, `bun run format:check` is a validate step, and
+# tools/format-hook.ts formats each file an agent edits. Bun reads this section
+# on every run, explicit paths included, so it decides what the formatter may
+# touch. Every line below answers a hazard measured on 2026-10-16 by formatting
+# the whole tree and running the build, the suite, lint and the checks on it.
+# tools/tests/contract-bun-fmt-keeps-out-of-what-it-would-break.test.ts holds each
+# one, with a --no-config control showing the hazard is real on the pinned bun.
+#
+#   embeddedLanguageFormatting = "off"  the default reformats the HTML inside
+#     html`` tagged templates, which changes the markup the Worker emits
+#     (gotcha 71). --debug-check does not notice.
+#   quoteProps = "preserve"  the default unquotes object keys, and lint rules
+#     that read identifiers (anti-slop's naming rule) then fire on code nobody
+#     changed (gotcha 73).
+#   **/*.md  the Markdown printer renumbers ordered lists, and GOTCHAS.md
+#     numbers are identities with gaps (gotcha 72).
+#   the rest  files whose exact text something else reads: the build's
+#     regexes over luna.css, tokens copied verbatim into it, specs inlined into
+#     pages, generated files and blocks, JSON that tools write with
+#     JSON.stringify, and bytes that ship as they are (gotcha 74).
+#
+# printWidth is the narrowest width that leaves most of this repo's dense lines
+# alone; 80 would rewrap 546 files.
+[fmt]
+printWidth = 160
+embeddedLanguageFormatting = "off"
+quoteProps = "preserve"
+ignorePatterns = [
+  "public/**",
+  "src/dict/**",
+  "src/pages/**",
+  "src/content/**",
+  "src/styles/**",
+  "design/tokens/**",
+  "**/*.md",
+  "**/*.json",
+  "pipelines/*/specs/**",
+  "**/pretext.lib.*",
+  "tools/oxlint/anti-slop/**",
+  "src/worker/lib/desktop.*",
+  "src/worker/lib/site-manifest.*",
+  "src/client/nav-run.ts",
+  "src/client/lwe/ask.ts",
+  "lwe-ask/src/passages.ts",
+  "**/bun.lock",
 ]

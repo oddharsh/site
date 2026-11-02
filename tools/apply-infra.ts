@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The rebuild path: turn infra.json's declared DNS records back into reality.
 //
-// check-infra.mjs answers "did it drift". This answers "put it back". They are
+// check-infra.ts answers "did it drift". This answers "put it back". They are
 // deliberately separate programs: the check runs on every PR and must never be
 // able to write, so the write code does not live in the file CI executes.
 //
@@ -17,9 +17,9 @@
 // the MX/SPF/DMARC/BIMI/SVCB set, which is also the set that carries mail. That
 // is the whole reason it earns a write path.
 //
-//   node tools/apply-infra.ts              plan only, no credential needed
-//   node tools/apply-infra.ts --confirm    apply (needs the write token)
-//   node tools/apply-infra.ts --prune      also delete extras on declared names
+//   bun tools/apply-infra.ts              plan only, no credential needed
+//   bun tools/apply-infra.ts --confirm    apply (needs the write token)
+//   bun tools/apply-infra.ts --prune      also delete extras on declared names
 //
 // Refuses to run in CI. A write token in GitHub would undo the property the
 // whole release design rests on: that GitHub cannot reach production.
@@ -36,8 +36,6 @@ const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB:
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const policy = infra.apply;
 
-// ------------------------------------------------------------- guardrails --
-
 if (process.env.CI) {
   console.error("refusing to run in CI.");
   console.error("");
@@ -46,8 +44,6 @@ if (process.env.CI) {
   console.error("one. A write token in CI would dissolve that. Run this from a workstation.");
   process.exit(1);
 }
-
-// ---------------------------------------------------------------- desired --
 
 // Only `exact` records carry a complete declared value, so only they can be
 // rebuilt. Everything else is reported as out-of-scope with its owner named,
@@ -69,13 +65,11 @@ const OWNER = {
 // quietly degrade the one list whose entire job is explaining what is skipped.
 for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   if (mode !== "exact" && !OWNER[mode]) {
-    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
+    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.ts.`);
     console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
     process.exit(1);
   }
 }
-
-// ------------------------------------------------------------------- live --
 
 // Two sources for live state, and which one is in use is a safety property, not
 // a detail.
@@ -164,7 +158,10 @@ const stripDot = (s) => s.replace(/\.$/, "");
 function normalize(type, data) {
   if (type === "TXT") {
     if (!data.startsWith('"')) return data.trim();
-    return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join("").trim();
+    return [...data.matchAll(/"((?:[^"\\]|\\.)*)"/g)]
+      .map((m) => m[1])
+      .join("")
+      .trim();
   }
   if (type === "SVCB" || type === "HTTPS") return canonicalSvcb(data);
   if (type === "MX") {
@@ -174,8 +171,6 @@ function normalize(type, data) {
   if (type === "NS" || type === "CNAME") return stripDot(data.trim());
   return data.trim();
 }
-
-// --------------------------------------------------------------- payloads --
 
 // Cloudflare takes most types as a flat `content` string. SVCB is the exception:
 // it wants the value split into priority / target / params. Build it explicitly
@@ -194,8 +189,6 @@ function payload(record, value) {
   }
   return { type: record.type, name, ttl, content: value };
 }
-
-// ------------------------------------------------------- authoritative state --
 
 // Resolved BEFORE the plan, not after, because which source the plan read is
 // the difference between a correct apply and a duplicate-creating one.
@@ -229,8 +222,6 @@ if (token) {
   zoneId = zones[0].id;
   apiRecords = await loadApiRecords(zoneId, token);
 }
-
-// ------------------------------------------------------------------- plan --
 
 // The plan, as three lists of what would change. `value`, `from` and `to` are
 // record contents, which is what the printer below interpolates.
@@ -282,13 +273,11 @@ for (const c of create) {
   if (declared === 1 && liveCount > 0) {
     blocked.push(
       `${c.record.type} ${c.record.name}: plan would CREATE a second record where ${liveCount} already ` +
-      `exist and the declaration wants exactly one. The live value is probably the declared one in a ` +
-      `different textual form; comparing them is the bug, not the zone.`,
+        `exist and the declaration wants exactly one. The live value is probably the declared one in a ` +
+        `different textual form; comparing them is the bug, not the zone.`,
     );
   }
 }
-
-// ------------------------------------------------------------------ print --
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 console.log(`plan for zone ${policy.zone}\n`);
@@ -326,8 +315,6 @@ for (const r of unmanaged) {
 console.log("    resources                                       wrangler creates KV/R2/D1; ids go in cloudflare.config.ts");
 console.log("    the Worker                                      Workers Builds is the only publisher");
 
-// ----------------------------------------------------------------- apply ---
-
 const pending = create.length + update.length + (PRUNE ? prune.length : 0);
 
 if (!CONFIRM) {
@@ -340,9 +327,9 @@ if (!pending) {
   process.exit(0);
 }
 
-// A plan we could not fully compute is not a plan. Previously `blocked` only
-// failed the plan-only path, so a --confirm run would write the parts it did
-// understand and ignore the parts it did not.
+// A plan we could not fully compute is not a plan, so `blocked` fails a
+// --confirm run too. Otherwise it would write the parts it did understand and
+// ignore the parts it did not.
 if (blocked.length) {
   console.error(`\nrefusing to apply: ${plural(blocked.length, "problem")} with the plan itself.`);
   for (const line of blocked) console.error(`  - ${line}`);
@@ -376,15 +363,16 @@ for (const { record, value } of create) {
     await cf(`/zones/${zoneId}/dns_records`, { method: "POST", body: JSON.stringify(payload(record, value)) });
     console.log(`  created ${record.type} ${record.name}`);
     done++;
-  } catch (e) { failed.push(`create ${record.type} ${record.name}: ${e.message}`); }
+  } catch (e) {
+    failed.push(`create ${record.type} ${record.name}: ${e.message}`);
+  }
 }
 
 // The id comes from the same snapshot the plan was computed against, so an
 // update can never target a record the plan did not actually see. Re-querying
 // here would reintroduce a window where the zone changed under us between plan
 // and write.
-const idFor = (record, value) =>
-  (apiRecords.get(`${record.name}|${record.type}`) || []).find((r) => r.value === value)?.id;
+const idFor = (record, value) => (apiRecords.get(`${record.name}|${record.type}`) || []).find((r) => r.value === value)?.id;
 
 for (const { record, from, to } of update) {
   try {
@@ -393,7 +381,9 @@ for (const { record, from, to } of update) {
     await cf(`/zones/${zoneId}/dns_records/${id}`, { method: "PATCH", body: JSON.stringify(payload(record, to)) });
     console.log(`  updated ${record.type} ${record.name}`);
     done++;
-  } catch (e) { failed.push(`update ${record.type} ${record.name}: ${e.message}`); }
+  } catch (e) {
+    failed.push(`update ${record.type} ${record.name}: ${e.message}`);
+  }
 }
 
 if (PRUNE) {
@@ -404,7 +394,9 @@ if (PRUNE) {
       await cf(`/zones/${zoneId}/dns_records/${id}`, { method: "DELETE" });
       console.log(`  deleted ${record.type} ${record.name}`);
       done++;
-    } catch (e) { failed.push(`delete ${record.type} ${record.name}: ${e.message}`); }
+    } catch (e) {
+      failed.push(`delete ${record.type} ${record.name}: ${e.message}`);
+    }
   }
 }
 

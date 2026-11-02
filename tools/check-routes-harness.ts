@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// check-routes-harness.mjs — run the route oracle BEFORE the merge.
+// check-routes-harness.ts — run the route oracle BEFORE the merge.
 //
-// verify-routes.mjs has always needed something already serving: production
+// verify-routes.ts has always needed something already serving: production
 // (which means the deploy that broke a route already happened) or a wrangler dev
 // somebody remembered to start. Wrangler 4.112+ ships createTestHarness(), which
 // boots this repo's Worker in-process on a real loopback port, so the same table
@@ -22,7 +22,7 @@
 // What this does NOT prove: local KV/R2/D1 come up EMPTY, so data-backed routes
 // answer from their fallback path. Status and content-type are real; a passing
 // /images/manifest.json here means the handler works, not that the photos exist.
-// Rows tagged `remote` in verify-routes.mjs are skipped for that reason. The
+// Rows tagged `remote` in verify-routes.ts are skipped for that reason. The
 // post-deploy `node tools/verify-routes.ts` sweep against production stays the check
 // that sees real content, and neither one replaces the other.
 
@@ -43,8 +43,8 @@ if (positionals.length > 1 || values.prebuilt === "") {
 }
 
 // --remote boots the harness on a generated config whose KV/R2/Browser bindings
-// reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the five rows
-// verify-routes.mjs marks `remote` — the ones whose whole assertion is content a
+// reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the rows
+// verify-routes.ts marks `remote` — the ones whose whole assertion is content a
 // local Worker structurally cannot have. That closes the gap this file's own
 // header admits to ("local KV/R2/D1 come up EMPTY, so data-backed routes answer
 // from their fallback path"): with it, a passing /images/manifest.json means the
@@ -78,25 +78,18 @@ if (remote) {
   }
   // No --out: the generator's default is the repo root, which is where the twin
   // has to live for the site config's relative `main` and `assets.directory` to
-  // keep resolving (see gen-remote-config.mjs).
-  const gen = spawnSync(
-    process.execPath,
-    ["tools/gen-remote-config.ts", config],
-    { cwd: root, stdio: "inherit" },
-  );
+  // keep resolving (see gen-remote-config.ts).
+  const gen = spawnSync(process.execPath, ["tools/gen-remote-config.ts", config], { cwd: root, stdio: "inherit" });
   if (gen.status !== 0) process.exit(gen.status ?? 1);
   config = "./.wrangler.remote.jsonc";
 }
 
-// The site's COUNTER binding names the aadhar-counter Worker since step 3 of
-// "Moving Counter out" (CLAUDE.md), and workerd refuses to start a Worker whose
+// The site's COUNTER binding names the aadhar-counter Worker (CLAUDE.md,
+// Invariants), and workerd refuses to start a Worker whose
 // binding names a service nobody defined. So the counter boots beside the site:
 // the site stays first, which is the one the harness URL serves.
 const server = createTestHarness({
-  workers: [
-    { configPath: config, prebuiltWorkerDir: values.prebuilt },
-    { configPath: `${root}counter/wrangler.jsonc` },
-  ],
+  workers: [{ configPath: config, prebuiltWorkerDir: values.prebuilt }, { configPath: `${root}counter/wrangler.jsonc` }],
 });
 
 let code = 1;
@@ -105,21 +98,17 @@ try {
   const { url } = await server.listen();
   console.log(`harness: ${config} booted in ${Date.now() - t0}ms at ${url}`);
 
-  // VERIFY_REMOTE is left UNSET rather than set to "" on a local run, since
-  // verify-routes.mjs reads presence rather than value.
+  // VERIFY_REMOTE is set only on a --remote run; verify-routes.ts un-skips the
+  // remote rows when it reads "1".
   // Spread from process.env, so inference freezes the key set at what was
   // spread plus VERIFY_BUILT; VERIFY_REMOTE is added conditionally below.
   const childEnv: Record<string, string | undefined> = { ...process.env, VERIFY_BUILT: "1" };
   if (remote) childEnv.VERIFY_REMOTE = "1";
 
   code = await new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["tools/verify-routes.ts", String(url).replace(/\/$/, "")],
-      { cwd: root, stdio: "inherit", env: childEnv },
-    );
+    const child = spawn(process.execPath, ["tools/verify-routes.ts", String(url).replace(/\/$/, "")], { cwd: root, stdio: "inherit", env: childEnv });
     child.on("error", reject);
-    child.on("exit", (status, signal) => resolve(signal ? 1 : status ?? 1));
+    child.on("exit", (status, signal) => resolve(signal ? 1 : (status ?? 1)));
   });
 } finally {
   // workerd holds the process open; close() before the exit code is reported.

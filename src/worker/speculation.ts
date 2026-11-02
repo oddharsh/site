@@ -1,11 +1,12 @@
-// speculation.js — did the hand-tuned speculation rules actually pay off?
+// speculation.ts — did the hand-tuned speculation rules actually pay off?
 //
-// index.html ships two speculation rules: prerender almost everything at
-// `eagerness: moderate` (roughly "the pointer rested on this link"), and
-// prefetch /garage/* + /lwe/* eagerly. Both were written by REASONING about
-// which link a visitor takes next, and until now nothing checked the reasoning.
-// The only evidence they helped was that pages felt fast when I clicked them,
-// which is not evidence: I wrote the rules, so I already know where I am going.
+// The shell ships one speculation rule (SPECULATION in tools/photos/
+// shell-data.ts, which also says why the eager prefetch rule was removed):
+// prerender almost everything at `eagerness: moderate` (roughly "the pointer
+// rested on this link"). It was written by REASONING about which link a
+// visitor takes next, and the only evidence it helped was that pages felt
+// fast when I clicked them, which is not evidence: I wrote the rule, so I
+// already know where I am going.
 //
 // A speculation that never activates is bandwidth spent on the visitor's behalf
 // for nothing — a whole document plus subresources, fetched, rendered, and
@@ -13,7 +14,7 @@
 // it needs BOTH halves:
 //
 //   DENOMINATOR — every speculative request. Chrome has sent `Sec-Purpose:
-//     prefetch` (and `prefetch;prerender`) for years, counter.js already reads
+//     prefetch` (and `prefetch;prerender`) for years, counter.ts already reads
 //     it to avoid counting a speculative load as a visit, and it arrives at this
 //     worker on every worker-first route. This half works TODAY.
 //
@@ -44,8 +45,7 @@
 // `--enable-blink-features=` with the same name, and
 // `--enable-experimental-web-platform-features` alone). So 151 is a plan rather
 // than a shipped state, and the numerator stays at zero until this origin joins
-// the trial or the feature reaches stable. The denominator starts recording the
-// moment this deploys.
+// the trial or the feature reaches stable.
 //
 // Re-test cheaply: prefetch a URL, navigate to it, and watch for a HEAD to
 // /ledger/prefetch. The absence of that HEAD is the whole signal.
@@ -109,12 +109,14 @@ export function countSpeculativeLoad(env, request, response, pathname) {
     // header says both (`prefetch;prerender`) it counts as a prerender.
     const kind = /prerender/i.test(purpose) ? "prerender" : "prefetch";
     env.SPECULATION.writeDataPoint({
-      // blob3 is the serving version (see the note on the activation write).
+      // blob3 is the serving version (see the note on versionBlob).
       blobs: [kind, pathname.slice(0, 96), versionBlob(env)],
       doubles: [1],
       indexes: [kind],
     });
-  } catch { /* best-effort; never break a response over a counter */ }
+  } catch {
+    /* best-effort; never break a response over a counter */
+  }
 }
 
 // NUMERATOR. The browser HEADs this when a speculated document gets used.
@@ -136,7 +138,9 @@ export function handlePrefetchActivation(request, env) {
         indexes: [kind],
       });
     }
-  } catch { /* as above */ }
+  } catch {
+    /* as above */
+  }
   // 204 with no body: the browser wants an acknowledgement, not a document.
   return new Response(null, {
     status: 204,
@@ -165,12 +169,16 @@ export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
 
 export type SpeculationRow = {
-  path: string; prefetch: number; prerender: number; activated: number;
-  speculated: number; rate: number | null;
+  path: string;
+  prefetch: number;
+  prerender: number;
+  activated: number;
+  speculated: number;
+  rate: number | null;
 };
 
-// the two activation sources, folded into `activated` by taking the larger
-const HEADER = "activated", CLIENT = "activated-client";
+const HEADER = "activated",
+  CLIENT = "activated-client";
 
 // Pure over the SQL rows, so the contract test can pin the arithmetic without a
 // token. Unknown kinds are ignored rather than counted as anything.
@@ -205,18 +213,30 @@ export async function handleSpeculationJson(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return jsonResponse({ ok: false, error: "method not allowed", code: "method_not_allowed", allow: ["GET", "HEAD"] }, 405, { allow: "GET, HEAD" });
   }
-  const read = await analyticsSql(env, SPECULATION_DATASET, (from, sum) =>
-    `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
-    `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
-    `GROUP BY kind, path`);
+  const read = await analyticsSql(
+    env,
+    SPECULATION_DATASET,
+    (from, sum) =>
+      `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
+      `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
+      `GROUP BY kind, path`,
+  );
   if (!read.ok) {
     const { status, error, code } = analyticsReadError(read.reason);
     return jsonResponse({ ok: false, error, code, reason: read.reason, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS }, status);
   }
   const rows = summarizeSpeculation(read.data);
-  return jsonResponse({
-    ok: true, via: read.via, binding_fallback: read.binding_fallback, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
-    note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
-    rows,
-  }, 200, { "cache-control": "public, max-age=300, s-maxage=300" });
+  return jsonResponse(
+    {
+      ok: true,
+      via: read.via,
+      binding_fallback: read.binding_fallback,
+      window_days: SPECULATION_WINDOW_DAYS,
+      dataset: SPECULATION_DATASET,
+      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
+      rows,
+    },
+    200,
+    { "cache-control": "public, max-age=300, s-maxage=300" },
+  );
 }

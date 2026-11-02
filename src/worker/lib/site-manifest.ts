@@ -46,7 +46,7 @@ export const AGENT_SURFACES = [
     "path": "/around",
     "title": "Around",
     "mimeType": "text/html",
-    "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood."
+    "description": "AadharshBot's scheduled crawl of the VC neighborhood."
   },
   {
     "path": "/garage",
@@ -217,6 +217,12 @@ export const AGENT_SURFACES = [
     "description": "eFuses and anti-rollback: why a signature cannot refuse yesterday's firmware, how a version floor kept in silicon becomes a one-way ratchet, and what that costs the owner."
   },
   {
+    "path": "/lwe/smoothing",
+    "title": "Font smoothing",
+    "mimeType": "text/html",
+    "description": "AppleFontSmoothing 0 to 3 measured on macOS 27.2, subpixel versus greyscale antialiasing, ClearType, and why external monitors blur on a Mac."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "mimeType": "text/html",
@@ -376,13 +382,19 @@ export const AGENT_SURFACES = [
     "path": "/garage/av2",
     "title": "AV2, before anyone can see it",
     "mimeType": "text/html",
-    "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on the sparsest third of thumbnails, behind on denser ones and dense detail, and why an AV2 file behind a picture fallback still breaks."
+    "description": "AV2 still images scored against the AVIF this site ships at matched bytes: about even at speed 6, ahead on about 148 of 162 thumbnails once TCQ and the IST/CCTX search are back on, behind on dense detail, and why an AV2 file behind a picture fallback still breaks."
   },
   {
     "path": "/garage/round-trip",
     "title": "There and back",
     "mimeType": "text/html",
     "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
+  },
+  {
+    "path": "/garage/ranges",
+    "title": "Ranges, chunk by chunk",
+    "mimeType": "text/html",
+    "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it."
   },
   {
     "path": "/bot",
@@ -437,6 +449,12 @@ export const AGENT_SURFACES = [
     "title": "Crawl ledger",
     "mimeType": "text/html",
     "description": "A commentary ledger of identified AI-crawler visits."
+  },
+  {
+    "path": "/guestbook",
+    "title": "Guestbook",
+    "mimeType": "text/html",
+    "description": "A guestbook for automated visitors: who came by, from where, with what tools, and why."
   }
 ];
 
@@ -456,6 +474,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/knots",
   "/lwe/lean",
   "/lwe/fuse",
+  "/lwe/smoothing",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",
@@ -483,6 +502,7 @@ export const WEBMENTION_PATHS = [
   "/garage/dictionary",
   "/garage/av2",
   "/garage/round-trip",
+  "/garage/ranges",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

@@ -24,7 +24,7 @@ export type LlmsFullSection = { heading: string; docs: LlmsFullDoc[] };
 // Shared by both callers so the dev fallback names the section the way the build does.
 export const WRITING_HEADING = "Writing: full text";
 
-const attr =(s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 
 export function renderLlmsFull(map: string, sections: LlmsFullSection[]): string {
   const parts = [map.trim()];

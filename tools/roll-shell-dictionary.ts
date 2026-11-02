@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// roll-shell-dictionary.mjs — adopt the CURRENT built shell as a dictionary candidate.
+// roll-shell-dictionary.ts — adopt the CURRENT built shell as a dictionary candidate.
 //
 //   bun run shell:roll
 //
-// This is all that remains of the old gen-shell-deltas.mjs. The deltas themselves moved
-// into build.ts once it turned out node:zlib's zstd takes a `dictionary` option (the
-// "unreachable from Node" limit was BROTLI's at the time, I had over-generalized it, and
-// node 26 has since given brotli one as well), so they are
-// build output now: no zstd CLI, no committed artifacts, nothing to forget.
+// The deltas themselves are build output (build.ts, since node:zlib's zstd and brotli
+// both take a `dictionary` option): no zstd CLI, no committed artifacts, nothing to
+// forget. This script only adopts the dictionaries they are made against.
 //
 // Rolling stays a deliberate human step for one reason: it WRITES INTO THE SOURCE TREE, and
 // build.ts must never do that. Its output has to be committed, because a dictionary must be
@@ -24,8 +22,7 @@ import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, h
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 import { dictionaryTag } from "./lib/dcz.ts";
 import { pageSlug, pageSnapshotName, parseFamilyDictionary, parsePageSnapshot, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
-
-// ------------------------------------------------------- adoption order ----
+import { PAGE_CACHE_CONTROL } from "../src/worker/lib/const.ts";
 
 // **How old is a committed dictionary?** mtime cannot answer that, because
 // `git checkout` stamps every file it writes with the checkout time — so in a
@@ -43,12 +40,14 @@ import { pageSlug, pageSnapshotName, parseFamilyDictionary, parsePageSnapshot, p
 function gitTimes(dir) {
   const times = new Map();
   try {
-    const log = execFileSync("git", ["log", "--format=%ct", "--name-only", "--", dir],
-                             { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const log = execFileSync("git", ["log", "--format=%ct", "--name-only", "--", dir], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     let t = 0;
     for (const line of log.split("\n")) {
       const row = line.trim();
-      if (/^\d+$/.test(row)) { t = Number(row); continue; }
+      if (/^\d+$/.test(row)) {
+        t = Number(row);
+        continue;
+      }
       const base = row.split("/").pop();
       // First mention wins: git log walks newest-first, and what matters is the
       // most recent commit that touched the file.
@@ -60,18 +59,35 @@ function gitTimes(dir) {
   return times;
 }
 
-// Oldest first, so the caller can slice the head off.
-async function oldestFirst(dir, group, { keep, current = new Set() }) {
+// The candidates no browser can still offer, which are the only ones worth deleting.
+//
+// Retention was a fixed count per base (3 shell, 4 page) until 2026-10-24, which
+// is a proxy for "has every browser dropped this?" and a poor one: a churny base
+// (luna, nav-run) burned through 3 slots in a day, so a visitor back after a
+// weekend offered a hash with no delta behind it. The real bound is a lifetime. A
+// version is handed out until the one after it lands, and a browser that took it
+// keeps it for the tier's lifetime from then. So a candidate stays while it is
+// current, is one of the `floor` newest, or was replaced less than `windowSec` ago.
+//
+// The replacement's COMMIT time stands in for when production stopped serving the
+// old version. A roll commits after the release it reads, so the stand-in is late,
+// which errs toward keeping.
+async function prunable(dir, group, { floor, windowSec, current = new Set() }) {
   const times = gitTimes(dir);
-  const withTime = await Promise.all(group.map(async (g) => ({
-    g,
-    t: current.has(g.name) ? Infinity
-      : times.has(g.name) ? times.get(g.name)
-      : (await stat(`${dir}/${g.name}`)).mtimeMs / 1000,
-  })));
-  withTime.sort((a, b) => a.t - b.t);
-  return withTime.slice(0, Math.max(0, withTime.length - keep)).map((x) => x.g);
+  const withTime = await Promise.all(
+    group.map(async (g) => {
+      const t = times.has(g.name) ? times.get(g.name) : (await stat(`${dir}/${g.name}`)).mtimeMs / 1000;
+      // Anything this run confirmed as currently served sorts newest by definition,
+      // but keeps its real time as the moment it replaced its predecessor.
+      return { g, t, rank: current.has(g.name) ? Infinity : t };
+    }),
+  );
+  withTime.sort((a, b) => a.rank - b.rank);
+  const cutoff = Date.now() / 1000 - windowSec;
+  return withTime.filter((x, i) => i < withTime.length - floor && !current.has(x.g.name) && withTime[i + 1].t < cutoff).map((x) => x.g);
 }
+
+const DAY = 86400;
 
 const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
 
@@ -83,10 +99,7 @@ const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
 // step whenever an edge feature starts rewriting documents. Default stays both.
 // --pages rolls the page half AND the family dictionary, since both are the HTML
 // tier; --family rolls the family dictionary alone; --shell leaves both alone.
-const only = process.argv.includes("--family") ? "family"
-           : process.argv.includes("--pages") ? "pages"
-           : process.argv.includes("--shell") ? "shell"
-           : "both";
+const only = process.argv.includes("--family") ? "family" : process.argv.includes("--pages") ? "pages" : process.argv.includes("--shell") ? "shell" : "both";
 
 // --live sources the SHELL half from production instead of the built tree, which is
 // the same argument the page half makes below: a dictionary is matched by the SHA-256
@@ -98,20 +111,27 @@ const only = process.argv.includes("--family") ? "family"
 // What it buys is that adoption no longer has to run FROM the deployed commit. Reading
 // the built tree can only ever capture the shell THIS checkout builds, so a release that
 // went by without a roll is unrecoverable, and an unramped checkout would adopt bytes no
-// browser holds and evict one that is still in use (KEEP is 3). Reading the wire captures
+// browser holds and evict one that is still in use. Reading the wire captures
 // whatever is live, from anywhere, which is what lets a scheduled job do this unattended.
 const live = process.argv.includes("--live");
 
 const BUILT = ".build/public/a";
 const DICTS = "src/dict/a-dict";
-// Each extra candidate costs one delta per asset per deploy and widens the cache-variant
-// fan-out, while only serving visitors who skipped exactly that many deploys.
-const KEEP = 3;
+// `/a/` ships `max-age=31536000, immutable`, so a browser can offer a shell asset
+// for a year; eviction makes the real figure shorter and nobody has measured it.
+// 90 days is a judgment inside that year. Measured 2026-10-24: 232 candidates
+// landed in a-dict over the previous 60 days, and the two delta phases (q11
+// twins included) took 1.4 s of a 4.2 s build that staged 2,479 files, against
+// the 20,000-file asset cap. Each candidate is about 15 KB in the tree and one delta
+// per build. The floor of 3 is the old count, kept so a rarely-changing asset
+// (icons.svg) holds history however long ago it last changed.
+const SHELL_FLOOR = 3;
+const SHELL_WINDOW = 90 * DAY;
 
 // js, css, and the icon sprite. The sprite sat out until 2026-09-26, matching
 // DICTIONARY_TYPES in lib/assets.ts, and rejoined when svg deltas went on for everyone.
 // A delta exists only if a-dict already holds the sprite a browser was offered. It
-// changes rarely and KEEP prunes per base, so this files one candidate per sprite
+// changes rarely and the prune runs per base, so this files one candidate per sprite
 // change rather than one per deploy.
 const parse = parseShellAsset;
 
@@ -125,8 +145,9 @@ if (!live && !existsSync(BUILT)) {
 // The live shell, read the way the page half reads pages. No single document references
 // every dictionary-carrying asset, so this walks a few: the homepage pulls nav + luna +
 // hoist + tooltip, /lens pulls lens-boot, an LWE page pulls lwe-base.css, quiz.js and
-// ask.js, and /dotfiles and /garage/pretext each pull the one page-scoped script only
-// they load (SHELL_DISCOVERY_ROOTS, shared with dcz:check).
+// ask.js, /writing pulls notepad.js, and /dotfiles and /garage/pretext each pull the
+// one page-scoped script only they load (SHELL_DISCOVERY_ROOTS in lib/shell-roots.ts,
+// shared with dcz:check).
 //
 // Walking DOCUMENTS alone is not enough, and the gap was silent for as long as --live has
 // been the nightly path. An asset loaded lazily from JavaScript appears in no document, so
@@ -147,9 +168,16 @@ const assetRefs = (body) => shellAssetRefs(body.toString("utf8"));
 
 async function fetchLive(path) {
   let r;
-  try { r = await fetch(`${ORIGIN}${path}`, { headers: { "accept-encoding": "identity" } }); }
-  catch (e) { console.log(`  skipped ${path} (${e.message})`); return null; }
-  if (!r.ok) { console.log(`  skipped ${path} (HTTP ${r.status})`); return null; }
+  try {
+    r = await fetch(`${ORIGIN}${path}`, { headers: { "accept-encoding": "identity" } });
+  } catch (e) {
+    console.log(`  skipped ${path} (${e.message})`);
+    return null;
+  }
+  if (!r.ok) {
+    console.log(`  skipped ${path} (HTTP ${r.status})`);
+    return null;
+  }
   return Buffer.from(await r.arrayBuffer());
 }
 
@@ -170,7 +198,11 @@ async function liveShell() {
     const body = await fetchLive(`/a/${name}`);
     if (!body) continue;
     liveBody.set(name, body);
-    for (const n of assetRefs(body)) if (!names.has(n)) { names.add(n); queue.push(n); }
+    for (const n of assetRefs(body))
+      if (!names.has(n)) {
+        names.add(n);
+        queue.push(n);
+      }
   }
   // Abort rather than adopt nothing. An empty read means production is down or the ref
   // shape moved, and continuing would hand the prune below an empty `current` set, which
@@ -184,45 +216,47 @@ async function liveShell() {
 
 if (only === "pages" || only === "family") console.log(`shell:roll — --${only} given, leaving src/dict/a-dict/ alone.`);
 else {
-await mkdir(DICTS, { recursive: true });
-const shell = live ? await liveShell() : (await readdir(BUILT)).map(parse).filter(Boolean);
-console.log(`shell:roll: ${shell.length} candidate(s) from ${live ? `${ORIGIN} (live)` : BUILT}`);
-let adopted = 0;
-for (const a of shell) {
-  if (existsSync(`${DICTS}/${a.name}`)) continue;
-  // liveBody already holds every .js the walk fetched; css was never walked, so it
-  // still costs one request here.
-  const bytes = live
-    ? liveBody.get(a.name) ?? Buffer.from(await (await fetch(`${ORIGIN}/a/${a.name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer())
-    : await readFile(`${BUILT}/${a.name}`);
-  await writeFile(`${DICTS}/${a.name}`, bytes);
-  adopted++;
-  console.log(`adopted ${a.name}`);
-}
-// Whatever is live must survive the prune: those are the bytes browsers hold right now,
-// so evicting one is the exact failure this roll exists to prevent. Same protection the
-// page half gives its currently-served snapshots.
-const currentShell = new Set(shell.map((a) => a.name));
-
-// Prune per base, so a rarely-changing asset (icons.svg) keeps its history instead of being
-// evicted by a churny neighbour (nav.js). Ordering is COMMIT time, not mtime, for the reason
-// gitTimes() explains — a content hash carries no ordering of its own.
-const byBase = new Map();
-for (const d of (await readdir(DICTS)).map(parse).filter(Boolean)) {
-  if (!byBase.has(d.base)) byBase.set(d.base, []);
-  byBase.get(d.base).push(d);
-}
-let pruned = 0;
-for (const [, group] of byBase) {
-  if (group.length <= KEEP) continue;
-  for (const g of await oldestFirst(DICTS, group, { keep: KEEP, current: currentShell })) {
-    await rm(`${DICTS}/${g.name}`, { force: true });
-    pruned++;
-    console.log(`pruned ${g.name}`);
+  await mkdir(DICTS, { recursive: true });
+  const shell = live ? await liveShell() : (await readdir(BUILT)).map(parse).filter(Boolean);
+  console.log(`shell:roll: ${shell.length} candidate(s) from ${live ? `${ORIGIN} (live)` : BUILT}`);
+  let adopted = 0;
+  for (const a of shell) {
+    if (existsSync(`${DICTS}/${a.name}`)) continue;
+    // liveBody already holds every .js the walk fetched; css was never walked, so it
+    // still costs one request here.
+    const bytes = live
+      ? (liveBody.get(a.name) ?? Buffer.from(await (await fetch(`${ORIGIN}/a/${a.name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer()))
+      : await readFile(`${BUILT}/${a.name}`);
+    await writeFile(`${DICTS}/${a.name}`, bytes);
+    adopted++;
+    console.log(`adopted ${a.name}`);
   }
-}
-console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
-console.log("  Commit src/dict/a-dict/. build.ts regenerates the deltas on its own from here.");
+  // Whatever is live must survive the prune: those are the bytes browsers hold right now,
+  // so evicting one is the exact failure this roll exists to prevent. Same protection the
+  // page half gives its currently-served snapshots.
+  const currentShell = new Set(shell.map((a) => a.name));
+
+  // Prune per base, so a rarely-changing asset (icons.svg) keeps its history instead of being
+  // evicted by a churny neighbour (nav.js). Ordering is COMMIT time, not mtime, for the reason
+  // gitTimes() explains — a content hash carries no ordering of its own.
+  const byBase = new Map();
+  for (const d of (await readdir(DICTS)).map(parse).filter(Boolean)) {
+    if (!byBase.has(d.base)) byBase.set(d.base, []);
+    byBase.get(d.base).push(d);
+  }
+  let pruned = 0;
+  for (const [, group] of byBase) {
+    if (group.length <= SHELL_FLOOR) continue;
+    for (const g of await prunable(DICTS, group, { floor: SHELL_FLOOR, windowSec: SHELL_WINDOW, current: currentShell })) {
+      await rm(`${DICTS}/${g.name}`, { force: true });
+      pruned++;
+      console.log(`pruned ${g.name}`);
+    }
+  }
+  console.log(
+    `shell:roll — adopted ${adopted}, pruned ${pruned}, keeping anything replaced in the last ${SHELL_WINDOW / DAY} days (at least ${SHELL_FLOOR} per asset).`,
+  );
+  console.log("  Commit src/dict/a-dict/. build.ts regenerates the deltas on its own from here.");
 }
 
 // ── PAGE DICTIONARIES (src/dict/p-dict) ──────────────────────────────────────────
@@ -264,17 +298,24 @@ if (only === "shell" || only === "family") console.log(`pages:roll — --${only}
 else {
   const BUILT_PAGES = ".build/public";
   const PDICTS = "src/dict/p-dict";
-  // 4, since 2026-09-29; it was 2. A shell re-mint changes the /a/ URL every page
-  // embeds, and 26 of the 39 rolls from 2026-07-27 to 09-28 re-versioned over
-  // 90% of pages at once, so N snapshots cover a returning visitor for about
-  // N-1 rolls (1.6 days a roll). Measured over those rolls, a visitor returning
-  // to a changed page 3 rolls later was covered 20% of the time at 2 and 100%
-  // at 4, saving about 10 KB against the q11 twin. That visitor is one who holds
-  // the page but not the family dictionary, which wins whenever it is held. Each
-  // extra level costs 67 more deltas per build and about 0.8 MB of committed
-  // snapshots; past 4 the curve is flat (a 16-roll return is covered 4% at 4
-  // and 4% at 6).
-  const KEEP_PAGES = 4;
+  // A lifetime window since 2026-10-24; before that a count (2, then 4 from
+  // 2026-09-29). A shell re-mint changes the /a/ URL every page embeds, and 26 of
+  // the 39 rolls from 2026-07-27 to 09-28 re-versioned over 90% of pages at once,
+  // so N snapshots covered a returning visitor for about N-1 rolls (1.6 days a
+  // roll). A count can't keep up with that churn; 582 snapshots landed in the 7
+  // days before 2026-10-24, about 9 per page. The help goes to a visitor who
+  // holds the page but not the family dictionary, which wins whenever it is held.
+  //
+  // The window is exact here, unlike the shell's. PAGE_CACHE_CONTROL's swr is the
+  // dictionary's lifetime in the browser (Chromium sizes it from the response's
+  // freshness), and s-maxage is how long the edge can keep handing out a replaced
+  // version. Past their sum no browser can offer the snapshot, so it goes. A page
+  // that changes rarely ends up with fewer snapshots than the old count of 4,
+  // and every one it loses was dead.
+  const directive = (name) => Number(new RegExp(`${name}=(\\d+)`).exec(PAGE_CACHE_CONTROL)?.[1] ?? NaN);
+  const PAGE_WINDOW = directive("s-maxage") + directive("stale-while-revalidate");
+  if (!Number.isFinite(PAGE_WINDOW) || PAGE_WINDOW <= 0)
+    throw new Error(`pages:roll — no s-maxage + stale-while-revalidate in PAGE_CACHE_CONTROL (${PAGE_CACHE_CONTROL}); refusing to prune without a lifetime`);
   const FETCH_CONCURRENCY = 6;
   const parse = parsePageSnapshot;
   // `.build/public/garage/pretext.html` is served at `/garage/pretext`, and an
@@ -285,10 +326,11 @@ else {
     return `/${path}`.replace(/\/$/, "") || "/";
   };
   await mkdir(PDICTS, { recursive: true });
-  const staged = (await readdir(BUILT_PAGES, { recursive: true }))
-    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
+  const staged = (await readdir(BUILT_PAGES, { recursive: true })).filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   const liveSlugs = new Set();
-  let adopted = 0, pruned = 0, missing = 0;
+  let adopted = 0,
+    pruned = 0,
+    missing = 0;
   // Every snapshot this run confirmed as CURRENTLY SERVED, whether it wrote the
   // file or found it already there. These are never prune candidates.
   const adoptedNow = new Set();
@@ -297,14 +339,18 @@ else {
   // and trusting it. The Worker precompresses and cannot negotiate (gotcha 13), and
   // undici transparently decodes br while LEAVING the header in place, so neither
   // the request header nor the response header is evidence about the bytes in hand.
-  // Try the decode, keep whatever survives — the same defence check-dictionary-support.mjs
+  // Try the decode, keep whatever survives — the same defence check-dictionary-support.ts
   // documents at its own decode.
   const deliveredBytes = async (route) => {
     const res = await fetch(`${ORIGIN}${route}`, { headers: { "accept-encoding": "br" } });
     if (!res.ok) return { status: res.status, bytes: null };
     const body = Buffer.from(await res.arrayBuffer());
     let raw = body;
-    try { raw = brotliDecompressSync(body); } catch { /* already plain */ }
+    try {
+      raw = brotliDecompressSync(body);
+    } catch {
+      /* already plain */
+    }
     return { status: res.status, bytes: raw };
   };
 
@@ -312,10 +358,15 @@ else {
   for (const job of jobs) liveSlugs.add(job.slug);
   for (let i = 0; i < jobs.length; i += FETCH_CONCURRENCY) {
     const batch = jobs.slice(i, i + FETCH_CONCURRENCY);
-    const results = await Promise.all(batch.map(async (job) => {
-      try { return { job, ...(await deliveredBytes(job.route)) }; }
-      catch (err) { return { job, status: null, bytes: null, err }; }
-    }));
+    const results = await Promise.all(
+      batch.map(async (job) => {
+        try {
+          return { job, ...(await deliveredBytes(job.route)) };
+        } catch (err) {
+          return { job, status: null, bytes: null, err };
+        }
+      }),
+    );
     for (const { job, status, bytes, err } of results) {
       if (!bytes) {
         // Loud, and not fatal. A page added in this very commit legitimately 404s
@@ -340,7 +391,11 @@ else {
   }
   const byent = new Map();
   for (const d of (await readdir(PDICTS)).map(parse).filter(Boolean)) {
-    if (!liveSlugs.has(d.slug)) { await rm(`${PDICTS}/${d.name}`, { force: true }); pruned++; continue; }
+    if (!liveSlugs.has(d.slug)) {
+      await rm(`${PDICTS}/${d.name}`, { force: true });
+      pruned++;
+      continue;
+    }
     if (!byent.has(d.slug)) byent.set(d.slug, []);
     byent.get(d.slug).push(d);
   }
@@ -348,14 +403,16 @@ else {
   // is the half where it actually bit: see gitTimes(). `adoptedNow` is what makes
   // the current release un-prunable regardless of how git dates it.
   for (const [, group] of byent) {
-    if (group.length <= KEEP_PAGES) continue;
-    for (const g of await oldestFirst(PDICTS, group, { keep: KEEP_PAGES, current: adoptedNow })) {
+    if (group.length <= 1) continue;
+    for (const g of await prunable(PDICTS, group, { floor: 1, windowSec: PAGE_WINDOW, current: adoptedNow })) {
       await rm(`${PDICTS}/${g.name}`, { force: true });
       pruned++;
       console.log(`pruned page ${g.slug}.${g.tag}`);
     }
   }
-  console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping ${KEEP_PAGES} per page (source: ${ORIGIN}).`);
+  console.log(
+    `pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping anything replaced in the last ${PAGE_WINDOW / DAY} days (source: ${ORIGIN}).`,
+  );
 }
 
 // ── THE FAMILY DICTIONARY (src/dict/f-dict) ──────────────────────────────────────
@@ -404,19 +461,27 @@ else {
 
   const keep = committed ? await chooseFamilyDictionary({ fresh, committed: committed.bytes, pages: finalPages }) : null;
   if (committed && keep && keep.source === "committed") {
-    console.log(`family:roll — ${FAMILY_DICT_DIR}/${committed.name} is within drift of the fresh corpus (${pct(keep.drift ?? 0)} on ${finalPages.length} pages); leaving it alone.`);
+    console.log(
+      `family:roll — ${FAMILY_DICT_DIR}/${committed.name} is within drift of the fresh corpus (${pct(keep.drift ?? 0)} on ${finalPages.length} pages); leaving it alone.`,
+    );
   } else {
-    if (committed && keep) console.log(`family:roll — committed ${committed.hash8} has drifted ${pct(keep.drift ?? 0)} past the ${pct(keep.threshold).slice(1)} line; replacing it.`);
+    if (committed && keep)
+      console.log(
+        `family:roll — committed ${committed.hash8} has drifted ${pct(keep.drift ?? 0)} past the ${pct(keep.threshold).slice(1)} line; replacing it.`,
+      );
     else console.log(`family:roll — ${FAMILY_DICT_DIR}/ is empty.`);
 
-    let adopt = fresh, why = "the fresh corpus, which the next build ships";
+    let adopt = fresh,
+      why = "the fresh corpus, which the next build ships";
     if (live) {
       // What browsers hold: the dictionary production's own documents advertise.
       // Decode whatever comes back rather than trusting a request for identity;
       // the Worker precompresses and cannot negotiate (gotcha 13).
       const home = await fetch(`${ORIGIN}/`, { headers: { "accept-encoding": "identity" } });
       const offered = home.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
-      try { await home.body?.cancel(); } catch {}
+      try {
+        await home.body?.cancel();
+      } catch {}
       if (!offered) {
         console.error(`family:roll --live: no rel="compression-dictionary" Link on ${ORIGIN}/. Refusing to roll.`);
         process.exit(1);
@@ -424,10 +489,16 @@ else {
       const res = await fetch(`${ORIGIN}${offered}`, { headers: { "accept-encoding": "br" } });
       const body = Buffer.from(await res.arrayBuffer());
       let liveBytes = body;
-      try { liveBytes = brotliDecompressSync(body); } catch { /* already plain */ }
+      try {
+        liveBytes = brotliDecompressSync(body);
+      } catch {
+        /* already plain */
+      }
       const liveHash = parseFamilyDictionary(offered.split("/").pop() ?? "");
       if (!res.ok || liveHash !== hash8(liveBytes)) {
-        console.error(`family:roll --live: ${offered} answered ${res.status} and hashes to ${hash8(liveBytes)}; refusing to adopt bytes the URL does not name.`);
+        console.error(
+          `family:roll --live: ${offered} answered ${res.status} and hashes to ${hash8(liveBytes)}; refusing to adopt bytes the URL does not name.`,
+        );
         process.exit(1);
       }
       const asLive = await chooseFamilyDictionary({ fresh, committed: liveBytes, pages: finalPages });

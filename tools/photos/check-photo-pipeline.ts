@@ -8,10 +8,9 @@
 //
 // Two of the artifacts it once READ are BUILD OUTPUT now (exif.json and
 // fingerprints.json, since 2026-08-29), so it DERIVES those through
-// tools/lib/photo-indexes.ts rather than opening a committed file. Both blocks
-// below say which of their old assertions that retired and why; the short version
-// is that a claim about a committed copy disagreeing with its inputs has nothing
-// left to be true of once the build computes it from those same inputs.
+// tools/lib/photo-indexes.ts rather than opening a committed file. A claim about
+// a committed copy disagreeing with its inputs has nothing left to be true of
+// once the build computes it from those same inputs, so none is made here.
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -39,40 +38,45 @@ const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
 
 if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
-  // Name the stems and the likely cause. This used to report the two COUNTS and
-  // nothing else, which says a set differs without saying how, and the usual
-  // cause is not a missing photo at all: the source folder is an input superset,
-  // so a full metadata regen used to write a record for every frame sitting in
-  // it, published or not. extract-photo-metadata.sh scopes to hashes.json now,
-  // and the message says so, because "165 metadata, 158 hashes" sent the last
-  // reader looking for 7 broken photos rather than 7 unpublished ones.
+  // Name the stems and the likely cause, because two COUNTS say a set differs
+  // without saying how, and the usual cause is not a missing photo at all: the
+  // source folder is an input superset, so a full metadata regen used to write a
+  // record for every frame sitting in it, published or not.
+  // extract-photo-metadata.sh scopes to hashes.json now, and the message says
+  // so, because "165 metadata, 158 hashes" sent one reader looking for 7 broken
+  // photos rather than 7 unpublished ones.
   const unhashed = metadataStems.filter((s) => !hashes[s]);
   const undescribed = stems.filter((s) => !metadata[s]);
-  fail(`metadata/hash stem sets differ (${metadataStems.length} metadata, ${stems.length} hashes)` +
-       `${unhashed.length ? `\n  described but not published: ${unhashed.slice(0, 8).join(", ")}${unhashed.length > 8 ? ` (+${unhashed.length - 8})` : ""}` : ""}` +
-       `${undescribed.length ? `\n  published but not described: ${undescribed.slice(0, 8).join(", ")}${undescribed.length > 8 ? ` (+${undescribed.length - 8})` : ""}` : ""}` +
-       `\n  metadata.json describes PUBLISHED photos; re-run extract-photo-metadata.sh, which scopes to hashes.json`);
+  fail(
+    `metadata/hash stem sets differ (${metadataStems.length} metadata, ${stems.length} hashes)` +
+      `${unhashed.length ? `\n  described but not published: ${unhashed.slice(0, 8).join(", ")}${unhashed.length > 8 ? ` (+${unhashed.length - 8})` : ""}` : ""}` +
+      `${undescribed.length ? `\n  published but not described: ${undescribed.slice(0, 8).join(", ")}${undescribed.length > 8 ? ` (+${undescribed.length - 8})` : ""}` : ""}` +
+      `\n  metadata.json describes PUBLISHED photos; re-run extract-photo-metadata.sh, which scopes to hashes.json`,
+  );
 }
 
-// The photo index is the pool the worker BUNDLES (photos.js imports it): the
+// The photo index is the pool the worker BUNDLES (photos.ts imports it): the
 // grid renders exactly these stems. It must be in perfect bijection with
 // hashes.json — an index entry without hashes would SSR a broken tile, and a
 // hashed stem without an index entry is a published photo that silently never
-// appears. Field shape is load-bearing too: home.js reads full/size/uploaded
-// verbatim into href/data-* attributes.
+// appears. Field shape is load-bearing too: photos.ts copies full/size/uploaded
+// verbatim into every pool row.
 // One entry per photo stem: the R2 key, its byte size, and the upload stamp.
 // Named here because `json()` answers unknown and this file's whole job is
 // asserting the shape of that record.
-const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string; album?: string; heif?: string }> =
-  await json(path.join(ROOT, "src/worker/photo-index.json"));
+const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string; album?: string; heif?: string }> = await json(
+  path.join(ROOT, "src/worker/photo-index.json"),
+);
 const indexStems = Object.keys(photoIndex).sort();
 if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
   const missing = stems.filter((s) => !photoIndex[s]);
   const extra = indexStems.filter((s) => !hashes[s]);
-  fail(`photo-index/hash stem sets differ (${indexStems.length} index, ${stems.length} hashes)` +
-       `${missing.length ? `\n  hashed but not indexed: ${missing.slice(0, 8).join(", ")}` : ""}` +
-       `${extra.length ? `\n  indexed but not hashed: ${extra.slice(0, 8).join(", ")}` : ""}` +
-       `\n  add-photos.sh phase 4 writes the index; a removed photo must lose its entry here too`);
+  fail(
+    `photo-index/hash stem sets differ (${indexStems.length} index, ${stems.length} hashes)` +
+      `${missing.length ? `\n  hashed but not indexed: ${missing.slice(0, 8).join(", ")}` : ""}` +
+      `${extra.length ? `\n  indexed but not hashed: ${extra.slice(0, 8).join(", ")}` : ""}` +
+      `\n  add-photos.sh phase 4 writes the index; a removed photo must lose its entry here too`,
+  );
 }
 for (const [stem, entry] of Object.entries(photoIndex)) {
   if (asText(entry?.full) === null || !entry.full.startsWith(`${stem}.`)) {
@@ -91,7 +95,7 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   if (entry.album !== undefined && !Object.hasOwn(ALBUMS, String(entry.album))) {
     fail(`${stem}: index album ${JSON.stringify(entry.album)} is not declared in src/worker/albums.ts`);
   }
-  if (entry.heif !== undefined && !/^[A-Za-z0-9_.-]+\.(?:heic|heif|hif)$/i.test(String(entry.heif)) ) {
+  if (entry.heif !== undefined && !/^[A-Za-z0-9_.-]+\.(?:heic|heif|hif)$/i.test(String(entry.heif))) {
     fail(`${stem}: index heif must be a HEIF R2 key (got ${JSON.stringify(entry.heif)})`);
   }
   if (entry.heif !== undefined && !String(entry.heif).startsWith(`${stem}.`)) {
@@ -111,8 +115,8 @@ const expectedFiles = new Set();
 for (const stem of stems) {
   const entry = hashes[stem];
   // x (the 200px DPR-1 tier) is required alongside the other three. It could
-  // have been optional, since photo-grid.js degrades to two srcset candidates
-  // without it and photos.js keeps serving the stem — but "the pipeline half ran"
+  // have been optional, since photo-grid.ts degrades to two srcset candidates
+  // without it and photos.ts keeps serving the stem — but "the pipeline half ran"
   // is exactly the state this file exists to refuse, and an optional tier is one
   // nothing would ever notice missing.
   if (!asRecord(entry) || !entry.a || !entry.j || !entry.s || !entry.x) {
@@ -122,8 +126,11 @@ for (const stem of stems) {
   const files = tierFiles(stem, entry);
   for (const tier of TIER_KEYS) {
     expectedFiles.add(files[tier]);
-    try { await stat(path.join(HASHED, files[tier])); }
-    catch { fail(`${stem}: missing hashed pixel tier ${files[tier]}`); }
+    try {
+      await stat(path.join(HASHED, files[tier]));
+    } catch {
+      fail(`${stem}: missing hashed pixel tier ${files[tier]}`);
+    }
   }
 
   // The four histogram channels are asserted against the INDEX now, because
@@ -137,21 +144,17 @@ for (const stem of stems) {
     fail(`${stem}: histograms.json must carry four 64-bin channels (got ${packedHist ? `${packedHist.length} chars` : "nothing"})`);
   }
 }
-// THREE FINGERPRINT ASSERTIONS LIVED HERE AND ARE GONE, because images/
-// fingerprints.json is BUILD OUTPUT as of 2026-08-29 and each of the three was a
-// statement about a committed file that could disagree with these bytes: a
-// digest that had drifted, a digest naming an unpublished stem, and a count that
-// no longer matched stems x tiers. A map derived from hashes.json and public/i
-// on the way into .build/ cannot hold any of those three states, so re-asserting
-// them here would be a check that can only agree with itself, which this
-// repository has shipped before and does not want again.
+// images/fingerprints.json is BUILD OUTPUT as of 2026-08-29, derived from
+// hashes.json and public/i on the way into .build/, so it cannot hold a drifted
+// digest, an unpublished stem or a wrong count. Asserting those here would be a
+// check that can only agree with itself.
 //
 // One fact about that map is NOT a restatement of its own inputs: two published
 // tiers can hold identical bytes, and an inverted index cannot represent both.
 // buildImageFingerprints refuses rather than picking a winner, and running it
 // here is what puts that refusal in front of add-photos.sh instead of leaving it
-// to the next build. It re-reads the same 660 files the loop above stats, which
-// is the hashing this file used to do inline and no longer does.
+// to the next build. It re-reads every file the loop above stats (660 for 165
+// photos on 2026-10-16).
 try {
   const { tiers } = await buildImageFingerprints(ROOT);
   if (tiers !== stems.length * TIER_KEYS.length) {
@@ -184,8 +187,9 @@ if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}
 // which is the event it exists for.
 const HARDCODED_ROOTS = ["src/pages", "src/content", "src/client"];
 // A scanner whose roots stop matching reports a pass over an empty set, which is
-// what every floor in this repo refuses. 12 today, all in tooltips.html. Deleting
-// that demo is a deliberate act and lowering this number with it is one line.
+// what every floor in this repo refuses. 25 on 2026-10-16, in garage/tooltips.html
+// and garage/av2.html. Deleting a demo is a deliberate act and lowering this
+// number with it is one line.
 const HARDCODED_FLOOR = 12;
 const walk = async (target) => {
   const entry = await stat(target);
@@ -194,58 +198,58 @@ const walk = async (target) => {
   const nested = await Promise.all(kids.map((k) => walk(path.join(target, k.name))));
   return nested.flat();
 };
-const authored = (await Promise.all(HARDCODED_ROOTS.map((r) => walk(path.join(ROOT, r)))))
-  .flat().filter((file) => /\.(html|js)$/.test(file));
+const authored = (await Promise.all(HARDCODED_ROOTS.map((r) => walk(path.join(ROOT, r))))).flat().filter((file) => /\.(html|js)$/.test(file));
 let hardcoded = 0;
 for (const file of authored) {
   const body = await readFile(file, "utf8");
   for (const [, name] of body.matchAll(/\/i\/([A-Za-z0-9_-]+\.[a-f0-9]{8}\.(?:avif|jpg))/g)) {
     hardcoded++;
     if (!expectedFiles.has(name)) {
-      fail(`${path.relative(ROOT, file)} references /i/${name}, which no longer exists\n` +
-           `  the tier was re-encoded; re-point it at the current hash in images/hashes.json`);
+      fail(
+        `${path.relative(ROOT, file)} references /i/${name}, which no longer exists\n` +
+          `  the tier was re-encoded; re-point it at the current hash in images/hashes.json`,
+      );
     }
   }
 }
 if (hardcoded < HARDCODED_FLOOR) {
-  fail(`the hardcoded /i/ scan read ${hardcoded} references across ${authored.length} file(s), ` +
-       `under the floor of ${HARDCODED_FLOOR}\n` +
-       `  it has stopped matching. roots: ${HARDCODED_ROOTS.join(", ")}`);
+  fail(
+    `the hardcoded /i/ scan read ${hardcoded} references across ${authored.length} file(s), ` +
+      `under the floor of ${HARDCODED_FLOOR}\n` +
+      `  it has stopped matching. roots: ${HARDCODED_ROOTS.join(", ")}`,
+  );
 }
 
 // exif.json is BUILD OUTPUT as of 2026-08-29, so this DERIVES it rather than
 // reading it. Its coverage of the published set is asserted by the
 // metadata/hash stem-set equality at the top of this file, which is exact in
-// both directions, so the old "absent from images/exif.json" and "carries
-// unpublished stems" checks would now be re-deriving that same equality from
-// the same two files. They are gone rather than restated.
+// both directions, so checking it again here would re-derive that same
+// equality from the same two files.
 const exifIndex = await buildExifIndex(ROOT);
 
 // TIERED, because images/meta/ is BUILD OUTPUT too and is absent from a fresh
 // checkout. Where it exists, which is a workstation that just ran the pipeline,
-// roll it up and compare.
-//
-// WHAT THAT COMPARISON MEANS has changed twice. It used to hold two committed
-// copies of one projection together. Then, from 2026-08-29, it held the two
-// IMPLEMENTATIONS of the projection to each other: a jq object literal in
-// extract-photo-metadata.sh writing these per-photo files, and EXIF_KEY_MAP in
-// tools/lib/photo-indexes.ts shipping, where a field added to one and forgotten
-// in the other was silent on both sides. Since 2026-09-15 the split calls
-// projectExifRecord too (pipeline-json.ts meta-split), so there is one
-// implementation, and what this catches is the remaining way the two files can
-// disagree: images/meta/ written from an OLDER metadata.json than the one on
-// disk. That is still worth a failure, since zenc's histogram bake reads meta/.
-const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
+// roll it up and compare. Since 2026-09-15 the per-photo split calls
+// projectExifRecord (pipeline-json.ts meta-split), the same projection the build
+// uses, so what this catches is the remaining way the two can disagree:
+// images/meta/ written from an OLDER metadata.json than the one on disk. That is
+// still worth a failure, since zenc's histogram bake reads meta/.
+const metaPresent = await stat(META).then(
+  (s) => s.isDirectory(),
+  () => false,
+);
 
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
-  fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
-       `${histMissing.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`);
+  fail(
+    `${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
+      `${histMissing.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`,
+  );
 }
 
 if (metaPresent) {
-  // The per-photo files minus their histogram channel: what the jq literal in
-  // extract-photo-metadata.sh produced for each stem.
+  // The per-photo files minus their histogram channel: what pipeline-json.ts
+  // meta-split wrote for each stem.
   const rolled = {};
   for (const file of (await readdir(META)).filter((f) => f.endsWith(".json"))) {
     const { [HISTOGRAM_KEY]: _hist, ...exif } = JSON.parse(await readFile(path.join(META, file), "utf8"));
@@ -253,16 +257,20 @@ if (metaPresent) {
   }
   const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rolled[stem]));
   if (stale.length) {
-    fail(`the two EXIF projections disagree for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-         `${stale.length > 8 ? " …" : ""}\n` +
-         `  both come from projectExifRecord in tools/lib/photo-indexes.ts, so images/meta/ was\n` +
-         `  written from an older metadata.json than the one on disk. Re-run extract-photo-metadata.sh.`);
+    fail(
+      `the two EXIF projections disagree for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
+        `${stale.length > 8 ? " …" : ""}\n` +
+        `  both come from projectExifRecord in tools/lib/photo-indexes.ts, so images/meta/ was\n` +
+        `  written from an older metadata.json than the one on disk. Re-run extract-photo-metadata.sh.`,
+    );
   }
   const rebuiltHist = (await buildHistogramIndex()).index;
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
   if (histStale.length) {
-    fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
-         `${histStale.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`);
+    fail(
+      `images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
+        `${histStale.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`,
+    );
   }
 } else {
   console.log("photo-pipeline: images/meta/ absent (build output), so the projection-agreement checks are skipped here");
@@ -276,8 +284,10 @@ if (histStrays.length) fail(`images/histograms.json carries unpublished stems: $
 // above this check, so reaching it means the captioner was rate-limited or skipped.
 const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
 if (uncaptioned.length) {
-  fail(`${uncaptioned.length} photo(s) without alt text: ${uncaptioned.slice(0, 8).join(", ")}` +
-       `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: bun run captions`);
+  fail(
+    `${uncaptioned.length} photo(s) without alt text: ${uncaptioned.slice(0, 8).join(", ")}` +
+      `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: bun run captions`,
+  );
 }
 
 console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, index in bijection, complete EXIF + histogram + alt-text metadata`);

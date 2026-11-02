@@ -1,5 +1,6 @@
-// updates.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+// updates.ts: /updates (Windows Update) and /restore (System Restore), two XP
+// views of the site's release checkpoints, plus /updates.json.
+
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
@@ -10,58 +11,48 @@ import checkpoints from "./checkpoints.json" with { type: "json" };
 export async function handleWindowsUpdate(request, env, ctx) {
   // Version-keyed edge cache (caches.default): the changelog changes only on
   // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
-  // for up to s-maxage=300 without re-querying D1 on every visit.
+  // for up to s-maxage=300 without re-rendering on every visit.
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderWindowsUpdate), "/updates", env);
 }
 
-// The deploy log, read ONCE and handed to the three renderers that project it.
+// The release log, read ONCE and handed to the three renderers that project it.
 //
-// D1 stays the single source of truth. This function is the only thing that talks to
-// it, which is what keeps /updates, /updates.json and /restore from drifting apart —
-// previously each ran its own SELECT with its own LIMIT and its own error handling.
+// It reads the BUNDLED projection (src/worker/checkpoints.json) rather than D1,
+// and that is the point. build.ts calls the three renderers in Node against the
+// same file and bakes updates.html + restore.html at deploy time, so /updates.json
+// serves literally the same bytes the two HTML pages render from, and the three
+// cannot disagree. Baking costs no freshness, because the file changes only in
+// the PR that ships a release (tools/photos/bump-version.sh writes the entry).
 //
-// It also makes the three renderers PURE, so build.ts can call them in Node against
-// the committed projection (src/worker/checkpoints.json, written by
-// bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
-// pages are the only dynamic surfaces whose data changes ONLY at deploy — the
-// checkpoint row is inserted moments before it — so baking them costs no freshness
-// at all, unlike /reading or /around whose feeds move on their own.
+// D1 records what actually SHIPPED. Nothing on the release path writes it since
+// 2026-09-28 (#1002), so `bun run checkpoints:record` copies released entries in
+// from a workstation, and `bun run checkpoints:check` fails when the two diverge
+// beyond a tail of staged entries (tools/lib/checkpoints.ts). env stays in the
+// signature because the handlers pass it.
 export async function readCheckpoints(env) {
-  // The BUNDLED projection, not a D1 read, and that is the point.
-  //
-  // /updates and /restore are precomputed from this file at build time. If this
-  // function went to D1 at runtime, /updates.json would answer from a different
-  // source than the two HTML pages render from, and the three could disagree the
-  // moment a checkpoint landed without a deploy. CLAUDE.md calls out that /updates
-  // and /restore reading one table "is what stops those two pages drifting apart";
-  // reading one committed file is the same guarantee, made stronger — all three
-  // surfaces now serve literally the same bytes rather than the same query.
-  //
-  // D1 remains the source of truth: bump-version.sh writes it and then derives this
-  // file from it, and `bun run checkpoints:check` fails on any drift between them.
-  // env is kept in the signature because the handlers pass it and a future caller
-  // may want the live table; nothing here needs it today.
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
 }
 
 export async function renderWindowsUpdate(cp) {
-  // Single source of truth: the same D1 `checkpoints` table that backs /restore.
-  // One row per logged deploy (tools/photos/bump-version.sh, which now derives the
-  // next vnum from this table; the retired service worker used to carry it as
-  // CACHE_VERSION). The newest row is the running build and the recent rows ARE
-  // the changelog, so /updates and /restore cannot drift apart. Degrades
-  // gracefully when RESTORE_DB is unbound, mirroring /restore.
+  // The recent entries ARE the changelog. The newest is the newest LOGGED release,
+  // the running build only when the release that serves carried an entry;
+  // /whoareyou.json reports the serving version itself.
   const state = cp.state;
-  const pts = cp.points.slice(-18).reverse();          // newest first, same as the old DESC LIMIT 18
-  let build = "aadhar.sh", log = [];
-  if (pts.length) { build = pts[0].version; log = pts.map((p) => [p.slug, p.title]); }
+  const pts = cp.points.slice(-18).reverse(); // newest first
+  let build = "aadhar.sh",
+    log = [];
+  if (pts.length) {
+    build = pts[0].version;
+    log = pts.map((p) => [p.slug, p.title]);
+  }
   const rows = log.length
-    ? log.map(([tag, desc]) =>
-        `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
+    ? log.map(([tag, desc]) => `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
     : `<li><span class="wu-desc">${esc(
-        state === "unbound" ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
-        : state === "error" ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
-        : "No updates recorded yet."
+        state === "unbound"
+          ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
+          : state === "error"
+            ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
+            : "No updates recorded yet.",
       )}</span></li>`;
   return lunaPage({
     title: "Windows Update · aadhar.sh",
@@ -100,36 +91,43 @@ export async function renderWindowsUpdate(cp) {
     closeTitle: "back to Security Center",
     closeLabel: "back to Security Center",
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });
 }
 
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
-// read from the same D1 checkpoints log as /updates and /restore.
+// read from the same checkpoints projection as /updates and /restore.
 export async function handleUpdatesJson(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env);
 }
 
 export async function renderUpdatesJson(cp) {
-  const pts = cp.points.slice(-8).reverse();           // newest first, same as the old DESC LIMIT 8
-  let build = "aadhar.sh", items = [];
-  if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
-  return jsonResponse({ build, items }, 200, {
-    "cache-control":   "public, max-age=0, s-maxage=300",
-    "x-robots-tag":    "noindex",
-    "referrer-policy": "strict-origin-when-cross-origin",
-  }, { pretty: false });
+  const pts = cp.points.slice(-8).reverse(); // newest first
+  let build = "aadhar.sh",
+    items = [];
+  if (pts.length) {
+    build = pts[0].version;
+    items = pts.map((p) => ({ slug: p.slug, title: p.title }));
+  }
+  return jsonResponse(
+    { build, items },
+    200,
+    {
+      "cache-control": "public, max-age=0, s-maxage=300",
+      "x-robots-tag": "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+    { pretty: false },
+  );
 }
 
-// ── /restore handler (Windows System Restore reskin, backed by D1) ───
-// Restore points live in the aadhar-restore D1 database, one row per logged
-// deploy (bump-version.sh insert), seeded from this repo's git history. The
+// ── /restore handler (Windows System Restore reskin) ─────────────────
+// One restore point per release entry in the checkpoints projection. The
 // scrubber previews the recorded state at any past point; it changes nothing.
-// A real rollback is a destructive D1 Time Travel restore run from the CLI
-// (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB
-// is a dashboard binding; this page degrades gracefully when it is absent.
+// A real rollback is `bun run deploy:promote --rollback` from a workstation,
+// never exposed to a visitor.
 export async function handleSystemRestore(request, env, ctx) {
   return cachedRender(request, ctx, () => readCheckpoints(env).then(renderSystemRestore), "/restore", env);
 }
@@ -137,12 +135,10 @@ export async function handleSystemRestore(request, env, ctx) {
 export async function renderSystemRestore(cp) {
   const points = cp.points;
   const state = cp.state;
-  // "You are here" tracks the newest checkpoint in D1, so it can't go stale on deploy
-  // the way a hardcoded constant did. Backfill recent deploys into the log to keep it current.
+  // "You are here" tracks the newest checkpoint, so it can't go stale on deploy
+  // the way a hardcoded constant did.
   const newest = points.length ? points[points.length - 1] : null;
-  const live = newest
-    ? { version: newest.version, title: newest.title, ymd: newest.ymd }
-    : { version: "aadhar.sh", title: "live build", ymd: "" };
+  const live = newest ? { version: newest.version, title: newest.title, ymd: newest.ymd } : { version: "aadhar.sh", title: "live build", ymd: "" };
 
   const liveBar =
     `<div class="sr-now"><span class="pin"></span><div><b>You are here.</b>` +
@@ -151,9 +147,8 @@ export async function renderSystemRestore(cp) {
 
   let main;
   if (state === "ok") {
-    const data = points.map(p => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
-    main =
-`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
+    const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
     <div class="sr-stage">
       <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
       <div class="sr-detail" id="srDetail"></div>
@@ -203,13 +198,13 @@ var POINTS = ${JSON.stringify(data)};
 })();
     </script>`;
   } else {
-    const msg = state === "unbound"
-      ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
-      : state === "empty"
-        ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
-        : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
-    main =
-`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
+    const msg =
+      state === "unbound"
+        ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
+        : state === "empty"
+          ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
+          : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
+    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
     <div class="sr-pending"><span class="sr-gear"></span><div><b>System Restore is finishing setup.</b><div class="sub">${esc(msg)}</div></div></div>
     <p class="sr-foot">Backed by <b>Cloudflare D1</b>, with a 7-day Time Travel window underneath for real recovery. See what's shipped in <a href="/updates">Windows Update</a>.</p>`;
   }
@@ -275,7 +270,7 @@ ${main}
     closeTitle: "back to Windows Update",
     closeLabel: "back to Windows Update",
     headers: {
-      "x-robots-tag":    "noindex",
+      "x-robots-tag": "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });

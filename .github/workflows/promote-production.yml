@@ -41,7 +41,14 @@ jobs:
       promoted: ${{ steps.promote.outputs.promoted }}
 
     steps:
+      # A stale completion is a skip, not a failure: when merges land seconds
+      # apart, CI for the older commit finishes after main has moved, and the
+      # run for the newer commit promotes instead (2026-10-17: three refusals,
+      # then a clean promotion 28 seconds later, each refusal emailed as a red
+      # run). Every step below is gated on `stale`, so the old commit still
+      # never reaches production.
       - name: Require the tested commit to still be current main
+        id: fresh
         if: github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,11 +56,12 @@ jobs:
           set -euo pipefail
           main_sha="$(gh api "/repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
           if [[ "${main_sha}" != "${RELEASE_SHA}" ]]; then
-            echo "Refusing stale CI completion: main is now ${main_sha}, not ${RELEASE_SHA}."
-            exit 1
+            echo "::notice::Skipping stale CI completion: main is now ${main_sha}, not ${RELEASE_SHA}; the run for ${main_sha} promotes instead."
+            echo "stale=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Require a merged pull request into main
+        if: steps.fresh.outputs.stale != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -76,6 +84,7 @@ jobs:
       # the affinity rule, so eight of them see every version that is serving.
       - name: Record the versions serving now
         id: before
+        if: steps.fresh.outputs.stale != 'true'
         run: |
           v="$(for i in 1 2 3 4 5 6 7 8; do
                 curl -fsS --max-time 10 -H "Cloudflare-Workers-Version-Key: promote-$RANDOM-$i" https://aadhar.sh/whoareyou.json \
@@ -94,6 +103,7 @@ jobs:
 
       - name: Promote exact tested commit to production
         id: promote
+        if: steps.fresh.outputs.stale != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -115,7 +125,7 @@ jobs:
           echo "Cloudflare Workers Builds will now deploy this commit at 100% ('wrangler deploy')."
 
       - name: Publish promotion record
-        if: always()
+        if: always() && steps.fresh.outputs.stale != 'true'
         run: |
           {
             echo "## Production promotion"

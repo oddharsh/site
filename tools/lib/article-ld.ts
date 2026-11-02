@@ -15,9 +15,9 @@
 //                (gen-feeds.ts), so the feed and the markup cannot disagree
 //
 // Built rather than authored because the inputs already exist in two registries
-// and 39 pages, and a pasted block would be a third copy of each. The block is a
-// data script, so CSP never sees it (lib/csp-scan.ts) and step 7b minifies it
-// with the page's other JSON (lib/json-script.ts).
+// and 40 pages (2026-10-16), and a pasted block would be a third copy of each.
+// The block is a data script, so CSP never sees it (lib/csp-scan.ts) and step
+// 7b minifies it with the page's other JSON (lib/json-script.ts).
 
 export const SITE = "https://aadhar.sh";
 export const PERSON = {
@@ -63,17 +63,25 @@ export function topicOf(ogTitle: string | null): string | null {
 export function h1Of(html: string): string | null {
   const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
   if (!h1) return null;
-  const text = decodeEntities(h1[1]
-    .replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
-    .replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ").trim();
+  const text = decodeEntities(h1[1].replace(/<span\b[^>]*\bclass="[^"]*\b(?:badge|status)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
   return text || null;
 }
 
 export type ArticleLd = {
-  "@context": string; "@type": string; headline: string; description?: string;
-  url: string; mainEntityOfPage: string; datePublished: string; inLanguage: string;
-  image?: string; author: typeof PERSON; publisher: { "@id": string }; isPartOf: { "@id": string };
+  "@context": string;
+  "@type": string;
+  headline: string;
+  description?: string;
+  url: string;
+  mainEntityOfPage: string;
+  datePublished: string;
+  inLanguage: string;
+  image?: string;
+  author: typeof PERSON;
+  publisher: { "@id": string };
+  isPartOf: { "@id": string };
 };
 
 /** `date` is a sitemap lookup, so it may be missing; that is refused here. */

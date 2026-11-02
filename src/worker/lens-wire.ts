@@ -1,6 +1,6 @@
 import { span } from "./lib/trace.ts";
 import { BOT_UA } from "./lib/botauth.ts";
-// lens.js does not import this file, so the edge runs one way and there is no
+// lens.ts does not import this file, so the edge runs one way and there is no
 // cycle. The route's validation, cache, budgets and span are lens-pipeline.ts's;
 // the SSRF guard it validates through is lib/public-fetch.ts's, never a copy.
 import { BROWSER_FREE_PLAN } from "./lens.ts";
@@ -34,8 +34,8 @@ const WIRE_MAX_ROWS = 60;
 
 // ── pure summariser ────────────────────────────────────────────────────────
 // Split out from the transport on purpose: this half is a pure function of a
-// CDP event array, so `node --test` can exercise the interesting logic without
-// a browser, a binding, or a network. Everything below the transport line needs
+// CDP event array, so the contract suite can exercise the interesting logic
+// without a browser, a binding, or a network. Everything below the transport line needs
 // workerd; everything above it does not.
 
 // Registrable-domain-ish grouping. Deliberately NOT a public-suffix list: PSL is
@@ -46,27 +46,48 @@ const WIRE_MAX_ROWS = 60;
 // the payload reports HOSTS as the primary fact and the grouping as a
 // convenience. Say what a number is worth rather than overstating it.
 export function siteOf(hostname) {
-  const parts = String(hostname || "").toLowerCase().split(".").filter(Boolean);
+  const parts = String(hostname || "")
+    .toLowerCase()
+    .split(".")
+    .filter(Boolean);
   if (parts.length <= 2) return parts.join(".");
   const twoLevelSuffix = /^(co|com|org|net|gov|edu|ac)\.[a-z]{2}$/.test(parts.slice(-2).join("."));
   return parts.slice(twoLevelSuffix ? -3 : -2).join(".");
 }
 
 function hostOf(url) {
-  try { return new URL(url).hostname.toLowerCase(); } catch { return ""; }
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 // CDP resource types are Chrome's own vocabulary and there are ~20 of them. The
 // page's cost story needs about six, so the rest fold into "other" rather than
 // producing a histogram with a long tail of ones.
 const TYPE_BUCKETS = {
-  Document: "document", Stylesheet: "css", Script: "js", Image: "image",
-  Font: "font", XHR: "xhr", Fetch: "xhr", Media: "media", Manifest: "other",
-  TextTrack: "other", EventSource: "xhr", WebSocket: "other", Ping: "beacon",
-  CSPViolationReport: "beacon", Preflight: "other", Other: "other",
+  Document: "document",
+  Stylesheet: "css",
+  Script: "js",
+  Image: "image",
+  Font: "font",
+  XHR: "xhr",
+  Fetch: "xhr",
+  Media: "media",
+  Manifest: "other",
+  TextTrack: "other",
+  EventSource: "xhr",
+  WebSocket: "other",
+  Ping: "beacon",
+  CSPViolationReport: "beacon",
+  Preflight: "other",
+  Other: "other",
 };
 
-export function bucketFor(cdpType) { return TYPE_BUCKETS[cdpType] || "other"; }
+export function bucketFor(cdpType) {
+  return TYPE_BUCKETS[cdpType] || "other";
+}
 
 // Build one row per request id, folding the four events that describe the same
 // request into a single record. Ordering is by the CDP timestamp on the
@@ -89,7 +110,9 @@ export function summariseWire(events, pageUrl) {
         // carrying redirectResponse. Overwriting would lose the first hop and
         // undercount both the request and its bytes, so the hop is counted and
         // the row moves on to the destination.
-        if (p.redirectResponse && row.url) { row.redirects = (row.redirects || 0) + 1; }
+        if (p.redirectResponse && row.url) {
+          row.redirects = (row.redirects || 0) + 1;
+        }
         row.url = p.request?.url || row.url;
         row.method = p.request?.method || row.method;
         row.type = bucketFor(p.type);
@@ -125,17 +148,20 @@ export function summariseWire(events, pageUrl) {
         // means the server answered and the body was cut short or the caller
         // walked away, which devtools itself renders as "(canceled)". No status
         // means the request genuinely did not complete.
-        if (row.status != null || p.canceled) { row.aborted = true; } else { row.failed = true; }
-        row.error = p.blockedReason ? "blocked: " + p.blockedReason : (p.errorText || "failed");
+        if (row.status != null || p.canceled) {
+          row.aborted = true;
+        } else {
+          row.failed = true;
+        }
+        row.error = p.blockedReason ? "blocked: " + p.blockedReason : p.errorText || "failed";
         row.t1 = p.timestamp;
         break;
-      default: break;
+      default:
+        break;
     }
   }
 
-  const rows = [...byId.values()]
-    .filter((r) => r.url && !r.url.startsWith("data:"))
-    .sort((a, b) => (a.t0 ?? 0) - (b.t0 ?? 0));
+  const rows = [...byId.values()].filter((r) => r.url && !r.url.startsWith("data:")).sort((a, b) => (a.t0 ?? 0) - (b.t0 ?? 0));
 
   const dataUris = [...byId.values()].filter((r) => r.url && r.url.startsWith("data:")).length;
 
@@ -143,7 +169,12 @@ export function summariseWire(events, pageUrl) {
   // Filled per resource type as the waterfall is walked, so the key set is not
   // knowable from the initializer.
   const byType: Record<string, { count: number; bytes: number }> = {};
-  let bytes = 0, thirdBytes = 0, thirdCount = 0, cached = 0, failed = 0, aborted = 0;
+  let bytes = 0,
+    thirdBytes = 0,
+    thirdCount = 0,
+    cached = 0,
+    failed = 0,
+    aborted = 0;
 
   for (const r of rows) {
     const host = hostOf(r.url);
@@ -153,7 +184,10 @@ export function summariseWire(events, pageUrl) {
     r.ms = r.t0 != null && r.t1 != null ? Math.round((r.t1 - r.t0) * 1000) : null;
 
     bytes += r.bytes;
-    if (third) { thirdBytes += r.bytes; thirdCount++; }
+    if (third) {
+      thirdBytes += r.bytes;
+      thirdCount++;
+    }
     if (r.cached) cached++;
     if (r.failed) failed++;
     if (r.aborted) aborted++;
@@ -164,7 +198,8 @@ export function summariseWire(events, pageUrl) {
     byType[t].bytes += r.bytes;
 
     const h = hosts.getOrInsertComputed(host, () => ({ host, count: 0, bytes: 0, third }));
-    h.count++; h.bytes += r.bytes;
+    h.count++;
+    h.bytes += r.bytes;
   }
 
   const hostList = [...hosts.values()].sort((a, b) => b.bytes - a.bytes || b.count - a.count);
@@ -222,7 +257,11 @@ function cdpClient(ws) {
 
   ws.addEventListener("message", (ev) => {
     let msg;
-    try { msg = JSON.parse(asText(ev.data, "")); } catch { return; }
+    try {
+      msg = JSON.parse(asText(ev.data, ""));
+    } catch {
+      return;
+    }
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject } = pending.get(msg.id);
       pending.delete(msg.id);
@@ -250,30 +289,50 @@ function cdpClient(ws) {
   // callers below read one or two fields each and guard for absence.
   const send = (method: string, params?: unknown, sessionId?: string): Promise<Record<string, any>> =>
     new Promise<Record<string, any>>((resolve, reject) => {
-    if (closed) return reject(closed);
-    const id = nextId++;
-    pending.set(id, { resolve, reject });
-    // sessionId is OPTIONAL on the wire: a browser-level command carries none,
-    // and a page-level one must. Declared so the conditional assign type-checks.
-    const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
-    if (sessionId) frame.sessionId = sessionId;
-    try { ws.send(JSON.stringify(frame)); } catch (e) { pending.delete(id); return reject(e); }
-    setTimeout(() => { if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`)); }, WIRE_TIMING.cdpCommandMs);
-  });
+      if (closed) return reject(closed);
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      // sessionId is OPTIONAL on the wire: a browser-level command carries none,
+      // and a page-level one must. Declared so the conditional assign type-checks.
+      const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
+      if (sessionId) frame.sessionId = sessionId;
+      try {
+        ws.send(JSON.stringify(frame));
+      } catch (e) {
+        pending.delete(id);
+        return reject(e);
+      }
+      setTimeout(() => {
+        if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`));
+      }, WIRE_TIMING.cdpCommandMs);
+    });
 
   // Resolves on the first matching event, or on timeout WITHOUT throwing: a page
   // that never fires its load event is a real page with a real waterfall, and
   // refusing to report it would throw away the observation we just paid for.
-  const waitFor = (method, ms) => new Promise((resolve) => {
-    const seen = events.find((e) => e.method === method);
-    if (seen) return resolve(seen);
-    const t = setTimeout(() => { ws.removeEventListener("message", onMsg); resolve(null); }, ms);
-    function onMsg(ev) {
-      let m; try { m = JSON.parse(ev.data); } catch { return; }
-      if (m.method === method) { clearTimeout(t); ws.removeEventListener("message", onMsg); resolve(m); }
-    }
-    ws.addEventListener("message", onMsg);
-  });
+  const waitFor = (method, ms) =>
+    new Promise((resolve) => {
+      const seen = events.find((e) => e.method === method);
+      if (seen) return resolve(seen);
+      const t = setTimeout(() => {
+        ws.removeEventListener("message", onMsg);
+        resolve(null);
+      }, ms);
+      function onMsg(ev) {
+        let m;
+        try {
+          m = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (m.method === method) {
+          clearTimeout(t);
+          ws.removeEventListener("message", onMsg);
+          resolve(m);
+        }
+      }
+      ws.addEventListener("message", onMsg);
+    });
 
   return { send, waitFor, events };
 }
@@ -292,128 +351,163 @@ export async function enableWireDomains(send: PageCdpSend) {
   return execution.every((result) => result.status === "fulfilled");
 }
 
+// A minted CDP session as a resource, so `await using` owns its teardown. The
+// DELETE is awaited rather than fired and forgotten: a leaked session holds one
+// of three concurrent slots and blacks out every browser lens on the site.
+// A failed DELETE is swallowed, because a disposer that throws would replace
+// the run's own result or error with a cleanup failure.
+function cdpSession(env, sessionId: string) {
+  return {
+    async [Symbol.asyncDispose]() {
+      try {
+        await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" });
+      } catch (_e) {}
+    },
+  };
+}
+
 // Open a session, drive one navigation, return the raw events. Every exit path
-// runs the DELETE.
-async function runWireSession(env, url) {
+// after the session exists runs the DELETE, and the socket closes before it.
+// Disposal runs in reverse declaration order, so the order is written once,
+// in the order the two resources were acquired.
+export async function runWireSession(env, url) {
   const created = await env.BROWSER.fetch(CDP_BASE, { method: "POST" });
   if (created.status === 429) return { budget: true };
   if (!created.ok) {
-    let detail = ""; try { detail = (await created.text()).slice(0, 200); } catch (_e) {}
+    let detail = "";
+    try {
+      detail = (await created.text()).slice(0, 200);
+    } catch (_e) {}
     return { error: `Browser Run refused a CDP session (${created.status}).`, detail, status: created.status };
   }
   const { sessionId } = await created.json();
   if (!sessionId) return { error: "Browser Run returned no sessionId." };
 
+  await using _session = cdpSession(env, sessionId);
+
+  const wsRes = await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { headers: { Upgrade: "websocket" } });
+  const ws = wsRes.webSocket;
+  if (!ws) return { error: `Browser Run did not upgrade to a CDP WebSocket (status ${wsRes.status}).` };
+  ws.accept();
+  // workerd's WebSocket carries no Symbol.dispose of its own (checked
+  // 2026-10-01 on workerd 2026-09-26), so the close is wrapped here.
+  using _socket = {
+    [Symbol.dispose]() {
+      try {
+        ws.close(1000, "done");
+      } catch (_e) {}
+    },
+  };
+  const cdp = cdpClient(ws);
+
+  const { targetInfos } = await cdp.send("Target.getTargets");
+  const page = (targetInfos || []).find((t) => t.type === "page");
+  if (!page) return { error: "The CDP session exposed no page target." };
+  const { sessionId: pageSession } = await cdp.send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
+
+  // Identify honestly, exactly like every other outbound fetch on this site.
+  // A page that wants to refuse AadharshBot must be able to see it is
+  // AadharshBot; a stealth crawl would make this lens a lie about itself.
+  //
+  // Tolerated rather than awaited-or-die: the override is deprecated in favour
+  // of Emulation.setUserAgentOverride and the two have swapped primacy before,
+  // so a binding that drops it should cost the honest UA string and not the
+  // whole observation. `uaApplied` carries the fact into the payload instead of
+  // letting the page silently claim an identity it did not send.
+  let uaApplied = true;
   try {
-    const wsRes = await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { headers: { Upgrade: "websocket" } });
-    const ws = wsRes.webSocket;
-    if (!ws) return { error: `Browser Run did not upgrade to a CDP WebSocket (status ${wsRes.status}).` };
-    ws.accept();
-    const cdp = cdpClient(ws);
-
-    const { targetInfos } = await cdp.send("Target.getTargets");
-    const page = (targetInfos || []).find((t) => t.type === "page");
-    if (!page) return { error: "The CDP session exposed no page target." };
-    const { sessionId: pageSession } = await cdp.send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
-
-    // Identify honestly, exactly like every other outbound fetch on this site.
-    // A page that wants to refuse AadharshBot must be able to see it is
-    // AadharshBot; a stealth crawl would make this lens a lie about itself.
-    //
-    // Tolerated rather than awaited-or-die: the override is deprecated in favour
-    // of Emulation.setUserAgentOverride and the two have swapped primacy before,
-    // so a binding that drops it should cost the honest UA string and not the
-    // whole observation. `uaApplied` carries the fact into the payload instead of
-    // letting the page silently claim an identity it did not send.
-    let uaApplied = true;
+    await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
+  } catch (_e) {
     try {
-      await cdp.send("Network.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
-    } catch (_e) {
-      try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
-      catch (_e2) { uaApplied = false; }
+      await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession);
+    } catch (_e2) {
+      uaApplied = false;
     }
-    // Runtime and Log carry the EXECUTION evidence, and both are enabled before
-    // the navigation because an exception thrown during load is the interesting
-    // case. This costs no extra browser instance and no extra minute: it is the
-    // session this lens already opens, answering two more questions on the way
-    // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
-    // here, and they are the two questions a declaration audit structurally
-    // cannot answer.
-    //
-    // Tolerated rather than awaited-or-die, exactly like the UA override above.
-    // A binding that refuses either domain should cost the execution checks and
-    // leave them neutral, not lose the whole request waterfall this route
-    // exists for.
-    const execDomains = await enableWireDomains((method, params) =>
-      cdp.send(method, params, pageSession));
-
-    const t0 = Date.now();
-    await cdp.send("Page.navigate", { url }, pageSession);
-    const loaded = await cdp.waitFor("Page.loadEventFired", WIRE_TIMING.navigateMs);
-    // The settle window is where the third parties this lens exists to count
-    // actually show up: beacons and tag managers fire ON load, so stopping at
-    // the load event would systematically under-report the thing being measured.
-    await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
-
-    // The census runs AFTER the settle window on purpose: an image that has not
-    // finished loading yet reports naturalWidth 0 and is not broken, so probing
-    // at the load event would invent failures. EXECUTION_PROBE only counts an
-    // image once `complete` is true.
-    let execution = null;
-    if (execDomains) {
-      try {
-        const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
-        const raw = r && r.result && asText(r.result.value) !== null ? JSON.parse(r.result.value) : null;
-        if (raw && !raw.probeError) {
-          // Uncaught errors, counted off the events this session already
-          // collected. Runtime.exceptionThrown is the page's own throw;
-          // Log.entryAdded at error level catches what the console reports
-          // without an exception object, which is how Kitesurf reports a
-          // callback that threw inside requestAnimationFrame.
-          const thrown = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown");
-          const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
-          const first = thrown[0]
-            ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
-            : logged[0] ? String((logged[0].params.entry.text) || "").slice(0, 120) : "";
-          execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
-        }
-      } catch (_e) { execution = null; }
-    }
-
-    // The browser-local tool catalog, read from the SAME session. A page's
-    // WebMCP tools exist only once its own script has run, so this is the one
-    // place on the site that can see them at all; every other tool reading here
-    // fetches /mcp, which is a different catalog belonging to the server.
-    //
-    // awaitPromise is the load-bearing option: getTools() is async, and without
-    // it the evaluate resolves to a pending Promise handle and the catalog reads
-    // as empty on every origin, which is indistinguishable from a site that has
-    // no tools.
-    let webmcp: ReturnType<typeof readWebmcpProbe> = null;
-    if (execDomains) {
-      try {
-        const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
-        const value = w && w.result ? asText(w.result.value) : null;
-        webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
-        // The engine label has to come from CDP rather than from the page. This
-        // route overrides navigator.userAgent to AadharshBot, so the in-page
-        // value is our own mask and would report the browser as a crawler.
-        if (webmcp) {
-          try {
-            const ver = await cdp.send("Browser.getVersion");
-            const product = ver && asText(ver.product);
-            if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
-          } catch (_e) { /* an engine we cannot name is still a result */ }
-        }
-      } catch (_e) { webmcp = null; }
-    }
-
-    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
-  } finally {
-    // Fire and forget would be wrong: a leaked session holds one of three
-    // concurrent slots and blacks out every browser lens on the site.
-    try { await env.BROWSER.fetch(`${CDP_BASE}/${sessionId}`, { method: "DELETE" }); } catch (_e) {}
   }
+  // Runtime and Log carry the EXECUTION evidence, and both are enabled before
+  // the navigation because an exception thrown during load is the interesting
+  // case. This costs no extra browser instance and no extra minute: it is the
+  // session this lens already opens, answering two more questions on the way
+  // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
+  // here, and they are the two questions a declaration audit structurally
+  // cannot answer.
+  //
+  // Tolerated rather than awaited-or-die, exactly like the UA override above.
+  // A binding that refuses either domain should cost the execution checks and
+  // leave them neutral, not lose the whole request waterfall this route
+  // exists for.
+  const execDomains = await enableWireDomains((method, params) => cdp.send(method, params, pageSession));
+
+  const t0 = Date.now();
+  await cdp.send("Page.navigate", { url }, pageSession);
+  const loaded = await cdp.waitFor("Page.loadEventFired", WIRE_TIMING.navigateMs);
+  // The settle window is where the third parties this lens exists to count
+  // actually show up: beacons and tag managers fire ON load, so stopping at
+  // the load event would systematically under-report the thing being measured.
+  await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
+
+  // The census runs AFTER the settle window on purpose: an image that has not
+  // finished loading yet reports naturalWidth 0 and is not broken, so probing
+  // at the load event would invent failures. EXECUTION_PROBE only counts an
+  // image once `complete` is true.
+  let execution = null;
+  if (execDomains) {
+    try {
+      const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
+      const raw = r && r.result && asText(r.result.value) !== null ? JSON.parse(r.result.value) : null;
+      if (raw && !raw.probeError) {
+        // Uncaught errors, counted off the events this session already
+        // collected. Runtime.exceptionThrown is the page's own throw;
+        // Log.entryAdded at error level catches what the console reports
+        // without an exception object, which is how Kitesurf reports a
+        // callback that threw inside requestAnimationFrame.
+        const thrown = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown");
+        const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
+        const first = thrown[0]
+          ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
+          : logged[0]
+            ? String(logged[0].params.entry.text || "").slice(0, 120)
+            : "";
+        execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
+      }
+    } catch (_e) {
+      execution = null;
+    }
+  }
+
+  // The browser-local tool catalog, read from the SAME session. A page's
+  // WebMCP tools exist only once its own script has run, so this is the one
+  // place on the site that can see them at all; every other tool reading here
+  // fetches /mcp, which is a different catalog belonging to the server.
+  //
+  // awaitPromise is the load-bearing option: getTools() is async, and without
+  // it the evaluate resolves to a pending Promise handle and the catalog reads
+  // as empty on every origin, which is indistinguishable from a site that has
+  // no tools.
+  let webmcp: ReturnType<typeof readWebmcpProbe> = null;
+  if (execDomains) {
+    try {
+      const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
+      const value = w && w.result ? asText(w.result.value) : null;
+      webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
+      // The engine label has to come from CDP rather than from the page. This
+      // route overrides navigator.userAgent to AadharshBot, so the in-page
+      // value is our own mask and would report the browser as a crawler.
+      if (webmcp) {
+        try {
+          const ver = await cdp.send("Browser.getVersion");
+          const product = ver && asText(ver.product);
+          if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
+        } catch (_e) {
+          /* an engine we cannot name is still a result */
+        }
+      }
+    } catch (_e) {
+      webmcp = null;
+    }
+  }
+
+  return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
 }
 
 // ── route ──────────────────────────────────────────────────────────────────
@@ -442,7 +536,9 @@ const LENS_WIRE = defineLens({
     // the single most likely non-success here.
     if (out.budget) {
       return {
-        ok: false, status: 429, outcome: "browser_budget_spent",
+        ok: false,
+        status: 429,
+        outcome: "browser_budget_spent",
         payload: {
           ok: false,
           error: `Browser Run is rate-limited right now (free plan: one new browser every 20s, ${BROWSER_FREE_PLAN.perDayMinutes} min/day account-wide). Every other lens still works.`,

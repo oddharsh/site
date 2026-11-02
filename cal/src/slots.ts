@@ -1,13 +1,14 @@
-// Slot computation, split out of index.js so it can be imported without
+// Slot computation, split out of index.ts so it can be imported without
 // pulling in the Workflow class.
 //
-// index.js re-exports BookingWorkflow (cal/src/workflow.ts), which imports
+// index.ts re-exports BookingWorkflow (cal/src/workflow.ts), which imports
 // `cloudflare:workers`. That's fine inside wrangler, which resolves the scheme
-// at bundle time, but plain `node --test` can't load it: the default ESM loader
-// only understands file:, data:, and node:. So anything a Node test touches has
-// to reach the slot logic WITHOUT going through index.js. The site worker's
-// /coffee/availability.json route and contract-tests.mjs both import from here
-// for that reason.
+// at bundle time, but plain node can't load it: the default ESM loader only
+// understands file:, data:, and node:, and the contract suite also runs under
+// node (`bun run test:node`). So anything a contract test touches has to reach
+// the slot logic WITHOUT going through index.ts. The site Worker's coffee.ts
+// (/coffee/availability.json), terminal.ts and lib/tools.ts, and
+// tools/tests/contract-shared.ts, all import from here for that reason.
 
 import { generateSlots, fetchBusySWR, BOOK_MAX_STALE_MS } from "./availability.ts";
 import { listHeld } from "./booking.ts";
@@ -20,20 +21,23 @@ export async function listOpenSlots(env, ctx, timings: Record<string, number> | 
   const mark = (name, p) => {
     if (!timings) return p;
     const s = Date.now();
-    return p.then(v => { timings[name] = Date.now() - s; return v; },
-                  e => { timings[name] = Date.now() - s; throw e; });
+    return p.then(
+      (v) => {
+        timings[name] = Date.now() - s;
+        return v;
+      },
+      (e) => {
+        timings[name] = Date.now() - s;
+        throw e;
+      },
+    );
   };
   // every held slot (pending reservation OR confirmed coffee) blocks its exact
   // slot AND counts toward the caps. A pending hold is reclaimed by the booking's
   // expiry Workflow if the host never acts; a confirmed hold self-expires just
   // after the event. listHeld reads them all in one shot (one key per slot).
-  const [cal, held] = await Promise.all([
-    mark("ics", fetchBusySWR(env, ctx, options)),
-    mark("held", listHeld(env)),
-  ]);
-  // busy → conflict-only (your real calendar); coffee bookings (held) → conflict
-  // + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what stops a
-  // packed calendar from zeroing out availability.
+  const [cal, held] = await Promise.all([mark("ics", fetchBusySWR(env, ctx, options)), mark("held", listHeld(env))]);
+  // busy and held stay separate inputs: see generateSlots for why.
   const t = Date.now();
   const slots = generateSlots(env, cal.busy, held);
   if (timings) timings.slots = Date.now() - t;
@@ -55,12 +59,14 @@ export async function getPublicAvailability(env, ctx) {
     ageSeconds: ageMs == null ? null : Math.floor(ageMs / 1000),
     timezone: env.HOST_TIMEZONE || "UTC",
     bookingUrl: "https://aadhar.sh/coffee",
-    slots: available ? slots.map(({ start, end }) => ({
-      start: new Date(start).toISOString(),
-      end: new Date(end).toISOString(),
-      startMs: start,
-      endMs: end,
-      durationMinutes: Math.round((end - start) / 60000),
-    })) : [],
+    slots: available
+      ? slots.map(({ start, end }) => ({
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          startMs: start,
+          endMs: end,
+          durationMinutes: Math.round((end - start) / 60000),
+        }))
+      : [],
   };
 }

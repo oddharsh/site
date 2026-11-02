@@ -109,8 +109,8 @@
       "title": "Around",
       "section": "around",
       "kind": "utility",
-      "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
-      "hint": "the crypto-VC neighborhood",
+      "description": "AadharshBot's scheduled crawl of the VC neighborhood.",
+      "hint": "the VC neighborhood",
       "flags": {
         "run": true,
         "taskbar": true,
@@ -628,6 +628,23 @@
       }
     },
     {
+      "path": "/lwe/smoothing",
+      "title": "Font smoothing",
+      "section": "lwe",
+      "kind": "content",
+      "description": "AppleFontSmoothing 0 to 3 measured on macOS 27.2, subpixel versus greyscale antialiasing, ClearType, and why external monitors blur on a Mac.",
+      "hint": "macOS font smoothing: AppleFontSmoothing, subpixel vs greyscale, ClearType",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/garage/blueprint",
       "title": "Blueprint",
       "section": "garage",
@@ -1080,7 +1097,7 @@
       "title": "AV2, before anyone can see it",
       "section": "garage",
       "kind": "content",
-      "description": "AV2 still images scored against the AVIF this site ships at matched bytes: ahead on the sparsest third of thumbnails, behind on denser ones and dense detail, and why an AV2 file behind a picture fallback still breaks.",
+      "description": "AV2 still images scored against the AVIF this site ships at matched bytes: about even at speed 6, ahead on about 148 of 162 thumbnails once TCQ and the IST/CCTX search are back on, behind on dense detail, and why an AV2 file behind a picture fallback still breaks.",
       "hint": "AV2 stills vs shipped AVIF, and the picture fallback trap",
       "flags": {
         "run": true,
@@ -1099,6 +1116,23 @@
       "kind": "content",
       "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading.",
       "hint": "a parser for the twins, and the five bugs it found",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
+      "path": "/garage/ranges",
+      "title": "Ranges, chunk by chunk",
+      "section": "garage",
+      "kind": "content",
+      "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it.",
+      "hint": "origin range requests, chunk sizes, and the photo route's R2 ranges",
       "flags": {
         "run": true,
         "taskbar": false,
@@ -1256,6 +1290,23 @@
         "run": false,
         "taskbar": false,
         "sitemap": false,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
+      "path": "/guestbook",
+      "title": "Guestbook",
+      "section": "utility",
+      "kind": "utility",
+      "description": "A guestbook for automated visitors: who came by, from where, with what tools, and why.",
+      "hint": "agents sign in and say why they came",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
         "gallery": false,
         "agents": true,
         "searchIndex": true,

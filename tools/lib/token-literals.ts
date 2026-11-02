@@ -24,7 +24,6 @@
 // distance in OKLab (see COPY_DE).
 import { readFileSync, readdirSync } from "node:fs";
 
-
 /**
  * Spelling variants collapse so `0.150`, `0.15` and `.15` compare equal, and so
  * does `100.00%` against `100%`. The bare `.15` form is what the garage
@@ -157,15 +156,6 @@ function inDeclaration(css: string, index: number): boolean {
 /** oklch(), and the sRGB spellings the site also writes: hex and rgb()/rgba(). */
 const COLOR = /oklch\([^()]*\)|(?<![\w&#-])#[0-9a-fA-F]{3,8}(?![\w-])|rgba?\([^()]*\)/g;
 
-/**
- * Every colour literal in `css` that is one token's value, with where it sits.
- * Three spellings count: the token's resolved text, the same with an alpha
- * (`--frame / .3`, written as `oklch(from var(--frame) l c h / .3)`), and a
- * literal within COPY_DE of exactly one token. A literal that close to two
- * tokens names neither, for the same reason an ambiguous value never does.
- * Hex and rgb() are compared by distance alone, since they never share text
- * with an oklch() token; that is how 87 of them hid until 2026-10-06.
- */
 export interface ColorLiteral {
   literal: string;
   index: number;
@@ -195,6 +185,15 @@ export function colorLiteralsIn(css: string): ColorLiteral[] {
   return out;
 }
 
+/**
+ * Every colour literal in `css` that is one token's value, with where it sits.
+ * Three spellings count: the token's resolved text, the same with an alpha
+ * (`--frame / .3`, written as `oklch(from var(--frame) l c h / .3)`), and a
+ * literal within COPY_DE of exactly one token. A literal that close to two
+ * tokens names neither, for the same reason an ambiguous value never does.
+ * Hex and rgb() are compared by distance alone, since they never share text
+ * with an oklch() token; that is how 87 of them hid until 2026-10-06.
+ */
 export function tokenCopiesIn(css: string, map: Map<string, string>): TokenCopy[] {
   const labs: [string, Lab][] = [];
   for (const [value, token] of map) {
@@ -263,7 +262,7 @@ export function cssSources(root: URL): CssSource[] {
   // The generators author INTO src/pages, so a copy there is a copy on the next
   // page anyone generates. The first sweep missed the garage one because it
   // spells the stops `.15` rather than `0.15`, which normalizeColor now folds.
-  for (const rel of ["pipelines/lwe/generate.mjs", "pipelines/garage/generate.mjs"]) out.push({ file: rel, css: read(rel), kind: "generator", offset: 0 });
+  for (const rel of ["pipelines/lwe/generate.ts", "pipelines/garage/generate.ts"]) out.push({ file: rel, css: read(rel), kind: "generator", offset: 0 });
   for (const family of ["lwe", "garage"]) {
     for (const f of ls(`pipelines/${family}/specs`).filter((f) => f.endsWith(".json"))) {
       // Garage specs carry their CSS as `pageCss`, lwe specs as `demoCss`. Until
@@ -281,7 +280,8 @@ export function cssSources(root: URL): CssSource[] {
   // the swap because a TS file holds CSS beside things that are not CSS.
   for (const dir of ["src/worker", "cal/src", "serendipity"]) {
     for (const f of ls(dir, true)) {
-      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts") && !EMAIL_TEMPLATES.has(`${dir}/${f}`)) out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
+      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts") && !EMAIL_TEMPLATES.has(`${dir}/${f}`))
+        out.push({ file: `${dir}/${f}`, css: read(`${dir}/${f}`), kind: "worker", offset: 0 });
     }
   }
   // luna.css after its verbatim token blocks: the definitions themselves are literals by nature.

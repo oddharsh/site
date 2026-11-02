@@ -33,7 +33,13 @@ import { brotliDecompressSync, constants, zstdCompressSync, zstdDecompressSync }
 const ORIGIN = "https://aadhar.sh";
 const LEVELS = [3, 6, 19];
 
-interface Reply { status: number; encoding: string; type: string; cacheControl: string; body: Buffer }
+interface Reply {
+  status: number;
+  encoding: string;
+  type: string;
+  cacheControl: string;
+  body: Buffer;
+}
 // One page the Worker renders: its size, the brotli it ships, and per level the
 // dcz frame size (`dcz3`) and the median milliseconds to make it (`ms3`).
 type Row = { path: string; cacheControl: string; raw: number; liveBr: number } & Record<string, number | string>;
@@ -44,7 +50,10 @@ function curl(path: string, headers: string[]): Reply {
   const r = spawnSync("curl", [...args, ORIGIN + path], { maxBuffer: 64 * 1024 * 1024 });
   if (r.status !== 0) throw new Error(`curl ${path} exited ${r.status}`);
   // An Early Hints 103 block precedes the real response, so read the LAST block.
-  const blocks = r.stderr.toString().split(/\r?\n\r?\n/).filter((b) => b.startsWith("HTTP/"));
+  const blocks = r.stderr
+    .toString()
+    .split(/\r?\n\r?\n/)
+    .filter((b) => b.startsWith("HTTP/"));
   const head = blocks[blocks.length - 1] ?? "";
   const field = (name: string) => head.match(new RegExp(`^${name}: *(.*)$`, "mi"))?.[1]?.trim() ?? "";
   return {
@@ -80,7 +89,10 @@ const rows: Row[] = [];
 for (const { path } of manifest.surfaces as { path: string }[]) {
   const live = curl(path, [...asDocument, "Accept-Encoding: br, zstd, dcz", available]);
   if (live.status !== 200 || !live.type.startsWith("text/html")) continue;
-  if (live.encoding === "dcz") { delta.push(path); continue; }
+  if (live.encoding === "dcz") {
+    delta.push(path);
+    continue;
+  }
   const plain = curl(path, [...asDocument, "Accept-Encoding: br"]);
   const html = plain.encoding === "br" ? brotliDecompressSync(plain.body) : plain.body;
   const row: Row = { path, cacheControl: live.cacheControl, raw: html.length, liveBr: live.body.length };
@@ -95,7 +107,15 @@ for (const { path } of manifest.surfaces as { path: string }[]) {
   rows.push(row);
 }
 
-const result = { when: new Date().toISOString(), node: process.version, zstd: process.versions.zstd, dictionary: dictPath, dictionaryBytes: dict.length, delta, rows };
+const result = {
+  when: new Date().toISOString(),
+  node: process.version,
+  zstd: process.versions.zstd,
+  dictionary: dictPath,
+  dictionaryBytes: dict.length,
+  delta,
+  rows,
+};
 if (process.argv.includes("--json")) {
   console.log(JSON.stringify(result));
 } else {
@@ -105,7 +125,9 @@ if (process.argv.includes("--json")) {
   console.log(`${result.when}  node ${result.node}  zstd ${result.zstd}  ${dictPath} (${dict.length} B)`);
   console.log(`${delta.length} pages already answer dcz; ${rows.length} answer br`);
   for (const r of rows) {
-    console.log(`  ${r.path.padEnd(16)} ${String(r.raw).padStart(7)} raw ${String(r.liveBr).padStart(6)} br ${String(num(r, "dcz6")).padStart(6)} dcz6  ${num(r, "ms6")} ms`);
+    console.log(
+      `  ${r.path.padEnd(16)} ${String(r.raw).padStart(7)} raw ${String(r.liveBr).padStart(6)} br ${String(num(r, "dcz6")).padStart(6)} dcz6  ${num(r, "ms6")} ms`,
+    );
   }
   for (const level of LEVELS) {
     const times = rows.map((r) => num(r, `ms${level}`)).sort((a, b) => a - b);

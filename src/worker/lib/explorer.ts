@@ -1,12 +1,13 @@
-// lib/explorer.js — the Explorer address bar and task pane, as markup.
+// lib/explorer.ts — the Explorer address bar and task pane, as markup.
 //
 // Two devices, one builder, used from both sides of the site: build.ts bakes
 // them into every staged static page, and lunaPage() emits them for the
 // Worker-rendered ones. Neither side owns a private copy, for the same reason
-// lib/desktop.js exists — window chrome that changes in two places drifts.
+// lib/desktop.ts exists: window chrome that changes in two places drifts.
 //
 // Node-safe on purpose (no `cloudflare:` import), because build.ts and
-// contract-tests.mjs both import it under plain node. See gotcha 16.
+// contract-explorer-chrome.test.ts both import it under plain node. See
+// gotcha 16.
 //
 // THE HONESTY RULE IS THE DESIGN CONSTRAINT. Every row here is passed in by a
 // caller that can see the thing it is describing, or derived from the URL. This
@@ -43,10 +44,17 @@ const PLACE_LABEL = new Map(PLACES.map((place) => [place.path, place.label]));
 
 /** "/garage/encoding" -> ["/garage", "/garage/encoding"] */
 function trail(path: string): string[] {
-  const parts = String(path || "/").split("?")[0].replace(/\/+$/, "").split("/").filter(Boolean);
+  const parts = String(path || "/")
+    .split("?")[0]
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter(Boolean);
   const out: string[] = [];
   let walked = "";
-  for (const part of parts) { walked += `/${part}`; out.push(walked); }
+  for (const part of parts) {
+    walked += `/${part}`;
+    out.push(walked);
+  }
   return out;
 }
 
@@ -61,7 +69,6 @@ export function parentOf(path) {
   return parts.length > 1 ? parts[parts.length - 2] : "/";
 }
 
-/** The display name for a path we know about, else the caller's fallback. */
 export function labelFor(path, fallback = "") {
   if (path === "/") return "aadhar.sh";
   return PLACE_LABEL.get(path) || fallback || path.replace(/^.*\//, "");
@@ -73,8 +80,7 @@ export function labelFor(path, fallback = "") {
  *
  * There is deliberately no Go button. Every segment here navigates, and a Go
  * that submitted nothing would be exactly the fabricated affordance the brand
- * rules forbid. Making the well a real editable address is the follow-up; /run
- * already exists to answer it.
+ * rules forbid. /run is where a typed address goes.
  */
 export function addressBar({ path = "/", name = "" }: { path?: string; name?: string } = {}): Html {
   const parts = trail(path);
@@ -83,9 +89,7 @@ export function addressBar({ path = "/", name = "" }: { path?: string; name?: st
     const last = index === parts.length - 1;
     const text = last ? labelFor(step, name) : labelFor(step, step.replace(/^.*\//, ""));
     crumbs.push(html`<span class="axp-sep" aria-hidden="true">›</span>`);
-    crumbs.push(last
-      ? html`<span class="axp-here" aria-current="page">${text}</span>`
-      : html`<a href="${step}">${text}</a>`);
+    crumbs.push(last ? html`<span class="axp-here" aria-current="page">${text}</span>` : html`<a href="${step}">${text}</a>`);
   });
   return html`<div class="axp-address"><span class="axp-addr-label">Address</span><div class="axp-well"><span class="axp-addr-icon" aria-hidden="true"></span>${crumbs}</div></div>`;
 }
@@ -108,10 +112,7 @@ function taskList(items: Task[]): Html {
  * representations, mostly) and `details` are facts the caller has counted.
  * Both are optional; what remains is true of every page.
  */
-export function taskPane(
-  { path = "/", name = "", tasks = [], details = [] }:
-    { path?: string; name?: string; tasks?: Task[]; details?: Detail[] } = {},
-): Html {
+export function taskPane({ path = "/", name = "", tasks = [], details = [] }: { path?: string; name?: string; tasks?: Task[]; details?: Detail[] } = {}): Html {
   const section = sectionOf(path);
   const parent = parentOf(path);
   const boxes: Html[] = [];
@@ -120,7 +121,8 @@ export function taskPane(
   if (parent) objectTasks.push({ href: parent, label: `Up to ${labelFor(parent)}`, glyph: "↑" });
   if (objectTasks.length) boxes.push(group("Object tasks", taskList(objectTasks)));
 
-  const places = PLACES.filter((place) => place.path !== section).slice(0, 6)
+  const places = PLACES.filter((place) => place.path !== section)
+    .slice(0, 6)
     .map((place) => ({ href: place.path, label: place.label, glyph: "■" }));
   if (places.length) boxes.push(group("Other places", taskList(places)));
 
@@ -129,17 +131,15 @@ export function taskPane(
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
-  boxes.push(group("Details", html`<dl>${rows.map((row) =>
-    html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
+  boxes.push(group("Details", html`<dl>${rows.map((row) => html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
 
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
   // a closed details' content, so the pane rendered outside its 23px collapsed
-  // box and painted straight over the article. luna.css already carries that
-  // lesson for `.np-note[popover]`, whose comment inverts the same logic on
-  // purpose. The wrapper stays explicit so luna.css can hide the whole piece of
-  // secondary navigation at its narrow breakpoint instead of turning the rail
-  // into a bottom strip that reads like page content.
+  // box and painted straight over the article. writing.ts's stylesheet already
+  // carries that lesson for `.np-note[popover]`, whose comment inverts the same
+  // logic on purpose. The wrapper stays explicit so luna.css can hide the whole
+  // piece of secondary navigation at its narrow breakpoint instead of turning
+  // the rail into a bottom strip that reads like page content.
   return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
-

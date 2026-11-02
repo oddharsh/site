@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/ranges: Ranges, chunk by chunk</title>
+<meta name="description" content="Cloudflare&#39;s cache now pulls big files from the origin one chunk at a time. The chunk arithmetic, ten viewers sharing one fetch, and a live probe of why this site&#39;s 3.26 GB of photos can&#39;t use it.">
+<link rel="canonical" href="https://aadhar.sh/garage/ranges">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/ranges: Ranges, chunk by chunk">
+<meta property="og:description" content="Cloudflare&#39;s cache now pulls big files from the origin one chunk at a time. The chunk arithmetic, ten viewers sharing one fetch, and a live probe of why this site&#39;s 3.26 GB of photos can&#39;t use it.">
+<meta property="og:url" content="https://aadhar.sh/garage/ranges">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-ranges.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/ranges interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-ranges.jpg">
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+@media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
+
+.rg-box{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 var(--paper);padding:8px 10px;margin:10px 0}
+.rg-pad{font-size:var(--text-xs)}
+.rg-controls{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:var(--text-xs);margin:0 0 8px}
+.rg-controls .xp-button{font-size:var(--text-micro)}
+.rg-strip{display:grid;gap:1px;background:var(--slate-81);border:1px solid var(--slate-73);cursor:crosshair;margin:4px 0 2px}
+.rg-strip span{display:block;height:22px;background:var(--paper)}
+.rg-strip .part{background:var(--blue-80)}
+.rg-strip .have{background:var(--blue-55)}
+.rg-strip .fresh{background:var(--go)}
+.rg-strip .read{box-shadow:inset 0 0 0 2px var(--warn)}
+.rg-cap{font-size:var(--text-2xs);color:var(--ink-dim);margin:2px 0 8px}
+.rg-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 8px}
+.rg-stats>div,.rg-race .leg{border:1px solid var(--slate-81);background:var(--paper);padding:6px 8px;font-size:var(--text-micro)}
+.rg-stats .n,.rg-race .n{font-family:var(--font-mono);font-size:var(--text-lede);font-weight:700;display:block}
+.rg-stats .lbl,.rg-race .lbl{color:var(--slate-40)}
+.rg-log{margin:0;padding-left:18px;font-size:var(--text-micro);color:var(--ink-soft);min-height:4em}
+.rg-log li:first-child{color:var(--ink)}
+.rg-box .n{font-family:var(--font-mono);font-weight:700}
+.rg-legend{font-size:var(--text-2xs);color:var(--ink-dim);margin:0 0 6px}
+.rg-legend span{display:inline-block;width:10px;height:10px;margin:0 3px 0 10px;vertical-align:-1px}
+.rg-legend span:first-child{margin-left:0}
+.rg-lanes{border:1px solid var(--slate-81);background:var(--paper);padding:4px 0}
+.lane{display:grid;grid-template-columns:5.5em 1fr;align-items:center;font-size:var(--text-2xs);padding:1px 8px}
+.lane.origin{border-bottom:1px solid var(--rule);padding-bottom:4px;margin-bottom:3px}
+.lane .who{color:var(--slate-40)}
+.lane .track{position:relative;height:9px}
+.lane .track span{position:absolute;top:0;height:9px;transform-origin:left;animation:rg-grow var(--xp-transition-move) both}
+.rg-legend .own,.lane .own{background:var(--go)}
+.rg-legend .ride,.lane .ride{background:var(--blue-55)}
+.rg-legend .hit,.lane .hit{background:var(--slate-81)}
+.rg-legend .fetch,.lane .fetch{background:var(--amber-56);opacity:.55}
+@keyframes rg-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){.lane .track span{animation:none}}
+.rg-sum{font-size:var(--text-xs);margin:8px 0 0}
+.rg-live-grid{display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:start}
+.rg-thumb{width:200px;height:auto;border:1px solid var(--slate-73);background:var(--paper)}
+.rg-boxes .row{display:grid;grid-template-columns:6.5em minmax(0,1.6fr) 6.5em minmax(0,1fr) 4em;gap:8px;align-items:center;padding:2px 6px;font-size:var(--text-micro);border-bottom:1px solid var(--surface-desktop);background:var(--paper)}
+.rg-boxes .row.head{font-weight:700;background:var(--surface-desktop)}
+.rg-boxes .row span:nth-child(1),.rg-boxes .row span:nth-child(3),.rg-boxes .row span:nth-child(5){font-family:var(--font-mono);font-size:var(--text-2xs);text-align:right}
+.rg-boxes .row.head span{font-family:inherit;font-size:inherit}
+.rg-boxes .share{display:block;height:9px;border:1px solid var(--slate-81);background:var(--paper)}
+.rg-boxes .share i{display:block;height:100%;background:var(--blue-55)}
+.rg-race{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 0;font-size:var(--text-xs)}
+.rg-race:empty{display:none}
+@media (max-width:640px){.rg-stats{grid-template-columns:1fr 1fr}.rg-live-grid,.rg-race{grid-template-columns:1fr}.rg-boxes .row{grid-template-columns:5.5em minmax(0,1fr) 5.5em 3.5em}.rg-boxes .row span:nth-child(4){display:none}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/ranges</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div><!-- /axp:window -->
+  <main id="main" class="content prose">
+<h1>Ranges, chunk by chunk</h1>
+<p class="garage-intro">On 2026-10-23 Cloudflare shipped <a href="https://blog.cloudflare.com/origin-range-requests/">Origin Range Requests</a>, a <a class="term" data-t="cache-rules" href="https://developers.cloudflare.com/cache/how-to/cache-rules/" title="A Cloudflare zone setting that changes how the cache treats requests matching a filter, such as whether to cache them and for how long." rel="external">Cache Rule</a> switch for big files. When a client asks for a slice of a file the edge doesn't hold, the edge now fetches only the chunks that slice touches, keeps them, and builds later answers from whatever chunks it has. Three demos below: the chunk arithmetic, ten viewers sharing one fetch, and a live probe of the one place this site serves big files. That place can't use the switch, and why is half the story.</p>
+
+<h2>What the old cache did</h2>
+<p>A <a class="term" data-t="http-range-requests" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests" title="An HTTP request with a Range header that asks for only some bytes of a file. The server answers 206 Partial Content with just those bytes." rel="external">range request</a> asks for bytes <code>a</code> through <code>b</code> of a file and gets back a <code>206 Partial Content</code>. A video player seeking to minute 40 sends one. So does a download manager resuming at 61%.</p>
+<p>Before this change, a zone that wanted ranges cached set one fixed range size and a list of file extensions, close to nginx's slice module. Every request mapped onto those fixed slices. <a class="term" data-t="r2" href="https://developers.cloudflare.com/r2/" title="Cloudflare's object storage for files. It speaks Amazon S3's API and charges nothing for downloading data back out." rel="external">R2</a>, the biggest internal user, ran at 64 MiB, so a 1 KiB read that straddled a slice edge pulled two slices, 128 MiB, between data centers. A slice had to finish downloading before anyone could read from it. The size was part of the cache key, too, so changing it threw the cache away.</p>
+<p>Now the slice is the chunk that <a class="term" data-t="pingora" href="https://github.com/cloudflare/pingora" title="Cloudflare's open-source Rust framework for building network proxies. Cloudflare's own cache is built on it." rel="external">Pingora</a> already writes to disk, and customers don't pick its size. Metadata records which byte ranges landed. One response can stitch together bytes from disk, bytes from a download still in flight, and bytes from a new origin fetch. Before it stitches, the edge checks that every origin piece reports the same total size and the same <a class="term" data-t="etag" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag" title="An HTTP response header that names one exact version of a file, so a cache can ask whether its copy is still current." rel="external">ETag</a>, so two versions of a file never share a response. Cloudflare reports that R2's p99 <a class="term" data-t="ttfb" href="https://en.wikipedia.org/wiki/Time_to_first_byte" title="Time to first byte: how long a browser waits after sending a request before the first byte of the response arrives." rel="external">time to first byte</a> roughly halved, and traffic between its cache tiers fell about 6% week over week.</p>
+
+<h2>Fill the chunks</h2>
+<p>Pick a file and a chunk size, then send reads. Click anywhere on the strip to read 1 MiB from that spot. Blue squares are cached, green ones arrived from the origin on the last read, and the outline marks what the last read touched.</p>
+<div id="rg-sim" class="rg-box" hidden>
+<div class="rg-controls">
+<label>File <select id="rg-file"><option value="photo">a 9.27 MB photo original</option><option value="video" selected>a 500 MiB video</option><option value="disk">a 4 GiB disk image</option></select></label>
+<label>Chunk <select id="rg-chunk"><option value="65536">64 KiB</option><option value="1048576" selected>1 MiB</option><option value="8388608">8 MiB</option><option value="67108864">64 MiB (old R2)</option></select></label>
+</div>
+<div class="rg-controls">
+<button type="button" class="xp-button" data-read="head">Read the header</button>
+<button type="button" class="xp-button" data-read="tail">Read the last 64 KiB</button>
+<button type="button" class="xp-button" data-read="edge">1 KiB across a chunk edge</button>
+<button type="button" class="xp-button" data-read="scrub">Scrub: 8 seeks</button>
+<button type="button" class="xp-button" id="rg-reset">Empty the cache</button>
+</div>
+<div id="rg-strip" class="rg-strip" role="img" aria-label="Chunks of the file, colored by cache state"></div>
+<p id="rg-geom" class="rg-cap"></p>
+<div id="rg-stats" class="rg-stats"></div>
+<ol id="rg-log" class="rg-log"></ol>
+</div>
+<noscript><p class="rg-box rg-pad">The simulator needs JavaScript.</p></noscript>
+<p>Two costs pull against each other. A read of <i>n</i> bytes makes the origin send at most <i>n</i> plus two chunks, one partly wasted at each end, so smaller chunks waste less. Every chunk is also a cache entry to track. On the 500 MiB video, the 8 seeks ask for 8 MiB: at 64 KiB the origin sends exactly 8 MiB as 128 chunks, at 8 MiB it sends 80 MiB as 10 chunks, and at 64 MiB it sends the whole file. The post doesn't say what size Pingora's chunks are, so read the menu as a spread of guesses.</p>
+<p>The photo shows the blunt end. At 64 MiB the file fits in one chunk, so the first read of any byte pulls all 9.27 MB.</p>
+
+<h2>Ten viewers, one fetch</h2>
+<p>A popular file misses in bursts. A video premieres, and the players all seek to the same opening seconds within a few hundred milliseconds of each other, before the first origin fetch has come back. Here, viewers arrive about 30 ms apart, each wants 2 MiB near the same spot of a cold file, and the origin takes 300 ms per fetch.</p>
+<div id="rg-share" class="rg-box" hidden>
+<div class="rg-controls">
+<label>Viewers <input id="rg-viewers" type="range" min="2" max="20" value="10"> <span id="rg-viewers-n" class="n">10</span></label>
+<label><input id="rg-shared" type="checkbox" checked> Share downloads in flight</label>
+</div>
+<div class="rg-legend"><span class="own"></span>started an origin fetch <span class="ride"></span>waited on one already running <span class="hit"></span>served from cache <span class="fetch"></span>origin fetch</div>
+<div id="rg-lanes" class="rg-lanes"></div>
+<p class="rg-cap">The track spans the first second after the first viewer arrives.</p>
+<p id="rg-share-stats" class="rg-sum"></p>
+</div>
+<p>At ten viewers, sharing turns 20 origin fetches into 4 and cuts the median wait from 300 ms to 178 ms, because a viewer that attaches late waits only for the rest of a fetch already running. Past 300 ms the first fetches land, and from then on everyone hits the cache with or without sharing. The burst is the only window where sharing matters, and it's the window when the origin is busiest.</p>
+
+<h2>Why this site can't switch it on</h2>
+<p>The big files here are 165 photo originals: <a class="term" data-t="jpeg-xl" href="https://en.wikipedia.org/wiki/JPEG_XL" title="A newer image format from the JPEG committee. It compresses well, decodes in parallel, and can repack an existing JPEG losslessly into a smaller file." rel="external">JPEG XL</a> files from 7.2 MB to 30.8 MB, 3.26 GB in all. Everything else the site ships fits in 31 MB, and its largest single file is a 1.7 MB AV2 decoder.</p>
+<p>A Cache Rule governs requests that pass through Cloudflare's cache on their way to an origin. On this site the <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Worker</a> is the origin, and it reads originals through an R2 binding, which never passes a cache. No rule sees that read, so the switch has nothing to act on.</p>
+<p>Full reads still come out of a cache, two of them in fact. Workers Cache sits in front of the Worker and answers a repeat <code>GET</code> of <code>/images/full/</code> before the Worker runs, with <code>cf-cache-status: HIT</code> and an <code>age</code>. Behind it, the photo route keeps its own copy in the <a class="term" data-t="workers-cache-api" href="https://developers.cloudflare.com/workers/runtime-apis/cache/" title="The interface a Cloudflare Worker uses to store responses in the local data center's cache and serve them on later requests." rel="external">Cache API</a> for the <a class="term" data-t="colo" href="https://en.wikipedia.org/wiki/Colocation_centre" title="Short for colocation center, a shared data center. At Cloudflare it means one of the data centers that answers visitors nearby." rel="external">colo</a>.</p>
+<p>A range read skips both. The dispatcher sends any request with a <code>Range</code> header around Workers Cache, and the photo route skips the Cache API, because a 1 KiB body must never land in the slot that holds the whole file. The route then turns <code>Range: bytes=a-b</code> into an R2 read with an offset and a length, and writes the <code>206</code> and its <code>Content-Range</code> itself. So every range read runs the Worker and reads R2, even when both caches hold every byte it asks for.</p>
+
+<h2>Read a photo original, 32 bytes at a time</h2>
+<p>A JPEG XL file is a stack of boxes, and each opens with its length and a four-letter type. Read one box header, add the length, and you land on the next. The script below walks a real original that way, one range request per box. It also reads the image's width and height out of the first codestream bytes, so it learns the layout and the size of a 15 MB file from a few hundred bytes.</p>
+<div id="rg-live" class="rg-box" hidden>
+<div class="rg-controls">
+<label>Original <select id="rg-photo"></select></label>
+<button type="button" class="xp-button" id="rg-walk">Walk the boxes</button>
+<button type="button" class="xp-button" id="rg-race">Race the cache</button>
+</div>
+<div class="rg-live-grid">
+<img id="rg-thumb" class="rg-thumb" alt="" width="200" height="134" hidden>
+<div><div id="rg-boxes" class="rg-boxes"></div><p id="rg-walk-sum" class="rg-sum"></p></div>
+</div>
+<div id="rg-race-out" class="rg-race"></div>
+</div>
+<p id="rg-live-off" class="rg-box rg-pad">The live probe needs JavaScript and this site's photo list.</p>
+<p>No hop carries <code>cf-cache-status</code>, which means none of them touched a cache: each one ran the Worker and read R2. The race puts the two paths side by side: a full request, cut off once its headers arrive, against a 1 KiB range of the same file. On 2026-10-24 from New York, 5 rounds each, the full request's headers took a median 27 ms, all from Workers Cache, and the range's took 69 ms.</p>
+<p>One trap cost me a wrong draft of this section. The photo route stamps <code>x-photo-cache: hit</code> or <code>miss</code> on what it returns, and Workers Cache stores that response whole, header included. A repeat request then gets <code>x-photo-cache: miss</code> out of a cache hit with an <code>age</code> of nine minutes. Four of 13 originals I sampled answered that way on every request. Read <code>cf-cache-status</code> and <code>age</code> first.</p>
+
+<h2>What would close the gap</h2>
+<ul>
+<li><b>Let ranges into Workers Cache.</b> The front tier is Cloudflare's cache, and the Worker behind it already answers ranges, which is the shape Origin Range Requests wants. Two things I haven't tested decide it: whether Workers Cache answers a range out of a stored full response, and whether a Cache Rule reaches Workers Cache at all.</li>
+<li><b>Answer ranges from the Cache API.</b> If <code>cache.match()</code> can serve a range out of a stored full response, the fix is a few lines in the photo route, and the read stops reaching R2.</li>
+<li><b>Leave it.</b> As far as I know, browsers don't send ranges for an <code>&lt;img&gt;</code>. Video players and resumable downloads do, and this site serves neither. I haven't counted how many range requests <code>/images/full/</code> gets, and that count decides whether either fix earns a change.</li>
+</ul>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
+  </main>
+  <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-10-24</span></div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var KiB = 1024, MiB = 1048576, GiB = 1073741824;
+  var commas = function(n){ return n.toLocaleString("en-US"); };
+  // Binary units throughout, because the chunk sizes are powers of two and the
+  // post quotes R2's old range as 64 MiB.
+  var human = function(n){
+    var u = n >= GiB ? [GiB, "GiB"] : n >= MiB ? [MiB, "MiB"] : n >= KiB ? [KiB, "KiB"] : [1, "B"];
+    var v = n / u[0];
+    return (u[0] === 1 || v >= 100 || v === Math.round(v) ? String(Math.round(v)) : v.toFixed(v >= 10 ? 1 : 2)) + " " + u[1];
+  };
+  var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){ return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var median = function(xs){ var s = xs.slice().sort(function(a, b){ return a - b; }); var m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+  // ── 1. chunk simulator ──────────────────────────────────────────────
+  // One model for both eras: a read fetches every touched chunk it doesn't
+  // hold, whole, and one origin request covers each run of adjacent misses.
+  // The old R2 behavior is this model at 64 MiB.
+  (function(){
+    var box = $("rg-sim");
+    if (!box) return;
+    var FILES = { photo: 9270366, video: 524288000, disk: 4 * GiB };
+    var CELLS = 96;
+    var strip = $("rg-strip"), stats = $("rg-stats"), log = $("rg-log"), file = $("rg-file"), chunkSel = $("rg-chunk");
+    var st;
+    function reset(){
+      var size = FILES[file.value], chunk = +chunkSel.value, n = Math.ceil(size / chunk);
+      st = { size: size, chunk: chunk, n: n, have: new Uint8Array(n), fresh: new Uint8Array(n), asked: 0, sent: 0, reqs: 0, last: null };
+      log.innerHTML = "";
+      draw();
+    }
+    function read(start, len, label){
+      start = Math.max(0, Math.min(start, st.size - 1));
+      var end = Math.min(st.size - 1, start + len - 1);
+      var a = Math.floor(start / st.chunk), b = Math.floor(end / st.chunk);
+      var fetched = 0, runs = 0, hit = 0, inRun = false;
+      st.fresh.fill(0);
+      for (var c = a; c <= b; c++) {
+        if (st.have[c]) { hit++; inRun = false; continue; }
+        if (!inRun) { runs++; inRun = true; }
+        fetched += Math.min(st.chunk, st.size - c * st.chunk);
+        st.have[c] = 1; st.fresh[c] = 1;
+      }
+      var asked = end - start + 1, touched = b - a + 1;
+      st.asked += asked; st.sent += fetched; st.reqs += runs; st.last = [start, end];
+      var li = document.createElement("li");
+      li.textContent = label + ": " + human(asked) + " at byte " + commas(start) + " touches " + touched + (touched === 1 ? " chunk" : " chunks") +
+        (hit ? " (" + hit + " cached)" : "") + ". " + (fetched ? "Origin sends " + human(fetched) + " in " + runs + (runs === 1 ? " request." : " requests.") : "Served from cache, origin untouched.");
+      log.insertBefore(li, log.firstChild);
+      while (log.children.length > 6) log.removeChild(log.lastChild);
+      draw();
+    }
+    function draw(){
+      var cells = Math.min(CELLS, st.n), html = "";
+      for (var i = 0; i < cells; i++) {
+        var c0 = Math.floor(i * st.n / cells), c1 = Math.floor((i + 1) * st.n / cells), have = 0, fresh = 0;
+        for (var c = c0; c < c1; c++) { have += st.have[c]; fresh |= st.fresh[c]; }
+        var cls = fresh ? "fresh" : have === c1 - c0 ? "have" : have ? "part" : "";
+        if (st.last) {
+          var b0 = c0 * st.chunk, b1 = Math.min(st.size, c1 * st.chunk) - 1;
+          if (st.last[0] <= b1 && st.last[1] >= b0) cls += " read";
+        }
+        html += '<span class="' + cls + '"></span>';
+      }
+      strip.innerHTML = html;
+      strip.style.gridTemplateColumns = "repeat(" + cells + ",1fr)";
+      var held = 0;
+      for (var k = 0; k < st.n; k++) held += st.have[k];
+      var amp = st.asked ? st.sent / st.asked : 0;
+      stats.innerHTML =
+        '<div><span class="n">' + human(st.asked) + '</span><span class="lbl">clients asked for</span></div>' +
+        '<div><span class="n">' + human(st.sent) + '</span><span class="lbl">origin sent' + (st.asked ? " (" + (amp >= 10 ? commas(Math.round(amp)) : amp.toFixed(1)) + "x)" : "") + '</span></div>' +
+        '<div><span class="n">' + commas(st.reqs) + '</span><span class="lbl">origin requests</span></div>' +
+        '<div><span class="n">' + commas(held) + " / " + commas(st.n) + '</span><span class="lbl">chunks cached</span></div>';
+      $("rg-geom").textContent = commas(st.size) + " bytes in " + commas(st.n) + (st.n === 1 ? " chunk" : " chunks") + " of " + human(st.chunk) +
+        (st.n > CELLS ? ", about " + commas(Math.round(st.n / CELLS)) + " chunks per square" : ", one per square") + ".";
+    }
+    var READS = {
+      head: function(){ read(0, KiB, "Header"); },
+      tail: function(){ read(st.size - 64 * KiB, 64 * KiB, "Tail"); },
+      edge: function(){ read(st.n > 1 ? st.chunk - 512 : Math.floor(st.size / 2), KiB, "Edge"); },
+      scrub: function(){ for (var k = 0; k < 8; k++) read(Math.floor(st.size * (k + 0.5) / 8), MiB, "Seek " + (k + 1)); }
+    };
+    box.addEventListener("click", function(e){
+      var t = e.target.closest("[data-read]");
+      if (t) { READS[t.getAttribute("data-read")](); return; }
+      if (e.target.closest("#rg-reset")) reset();
+    });
+    strip.addEventListener("click", function(e){
+      var r = strip.getBoundingClientRect();
+      read(Math.floor((e.clientX - r.left) / r.width * st.size), MiB, "Click");
+    });
+    file.addEventListener("change", reset);
+    chunkSel.addEventListener("change", reset);
+    box.hidden = false;
+    reset();
+  })();
+
+  // ── 2. in-flight sharing ────────────────────────────────────────────
+  // Viewers arrive 30 ms apart (plus seeded jitter) and each wants 2 MiB near
+  // the same spot of a cold 500 MB file. A fetch takes FETCH_MS. Shared, a
+  // viewer waits on a chunk already in flight; unshared, it fetches its own copy.
+  (function(){
+    var box = $("rg-share");
+    if (!box) return;
+    var FETCH_MS = 300, CHUNK = MiB, SPAN = 1000;
+    var countEl = $("rg-viewers"), shareEl = $("rg-shared"), out = $("rg-lanes"), sum = $("rg-share-stats");
+    function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+    function simulate(n, shared){
+      var rand = rng(7), done = {}, flying = {}, viewers = [], fetches = [];
+      for (var i = 0; i < n; i++) {
+        var at = i * 30 + Math.floor(rand() * 20), first = 100 + Math.floor(rand() * 3), wait = at, own = 0, rode = 0;
+        for (var c = first; c < first + 2; c++) {
+          if (done[c] !== undefined && done[c] <= at) continue;
+          if (shared && flying[c] !== undefined && flying[c] > at) { rode++; wait = Math.max(wait, flying[c]); continue; }
+          own++;
+          var end = at + FETCH_MS;
+          fetches.push([at, end]);
+          if (flying[c] === undefined || !shared) flying[c] = end;
+          if (done[c] === undefined || end < done[c]) done[c] = end;
+          wait = Math.max(wait, end);
+        }
+        viewers.push({ at: at, end: wait, kind: own ? "own" : rode ? "ride" : "hit" });
+      }
+      return { viewers: viewers, fetches: fetches };
+    }
+    function bar(cls, a, b, label){
+      return '<span class="' + cls + '" style="left:' + (a / SPAN * 100).toFixed(2) + "%;width:" + Math.max(0.6, (b - a) / SPAN * 100).toFixed(2) + '%"' + (label ? ' title="' + esc(label) + '"' : "") + "></span>";
+    }
+    function run(){
+      var n = +countEl.value, shared = shareEl.checked, r = simulate(n, shared), html = "";
+      $("rg-viewers-n").textContent = n;
+      html += '<div class="lane origin"><span class="who">origin</span><span class="track">';
+      r.fetches.forEach(function(f){ html += bar("fetch", f[0], f[1]); });
+      html += "</span></div>";
+      r.viewers.forEach(function(v, i){
+        html += '<div class="lane"><span class="who">viewer ' + (i + 1) + '</span><span class="track">' +
+          bar(v.kind, v.at, Math.max(v.end, v.at + 8), v.kind === "own" ? "started an origin fetch" : v.kind === "ride" ? "waited on a fetch already running" : "served from cache") + "</span></div>";
+      });
+      out.innerHTML = html;
+      var waits = r.viewers.map(function(v){ return v.end - v.at; });
+      sum.innerHTML = '<span class="n">' + r.fetches.length + "</span> origin " + (r.fetches.length === 1 ? "fetch" : "fetches") + ', <span class="n">' + human(r.fetches.length * CHUNK) +
+        '</span> from the origin, median wait <span class="n">' + Math.round(median(waits)) + " ms</span>.";
+    }
+    countEl.addEventListener("input", run);
+    shareEl.addEventListener("change", run);
+    box.hidden = false;
+    run();
+  })();
+
+  // ── 3. live: walk a photo original with range reads ─────────────────
+  (function(){
+    var box = $("rg-live");
+    if (!box || !window.fetch || !window.AbortController) return;
+    var pick = $("rg-photo"), walkBtn = $("rg-walk"), raceBtn = $("rg-race"), out = $("rg-boxes"), sumEl = $("rg-walk-sum"), raceEl = $("rg-race-out"), thumb = $("rg-thumb");
+    var HOP = 32;
+    var KINDS = { "JXL ": "signature", ftyp: "file type", jxll: "level", jxlc: "codestream", jxlp: "codestream part", jxli: "frame index", jbrd: "JPEG reconstruction data", brob: "Brotli-compressed", Exif: "EXIF", "xml ": "XMP", jumb: "JUMBF" };
+    var four = function(u, o){ return String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]); };
+    var photos = {};
+
+    // A range read that refuses to turn into a 30 MB download: a server that
+    // ignores Range answers 200, and this aborts before reading that body.
+    async function ranged(url, a, b){
+      var ctrl = new AbortController(), t0 = performance.now();
+      var r = await fetch(url, { headers: { Range: "bytes=" + a + "-" + b }, cache: "no-store", signal: ctrl.signal });
+      if (r.status !== 206) { ctrl.abort(); throw new Error(url + " answered " + r.status + " to a range request"); }
+      var buf = new Uint8Array(await r.arrayBuffer());
+      var total = +((r.headers.get("content-range") || "").split("/")[1] || 0);
+      return { bytes: buf, total: total, ms: performance.now() - t0, edge: r.headers.get("cf-cache-status"), ray: r.headers.get("cf-ray") };
+    }
+
+    // JPEG XL SizeHeader (ISO/IEC 18181-1), read LSB first from just after the
+    // FF 0A codestream signature.
+    function sizeHeader(u, o){
+      var bit = 0;
+      var bits = function(n){ var v = 0; for (var k = 0; k < n; k++) { v += ((u[o + (bit >> 3)] >> (bit & 7)) & 1) * Math.pow(2, k); bit++; } return v; };
+      var u32 = function(){ return bits([9, 13, 18, 30][bits(2)]) + 1; };
+      var small = bits(1), h = small ? (bits(5) + 1) * 8 : u32(), ratio = bits(3);
+      var R = [null, [1, 1], [12, 10], [4, 3], [3, 2], [16, 9], [5, 4], [2, 1]];
+      var w = ratio ? Math.floor(h * R[ratio][0] / R[ratio][1]) : small ? (bits(5) + 1) * 8 : u32();
+      return [w, h];
+    }
+
+    async function walk(){
+      var url = pick.value, rows = [], dims = null, off = 0, total = Infinity, read = 0, ms = [], cached = 0;
+      walkBtn.disabled = raceBtn.disabled = true;
+      out.innerHTML = ""; sumEl.textContent = "Walking " + url + " ...";
+      try {
+        while (off < total && rows.length < 64) {
+          var got = await ranged(url, off, off + HOP - 1), u = got.bytes;
+          total = got.total; read += u.length; ms.push(got.ms);
+          if (got.edge) cached++;
+          if (off === 0 && u[0] === 0xff && u[1] === 0x0a) { dims = sizeHeader(u, 2); rows.push({ off: 0, size: total, type: "bare", ms: got.ms }); break; }
+          var size = ((u[0] << 24) >>> 0) + (u[1] << 16) + (u[2] << 8) + u[3], type = four(u, 4), hdr = 8;
+          if (size === 1) { size = (((u[8] << 24) >>> 0) + (u[9] << 16) + (u[10] << 8) + u[11]) * 4294967296 + ((u[12] << 24) >>> 0) + (u[13] << 16) + (u[14] << 8) + u[15]; hdr = 16; }
+          if (size === 0) size = total - off;
+          var inner = type === "brob" ? four(u, hdr) : "";
+          if (!dims && (type === "jxlc" || type === "jxlp")) {
+            var cs = hdr + (type === "jxlp" ? 4 : 0);
+            if (u[cs] === 0xff && u[cs + 1] === 0x0a) dims = sizeHeader(u, cs + 2);
+          }
+          rows.push({ off: off, size: size, type: type, inner: inner, ms: got.ms, ray: got.ray });
+          paint(rows, total);
+          off += size;
+        }
+        paint(rows, total);
+        var biggest = rows.reduce(function(m, r){ return r.size > m.size ? r : m; }, rows[0]);
+        var colo = (rows[0].ray || "").split("-")[1];
+        sumEl.innerHTML = '<span class="n">' + rows.length + "</span> range requests read <span class=\"n\">" + commas(read) + "</span> of " + commas(total) +
+          " bytes (" + (read / total * 100).toPrecision(2) + "%)" + (dims ? ". The codestream header says the image is <span class=\"n\">" + dims[0] + " x " + dims[1] + "</span>" : "") +
+          ", and its largest box, the " + esc(KINDS[biggest.type] || biggest.type) + ", is " + (biggest.size / total * 100).toFixed(1) + "% of the file. " +
+          (cached ? cached + " of " + rows.length + " answers carried cf-cache-status" : "None of the " + rows.length + " answers carried cf-cache-status, so every hop ran the Worker and read R2") +
+          (colo ? ", through the " + esc(colo) + " colo" : "") + ". Median hop: <span class=\"n\">" + Math.round(median(ms)) + " ms</span>.";
+      } catch (e) {
+        sumEl.textContent = "The walk stopped: " + e.message + ".";
+      }
+      walkBtn.disabled = raceBtn.disabled = false;
+    }
+    function paint(rows, total){
+      out.innerHTML = '<div class="row head"><span>offset</span><span>box</span><span>size</span><span>share of file</span><span>hop</span></div>' +
+        rows.map(function(r){
+          var name = r.type === "bare" ? "bare codestream" : (KINDS[r.type] || "unknown") + (r.inner ? " " + (KINDS[r.inner] || r.inner) : "");
+          return '<div class="row"><span>' + commas(r.off) + "</span><span><code>" + esc(r.type.trim() || r.type) + "</code> " + esc(name) + "</span><span>" + commas(r.size) +
+            '</span><span class="share"><i style="width:' + Math.max(0.5, r.size / total * 100).toFixed(2) + '%"></i></span><span>' + Math.round(r.ms) + " ms</span></div>";
+        }).join("");
+    }
+
+    // Time to response headers, nothing more. The full GET is aborted as soon as
+    // they land, so the race doesn't pull a whole original per round (some of the body is in
+    // flight by then anyway). Order alternates per round so neither path always
+    // goes first on the shared connection.
+    async function headersIn(url, range){
+      var ctrl = new AbortController(), t0 = performance.now(), opts = { cache: "no-store", signal: ctrl.signal };
+      if (range) opts.headers = { Range: range };
+      var r = await fetch(url, opts), ms = performance.now() - t0, edge = r.headers.get("cf-cache-status"), age = r.headers.get("age");
+      if (range && r.status === 206) await r.arrayBuffer(); else ctrl.abort();
+      return { ms: ms, status: r.status, edge: edge, age: age === null ? null : +age };
+    }
+    async function race(){
+      var url = pick.value, ROUNDS = 5, full = [], part = [];
+      walkBtn.disabled = raceBtn.disabled = true;
+      raceEl.textContent = "Racing ...";
+      try {
+        for (var i = 0; i < ROUNDS; i++) {
+          var pair = i % 2 ? [await headersIn(url, "bytes=0-1023"), await headersIn(url)].reverse() : [await headersIn(url), await headersIn(url, "bytes=0-1023")];
+          full.push(pair[0]); part.push(pair[1]);
+        }
+        var hits = full.filter(function(r){ return r.edge === "HIT"; }).length, partTagged = part.filter(function(r){ return r.edge; }).length;
+        var ages = full.filter(function(r){ return r.age !== null; }).map(function(r){ return r.age; });
+        raceEl.innerHTML =
+          '<div class="leg"><span class="n">' + Math.round(median(full.map(function(r){ return r.ms; }))) + ' ms</span><span class="lbl">full GET to headers, median of ' + ROUNDS + ". " +
+          hits + " of " + ROUNDS + " answered cf-cache-status: HIT" + (ages.length ? ", the copy " + commas(Math.max.apply(null, ages)) + " s old" : "") + "</span></div>" +
+          '<div class="leg"><span class="n">' + Math.round(median(part.map(function(r){ return r.ms; }))) + ' ms</span><span class="lbl">1 KiB range to headers, median of ' + ROUNDS + ". " +
+          (partTagged ? partTagged + " carried cf-cache-status" : "none carried cf-cache-status, so every one ran the Worker and read R2") + "</span></div>";
+      } catch (e) {
+        raceEl.textContent = "The race stopped: " + e.message + ".";
+      }
+      walkBtn.disabled = raceBtn.disabled = false;
+    }
+    function showThumb(){
+      var p = photos[pick.value];
+      if (p && p.thumb && p.thumb.small) { thumb.src = p.thumb.small; thumb.alt = p.alt || ""; thumb.hidden = false; } else thumb.hidden = true;
+    }
+
+    fetch("/photos/query.json?limit=40").then(function(r){ if (!r.ok) throw new Error("/photos/query.json answered " + r.status); return r.json(); }).then(function(j){
+      var list = (j.photos || []).filter(function(p){ return p.full; });
+      if (!list.length) throw new Error("the photo list came back empty");
+      pick.innerHTML = list.map(function(p){ photos[p.full] = p; return '<option value="' + esc(p.full) + '">' + esc(p.full.split("/").pop()) + "</option>"; }).join("");
+      showThumb();
+      pick.addEventListener("change", function(){ out.innerHTML = ""; sumEl.textContent = ""; raceEl.textContent = ""; showThumb(); });
+      walkBtn.addEventListener("click", walk);
+      raceBtn.addEventListener("click", race);
+      box.hidden = false;
+      $("rg-live-off").hidden = true;
+    }).catch(function(e){
+      $("rg-live-off").textContent = "The live probe couldn't load its photo list: " + e.message + ".";
+    });
+  })();
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Before you close the hood, rebuild the mechanism in four questions.",
+  "questions": [
+    {
+      "q": "A cold file is cached in 64 MiB chunks. A client reads 1 KiB that straddles a chunk edge. What does the origin send?",
+      "options": [
+        {
+          "t": "128 MiB, because both chunks it touches are fetched whole.",
+          "ok": true,
+          "why": "Right. The edge fetches every chunk the read touches and keeps each one whole, so two chunks cross the wire for 1 KiB. That's the post's worst case for R2's old 64 MiB range."
+        },
+        {
+          "t": "1 KiB, since the edge forwards the client's exact range.",
+          "why": "Forwarding the exact range would leave the edge with a fragment nobody else can reuse. It fetches aligned chunks so the next reader of nearby bytes hits the cache."
+        },
+        {
+          "t": "64 MiB, since the edge fetches the chunk the read starts in.",
+          "why": "The read's last 512 bytes sit in the next chunk, and the edge needs them too. Any byte the read touches brings its whole chunk."
+        }
+      ]
+    },
+    {
+      "q": "Why can't a Cache Rule switch Origin Range Requests on for /images/full/ here?",
+      "options": [
+        {
+          "t": "R2 can't serve byte ranges, so the edge has nothing to chunk.",
+          "why": "R2 serves ranges fine: the photo route passes an offset and a length to R2 and gets just those bytes back."
+        },
+        {
+          "t": "The Worker reads R2 through a binding, and that skips the cache.",
+          "ok": true,
+          "why": "Right. A Cache Rule acts on requests passing through the cache to an origin. A binding read never passes it, so the rule has nothing to see."
+        },
+        {
+          "t": "JPEG XL is compressed, and the edge won't range compressed files.",
+          "why": "The limit covers responses the edge itself decompresses, like gzip or brotli transfer encodings. A JPEG XL file is opaque bytes to the cache."
+        }
+      ]
+    },
+    {
+      "q": "Ten viewers miss on the same cold chunk within 100 ms, and an origin fetch takes 300 ms. With in-flight sharing on, how many origin fetches go out for that chunk?",
+      "options": [
+        {
+          "t": "Ten, because no viewer can read a chunk until its fetch ends.",
+          "why": "They all wait, but waiting is the point: with sharing they wait on the one fetch already running instead of starting their own."
+        },
+        {
+          "t": "Zero, because the edge prefetches popular files before a miss.",
+          "why": "Nothing in the feature prefetches. The first miss starts the fetch, and the other nine attach to it."
+        },
+        {
+          "t": "One, because the other nine attach to the fetch in progress.",
+          "ok": true,
+          "why": "Right. The first miss starts a fetch, and later viewers find that chunk in flight and wait on it. The demo's 4 fetches come from viewers asking for different chunk pairs."
+        }
+      ]
+    },
+    {
+      "q": "The edge builds one response from a chunk cached yesterday and a chunk fetched now. What keeps it from mixing two versions of the file?",
+      "options": [
+        {
+          "t": "Every origin piece has to report the same total size and ETag.",
+          "ok": true,
+          "why": "Right. The edge checks each origin response against the version it already holds, and an If-Range that no longer matches gets the full file instead of a stitched one."
+        },
+        {
+          "t": "Chunks expire within the hour, so yesterday's chunk is gone.",
+          "why": "Chunks live as long as the file's cache rules allow, which can be days. The version check is what keeps old and new apart."
+        },
+        {
+          "t": "The browser checks each 206 body against a hash in its headers.",
+          "why": "HTTP has no such per-range hash check. The browser trusts the 206, so the edge has to get the version right before it answers."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="29"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

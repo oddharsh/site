@@ -15,8 +15,11 @@ const keepAlive = Number((args.find((arg) => arg.startsWith("--keep-alive=")) ||
 
 if (!target) fail("Usage: node tools/lens-webmcp.ts https://example.com [--keep-open] [--keep-alive=300]");
 let url;
-try { url = new URL(target); }
-catch { fail("Target must be an absolute http(s) URL."); }
+try {
+  url = new URL(target);
+} catch {
+  fail("Target must be an absolute http(s) URL.");
+}
 if (!/^https?:$/.test(url.protocol)) fail("Target must use http or https.");
 if (!Number.isInteger(keepAlive) || keepAlive < 60 || keepAlive > 600) fail("--keep-alive must be an integer from 60 to 600 seconds.");
 
@@ -41,17 +44,18 @@ try {
   fail(error && error.message ? error.message : String(error));
 } finally {
   if (sessionId && !keepOpen) {
-    try { await cf(["browser-run", "devtools", "browser", "delete", sessionId]); }
-    catch (error) { process.stderr.write("Could not close Browser Run session " + sessionId + ": " + (error.message || error) + "\n"); }
+    try {
+      await cf(["browser-run", "devtools", "browser", "delete", sessionId]);
+    } catch (error) {
+      process.stderr.write("Could not close Browser Run session " + sessionId + ": " + (error.message || error) + "\n");
+    }
   }
 }
 
 // Through cf (tools/lib/cf.ts): the Browser Run devtools API, which takes the
 // keep-alive in milliseconds where wrangler's flag took seconds.
 async function createSession(seconds) {
-  const created = await cf([
-    "browser-run", "devtools", "browser", "create", "--lab", "--targets", "--keep-alive", String(seconds * 1000),
-  ]);
+  const created = await cf(["browser-run", "devtools", "browser", "create", "--lab", "--targets", "--keep-alive", String(seconds * 1000)]);
   if (!created?.sessionId) throw new Error("cf did not return a Browser Run session id.");
   return created;
 }
@@ -90,7 +94,10 @@ async function probePage(wsUrl, targetUrl) {
 
 function waitForEvent(cdp, method, timeoutMs) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => { cdp.removeListener(method, onEvent); resolve(undefined); }, timeoutMs);
+    const timer = setTimeout(() => {
+      cdp.removeListener(method, onEvent);
+      resolve(undefined);
+    }, timeoutMs);
     function onEvent(value) {
       clearTimeout(timer);
       cdp.removeListener(method, onEvent);
@@ -111,7 +118,11 @@ async function connectCdp(url) {
   });
   socket.addEventListener("message", (event) => {
     let message;
-    try { message = JSON.parse(String(event.data)); } catch { return; }
+    try {
+      message = JSON.parse(String(event.data));
+    } catch {
+      return;
+    }
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id);
       pending.delete(message.id);

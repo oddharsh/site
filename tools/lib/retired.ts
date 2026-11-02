@@ -39,11 +39,11 @@ export interface Bans {
  *  would otherwise sit in the file looking like enforcement while doing
  *  nothing, which is how `.github/dependabot.yml` shipped a `labels:` list
  *  naming a label GitHub did not have.
+ *
+ *  Typed as a plain string list rather than a literal tuple so a caller can ask
+ *  `BAN_KINDS.includes(someKey)` about a key read from JSON, which is the only
+ *  question it exists to answer. `Bans` above is the type-level twin.
  */
-//
-//  Typed as a plain string list rather than a literal tuple so a caller can ask
-//  `BAN_KINDS.includes(someKey)` about a key read from JSON, which is the only
-//  question it exists to answer. `Bans` above is the type-level twin.
 export const BAN_KINDS: readonly string[] = ["npm", "binary", "cargo", "source"];
 
 /** The four maps npm resolves a direct dependency from. */
@@ -84,8 +84,8 @@ export function npmViolations(manifestPath: string, text: string, banned: string
  *  `tools:check` already fails on a script whose binary is missing from it. So
  *  re-adding a retired binary has to pass through here to be usable, which is
  *  what makes a name check exact where a scan of shell source could not be:
- *  four scripts carry `exiftool` and `jq` in comments that exist to record
- *  these very retirements.
+ *  scripts carry `exiftool` and `jq` in comments that exist to record these
+ *  very retirements.
  */
 export function binaryViolations(toolsJson: string, banned: string[]): string[] {
   const declared = new Set<string>();
@@ -140,12 +140,9 @@ export function cargoLockViolations(lock: string, crates: string[]): string[] {
 // ones; left wide they can also match a comment quoting one. That direction
 // FAILS CLOSED, the same trade the shell half of the writer census takes, and a
 // false fire is a sentence to rewrite rather than a dependency to re-add.
-const JS_STATIC = (spec: string) =>
-  new RegExp(String.raw`^\s*(?:import|export)\b[^\n]*["']${escapeRe(spec)}(?:/[^"']*)?["']`, "m");
-const JS_CALL = (spec: string) =>
-  new RegExp(String.raw`\b(?:require|import)\(\s*["']${escapeRe(spec)}(?:/[^"']*)?["']\s*\)`);
-const PY_IMPORT = (spec: string) =>
-  new RegExp(String.raw`^\s*(?:import\s+${escapeRe(spec)}\b|from\s+${escapeRe(spec)}[\s.])`, "m");
+const JS_STATIC = (spec: string) => new RegExp(String.raw`^\s*(?:import|export)\b[^\n]*["']${escapeRe(spec)}(?:/[^"']*)?["']`, "m");
+const JS_CALL = (spec: string) => new RegExp(String.raw`\b(?:require|import)\(\s*["']${escapeRe(spec)}(?:/[^"']*)?["']\s*\)`);
+const PY_IMPORT = (spec: string) => new RegExp(String.raw`^\s*(?:import\s+${escapeRe(spec)}\b|from\s+${escapeRe(spec)}[\s.])`, "m");
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

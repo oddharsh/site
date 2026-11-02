@@ -16,7 +16,7 @@
 # `linker = "isolated"` to keep five workspace projects' dependency sets apart,
 # which is a question this single standalone project does not have, and changing
 # it would move what `overrides` resolves for the htmlparser2 parity oracle in
-# test/dom-differential.test.mjs.
+# test/dom-differential.test.ts.
 
 [install]
 
@@ -37,7 +37,7 @@ minimumReleaseAge = 86400
 [test]
 
 # The root suite's network tripwire, shared rather than copied, as cal and
-# cf-garage take it. reader.test.mjs stubs every fetch it makes; this turns a
+# cf-garage take it. reader.test.ts stubs every fetch it makes; this turns a
 # stub somebody forgets into a red run instead of a request to a real page.
 #
 # NO `timeout` KEY, because bun ignores one here: measured 2026-10-07, a 200ms

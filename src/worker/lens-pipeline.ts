@@ -1,14 +1,14 @@
 // lens-pipeline.ts: the one request pipeline every lens door runs through.
 //
-// Seventeen callers used to hand-copy the same steps: validate the target,
-// check a precondition, read the KV cache, charge a per-IP budget and then the
-// shared browser one, run, write the cache back. The copies drifted the way
-// copies do. /lens/fetch?mode=cloudflare charged its budget BEFORE reading its
+// Every lens door runs the same steps: validate the target, check a
+// precondition, read the KV cache, charge a per-IP budget and then the shared
+// browser one, run, write the cache back. Hand-copied per door, those steps
+// drifted: /lens/fetch?mode=cloudflare charged its budget BEFORE reading its
 // cache, five routes read KV with no guard (a throw there is Cloudflare's HTML
 // 1101 page, which the client then JSON.parses), the cache-hit flag was spelled
 // three ways, and nine 429 messages quoted numbers nothing checked.
 //
-// `defineLens(spec)` owns all of that now. A spec says WHAT differs per lens:
+// `defineLens(spec)` owns all of that. A spec says WHAT differs per lens:
 // its budget, whether it spends Browser Run, its cache key and TTL, and its own
 // `run`. The pipeline owns the ORDER, and the order is not configurable:
 //
@@ -23,8 +23,8 @@
 // The result is an OUTCOME, never a Response, because the callers answer in
 // different shapes: a JSON route, a PNG, an 80-column terminal frame, an MCP
 // tool result, and the SSR shell's status/payload pair. Each shape is an
-// encoder over the same outcome (`lensJson` and `lensPng` here, `asFrame` in
-// terminal.ts, `asToolResult` in lib/tools.ts), which is where the callers
+// encoder over the same outcome (`lensJson` and `lensPng` here, `refusalFrame`
+// in terminal.ts, `lensToolResult` in lib/tools.ts), which is where the callers
 // really differ and the only seam this module needed.
 //
 // What it deliberately does NOT wrap: KV and the rate limiter. Both are
@@ -40,8 +40,6 @@ import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { hasRenderEngine } from "./lens-render.ts";
 import type { Span } from "./lib/span-vocabulary.ts";
 
-// ── budgets ────────────────────────────────────────────────────────────────
-
 type LensBudgetDecl = {
   binding: string;
   max: number;
@@ -56,34 +54,36 @@ type LensBudgetDecl = {
   key?: string;
 };
 
-// Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
-// (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
-// Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
-// 429. The per-IP ceilings below were written against no such limit. `shot`
+// Browser Run's free plan is account-wide (BROWSER_FREE_PLAN in lens.ts, with
+// its 2026-08-06 measurement). The per-IP ceilings below were first written
+// against no such limit. `shot`
 // alone allowed 8/min to a SINGLE visitor, so one person could spend the whole
 // account's minute and the next visitor got a failure that read like a bug.
 //
 // Every 429 the lens doors send is DERIVED from this table by budgetMessage().
-// It used to be hand-typed at nine call sites, and the numbers in those strings
-// were checked by nothing: the contract test pinned this table to the config,
-// and the strings were a third copy. A contract test now fails on a literal
-// "N/min" in a lens door.
+// tools/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
+// in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
-  shot:    { binding: "LENS_RL_SHOT",    max: 3,  label: "Snapshots" },
-  compare: { binding: "LENS_RL_COMPARE", max: 4,  label: "Lens comparisons", shares: "/lens/compare and /mcp" },
-  browser: { binding: "LENS_RL_BROWSER", max: 3,  label: "Browser Run snapshots" },
-  wire:    { binding: "LENS_RL_WIRE",    max: 2,  label: "Wire traces" },
-  tools:   { binding: "LENS_RL_TOOLS",   max: 10, label: "Catalogue reads" },
+  shot: { binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
+  compare: { binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
+  browser: { binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
+  wire: { binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
+  tools: { binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
   // Tighter than the catalogue read it sits beside, and deliberately so: a
   // catalogue read costs a foreign server a lookup, and an /ask costs it a
   // retrieval and possibly a model call.
-  nlweb:   { binding: "LENS_RL_NLWEB",   max: 4,  label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
+  nlweb: { binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
   // Ten plain GETs of one URL per run, deduped by Accept string. No browser
   // and no model, so it is cheaper than the tabs above it on OUR side; what it
   // spends is somebody else's bandwidth, ten times over, on one page. Sat
   // between the catalogue read and the /ask question for that reason.
-  markdown: { binding: "LENS_RL_MARKDOWN", max: 4, label: "Markdown checks", why: "because each one fetches the same page ten times from somebody else's origin" },
+  markdown: {
+    binding: "LENS_RL_MARKDOWN",
+    max: 4,
+    label: "Markdown checks",
+    why: "because each one fetches the same page ten times from somebody else's origin",
+  },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -109,8 +109,6 @@ export function budgetMessage(name: LensBudget): string {
   return `${b.label} are rate-limited to ${b.max}/min${why}${shares}. Hang on a moment.`;
 }
 
-// ── shared helpers the lens modules used to import from lens.ts ────────────
-
 export { sha256Hex as lensSha256Hex };
 
 export function lensPngHeaders(cached: boolean) {
@@ -125,12 +123,9 @@ const NO_ENGINE = "Browser Run is not configured on this deployment.";
 // page that re-rendered from scratch on every visit.
 export const LENS_KV_MAX = 20_000_000;
 
-// ── the interface ──────────────────────────────────────────────────────────
-
 // The span names a cached lens owns. One name for a hit and a miss, differing
 // on `lens.cache`, so a hit rate is a group-by rather than a join.
-export type LensSpanName =
-  | "lens.shot" | "lens.browser" | "lens.wire" | "lens.tools" | "lens.nlweb" | "lens.markdown";
+export type LensSpanName = "lens.shot" | "lens.browser" | "lens.wire" | "lens.tools" | "lens.nlweb" | "lens.markdown";
 
 // What `run` hands back. `ok: false` is a result the lens reached and does not
 // want cached (a shut door, an unreadable origin, Browser Run refusing US),
@@ -138,8 +133,7 @@ export type LensSpanName =
 // lenses answer 200 with `ok: false` for a door that is shut, and that answer
 // must not sit in KV for an hour.
 export type LensRan<V> =
-  | { ok: true; value: V; store?: unknown; outcome?: string }
-  | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
+  { ok: true; value: V; store?: unknown; outcome?: string } | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
 
 export type LensOutcome<V> =
   | { kind: "ok"; value: V; fromCache?: boolean; budgets?: LensBudget[] }
@@ -213,8 +207,6 @@ export interface Lens<In, V> {
   handle(request: Request, env: any, ctx?: any): Promise<Response>;
 }
 
-// ── implementation ─────────────────────────────────────────────────────────
-
 const PREFIXES = new Set<string>();
 
 const INERT_SPAN: Span<LensSpanName> = Object.freeze({ setAttribute() {}, end() {}, isTraced: false });
@@ -224,17 +216,24 @@ function withSpan<R>(name: LensSpanName | undefined, fn: (s: Span<LensSpanName>)
 }
 
 function hostOf(url: string): string | undefined {
-  try { return new URL(url).hostname; } catch { return undefined; }
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
 }
 
-function refused<V>(status: 400 | 429 | 503, reason: "bad_target" | "unavailable" | "over_budget", error: string, extra?: { budget?: LensBudget; extra?: Record<string, unknown> }): LensOutcome<V> {
+function refused<V>(
+  status: 400 | 429 | 503,
+  reason: "bad_target" | "unavailable" | "over_budget",
+  error: string,
+  extra?: { budget?: LensBudget; extra?: Record<string, unknown> },
+): LensOutcome<V> {
   return { kind: "refused", status, reason, error, ...extra };
 }
 
 function defaultUsable(body: "json" | "png") {
-  return body === "png"
-    ? (entry) => entry instanceof ArrayBuffer && entry.byteLength > 0
-    : (entry) => asRecord(entry) !== null && entry.ok !== false;
+  return body === "png" ? (entry) => entry instanceof ArrayBuffer && entry.byteLength > 0 : (entry) => asRecord(entry) !== null && entry.ok !== false;
 }
 
 function browserReady(kind: "render" | "cdp", env): boolean {
@@ -245,9 +244,7 @@ export function lensErrorText(e: unknown): string {
   return asText(asRecord(e)?.message) ?? String(e);
 }
 
-export function defineLens<In, T extends string | Record<string, string>, A = undefined, V = any>(
-  spec: LensSpec<In, T, A, V>,
-): Lens<In, V> {
+export function defineLens<In, T extends string | Record<string, string>, A = undefined, V = any>(spec: LensSpec<In, T, A, V>): Lens<In, V> {
   if (!(spec.budget in LENS_BUDGETS) || spec.budget === "browserAll") {
     throw new Error(`defineLens: ${String(spec.budget)} is not a per-route budget`);
   }
@@ -311,8 +308,11 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     }
     if (key && env && env.RN_KV) {
       let read: any = null;
-      try { read = await env.RN_KV.get(key, body === "png" ? "arrayBuffer" : "json"); }
-      catch { read = null; /* a corrupt or unreadable entry is a miss */ }
+      try {
+        read = await env.RN_KV.get(key, body === "png" ? "arrayBuffer" : "json");
+      } catch {
+        read = null; /* a corrupt or unreadable entry is a miss */
+      }
       const hit = read;
       if (hit !== null && usable(hit)) {
         return withSpan(spec.span, (s) => {
@@ -329,7 +329,7 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     if (await overBudget(LENS_BUDGETS[spec.budget], request, env)) {
       return refused(429, "over_budget", budgetMessage(spec.budget), { budget: spec.budget });
     }
-    if (spec.browser && await overBudget(LENS_BUDGETS.browserAll, request, env)) {
+    if (spec.browser && (await overBudget(LENS_BUDGETS.browserAll, request, env))) {
       return refused(429, "over_budget", budgetMessage("browserAll"), { budget: "browserAll" });
     }
 
@@ -379,8 +379,6 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
     },
   };
 }
-
-// ── encoders ───────────────────────────────────────────────────────────────
 
 // A cached lens says where its answer came from on every response, `true` or
 // `false`, so a client never has to tell a missing field from a miss. An

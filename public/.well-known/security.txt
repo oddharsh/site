@@ -1,0 +1,5 @@
+Contact: mailto:security@aadhar.sh
+Expires: 2027-05-19T23:59:00Z
+Preferred-Languages: en
+Canonical: https://aadhar.sh/.well-known/security.txt
+Policy: https://aadhar.sh/contact#security

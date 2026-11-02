@@ -5,43 +5,24 @@
 #
 # Re-encodes the grid thumbnails as PRE-CROPPED CENTER SQUARES — exactly what the
 # homepage grid shows (aspect-ratio:1 + object-fit:cover). The file IS the
-# displayed pixels, so no off-square bytes are shipped. Two square tiers:
+# displayed pixels, so no off-square bytes are shipped. Three square tiers:
 #   SQ    desktop square (default 600 — the ~197px tile at DPR-3; 800 would be
 #         MORE pixels than the old 800-long-edge and bigger for no visible gain)
 #   SQ_SM mobile square  (default 400 — the ~100px tile, served via <source media>)
-# AVIF for both; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM must match
-# THUMB_SMALL_PX in _worker.js (the -<N>.avif suffix).
+#   SQ_XS 1x square      (default 200, the 184px tile at DPR-1)
+# AVIF for all three; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM and
+# SQ_XS must match the -400/-200 .avif suffixes src/worker/photos.ts builds /i/
+# URLs with.
 #
-# Deliberately does NOT touch R2 (it now holds only q100 JPG share copies, not
-# originals), metadata.json (its width/height are the ORIGINAL dims), or the
-# full-res click export. The source folder may be a disposable directory
+# Deliberately does NOT touch R2, metadata.json (its width/height are the
+# ORIGINAL dims), or the full-res click export. The source folder may be a disposable directory
 # downloaded from R2 by the remote GitHub Actions workflow.
 #
-# FUTURE — native-aspect layout (when CSS masonry / grid-lanes ships in 2+
-# engines; today it's Safari 26 only, Chrome behind a flag — see /garage/horizon).
-# The square crop here is a CURRENT-ENGINES compromise; the long-term intent is to
-# stop cropping and lay photos out at their native aspect, packed creatively
-# (masonry) and scaled by SOOC pixel area. To get there: re-encode full-frame
-# (NOT square) thumbnails from the local SOOC originals in $SRC (the .HIF files)
-# — nothing is lost, the crop only ever lived in these files — and drive the
-# layout from metadata.json's original
-# width/height. Key gotcha (this bit us before): if a tile is shown LARGER than
-# its thumbnail's resolution it pixelates, so the thumbnail's encoded size must
-# scale with its DISPLAY area, not be a fixed long-edge. So that variant wants a
-# per-photo target size (area-aware), not one global SQ.
-#
-# Relative TILE AREA = (pixel area) × (sensor area):
-#   - pixel area  = metadata.json width × height (already stored).
-#   - sensor area = camera model → mm² lookup. Today's bodies:
-#       FUJIFILM X-T50            APS-C  ~367 mm²  (40 MP)
-#       Leica M Monochrom Typ 246 full   ~864 mm²  (24 MP)
-#     so Leica frames land ~1.4× the Fuji tiles — a gentle premium for the
-#     bigger sensor, NOT "more megapixels wins" (pure-MP would invert this).
-# Normalize the metric into a few DISCRETE area tiers (e.g. 1× / 1.4× / 2×),
-# never literal-proportional (that's what caused the earlier imbalance). SHAPE
-# comes from native aspect (don't crop); this metric only sets relative AREA.
-# With just two bodies it's near-binary today — the visual variety will come
-# from aspect ratios, not this — but it future-proofs the moment a 3rd body lands.
+# The square crop is a compromise for today's engines. A native-aspect layout
+# (once CSS masonry ships in 2+ engines; see /garage/horizon) would re-encode
+# full-frame thumbnails from the SOOC originals in $SRC, since the crop only
+# ever lived in these files. Size each one by its DISPLAY area rather than one
+# global SQ: a tile shown larger than its thumbnail's resolution pixelates.
 #
 # After running, re-run hash-thumbnails.sh: it re-hashes each tier into public/i/
 # and rewrites images/hashes.json. A re-encode mints a NEW content-addressed URL,
@@ -57,7 +38,7 @@ PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 DEST="$PROJECT_DIR/public/images"
 SRC="${1:-/Users/aadharsh/Downloads/to post (from ssd)}"
 SQ="${SQ:-600}"        # desktop square edge
-SQ_SM="${SQ_SM:-400}"  # mobile square edge (filename suffix; must match THUMB_SMALL_PX)
+SQ_SM="${SQ_SM:-400}"  # mobile square edge (filename suffix; must match src/worker/photos.ts)
 SQ_XS="${SQ_XS:-200}"  # 1x square edge (the 184px tile at DPR-1)
 
 # WHICH tiers to write. Default is everything, which is what a real re-encode
@@ -143,9 +124,10 @@ while IFS= read -r -d '' src && IFS= read -r -d '' original &&
   # in the shadows a monochrome body exists for. The curve is decode AND encode,
   # so unaveraged values pass through exactly and the shipped tone is unchanged.
   #
-  # The probe (tools/photos/resample-probe.ts) and its history stay the record
-  # for the kernel itself: gamma 188.0 where sips read 127.6, flat 0.00 where
-  # sips read 0.49, ring 0. See also ZENC_Q above for what correct pixels cost.
+  # The kernel itself was measured by tools/photos/resample-probe.ts (deleted
+  # in #1127, its history in git): gamma 188.0 where sips read 127.6, flat 0.00
+  # where sips read 0.49, ring 0. See also ZENC_Q above for what correct pixels
+  # cost.
   input="$src"
   case "${src##*.}" in
     [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])

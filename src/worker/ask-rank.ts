@@ -1,7 +1,7 @@
 // /ask's ranking, decided by Clef over the WHOLE corpus.
 //
-// /ask answered from searchSiteRanked: an OR of query terms scored title 8,
-// description 4, body 1. That ranks a keyword query well and a question badly,
+// /ask used to answer from searchSiteRanked, still its fallback: an OR of query
+// terms scored title 8, description 4, body 1. That ranks a keyword query well and a question badly,
 // in two different ways. It orders paraphrases wrongly ("the codec that comes
 // after AV1" put /garage/av2 third), and it cannot find a page that shares no
 // word with the question at all ("which bots crawled the site recently" never
@@ -9,8 +9,8 @@
 //
 // A reranker fixes the first and structurally cannot fix the second, because
 // it only reorders what the lexical pass already found. The corpus is small
-// enough not to need one: it is 64 records, and a Clef choice question takes
-// up to 255 options. So the question asked is "which of these pages best
+// enough not to need one: it was 64 records on 2026-10-01, and a Clef choice
+// question takes up to 255 options. So the question asked is "which of these pages best
 // answers this", with EVERY page an option, and the probability Clef puts on
 // each page is the ranking.
 //
@@ -48,7 +48,7 @@ export const MAX_OPTIONS = 255;
 export const ASK_FLOOR = 0.02;
 export const ASK_BUDGET = { binding: "ASK_RL", max: 20 };
 
-export type RankableRecord = { url: string, title?: string, description?: string };
+export type RankableRecord = { url: string; title?: string; description?: string };
 
 // What Clef reads about each page: its title, path and description, which the
 // measurement used. The body text was left out because 64 bodies is far past
@@ -57,11 +57,13 @@ function option(record: RankableRecord) {
   return {
     title: String(record.title || "").replace(/^aadhar\.sh\//, ""),
     url: record.url,
-    about: String(record.description || "").replace(/\s+/g, " ").trim().slice(0, 200),
+    about: String(record.description || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200),
   };
 }
 
-/** One choice question with every record an option, ids in corpus order. */
 export function buildAskRequest(query: string, records: readonly RankableRecord[]) {
   const ids = records.slice(0, MAX_OPTIONS).map((_, i) => `p${i}`);
   const criteria = Object.fromEntries(ids.map((id, i) => [id, option(records[i])]));
@@ -75,9 +77,11 @@ export function buildAskRequest(query: string, records: readonly RankableRecord[
   };
 }
 
-/** The probability Clef put on each url, or the reason there is none. */
-export async function clefRank(env: ClefEnv, query: string, records: readonly RankableRecord[]):
-  Promise<{ probabilities: Map<string, number> } | { error: string }> {
+export async function clefRank(
+  env: ClefEnv,
+  query: string,
+  records: readonly RankableRecord[],
+): Promise<{ probabilities: Map<string, number> } | { error: string }> {
   if (records.length < 2) return { error: "fewer than two pages to choose between" };
   const { request, ids } = buildAskRequest(query, records);
   const r = await runClef(env, ASK_MODEL, request, ASK_DEADLINE_MS);

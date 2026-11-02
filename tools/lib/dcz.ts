@@ -4,7 +4,7 @@
 // The wire contract (names, tags, the frame layout, the level) is
 // src/worker/lib/dictionary-names.ts, which the Worker reads too. This file is
 // the half that needs node:zlib, so it stays in tools. build.ts, perf-budget.ts
-// and family-holdout.ts each carried their own copy of the zstd call until
+// and family-holdout.ts (since removed) each carried their own copy of the zstd call until
 // 2026-10-02; the code below is build.ts's, moved with its level named and its
 // output byte-identical (every .dcz in .build/public, measured on the move).
 
@@ -43,13 +43,14 @@ export function dczEncode(bytes: Uint8Array, dictBytes: Uint8Array) {
 }
 
 export async function dczEncodeBatch(jobs: Array<{ bytes: Uint8Array; dictBytes: Uint8Array }>) {
-  const frames = await zstdCompressDictionaryBatch(jobs.map(({ bytes, dictBytes }) => ({
-    bytes,
-    dictionary: dictBytes,
-  })));
+  const frames = await zstdCompressDictionaryBatch(
+    jobs.map(({ bytes, dictBytes }) => ({
+      bytes,
+      dictionary: dictBytes,
+    })),
+  );
   return jobs.map(({ dictBytes }, index) => frameDcz(frames[index], dictBytes));
 }
 
 // The 16-hex tag for a dictionary's bytes.
-export const dictionaryTag = (dictBytes: Uint8Array): string =>
-  tagOfDigest(createHash("sha256").update(dictBytes).digest());
+export const dictionaryTag = (dictBytes: Uint8Array): string => tagOfDigest(createHash("sha256").update(dictBytes).digest());

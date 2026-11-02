@@ -3,8 +3,8 @@
 #
 # WRITES ONE FILE AND NOTHING ELSE. No D1, no wrangler, no network, no account
 # selection. Run it inside the PR that is being released; the entry ships with
-# the merge, and `bun run deploy:promote` records it in D1 once traffic actually
-# reaches 100%.
+# the merge, and `bun run checkpoints:record` copies it into D1 once production
+# carries it.
 #
 #   ./tools/photos/bump-version.sh <slug> "<title>"
 #   e.g. ./tools/photos/bump-version.sh confetti "Run palette: Raycast confetti easter egg"
@@ -22,9 +22,11 @@
 #
 # Now the order matches reality. The repo says what a release CLAIMS to be, in
 # the PR, where the title can be reviewed like any other prose. D1 says what
-# actually SHIPPED, written at 100% by the one thing that knows traffic moved.
-# `bun run checkpoints:check` allows the projection to run ahead by a contiguous
-# tail of unreleased entries and fails on every other kind of divergence.
+# actually SHIPPED. Since 2026-09-28 (#1002) nothing on the release path writes
+# it, because CI holds a read-only token, so `bun run checkpoints:record` does,
+# from a workstation (tools/lib/checkpoints.ts defines "released").
+# `bun run checkpoints:check` allows a contiguous tail of staged entries and
+# fails on every other divergence, including a released entry D1 lacks.
 set -euo pipefail
 
 slug="${1:-}"; title="${2:-}"
@@ -35,7 +37,7 @@ fi
 if ! printf '%s' "$slug" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
   echo "slug must be lowercase alnum/dashes, e.g. 'sysprop' or 'instant-nav'" >&2; exit 1
 fi
-# The title still reaches D1 through a single-quoted SQL literal at ramp time.
+# The title reaches D1 through a single-quoted SQL literal when it is recorded.
 case "$title" in *\'*) echo "title cannot contain a single quote (')" >&2; exit 1;; esac
 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
@@ -50,4 +52,4 @@ bun "$ROOT/tools/photos/pipeline-json.ts" checkpoint-add "$OUT" --slug "$slug" -
 
 echo "next:   commit src/worker/checkpoints.json with the change it describes."
 echo "        /updates + /restore show it as soon as that version serves;"
-echo "        bun run deploy:promote records it in D1 at 100%."
+echo "        after production carries it: bun run checkpoints:record"

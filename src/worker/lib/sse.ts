@@ -1,5 +1,6 @@
 // Completed events from a byte-capped, UTF-8-decoded body; the decoder strips
 // its BOM. No connection, retry or Last-Event-ID state: one bounded request.
+
 export function* sseEvents(text: string) {
   let event = "";
   let data: string[] = [];

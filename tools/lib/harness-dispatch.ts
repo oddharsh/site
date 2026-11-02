@@ -53,9 +53,11 @@ function nodeFloor(): void {
   const run = spawnSync("node", ["--version"], { encoding: "utf8" });
   const have = Number(/^v(\d+)\./.exec(run.stdout ?? "")?.[1] ?? NaN);
   if (!(have >= want)) {
-    throw new Error(`underNode needs node ${want} (.node-version) on PATH and found `
-      + `${run.error ? run.error.message : (run.stdout || "nothing").trim()}. In CI, add a `
-      + "setup-node step with node-version-file: .node-version to the job running the suite.");
+    throw new Error(
+      `underNode needs node ${want} (.node-version) on PATH and found ` +
+        `${run.error ? run.error.message : (run.stdout || "nothing").trim()}. In CI, add a ` +
+        "setup-node step with node-version-file: .node-version to the job running the suite.",
+    );
   }
   floorChecked = true;
 }
@@ -65,17 +67,30 @@ export function underNode(file: string, name: string, body: Body): Body {
   return () => {
     nodeFloor();
     const pattern = `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
-    const run = spawnSync("node", [
-      "--import", "./tools/lib/no-network.ts",
-      "--test", "--test-isolation=none", "--test-reporter=tap",
-      `--test-name-pattern=${pattern}`,
-      fileURLToPath(file),
-    ], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
+    const run = spawnSync(
+      "node",
+      [
+        "--import",
+        "./tools/lib/no-network.ts",
+        "--test",
+        "--test-isolation=none",
+        "--test-reporter=tap",
+        `--test-name-pattern=${pattern}`,
+        fileURLToPath(file),
+      ],
+      { cwd: ROOT, encoding: "utf8", timeout: 120_000 },
+    );
     const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;
     const count = (label: string) => Number(out.match(new RegExp(`^# ${label} (\\d+)$`, "m"))?.[1] ?? NaN);
     if (run.error || run.status !== 0 || count("pass") !== 1 || count("fail") !== 0) {
-      throw new Error(`under node, "${name}" did not pass exactly once `
-        + `(status ${run.status}${run.error ? `, ${run.error.message}` : ""}):\n${out.slice(-6000)}`);
+      // node's TAP diff prints a Buffer one byte per line, so a failed deepEqual
+      // on encodeBody's 17,600-byte page put its message 467 KB above the tail
+      // and the tail alone said nothing. Lift each failure's first error line.
+      const reasons = [...out.matchAll(/^\s+error: (?:\|-\n\s+)?(.+)$/gm)].map((m) => `  ${m[1]}\n`).join("");
+      throw new Error(
+        `under node, "${name}" did not pass exactly once ` +
+          `(status ${run.status}${run.error ? `, ${run.error.message}` : ""}):\n${reasons}${out.slice(-6000)}`,
+      );
     }
   };
 }

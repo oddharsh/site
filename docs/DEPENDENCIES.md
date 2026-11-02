@@ -1,5 +1,7 @@
 # Dependency updates and site leverage
 
+For pin locations and everyday commands, start with [TOOLING.md](TOOLING.md).
+
 Two systems own dependency updates, split by ecosystem:
 
 | owner | ecosystem | directory | what it owns |
@@ -7,7 +9,7 @@ Two systems own dependency updates, split by ecosystem:
 | [`deps-pin.yml`](../.github/workflows/deps-pin.yml) | npm | `/`, its workspaces, `/lens-reader` | the shared build, test, and deploy toolchain, and the Reader lens Worker, which is outside the workspace on purpose |
 | [Dependabot](../.github/dependabot.yml) | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
-| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/photo-metrics` | the HIF archive bar's fast-ssim2 and butteraugli pins (a bump is a re-measurement) |
+| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/photo-metrics` | the fast-ssim2 and butteraugli pins every photo score reads, the HIF archive bar first (a bump is a re-measurement) |
 
 Dependabot owned npm too until 2026-10-06. Its npm updater has refused any
 directory holding a `bun.lock` since dependabot-core#16220 (2026-09-25), and its
@@ -79,7 +81,21 @@ format, a byte-identical build and passing tests.
 
 From 2026-10-06 to 2026-10-11 the pin was `"bun": "canary"`, selected to adopt
 Bun's native `bun check` before npm carried it. 1.4.3 (2026-10-10) is the first
-release with the checker, and the pin returned to it. The rolling source still
+release with the checker, and the pin returned to it. On 2026-10-15 it moved
+to the dated canary `1.4.3-canary.20261013.1+9bcbf1e` to adopt `bun lint`,
+which no release carries yet (the first canary with it is 20261012.1). That is
+a hand edit of the channel, which `bun:pin` refuses to make. The newer
+20261014.1 and 20261015.1 cannot be pinned at all: their npm `gitHead` is not
+the commit their binary reports, and the installer refuses the pair
+(gotcha 69). The evidence for 20261013.1: the tripwire ran the rolling canary
+on each side of it (`c69a636b9` on 10-13, `408c9374b` on 10-14), and both
+cleared zstd, the lockfile, the contract suite and cal's suite, with one
+differing build file, `phases.json`, the build's own timings (gotcha 68). On
+9bcbf1ecb itself the lockfile is unchanged, `bun check` prints the same
+diagnostics as 1.4.3 for all seven programs, and the lint matches oxlint.
+It is past bunfig's 24 h window. While the pin sits on the
+canary channel, the nightly bumper walks dated canaries; it returns to
+releases by hand once one carries `bun lint`. The rolling source still
 works if the owner selects it again: `.github/install-bun.sh` reads one GitHub
 release metadata snapshot, checks the archive's SHA-256 and the binary's full
 commit, verifies `bun check` is available, and writes `bun.install.json` beside
@@ -141,8 +157,7 @@ it; the header of [`osv-scanner.toml`](../osv-scanner.toml) carries the
 command. Reach for `deps:audit` when you want the npm half answered in the time
 it takes to read the question, and run the osv scan for the whole tree.
 
-`bun why <package>` answers the floor questions the manifest comments argue in
-prose. The `comment:undici` block spends a paragraph on where undici comes from
+`bun why <package>` answers the floor questions the toolchain notes discuss. The `undici` section in [TOOLCHAIN-DECISIONS.md](TOOLCHAIN-DECISIONS.md#undici) records on where undici comes from
 and why an `overrides` entry was retired; the command prints the chain, read
 here on 2026-10-05 and checked by nothing, so treat the versions as a snapshot:
 
@@ -156,27 +171,31 @@ undici@7.29.1
         └─ dev lwe-ask@workspace (requires https://pkg.pr.new/cloudflare/workers-sdk/wrangler@f025bbf)
 ```
 
-`bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's 92 files
-four at a time. On CI, where it counts, the `validate` test step goes from
-15-18s sequential to 7-10s; a version keeping the `--isolate` that `--parallel`
-implies measured 15s, inside the sequential range, so the win there is the
-isolation flag rather than the parallelism. On a macOS laptop, where a process
-spawn costs far more, it is 37s to 19s. All three
+`bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's files
+four at a time. On CI, where it counts, the `validate` test step went from
+15-18s sequential to 7-10s (92 files, 2026-09-10); a version keeping the
+`--isolate` that `--parallel` implies measured 15s, inside the sequential
+range, so the win there is the isolation flag rather than the parallelism. On a
+macOS laptop, where a process spawn costs far more, it is 37s to 19s. These
 flags are measured rather than defaulted: more workers only starve the
 interpreters these tests spawn, `--isolate` (which `--parallel` implies unless
 you decline it) costs about 35% more CPU for a guarantee this suite does not
 need, and the runner's 5s per-test default is what breaks first under
-contention. The tables, the isolation argument and the control are at
-`comment:test-parallel`.
+contention. `--timings=config/test-timings.json` (2026-10-19) starts the
+slowest files first, since three spawn-bound files now carry 57s of the
+suite's 98s and the longest one sets the floor. That's a laptop win (about
+22%); CI measured no change, because there the cpu-sweep contract test alone
+runs 43s of a 44s suite. Refresh it with `bun run test --update-timings`. The tables, the isolation argument and the
+control are in [TOOLCHAIN-DECISIONS.md](TOOLCHAIN-DECISIONS.md#test-parallel).
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
-anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
+anything a `.test.ts` file imports, or spawns with `process.execPath`, runs
 under node too, so a `Bun.` reference there fails `test:node` and passes every
 local run.** That is why 22 tools walk directories with `readdirSync` rather than
 `Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
 `Bun.which`, and why TOML is read by `tools/lib/toml.ts` rather than `Bun.TOML`:
 its three consumers (`tools/lib/dependency-docs.ts`, `tools/lib/retired.ts` and
-`contract-osv-ignore-names-a-url-pin.test.mjs`) are each a test or imported by
+`contract-osv-ignore-names-a-url-pin.test.ts`) are each a test or imported by
 one. That module replaced `smol-toml` on 2026-10-08. Two files are audited exceptions today, each
 run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`)
 and `gen-repo-card.ts` (`Bun.WebView`, `Bun.write`). No scanner enforces this. `bun run test:node` in CI is the
@@ -303,7 +322,7 @@ bun run node:pin --pretend 22   # in maintenance since 2025-10-21
 ```
 
 The tree half of the check has no network and lives in
-`contract-the-node-pin-is-declared-once.test.mjs`, so `validate` already runs it:
+`contract-the-node-pin-is-declared-once.test.ts`, so `validate` already runs it:
 the pin is a bare major, the three node numbers below stay in order, and every
 workflow reads the file rather than naming a version inline.
 
@@ -420,7 +439,7 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.25.0 is the exact root pin for the helpers
+- @cloudflare/config 0.29.0 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
   0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
@@ -432,25 +451,35 @@ does not make a failed write safe to ignore.
   `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
   package. Bump it with the wrangler pin when a new wrangler commit's generated
   types need a newer version; `cf`'s own dependency on it shows which.
-- Oxc Minify 0.154.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.156.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 are exact root pins for
-  `bun run lint`, a required step in `validate`. The tsgolint version tracks the
-  checker bundled with Bun: TypeScript 7.0 ships no stable programmatic
-  API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
-  uses to reach the same type-aware rules. A bump PR's review should read oxlint
-  releases for NEW rules, since a new rule in an enabled category fails CI on
-  unchanged code, and compare any tsgolint release with the
-  checker version reported by `bun -p process.versions.typescript`. Every rule this repo turns off is turned off in
-  `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.88.0 is the runtime for the three rules vendored from
-  anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
-  never on its own**: it is the ABI between the linter and a JS plugin, the two
-  ship one version number, and a mismatch would fail at plugin load rather than
-  at install. It carries no transitive dependencies. Since the rules themselves
+- **The linter is Bun's, as of 2026-10-15.** `bun run lint`, a required step
+  in `validate`, runs `bun lint --type-aware`, which reads `.oxlintrc.json` as
+  it stands and runs the type-aware rules against the same programs Bun's
+  checker uses. Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 left with it, and
+  56 lockfile lines with them. Measured on an unchanged tree the day it moved,
+  identical by file, line and rule: the same 4 findings without types (0.35 s
+  against oxlint's 1.22 s) and the same 14 with them (1.9 s against 4.0 s),
+  the second run with both packages removed from `node_modules`. That checkout
+  could not install wrangler, so it had no generated Workers types and 13 of
+  the 14 were error-type findings (the #709 shape); a planted file still drew
+  `typescript(await-thenable)`, a native `unicorn` rule and
+  `anti-slop(no-runtime-typeof)`, one from each kind of rule. The linter now moves with the
+  Bun pin, so a pin bump PR's review should read Bun's lint changes for NEW
+  rules, since a new rule in an enabled category fails CI on unchanged code.
+  Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
+  measurement that decided it. `bun lint --doctor` says which rules run
+  natively and which run in JavaScript (117 and 3 on 2026-10-15).
+- @oxlint/plugins 1.90.0 is the adapter the three rules vendored from
+  anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
+  `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
+  the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
+  with oxlint gone it moves on its own, and a bump PR should run `bun run lint`
+  and confirm `--doctor` still counts 3 JavaScript rules. It carries no
+  transitive dependencies. Since the rules themselves
   are vendored rather than depended on, an anti-slop release is NOT a Dependabot
   event here; re-syncing is a deliberate copy, and the section at the end of this
   file says which three files it covers.
@@ -496,7 +525,7 @@ does not make a failed write safe to ignore.
   Bun also discovers directly included files with
   `--listFilesOnly --noResolve`, preserving the lint coverage check without
   the old CLI's `--showConfig`. The root `tsconfig.json` maps those programs
-  for tsgolint and Bun. It intentionally has no compiler options or source files of its own.
+  for Bun's checker and its type-aware lint. It intentionally has no compiler options or source files of its own.
 
   Programs follow runtime boundaries: Workers use the generated workerd
   declarations, client code uses the DOM, the service worker uses WebWorker
@@ -534,9 +563,23 @@ does not make a failed write safe to ignore.
   the peer is absent. The harness types used here are declared locally in that
   file; keep this limitation in mind when adopting another Wrangler API.
 
-  Review Bun checker upgrades for new checks on unchanged source and keep
-  tsgolint paired with the compiler, as described above.
-- @types/bun 1.4.3 is the exact type pin for host tools and tests. It supplies
+  Review Bun checker upgrades for new checks on unchanged source. The
+  type-aware lint ships in the same binary as the checker, so there is no
+  second version to pair with it the way tsgolint had to be.
+
+  Microsoft's tsc is not a dependency, and it's still the reference. Since
+  2026-10-17 the canary's bun leg downloads the native tsc at
+  `TSC_REFERENCE` (7.0.2, which the pinned checker matches byte for byte on
+  all 8 programs, measured 2026-10-17) by exact version
+  and registry sha512, then diffs every nightly canary's `bun check` against
+  it on each program `bun run typecheck` checks (`checkerAgreementGate` in
+  `tools/lib/bun-gates.ts`). A canary that drops or invents a diagnostic files
+  the leg's issue before that build can become a pin. The bumper runs the same
+  gate (its 4b), so a candidate that disagrees is never proposed. When Bun
+  moves its port to a newer TypeScript, both read the move as disagreement
+  and the pin holds until `TSC_REFERENCE` is bumped to match, which makes
+  that bump the review of the new checker.
+- @types/bun 1.4.4 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
 
@@ -544,14 +587,14 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core 1.64.0 is the exact root pin for the browser probes. It was
+- playwright-core 1.64.1 is the exact root pin for the browser probes. It was
   caret-ranged until 2026-09-10, on the reasoning that it drives the locally
   installed Google Chrome rather than a bundled browser, so there was no exact
   pin worth stating. That argument is about the BROWSER, and it left the half a
   lockfile CAN hold still floating. The scope it also rested on had gone stale:
   "only `tools/photos/gen-og-cards.ts` uses it, and no CI job and no deploy path
-  touches it" was true when written and is now five callers (`csp-sweep`,
-  `speculation-probe`, `lens-seed`, `check-agent`, `gen-og-cards`) plus
+  touches it" was true when written and is now four callers (`csp-sweep`,
+  `lens-seed`, `check-agent`, `gen-og-cards`) plus
   [`og-cards.yml`](../.github/workflows/og-cards.yml), which drives it in CI and
   COMMITS the PNGs it bakes. Those cards are `unverifiable` in
   `config/derivations.json`, since the homepage draws a random 12 of 158 photos
@@ -617,7 +660,7 @@ the reason, rather than written here with the caret quietly dropped.
   whether it changes what the extractor DISCARDS, since the discard is the
   lens's whole artifact.
 
-  `linkedom` 0.18.13 is a DEV dependency as of 2026-08-23 and ships in nothing.
+  `linkedom` 0.18.14 is a DEV dependency as of 2026-08-23 and ships in nothing.
   It supplied the DOM that Workers lack, and it was several times the weight of
   the extractor it served: 65.27 KiB gzip of an 80.57 KiB Worker, measured by
   bundling each package alone under that project's wrangler config.
@@ -639,8 +682,9 @@ the reason, rather than written here with the caret quietly dropped.
   remove, replace, move, `textContent`, and `innerHTML`.
 
   It stays INSTALLED because it is the oracle.
-  `test/dom-differential.test.mjs` runs the real pipeline twice over 48
-  documents, once on each DOM, and compares title, byline, content, markdown and
+  `test/dom-differential.test.ts` runs the real pipeline twice over every
+  page in `src/pages` plus the 10 captures (57 documents on 2026-10-17), once
+  on each DOM, and compares title, byline, content, markdown and
   control labels byte for byte; a second gate compares the serialized parse tree
   on the 10 captured real-world pages, and a third pins the SVG rules no capture
   can reach. Deleting linkedom would delete the only
@@ -671,7 +715,7 @@ the reason, rather than written here with the caret quietly dropped.
 
   **Version 12 was deliberately REFUSED here until 2026-08-24, and the reason it
   is taken now is that a browser was finally asked.** The refusal read: its
-  WHATWG raw-text change breaks linkedom 0.18.13's self-closing-script
+  WHATWG raw-text change breaks linkedom 0.18.14's self-closing-script
   serialization in linkedom's own upstream suite. That is accurate about the
   suite and says nothing about which parse is right, which is the question this
   Worker actually has, because /lens exists to show what a machine saw rather
@@ -687,7 +731,7 @@ the reason, rather than written here with the caret quietly dropped.
   | SVG `clipPath` | lowercased to `clippath` | case preserved, per foreign content |
 
   So linkedom's upstream test is pinning the pre-spec string, which is exactly
-  what this repository's own test was doing (`test/reader.test.mjs` carried the
+  what this repository's own test was doing (`test/reader.test.ts` carried the
   11 serialization as its expectation, with a message naming 12 as the thing
   that would break it). Both were reading a regression where there was a
   correction.
@@ -697,7 +741,7 @@ the reason, rather than written here with the caret quietly dropped.
   at both versions, the Markdown is BYTE-IDENTICAL on 10 of 10. Three pages
   differ in the intermediate content HTML and every difference is one of the
   three rows above: `clipPath` on stripe.com, `<!--?-->` on the two MDN pages.
-  The parity gate is unmoved, at 4 of 4 across 48 documents plus those 10.
+  The parity gate is unmoved, at 4 of 4 across 48 documents, those 10 among them.
 
   The override still forces the oracle onto the same generation, which is what
   keeps that gate meaning anything. Re-evaluate it when linkedom changes its
@@ -760,8 +804,8 @@ the reason, rather than written here with the caret quietly dropped.
   up to the workspace root, so without it `cf build` refuses with "No
   Cloudflare dev-server is installed in this project." Under bun's isolated
   linker the same URL resolves to the same store entry, so this adds 3 lines to
-  `bun.lock` and zero packages. `check-wrangler` holds it to the root pin byte
-  for byte, and `wrangler:pin` moves both in one write.
+  `bun.lock` and zero packages. `catalog:` references the root pin, `check-wrangler` verifies the shared
+  installation, and `wrangler:pin` changes the catalog once.
 
   **`cf` itself is NOT a dependency here, and that is deliberate.** Installed
   into the tree it pins its own Miniflare and Workerd for its CLI half
@@ -787,7 +831,7 @@ rules through `tools/oxlint/anti-slop/index.ts` and enables them in
 | `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
 The three rule files and their MIT license are vendored; `@oxlint/plugins`
-provides the adapter and stays paired with Oxlint. Re-sync the upstream rule
+provides the adapter Bun's linter loads them through. Re-sync the upstream rule
 files deliberately, review their behavior against this tree, and keep local
 policy in the wrapper and `.oxlintrc.json`.
 
@@ -796,7 +840,7 @@ others inapplicable because the source was JavaScript. Adoption and the
 TypeScript migration superseded that conclusion. The unvendored rules are
 not enabled; the old zero findings do not establish their applicability now.
 
-Core Oxlint supplies `vitest/no-restricted-vi-methods` for `vi.mock` and
+The linter's built-in `vitest` plugin supplies `vitest/no-restricted-vi-methods` for `vi.mock` and
 `vi.doMock`, so that equivalent rule needs no vendored copy. It does not
 match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 `cloudflare:workers` virtual module, and other uses require review of the seam.
@@ -804,3 +848,41 @@ match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 The plugin array in `.oxlintrc.json` preserves the default plugins because an
 explicit array replaces them. Its comments record the planted control that
 caught a rule disappearing when only `vitest` was listed.
+
+## Vendored bundle: @chenglou/pretext
+
+`src/client/garage/pretext.lib.js` is @chenglou/pretext 1.0.0 (published
+2026-10-14), the one third-party JavaScript the site ships. `/garage/pretext`
+imports it on that page only, and the build serves it as a page-scoped `/a/`
+asset. It is a bundle rather than a `package.json` dependency, so neither
+`deps-pin.yml` nor `minimumReleaseAge` sees it: a new release reaches it only
+through a person.
+
+`bun tools/vendor-pretext.ts`, run under the pinned bun, is the recipe. It
+fetches the registry tarball, refuses it unless its sha512 matches the one
+pinned in the script, and runs
+`bun build dist/layout.js --format=esm --minify` with a license banner. It
+also writes `pretext.lib.d.ts`, upstream's `dist/layout.d.ts` with its one
+import inlined, which is why `config/tsconfig.browser.json` no longer has to
+type-check the minified bundle. Two runs on 2026-10-17 under
+1.4.3-canary.20261013.1 wrote the same bytes.
+
+0.0.7, vendored 2026-06-02 in 978f1f7a, recorded no recipe, and none of the three `bun build` flag sets tried on
+2026-10-17 reproduces its 47,832 bytes (`--minify` came closest, at 48,358). That is the gap this section and the script close.
+
+To update:
+
+1. Set `VERSION` and `INTEGRITY` in the script from the registry's `dist`
+   record, wait out the same 24 hours `minimumReleaseAge` would, and run it.
+2. Read that version's `CHANGELOG.md` for anything the page calls. 1.0.0 moved
+   `layoutNextLine()`'s width before its cursor, and it throws a `RangeError`
+   for a font string Canvas ignores.
+3. Check the three demos on `/garage/pretext` in a browser, and the page's
+   prose about versions and sizes.
+4. Label the PR `hashed-asset`: the bundle's `/a/` URL re-mints (gotcha 35),
+   and the dictionary roll after release adds the new bytes to `src/dict/a-dict`.
+
+Sizes on the wire, brotli q11 as served: 12,635 B at 0.0.7, 34,710 B at 1.0.0.
+Upstream's changelog puts about 23 KB gzipped of the 1.0 bundle in each
+browser's line-break and grapheme data and the code that reads it, which
+replaced pretext's own break rules.

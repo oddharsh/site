@@ -12,12 +12,10 @@
 # requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
 #           and the bun the rest of the pipeline already runs (pipeline-json.ts)
 #
-# This read exiftool + jaq + build-recipes.py until 2026-08-14, and jaq alone
-# for its JSON until 2026-09-15. exif-sooc emits
-# this record shape and the recipe card directly, and owns the merge, so the
-# reshape filter and the Python step are both gone. Measured on the 158
-# committed photos: byte-identical output, and 9.9ms against exiftool's 995ms,
-# which is within 0.3ms of the I/O floor for opening those files at all.
+# exif-sooc emits this record shape and the recipe card directly, and owns the
+# merge. It replaced exiftool + jaq + build-recipes.py on 2026-08-14, measured on
+# the 158 committed photos: byte-identical output, and 9.9ms against exiftool's
+# 995ms, which is within 0.3ms of the I/O floor for opening those files at all.
 #
 # --merge updates only the supplied source batch and preserves metadata for
 # other photos. This is the mode used by the remote GitHub Actions pipeline,
@@ -90,17 +88,15 @@ if ! command -v exif-sooc >/dev/null 2>&1; then
   echo "  cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2
   exit 1
 fi
-# resolve the output path relative to this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # The served asset tree. NOT "$SCRIPT_DIR/..": that resolved to www/ back when
 # this script lived in www/scripts/, and it resolves to tools/ now.
 PUBLIC_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )/public"
 OUT="$PUBLIC_DIR/images/metadata.json"
 
-# zenc bakes the histogram channels at the end of this script (it replaced
-# photo-histograms.py + Pillow on 2026-08-14, sharing the JPEG decoder the
-# encoder already links). Same auto-build-on-first-run convention the other six
-# pipeline scripts use, so a fresh checkout needs cargo and nothing else.
+# zenc bakes the histogram channels at the end of this script, sharing the JPEG
+# decoder the encoder already links. Same auto-build-on-first-run convention as
+# the other pipeline scripts, so a fresh checkout needs cargo and nothing else.
 ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 if [ ! -x "$ZENC" ]; then
@@ -108,48 +104,16 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 
-# exif-sooc reads the containers directly and emits this script's exact record
-# shape, so the 50-line jq `reduce` that used to reshape `exiftool -json` is
-# gone, and so is the `jq -s '.[0] * .[1]'` merge that followed it.
-#
-# BOTH NAMES BELOW ARE jq ON PURPOSE, because they are history: this script ran
-# jq until 2026-09-08 and the merge described here is the reason it had to.
-#
-# THE MERGE IS THE REASON THAT SWAP MATTERED, more than the speed. jq's object
-# `*` is a RECURSIVE merge, and the reflexive substitute `+` is shallow: on a
-# --merge run the fresh read carries no `recipe`, so `+` would drop the card
-# from every re-merged photo, silently, and the failure reads as a tooltip that
-# has quietly stopped showing lines. That merge pinned this pipeline to jq.
-#
-# THE RECORDED REASON WAS WRONG ABOUT WHICH PART, and the correction is why the
-# move to jaq on 2026-09-08 was safe. The 2026-08-14 note said jaq "refuses `*`
-# outright". It does not: `{"a":{"x":1}} * {"a":{"y":2}}` gives the recursive
-# merge on jaq 3.1.1, same as jq. What differs is `-s` across MULTIPLE FILE
-# ARGUMENTS, which is how that merge was actually written: jq slurps two files
-# into one array of 2, and jaq processes each file separately, so `.[1]` is
-# null and the expression dies on a type error that names `*`. The error names
-# the operator and the cause is the flag, which is how it was misfiled.
-#
-# No filter left in this repo uses `-s` at all. `--slurpfile` is a different
-# flag, reads ONE named file, and agrees on both engines. Every remaining
-# filter was diffed jq against jaq over the real 165-photo library and matched
-# byte for byte: `--slurpfile`, `-S`, `--arg`, `-n`, `with_entries`, `has`,
-# `to_entries`, array subtraction and the photo-index merge.
-# `--merge-into` states the rule instead of relying on an operator:
+# `--merge-into` states the merge rule instead of relying on an operator. A
+# shallow merge would silently drop `recipe` from every re-merged photo, since a
+# --merge read carries none, and the failure reads as a tooltip that has
+# quietly stopped showing lines. The rule:
 #
 #   * a stem the read did not see passes through untouched
 #   * a stem it did see keeps every key it already had, freshly read fields on top
 #
 # It prints to stdout and never writes the file it read, so a crash cannot leave
 # a truncated metadata.json where a complete one was.
-#
-# The recipe card comes out of the same pass (exif-sooc derives it from the Fuji
-# tags), which is what retired build-recipes.py and the last Python in this
-# script's path.
-#
-# Verified before the swap: regenerating all 158 committed photos through
-# exif-sooc produced records byte-identical to what exiftool + jaq + Python
-# produced, recipe cards included, 158/158.
 if [ "$MERGE" -eq 1 ]; then
   exif-sooc --keyed --merge-into "$OUT" -q -r "$@" > "$OUT.tmp"
 else
@@ -157,9 +121,7 @@ else
 fi
 # NOTE: "$OUT" is not replaced yet. The prune below runs on the temp file and
 # the single `mv` happens after it, so a refusal there leaves the metadata.json
-# on disk exactly as it was. Writing first and pruning second was this block's
-# first shape, and its floor reported "left untouched" over a file it had
-# already overwritten with the unpruned read.
+# on disk exactly as it was.
 
 # ── scope the record to PUBLISHED photos ──────────────────────────────────────
 # SRC_DIR is an INPUT SUPERSET, not the archive. The curated source folder holds
@@ -218,14 +180,13 @@ if [ -s "$HASHES_JSON" ] && [ "$(bun "$PJ" length "$HASHES_JSON")" -gt 0 ]; then
   # The other direction is DATA LOSS in full mode, so it refuses rather than
   # warns. A full run REPLACES the record, so a published photo whose source file
   # this run could not see does not merely go undescribed: its EXIF is deleted,
-  # and the tooltip renders blank lines for a photo that still ships. That is the
-  # footgun in passing a single file from a scratch directory, since META_SRC in
-  # add-photos.sh becomes that file's PARENT: pointed at a folder of one, a full
-  # regen would cut metadata.json from 158 records to 1 and report success.
+  # and the tooltip renders blank lines for a photo that still ships. Pointed at
+  # a folder of one, a full regen would cut metadata.json to 1 record and report
+  # success.
   #
-  # --merge is the mode for a partial source, which is why the remote pipeline
-  # uses it, and merge preserves stems it did not read, so this list is empty
-  # there by construction.
+  # --merge is the mode for a partial source, which is why add-photos.sh and the
+  # remote pipeline use it, and merge preserves stems it did not read, so this
+  # list is empty there by construction.
   unread=$(bun "$PJ" unread "$HASHES_JSON" --against "$OUT.tmp")
   if [ -n "$unread" ]; then
     unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
@@ -244,43 +205,31 @@ else
 fi
 mv "$OUT.tmp" "$OUT"
 
-# also emit one file per photo for the tooltip's per-photo lazy fetch:
-# /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
-# only pulls EXIF for the photos they actually hover (not the whole index), and
-# repeat visits are served from the browser cache. metadata.json stays as the full
-# index (the /images/metadata.json endpoint + a fallback). bump the ?mv version
-# (META_V in tooltip.js) whenever this regenerates so caches refresh.
+# One file per photo, images/meta/<stem>.json, in the compact schema: SHORT
+# keys, only the fields the tooltip renders, null-valued fields dropped. The
+# split calls projectExifRecord (tools/lib/photo-indexes.ts), the same function
+# build.ts projects exif.json through, so the key map has one copy.
+# metadata.json keeps the full, long-key schema: it is the public /photos index
+# (PHOTO_PUBLIC_FIELDS in src/worker/photos.ts reads it) and the archive.
+#
+# These files are a local pipeline artifact. The histogram bake and the index
+# build below read them; build.ts derives the served /images/meta/ files from
+# the committed indexes. Bump META_V in src/client/tooltip.ts when the fields change.
 META_DIR="$PUBLIC_DIR/images/meta"
 mkdir -p "$META_DIR"
 if [ "$MERGE" -eq 0 ]; then
   rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
 fi
-# per-photo files carry a COMPACT schema, not a verbatim copy of the metadata.json
-# entry: SHORT keys, only the fields the tooltip actually renders, and null-valued
-# fields dropped. these are fetched once per hover (the hot path), so every byte is
-# on someone's cursor. metadata.json keeps the full, readable, long-key schema — it
-# is the public /photos index (photos.js PHOTO_PUBLIC_FIELDS reads it) and the
-# archive. The map is EXIF_KEY_MAP in tools/lib/photo-indexes.ts; KEEP IT IN
-# SYNC with tooltip.js (reader) and zenc's histogram.rs (which merges the "hi"
-# histogram into these same files).
-# ONE map now, since 2026-09-15: the split calls projectExifRecord, the same
-# function build.ts projects exif.json through, so the "written twice" this
-# comment used to close with is closed. check-photo-pipeline.ts's agreement
-# check still runs and still means something: images/meta/ older than
-# metadata.json is the state it catches now, rather than two maps drifting.
 bun "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
 
-# the recipe card is derived during extraction now (exif-sooc --keyed), so
-# build-recipes.py is gone. One consequence worth knowing: a --merge run
-# refreshes cards for the BATCH only, where the old script rewrote every card on
-# every run. A full run still regenerates all of them, which is what to do after
-# an exif-sooc upgrade that changes the card.
+# the recipe card is derived during extraction (exif-sooc --keyed), so a --merge
+# run refreshes cards for the BATCH only. A full run regenerates all of them,
+# which is what to do after an exif-sooc upgrade that changes the card.
 
 # bake the 64-bin histograms back into the meta files (the full run may have
 # wiped them; the tooltip reads meta.hi instead of computing client-side).
-# THE ONLY BAKE IN THE PIPELINE, and it is pinned here: the two index builds
-# below read meta/, so a bake anywhere else is one the indexes cannot see.
-# add-photos.sh ran a second one after calling this script until 2026-08-29.
+# THE ONLY BAKE IN THE PIPELINE, and it is pinned here: the index build below
+# reads meta/, so a bake anywhere else is one the index cannot see.
 #
 # NOT piped into `tail -1`, matching the sibling call #566 unpiped. The status
 # half of gotcha 40 was never open here, because this script has carried
@@ -292,18 +241,6 @@ bun "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
 # L1009919_2.6e03d6df.jpg missing, skipped`. Piped, the run died on a summary
 # reading "1 skipped" and named no stem.
 "$ZENC" histogram --root "$PUBLIC_DIR"
-
-# the one shared EXIF index the tooltip warms on idle USED TO BE ROLLED UP HERE,
-# out of the per-photo files just written, and committed. build.ts step 1a
-# projects it straight out of metadata.json now, which is the same 22-pair map
-# one hop shorter, and it lands in .build/ rather than in git. So the EXIF half
-# of the per-photo files above no longer feeds anything that ships; what still
-# needs them is the histogram bake, below.
-#
-# The map was written twice until 2026-09-15, as a jaq literal above and as
-# EXIF_KEY_MAP in tools/lib/photo-indexes.ts; the split reads the latter now.
-# check-photo-pipeline.ts still compares images/meta/ against the projection
-# wherever the directory exists, which catches a stale meta/ rather than drift.
 
 # The packed bars the grid inlines into each tile as data-hist. These read the
 # per-photo files, so they still run here.

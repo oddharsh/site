@@ -16,7 +16,7 @@ const DISCOVERY_BYTE_CAP = 256 * 1024;
 //
 // Under the subrequest budget below it cannot currently bind — 40 subrequests buy
 // at most ~12 sends — so it is the ceiling that takes over if that budget is ever
-// raised, which is what moving off Workers Free would do (the cap there is 1000).
+// raised, which is what moving off Workers Free would do.
 // Kept rather than deleted because the two bounds answer different questions and
 // only one of them is about being a good citizen.
 const MAX_SENDS_PER_RUN = 25;
@@ -52,7 +52,7 @@ const COST_PER_TARGET = 3;
 const COST_PER_PAGE = 3;
 
 // My own profile links, stamped into every page by the desktop shell. Kept in
-// sync with nav.js PROFILES by a contract test rather than by hope.
+// sync with PROFILES (tools/photos/shell-data.ts) by contract-webmention-outbound.
 export const SELF_LINK_HOSTS = [
   "github.com/oddharsh",
   "x.com/oddhash",
@@ -66,16 +66,18 @@ const TABLE = "webmentions_sent";
 let ensured = false;
 async function ensureTable(db) {
   if (ensured) return;
-  await db.prepare(
-    `CREATE TABLE IF NOT EXISTS ${TABLE} (
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS ${TABLE} (
       source TEXT NOT NULL,
       target TEXT NOT NULL,
       endpoint TEXT,
       status INTEGER,
       last_sent_at INTEGER NOT NULL,
       PRIMARY KEY (source, target)
-    )`
-  ).run();
+    )`,
+    )
+    .run();
   ensured = true;
 }
 
@@ -107,7 +109,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   // than as the one call it looks like from here.
   const budget = createBudget(SUBREQUEST_BUDGET);
   const transport = meteredTransport(budget, env.OUTBOUND_TRANSPORT);
-  await ensureTable(db); budget.charge();
+  await ensureTable(db);
+  budget.charge();
 
   const pages = await span("webmention.own_pages", () => mentionablePages(env, origin));
   sSend.setAttribute("webmention.pages", Array.isArray(pages) ? pages.length : 0);
@@ -118,7 +121,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   // per page, so it is a few hundred rows and it buys back ~100 subrequests —
   // which is the whole difference between a run that finishes and a run that
   // dies at the platform cap.
-  const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all(); budget.charge();
+  const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all();
+  budget.charge();
   const prior = new Map();
   for (const r of (priorRows && priorRows.results) || []) prior.set(`${r.source}|${r.target}`, r.last_sent_at || 0);
   const freshAt = (source, target) => now - (prior.get(`${source}|${target}`) ?? 0) < RESEND_AFTER_MS;
@@ -126,14 +130,17 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   // ROTATION, and it needs the marker rows to work. A bounded run always starts
   // at the top of the list, so without a memory of which pages have been READ the
   // first few would be swept every night and the tail never at all — and the
-  // twelve pages that cite nothing would starve it hardest, because a page with
+  // pages that cite nothing would starve it hardest, because a page with
   // no citations writes no row and so always looks new. The marker is the
   // self-pair (source === target), which no real citation can ever be:
   // citationsIn drops same-origin links, so the two key spaces cannot collide.
   const pageRead = (p) => prior.get(`${p}|${p}`) ?? 0;
   const queue = [...pages].sort((a, b) => pageRead(a) - pageRead(b));
 
-  let sent = 0, discovered = 0, considered = 0, pagesRead = 0;
+  let sent = 0,
+    discovered = 0,
+    considered = 0,
+    pagesRead = 0;
   // A refusal from the ledger mid-target: a redirect chain cost more than the
   // whole-target estimate. The run stops there and records nothing for it.
   let refused = false;
@@ -156,7 +163,10 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
 
     let cut = false;
     for (const target of citationsIn(html, origin)) {
-      if (sent >= MAX_SENDS_PER_RUN || !affordable()) { cut = true; break; }
+      if (sent >= MAX_SENDS_PER_RUN || !affordable()) {
+        cut = true;
+        break;
+      }
       considered++;
 
       // already told them recently? the spec's re-send is an update signal, not
@@ -185,16 +195,20 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
         // target, so tomorrow's run probes it again instead of trusting a
         // "no endpoint" the ledger made up.
         if (budget.fault(e) !== "cap") throw e;
-        refused = true; cut = true; break;
+        refused = true;
+        cut = true;
+        break;
       }
       if (!endpoint) {
         // No endpoint is the common case and not a failure. Record it so the
         // next run doesn't re-probe the same URL for a week.
-        await recordSend(db, pageUrl, target, null, null, now); budget.charge();
+        await recordSend(db, pageUrl, target, null, null, now);
+        budget.charge();
         continue;
       }
       discovered++;
-      await recordSend(db, pageUrl, target, endpoint, status, now); budget.charge();
+      await recordSend(db, pageUrl, target, endpoint, status, now);
+      budget.charge();
       sent++;
     }
 
@@ -203,7 +217,8 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
     // up first tomorrow. (Until 2026-10-14 the cut only left the inner loop and
     // fell through to this write, marking a half-swept page done for a week.)
     if (cut) break;
-    await recordSend(db, pageUrl, pageUrl, null, null, now); budget.charge();
+    await recordSend(db, pageUrl, pageUrl, null, null, now);
+    budget.charge();
   }
 
   sSend.setAttribute("webmention.considered", considered);
@@ -216,19 +231,28 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   // to do, which the summary line below cannot express.
   sSend.setAttribute("webmention.capped", refused || sent >= MAX_SENDS_PER_RUN || !affordable());
   recordBudget(sSend, budget);
-  console.log(`webmention-send: ${pagesRead} pages read, ${considered} citations considered, ${discovered} endpoints found, ${sent} sent, ${spent}/${SUBREQUEST_BUDGET} subrequests`);
+  console.log(
+    `webmention-send: ${pagesRead} pages read, ${considered} citations considered, ${discovered} endpoints found, ${sent} sent, ${spent}/${SUBREQUEST_BUDGET} subrequests`,
+  );
   return { sent, discovered, considered, pagesRead, spent };
 }
 
 function hostOf(url) {
-  try { return new URL(url).hostname; } catch { return undefined; }
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
 }
 
 function recordSend(db, source, target, endpoint, status, at) {
-  return db.prepare(
-    `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(source, target) DO UPDATE SET endpoint = excluded.endpoint, status = excluded.status, last_sent_at = excluded.last_sent_at`
-  ).bind(source, target, endpoint, status, at).run();
+  return db
+    .prepare(
+      `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(source, target) DO UPDATE SET endpoint = excluded.endpoint, status = excluded.status, last_sent_at = excluded.last_sent_at`,
+    )
+    .bind(source, target, endpoint, status, at)
+    .run();
 }
 
 // Every page that accepts mentions also SENDS them: if a page is public enough
@@ -252,38 +276,38 @@ export async function mentionablePages(env, origin) {
 
 // Read one of my own pages, IN-PROCESS.
 //
-// This used to be a plain `fetch(url)` at the public origin, with a comment
-// saying it went over the network on purpose because the worker-rendered pages
-// (writing posts) do not exist as static files. The reasoning is right and the
-// mechanism is not available: a fetch to our own hostname from inside this worker
-// is blocked as recursion (error 1042), which perf-probe.js and lens's SELF_FETCH
-// each already document. It failed by RETURNING "" — the catch is right there —
-// so every page was skipped, every run wrote nothing, and the job reported the
-// same silence a working job reports.
+// A plain `fetch(url)` at the public origin cannot work: a fetch to our own
+// hostname from inside this worker is blocked as recursion (error 1042;
+// contract-webmention-outbound pins the in-process read). It failed by
+// RETURNING "" through the catch below, so every page was skipped and the job reported the
+// same silence a working job reports. Measured 2026-08-28: `webmentions_sent`
+// and `webmentions` both held zero rows, weeks after the feature shipped.
 //
-// Measured 2026-08-28, weeks after the feature shipped: `webmentions_sent` held
-// zero rows, `webmentions` held zero rows, and /around on the same daily tick had
-// run that morning. The whole outbound half had never fetched one page.
-//
-// SELF_FETCH dispatches through route() and is what a reader would have got,
-// worker enhancement included; index.js sets IDENTITY_BODY on it so the
-// precompressed page tier arrives readable rather than as raw brotli. ASSETS is
-// the fallback for a caller that has no dispatcher (dev, tests): it returns the
-// pre-enhancement static bytes, which is worse but is still the page's own links.
-// There is deliberately NO plain-fetch arm, because that arm is the bug.
+// SELF_FETCH (lib/outbound.ts selfAdapter) dispatches through route() and is
+// what a reader would have got, worker enhancement included; dispatch.ts sets
+// IDENTITY_BODY on it so the precompressed page tier arrives readable rather
+// than as raw brotli. ASSETS is the fallback for a caller that has no
+// dispatcher (dev, tests): it returns the pre-enhancement static bytes, which
+// is worse but is still the page's own links. There is deliberately NO
+// plain-fetch arm, because that arm is the bug.
 async function fetchOwnPage(url, env) {
   const req = new Request(url, {
     headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
     signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
   const read = selfAdapter(env);
-  if (!read) { console.warn("webmention-send: no SELF_FETCH or ASSETS; cannot read own pages"); return ""; }
+  if (!read) {
+    console.warn("webmention-send: no SELF_FETCH or ASSETS; cannot read own pages");
+    return "";
+  }
   try {
     const res = await read(req);
     if (!res || !res.ok) return "";
     const body = await readResponseCapped(res, PAGE_BYTE_CAP);
     return body?.text || "";
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 // ── the citation filter ────────────────────────────────────────────────────
@@ -316,16 +340,20 @@ export function citationsIn(html, origin) {
     const href = (tag.match(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i) || [])[1];
     if (!href) continue;
     const raw = href.replace(/^["']|["']$/g, "").trim();
-    if (!/^https?:\/\//i.test(raw)) continue;             // relative + mailto + raycast:// etc
+    if (!/^https?:\/\//i.test(raw)) continue; // relative + mailto + raycast:// etc
     let u;
-    try { u = new URL(raw); } catch { continue; }
-    if (u.origin === origin) continue;                     // my own pages
+    try {
+      u = new URL(raw);
+    } catch {
+      continue;
+    }
+    if (u.origin === origin) continue; // my own pages
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     if (SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/"))) continue;
     if (privateHostBlocked(u.hostname.toLowerCase())) continue;
     const checked = validateLensTarget(u.toString());
     if (!checked.ok) continue;
-    u.hash = "";                                           // #anchor is the same document
+    u.hash = ""; // #anchor is the same document
     out.add(u.toString());
   }
   return [...out];
@@ -342,7 +370,10 @@ export function citationsIn(html, origin) {
 // boundary, so it happily matches rel="not-webmention", which is precisely the
 // decoy discovery test 12 plants.
 function relHasWebmention(rel) {
-  return String(rel).trim().split(/\s+/).some((t) => t.toLowerCase() === "webmention");
+  return String(rel)
+    .trim()
+    .split(/\s+/)
+    .some((t) => t.toLowerCase() === "webmention");
 }
 
 function attr(tag, name) {
@@ -382,10 +413,16 @@ export function findEndpointIn(html, linkHeader, baseUrl) {
 export async function discoverEndpoint(target, transport?: PublicTransport) {
   try {
     const signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
-    const followed = await fetchFollowingPublicRedirects(target, () => ({
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
-      signal,
-    }), validateLensTarget, 20, transport); // Preserve native fetch's redirect allowance.
+    const followed = await fetchFollowingPublicRedirects(
+      target,
+      () => ({
+        headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
+        signal,
+      }),
+      validateLensTarget,
+      20,
+      transport,
+    ); // Preserve native fetch's redirect allowance.
     if (!followed.ok) return null;
     const { response: res, finalUrl } = followed;
     const linkHeader = res.headers.get("link");
@@ -393,7 +430,11 @@ export async function discoverEndpoint(target, transport?: PublicTransport) {
     // A HEAD-equivalent shortcut: if the Link header already names an endpoint,
     // don't read the body at all.
     if (linkHeader && /\bwebmention\b/i.test(linkHeader)) {
-      try { await res.body?.cancel(); } catch { /* no body needed for header discovery */ }
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* no body needed for header discovery */
+      }
       endpoint = findEndpointIn("", linkHeader, finalUrl);
     } else {
       if (!res.ok) return null;
@@ -412,7 +453,11 @@ export async function discoverEndpoint(target, transport?: PublicTransport) {
 }
 
 function abs(href, base) {
-  try { return new URL(href, base).toString(); } catch { return null; }
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return null;
+  }
 }
 
 // ONE request, redirect: "manual". A followed redirect is a subrequest per hop

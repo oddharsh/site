@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
+// perf-budget.ts — deterministic build/deploy invariants + advisory wire-size
 // reporting for aadhar.sh.
 //
 // User experience is measured in a controlled browser lab; this site deliberately
@@ -15,26 +15,24 @@
 // derive a user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
-//   node tools/perf-budget.ts        (or: bun run perf-budget)
+//   bun run perf-budget
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is
 // the repeatable pre-merge signal; no field-RUM outcome source is currently wired.
 //
-// ALSO NOT MEASURED HERE, and this is the newer and more important boundary:
-// whether THIS CHANGE moved anything. Every threshold below is an absolute line
-// against a constant somebody typed, and the baseline history at
-// WORKER_BASELINE_GZIP_KIB is the record of what that costs — a number that sat
-// 58% stale for months while CI printed "hard checks green" over it every run.
-// The differential half now lives in `tools/perf-snapshot.ts`, run by
+// Also not measured here: whether THIS CHANGE moved anything. Every threshold
+// below is an absolute line against a constant somebody typed, and the baseline
+// history at WORKER_BASELINE_GZIP_KIB is the record of what that costs: a number
+// that sat 58% stale for months while CI printed "hard checks green" over it.
+// The differential half lives in `tools/perf-snapshot.ts`, run by
 // .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
 // posts the delta as a PR comment. It has no constants, so it cannot go stale.
 //
-// Read the two together and the division of labour is clean: THIS script is the
-// gate (structural invariants that must never ship broken, plus a coarse alarm
-// for a change large enough that nobody could have meant it), and the diff is
-// the signal (what moved, by how much, in this PR). A slow 500-bytes-per-PR
-// drift is invisible to everything here and obvious there.
+// THIS script is the gate (structural invariants that must never ship broken,
+// plus a coarse alarm for a change large enough that nobody could have meant
+// it), and the diff is the signal (what moved, by how much, in this PR). A slow
+// 500-bytes-per-PR drift is invisible to everything here and obvious there.
 
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -142,10 +140,10 @@ const WORKER_ALERT_GROWTH = 0.25;
 // all, which is worth knowing before splitting this by vendor again).
 //
 // It answers a question the gzip figure stopped being able to answer the moment
-// production started minifying: how much code is in here. Both numbers are worth
-// having and they measure different things. Gzip is what the deploy uploads and
-// what a cold start parses; source bytes are what the repository wrote, and only
-// the second one is invariant under a change to how the first is produced.
+// production started minifying: how much code is in here. Gzip is what the
+// deploy uploads and what a cold start parses; source bytes are what the
+// repository wrote, and only the second one is invariant under a change to how
+// the first is produced.
 //
 // Shares WORKER_ALERT_GROWTH on purpose, so there is one headroom knob rather
 // than two that can drift apart. Advisory, like everything else here.
@@ -153,40 +151,26 @@ const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 
 // `wrangler check startup` advisory ceiling, in ms of ACTIVE startup CPU.
 //
-// The baseline note above measured startup cost BY HAND on 2026-08-04 and
-// concluded bundle bytes are two orders of magnitude away from being a latency
-// problem. This runs that same measurement on every CI run, so the conclusion
-// stops being a point-in-time finding somebody has to remember to re-take.
+// The baseline note above measured startup cost by hand on 2026-08-04; this
+// re-takes that measurement on every CI run. `check startup` ranks frames and
+// does not cost them, and it profiles a local machine whose CPU is not
+// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production
+// startup, and a breach here means "go re-measure", never "cold start regressed".
 //
-// Read it for what it is. That note's caveat holds: `check startup` ranks frames
-// and does not cost them, and this profiles a local machine whose CPU is not
-// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production startup,
-// and a breach here means "go re-measure", never "cold start regressed".
-//
-// It was called a "regression tripwire" until the merge-base diff existed, and
-// that was the wrong job for it. A sampled profile whose window lands ~5 samples
-// cannot detect a regression; three consecutive runs of identical bytes read 9.6,
-// 7.6 and 6.4 ms, a 50% spread on no change at all, and a fourth on 2026-08-08
-// read 16.4 ms — 2.6x the low, still on bytes nobody had touched. The tripwire is the bundle
+// It cannot catch a regression either. The profile window is ~20ms and lands
+// about 5 samples: three consecutive runs of identical bytes read 9.6, 7.6 and
+// 6.4 ms, and a fourth on 2026-08-08 read 16.4 ms. The tripwires are the bundle
 // gzip above and the per-module attribution below, both deterministic, and the
 // per-PR movement in those is what tools/perf-snapshot.ts reports.
 //
 // That is also why the snapshot deliberately does NOT record this number.
 // Diffing two draws from a noisy distribution manufactures findings: a run that
-// happened to sample 9.6 against one that sampled 6.4 would read as a 50%
-// startup regression, in a comment whose whole credibility rests on every row
-// being real. Astral's answer to benchmark noise is to remove the noise source
-// (CodSpeed counts simulated instructions; ty's memory job pins
-// TY_MAX_PARALLELISM=1) rather than to widen a threshold around it. Here the
-// cheaper version of that answer is available: measure the deterministic thing,
-// and keep the sampled one as the flamegraph you open once it fires.
+// sampled 9.6 against one that sampled 6.4 would read as a 50% startup
+// regression. Measure the deterministic thing, and keep the sampled one as the
+// flamegraph you open once it fires.
 //
 // 50ms is ~6x the observed 6.4-9.6ms and still an order of magnitude under the
-// 400ms platform limit: room for the reading to wander, none for a real
-// regression to hide. It wanders more than you would expect, because the profile
-// window is ~20ms and lands about 5 samples — three consecutive runs here read
-// 9.6, 7.6 and 6.4ms with nothing changed. Advisory, never fatal; a sampled
-// profile at that resolution has no business failing a PR.
+// 400ms platform limit. Advisory, never fatal.
 const WORKER_STARTUP_ALERT_MS = 50;
 // Every minified asset's readable twin, from the same registry.
 const TWINS = readableTwins();
@@ -200,14 +184,22 @@ const HTML_ENVELOPE = {
 const fails = [];
 const warnings = [];
 const ok = (m) => console.log(`  ok    ${m}`);
-const bad = (m) => { console.log(`  FAIL  ${m}`); fails.push(m); };
-const warn = (m) => { console.log(`  warn  ${m}`); warnings.push(m); };
+const bad = (m) => {
+  console.log(`  FAIL  ${m}`);
+  fails.push(m);
+};
+const warn = (m) => {
+  console.log(`  warn  ${m}`);
+  warnings.push(m);
+};
 const kib = (bytes) => bytes / 1024;
 const compressedSizes = (bytes) => ({
   gzip: kib(gzipSync(bytes, { level: 9 }).length),
-  brotli: kib(brotliCompressSync(bytes, {
-    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
-  }).length),
+  brotli: kib(
+    brotliCompressSync(bytes, {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+    }).length,
+  ),
 });
 const fmt = (value) => `${value.toFixed(1)} KiB`;
 
@@ -230,7 +222,12 @@ try {
   // One dry-run writes index.js for the route harness's prebuiltWorkerDir and
   // the upload-format worker.bundle for `check startup`. They are different
   // formats; the profiler cannot consume the plain JavaScript entrypoint.
-  dryOut = execFileSync(...wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"])), { encoding: "utf8" });
+  dryOut = execFileSync(
+    ...wranglerCommand(
+      await siteWranglerArgs(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]),
+    ),
+    { encoding: "utf8" },
+  );
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
   dryRunFailed = true;
@@ -254,7 +251,10 @@ if (gz) {
   const kib = parseFloat(gz[1]);
   const alertAt = WORKER_BASELINE_GZIP_KIB * (1 + WORKER_ALERT_GROWTH);
   overBudget = kib > alertAt;
-  if (overBudget) warn(`worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`);
+  if (overBudget)
+    warn(
+      `worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`,
+    );
   else ok(`worker bundle ${kib.toFixed(2)} KiB gzip (advisory alert at ${alertAt.toFixed(2)} KiB)`);
 } else {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
@@ -265,26 +265,35 @@ if (gz) {
 // size costs at cold start, which is the constraint the size was ever a proxy
 // for. Available since 2026-07-30 and it needs no credential.
 //
-// This settles an open question rather than opening one. The repo's standing
-// conclusion is that cold start here is not eval-bound (measured 2026-07-28,
-// when lazy route imports were tried and bought nothing but +27KB of wrappers).
-// That was reasoned from bundle structure; this measures it directly, and it
-// agrees: ~8ms of active startup CPU against a 400ms platform limit, on a
-// Worker whose bundle grew 57% in the interim.
+// The repo's standing conclusion is that cold start here is not eval-bound
+// (measured 2026-07-28, when lazy route imports were tried and bought nothing
+// but +27KB of wrappers). That was reasoned from bundle structure; this
+// measures it directly, and it agrees: ~8ms of active startup CPU against a
+// 400ms platform limit, on a Worker whose bundle grew 57% in the interim.
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync(...wranglerCommand(await siteWranglerArgs([
-    "check", "startup",
-    "--workerBundle", ".build/.perfbudget/worker.bundle",
-    "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
-  ])), { encoding: "utf8" });
+  const startOut = execFileSync(
+    ...wranglerCommand(
+      await siteWranglerArgs([
+        "check",
+        "startup",
+        "--workerBundle",
+        ".build/.perfbudget/worker.bundle",
+        "--outfile",
+        ".build/.perfbudget/worker-startup.cpuprofile",
+      ]),
+    ),
+    { encoding: "utf8" },
+  );
   // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {
     const ms = parseFloat(active[1]);
     ms > WORKER_STARTUP_ALERT_MS
-      ? warn(`worker startup ${ms.toFixed(1)} ms active CPU > ${WORKER_STARTUP_ALERT_MS} ms advisory alert — open .build/.perfbudget/worker-startup.cpuprofile in Chrome DevTools for the flamegraph`)
+      ? warn(
+          `worker startup ${ms.toFixed(1)} ms active CPU > ${WORKER_STARTUP_ALERT_MS} ms advisory alert — open .build/.perfbudget/worker-startup.cpuprofile in Chrome DevTools for the flamegraph`,
+        )
       : ok(`worker startup ${ms.toFixed(1)} ms active CPU (advisory alert at ${WORKER_STARTUP_ALERT_MS} ms, platform limit 400 ms)`);
   } else {
     warn("could not read active CPU from `wrangler check startup`; skipping the startup check");
@@ -300,8 +309,9 @@ try {
 // prints when the advisory fires: on a green run it is noise.
 try {
   const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
-  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
-    .find(([name]) => name.endsWith(".js") && !name.endsWith(".map"));
+  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][]).find(
+    ([name]) => name.endsWith(".js") && !name.endsWith(".map"),
+  );
   const inputs = Object.entries(entry?.[1]?.inputs ?? {})
     .map(([name, v]): [string, number] => [name, v.bytesInOutput ?? 0])
     .sort((a, b) => b[1] - a[1]);
@@ -318,16 +328,17 @@ try {
   // 2026-08-16 minify drop and any future compression change leave it alone.
   //
   // A collapsed count is the failure mode worth guarding: an empty or tiny
-  // metafile would otherwise report a huge improvement. Floor it at the module
-  // count the bundle is known to carry.
-  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[])
-    .reduce((sum, input) => sum + (input.bytes ?? 0), 0));
+  // metafile would otherwise report a huge improvement. Floor it at 40 modules,
+  // under half the 83 the bundle carried on 2026-08-16.
+  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[]).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
   const modules = Object.keys(meta.inputs ?? {}).length;
   if (modules < 40) {
     warn(`metafile listed only ${modules} source inputs, so the source-bytes total cannot be trusted (expected the whole Worker graph)`);
   } else if (sourceKib > sourceAlertAt) {
-    warn(`worker source ${sourceKib.toFixed(2)} KiB > ${sourceAlertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_SOURCE_KIB} KiB baseline, ${modules} modules). This one is minify-invariant, so it is real growth.`);
+    warn(
+      `worker source ${sourceKib.toFixed(2)} KiB > ${sourceAlertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_SOURCE_KIB} KiB baseline, ${modules} modules). This one is minify-invariant, so it is real growth.`,
+    );
   } else {
     ok(`worker source ${sourceKib.toFixed(2)} KiB across ${modules} modules (advisory alert at ${sourceAlertAt.toFixed(2)} KiB; minify-invariant)`);
   }
@@ -339,10 +350,18 @@ try {
 for (const { file, envelope } of ASSET_ENVELOPES) {
   const path = `.build/public/${file}`;
   let bytes;
-  try { bytes = await readFile(path); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  try {
+    bytes = await readFile(path);
+  } catch {
+    bad(`${file}: missing from build output (run build first)`);
+    continue;
+  }
   const text = bytes.toString("utf8");
   const banner = text.startsWith("/*!") && text.includes("minified at deploy");
-  if (!banner) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
+  if (!banner) {
+    bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`);
+    continue;
+  }
   const sizes = compressedSizes(bytes);
   const overGzip = sizes.gzip > envelope.gzipKiB;
   const overBrotli = sizes.brotli > envelope.brotliKiB;
@@ -355,29 +374,37 @@ for (const { file, envelope } of ASSET_ENVELOPES) {
 // decides a number.
 for (const file of UNBUDGETED) {
   let bytes;
-  try { bytes = await readFile(`.build/public/${file}`); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  try {
+    bytes = await readFile(`.build/public/${file}`);
+  } catch {
+    bad(`${file}: missing from build output (run build first)`);
+    continue;
+  }
   const text = bytes.toString("utf8");
-  if (!(text.startsWith("/*!") && text.includes("minified at deploy"))) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
+  if (!(text.startsWith("/*!") && text.includes("minified at deploy"))) {
+    bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`);
+    continue;
+  }
   const sizes = compressedSizes(bytes);
   ok(`${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (unbudgeted: no envelope declared)`);
 }
 
 // 4) readable twins present --------------------------------------------------
 for (const t of TWINS) {
-  try { await stat(`.build/public/${t}`); ok(`twin ${t} present`); }
-  catch { bad(`twin ${t} missing from build output`); }
+  try {
+    await stat(`.build/public/${t}`);
+    ok(`twin ${t} present`);
+  } catch {
+    bad(`twin ${t} missing from build output`);
+  }
 }
 
 // 4b) dictionary + generated-page pipeline ----------------------------------
 try {
-  const name = (await readdir(".build/public/a"))
-    .find((f) => parseFamilyDictionary(f));
+  const name = (await readdir(".build/public/a")).find((f) => parseFamilyDictionary(f));
   if (!name) bad("page-family.dict: content-hashed build asset missing");
   else {
-    const [dict, br] = await Promise.all([
-      readFile(`.build/public/a/${name}`),
-      readFile(`.build/public/a/${name}.br`),
-    ]);
+    const [dict, br] = await Promise.all([readFile(`.build/public/a/${name}`), readFile(`.build/public/a/${name}.br`)]);
     if (dict.length !== 65_536 || dict.readUInt32LE(0) === 0xec30a437) {
       bad("page-family.dict: expected an exact 64KB raw-content dictionary, not a trained zstd dictionary");
     } else if (br.length >= dict.length) {
@@ -391,21 +418,18 @@ try {
 }
 
 try {
-  const pages = (await readdir(".build/public", { recursive: true }))
-    .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
+  const pages = (await readdir(".build/public", { recursive: true })).filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
   const deltas = await readdir(".build/public/pd");
   // PAGE_FAMILY_MATCH makes this the dictionary Chrome selects whenever both the
   // family and an exact page snapshot are cached. Coverage by EITHER tier is no
   // longer an honest gate: a page with only an exact delta would still receive the
   // family hash and fall through to Brotli. Require the preferred family tag on
   // every deterministic page; exact snapshots remain a high-ratio cold-family path.
-  const familyName = (await readdir(".build/public/a"))
-    .find((name) => parseFamilyDictionary(name));
+  const familyName = (await readdir(".build/public/a")).find((name) => parseFamilyDictionary(name));
   if (!familyName) throw new Error("page-family dictionary is missing");
   const family = await readFile(`.build/public/a/${familyName}`);
   const familyTag = dictionaryTag(family);
-  const absent = pages
-    .filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
+  const absent = pages.filter((path) => !deltas.includes(pageDeltaName(pageSlug(path), familyTag)));
 
   // build.ts step 8 SKIPS a family delta that is not smaller than the page's q11
   // twin, and it is right to: Chrome sends the family hash either way, so with no
@@ -420,14 +444,20 @@ try {
   for (const path of absent) {
     const slug = pageSlug(path);
     const bytes = await readFile(`.build/public/${path}`);
-    const q11 = await readFile(`.build/public/${path}.br`).then((b) => b.length, () => Infinity);
+    const q11 = await readFile(`.build/public/${path}.br`).then(
+      (b) => b.length,
+      () => Infinity,
+    );
     const dcz = zstdDictionaryFrame(bytes, family).length + DCZ_HEADER_BYTES;
     if (dcz < q11) missing.push(slug);
     else notUseful.push(`${slug} (${dcz} B dcz >= ${q11} B q11)`);
   }
 
   if (missing.length) bad(`preferred site-page dictionary: missing useful family DCZ variants for ${missing.join(", ")}`);
-  else ok(`preferred site-page dictionary: ${pages.length - absent.length} of ${pages.length} static/deterministic pages have family DCZ variants${notUseful.length ? `; no variant where it loses to q11: ${notUseful.join(", ")}` : ""}`);
+  else
+    ok(
+      `preferred site-page dictionary: ${pages.length - absent.length} of ${pages.length} static/deterministic pages have family DCZ variants${notUseful.length ? `; no variant where it loses to q11: ${notUseful.join(", ")}` : ""}`,
+    );
 } catch (e) {
   bad(`site-page dictionary: generated DCZ set unreadable (${e.message})`);
 }
@@ -442,10 +472,7 @@ for (const path of [
   "pixel-peeper/index.html",
 ]) {
   try {
-    const [raw, br] = await Promise.all([
-      readFile(`.build/public/${path}`),
-      readFile(`.build/public/${path}.br`),
-    ]);
+    const [raw, br] = await Promise.all([readFile(`.build/public/${path}`), readFile(`.build/public/${path}.br`)]);
     if (br.length >= raw.length) bad(`${path}: q11 twin is not smaller than the generated page`);
     else ok(`${path}: deterministic renderer staged ${raw.length} B -> ${br.length} B q11`);
   } catch {
@@ -480,7 +507,7 @@ if (homepage) {
   // the same two-moment arrangement HTML_MARKERS already uses.
   //
   // The twin is checked for EXISTENCE and readability rather than byte-equality with
-  // a source file, because ten of these pages are generated into the staged tree and
+  // a source file, because some of these pages are generated into the staged tree and
   // have no authored file to compare against. Readability is the claim that matters:
   // a twin that came back minified would make View Source a dead link.
   try {
@@ -488,18 +515,24 @@ if (homepage) {
     const served = (await readdir(".build/public", { recursive: true }))
       .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
       .sort();
-    let missing = 0, unbannered = 0, unreadable = 0;
+    let missing = 0,
+      unbannered = 0,
+      unreadable = 0;
     for (const rel of served) {
       const page = (await readFile(`.build/public/${rel}`)).toString("utf8");
       const twinRel = rel.replace(/\.html$/, ".src.html");
       if (!page.startsWith(`<!-- minified at deploy; readable source: /${twinRel} -->`)) unbannered++;
       let twin;
-      try { twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8"); }
-      catch { missing++; continue; }
+      try {
+        twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8");
+      } catch {
+        missing++;
+        continue;
+      }
       // The claim is that the twin is the PRE-minification document, so the exact
       // test is that it does not itself carry the banner the minifier stamps on.
       //
-      // A line-count comparison was the obvious heuristic and it was wrong: the five
+      // A line-count comparison was the obvious heuristic and it was wrong: the
       // /writing Notepad pages hold their text inside a <textarea>, whose newlines
       // the minifier must preserve, so twin and page have the same line count and the
       // banner tipped it the wrong way. Minification is non-expanding, so the size

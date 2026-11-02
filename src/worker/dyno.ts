@@ -15,16 +15,14 @@ import { DYNO_PULLS_URL } from "./routes.ts";
 // A BRANCH rather than D1 or a commit to main, and the reason is the repo's own
 // rules rather than preference. `main` carries a ruleset with zero bypass
 // actors, so no workflow may push to it; D1 writes need a Cloudflare Edit token,
-// and the one that exists is environment-gated behind a required reviewer for
-// the ramp. A branch outside both rulesets is the only write target a nightly
-// job can reach without weakening something load-bearing.
+// and CI's Cloudflare token is read-only by rule. A branch outside both
+// rulesets (main's and production's) is the only write target a nightly job can
+// reach without weakening something load-bearing.
 const HISTORY_URL = "https://raw.githubusercontent.com/oddharsh/site/perf-history/history.jsonl";
 
 const KV_KEY = "dyno:history";
-const KV_TTL = 6 * 3600;      // the source updates once a night; 6h is generous
+const KV_TTL = 6 * 3600; // the source updates once a night; 6h is generous
 const FETCH_BUDGET_MS = 3000;
-
-// ── data ────────────────────────────────────────────────────────────────────
 
 // Rows come back stale-while-revalidate. The isValid guard is load-bearing: a
 // GitHub outage that returned an empty array would otherwise overwrite a good
@@ -54,7 +52,10 @@ async function fetchHistory() {
       return null;
     }
     s.setAttribute("dyno.status", res.status);
-    if (!res.ok) { s.setAttribute("dyno.outcome", "http-error"); return null; }
+    if (!res.ok) {
+      s.setAttribute("dyno.outcome", "http-error");
+      return null;
+    }
     const text = await res.text();
     const rows = [];
     let malformed = 0;
@@ -64,7 +65,11 @@ async function fetchHistory() {
       // One malformed line must not cost the whole series. The file is
       // append-only from a single writer, so a bad line means an interrupted
       // push, and the rows around it are still true.
-      try { rows.push(JSON.parse(trimmed)); } catch { malformed++; }
+      try {
+        rows.push(JSON.parse(trimmed));
+      } catch {
+        malformed++;
+      }
     }
     s.setAttribute("dyno.rows", rows.length);
     if (malformed) s.setAttribute("dyno.malformed", malformed);
@@ -73,8 +78,8 @@ async function fetchHistory() {
   });
 }
 
-// Seed rows are hand-entered history from perf-budget.mjs's baseline comment;
-// nightly rows are measured. Merging them here rather than seeding the branch
+// Seed rows are hand-entered history from tools/perf-budget.ts's baseline
+// comment; nightly rows are measured. Merging them here rather than seeding the branch
 // keeps every hand-entered number in the repo, where a PR review can see it.
 // Dedupe on ts so a nightly row always wins over a seeded one for the same day.
 export function mergeHistory(nightly) {
@@ -84,9 +89,12 @@ export function mergeHistory(nightly) {
   return [...byTs.values()].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
 }
 
-// ── chart ───────────────────────────────────────────────────────────────────
-
-const W = 620, H = 210, PAD_L = 46, PAD_R = 12, PAD_T = 14, PAD_B = 26;
+const W = 620,
+  H = 210,
+  PAD_L = 46,
+  PAD_R = 12,
+  PAD_T = 14,
+  PAD_B = 26;
 const PLOT_W = W - PAD_L - PAD_R;
 const PLOT_H = H - PAD_T - PAD_B;
 
@@ -101,7 +109,8 @@ const day = (ts) => Date.parse(`${ts}T00:00:00Z`);
 function scales(rows, pick) {
   const xs = rows.map((r) => day(r.ts));
   const ys = rows.map(pick).filter((v) => asNumber(v) !== null);
-  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const x0 = Math.min(...xs),
+    x1 = Math.max(...xs);
   const yMax = Math.max(...ys) * 1.12;
   return {
     x: (ts) => PAD_L + (x1 === x0 ? PLOT_W : ((day(ts) - x0) / (x1 - x0)) * PLOT_W),
@@ -111,8 +120,7 @@ function scales(rows, pick) {
 }
 
 function polyline(rows, sc, pick, cls) {
-  const pts = rows.filter((r) => asNumber(pick(r)) !== null)
-    .map((r) => `${sc.x(r.ts).toFixed(1)},${sc.y(pick(r)).toFixed(1)}`);
+  const pts = rows.filter((r) => asNumber(pick(r)) !== null).map((r) => `${sc.x(r.ts).toFixed(1)},${sc.y(pick(r)).toFixed(1)}`);
   return pts.length < 2 ? "" : `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
 }
 
@@ -120,19 +128,23 @@ function polyline(rows, sc, pick, cls) {
 // no JavaScript: the browser draws the tooltip natively. Hand-entered points get
 // a wider dot because they are the ones with a note worth reading.
 function dots(rows, sc, pick, cls) {
-  return rows.filter((r) => asNumber(pick(r)) !== null).map((r) =>
-    `<circle class="${cls}" cx="${sc.x(r.ts).toFixed(1)}" cy="${sc.y(pick(r)).toFixed(1)}" r="${r.source === "baseline-note" ? "3.2" : "1.7"}"><title>${esc(`${r.ts} · ${kib(pick(r)).toFixed(1)} KiB · ${r.sha}${r.note ? ` — ${r.note}` : ""}`)}</title></circle>`
-  ).join("");
+  return rows
+    .filter((r) => asNumber(pick(r)) !== null)
+    .map(
+      (r) =>
+        `<circle class="${cls}" cx="${sc.x(r.ts).toFixed(1)}" cy="${sc.y(pick(r)).toFixed(1)}" r="${r.source === "baseline-note" ? "3.2" : "1.7"}"><title>${esc(`${r.ts} · ${kib(pick(r)).toFixed(1)} KiB · ${r.sha}${r.note ? ` — ${r.note}` : ""}`)}</title></circle>`,
+    )
+    .join("");
 }
 
 function chart(rows) {
-  // Three series on one axis. They span 57-466 KiB, which is close enough that a
-  // shared axis reads fine and far better than three stacked charts: the whole
+  // Three series on one axis. They span 58-666 KiB (2026-10-16), close enough
+  // that a shared axis reads fine and far better than three stacked charts: the whole
   // question this page answers is how the parts move against each other.
   const series = [
-    { key: "pages_br",    cls: "s-pages",  label: "all pages, Brotli" },
+    { key: "pages_br", cls: "s-pages", label: "all pages, Brotli" },
     { key: "worker_gzip", cls: "s-worker", label: "worker bundle, gzip" },
-    { key: "assets_br",   cls: "s-assets", label: "client assets, Brotli" },
+    { key: "assets_br", cls: "s-assets", label: "client assets, Brotli" },
   ];
   // The placeholder model (PENDING_ROWS below) carries no dates and no numbers,
   // so it draws the frame alone: the same viewBox, grid and legend, with no
@@ -152,30 +164,42 @@ function chart(rows) {
   // Join the two so the line does not break at the handover.
   const bridge = seeded.length && measured.length ? [seeded[seeded.length - 1], measured[0]] : [];
 
-  const gridY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const v = sc.yMax * f;
-    const y = sc.y(v).toFixed(1);
-    return `<line class="grid" x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}"/>`
-      + `<text class="ytick" x="${PAD_L - 6}" y="${(+y + 3).toFixed(1)}">${pending ? "…" : Math.round(kib(v))}</text>`;
-  }).join("");
+  const gridY = [0, 0.25, 0.5, 0.75, 1]
+    .map((f) => {
+      const v = sc.yMax * f;
+      const y = sc.y(v).toFixed(1);
+      return (
+        `<line class="grid" x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}"/>` +
+        `<text class="ytick" x="${PAD_L - 6}" y="${(+y + 3).toFixed(1)}">${pending ? "…" : Math.round(kib(v))}</text>`
+      );
+    })
+    .join("");
 
-  const first = rows[0], last = rows[rows.length - 1];
+  const first = rows[0],
+    last = rows[rows.length - 1];
   const xTicks = [
     `<text class="xtick" x="${PAD_L}" y="${H - 8}" text-anchor="start">${esc(first.ts ?? "…")}</text>`,
     `<text class="xtick" x="${W - PAD_R}" y="${H - 8}" text-anchor="end">${esc(last.ts ?? "…")}</text>`,
   ].join("");
 
-  const lines = pending ? "" : series.map((s) => {
-    const pick = (r) => r[s.key];
-    return polyline(seeded, sc, pick, `${s.cls} dashed`)
-      + polyline(bridge, sc, pick, `${s.cls} dashed`)
-      + polyline(measured, sc, pick, s.cls)
-      + dots(rows, sc, pick, s.cls);
-  }).join("");
+  const lines = pending
+    ? ""
+    : series
+        .map((s) => {
+          const pick = (r) => r[s.key];
+          return (
+            polyline(seeded, sc, pick, `${s.cls} dashed`) +
+            polyline(bridge, sc, pick, `${s.cls} dashed`) +
+            polyline(measured, sc, pick, s.cls) +
+            dots(rows, sc, pick, s.cls)
+          );
+        })
+        .join("");
 
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(pending
-    ? "Wire size over time, not read yet."
-    : `Wire size over time, ${first.ts} to ${last.ts}. Worker bundle ${kib(last.worker_gzip ?? 0).toFixed(0)} KiB gzip.`
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(
+    pending
+      ? "Wire size over time, not read yet."
+      : `Wire size over time, ${first.ts} to ${last.ts}. Worker bundle ${kib(last.worker_gzip ?? 0).toFixed(0)} KiB gzip.`,
   )}">
   ${gridY}
   <line class="axis" x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${PAD_T + PLOT_H}"/>
@@ -188,8 +212,6 @@ function chart(rows) {
   <li><i class="s-dash"></i>dashed: recorded by hand before this series existed</li>
 </ul>`;
 }
-
-// ── page ────────────────────────────────────────────────────────────────────
 
 // /garage/dyno is a BUILT document since 2026-09-25, in lib/island.ts's shape:
 // build.ts step 5b renders the shell once, so the lede, the footnote and 4 KB of
@@ -213,7 +235,8 @@ const PENDING_ROWS = Array.from({ length: TABLE_ROWS }, () => ({ ts: null, sha: 
 const delta = (rows, key) => {
   const have = rows.filter((r) => asNumber(r[key]) !== null);
   if (have.length < 2) return null;
-  const a = have[0][key], b = have[have.length - 1][key];
+  const a = have[0][key],
+    b = have[have.length - 1][key];
   return { a, b, pct: ((b - a) / a) * 100, from: have[0].ts, to: have[have.length - 1].ts };
 };
 
@@ -231,28 +254,39 @@ export function renderDynoPulls(rows) {
   // than absent.
   const cell = (v) => (pending ? dots : asNumber(v) === null ? "—" : kib(asNumber(v)).toFixed(1));
   const source = (r) => (pending ? dots : r.source === "baseline-note" ? "by hand" : "measured");
-  const table = rows.slice(-TABLE_ROWS).reverse().map((r) => `<tr>
+  const table = rows
+    .slice(-TABLE_ROWS)
+    .reverse()
+    .map(
+      (r) => `<tr>
       <td class="mono">${esc(r.ts ?? dots)}</td>
       <td class="mono sha">${esc(r.sha ?? dots)}</td>
       <td class="num">${cell(r.worker_gzip)}</td>
       <td class="num">${cell(r.pages_br)}</td>
       <td class="num">${cell(r.assets_br)}</td>
       <td class="src">${source(r)}</td>
-    </tr>`).join("\n    ");
+    </tr>`,
+    )
+    .join("\n    ");
 
   // The placeholder keeps the callout's box and its sentence, with the figures
   // unread, so the text below it does not jump when the numbers arrive.
-  const callout = worker || pending
-    ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
+  const callout =
+    worker || pending
+      ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
     It went from ${worker ? kib(worker.a).toFixed(0) : dots} to ${worker ? kib(worker.b).toFixed(0) : dots} KiB gzip between ${esc(worker ? worker.from : dots)} and
     ${esc(worker ? worker.to : dots)}, ${worker ? (worker.pct > 0 ? "up" : "down") : dots} ${worker ? Math.abs(worker.pct).toFixed(0) : dots}%. Somebody found every one of
     those numbers by tripping over a stale threshold rather than by watching the slope. That drift is the
     specific failure a per-change check cannot catch and a series can.</div>`
-    : "";
+      : "";
 
-  return unsafeHtml(`${empty ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
-    hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>, which is what
-    this page exists to replace.</div>` : ""}
+  return unsafeHtml(`${
+    empty
+      ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
+    hand-entered points below come from the baseline history in <code>perf-budget.ts</code>, which is what
+    this page exists to replace.</div>`
+      : ""
+  }
     ${rows.length ? chart(rows) : ""}
     ${callout}
     <h2>Recent pulls</h2>
@@ -309,7 +343,7 @@ th.num,td.num{text-align:right}
 td{padding:4px 6px;border-bottom:1px solid var(--mist-96);color:var(--slate-38)}
 .mono{font-family:var(--font-mono);font-size:var(--text-2xs)}
 td.sha{color:#7a4eb0}
-td.src{font-size:var(--text-3xs);color:var(--slate-67)}
+td.src{font-size:var(--text-3xs);color:var(--slate-55)}
 .foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
 .dy-fail{display:none;font-size:var(--text-micro);color:var(--slate-55);margin:0 0 13px}
@@ -342,10 +376,14 @@ export async function handleDynoPulls(request, env, ctx) {
 
 export async function handleDynoJson(request, env, ctx) {
   const rows = mergeHistory(await readHistory(env, ctx));
-  return jsonResponse({
-    generated: new Date().toISOString(),
-    source: HISTORY_URL,
-    count: rows.length,
-    points: rows,
-  }, 200, { "cache-control": "public, max-age=300, s-maxage=300" });
+  return jsonResponse(
+    {
+      generated: new Date().toISOString(),
+      source: HISTORY_URL,
+      count: rows.length,
+      points: rows,
+    },
+    200,
+    { "cache-control": "public, max-age=300, s-maxage=300" },
+  );
 }

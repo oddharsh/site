@@ -1,15 +1,15 @@
-// link-integrity.mjs — does every internal reference in the staged pages point at
+// link-integrity.ts — does every internal reference in the staged pages point at
 // something this site actually serves?
 //
 // The gap this fills: moving or renaming a page changed the pages that LINK to it
 // into 404s, and nothing noticed. `routes:check` sweeps the routes it is told
-// about, which is the forward direction; build invariant #1 asserts the Worker's
-// routes are mirrored into run_worker_first. Neither reads a page body, so a stale
-// href survived every gate in the repo.
+// about, which is the forward direction; build.ts's route invariant asserts the
+// Worker's routes are mirrored into run_worker_first. Neither reads a page body,
+// so a stale href survived every gate in the repo.
 //
 // Nothing here is a second copy of the route table. The inputs are exactly what
-// build.ts already extracts for invariant #1 (the ROUTES keys, run_worker_first's
-// globs), plus the surface registry and the staged tree itself, so a route added
+// build.ts already extracts for its route invariant (routes.ts's EXACT_PATHS,
+// run_worker_first's globs), plus the surface registry and the staged tree itself, so a route added
 // anywhere is understood here without a matching edit.
 //
 // ── the one subtlety worth reading ────────────────────────────────────────────
@@ -28,10 +28,15 @@
 
 import { claimedByWorker } from "../../src/worker/routes.ts";
 
-export function makeResolver({ files, routeKeys, allow, surfaces }: {
+export function makeResolver({
+  files,
+  routeKeys,
+  allow,
+  surfaces,
+}: {
   /** served paths in the staged tree, each leading "/" */
   files: Set<string>;
-  /** exact paths from the Worker's ROUTES map */
+  /** exact paths from routes.ts's EXACT_PATHS */
   routeKeys: Set<string>;
   /** run_worker_first entries (negations already dropped) */
   allow: string[];
@@ -69,16 +74,10 @@ export function makeResolver({ files, routeKeys, allow, surfaces }: {
  * PARSED, not pattern-matched, since 2026-08-20. HTMLRewriter is the same
  * lol-html the Worker runs and it is a bun global, so this costs no dependency.
  *
- * WHAT THE REGEX ACTUALLY COVERED, measured when it was replaced, because it is
- * not what its own comment claimed. It matched `href=` and `src=` — and
- * `data-src=` too, by accident, since `src=` is a SUBSTRING of it. That accident
- * was load-bearing: this site defers photo loading through `data-src`, so 23 real
- * URLs on the homepage were being checked by luck. It never covered `srcset` or
- * `data-srcset` at all, because neither ends in `src=`.
- *
- * So the attributes are named explicitly here, and srcset is split on its
- * descriptors rather than swallowed whole. That is strictly more coverage than
- * the regex had, and all of it is now deliberate.
+ * The attributes are named explicitly, and srcset is split on its descriptors.
+ * The regex this replaced caught `data-src=` only because `src=` is a substring
+ * of it (23 homepage photo URLs were checked by luck) and never read `srcset`
+ * or `data-srcset` at all.
  *
  * The reason to be rid of the pattern stands: the HTML minifier UNQUOTES every
  * attribute it can, and the first draft written against `href="..."` read 33
@@ -107,10 +106,7 @@ export async function internalRefs(html) {
       }
     },
   };
-  await new HTMLRewriter()
-    .on("*", handler)
-    .transform(new Response(html))
-    .arrayBuffer();
+  await new HTMLRewriter().on("*", handler).transform(new Response(html)).arrayBuffer();
   return out;
 }
 
@@ -129,9 +125,7 @@ export async function internalRefs(html) {
  * `origin` or root-relative. An off-origin image is not ours to vouch for, and
  * the `og:image:width` family is metadata about the image rather than a URL.
  */
-const META_IMAGE_KEYS = new Set([
-  "og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src",
-]);
+const META_IMAGE_KEYS = new Set(["og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src"]);
 
 export async function metaImageRefs(html: string, origin = "https://aadhar.sh"): Promise<string[]> {
   const out: string[] = [];
@@ -142,9 +136,16 @@ export async function metaImageRefs(html: string, origin = "https://aadhar.sh"):
         const key = el.getAttribute("property") || el.getAttribute("name");
         const raw = el.getAttribute("content");
         if (!key || !raw || !META_IMAGE_KEYS.has(key)) return;
-        if (raw.startsWith("/") && !raw.startsWith("//")) { out.push(raw.split(/[?#]/)[0]); return; }
+        if (raw.startsWith("/") && !raw.startsWith("//")) {
+          out.push(raw.split(/[?#]/)[0]);
+          return;
+        }
         let url: URL;
-        try { url = new URL(raw); } catch { return; }
+        try {
+          url = new URL(raw);
+        } catch {
+          return;
+        }
         if (url.host === host) out.push(url.pathname);
       },
     })

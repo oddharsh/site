@@ -42,7 +42,9 @@ export type Encoder<T> = {
 };
 
 export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; enabled: boolean }) {
-  let hits = 0, misses = 0, writes = 0;
+  let hits = 0,
+    misses = 0,
+    writes = 0;
   // Two staged files can hold the same bytes, and with them the same key: they
   // share one lookup, so the bytes encode once and the entry is written once.
   const inFlight = new Map<string, Promise<Buffer>>();
@@ -57,7 +59,11 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     const out = await readFile(path).catch(() => null);
     if (!out) return null;
     let valid = false;
-    try { valid = ok(out); } catch { /* a decoder that throws is a miss */ }
+    try {
+      valid = ok(out);
+    } catch {
+      /* a decoder that throws is a miss */
+    }
     if (!valid) return null;
     used.add(key);
     return out;
@@ -83,26 +89,36 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
       for (const part of enc.keyOf(item)) h.update("\0").update(part);
       const key = h.digest("hex");
       const shared = inFlight.get(key);
-      if (shared) { hits++; return shared; }
+      if (shared) {
+        hits++;
+        return shared;
+      }
       const { promise, resolve, reject } = Promise.withResolvers<Buffer>();
       inFlight.set(key, promise);
       owned.push({ i, key, resolve, reject });
       return promise;
     });
     const missed: Owned[] = [];
-    await Promise.all(owned.map(async (o) => {
-      const out = enabled ? await read(o.key, (b) => enc.verify(items[o.i], b)) : null;
-      if (out) { hits++; o.resolve(out); } else missed.push(o);
-    }));
+    await Promise.all(
+      owned.map(async (o) => {
+        const out = enabled ? await read(o.key, (b) => enc.verify(items[o.i], b)) : null;
+        if (out) {
+          hits++;
+          o.resolve(out);
+        } else missed.push(o);
+      }),
+    );
     if (missed.length) {
       misses += missed.length;
       missed.sort((a, b) => a.i - b.i);
       try {
         const outs = await enc.encode(missed.map((o) => items[o.i]));
-        await Promise.all(missed.map(async (o, j) => {
-          if (enabled) await write(o.key, outs[j]);
-          o.resolve(outs[j]);
-        }));
+        await Promise.all(
+          missed.map(async (o, j) => {
+            if (enabled) await write(o.key, outs[j]);
+            o.resolve(outs[j]);
+          }),
+        );
       } catch (error) {
         for (const o of missed) o.reject(error);
       }
@@ -122,7 +138,10 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     for (const part of parts) h.update("\0").update(part);
     const key = h.digest("hex");
     const known = memos.get(key);
-    if (known !== undefined) { hits++; return known; }
+    if (known !== undefined) {
+      hits++;
+      return known;
+    }
     if (enabled) {
       const path = `${dir}/${key}`;
       try {
@@ -135,7 +154,9 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
           used.add(key);
           return text;
         }
-      } catch { /* a miss */ }
+      } catch {
+        /* a miss */
+      }
     }
     misses++;
     const text = produce();
@@ -162,12 +183,14 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     if (last && Date.now() - last.mtimeMs < 86_400_000) return 0;
     const cutoff = Date.now() - maxAgeDays * 86_400_000;
     const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n !== ".pruned" && !used.has(n));
-    const gone = await Promise.all(names.map(async (name) => {
-      const s = await stat(`${dir}/${name}`).catch(() => null);
-      if (!s || s.mtimeMs >= cutoff) return false;
-      await rm(`${dir}/${name}`, { force: true });
-      return true;
-    }));
+    const gone = await Promise.all(
+      names.map(async (name) => {
+        const s = await stat(`${dir}/${name}`).catch(() => null);
+        if (!s || s.mtimeMs >= cutoff) return false;
+        await rm(`${dir}/${name}`, { force: true });
+        return true;
+      }),
+    );
     await mkdir(dir, { recursive: true });
     await writeFile(stamp, "");
     return gone.filter(Boolean).length;

@@ -20,7 +20,7 @@
 // It FAILS OPEN TO THE OLD POLICY, never closed. Anything a hash cannot cover
 // (an inline event handler, a javascript: URL, an srcdoc document that would
 // inherit this policy) makes it return null, and the page keeps the loose
-// policy it had yesterday. A false alarm therefore costs nothing that shipped
+// policy. A false alarm therefore costs nothing that shipped
 // before; a missed script would break the page, and that direction is the one
 // the test hunts.
 import { cspHashed } from "./csp-policy.ts";
@@ -41,9 +41,9 @@ const RAW_TEXT = /<(script|style)\b[^>]*>[\s\S]*?<\/\1[\s/>]/gi;
 // inside an attribute VALUE is a false alarm, and a false alarm only means the
 // page keeps the loose policy.
 const UNHASHABLE = [
-  /<[a-z][^>]*\son[a-z]+\s*=/i,            // an inline event handler
-  /=\s*["']?\s*javascript:/i,               // a javascript: URL
-  /<[a-z][^>]*\ssrcdoc\s*=/i,               // a document that inherits this policy
+  /<[a-z][^>]*\son[a-z]+\s*=/i, // an inline event handler
+  /=\s*["']?\s*javascript:/i, // a javascript: URL
+  /<[a-z][^>]*\ssrcdoc\s*=/i, // a document that inherits this policy
 ];
 
 /** The sha256 of every inline script the browser would execute, in document
@@ -57,7 +57,7 @@ export function inlineScriptHashes(doc: string): string[] | null {
   const hashes: string[] = [];
   for (const m of doc.matchAll(SCRIPT)) {
     const attrs = m[1];
-    if (ATTR("src").test(attrs)) continue;                 // external: 'self' covers it
+    if (ATTR("src").test(attrs)) continue; // external: 'self' covers it
     const t = attrs.match(ATTR("type"));
     const type = t ? (t[1] ?? t[2] ?? t[3] ?? "").trim().toLowerCase() : "";
     if (!EXECUTABLE.has(type)) continue;

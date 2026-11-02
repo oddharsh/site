@@ -141,20 +141,15 @@ export type Recorded = {
 /**
  * Per-input hashes, machine-owned, so a stale result can NAME what moved rather
  * than only that something did. FLAT and deduped across derivations on purpose:
- * three of them declare public/i, and keying by derivation id would store 660
- * hashes three times to say the same thing.
+ * images/hashes and images/histograms both declare public/i by path, and keying
+ * by derivation id would store its 660 hashes twice to say the same thing.
  */
 export type Lock = Record<string, string>;
 
 const HASH = "sha256";
 
-export const hashBytes = (bytes: Buffer | string): string =>
-  createHash(HASH).update(bytes).digest("hex");
+export const hashBytes = (bytes: Buffer | string): string => createHash(HASH).update(bytes).digest("hex");
 
-/**
- * Every file a spec resolves to, repo-relative and sorted, so the digest is a
- * function of the bytes rather than of readdir order or of the machine.
- */
 export const keeps = (spec: InputSpec, rel: string): boolean => {
   if (spec.include?.length && !spec.include.some((ext) => rel.endsWith(ext))) return false;
   if (spec.exclude?.some((seg) => rel.split(path.sep).includes(seg))) return false;
@@ -163,9 +158,12 @@ export const keeps = (spec: InputSpec, rel: string): boolean => {
 
 /** Is this repo-relative path one the spec would have collected? */
 export const claims = (spec: InputSpec, rel: string): boolean =>
-  keeps(spec, rel) &&
-  spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
+  keeps(spec, rel) && spec.paths.some((p) => rel === p || rel.startsWith(p.endsWith("/") ? p : `${p}/`));
 
+/**
+ * Every file a spec resolves to, repo-relative and sorted, so the digest is a
+ * function of the bytes rather than of readdir order or of the machine.
+ */
 export async function resolveInputs(root: string, spec: InputSpec): Promise<string[]> {
   const found: string[] = [];
   const keep = (rel: string) => keeps(spec, rel);
@@ -301,12 +299,7 @@ export type Verdict =
  * is the caller's projection of config/tools.json, passed in rather than read
  * here so this module stays free of any one repository's layout.
  */
-export async function verify(
-  root: string,
-  d: Derivation,
-  lock: Lock,
-  toolVersions: Record<string, string> = {},
-): Promise<Verdict> {
+export async function verify(root: string, d: Derivation, lock: Lock, toolVersions: Record<string, string> = {}): Promise<Verdict> {
   if (d.tier === "unverifiable") {
     return { id: d.id, state: "unverifiable", reason: d.unverifiable ?? "no reason declared" };
   }
@@ -361,11 +354,7 @@ export async function verify(
  * is dead weight rather than a missing answer, and the deletion that created it
  * has already moved the digest.
  */
-async function coverage(
-  root: string,
-  d: Derivation,
-  keys: string[],
-): Promise<{ uncovered: string[]; orphaned: string[] }> {
+async function coverage(root: string, d: Derivation, keys: string[]): Promise<{ uncovered: string[]; orphaned: string[] }> {
   if (!d.covers) return { uncovered: [], orphaned: [] };
   const parsed = JSON.parse(await readFile(path.join(root, d.covers), "utf8"));
   const have = new Set(Object.keys(parsed));
@@ -386,9 +375,7 @@ export async function record(
   const { entries, lockName, owns, count } = await project(root, d);
   const recorded: Recorded = { inputs: digestOf(entries), count };
   if (d.tools?.length) {
-    recorded.tools = Object.fromEntries(
-      d.tools.map((name) => [name, toolVersions[name] ?? ""]).filter(([, v]) => v),
-    );
+    recorded.tools = Object.fromEntries(d.tools.map((name) => [name, toolVersions[name] ?? ""]).filter(([, v]) => v));
   }
   const hashes = Object.fromEntries(Object.entries(entries).map(([n, v]) => [lockName(n), v]));
   return { recorded, hashes, owns };
@@ -404,18 +391,17 @@ export async function record(
  * with nothing behind it. Measured on the commit that added this: 1493 rows
  * describing 660 files, 498 of them naming a path no checkout can open, 495 of
  * those minted by one full-library re-encode (#660). Every future re-encode adds
- * another ~495. It reports nothing wrong, because verify() hashes the inputs on
- * disk rather than reading the lock, so a dead row cannot produce a wrong
- * verdict; what it costs is a machine-owned file whose own $comment says it
- * exists "so a stale result can name what moved" filling with rows that can never
- * be what moved.
+ * another ~495. A dead row cannot produce a wrong verdict, because verify()
+ * hashes the inputs on disk rather than reading the lock; it only fills the lock
+ * with rows that can never be what moved.
  *
  * SCOPED TO `owns`, because --only re-records one derivation at a time and must
  * leave every other derivation's rows exactly as it found them. A key is dropped
  * for one reason: this derivation would have collected it and did not, which for
  * a path spec means the file is gone and for a set spec means the key left the
- * set. Two derivations declaring the same tree (fingerprints and hashes both
- * declare public/i) project the same entries, so either one prunes the same rows.
+ * set. Two derivations declaring the same tree (images/hashes and
+ * images/histograms both declare public/i) project the same entries, so either
+ * one prunes the same rows.
  *
  * The trade that buys: under --only, a row this derivation owns and prunes may
  * also be owned by a derivation NOT being recorded, which then loses the ability
@@ -429,11 +415,7 @@ export async function record(
  * site is a second thing to keep in agreement, and the one that would rot is the
  * printed count, which nothing checks.
  */
-export function relock(
-  lock: Lock,
-  fresh: Record<string, string>,
-  owns: (lockName: string) => boolean,
-): { next: Lock; pruned: string[] } {
+export function relock(lock: Lock, fresh: Record<string, string>, owns: (lockName: string) => boolean): { next: Lock; pruned: string[] } {
   const next: Lock = {};
   const pruned: string[] = [];
   for (const [key, value] of Object.entries(lock)) {

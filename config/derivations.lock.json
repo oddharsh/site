@@ -1,7 +1,7 @@
 {
   "$comment": "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.",
   "files": {
-    "config/site-manifest.json": "3e58694d692efe1053f9169352ca40553033afd79a7acec63caa29ee642fb7ff",
+    "config/site-manifest.json": "8d6fde3523df85d429b5904e3c3cb25f70e3781636f5f04daf2728b8358ee1e9",
     "images/alt#L1000069_3": "set",
     "images/alt#L1009919_2": "set",
     "images/alt#L1009920": "set",
@@ -994,8 +994,8 @@
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
     "public/images/alt.json": "d7b22babe37bf87eab5ebe3ed0d7852797b3cdf02d04d7d64e2b9e6778b2e666",
     "public/images/metadata.json": "1bdcd007583755255510c7a8887f2ace3f9711eff4e9d5456b55fd0cad2e2d0d",
-    "src/worker/lib/api-limits.ts": "c7cca61719c12e481d065b11c3315f9f2c1de1f142e78f142f3c4f86b250db52",
-    "src/worker/lib/public-api.ts": "598cd53cc34a60c844865423a87a83e4a66ae70ac06edb03bc355c2ce183ba55",
-    "tools/photos/shell-data.ts": "6473e5af5fd47d81aeb80ce91ba6e8f9ec0f5ac462f4319a22dc95f7fb2f4707"
+    "src/worker/lib/api-limits.ts": "853715505b474ddcb05f18232005634a8e37cfaa113ddc490d879a445e9ccd1c",
+    "src/worker/lib/public-api.ts": "3c1ee461f0ad33f7dc1f0f4aa6bec12c29507e07754a8cf3bdddd119f176fe57",
+    "tools/photos/shell-data.ts": "f99344cb233bae43cb9800da2e7a2759d55fd40374529934c37cc6a09cd9f346"
   }
 }

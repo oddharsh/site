@@ -1,16 +1,14 @@
-// lens-nlweb.js — the NLWeb lens: what a foreign origin ANSWERS, not whether it
+// lens-nlweb.ts — the NLWeb lens: what a foreign origin ANSWERS, not whether it
 // has a door to answer through.
 //
 // /lens has knocked on /ask since the doors tier was built, and a knock is all
 // it was: a status code and a content-type, from a request carrying no query.
-// That probe is deliberately conservative and its own comment says why — "we
-// never send one, so nothing runs on their side" — and it is also the reason
-// four of six origins in a 46-site survey were promoted to Agent-Native by a
-// /ask that answered 410, 412, 429 or 401. A door that opens onto nothing still
-// reads as a door from outside.
-//
-// This walks through it. One real question, one real answer, graded against the
-// contract the protocol actually specifies.
+// That probe is deliberately conservative ("we never send one, so nothing runs
+// on their side", lens.ts), and it is also the reason four of six origins in a
+// 46-site survey were promoted to Agent-Native by a /ask that answered 410,
+// 412, 429 or 401. A door that opens onto nothing still reads as a door from
+// outside. This lens sends one real question and grades the answer against the
+// contract the protocol specifies.
 //
 // WHAT IT REPORTS IS SHAPE, NOT CONTENT. The pane does show the results, because
 // hiding them would make the grade unfalsifiable, but the finding is the
@@ -35,10 +33,8 @@ const NLWEB_CACHE_SECONDS = 3600;
 // The visitor may ask their own question, because "what does this endpoint
 // answer" is not a thing one fixed string can show. It is bounded and it is
 // DATA rather than code: it reaches the target as a search query, which is what
-// the endpoint exists to receive. That is the line lens-recipes.js draws too —
-// a URL is fine, a `js=` parameter is not — and the reason a query is on the
-// safe side of it is that no allowlist could make executable input safe, while
-// a search string needs none.
+// the endpoint exists to receive. No allowlist could make executable input
+// safe, while a search string needs none.
 const MAX_QUERY = 200;
 const DEFAULT_QUERY = "what is this site about";
 
@@ -46,7 +42,12 @@ const LENS_NLWEB = defineLens({
   span: "lens.nlweb",
   budget: "nlweb",
   targets: (params: URLSearchParams) => params.get("url") || "",
-  args: (params) => ({ query: String(params.get("q") || "").trim().slice(0, MAX_QUERY) || DEFAULT_QUERY }),
+  args: (params) => ({
+    query:
+      String(params.get("q") || "")
+        .trim()
+        .slice(0, MAX_QUERY) || DEFAULT_QUERY,
+  }),
   // Keyed on the QUERY as well as the origin. Keying on origin alone would show
   // one visitor's answer to another visitor's question, which on a surface whose
   // whole claim is "this is what the machine actually got" is the exact lie it
@@ -63,9 +64,14 @@ const LENS_NLWEB = defineLens({
       // merging them would have the pane announce that a live endpoint is absent.
       s.setAttribute("lens.detail", probe.detail);
       return {
-        ok: false, status: 200, outcome: probe.unreadable ? "unreadable" : "shut",
+        ok: false,
+        status: 200,
+        outcome: probe.unreadable ? "unreadable" : "shut",
         payload: {
-          ok: false, origin, host, query,
+          ok: false,
+          origin,
+          host,
+          query,
           endpoint: origin.replace(/\/+$/, "") + "/ask",
           unreadable: !!probe.unreadable,
           gated: !!probe.gated,

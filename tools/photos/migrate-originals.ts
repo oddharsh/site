@@ -104,7 +104,9 @@ const pending = scope.filter((s) => isJpeg(index[s].full)).slice(0, limit);
 // Moved by an earlier run that didn't delete; R2 may still hold the JPEG.
 const leftover = del ? scope.filter((s) => index[s].jpeg && !isJpeg(index[s].full)) : [];
 
-console.log(`${pending.length} JPEG originals to move${del ? `, ${leftover.length} moved JPEGs to delete` : " (no uploads or deletes without --delete)"}${dryRun ? " (dry run)" : ""}`);
+console.log(
+  `${pending.length} JPEG originals to move${del ? `, ${leftover.length} moved JPEGs to delete` : " (no uploads or deletes without --delete)"}${dryRun ? " (dry run)" : ""}`,
+);
 if (dryRun) {
   for (const s of pending) console.log(`  ${index[s].full} -> ${jxlKey(index[s].full)}`);
   for (const s of leftover) console.log(`  delete ${index[s].jpeg}`);
@@ -139,17 +141,26 @@ const record = (stem: string, row: IndexEntry) => {
 const remove = (key: string) => run([WRANGLER, "r2", "object", "delete", `${BUCKET}/${key}`, "--remote"]);
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "migrate-originals-"));
-let moved = 0, skipped = 0, failed = 0, deleted = 0, started = 0, jpegBytes = 0, jxlBytes = 0;
+let moved = 0,
+  skipped = 0,
+  failed = 0,
+  deleted = 0,
+  started = 0,
+  jpegBytes = 0,
+  jxlBytes = 0;
 
 // Failures that name the connection or the login, as wrangler and fetch word
 // them, rather than one photo's bytes.
-const SYSTEMIC = /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
+const SYSTEMIC =
+  /auth token has expired|not authenticated|Unable to resolve Cloudflare|fetch failed|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|socket connection was closed/i;
 const STOP_AFTER = 3;
 let streak = 0;
 // Typed by assertion: it is only ever set inside failure(), so flow analysis
 // would narrow it to null at every read below.
 let halted = null as string | null;
-const succeeded = () => { streak = 0; };
+const succeeded = () => {
+  streak = 0;
+};
 const failure = (stem: string, message: string) => {
   failed++;
   console.error(`  ✗ ${stem}: ${message}`);
@@ -162,7 +173,9 @@ async function move(stem: string): Promise<void> {
   const entry = index[stem];
   const { full, size } = entry;
   const key = jxlKey(full);
-  const jpg = path.join(work, full), jxl = path.join(work, key), rebuilt = `${jxl}.rebuilt.jpg`;
+  const jpg = path.join(work, full),
+    jxl = path.join(work, key),
+    rebuilt = `${jxl}.rebuilt.jpg`;
   try {
     // Read through wrangler rather than the public URL: until this route ships
     // a .jxl, production 404s every .jxl key before asking R2, which made the
@@ -196,10 +209,17 @@ async function move(stem: string): Promise<void> {
     if (made) run([WRANGLER, "r2", "object", "put", `${BUCKET}/${key}`, `--file=${jxl}`, "--content-type=image/jxl", "--remote"]);
     const jxlSize = fs.statSync(jxl).size;
     await record(stem, { ...entry, full: key, size: jxlSize, jpeg: full });
-    if (del) { remove(full); deleted++; }
+    if (del) {
+      remove(full);
+      deleted++;
+    }
     succeeded();
-    moved++; jpegBytes += size; jxlBytes += jxlSize;
-    console.log(`  ✓ ${full} -> ${key}  ${(jxlSize / 1e6).toFixed(2)} MB, ${((jxlSize / size - 1) * 100).toFixed(2)}%${made ? ", uploaded" : ""}${del ? ", JPEG deleted" : ""}`);
+    moved++;
+    jpegBytes += size;
+    jxlBytes += jxlSize;
+    console.log(
+      `  ✓ ${full} -> ${key}  ${(jxlSize / 1e6).toFixed(2)} MB, ${((jxlSize / size - 1) * 100).toFixed(2)}%${made ? ", uploaded" : ""}${del ? ", JPEG deleted" : ""}`,
+    );
   } catch (e) {
     failure(stem, (e as Error).message);
   } finally {
@@ -209,23 +229,35 @@ async function move(stem: string): Promise<void> {
 
 for (const stem of leftover) {
   if (halted) break;
-  try { remove(index[stem].jpeg as string); succeeded(); deleted++; console.log(`  ✓ deleted ${index[stem].jpeg}`); }
-  catch (e) { failure(stem, (e as Error).message); }
+  try {
+    remove(index[stem].jpeg as string);
+    succeeded();
+    deleted++;
+    console.log(`  ✓ deleted ${index[stem].jpeg}`);
+  } catch (e) {
+    failure(stem, (e as Error).message);
+  }
 }
 
 // Each worker checks for a halt before it takes the next photo, so the ones
 // already in flight finish and nothing new starts.
 const queue = halted ? [] : [...pending];
-await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
-  while (!halted && queue.length) await move(queue.shift() as string);
-}));
+await Promise.all(
+  Array.from({ length: Math.min(jobs, queue.length) }, async () => {
+    while (!halted && queue.length) await move(queue.shift() as string);
+  }),
+);
 await writing;
 fs.rmSync(work, { recursive: true, force: true });
 
 const saved = jpegBytes ? ((1 - jxlBytes / jpegBytes) * 100).toFixed(2) : "0";
-console.log(`moved ${moved}, skipped ${skipped}, failed ${failed}, JPEGs deleted ${deleted}; ${(jpegBytes / 1e9).toFixed(2)} GB of JPEG as ${(jxlBytes / 1e9).toFixed(2)} GB of JPEG XL (-${saved}%)`);
+console.log(
+  `moved ${moved}, skipped ${skipped}, failed ${failed}, JPEGs deleted ${deleted}; ${(jpegBytes / 1e9).toFixed(2)} GB of JPEG as ${(jxlBytes / 1e9).toFixed(2)} GB of JPEG XL (-${saved}%)`,
+);
 if (halted) {
   console.error(`stopped after ${STOP_AFTER} connection or login failures in a row, ${pending.length - started} photos not attempted: ${halted}`);
-  console.error("  a failed photo is untouched, or recorded with its JPEG still in R2; check the connection, run `bun run wrangler:site login`, and rerun to finish both");
+  console.error(
+    "  a failed photo is untouched, or recorded with its JPEG still in R2; check the connection, run `bun run wrangler:site login`, and rerun to finish both",
+  );
 }
 process.exit(failed ? 1 : 0);

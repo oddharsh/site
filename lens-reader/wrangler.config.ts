@@ -5,7 +5,6 @@ import { defineWranglerConfig } from "wrangler/experimental-config";
 
 export default defineWranglerConfig({
   // Deploy-only. Minification measured 2026-08-16: 148.92 -> 113.09 KiB gzip.
-  // The aligned parser dependency graph measured 80.56 KiB gzip on 2026-08-20.
   // Source maps preserve original stack locations in Workers Logs; local
   // development still reads the authored modules.
   minify: true,

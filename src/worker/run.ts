@@ -1,8 +1,9 @@
-// run.js — the zero-JS floor under the Run palette (blueprint's declarative
-// ladder). The ⌘K palette in nav.js is script; this is the same idea as a real
+// run.ts — the zero-JS floor under the Run palette (blueprint's declarative
+// ladder). The ⌘K palette in nav-run.js is script; this is the same idea as a real
 // page: an <input list> + <datalist> of destinations and a GET form this
 // handler answers with a 302. Works with scripting disabled, invokers missing,
 // or dialog unsupported — the palette's own footer links here.
+
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
@@ -10,55 +11,52 @@ import { escAttr, escHtml } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { PHOTO_POOL } from "./photos.ts";
 
-// Mirrors nav.js's inline pages + profiles set (kept small on purpose; photos
-// resolve dynamically against the manifest instead of bloating the datalist).
+// Mirrors the pages + profiles set in nav-run.js (kept small on purpose; photo
+// stems resolve against PHOTO_POOL instead of bloating the datalist).
 // Every other page resolves against the site manifest below, so the datalist
 // stays a suggestion list rather than the whole map.
 const DESTS = [
-  ["home",        "/",            "the homepage"],
-  ["photos",      "/photos",      "every photo, Thumbnails view"],
-  ["writing",     "/writing",     "notes, in flux"],
-  ["reading",     "/reading",     "the bookshelf"],
-  ["garage",      "/garage",      "experiments, mules, teardowns"],
-  ["lwe",         "/lwe",         "little walkthrough explainers"],
+  ["home", "/", "the homepage"],
+  ["photos", "/photos", "every photo, Thumbnails view"],
+  ["writing", "/writing", "notes, in flux"],
+  ["reading", "/reading", "the bookshelf"],
+  ["garage", "/garage", "experiments, mules, teardowns"],
+  ["lwe", "/lwe", "little walkthrough explainers"],
   ["serendipity", "/serendipity", "the event pool"],
-  ["around",      "/around",      "the crypto-VC neighborhood"],
-  ["lens",        "/lens",        "the other web"],
+  ["around", "/around", "the VC neighborhood"],
+  ["lens", "/lens", "the other web"],
   ["pixel peeper", "/pixel-peeper", "a compression vision test"],
-  ["music",       "/rn",          "now playing"],
-  ["coffee",      "/coffee",      "book a coffee"],
-  ["whoareyou",   "/whoareyou",   "System Properties"],
-  ["security",    "/security",    "Security Center"],
-  ["updates",     "/updates",     "Windows Update"],
-  ["restore",     "/restore",     "System Restore"],
-  ["bot",         "/bot",         "AadharshBot methodology"],
-  ["twitter",     "https://x.com/oddhash",                        "profile"],
-  ["instagram",   "https://www.instagram.com/aadharsh.hif",                 "profile"],
-  ["curius",      "https://curius.app/aadharsh-pannirselvam",           "profile"],
-  ["beli",        "https://beliapp.com/users/aadharsh",                 "profile"],
-  ["spotify",     "https://open.spotify.com/user/aadharsh2010",         "profile"],
+  ["music", "/rn", "now playing"],
+  ["coffee", "/coffee", "book a coffee"],
+  ["whoareyou", "/whoareyou", "System Properties"],
+  ["security", "/security", "Security Center"],
+  ["updates", "/updates", "Windows Update"],
+  ["restore", "/restore", "System Restore"],
+  ["bot", "/bot", "AadharshBot methodology"],
+  ["twitter", "https://x.com/oddhash", "profile"],
+  ["instagram", "https://www.instagram.com/aadharsh.hif", "profile"],
+  ["curius", "https://curius.app/aadharsh-pannirselvam", "profile"],
+  ["beli", "https://beliapp.com/users/aadharsh", "profile"],
+  ["spotify", "https://open.spotify.com/user/aadharsh2010", "profile"],
 ];
 
 async function resolve(cmd, env, request) {
   const q = cmd.trim().toLowerCase().replace(/\/+$/, "");
   if (!q) return null;
 
-  // exact path ("/garage", "garage") or name match first
   for (const [name, path] of DESTS) {
-    if (q === name || q === path.toLowerCase() || ("/" + q) === path.toLowerCase()) return path;
+    if (q === name || q === path.toLowerCase() || "/" + q === path.toLowerCase()) return path;
   }
-  // writing slugs: "colophon" → /writing/colophon
   try {
     const res = await env.ASSETS.fetch(new URL("/writing/posts.json", request.url));
     if (res.ok) {
       const posts = await res.json();
-      const hit = Array.isArray(posts) && posts.find(p => p.slug && p.slug.toLowerCase() === q);
+      const hit = Array.isArray(posts) && posts.find((p) => p.slug && p.slug.toLowerCase() === q);
       if (hit) return `/writing/${hit.slug}`;
     }
   } catch {}
-  // photo stems: "L1000069_3" → the SOOC original
   if (/^[a-z0-9_@-]+$/i.test(q)) {
-    const hit = PHOTO_POOL.find(p => p.stem.toLowerCase() === q);
+    const hit = PHOTO_POOL.find((p) => p.stem.toLowerCase() === q);
     if (hit) return `/images/full/${encodeURIComponent(hit.full).replace(/%2F/g, "/")}`;
   }
   // any page the site registers: its path ("garage/av2"), or its last segment
@@ -70,15 +68,13 @@ async function resolve(cmd, env, request) {
   if (byPath) return byPath;
   const bySegment = pages.filter((p) => p.toLowerCase().split("/").pop() === q);
   if (bySegment.length === 1) return bySegment[0];
-  // unique name prefix ("gar" → garage)
   const pre = DESTS.filter(([name]) => name.startsWith(q));
   if (pre.length === 1) return pre[0][1];
   return null;
 }
 
 export function renderRun({ cmd = "", notFound = false } = {}) {
-  const options = DESTS.map(([name, path, hint]) =>
-    `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
+  const options = DESTS.map(([name, path, hint]) => `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
   // XP's own Run error ends "To search for a file, click the Start button, and
   // then click Search." Here the search is one link away, already filled in.
   const search = `/search?q=${encodeURIComponent(cmd.trim())}`;

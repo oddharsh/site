@@ -79,15 +79,14 @@ export const minifyJsonScript = (label: string, body: string): string => {
   } catch (error) {
     throw new Error(`${label}: JSON script body does not parse: ${(error as Error).message}`);
   }
-  const out = JSON.stringify(JSON.parse(body, preserveNumbers))
-    .replace(/<\//g, "<\\/")
-    .replace(/<!--/g, "\\u003c!--");
+  const out = JSON.stringify(JSON.parse(body, preserveNumbers)).replace(/<\//g, "<\\/").replace(/<!--/g, "\\u003c!--");
   // Every claim this pass makes, re-proven per block: the guard left nothing
   // that can end the element, the escapes it added changed no value, and every
   // number reached the output as the author wrote it.
   if (/<\/|<!--/.test(out)) throw new Error(`${label}: JSON script body still carries a sequence that ends a script element`);
   if (!isDeepStrictEqual(JSON.parse(out), value)) throw new Error(`${label}: JSON script body did not survive minification`);
-  const before = numberLiterals(label, body), after = numberLiterals(label, out);
+  const before = numberLiterals(label, body),
+    after = numberLiterals(label, out);
   if (!isDeepStrictEqual(before, after)) {
     const i = after.findIndex((literal, at) => literal !== before[at]);
     throw new Error(`${label}: JSON script body changed a number literal (${before[i] ?? "?"} -> ${after[i] ?? "?"})`);

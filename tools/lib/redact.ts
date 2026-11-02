@@ -6,14 +6,16 @@
 // `process.env.CLOUDFLARE_ACCOUNT_ID`. On the VALUE the rule is wrong: that id
 // is committed at cloudflare.config.ts's `accountId`, repeated in config/infra.json,
 // and print-account-id.ts is what sets the variable in CI by reading that same
-// committed literal. Its own header says the id is not a secret.
+// committed literal. The id is not a secret.
 //
 // On the SHAPE the rule is right, which is the reason for this module. Those
-// three arrays are a funnel roughly 90 call sites feed, in a script that holds
-// CLOUDFLARE_API_TOKEN and GITHUB_TOKEN, printing into Actions logs on a PUBLIC
-// repository. A CodeQL alert is anchored at its sink, so dismissing one because
-// today's source is harmless would leave a dismissal sitting on the line a real
-// token would print from. The barrier is what makes that dismissal safe.
+// three arrays (built in lib/infra-report.ts) are a funnel that 172 call sites
+// in check-infra.ts and lib/infra-compare.ts feed (2026-10-16), in a script
+// that holds CLOUDFLARE_API_TOKEN and GITHUB_TOKEN, printing into Actions logs
+// on a PUBLIC repository. A CodeQL alert is anchored at its sink, so
+// dismissing one because today's source is harmless would leave a dismissal
+// sitting on the line a real token would print from. The barrier is what
+// makes that dismissal safe.
 //
 // DERIVED, NEVER HAND-KEPT. The names are matched by pattern rather than listed,
 // on the same reasoning as the tools.json guard scanner: a list of secrets to

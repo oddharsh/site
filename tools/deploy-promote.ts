@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// deploy-promote.mjs — ramp an uploaded version onto production traffic.
+// deploy-promote.ts: ramp an uploaded version onto production traffic, or roll
+// production back.
 //
 //   bun run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
 //   bun run deploy:promote --to 25       # one step, park it at 25%
@@ -9,23 +10,19 @@
 //   bun run deploy:promote --rollback    # 100% back to the previously active version
 //   bun run deploy:promote --status      # what is serving right now, and nothing else
 //
-// WHY THIS EXISTS. Merging used to publish: Workers Builds ran `wrangler deploy`
-// off the `production` branch and 100% of traffic moved in one step. That is a
-// fine model right up to the moment a change is wrong, and then the only signal
-// is a visitor noticing. This site had no way to serve a change to some traffic
-// and read the result, because it had no way to serve a change at all without
-// serving it to everyone.
-//
-// Workers Builds now runs `wrangler versions upload` instead (infra.json's
-// release block). A merge produces a VERSION: fully built, fully uploaded,
-// reachable at its own preview URL, serving nobody. This script is the second
-// half — the part that decides how much of the world sees it.
+// WHERE IT SITS. Since 2026-09-28 (#1002) the production deploy_command is
+// `wrangler deploy`, which moves 100% of traffic at once (config/infra.json,
+// release.traffic_moved_by). Branch pushes still run `wrangler versions upload`,
+// so a VERSION exists for each one: built, uploaded, reachable at its own
+// preview URL, serving nobody. This script is the workstation tool for moving
+// traffic between those versions by hand: --rollback and --status above all,
+// and a stepped ramp when one is wanted.
 //
 // WHAT IT ACTUALLY CHECKS BETWEEN STEPS. It polls /whoareyou.json, which reports
-// the serving version per request (whoareyou.js explains why that route and not
-// /updates.json — both versions read the same D1 changelog, so the changelog
-// cannot tell them apart). TWO PROBES run per step and they answer different
-// questions, which is why neither replaces the other:
+// the serving version per request (src/worker/whoareyou.ts explains why that
+// route and not /updates.json: both versions read the same D1 changelog, so
+// the changelog cannot tell them apart). TWO PROBES run per step and they
+// answer different questions, which is why neither replaces the other:
 //
 //   1. THE PINNED PROBE (probePinned). 12 requests carrying
 //      `Cloudflare-Workers-Version-Overrides`, so every one of them is handled
@@ -57,25 +54,19 @@
 // visitor would notice that still returns 200. Workers Logs is the surface for
 // that (the structured line carries `v`, the version prefix, for exactly this),
 // and the honest workflow is to hold a step, read the logs, then continue.
-// Actions pauses for approval after the canary. On a workstation, use --to for
-// that pause: the default multi-step invocation continues automatically.
+// Use --to for that pause: the default multi-step invocation continues
+// automatically.
 //
-// lib/release-guard.ts requires authentication. Actions uses an environment
-// secret for both ramp jobs; production-full requires reviewer approval after
-// the automatic canary. config/infra.json declares that token's scope.
-//
-// infra:apply is NOT covered by that change and still refuses to run in CI. It
-// can create and destroy zone-level DNS, which no pipeline here needs to do.
+// lib/release-guard.ts refuses to run in CI without CLOUDFLARE_API_TOKEN and
+// CLOUDFLARE_ACCOUNT_ID, since CI has no interactive cf login.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
 import { cf, d1Rows, D1 } from "./lib/cf.ts";
+import { checkpointInsert } from "./lib/checkpoints.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
-// The four version-reading probes, lifted out on 2026-09-22 so soak-canary.ts
-// can ask the same questions without this module's credentialed module-scope
-// setup. Their comments moved with them; see that file's header.
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
 
 const exec = promisify(execFile);
@@ -90,12 +81,7 @@ const SAMPLE_ATTEMPTS = 3;
 // One affinity key per request, namespaced per run so a re-ramp does not inherit
 // the previous run's version assignments.
 const RUN_ID = Math.random().toString(36).slice(2, 8);
-// Bind the run id once so the two call sites below read exactly as they did
-// before the extraction. The wire bytes are identical; the id is the same value
-// the module already generated, now passed rather than closed over.
 const sample = (target, previous) => sampleSplit(target, previous, RUN_ID);
-
-// ---------------------------------------------------------------- args ----
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -106,8 +92,6 @@ const has = (name) => argv.includes(`--${name}`);
 
 const credentialError = releaseCredentialError();
 if (credentialError) die(credentialError);
-
-// ------------------------------------------------------------------- cf ----
 
 // Every Cloudflare call goes through the `cf` CLI (tools/lib/cf.ts) since
 // 2026-10-06. Those commands are thin API wrappers, so what comes back is the
@@ -120,7 +104,9 @@ async function cfOrDie(args) {
     // died here and printed thirty lines of ChildProcess internals around one
     // line of usable error, which is a poor way to learn that traffic did not
     // move. lib/cf.ts cuts stderr to its first real lines; this frames it.
-    die(`${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
+    die(
+      `${e.message}\n\n  Nothing was changed: Cloudflare validates a deployment before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`,
+    );
   }
 }
 
@@ -165,7 +151,10 @@ async function productionAlias() {
     // Workers Builds sanitizes a branch name into an alias by replacing runs of
     // non-alphanumerics with a single dash. Identity for "production"; correct
     // if the production branch is ever renamed to something with a slash.
-    return String(branch).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return String(branch)
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
   } catch (e) {
     die(`could not read the production branch from infra.json: ${e.message}`);
   }
@@ -222,8 +211,7 @@ async function newestVersion() {
   const productionAliasName = await productionAlias();
   const list = await versionList();
   // Sort on the timestamp rather than trusting the API's order.
-  const sorted = [...list].sort((a, b) =>
-    String(b.created_on || "").localeCompare(String(a.created_on || "")));
+  const sorted = [...list].sort((a, b) => String(b.created_on || "").localeCompare(String(a.created_on || "")));
 
   const aliasOf = (v) => (v.annotations || {})["workers/alias"] || "(no alias)";
   const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
@@ -234,12 +222,15 @@ async function newestVersion() {
     // list that carries no `workers/alias` annotation. Guessing here is
     // exactly the bug being fixed, so name the candidates and let a human
     // choose.
-    const seen = sorted.slice(0, 20).map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
+    const seen = sorted
+      .slice(0, 20)
+      .map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`)
+      .join("\n");
     die(
       `no \`${productionAliasName}\` build among the ${sorted.length} most recent versions.\n\n` +
-      `  The newest of what is listed:\n\n${seen}\n\n` +
-      `  Pick the one you mean and pass it explicitly:\n` +
-      `    bun run deploy:promote --version <id>`,
+        `  The newest of what is listed:\n\n${seen}\n\n` +
+        `  Pick the one you mean and pass it explicitly:\n` +
+        `    bun run deploy:promote --version <id>`,
     );
   }
 
@@ -267,9 +258,6 @@ async function workerName() {
     die(`could not read the worker name from infra.json: ${e.message}`);
   }
 }
-
-
-// ------------------------------------------------------- target freshness ----
 
 // WHY. Workers Builds takes a couple of minutes to upload after a merge, and a
 // ramp inside that window silently targets the PREVIOUS release. Nothing
@@ -331,8 +319,8 @@ async function reportTargetFreshness(targetId) {
     // here. That is not an error; it is the normal answer for a deliberately
     // old target.
     console.log(
-      `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` +
-      `${list.length} newest versions, so it has no timestamp to compare)\n`);
+      `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` + `${list.length} newest versions, so it has no timestamp to compare)\n`,
+    );
     return;
   }
   const gap = built.getTime() - head.at.getTime();
@@ -342,17 +330,15 @@ async function reportTargetFreshness(targetId) {
   }
   console.log(
     `\n  ⚠ STALE TARGET: ${String(targetId).slice(0, 8)} was built ${humanGap(gap)} BEFORE your HEAD commit.\n` +
-    `\n    HEAD    ${head.sha}  committed ${head.at.toISOString()}` +
-    `\n    target  ${String(targetId).slice(0, 8)}  built     ${built.toISOString()}\n` +
-    `\n    A version uploaded before a commit cannot contain it. If you just merged,` +
-    `\n    Workers Builds has probably not finished uploading — wait a couple of` +
-    `\n    minutes and re-run --dry-run until this line clears.\n` +
-    `\n    Ramp anyway only if you MEAN to serve an older build (a rollback, or` +
-    `\n    re-ramping the serving version to write a missed changelog row).\n`,
+      `\n    HEAD    ${head.sha}  committed ${head.at.toISOString()}` +
+      `\n    target  ${String(targetId).slice(0, 8)}  built     ${built.toISOString()}\n` +
+      `\n    A version uploaded before a commit cannot contain it. If you just merged,` +
+      `\n    Workers Builds has probably not finished uploading — wait a couple of` +
+      `\n    minutes and re-run --dry-run until this line clears.\n` +
+      `\n    Ramp anyway only if you MEAN to serve an older build (a rollback, or` +
+      `\n    re-ramping the serving version to write a missed changelog row).\n`,
   );
 }
-
-// ------------------------------------------------------------------ run ----
 
 // `: never` is load-bearing rather than documentation. Every caller uses this as
 // control flow ("bail unless X"), and without the annotation TypeScript keeps the
@@ -391,7 +377,9 @@ if (has("rollback")) {
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
-    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`);
+    die(
+      `nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`,
+    );
   }
   const to = older.sort((a, b) => b.pct - a.pct)[0];
   console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
@@ -400,7 +388,7 @@ if (has("rollback")) {
   process.exit(0);
 }
 
-const target = flag("version") || await newestVersion();
+const target = flag("version") || (await newestVersion());
 // The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.ts
 // for the measurement that made an arbitrary pick a real hazard.
 const previous = remainderHolder(active, target);
@@ -410,9 +398,7 @@ const previous = remainderHolder(active, target);
 // which is also a (harmless) second scan of argv on the release path.
 const toFlag = flag("to");
 const stepsFlag = flag("steps");
-const steps = toFlag
-  ? [Number(toFlag)]
-  : (stepsFlag ? stepsFlag.split(",").map(Number) : DEFAULT_STEPS);
+const steps = toFlag ? [Number(toFlag)] : stepsFlag ? stepsFlag.split(",").map(Number) : DEFAULT_STEPS;
 if (steps.some((s) => !Number.isFinite(s) || s <= 0 || s > 100)) die(`bad steps: ${steps.join(",")}`);
 
 console.log(`target version:   ${target.slice(0, 8)}`);
@@ -465,9 +451,13 @@ for (const pct of steps) {
   //
   // Below 100 the remainder goes explicitly to the version that is serving now,
   // which also keeps the intent reviewable in the log.
-  const specs = pct >= 100 || !previous
-    ? [{ id: target, pct: 100 }]
-    : [{ id: target, pct }, { id: previous, pct: 100 - pct }];
+  const specs =
+    pct >= 100 || !previous
+      ? [{ id: target, pct: 100 }]
+      : [
+          { id: target, pct },
+          { id: previous, pct: 100 - pct },
+        ];
   await deployVersions(specs, `deploy:promote ramp to ${pct}%`);
 
   // Let the change propagate before believing a sample of it, then RETRY rather
@@ -594,11 +584,18 @@ for (const pct of steps) {
 
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 
-// ── record the release ────────────────────────────────────────────────────
 // The changelog entry was authored in the PR (bump-version.sh writes only the
 // committed projection), so /updates and /restore have been serving it since
 // this version started answering. What was still missing is D1's record that it
-// SHIPPED, and this is the only place that knows traffic actually moved.
+// SHIPPED, and a ramp that reaches 100% knows traffic moved.
+//
+// This block is NOT on the normal release path. Since 2026-09-28 (#1002)
+// production ships through promote-production.yml and Workers Builds'
+// `wrangler deploy` at 100%, which write no D1 row (CI's token is read-only).
+// `bun run checkpoints:record` is that path's writer, run from a workstation
+// after the release; this block covers only a manual ramp. Both send
+// tools/lib/checkpoints.ts's INSERT, and `checkpoints:check` fails while
+// production carries an entry D1 lacks.
 //
 // Deliberately after the last step and never before: a row here means the
 // version reached 100%, not that someone intended it to. A ramp that aborts at
@@ -607,7 +604,7 @@ if (steps[steps.length - 1] === 100) {
   const file = new URL("../src/worker/checkpoints.json", import.meta.url);
   // The changelog rows this release adds: whatever checkpoints.json carries
   // beyond what D1 already holds.
-  let staged: { vnum: number, ymd: string, version: string, slug: string, title: string }[] = [];
+  let staged: { vnum: number; ymd: string; version: string; slug: string; title: string }[] = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
     // d1Rows() returns parsed rows. A second JSON.parse here once stringified
@@ -627,8 +624,7 @@ if (steps[steps.length - 1] === 100) {
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);
     try {
-      await d1Rows(D1["aadhar-restore"],
-        `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`);
+      await d1Rows(D1["aadhar-restore"], checkpointInsert(row, ts));
       console.log(`logged: v${row.vnum} ${row.version}`);
     } catch (e) {
       // Not fatal. Traffic already moved, and a missing log row is a changelog

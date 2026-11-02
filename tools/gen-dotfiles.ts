@@ -6,13 +6,13 @@
 //
 // The page is the source: its <script type="application/json" id="dotfiles-data">
 // block is what the checklist renders from, and the committed .sh is the same
-// data through the same renderer (src/client/dotfiles.js) so the curl-able copy
+// data through the same renderer (src/client/dotfiles.ts) so the curl-able copy
 // cannot say something the page does not. contract-dotfiles-script-matches-the-
-// page.test.mjs deep-equals the two, which is what stands in for a derivation
+// page.test.ts deep-equals the two, which is what stands in for a derivation
 // entry: a test over one artifact is stronger than a digest over its inputs.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseData, renderScript } from "../src/client/dotfiles.js";
+import { parseData, renderScript } from "../src/client/dotfiles.ts";
 
 export const PAGE = "src/pages/dotfiles/index.html";
 export const SCRIPT = "public/dotfiles/macos.sh";

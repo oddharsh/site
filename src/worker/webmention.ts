@@ -1,4 +1,4 @@
-// webmention.js — the inbound half of Webmention (W3C REC, 2017): the open
+// webmention.ts — the inbound half of Webmention (W3C REC, 2017): the open
 // web's way to tell this site "I linked to you." Spiritually a trackback, which
 // makes it period-correct for a site that renders as Windows XP, and it is the
 // only standard mechanism by which someone else's page can appear on aadhar.sh.
@@ -43,7 +43,7 @@ import { sortLine, sortMention, sortSubjectTag } from "./webmention-sort.ts";
 // safety. `max` is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test
 // pins the pair, the same as every /lens budget.
 export const WEBMENTION_BUDGET = { binding: "WEBMENTION_RL", max: 10 };
-const SOURCE_BYTE_CAP = 512 * 1024;   // a blog post that needs more isn't a mention
+const SOURCE_BYTE_CAP = 512 * 1024; // a blog post that needs more isn't a mention
 const SOURCE_TIMEOUT_MS = 8000;
 const EXCERPT_MAX = 320;
 
@@ -51,15 +51,16 @@ const EXCERPT_MAX = 320;
 // Its own database (SOCIAL_DB / aadhar-social), deliberately NOT the deploy-log
 // DB: social content is third-party, moderated, and mutable, while the
 // checkpoints table is the site's own append-only history. Created lazily like
-// census.js and around.js do, so a fresh binding self-provisions instead of
+// census.ts and around.ts do, so a fresh binding self-provisions instead of
 // requiring a migration step before the route works. migrations/0001_webmentions.sql
 // carries the same DDL for anyone who prefers to apply it up front.
 const TABLE = "webmentions";
 let ensured = false;
 async function ensureTable(db) {
   if (ensured) return;
-  await db.prepare(
-    `CREATE TABLE IF NOT EXISTS ${TABLE} (
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS ${TABLE} (
       id TEXT PRIMARY KEY,
       source TEXT NOT NULL,
       target TEXT NOT NULL,
@@ -72,8 +73,9 @@ async function ensureTable(db) {
       received_at INTEGER NOT NULL,
       approved_at INTEGER,
       UNIQUE (source, target)
-    )`
-  ).run();
+    )`,
+    )
+    .run();
   ensured = true;
 }
 
@@ -86,18 +88,27 @@ async function mentionId(source, target) {
   return new Uint8Array(digest).subarray(0, 12).toHex();
 }
 
-// ── POST /webmention ───────────────────────────────────────────────────────
 export async function handleWebmention(request, env, ctx) {
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type" } });
+    return new Response(null, {
+      status: 204,
+      headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type" },
+    });
   }
   if (request.method !== "POST") {
     // GET on the endpoint is a human poking at it; say what it is rather than 405ing blankly.
-    return text("This is the Webmention endpoint for aadhar.sh. POST source= and target= (application/x-www-form-urlencoded). See https://www.w3.org/TR/webmention/", 405);
+    return text(
+      "This is the Webmention endpoint for aadhar.sh. POST source= and target= (application/x-www-form-urlencoded). See https://www.w3.org/TR/webmention/",
+      405,
+    );
   }
 
   let form;
-  try { form = await request.formData(); } catch { return text("Send application/x-www-form-urlencoded with source and target.", 400); }
+  try {
+    form = await request.formData();
+  } catch {
+    return text("Send application/x-www-form-urlencoded with source and target.", 400);
+  }
   const source = String(form.get("source") || "").trim();
   const target = String(form.get("target") || "").trim();
 
@@ -145,9 +156,9 @@ export async function handleWebmention(request, env, ctx) {
   // Accepted: everything past here is slow (a third-party fetch, D1, email), and
   // the spec is explicit that verification may be async. The sender gets 202
   // immediately and never waits on my moderation.
-  const job = processMention(checked.url, origin + targetPath, request, env)
-    .catch((e) => console.error("webmention processing failed", e?.message || e));
-  if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+  const job = processMention(checked.url, origin + targetPath, request, env).catch((e) => console.error("webmention processing failed", e?.message || e));
+  if (ctx?.waitUntil) ctx.waitUntil(job);
+  else await job;
 
   // 202 and NO Location header. The spec ties Location to 201, where it must
   // point at a status URL the sender can poll; on a 200 or 202 it has no
@@ -177,21 +188,27 @@ async function processMention(source, target, request, env) {
   const parsed = parseSource(fetched.html, fetched.url, target);
   const id = await mentionId(source, target);
   const db = env.SOCIAL_DB;
-  if (!db) { console.warn("webmention verified but SOCIAL_DB is unbound; dropping", source); return; }
+  if (!db) {
+    console.warn("webmention verified but SOCIAL_DB is unbound; dropping", source);
+    return;
+  }
   await ensureTable(db);
 
   // A re-send of an already-approved mention refreshes its content but keeps it
   // approved — re-moderating an edit I already blessed would be busywork.
-  const row = await db.prepare(
-    `INSERT INTO ${TABLE} (id, source, target, kind, author, author_url, title, excerpt, status, received_at)
+  const row = await db
+    .prepare(
+      `INSERT INTO ${TABLE} (id, source, target, kind, author, author_url, title, excerpt, status, received_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
      ON CONFLICT(source, target) DO UPDATE SET
        kind = excluded.kind, author = excluded.author, author_url = excluded.author_url,
        title = excluded.title, excerpt = excluded.excerpt, received_at = excluded.received_at
-     RETURNING status`
-  ).bind(id, source, target, parsed.kind, parsed.author, parsed.authorUrl, parsed.title, parsed.excerpt, Date.now()).first();
+     RETURNING status`,
+    )
+    .bind(id, source, target, parsed.kind, parsed.author, parsed.authorUrl, parsed.title, parsed.excerpt, Date.now())
+    .first();
 
-  if (row?.status === "approved") return;   // already live; no second email
+  if (row?.status === "approved") return; // already live; no second email
 
   await emailHost(env, request, { id, source, target, ...parsed });
 }
@@ -208,12 +225,8 @@ async function retract(env, source, target, why) {
 // Identifies honestly as AadharshBot, follows redirects one hop at a time (a
 // mention often comes from a shortened or canonical URL) and checks EVERY hop
 // against the blocklist, so a public URL cannot redirect into private space.
-// Caps both time and bytes.
-//
-// This used to follow redirects in one call and check only the final host. The
-// body was correctly discarded on a blocked landing, so the exposure was a blind
-// request rather than a read — but the request was still made, and the check now
-// runs before each hop instead of after all of them.
+// Caps both time and bytes. The check runs before each hop: checking only the
+// final host still makes the blind request to a private one.
 async function fetchSource(url) {
   try {
     const signal = AbortSignal.timeout(SOURCE_TIMEOUT_MS);
@@ -229,7 +242,9 @@ async function fetchSource(url) {
           if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "not http(s)" };
           if (privateHostBlocked(u.hostname)) return { ok: false, error: "private host" };
           return { ok: true };
-        } catch { return { ok: false, error: "unparseable" }; }
+        } catch {
+          return { ok: false, error: "unparseable" };
+        }
       },
     );
     if (!followed.ok) return { ok: false, status: 0, html: "", url: followed.url || url };
@@ -243,9 +258,6 @@ async function fetchSource(url) {
   }
 }
 
-// Does the source actually link to the target? Compare on href values so a bare
-// mention of the URL in prose doesn't count as a link — the spec wants a real
-// <a href>, and that distinction is the entire anti-forgery property.
 // Regions whose text is NOT document content. An <a> written inside any of them
 // is not a link: a comment is markup the author removed, a script is code, a
 // template is inert until cloned, and a textarea's contents are the field's
@@ -280,7 +292,11 @@ function canonicalForCompare(url) {
 // uppercase host were both refused before, and both are ordinary HTML.
 export function linksTo(html, target, sourceUrl) {
   let wanted;
-  try { wanted = canonicalForCompare(new URL(target)); } catch { return false; }
+  try {
+    wanted = canonicalForCompare(new URL(target));
+  } catch {
+    return false;
+  }
   for (const m of documentContent(html).matchAll(/<a\b[^>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
     const raw = m[1].replace(/^["']|["']$/g, "").trim();
     if (!raw) continue;
@@ -288,7 +304,9 @@ export function linksTo(html, target, sourceUrl) {
       // `sourceUrl` is the base a browser would use. Without it a protocol-
       // relative href cannot be resolved at all.
       if (canonicalForCompare(new URL(raw, sourceUrl || undefined)) === wanted) return true;
-    } catch { /* an unparseable href is not a link to anything */ }
+    } catch {
+      /* an unparseable href is not a link to anything */
+    }
   }
   return false;
 }
@@ -337,36 +355,22 @@ function explicit(entry, prop) {
 }
 
 // Who sent it. The floor is the hostname, which is honest and still useful, and
-// the rule is that NOTHING may win this by being confidently wrong.
+// the rule is that NOTHING may win this by being confidently wrong. The first
+// real webmention this site received (webmention.rocks receiver test 1,
+// 2026-08-28) broke that rule twice under the old regex reader:
 //
-// Both halves of that were broken, and the first real webmention this site ever
-// received is what showed it (webmention.rocks receiver test 1, 2026-08-28,
-// stored with an empty author):
+//   1. An h-card wrapping only a photo, the ordinary IndieWeb shape, captured
+//      whitespace as the author. Whitespace is truthy, so the hostname floor
+//      never ran and the row stored an empty author.
+//   2. A bare p-name fallback is worse than the hostname. Inside an h-card a
+//      p-name is the author's name; inside an h-entry it is the POST's name.
+//      A reader blind to the parent would have called the author "Receiver
+//      Test #1".
 //
-//   <div class="left p-author h-card">
-//     <a href="/"><img class="u-photo" alt="Webmention Rocks!"></a>
-//   </div>
-//   ...
-//   <h1 class="p-name"><a href="/receive/1">Receiver Test #1</a></h1>
-//
-//   1. The p-author pattern matched, then captured the WHITESPACE between that
-//      div's ">" and the "<a" on the next line. A whitespace string is truthy,
-//      so the `||` chain stopped there and the hostname floor never ran. clean()
-//      then reduced it to "". An h-card wrapping a photo is the ordinary shape on
-//      a real IndieWeb site, so this was not a quirk of the test post: every
-//      reply from a site that markes its author up properly would have arrived
-//      blank.
-//   2. Falling back to a bare p-name is worse than falling back to the hostname.
-//      In microformats2 a p-name inside an h-card is the author's name, and a
-//      p-name inside an h-entry is the POST's name, and a pattern that cannot
-//      see which parent it is under picks up the title. On this very document
-//      that fallback would have called the author "Receiver Test #1".
-//
-// That regex reader was replaced on 2026-09-30 by a real mf2 parse (lib/mf2.ts),
-// because it read visible text only. This site's own notes name their author
-// as <data class="p-name" value="Aadharsh Pannirselvam">, which draws nothing,
-// and the regex reported the hostname for them. XRay, mf2py and
-// microformats-parser all read the name.
+// A real mf2 parse (lib/mf2.ts) replaced the regex on 2026-09-30, because the
+// regex read visible text only. This site's own notes name their author as
+// <data class="p-name" value="Aadharsh Pannirselvam">, which draws nothing.
+// XRay, mf2py and microformats-parser all read the name.
 //
 // The rungs, in order. The first four are the IndieWeb authorship algorithm
 // (https://indieweb.org/authorship-spec) without its one network step: we never
@@ -409,9 +413,10 @@ function authorOf(html, sourceUrl, doc, entry) {
 
   const url = httpUrl(found?.url) || new URL(sourceUrl).origin;
   const hostOf = (u) => new URL(u).hostname.replace(/^www\./, "");
-  const name = [found?.name, extractMeta(html, "author"), found?.url && httpUrl(found.url) ? hostOf(found.url) : "", hostOf(sourceUrl)]
-    .map((n) => squash(n || "").slice(0, 120))
-    .find(Boolean) ?? hostOf(sourceUrl);
+  const name =
+    [found?.name, extractMeta(html, "author"), found?.url && httpUrl(found.url) ? hostOf(found.url) : "", hostOf(sourceUrl)]
+      .map((n) => squash(n || "").slice(0, 120))
+      .find(Boolean) ?? hostOf(sourceUrl);
   return { name, url: url.slice(0, 500), photo: httpUrl(found?.photo) };
 }
 
@@ -431,9 +436,7 @@ function resolveAuthor(v, cards) {
   if (!s) return null;
   if (!httpUrl(s)) return { name: s, url: "", photo: "" };
   const card = cards.find((c) => mf2Strings(c, "url").some((u) => sameUrl(u) === sameUrl(s)));
-  return card
-    ? { name: mf2First(card, "name"), url: s, photo: mf2First(card, "photo") }
-    : { name: "", url: s, photo: "" };
+  return card ? { name: mf2First(card, "name"), url: s, photo: mf2First(card, "photo") } : { name: "", url: s, photo: "" };
 }
 
 // https://microformats.org/wiki/representative-h-card-parsing, over top-level
@@ -453,14 +456,17 @@ function representativeCard(doc, pageUrl) {
 
 function homeCard(doc, pageUrl) {
   const home = sameUrl(new URL("/", pageUrl).href);
-  return doc.items.find((c) => c.type.includes("h-card") &&
-    mf2Strings(c, "url").some((u) => sameUrl(u) === home)) || null;
+  return doc.items.find((c) => c.type.includes("h-card") && mf2Strings(c, "url").some((u) => sameUrl(u) === home)) || null;
 }
 
 /** A URL comparable across spellings (host case, trailing slash, query), or ""
  *  when it does not parse. */
 function sameUrl(raw) {
-  try { return canonicalForCompare(new URL(raw)); } catch { return ""; }
+  try {
+    return canonicalForCompare(new URL(raw));
+  } catch {
+    return "";
+  }
 }
 
 /** The value itself when it is an absolute http(s) URL, else "". Anything
@@ -513,7 +519,8 @@ function excerptAround(html, target) {
   // in an href, which guarantees the cut lands mid-tag whenever it is centred on
   // a link. Detect it by which of < and > comes first, and drop both partials.
   if (start > 0) {
-    const lt = slice.indexOf("<"), gt = slice.indexOf(">");
+    const lt = slice.indexOf("<"),
+      gt = slice.indexOf(">");
     if (gt !== -1 && (lt === -1 || gt < lt)) slice = slice.slice(gt + 1);
   }
   slice = slice.replace(/<[^>]*$/, "");
@@ -522,15 +529,22 @@ function excerptAround(html, target) {
   return textOnly.slice(0, EXCERPT_MAX);
 }
 
-function firstMatch(s, re) { return (String(s).match(re) || [])[1] || ""; }
+function firstMatch(s, re) {
+  return (String(s).match(re) || [])[1] || "";
+}
 function clean(s) {
   return String(s || "")
-    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " }[m] || " "))
-    .replace(/\s+/g, " ").trim();
+    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " })[m] || " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 // For values lib/mf2.ts already decoded: a second decode would turn a page's
 // literal "&amp;lt;" into "<".
-function squash(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
+function squash(s) {
+  return String(s || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 // ── moderation ─────────────────────────────────────────────────────────────
 // The exact HMAC construction cal uses for booking approvals: only the holder of
@@ -579,7 +593,6 @@ function kindPhrase(kind) {
   return kind === "reply" ? "replied to" : kind === "like" ? "liked" : kind === "repost" ? "reposted" : kind === "bookmark" ? "bookmarked" : "mentioned";
 }
 
-// ── GET /webmention/approve | /decline ─────────────────────────────────────
 export async function handleWebmentionDecision(request, env, ctx, url) {
   const decision = url.pathname.endsWith("/approve") ? "approve" : "decline";
   const id = url.searchParams.get("t") || "";
@@ -599,15 +612,16 @@ export async function handleWebmentionDecision(request, env, ctx, url) {
   return text("Declined — nothing published.", 200);
 }
 
-// ── reads for /inbox ───────────────────────────────────────────────────────
 export async function readApprovedMentions(env, limit = 200) {
   if (!env.SOCIAL_DB) return { state: "unbound", mentions: [] };
   try {
     await ensureTable(env.SOCIAL_DB);
     const r = await env.SOCIAL_DB.prepare(
       `SELECT source, target, kind, author, author_url, title, excerpt, approved_at
-       FROM ${TABLE} WHERE status = 'approved' ORDER BY approved_at DESC LIMIT ?`
-    ).bind(Math.min(limit, 500)).all();
+       FROM ${TABLE} WHERE status = 'approved' ORDER BY approved_at DESC LIMIT ?`,
+    )
+      .bind(Math.min(limit, 500))
+      .all();
     const mentions = (r && r.results) || [];
     return { state: mentions.length ? "ok" : "empty", mentions };
   } catch (e) {
@@ -632,10 +646,11 @@ export async function acceptsWebmention(path, env) {
     if (!res.ok) return false;
     const posts = await res.json();
     return Array.isArray(posts) && posts.some((p) => p.slug === slug);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
-// ── helpers ────────────────────────────────────────────────────────────────
 /** A URL a machine sent, rather than a string a person typed: it carries an
  *  http(s) scheme and a host of its own, and nothing is inferred.
  *
@@ -653,7 +668,9 @@ export function absoluteHttpUrl(raw) {
   try {
     const u = new URL(s);
     return (u.protocol === "http:" || u.protocol === "https:") && !!u.hostname;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function sameOriginPath(raw, origin) {
@@ -661,7 +678,9 @@ function sameOriginPath(raw, origin) {
     const u = new URL(raw);
     if (u.origin !== origin) return null;
     return u.pathname.replace(/\/+$/, "") || "/";
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function text(body, status, extra = {}) {

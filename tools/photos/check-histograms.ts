@@ -45,8 +45,8 @@ const COMMITTED = path.join(PUBLIC, "images/histograms.json");
 const ZENC_MANIFEST = path.join(ROOT, "tools/photos/zenc/Cargo.toml");
 const ZENC_BUILT = path.join(ROOT, "tools/photos/zenc/target/release/zenc");
 
-// 258 photos today. A third below catches a collapse (an empty hashes.json, a
-// bake that skipped everything) without turning a deliberate cull into a red run.
+// 165 photos on 2026-10-16. The floor catches a collapse (an empty hashes.json,
+// a bake that skipped everything).
 const FLOOR = 150;
 
 export type Index = Record<string, string>;
@@ -125,7 +125,11 @@ async function main(): Promise<void> {
       return;
     }
     console.error(`histograms: the committed file does NOT reproduce with ${who}`);
-    for (const [label, stems] of [["changed", r.changed], ["committed, not baked", r.missing], ["baked, not committed", r.extra]] as const) {
+    for (const [label, stems] of [
+      ["changed", r.changed],
+      ["committed, not baked", r.missing],
+      ["baked, not committed", r.extra],
+    ] as const) {
       if (stems.length) console.error(`  ${label} (${stems.length}): ${stems.join(", ")}`);
     }
     console.error(
