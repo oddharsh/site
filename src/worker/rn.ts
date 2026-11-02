@@ -823,8 +823,22 @@ export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean 
 // receipt for when a homepage fragment takes seconds. Each phase's fetches are
 // auto-instrumented as children of its span.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
-  // tier 1: playlist embed → ordered track list
-  const playlistEntity = await span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId });
+  // tier 1: playlist embed → ordered track list. The stored meta map is read
+  // beside it, since neither needs the other, so a cold build waits on one
+  // round trip instead of the embed and then the KV read.
+  const [playlistEntity, meta] = await Promise.all([
+    span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId }),
+    span("rn.scrape.meta", async (s) => {
+      let known: Record<string, StoredTrackMeta> = {};
+      try {
+        known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
+      } catch {
+        /* a missing map means every cover is pending, never an error */
+      }
+      s.setAttribute("rn.meta_known", Object.keys(known).length);
+      return known;
+    }),
+  ]);
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
@@ -854,17 +868,6 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   //
   // What is left inline is ONE fetch and ONE KV read, so a cold build is ~7
   // subrequests and comfortably inside both budgets.
-  const meta = await span("rn.scrape.meta", async (s) => {
-    let known: Record<string, StoredTrackMeta> = {};
-    try {
-      known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
-    } catch {
-      /* a missing map means every cover is pending, never an error */
-    }
-    s.setAttribute("rn.meta_known", Object.keys(known).length);
-    return known;
-  });
-
   const tracks = baseTracks.map((t) => withTrackMeta(t, meta[t.id]));
   return {
     playlist_id: playlistId,

@@ -3590,14 +3590,13 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     // "discovered" returns only the not-RSVP'd ones.
     const rsvp = ["going", "all", "discovered"].includes(args.rsvp) ? args.rsvp : "going";
     const now = Date.now();
-    let rows = await queryEvents(d);
+    let [rows, tags] = await Promise.all([queryEvents(d), queryEventTags(d)]);
     if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     else if (when === "past")
       rows = rows
         .filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
         .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
-    const tags = await queryEventTags(d);
     // A topic/format filter can only match what was classified with confidence,
     // so it also reports how many events in the slice it could not judge. Without
     // that count, "2 AI events" and "2 AI events out of the 9 we could read" are
