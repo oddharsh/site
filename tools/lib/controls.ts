@@ -469,4 +469,17 @@ export const CONTROLS: Control[] = [
     run: [...contract("contract-canary-tripwire-proposes-nothing"), "-t", "a verdict watch that moves"],
     expect: /moved and the issue does not name bun-minifier-not-a-swap\.md/,
   },
+  {
+    id: "suite-map-restored-on-main",
+    plants: "validate restores the test input map on every event, so a push to main runs a narrowed suite",
+    mutations: [
+      {
+        file: ".github/workflows/ci.yml",
+        find: "      - name: Restore the test input map\n        if: github.event_name == 'pull_request'\n",
+        replace: "      - name: Restore the test input map\n",
+      },
+    ],
+    run: contract("contract-ci-required-gate"),
+    expect: /a push to main must find no map and run the whole suite/,
+  },
 ];
