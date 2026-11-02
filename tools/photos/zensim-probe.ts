@@ -46,24 +46,29 @@
 // Each libjxl score of a 40 MP pair takes 5 s and 7 GB (ssimulacra2) plus
 // 16 s and 9 GB (butteraugli); --jobs defaults to 2 so two lanes fit in 36 GB.
 //
-// FOUND, 2026-10-13, M3 Max, zensim 0.2.7 + 0.3.0 at 96c3c9b, libjxl 0.12.0:
+// FOUND, M3 Max, zensim 0.2.7 + 0.3.0 at 96c3c9b, libjxl 0.12.0. The ladder
+// was rerun on 2026-11-02 with AVIF decoded exactly (avifToPng8; the
+// 2026-10-13 run used avifdec -d 8, gotcha 76). aom (3.15.1 to 3.15.3) and
+// zenc (#1511) had moved too, and JPEG-only rows shifted, so not every change
+// below is the decode. The archive and speed numbers are from 2026-10-13.
 //
 //   ladder, 868 pairs           vs ssimulacra2   cross-codec calls that
 //                               (Spearman)       disagree with ssimulacra2
-//   butteraugli 3-norm           0.979            6.2%
-//   zensim 0.2.7                 0.992            4.3%
-//   zensim B                     0.967            4.6%
+//   butteraugli 3-norm           0.977            5.8%
+//   zensim 0.2.7                 0.991            3.7%
+//   zensim B                     0.966            4.2%
 //
 //   zensim disagrees with ssimulacra2 less often than butteraugli does, on
-//   809 pairs of different codecs within 15% of each other's bytes.
+//   808 pairs of different codecs within 15% of each other's bytes.
 //
 //   Instagram decision (lowest JPEG q with ssimulacra2 >= 84), threshold fit
 //   on 16 photos, tested on 15: B at 78.95 picks the same q on 9 of 15,
-//   butteraugli on 7, 0.2.7 on 8. A one-photo gap is noise at n = 15.
+//   0.2.7 on 10, butteraugli on 6. A one-photo gap is noise at n = 15 (the
+//   2026-10-13 run had 9, 8 and 7).
 //
 //   Codec verdicts move: at equal quality B puts AVIF at -44% bytes against
 //   zenc JPEG, where ssimulacra2 says -36% and butteraugli -34%. JPEG XL reads
-//   -15% to -20% under every metric.
+//   -17% to -20% under every metric.
 //
 //   speed, per pair, wall clock with decode (5 runs, median):
 //                  ssimulacra2     butteraugli     zensim B, all cores / 1 core
@@ -93,6 +98,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { avifToPng8 } from "./gen-pixel-peeper.ts";
 import { ARGS, beats, searchDistance, stripPng } from "./hif-archive.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -122,12 +128,14 @@ async function sh(cmd: string[], tolerate = false): Promise<string> {
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
   return out;
 }
 
@@ -161,8 +169,11 @@ const median = (a: number[]) => {
   return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 const pearson = (a: number[], b: number[]) => {
-  const ma = mean(a), mb = mean(b);
-  let ab = 0, aa = 0, bb = 0;
+  const ma = mean(a),
+    mb = mean(b);
+  let ab = 0,
+    aa = 0,
+    bb = 0;
   for (let i = 0; i < a.length; i++) {
     ab += (a[i] - ma) * (b[i] - mb);
     aa += (a[i] - ma) ** 2;
@@ -192,7 +203,11 @@ const JXL_D = [0.5, 0.8, 1, 1.5, 2, 3, 4, 6];
 /** The 31-photo pick: every Leica, every 5th Fuji JPEG (8), every 7th HIF. */
 function pickLadder(): string[] {
   const all = fs.readdirSync(SRC).sort();
-  const every = (re: RegExp, k: number, cap: number) => all.filter((f) => re.test(f)).filter((_, i) => i % k === 0).slice(0, cap);
+  const every = (re: RegExp, k: number, cap: number) =>
+    all
+      .filter((f) => re.test(f))
+      .filter((_, i) => i % k === 0)
+      .slice(0, cap);
   return [...all.filter((f) => f.startsWith("L")), ...every(/^XT.*\.JPG$/, 5, 8), ...every(/^XT.*\.HIF$/, 7, 21)];
 }
 
@@ -218,13 +233,16 @@ async function encodeLadder(file: string): Promise<{ ref: string; encs: Enc[] }>
       await add("jpeg", q, j, j);
     }
     for (const q of AVIF_Q) {
-      const a = path.join(tmp, `a${q}.avif`), d = path.join(tmp, `a${q}.png`);
+      const a = path.join(tmp, `a${q}.avif`),
+        d = path.join(tmp, `a${q}.png`);
       await sh(["avifenc", "-q", String(q), "-d", "10", "-y", "444", "-s", "6", "-j", "1", ref, a]);
-      await sh(["avifdec", "-d", "8", a, d]);
+      // 16-bit decode rounded once, never avifdec -d 8, which truncates (gotcha 76).
+      avifToPng8("avifdec", a, d);
       await add("avif", q, a, d);
     }
     for (const dist of JXL_D) {
-      const x = path.join(tmp, `x${dist}.jxl`), d = path.join(tmp, `x${dist}.png`);
+      const x = path.join(tmp, `x${dist}.jxl`),
+        d = path.join(tmp, `x${dist}.png`);
       await sh(["cjxl", ref, x, "-d", String(dist), "-e", "7", "--num_threads", "1"]);
       await sh(["djxl", x, d, "--bits_per_sample", "8"]);
       await add("jxl", dist, x, d);
@@ -257,13 +275,20 @@ async function ladder() {
   console.error("scoring with zensim");
   const z = Bun.spawnSync([SCORER, "batch"], { stdin: Buffer.from(pairs.map((p) => `${p.ref}\t${p.e.png}\n`).join("")) });
   if (z.exitCode !== 0) throw new Error(`zensim-score batch failed: ${z.stderr.toString().slice(-400)}`);
-  const zBy = new Map(z.stdout.toString().trim().split("\n").map((l) => {
-    const c = l.split("\t");
-    return [c[1], c.slice(2).map(Number)] as const;
-  }));
+  const zBy = new Map(
+    z.stdout
+      .toString()
+      .trim()
+      .split("\n")
+      .map((l) => {
+        const c = l.split("\t");
+        return [c[1], c.slice(2).map(Number)] as const;
+      }),
+  );
 
   const rows: Row[] = pairs.map(({ e }) => {
-    const l = libBy.get(e.png), c = zBy.get(e.png);
+    const l = libBy.get(e.png),
+      c = zBy.get(e.png);
     if (!l || !c) throw new Error(`missing score for ${e.png}`);
     return { ...e, s2: l.s2, ba: l.ba, ba3: l.ba3, libMs: l.ms, z02: c[0], z02s2: c[2], z02ba: c[3], zB: c[5], zBs2: c[7], zBba: c[8], zMs: c[4] + c[9] };
   });
@@ -285,19 +310,22 @@ function report(rows: Row[]) {
   console.log(`${rows.length} pairs, ${stems.length} photos`);
   table("Spearman, pooled over every pair:", (a, b) => spearman(rows.map(M[a]), rows.map(M[b])).toFixed(3));
   table("Spearman within one photo, codecs mixed (median over photos):", (a, b) =>
-    median(stems.map((s) => spearman(by(s).map(M[a]), by(s).map(M[b])))).toFixed(3));
+    median(stems.map((s) => spearman(by(s).map(M[a]), by(s).map(M[b])))).toFixed(3),
+  );
 
   // Same photo, two codecs, within 15% bytes: which looks better? The rate at
   // which ssimulacra2 and butteraugli disagree is the scale for the rest.
   const pairs: [Row, Row][] = [];
   for (const s of stems) {
     const rs = by(s);
-    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
-      if (rs[i].codec !== rs[j].codec && Math.abs(Math.log(rs[i].bytes / rs[j].bytes)) <= Math.log(1.15)) pairs.push([rs[i], rs[j]]);
-    }
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        if (rs[i].codec !== rs[j].codec && Math.abs(Math.log(rs[i].bytes / rs[j].bytes)) <= Math.log(1.15)) pairs.push([rs[i], rs[j]]);
+      }
   }
   table(`Cross-codec winner calls at +-15% bytes (n = ${pairs.length}), % where two metrics disagree:`, (a, b) =>
-    pct(pairs.filter(([x, y]) => Math.sign(M[a](x) - M[a](y)) !== Math.sign(M[b](x) - M[b](y))).length / pairs.length));
+    pct(pairs.filter(([x, y]) => Math.sign(M[a](x) - M[a](y)) !== Math.sign(M[b](x) - M[b](y))).length / pairs.length),
+  );
 
   console.log("\nzensim's approximations against the real libjxl numbers:");
   for (const [label, f, g] of [
@@ -306,15 +334,23 @@ function report(rows: Row[]) {
     ["0.2.7 approx_butteraugli vs max", (r: Row) => r.z02ba, (r: Row) => r.ba],
     ["B approx_butteraugli vs max", (r: Row) => r.zBba, (r: Row) => r.ba],
   ] as const) {
-    console.log(`  ${label.padEnd(34)} MAE ${mean(rows.map((r) => Math.abs(f(r) - g(r)))).toFixed(2).padStart(7)}  r ${pearson(rows.map(f), rows.map(g)).toFixed(3)}`);
+    console.log(
+      `  ${label.padEnd(34)} MAE ${mean(rows.map((r) => Math.abs(f(r) - g(r))))
+        .toFixed(2)
+        .padStart(7)}  r ${pearson(rows.map(f), rows.map(g)).toFixed(3)}`,
+    );
   }
 
   // export-for-instagram.sh: the lowest q clearing ssimulacra2 >= 84. Fit each
   // metric's threshold on even-index photos, test on odd ones.
-  const train = stems.filter((_, i) => i % 2 === 0), test = stems.filter((_, i) => i % 2 === 1);
+  const train = stems.filter((_, i) => i % 2 === 0),
+    test = stems.filter((_, i) => i % 2 === 1);
   const step = (q: number | undefined) => (q === undefined ? JPEG_Q.length : JPEG_Q.indexOf(q));
   const pick = (s: string, f: (r: Row) => number, t: number) =>
-    by(s).filter((r) => r.codec === "jpeg").sort((a, b) => a.knob - b.knob).find((r) => f(r) >= t);
+    by(s)
+      .filter((r) => r.codec === "jpeg")
+      .sort((a, b) => a.knob - b.knob)
+      .find((r) => f(r) >= t);
   console.log(`\nInstagram decision (lowest JPEG q with ssimulacra2 >= 84), fit on ${train.length}, tested on ${test.length}:`);
   for (const [label, f, lo, hi, inc] of [
     ["butteraugli 3-norm", M.ba3, -3, 0, 0.01],
@@ -327,23 +363,33 @@ function report(rows: Row[]) {
       if (err < best.err - 1e-9) best = { t, err };
     }
     const res = test.map((s) => {
-      const a = pick(s, M.s2, 84), b = pick(s, f, best.t);
+      const a = pick(s, M.s2, 84),
+        b = pick(s, f, best.t);
       return { d: step(b?.knob) - step(a?.knob), bytes: a && b ? b.bytes / a.bytes - 1 : NaN };
     });
-    console.log(`  ${label.padEnd(20)} t=${best.t.toFixed(2).padStart(6)}  same q ${res.filter((r) => r.d === 0).length}/${test.length}  within one step ${res.filter((r) => Math.abs(r.d) <= 1).length}/${test.length}  bytes ${pct(mean(res.map((r) => r.bytes).filter(Number.isFinite)))}`);
+    console.log(
+      `  ${label.padEnd(20)} t=${best.t.toFixed(2).padStart(6)}  same q ${res.filter((r) => r.d === 0).length}/${test.length}  within one step ${res.filter((r) => Math.abs(r.d) <= 1).length}/${test.length}  bytes ${pct(mean(res.map((r) => r.bytes).filter(Number.isFinite)))}`,
+    );
   }
 
   // Bjontegaard-style: mean log-bytes gap between two codecs' curves over their
   // shared quality range, per photo and metric.
   const gap = (s: string, f: (r: Row) => number, c: Row["codec"]) => {
-    const curve = (k: Row["codec"]) => by(s).filter((r) => r.codec === k).map((r) => [f(r), Math.log(r.bytes)] as const).sort((a, b) => a[0] - b[0]);
-    const A = curve("jpeg"), B = curve(c);
-    const lo = Math.max(A[0][0], B[0][0]), hi = Math.min(A[A.length - 1][0], B[B.length - 1][0]);
+    const curve = (k: Row["codec"]) =>
+      by(s)
+        .filter((r) => r.codec === k)
+        .map((r) => [f(r), Math.log(r.bytes)] as const)
+        .sort((a, b) => a[0] - b[0]);
+    const A = curve("jpeg"),
+      B = curve(c);
+    const lo = Math.max(A[0][0], B[0][0]),
+      hi = Math.min(A[A.length - 1][0], B[B.length - 1][0]);
     if (!(hi > lo)) return NaN;
     const at = (C: (readonly [number, number])[], q: number) => {
       for (let i = 1; i < C.length; i++) {
         if (C[i][0] >= q) {
-          const [q0, b0] = C[i - 1], [q1, b1] = C[i];
+          const [q0, b0] = C[i - 1],
+            [q1, b1] = C[i];
           return q1 === q0 ? b1 : b0 + ((b1 - b0) * (q - q0)) / (q1 - q0);
         }
       }
@@ -372,22 +418,26 @@ async function archiveOne(hif: string) {
   const stem = path.basename(hif, path.extname(hif));
   const dir = fs.mkdtempSync(path.join(WORK, `${stem}-`));
   try {
-    const raw = path.join(dir, "raw.png"), ref = path.join(dir, "ref.png");
-    const baseJpg = path.join(dir, "base.jpg"), base = path.join(dir, "base.ppm");
+    const raw = path.join(dir, "raw.png"),
+      ref = path.join(dir, "ref.png");
+    const baseJpg = path.join(dir, "base.jpg"),
+      base = path.join(dir, "base.ppm");
     // hif-archive.ts's reference, and add-photos.sh's baseline (its jpegtran
     // pass only reorders scans, so the decoded pixels are zenc's).
     await sh(["sips", "-s", "format", "png", hif, "--out", raw]);
     stripPng(raw, ref);
     await sh([ZENC, raw, baseJpg, "-q", "100", "--yuv", "422"]);
     await sh(["djpeg", "-outfile", base, baseJpg]);
-    const baseLib = await libjxl(ref, base), baseZ = await zen16(ref, base);
+    const baseLib = await libjxl(ref, base),
+      baseZ = await zen16(ref, base);
 
     type Cand = { d: number; bytes: number; lib?: Lib; z: Z16 };
     const cands = new Map<number, Cand>();
     const cand = async (d: number) => {
       let c = cands.get(d);
       if (!c) {
-        const jxl = path.join(dir, `d${d}.jxl`), dec = path.join(dir, `d${d}.png`);
+        const jxl = path.join(dir, `d${d}.jxl`),
+          dec = path.join(dir, `d${d}.png`);
         await sh(["cjxl", "--quiet", "-d", String(d), ...ARGS, ref, jxl]);
         await sh(["djxl", jxl, dec]);
         c = { d, bytes: fs.statSync(jxl).size, z: await zen16(ref, dec) };
@@ -405,7 +455,10 @@ async function archiveOne(hif: string) {
     for (const d of [zB, z02]) if (d !== null) await withLib(await cand(d));
     console.error(`${stem} libjxl=${libjxlPick} zB=${zB} z02=${z02} zBq8=${zBq8}`);
     return {
-      stem, baseBytes: fs.statSync(baseJpg).size, baseLib, baseZ,
+      stem,
+      baseBytes: fs.statSync(baseJpg).size,
+      baseLib,
+      baseZ,
       picks: { libjxl: libjxlPick, zB, z02, zBq8 },
       cands: [...cands.values()].sort((a, b) => a.d - b.d),
     };
@@ -418,8 +471,13 @@ type Arch = Awaited<ReturnType<typeof archiveOne>>;
 async function archive() {
   prerequisites();
   fs.mkdirSync(WORK, { recursive: true });
-  const hifs = fs.readdirSync(SRC).sort().filter((f) => /^XT.*\.HIF$/.test(f)).filter((_, i) => i % 7 === 0)
-    .slice(0, Number(arg("limit") ?? Infinity)).map((f) => path.join(SRC, f));
+  const hifs = fs
+    .readdirSync(SRC)
+    .sort()
+    .filter((f) => /^XT.*\.HIF$/.test(f))
+    .filter((_, i) => i % 7 === 0)
+    .slice(0, Number(arg("limit") ?? Infinity))
+    .map((f) => path.join(SRC, f));
   console.error(`${hifs.length} HIFs at full resolution into ${WORK}; expect ~10 min per photo per lane`);
   const recs = await pool(hifs, Number(arg("jobs") ?? 2), archiveOne);
   archiveReport(recs);
@@ -429,7 +487,7 @@ async function archive() {
 
 function archiveReport(recs: Arch[]) {
   const n = recs.length;
-  const bytesAt = (r: Arch, d: number | null) => (d === null ? r.baseBytes : r.cands.find((c) => c.d === d)?.bytes ?? NaN);
+  const bytesAt = (r: Arch, d: number | null) => (d === null ? r.baseBytes : (r.cands.find((c) => c.d === d)?.bytes ?? NaN));
   const clears = (r: Arch, d: number | null) => {
     const c = d === null ? undefined : r.cands.find((x) => x.d === d);
     return c?.lib ? beats(c.lib, r.baseLib) : false;
@@ -445,12 +503,19 @@ function archiveReport(recs: Arch[]) {
   const lift = recs.flatMap((r) => r.cands.map((c) => c.z.zB - c.z.zBq8));
   console.log(`  B's 16-bit lift over the 8-bit control: median ${median(lift).toFixed(3)}, max ${Math.max(...lift).toFixed(3)} points`);
   // hif-archive.ts bisects, which assumes the score worsens as distance grows.
-  let inv = 0, steps = 0, worst = 0, invS2 = 0, stepsS2 = 0;
+  let inv = 0,
+    steps = 0,
+    worst = 0,
+    invS2 = 0,
+    stepsS2 = 0;
   for (const r of recs) {
     for (let i = 1; i < r.cands.length; i++) {
       steps++;
       const up = r.cands[i].z.zB - r.cands[i - 1].z.zB;
-      if (up > 0) { inv++; worst = Math.max(worst, up); }
+      if (up > 0) {
+        inv++;
+        worst = Math.max(worst, up);
+      }
     }
     const lib = r.cands.filter((c) => c.lib);
     for (let i = 1; i < lib.length; i++) {
@@ -458,21 +523,34 @@ function archiveReport(recs: Arch[]) {
       if ((lib[i].lib?.s2 ?? 0) > (lib[i - 1].lib?.s2 ?? 0)) invS2++;
     }
   }
-  console.log(`  monotonicity, adjacent tried distances where the score IMPROVES as distance grows: B ${inv}/${steps} (worst +${worst.toFixed(2)}), ssimulacra2 ${invS2}/${stepsS2}`);
+  console.log(
+    `  monotonicity, adjacent tried distances where the score IMPROVES as distance grows: B ${inv}/${steps} (worst +${worst.toFixed(2)}), ssimulacra2 ${invS2}/${stepsS2}`,
+  );
 }
 
 // ---- speed ------------------------------------------------------------------
 async function speed() {
   prerequisites();
   fs.mkdirSync(WORK, { recursive: true });
-  const hifs = fs.readdirSync(SRC).sort().filter((f) => /^XT.*\.HIF$/.test(f)).slice(0, 2);
-  const sizes: [string, number | null][] = [["1080px", 1080], ["2048px", 2048], ["40 MP", null]];
+  const hifs = fs
+    .readdirSync(SRC)
+    .sort()
+    .filter((f) => /^XT.*\.HIF$/.test(f))
+    .slice(0, 2);
+  const sizes: [string, number | null][] = [
+    ["1080px", 1080],
+    ["2048px", 2048],
+    ["40 MP", null],
+  ];
   const sets: { size: string; ref: string; dist: string }[] = [];
   for (const f of hifs) {
-    const stem = f.replace(/\.[^.]+$/, ""), full = path.join(WORK, `${stem}.full.png`);
+    const stem = f.replace(/\.[^.]+$/, ""),
+      full = path.join(WORK, `${stem}.full.png`);
     await sh(["sips", "-s", "format", "png", path.join(SRC, f), "--out", full]);
     for (const [size, w] of sizes) {
-      const ref = path.join(WORK, `${stem}-${size}.png`), r = path.join(WORK, "r.png"), j = path.join(WORK, "e.jpg");
+      const ref = path.join(WORK, `${stem}-${size}.png`),
+        r = path.join(WORK, "r.png"),
+        j = path.join(WORK, "e.jpg");
       if (w) await sh([ZENC, "resize", full, "--width", String(w), "--filter", "box", "--out", r]);
       await sh([SCORER, "canon", w ? r : full, ref]);
       await sh([ZENC, ref, j, "-q", "84", "--yuv", "420"]);
@@ -507,7 +585,11 @@ async function speed() {
   console.log("\nper pair, median of 10 (2 photos x 5 runs), wall clock including decode:");
   for (const [k, v] of res) {
     const [size, name] = k.split("\t");
-    console.log(`  ${size.padEnd(7)} ${name.padEnd(24)} ${(1000 * median(v.map((x) => x.s))).toFixed(0).padStart(6)} ms  ${median(v.map((x) => x.gb)).toFixed(1).padStart(5)} GB`);
+    console.log(
+      `  ${size.padEnd(7)} ${name.padEnd(24)} ${(1000 * median(v.map((x) => x.s))).toFixed(0).padStart(6)} ms  ${median(v.map((x) => x.gb))
+        .toFixed(1)
+        .padStart(5)} GB`,
+    );
   }
 }
 
