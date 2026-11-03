@@ -2321,6 +2321,87 @@ checks the declarations in `TWIN_FACTS`, including the bot User-Agent. Update
 an authored twin when its page changes; the fact checks cover named claims,
 not every sentence.
 
+### Production observability
+
+```bash
+bun run observe:check             # did each signal fire in the last 7 days?
+bun run observe:check --days 30   # widen the window (logs and traces keep 7)
+```
+
+It exits 1 on any BROKEN row. Logs, traces, Analytics Engine, Issues and the
+Issues route (automations, Notifications policies and webhooks) read through
+`bun run cf` and its login (`bun run cf auth login`). Invocations read from GraphQL with `CLOUDFLARE_API_TOKEN`, or the
+wrangler login when that's unset; GraphQL rate-limits after about a dozen
+reads, and the row then prints UNREADABLE. The wrangler login can't stand in
+for cf: every `logs.*` dataset answers it 403.
+[`OBSERVABILITY-DRILL.md`](OBSERVABILITY-DRILL.md) has what each row means,
+what it found on 2026-10-30, and the planted-fault half that is still waiting
+on the owner.
+
+### Route Workers Issues to GitHub
+
+Workers Issues groups production errors into one record per bug. A Claude Code
+routine turns each into one GitHub issue labelled `workers-issue`, with the
+prompt committed at
+[`routines/workers-issue-triage.md`](routines/workers-issue-triage.md).
+
+The route has three Cloudflare links and one claude.ai link. An Issues
+automation names a Notifications policy, the policy names a destination, and
+the destination calls the routine's fire URL
+(`https://api.anthropic.com/v1/claude_code/routines/trig_…/fire`) with the
+routine's token. `bun run observe:check` walks all three Cloudflare lists, and
+its `issues automation` row stays BROKEN until an enabled automation reaches a
+fire URL whose last delivery didn't fail (gotcha 93). Its `github
+workers-issue` row then holds the routine to having touched an issue.
+
+Two parts can't be declared in a file, checked 2026-11-03:
+
+- **The token.** claude.ai mints a routine's API token on the web only and
+  shows it once. No CLI or API creates one.
+- **The Claude Code destination.** `/fire` takes the token as
+  `Authorization: Bearer` beside an `anthropic-beta` header. A generic
+  Notifications webhook sends its secret as `cf-webhook-auth` instead, so it
+  can't fire a routine. `cf alerting destinations webhooks create` takes only
+  a name, URL and secret, and the docs list no Claude Code type for it. Only
+  the Issues dashboard's Claude Code destination formats the call.
+
+Webhooks themselves work on every plan
+(`cf alerting destinations eligible get` answers `eligible: true`). The
+earlier note here that they need a Pro zone was wrong. Once the dashboard has
+made the destination, read its shape with `bun run cf alerting destinations
+webhooks list` and `bun run cf alerting policies list`; if it is a webhook on
+the fire URL, the automations and policy can move into code.
+
+Scanner Issues fire the routine too. 12 of the 15 active Issues on 2026-10-30
+were `security` type, and the automation takes no type filter, so the prompt
+stops on `Potential vulnerability scan` titles without investigating.
+
+1. At claude.ai/code/routines, open the Workers issue triage routine, then
+   **Edit**. Paste in everything below the line of the prompt file, since this
+   PR changed it. In the **Trigger** row's API panel, select **Generate
+   token** (or **Regenerate** if nobody saved the first one) and copy it.
+   Note the routine id (`trig_…`) from the fire URL.
+2. Under the routine's **Connectors**, confirm GitHub can write issues on
+   `oddharsh/site`. Without it the prompt ends the run with the issue text
+   as its final message, so a run can succeed and leave nothing on GitHub.
+3. Run `bun run labels:sync -- --confirm`, or the first issue mints the
+   `workers-issue` label with a random colour.
+4. In the Cloudflare dashboard: **Workers & Pages**, `aadhar-sh`,
+   **Issues**, **Automations**, **Add automation**. Pick **Occurrence
+   threshold**, enter `1`. Under destination, create one: **Coding agent**,
+   **Claude Code**, display name `workers-issue-triage`, the routine id, and
+   the token. Turn on **Enabled**, then **Create**.
+5. **Add automation** again: **Recurrence after inactivity**, 7 days, the same
+   destination, **Enabled**, **Create**. The recurring `/rn` Issues need it.
+6. Open one exception Issue and send it to `workers-issue-triage` from its
+   actions, which runs the automation by hand. Read the run on
+   claude.ai/code/routines and the issue it filed.
+7. Run `bun run observe:check`. `issues automation` should read FIRED with
+   `reaches routine trig_…`. If it reads BROKEN with `not a Claude Code
+   routine` after step 4, the destination isn't stored as a fire-URL
+   webhook: print the two lists above and teach `route()` in
+   `tools/lib/observe-signals.ts` the shape you find.
+
 ---
 
 ## The scripts (`tools/photos/`)

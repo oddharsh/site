@@ -882,3 +882,20 @@ skips it.
     Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
     `reading.ts` and `serendipity.ts` already did.
     Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
+
+93. **An Issues automation can exist and still send nowhere.** Workers
+    Issues hands an issue to its automation, the automation names a
+    Notifications policy, and the policy names the destination. A disabled
+    automation, a disabled policy, an email-only policy or a generic webhook
+    each pass a count of automations, and none of them fires the triage
+    routine. A generic webhook can't anyway: the routine's `/fire` wants
+    `Authorization: Bearer` and an `anthropic-beta` header, and a webhook
+    sends its secret as `cf-webhook-auth`. The count was the only test until
+    2026-11-03, and on 2026-10-30 the list read `[]` with 3 exception Issues
+    stranded, so no Issue had ever reached GitHub. `observe:check` now walks
+    automation, policy and webhook, and reads FIRED only on an enabled chain
+    ending at a routine fire URL whose last delivery didn't fail. The
+    routine's token is minted on claude.ai only, so the route is a
+    dashboard step (docs/MAINTENANCE.md, "Route Workers Issues to GitHub"),
+    and `bun run observe:check` reads it live from the workstation.
+    Checked by: `tools/tests/contract-observe-check-verdicts.test.ts`, `tools/lib/observe-signals.ts`.
