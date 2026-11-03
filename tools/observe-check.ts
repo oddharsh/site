@@ -20,7 +20,16 @@ import { promisify } from "node:util";
 import { CF_ACCOUNT, cf } from "./lib/cf.ts";
 import { redactCredentials } from "./lib/redact.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import { CADENCE_FRESH_HOURS, LEDGER_FRESH_HOURS, verdicts, type Reading } from "./lib/observe-signals.ts";
+import {
+  CADENCE_FRESH_HOURS,
+  LEDGER_FRESH_HOURS,
+  verdicts,
+  type Automation,
+  type Policy,
+  type Reading,
+  type Route,
+  type Webhook,
+} from "./lib/observe-signals.ts";
 
 const exec = promisify(execFile);
 const SCRIPT = "aadhar-sh";
@@ -95,14 +104,20 @@ async function exceptionIssues(): Promise<Reading> {
 }
 
 // Account and service automations together: either kind would route an
-// aadhar-sh issue. A routine is the only destination this repo uses
-// (docs/MAINTENANCE.md, "Route Workers Issues to GitHub").
-async function automations(): Promise<Reading> {
+// aadhar-sh issue. An automation names a Notifications policy and the policy
+// names its webhooks, so the route is all three lists. A routine is the only
+// destination this repo uses (docs/MAINTENANCE.md, "Route Workers Issues to
+// GitHub").
+async function route(): Promise<Route> {
   try {
-    const { automations: list }: { automations: unknown[] } = await cf(["observability", "issues", "automations", "list"]);
-    return { kind: "read", count: list.length, last: null };
+    const [{ automations }, policies, webhooks]: [{ automations: Automation[] }, Policy[], Webhook[]] = await Promise.all([
+      cf(["observability", "issues", "automations", "list"]),
+      cf(["alerting", "policies", "list"]),
+      cf(["alerting", "destinations", "webhooks", "list"]),
+    ]);
+    return { kind: "read", automations, policies, webhooks };
   } catch (e) {
-    return unreadable(e);
+    return { kind: "unreadable", reason: redactCredentials(e instanceof Error ? e.message : String(e)) };
   }
 }
 
@@ -164,14 +179,14 @@ const [inv, logs, issues, routes, spans, perfProbe, botLedger, gh] = await Promi
   token().then(invocations, (e) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
   sqlCount("logs.workersLogs", "timestamp", `scriptName = '${SCRIPT}'`),
   exceptionIssues(),
-  automations(),
+  route(),
   sqlCount("logs.traces", "startTime", `serviceName = '${SCRIPT}' AND spanName = 'cron.home_probe'`, CADENCE_FRESH_HOURS),
   sqlCount("events.analyticsEngine.aadhar_perf_probe", "timestamp", "", CADENCE_FRESH_HOURS),
   sqlCount("events.analyticsEngine.aadhar_bot_ledger", "timestamp", "", LEDGER_FRESH_HOURS),
   github(),
 ]);
 
-const rows = verdicts({ days, ...inv, logs, issues, automations: routes, github: gh, spans, perfProbe, botLedger });
+const rows = verdicts({ days, ...inv, logs, issues, route: routes, github: gh, spans, perfProbe, botLedger });
 const width = Math.max(...rows.map((r) => r.signal.length));
 console.log(`observe:check, last ${days} days to ${now.toISOString()}`);
 for (const r of rows) console.log(`  ${r.verdict.padEnd(10)} ${r.signal.padEnd(width)}  ${r.detail}`);

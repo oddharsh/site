@@ -28,13 +28,29 @@
 //     GitHub counts issues UPDATED in the window, because the routine comments
 //     on an open issue for a recurrence instead of opening a second one.
 //   ROUTE. The Issues automation is configuration, not a signal, but without
-//     one nothing past Issues can fire. Zero automations is BROKEN on its own.
-//     That was the whole break on 2026-10-30: 3 exception Issues in 7 days,
-//     one of them 353 occurrences old, and no automation to send any of them.
+//     one nothing past Issues can fire. That was the whole break on
+//     2026-10-30: 3 exception Issues in 7 days, one of them 353 occurrences
+//     old, and no automation to send any of them. A count is too weak a
+//     test, because an automation can exist and still send nowhere: it names
+//     a Notifications policy, and the policy names the webhook it delivers
+//     to. The route reads FIRED only when an enabled automation's enabled
+//     policy delivers to a Claude Code routine's fire URL, and that webhook's
+//     last delivery didn't fail (gotcha 93).
 
 // `recent` is the count in the canary's freshness window, for the readings
 // the cadence and ledger rules judge.
 export type Reading = { kind: "read"; count: number; last: string | null; recent?: number } | { kind: "unreadable"; reason: string };
+
+// The Issues route as three Cloudflare lists, in the shapes the API returns:
+// `cf observability issues automations list`, `cf alerting policies list` and
+// `cf alerting destinations webhooks list`.
+export type Automation = { id: string; name?: string; enabled: boolean; policyId: string };
+export type Policy = { id: string; name: string; enabled: boolean; mechanisms: { webhooks?: { id: string }[]; email?: { id: string }[] } };
+export type Webhook = { id: string; name: string; url: string; last_success?: string | null; last_failure?: string | null };
+export type Route = { kind: "read"; automations: Automation[]; policies: Policy[]; webhooks: Webhook[] } | { kind: "unreadable"; reason: string };
+
+// A routine's API trigger, https://code.claude.com/docs/en/routines#add-an-api-trigger.
+const ROUTINE_FIRE = /^https:\/\/api\.anthropic\.com\/v1\/claude_code\/routines\/(trig_[A-Za-z0-9]+)\/fire$/;
 
 export type Readings = {
   days: number;
@@ -42,7 +58,7 @@ export type Readings = {
   exceptions: Reading;
   logs: Reading;
   issues: Reading;
-  automations: Reading;
+  route: Route;
   github: Reading;
   spans: Reading;
   perfProbe: Reading;
@@ -85,6 +101,47 @@ function chained(signal: string, r: Reading, upstream: { name: string; count: nu
 
 const fired = (r: Reading) => (r.kind === "read" ? r.count : 0);
 
+// Walk automation -> policy -> webhook and name the first link that drops.
+function route(r: Route, issues: number): Row {
+  const signal = "issues automation";
+  if (r.kind === "unreadable") return { signal, verdict: "UNREADABLE", detail: r.reason };
+  const broken = (detail: string): Row => ({ signal, verdict: "BROKEN", detail });
+  if (r.automations.length === 0)
+    return broken(issues > 0 ? `0 configured, so ${issues} exception Issues went nowhere` : "0 configured, so no Issue can reach the routine");
+  const enabled = r.automations.filter((a) => a.enabled);
+  if (enabled.length === 0) return broken(`${r.automations.length} configured, none enabled`);
+
+  const sends: string[] = [];
+  for (const a of enabled) {
+    const policy = r.policies.find((p) => p.id === a.policyId);
+    if (!policy) {
+      sends.push(`${a.name ?? a.id} names policy ${a.policyId}, which doesn't exist`);
+      continue;
+    }
+    if (!policy.enabled) {
+      sends.push(`${a.name ?? a.id} sends through policy "${policy.name}", which is disabled`);
+      continue;
+    }
+    const hooks = (policy.mechanisms.webhooks ?? []).map((m) => r.webhooks.find((w) => w.id === m.id)).filter((w) => w !== undefined);
+    const routine = hooks.find((w) => ROUTINE_FIRE.test(w.url));
+    if (!routine) {
+      const to = [...hooks.map((w) => `webhook "${w.name}"`), ...(policy.mechanisms.email ?? []).map(() => "email")];
+      sends.push(`${a.name ?? a.id} sends to ${to.length ? to.join(", ") : "nothing"}, not a Claude Code routine`);
+      continue;
+    }
+    // Timestamps are ISO 8601 UTC, so they compare as strings.
+    const failure = routine.last_failure ?? "";
+    if (failure > (routine.last_success ?? "")) {
+      sends.push(`${a.name ?? a.id} reaches webhook "${routine.name}", whose last delivery failed at ${failure}`);
+      continue;
+    }
+    const trigger = ROUTINE_FIRE.exec(routine.url)?.[1];
+    const delivered = routine.last_success ? `, last delivered ${routine.last_success}` : ", nothing delivered yet";
+    return { signal, verdict: "FIRED", detail: `${a.name ?? a.id} reaches routine ${trigger}${delivered}` };
+  }
+  return broken(sends.join("; "));
+}
+
 export function verdicts(r: Readings): Row[] {
   const rows: Row[] = [];
   const { days } = r;
@@ -108,15 +165,7 @@ export function verdicts(r: Readings): Row[] {
   rows.push(chained("workers logs", r.logs, { name: "invocations", count: fired(r.invocations) }));
   rows.push(chained("workers issues", r.issues, { name: "exceptions", count: fired(r.exceptions) }));
 
-  const route = r.automations;
-  if (route.kind === "unreadable") rows.push({ signal: "issues automation", verdict: "UNREADABLE", detail: route.reason });
-  else if (route.count === 0)
-    rows.push({
-      signal: "issues automation",
-      verdict: "BROKEN",
-      detail: fired(r.issues) > 0 ? `0 configured, so ${fired(r.issues)} exception Issues went nowhere` : "0 configured, so no Issue can reach the routine",
-    });
-  else rows.push({ signal: "issues automation", verdict: "FIRED", detail: `${route.count} configured` });
+  rows.push(route(r.route, fired(r.issues)));
 
   // Issues is the routine's trigger. When Issues is unreadable, fall back to the
   // exception count, which is the next-best evidence that it had work to send.

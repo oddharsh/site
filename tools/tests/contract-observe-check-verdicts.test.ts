@@ -4,11 +4,24 @@
 // BROKEN case sits beside the same reading one step healthier, so a rule that
 // cannot fire fails the healthy control rather than passing.
 import { assert, test } from "./contract-shared.ts";
-import { verdicts, type Reading, type Readings } from "../lib/observe-signals.ts";
+import { verdicts, type Automation, type Policy, type Reading, type Readings, type Route, type Webhook } from "../lib/observe-signals.ts";
 
 const read = (count: number, last: string | null = null): Reading => ({ kind: "read", count, last });
 const canary = (count: number, recent: number): Reading => ({ kind: "read", count, last: null, recent });
 const denied: Reading = { kind: "unreadable", reason: "HTTP 403 Authorization error" };
+
+// The route the runbook builds: one automation, its policy, and a webhook on a
+// routine's fire URL. Each override breaks one link of it.
+const FIRE = "https://api.anthropic.com/v1/claude_code/routines/trig_01ABCDEFGHJKLMNOPQRSTUVW/fire";
+function wired(over: { automation?: Partial<Automation>; policy?: Partial<Policy>; webhook?: Partial<Webhook> } = {}): Route {
+  return {
+    kind: "read",
+    automations: [{ id: "a1", name: "triage", enabled: true, policyId: "p1", ...over.automation }],
+    policies: [{ id: "p1", name: "Issues to triage", enabled: true, mechanisms: { webhooks: [{ id: "w1" }] }, ...over.policy }],
+    webhooks: [{ id: "w1", name: "workers-issue-triage", url: FIRE, last_success: "2026-11-03T10:00:00Z", last_failure: null, ...over.webhook }],
+  };
+}
+const none: Route = { kind: "read", automations: [], policies: [], webhooks: [] };
 
 // A healthy, quiet week: the shape of the 2026-10-30 run with an automation configured.
 function week(over: Partial<Readings> = {}): Readings {
@@ -18,7 +31,7 @@ function week(over: Partial<Readings> = {}): Readings {
     exceptions: read(0),
     logs: read(51420),
     issues: read(0),
-    automations: read(1),
+    route: wired(),
     github: read(0),
     spans: canary(330, 4),
     perfProbe: canary(335, 4),
@@ -64,17 +77,50 @@ test("observe:check: exception Issues, when readable, are what GitHub is held to
 
 test("observe:check: no Issues automation is BROKEN, and says how many Issues it stranded", () => {
   // The 2026-10-30 reading: three exception Issues in the week, nothing routing them.
-  assert.deepEqual(row(week({ issues: read(3, "2026-10-30T13:23:55.950Z"), automations: read(0) }), "issues automation"), {
+  assert.deepEqual(row(week({ issues: read(3, "2026-10-30T13:23:55.950Z"), route: none }), "issues automation"), {
     signal: "issues automation",
     verdict: "BROKEN",
     detail: "0 configured, so 3 exception Issues went nowhere",
   });
-  assert.equal(row(week({ automations: read(0) }), "issues automation")?.detail, "0 configured, so no Issue can reach the routine");
-  assert.deepEqual(row(week({ issues: read(3, "2026-10-30T13:23:55.950Z"), automations: read(1) }), "issues automation"), {
+  assert.equal(row(week({ route: none }), "issues automation")?.detail, "0 configured, so no Issue can reach the routine");
+  assert.deepEqual(row(week({ issues: read(3, "2026-10-30T13:23:55.950Z"), route: wired() }), "issues automation"), {
     signal: "issues automation",
     verdict: "FIRED",
-    detail: "1 configured",
+    detail: "triage reaches routine trig_01ABCDEFGHJKLMNOPQRSTUVW, last delivered 2026-11-03T10:00:00Z",
   });
+});
+
+test("observe:check: an automation that exists but can't reach a routine is BROKEN, link by link (gotcha 93)", () => {
+  const detail = (r: Route) => row(week({ route: r }), "issues automation");
+  const broken = (d: string) => ({ signal: "issues automation", verdict: "BROKEN", detail: d });
+  assert.deepEqual(detail(wired({ automation: { enabled: false } })), broken("1 configured, none enabled"));
+  assert.deepEqual(detail(wired({ automation: { policyId: "gone" } })), broken("triage names policy gone, which doesn't exist"));
+  assert.deepEqual(detail(wired({ policy: { enabled: false } })), broken('triage sends through policy "Issues to triage", which is disabled'));
+  // Email alone, or a generic webhook somewhere else, delivers but never fires the routine.
+  assert.deepEqual(
+    detail(wired({ policy: { mechanisms: { email: [{ id: "owner@example.com" }] } } })),
+    broken("triage sends to email, not a Claude Code routine"),
+  );
+  assert.deepEqual(
+    detail(wired({ webhook: { url: "https://hooks.example.com/issues" } })),
+    broken('triage sends to webhook "workers-issue-triage", not a Claude Code routine'),
+  );
+  assert.deepEqual(detail(wired({ policy: { mechanisms: {} } })), broken("triage sends to nothing, not a Claude Code routine"));
+  assert.deepEqual(
+    detail(wired({ webhook: { last_failure: "2026-11-03T11:00:00Z" } })),
+    broken('triage reaches webhook "workers-issue-triage", whose last delivery failed at 2026-11-03T11:00:00Z'),
+  );
+  // Controls: a failure older than the last success, and a route that hasn't delivered yet, both read FIRED.
+  assert.equal(detail(wired({ webhook: { last_failure: "2026-11-02T09:00:00Z" } }))?.verdict, "FIRED");
+  assert.deepEqual(detail(wired({ webhook: { last_success: null } })), {
+    signal: "issues automation",
+    verdict: "FIRED",
+    detail: "triage reaches routine trig_01ABCDEFGHJKLMNOPQRSTUVW, nothing delivered yet",
+  });
+  // One good automation is enough beside a broken one.
+  const two = wired();
+  if (two.kind === "read") two.automations.unshift({ id: "a0", name: "old", enabled: true, policyId: "gone" });
+  assert.equal(detail(two)?.verdict, "FIRED");
 });
 
 test("observe:check: a canary below half its cadence, or silent in its window, is BROKEN", () => {
