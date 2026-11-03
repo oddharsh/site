@@ -16,8 +16,7 @@ const LENS_TOOLS = defineLens({
   targets: (params: URLSearchParams) => params.get("url") || "",
   cache: { prefix: "lens:tools:", ttl: TOOLS_CACHE_SECONDS, key: (url) => new URL(url).origin },
   run: async ({ target, env, span: s }) => {
-    const origin = new URL(target).origin;
-    const host = new URL(origin).hostname;
+    const { origin, hostname: host } = new URL(target);
     const probe = await foreignMcpTools(origin, env, { schemas: true });
 
     // SHUT and UNREADABLE stay different answers here for the same reason

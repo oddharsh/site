@@ -274,12 +274,14 @@ const pageOffer = (pathname) => (pathname.length < PAGE_FAMILY_MATCH.length ? `m
 // whenever it is cached. The exact page tier remains useful before that idle-loaded
 // family dictionary arrives, so the two tiers stack without letting an uncaptured
 // exact hash force an avoidable Brotli response.
+const MAX_AGE = /\bmax-age=(\d+)/;
+const STALE_WHILE_REVALIDATE = /\bstale-while-revalidate=(\d+)/;
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
   if (/\b(?:no-store|no-cache)\b/.test(cc)) return false;
-  const seconds = (name) => Number(cc.match(new RegExp(`\\b${name}=(\\d+)`))?.[1] || 0);
-  const stale = /\bmust-revalidate\b/.test(cc) ? 0 : seconds("stale-while-revalidate");
-  return seconds("max-age") + stale > 0;
+  const seconds = (re: RegExp) => Number(cc.match(re)?.[1] || 0);
+  const stale = /\bmust-revalidate\b/.test(cc) ? 0 : seconds(STALE_WHILE_REVALIDATE);
+  return seconds(MAX_AGE) + stale > 0;
 };
 
 const variantEtag = (etag, suffix) => {

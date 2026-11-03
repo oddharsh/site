@@ -34,6 +34,8 @@ const EXECUTABLE = new Set(["", "text/javascript", "application/javascript", "te
 // `>`, case-insensitively, and the hash covers exactly the text in between.
 const SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script[\s/>]/gi;
 const ATTR = (name: string) => new RegExp(`(?:^|\\s)${name}(?=[\\s=/>]|$)(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+)))?`, "i");
+const SRC_ATTR = ATTR("src");
+const TYPE_ATTR = ATTR("type");
 
 const RAW_TEXT = /<(script|style)\b[^>]*>[\s\S]*?<\/\1[\s/>]/gi;
 
@@ -57,8 +59,8 @@ export function inlineScriptHashes(doc: string): string[] | null {
   const hashes: string[] = [];
   for (const m of doc.matchAll(SCRIPT)) {
     const attrs = m[1];
-    if (ATTR("src").test(attrs)) continue; // external: 'self' covers it
-    const t = attrs.match(ATTR("type"));
+    if (SRC_ATTR.test(attrs)) continue; // external: 'self' covers it
+    const t = attrs.match(TYPE_ATTR);
     const type = t ? (t[1] ?? t[2] ?? t[3] ?? "").trim().toLowerCase() : "";
     if (!EXECUTABLE.has(type)) continue;
     const h = sha256Base64(m[2]);

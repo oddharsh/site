@@ -69,6 +69,7 @@ const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input"
 // content is inert until cloned, the same rule linksTo applies.
 const RAW_DROP = new Set(["script", "style", "template", "noscript"]);
 const RAW_TEXT = new Set(["textarea", "title", "xmp"]);
+const RAW_CLOSE = new Map([...RAW_DROP, ...RAW_TEXT].map((tag) => [tag, new RegExp(`</${tag}\\s*>`, "i")]));
 // An open tag of one of these closes an open sibling of the same group, which is
 // how <li>a<li>b nests in a real parser.
 const AUTO_CLOSE: Record<string, Set<string>> = {
@@ -174,8 +175,9 @@ function buildTree(input: string): El {
     const el: El = { tag, attrs, classes, children: [], innerStart: TOKEN.lastIndex, innerEnd: TOKEN.lastIndex };
     top().children.push(el);
 
-    if (RAW_DROP.has(tag) || RAW_TEXT.has(tag)) {
-      const end = src.slice(TOKEN.lastIndex).search(new RegExp(`</${tag}\\s*>`, "i"));
+    const rawClose = RAW_CLOSE.get(tag);
+    if (rawClose) {
+      const end = src.slice(TOKEN.lastIndex).search(rawClose);
       const stop = end === -1 ? src.length : TOKEN.lastIndex + end;
       if (RAW_TEXT.has(tag)) el.children.push(textNode(decodeEntities(src.slice(TOKEN.lastIndex, stop))));
       el.innerEnd = stop;

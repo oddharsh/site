@@ -535,13 +535,14 @@ export function renderAroundSnapshot(report) {
           ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
           : esc(r.title) || "<span class=dim>—</span>";
       const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
+      const host = new URL(r.url).host;
       return `
       <tr>
-        <td class="firm">${esc(r.name)}<div class="host">${esc(new URL(r.url).host)}</div></td>
+        <td class="firm">${esc(r.name)}<div class="host">${esc(host)}</div></td>
         <td class="status">${status}</td>
         <td class="title">${titleCol}${desc}</td>
         <td class="latency">${r.elapsedMs}ms</td>
-        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${new URL(r.url).host}, in a new tab`)}">↗</a></td>
+        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${host}, in a new tab`)}">↗</a></td>
       </tr>`;
     })
     .join("");

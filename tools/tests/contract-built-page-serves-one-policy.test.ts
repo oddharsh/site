@@ -160,21 +160,26 @@ test("a live answer that is not the document keeps its own headers", async () =>
 
 test("a diverted request skips the built file and the policy", async () => {
   const env = { ASSETS: stagedAssets(BUILT) };
-  const page = {
+  // The predicate closes over its request's URL, as the route handlers do with
+  // the one dispatch parsed.
+  const page = (request: Request) => ({
     headers: POLICY,
-    divert: (url) => (url.searchParams.get("q") ? new Response("results", { headers: { "content-type": "text/html", "cache-control": "no-store" } }) : null),
+    divert: () =>
+      new URL(request.url).searchParams.get("q") ? new Response("results", { headers: { "content-type": "text/html", "cache-control": "no-store" } }) : null,
     live: () => assert.fail("neither arm renders live here"),
-  };
-  const diverted = await serveBuiltPage(ask("/page?q=photos"), env, page);
+  });
+  const query = ask("/page?q=photos");
+  const diverted = await serveBuiltPage(query, env, page(query));
   assert.equal(await diverted.text(), "results");
   assert.equal(diverted.headers.get("cache-control"), "no-store", "a per-query answer does not take the shell's cache policy");
   assert.equal(diverted.headers.get("x-robots-tag"), null);
   assert.deepEqual(env.ASSETS.asked, [], "the built file was never asked for");
 
-  const plain = await serveBuiltPage(ask("/page"), env, page);
+  const bare = ask("/page");
+  const plain = await serveBuiltPage(bare, env, page(bare));
   assert.equal(plain.headers.get("content-encoding"), "br", "without the query the predicate declines and the document is served");
   // an async predicate that declines is awaited, not taken as truthy
-  const declined = await serveBuiltPage(ask("/page"), env, { ...page, divert: async () => null });
+  const declined = await serveBuiltPage(ask("/page"), env, { ...page(bare), divert: async () => null });
   assert.equal(declined.headers.get("content-encoding"), "br");
 });
 

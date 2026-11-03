@@ -299,7 +299,8 @@ export const LENS_GLOSSARY = {
 //             of a sentence through, which the naive version got wrong.
 const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
   .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
-  .sort((a, b) => b[1].length - a[1].length);
+  .sort((a, b) => b[1].length - a[1].length)
+  .map(([key, spelling]) => [key, new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)")] as const);
 
 // ONE LEFT-TO-RIGHT PASS OVER THE SOURCE, and that is the load-bearing part
 // rather than a style preference. The old version looped the terms and re-matched
@@ -326,9 +327,8 @@ export function glossify(escaped, only?) {
   let pos = 0;
   for (;;) {
     let best: { key: any; spelling: string; index: number; m: RegExpMatchArray } | null = null;
-    for (const [key, spelling] of pairs) {
+    for (const [key, re] of pairs) {
       if (seen.has(key)) continue; // one definition per string, not one per spelling
-      const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
       const m = src.slice(pos).match(re);
       if (!m) continue;
       const at = pos + m.index + m[1].length;
@@ -3903,8 +3903,13 @@ export function lensStripInline(h) {
   return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
 }
 
+// Built once per name: lensMarkdown asks for alt, src and href on every
+// <img> and <a> of a crawled page.
+const TAG_ATTR_RE = new Map<string, RegExp>();
 export function lensTagAttr(tag, name) {
-  const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i"));
+  let re = TAG_ATTR_RE.get(name);
+  if (!re) TAG_ATTR_RE.set(name, (re = new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")));
+  const m = String(tag).match(re);
   return m ? (m[2] ?? m[3] ?? m[4] ?? "") : "";
 }
 

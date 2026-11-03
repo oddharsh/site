@@ -228,7 +228,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // logged error and a 5xx as well as an uncaught throw.
     let response: Response;
     try {
-      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? (await route(request, env, ctx));
+      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? (await route(request, env, ctx, url));
     } catch (error) {
       console.error(`unhandled error on ${request.method} ${url.pathname}:`, error);
       response = serverError(request);
@@ -288,8 +288,9 @@ export function createDispatch(handlers: DispatchHandlers) {
     return withSecurityHeaders(response, url.pathname, { noindex: !isCanonicalHost(url.hostname) });
   }
 
-  async function route(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
+  // SELF_FETCH and the cron arrive without a parsed URL; serveWorkerRequest
+  // hands over the one it already holds.
+  async function route(request: SiteRequest, env: Env, ctx: ExecutionContext, url = new URL(request.url)) {
     // Preserve the legacy Cal subdomain while giving it a small, unlisted
     // work-calendar escape hatch. The bare host is public and goes to the
     // canonical booking page; only the exact secret slug redirects externally.

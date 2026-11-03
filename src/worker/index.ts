@@ -450,8 +450,8 @@ const { serveWorkerRequest, withSelfFetch } = createDispatch({
 // the page policy every generated document takes, and its slot list arrives
 // from /coffee/slots.html, which cal still renders per request. Where no bake is
 // staged (bun run dev serves the unbuilt tree) cal renders the same shell.
-async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/coffee") {
+async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/coffee") {
     return serveBuiltPage(request, env, {
       headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" },
       live: () => calWorker.fetch(request, env, ctx),
@@ -506,7 +506,7 @@ async function routeCalHost(request: SiteRequest, env: Env, ctx: ExecutionContex
 
   // Keep the existing legacy Cal endpoint behavior for /coffee, /slots, and
   // signed host actions while the alias remains a separate exact path.
-  return routeCoffee(request, env, ctx);
+  return routeCoffee(request, env, ctx, url);
 }
 
 function noStoreRedirect(location) {
@@ -611,8 +611,7 @@ function isResolvedCalendarUrl(href) {
 // object init, which drops encodeBody on a precompressed body and double-encodes
 // it (gotcha 13). A flash ?msg= view, a HEAD and every other path stay live, and so
 // does local dev, where no bake is staged and the build map has no entry.
-async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  const url = new URL(request.url);
+async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   // The readable twin of a built page here (/serendipity/mcp-info.src.html),
   // which that page's own first line names as its View Source. This prefix wins
   // before the generic "/<path>.src.<ext>" row, and handleSerendipity has no
@@ -766,10 +765,10 @@ function routeDyno(request: SiteRequest, env: Env) {
 // owner's ?refresh=KEY view renders live and whole, because its banner belongs
 // to the request that asked for the sweep. /inbox is the same shape, and its
 // route lives in inbox.ts so the contract suite can call it (gotcha 16).
-function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   return serveBuiltPage(request, env, {
     headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" },
-    divert: (url) => (url.searchParams.has("refresh") ? handleCensus(request, env, ctx) : null),
+    divert: () => (url.searchParams.has("refresh") ? handleCensus(request, env, ctx) : null),
     live: () => renderCensusPage(),
   });
 }
@@ -785,8 +784,8 @@ function routeLedger(request: SiteRequest, env: Env) {
 // overwrites this colo's cached snapshot before the shell goes out, so the
 // island the shell then fetches is the new crawl. A wrong or absent secret does
 // nothing and the static page is served as usual.
-async function routeAround(request: SiteRequest, env: Env) {
-  if (new URL(request.url).searchParams.has("bust")) {
+async function routeAround(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  if (url.searchParams.has("bust")) {
     const busted = await refreshAroundSnapshot(request, env);
     try {
       await busted?.body?.cancel();
@@ -919,8 +918,7 @@ function routeImagesMeta(request: SiteRequest, env: Env) {
 // everyone else. The plain asset, because the dcz and q11 bodies
 // serveStaticPage hands back are already compressed and a rewriter can't read
 // them. Workers Cache never sees these requests (lib/cache.ts bails on them).
-async function ogVideoPage(request: SiteRequest, env: Env): Promise<Response | null> {
-  const url = new URL(request.url);
+async function ogVideoPage(request: SiteRequest, env: Env, url: URL): Promise<Response | null> {
   const video = request.method === "GET" ? ogVideoFor(url.pathname, request.headers.get("user-agent")) : null;
   if (!video) return null;
   const page = await env.ASSETS.fetch(new Request(url.toString(), { headers: { "accept-encoding": "identity" } }));
@@ -928,8 +926,8 @@ async function ogVideoPage(request: SiteRequest, env: Env): Promise<Response | n
   return page;
 }
 
-async function routeStaticPage(request: SiteRequest, env: Env) {
-  return (await ogVideoPage(request, env)) ?? serveStaticPage(request, env);
+async function routeStaticPage(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return (await ogVideoPage(request, env, url)) ?? serveStaticPage(request, env);
 }
 
 function routeShellAsset(request: SiteRequest, env: Env) {
@@ -1036,9 +1034,9 @@ const HOMEPAGE_HEADERS = {
 // CACHEABLE_PATHS (routes.ts) and the predicate admits HEAD, so a plain HEAD is
 // answered from the stored GET entry; only the MARKDOWN head, which bails the
 // cache, ever reached the duplicate.
-async function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+async function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
-  const video = await ogVideoPage(request, env);
+  const video = await ogVideoPage(request, env, url);
   if (video) return video;
   // warm the grid fragment's two memoised maps behind the document (home.ts says why)
   ctx.waitUntil(warmGridData(env));

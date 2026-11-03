@@ -2675,10 +2675,13 @@ const cleanVal = (raw) => {
   if (!s || s.length < 3 || /^(unknown|n\/?a|none)$/i.test(s) || GARBAGE.has(s.toLowerCase())) return null;
   return s;
 };
+const fieldLine = (k: string) => new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im");
+const STRUCTURED_KV = /^\s*(?:ROLE|COMPANY|LOCATION|PAST|BIO)\s*:/im;
+const STRUCTURED_LINE = { ROLE: fieldLine("ROLE"), COMPANY: fieldLine("COMPANY"), LOCATION: fieldLine("LOCATION"), PAST: fieldLine("PAST") };
+const STEALTH_LINE = { Domain: fieldLine("Domain"), Thesis: fieldLine("Thesis"), Signal: fieldLine("Signal") };
 function parseStructured(text) {
   if (!text) return { role: null, company: null, location: null, bio: null, work_history: [] };
-  const KV = new RegExp(`^\\s*(?:ROLE|COMPANY|LOCATION|PAST|BIO)\\s*:`, "im");
-  const m = KV.exec(text);
+  const m = STRUCTURED_KV.exec(text);
   const proseEnd = m ? m.index : text.length;
   let bio =
     text
@@ -2689,8 +2692,8 @@ function parseStructured(text) {
       .replace(/\s+/g, " ")
       .trim() || null;
   const kv = m ? text.slice(proseEnd) : "";
-  const line = (k) => {
-    const lm = kv.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+  const line = (k: keyof typeof STRUCTURED_LINE) => {
+    const lm = kv.match(STRUCTURED_LINE[k]);
     return cleanVal(lm?.[1]);
   };
   const role = line("ROLE"),
@@ -2708,8 +2711,8 @@ function parseStructured(text) {
 }
 function parseStealth(text) {
   if (!text) return { domain: null, thesis: null, signal: null };
-  const line = (k) => {
-    const m = text.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+  const line = (k: keyof typeof STEALTH_LINE) => {
+    const m = text.match(STEALTH_LINE[k]);
     if (!m) return null;
     const v = m[1].replace(/^["']|["']$/g, "").trim();
     return !v || /^unknown$/i.test(v) || /^n\/?a$/i.test(v) ? null : v;
