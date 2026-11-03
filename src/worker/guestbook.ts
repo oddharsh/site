@@ -148,6 +148,10 @@ export const INSERT_SQL = `INSERT OR IGNORE INTO ${TABLE}
   WHERE (SELECT count(*) FROM ${TABLE} WHERE day = ?1) < ?14
   RETURNING id`;
 
+// The columns rowToEntry reads, and no others: `day` exists for the UNIQUE key
+// and the daily cap, and no reader shows it.
+const ENTRY_COLUMNS = "id, at, name, purpose, tools, note, ip, user_agent, asn, network, country, verified_bot, signature_agent";
+
 export function rowToEntry(r: Record<string, unknown>): Entry {
   let tools: string[] = [];
   try {
@@ -182,7 +186,7 @@ export async function readEntries(env): Promise<Read> {
   const db = env.SOCIAL_DB;
   if (!db) return { state: "unbound", entries: [] };
   try {
-    const { results } = await db.prepare(`SELECT * FROM ${TABLE} ORDER BY id DESC LIMIT ?`).bind(SHOWN).all();
+    const { results } = await db.prepare(`SELECT ${ENTRY_COLUMNS} FROM ${TABLE} ORDER BY id DESC LIMIT ?`).bind(SHOWN).all();
     return { state: "ok", entries: (results || []).map(rowToEntry) };
   } catch (e) {
     if (/no such table/i.test(String(e?.message || e))) return { state: "ok", entries: [] };
@@ -265,10 +269,10 @@ async function sign(request: Request, env) {
 }
 
 /** The route: the page on GET, a signature on POST. */
-export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext) {
+export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext, url = new URL(request.url)) {
   if (request.method === "POST") return sign(request, env);
   if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET the page or POST a signature" }, 405, { allow: "GET, HEAD, POST" });
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK },
     live: () => renderGuestbookPage(),
   });

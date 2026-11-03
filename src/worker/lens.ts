@@ -299,7 +299,8 @@ export const LENS_GLOSSARY = {
 //             of a sentence through, which the naive version got wrong.
 const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
   .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
-  .sort((a, b) => b[1].length - a[1].length);
+  .sort((a, b) => b[1].length - a[1].length)
+  .map(([key, spelling]) => [key, new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)")] as const);
 
 // ONE LEFT-TO-RIGHT PASS OVER THE SOURCE, and that is the load-bearing part
 // rather than a style preference. The old version looped the terms and re-matched
@@ -326,9 +327,8 @@ export function glossify(escaped, only?) {
   let pos = 0;
   for (;;) {
     let best: { key: any; spelling: string; index: number; m: RegExpMatchArray } | null = null;
-    for (const [key, spelling] of pairs) {
+    for (const [key, re] of pairs) {
       if (seen.has(key)) continue; // one definition per string, not one per spelling
-      const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
       const m = src.slice(pos).match(re);
       if (!m) continue;
       const at = pos + m.index + m[1].length;
@@ -414,8 +414,7 @@ export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./le
 // /lens/fetch, so no-JS visitors still get a useful result. The empty shell is
 // keyed on the bare path and remains cacheable; targeted inspections are
 // private because they spend the crawler budget and contain third-party data.
-export async function handleLens(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleLens(request, env, ctx, url = new URL(request.url)) {
   const target = url.searchParams.get("url");
   const vs = url.searchParams.get("vs");
   if (target && vs) {
@@ -431,7 +430,7 @@ export async function handleLens(request, env, ctx) {
     return response;
   }
   if (target) {
-    const result = await inspectLensRequest(request, env, ctx);
+    const result = await inspectLensRequest(request, env, ctx, url);
     const response = renderLensShell(result.payload, lensState(url), target);
     response.headers.set("cache-control", "no-store, must-revalidate");
     response.headers.set("x-content-type-options", "nosniff");
@@ -441,7 +440,7 @@ export async function handleLens(request, env, ctx) {
   // Keep a route-local shell key: the production runtime may not expose
   // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
   // the edge cache while the separately served lens.js has already changed.
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env);
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env, url);
 }
 
 // One label per lens, shared by the SSR tabs, the SSR machine header, and the
@@ -804,8 +803,8 @@ export const LENS_INSPECT = defineLens({
   }),
 });
 
-async function inspectLensRequest(request, env, ctx) {
-  const params = new URL(request.url).searchParams;
+async function inspectLensRequest(request, env, ctx, url = new URL(request.url)) {
+  const params = url.searchParams;
   // ?phases=page returns only what derives from the page's own bytes: one
   // subrequest instead of twenty-eight. The UI asks for this first so readiness
   // paints at ~29ms rather than behind a 656ms fan-out, then asks for the rest.
@@ -1845,11 +1844,11 @@ footer a { color:var(--link); }
 }
 
 // /lens/fetch?url=… → the stable machine-facing JSON contract.
-export async function handleLensFetch(request, env, ctx) {
-  if (new URL(request.url).searchParams.get("mode") === "cloudflare") {
-    return handleLensCloudflareScore(request, env, ctx);
+export async function handleLensFetch(request, env, ctx, url = new URL(request.url)) {
+  if (url.searchParams.get("mode") === "cloudflare") {
+    return handleLensCloudflareScore(request, env, ctx, url);
   }
-  const result = await inspectLensRequest(request, env, ctx);
+  const result = await inspectLensRequest(request, env, ctx, url);
   return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
@@ -1933,8 +1932,8 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
   onThrow: () => ({ status: 200, payload: { ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." } }),
 });
 
-export function handleLensCloudflareScore(request, env, ctx) {
-  return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx);
+export function handleLensCloudflareScore(request, env, ctx, url = new URL(request.url)) {
+  return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx, url);
 }
 
 // How long a render waits for the page to settle, shared by /lens/shot and
@@ -2044,8 +2043,8 @@ const LENS_SHOT = defineLens({
   },
 });
 
-export function handleLensShot(request, env, ctx) {
-  return LENS_SHOT.handle(request, env, ctx);
+export function handleLensShot(request, env, ctx, url = new URL(request.url)) {
+  return LENS_SHOT.handle(request, env, ctx, url);
 }
 
 // Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an
@@ -2271,15 +2270,15 @@ const LENS_BROWSER = defineLens({
   },
 });
 
-export async function handleLensBrowser(request, env, ctx) {
+export async function handleLensBrowser(request, env, ctx, url = new URL(request.url)) {
   // The published allowlist, answered without a url and without a render, so
   // anyone can read exactly what this route is willing to run before they let
   // it run anything. Same route rather than a new one: run_worker_first is
   // capped at 100 rules and a query parameter costs none of them.
-  if (new URL(request.url).searchParams.has("recipes")) {
+  if (url.searchParams.has("recipes")) {
     return jsonResponse({ ok: true, recipes: lensRecipeCatalog() });
   }
-  return LENS_BROWSER.handle(request, env, ctx);
+  return LENS_BROWSER.handle(request, env, ctx, url);
 }
 
 // X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
@@ -2479,8 +2478,7 @@ export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
     : lensStatusPayload(o);
 }
 
-export async function handleLensCompare(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleLensCompare(request, env, ctx, url = new URL(request.url)) {
   const result = await compareLensRequest(request, env, ctx, url.searchParams.get("left"), url.searchParams.get("right"));
   return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
@@ -3903,8 +3901,13 @@ export function lensStripInline(h) {
   return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
 }
 
+// Built once per name: lensMarkdown asks for alt, src and href on every
+// <img> and <a> of a crawled page.
+const TAG_ATTR_RE = new Map<string, RegExp>();
 export function lensTagAttr(tag, name) {
-  const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i"));
+  let re = TAG_ATTR_RE.get(name);
+  if (!re) TAG_ATTR_RE.set(name, (re = new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")));
+  const m = String(tag).match(re);
   return m ? (m[2] ?? m[3] ?? m[4] ?? "") : "";
 }
 

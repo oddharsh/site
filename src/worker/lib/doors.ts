@@ -93,6 +93,7 @@ const CATALOG_CAP = 256 * 1024;
 
 // A version header some servers require and others refuse. See the call site.
 const PROTOCOL_HEADER = "mcp-protocol-version";
+const PROTOCOL_HEADER_NAMED = new RegExp(PROTOCOL_HEADER.replace(/-/g, "[- ]?"), "i");
 
 /**
  * Did the server refuse us for want of the version HEADER specifically?
@@ -105,7 +106,7 @@ const PROTOCOL_HEADER = "mcp-protocol-version";
 export function wantsProtocolHeader(payload) {
   const error = payload && payload.error;
   if (!error || error.code !== ERR_HEADER_MISMATCH) return false;
-  return new RegExp(PROTOCOL_HEADER.replace(/-/g, "[- ]?"), "i").test(String(error.message || ""));
+  return PROTOCOL_HEADER_NAMED.test(String(error.message || ""));
 }
 
 /**
@@ -597,8 +598,7 @@ export function classifyDoor(probe, wanted) {
  * on lensFetch enforcing them again underneath.
  */
 export async function readDoors(target, env) {
-  const origin = new URL(target).origin;
-  const hostname = new URL(target).hostname;
+  const { origin, hostname } = new URL(target);
   // The origin-level doors come from lens's CACHED discovery rather than being
   // re-probed here. This module originally fetched llms.txt, the agent card and
   // the api-catalog itself, which duplicated four of lens's probes —

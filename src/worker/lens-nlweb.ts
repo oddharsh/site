@@ -54,8 +54,7 @@ const LENS_NLWEB = defineLens({
   // exists to prevent.
   cache: { prefix: "lens:nlweb:", ttl: NLWEB_CACHE_SECONDS, key: (url, { query }) => new URL(url).origin + "\n" + query },
   run: async ({ target, args: { query }, env, span: s }) => {
-    const origin = new URL(target).origin;
-    const host = new URL(origin).hostname;
+    const { origin, hostname: host } = new URL(target);
     const probe = await foreignNlwebAsk(origin, env, { query });
 
     if (!probe.ok) {
@@ -88,6 +87,6 @@ const LENS_NLWEB = defineLens({
   },
 });
 
-export function handleLensNlweb(request, env, ctx?) {
-  return LENS_NLWEB.handle(request, env, ctx);
+export function handleLensNlweb(request, env, ctx?, url = new URL(request.url)) {
+  return LENS_NLWEB.handle(request, env, ctx, url);
 }

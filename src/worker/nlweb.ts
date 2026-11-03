@@ -371,8 +371,7 @@ function streamAnswer(payload, structured) {
   );
 }
 
-export async function handleAsk(request, env) {
-  const url = new URL(request.url);
+export async function handleAsk(request, env, _ctx?, url = new URL(request.url)) {
   if (!["GET", "POST", "HEAD"].includes(request.method)) {
     return jsonResponse({ error: "method not allowed", allow: ["GET", "POST"] }, 405, { allow: "GET, POST, HEAD" });
   }

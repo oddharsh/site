@@ -578,8 +578,7 @@ export const CENSUS_CSS = `/*min*/
 // sweep now, so the first snapshot doesn't have to wait for the weekly cron.
 // index.ts diverts only a ?refresh request here; the plain page is the built
 // shell below.
-export async function handleCensus(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleCensus(request, env, ctx, url = new URL(request.url)) {
   const refresh = url.searchParams.get("refresh");
   let banner = html``;
   if (refresh) {

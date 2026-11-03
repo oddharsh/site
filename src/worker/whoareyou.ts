@@ -110,10 +110,9 @@ export async function fetchRdap(ip) {
 // gather everything one HTTP request revealed: the cf.* edge signals, the
 // request headers, a parsed UA, and the (optional, cached) RDAP enrichment.
 // shared by the /whoareyou page and the /whoareyou.json popout feed.
-export async function gatherWhoareyou(request, ctx) {
+export async function gatherWhoareyou(request, ctx, url = new URL(request.url)) {
   const cf = request.cf || {};
   const h = request.headers;
-  const url = new URL(request.url);
 
   const bm = cf.botManagement || {};
   const data = {
@@ -275,8 +274,8 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
   ];
 }
 
-export async function handleWhoareyouJson(request, env, ctx) {
-  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
+export async function handleWhoareyouJson(request, env, ctx, url = new URL(request.url)) {
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx, url);
   const version = env?.CF_VERSION_METADATA?.id;
   // `build` is the same facts as the Server group, for a reader that wants them
   // without walking the groups. Null when there is neither a version binding nor
@@ -437,8 +436,8 @@ export function renderWhoareyouValues(data, ua, rdap) {
 }
 
 // The island. Everything in it is this one request's, so it is never cached.
-export async function handleWhoareyouValues(request, env, ctx) {
-  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
+export async function handleWhoareyouValues(request, env, ctx, url = new URL(request.url)) {
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx, url);
   return islandResponse(renderWhoareyouValues(data, ua, rdap), {
     "referrer-policy": "strict-origin-when-cross-origin",
   });

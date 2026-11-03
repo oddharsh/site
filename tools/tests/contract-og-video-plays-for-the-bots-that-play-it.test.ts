@@ -20,6 +20,9 @@ import { OG_VIDEOS, ogVideoFor, parseRange, serveOgVideo, withOgVideo } from "..
 import { CACHEABLE_PATHS, claimedByWorker } from "../../src/worker/routes.ts";
 import { OG_PAGE_DIRS } from "../photos/og-pages.ts";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const cacheableAt = (request: Request, paths) => shouldUseWorkersCache(request, paths, new URL(request.url));
+
 const read = (rel: string) => readFileSync(new URL(rel, ROOT));
 const PAGE = "/garage/encoding";
 
@@ -150,11 +153,11 @@ test("both page handlers ask for a clip before they take the static path", () =>
 test("Workers Cache lets a clip request by, and only that one", () => {
   const req = (ua: string) => new Request("https://aadhar.sh/", { headers: { "user-agent": ua } });
   assert.ok(CACHEABLE_PATHS.has("/"), "the homepage left the cache; this test can't see the bail any more");
-  assert.equal(shouldUseWorkersCache(req(UA.discord), CACHEABLE_PATHS), false, "a cache hit would hand Discord the plain page");
-  assert.equal(shouldUseWorkersCache(req(UA.iMessage), CACHEABLE_PATHS), false);
+  assert.equal(cacheableAt(req(UA.discord), CACHEABLE_PATHS), false, "a cache hit would hand Discord the plain page");
+  assert.equal(cacheableAt(req(UA.iMessage), CACHEABLE_PATHS), false);
   // control: a person, and a bot that gets no clip, still take the cache
-  assert.equal(shouldUseWorkersCache(req(UA.safari), CACHEABLE_PATHS), true);
-  assert.equal(shouldUseWorkersCache(req(UA.slack), CACHEABLE_PATHS), true);
+  assert.equal(cacheableAt(req(UA.safari), CACHEABLE_PATHS), true);
+  assert.equal(cacheableAt(req(UA.slack), CACHEABLE_PATHS), true);
 });
 
 // The homepage's og:image is its clip's first frame, written by bake.ts. A

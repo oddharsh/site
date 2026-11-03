@@ -257,8 +257,8 @@ function artAttrs(kind: "track" | "artist", rawUrl): Html {
   return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
-export function handleRnArt(request, env, ctx) {
-  return rnArt(request, env, ctx, {});
+export function handleRnArt(request, env, ctx, url = new URL(request.url)) {
+  return rnArt(request, env, ctx, {}, url);
 }
 
 // `budget` is the art warm's ledger, charged at the moment each call is made:
@@ -268,9 +268,8 @@ export function handleRnArt(request, env, ctx) {
 // last unit. A URL the ledger cannot afford answers `x-art-cache: skipped`.
 // A separate export for the same reason as rnTracksHtml: the router passes the
 // request URL in the fourth slot.
-export async function rnArt(request, env, ctx, opts: { budget?: Budget }) {
+export async function rnArt(request, env, ctx, opts: { budget?: Budget }, url = new URL(request.url)) {
   const skipped = () => new Response(null, { status: 503, headers: { "cache-control": "no-store", "x-art-cache": "skipped" } });
-  const url = new URL(request.url);
   const m = ART_PATH.exec(url.pathname);
   if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
   const [, hash, widthRaw, , ext] = m;
@@ -540,13 +539,11 @@ function trackResponse(payload, status = 200, format = "json") {
 // apart from "no playlist configured" apart from "Spotify refused the scrape",
 // and the second homepage fragment going quiet is exactly the kind of thing that
 // otherwise gets noticed by eye, weeks later.
-async function loadRnTracks(request, env, ctx) {
-  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s));
+async function loadRnTracks(request, env, ctx, url = new URL(request.url)) {
+  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s, url));
 }
 
-async function loadRnTracksInner(request, env, ctx, s) {
-  const url = new URL(request.url);
-
+async function loadRnTracksInner(request, env, ctx, s, url: URL) {
   if (!env.RN_KV) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
@@ -588,12 +585,12 @@ async function loadRnTracksInner(request, env, ctx, s) {
 
 // `/rn/tracks` is the stable machine contract. Keep its representation fixed
 // so callers do not need to negotiate against a browser-oriented HTML shape.
-export async function handleRnTracks(request, env, ctx) {
+export async function handleRnTracks(request, env, ctx, url = new URL(request.url)) {
   // A KV throw used to escape as Cloudflare's HTML 1101 page from the
   // machine-facing contract. It answers in the endpoint's own error shape.
   let result;
   try {
-    result = await loadRnTracks(request, env, ctx);
+    result = await loadRnTracks(request, env, ctx, url);
   } catch (e) {
     console.error("rn/tracks: load failed", e);
     return trackResponse({ error: "playlist read failed", code: "storage_unavailable", tracks: [] }, 503, "json");
@@ -633,12 +630,12 @@ export async function handleRnTracks(request, env, ctx) {
 // the 2026-09-27 15:07 tick: `outcome: exception`, 14 x "Too many subrequests",
 // 3 tracks and 6 artists stuck pending. Warming the cron's colo also bought
 // nothing, since the warm exists for the colo about to serve a hover.
-export function handleRnTracksHtml(request, env, ctx) {
-  return rnTracksHtml(request, env, ctx, { warm: true });
+export function handleRnTracksHtml(request, env, ctx, url = new URL(request.url)) {
+  return rnTracksHtml(request, env, ctx, { warm: true }, url);
 }
 
-export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
-  const result = await loadRnTracks(request, env, ctx);
+export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }, url = new URL(request.url)) {
+  const result = await loadRnTracks(request, env, ctx, url);
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(
@@ -746,9 +743,9 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 // the cacheable representation of the pair (the negotiated /rn response is
 // no-store, because the edge keys on URL and not on Accept), and it rides the
 // same SWR payload, so answering it costs a KV read.
-export async function handleRnMarkdown(request, env, ctx) {
-  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
-  const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+export async function handleRnMarkdown(request, env, ctx, url = new URL(request.url)) {
+  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx, url), playlistUrl(env)]);
+  const negotiated = wantsMarkdown(request) && !url.pathname.endsWith(".md");
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
   const headers: Record<string, string> = {
@@ -1297,8 +1294,7 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
 // ── /rn/admin handler ───────────────────────────────────────────────
 // renders the bookmark-friendly form. requires ?secret=<RN_BUST_SECRET>.
 // the form posts to /rn/set so the actual write logic stays in one place.
-export async function handleRnAdmin(request, env) {
-  const url = new URL(request.url);
+export async function handleRnAdmin(request, env, _ctx?, url = new URL(request.url)) {
   const secret = url.searchParams.get("secret") || "";
 
   if (!secretMatches(secret, env.RN_BUST_SECRET)) {
@@ -1340,8 +1336,7 @@ export async function handleRnAdmin(request, env) {
 //   POST /rn/set  with secret+url in form-encoded body  (the admin form)
 //   POST /rn/set  with secret+url as JSON               (programmatic)
 // returns the same tiny period-correct confirmation page in all cases.
-export async function handleRnSet(request, env) {
-  const url = new URL(request.url);
+export async function handleRnSet(request, env, _ctx?, url = new URL(request.url)) {
   const params = await readParams(request, url);
   const secret = params.get("secret") || "";
   const target = params.get("url") || "";
