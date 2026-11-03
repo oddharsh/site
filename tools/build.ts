@@ -48,6 +48,7 @@ import { spliceMinLiterals } from "./lib/css-literal.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
+import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
 import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
@@ -886,10 +887,11 @@ phase("1 stage");
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
 //
-// Which roots, in what order, and which three paths under public/ are left out
-// because steps 1a and 1a2 DERIVE them (images/meta, exif.json and
-// fingerprints.json) is tools/lib/served-tree.ts's declaration. checkInvariants
-// planned the tree from it, and local dev symlinks the same plan.
+// Which roots, in what order, and which four paths under public/ are left out
+// because steps 1a and 1a2 DERIVE them (images/meta, exif.json,
+// fingerprints.json and photo-search.bin) is tools/lib/served-tree.ts's
+// declaration. checkInvariants planned the tree from it, and local dev
+// symlinks the same plan.
 //
 // The plan proves that the five served roots do not contend for a destination
 // file, but directories are intentionally shared: public/ and src/pages/ both
@@ -1033,7 +1035,18 @@ phase("1a photo indexes");
     throw new Error(`image fingerprints: only ${tiers} tiers digested (expected 400+) — is public/images/hashes.json readable and whole?`);
   }
   await writeFile(`${OUT}/public/images/fingerprints.json`, serializeFingerprints(index));
-  console.log(`photo indexes: exif.json ${stems.length} stems, fingerprints.json ${tiers} tiers across ${photos} photos`);
+
+  // The photo query's ranking index (src/worker/lib/photo-search.ts). Baked here
+  // because building it inside an isolate cost what it saved: 3.00 ms against
+  // 3.02 ms for a cold query on 2026-11-03, where decoding this file took 0.77 ms.
+  const [metadata, alt, semantics] = await Promise.all(
+    ["metadata", "alt", "semantics"].map(async (name) => JSON.parse(await readFile(`public/images/${name}.json`, "utf8"))),
+  );
+  const search = encodePhotoSearchIndex(buildPhotoSearchIndex(metadata, alt, semantics));
+  await writeFile(`${OUT}/public/images/photo-search.bin`, search);
+  console.log(
+    `photo indexes: exif.json ${stems.length} stems, fingerprints.json ${tiers} tiers across ${photos} photos, photo-search.bin ${search.length} bytes`,
+  );
 }
 
 // 1a2) /images/meta/<stem>.json, DERIVED rather than copied.
