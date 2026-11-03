@@ -98,7 +98,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -125,7 +126,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -158,7 +160,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -177,7 +180,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -204,7 +208,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -239,7 +244,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -272,7 +278,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -303,7 +310,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -335,7 +343,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": true
       }
     },
     {
@@ -354,7 +363,8 @@
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "untrustedContentHint": false
       }
     }
   ]

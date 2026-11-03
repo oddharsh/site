@@ -65,6 +65,10 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
 // tools landed, and would have kept passing while advertising a tool that writes
 // a D1 row as read-only.
 const MCP_WRITE_TOOLS = new Set(["representation_capture", "representation_compare"]);
+// The tools whose output is only this origin's own text, so they carry
+// `untrustedContentHint: false`. Listed here rather than imported, so a tool
+// added to the untrusted set by mistake, or left out of it, fails below.
+const OWN_TEXT_TOOLS = new Set(["ask", "search_site", "photo_query", "coffee_availability", "image_compare", "photo_recipe", "photos", "radar"]);
 
 test("MCP tools publish honest client metadata for calling and WebMCP", async () => {
   const response = await handleSiteMcp(
@@ -90,6 +94,7 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
         destructiveHint: false,
         idempotentHint: !writes,
         openWorldHint: tool.annotations.openWorldHint,
+        untrustedContentHint: !OWN_TEXT_TOOLS.has(tool.name),
       },
       `${tool.name} annotations must be explicit`,
     );
