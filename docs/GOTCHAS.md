@@ -870,3 +870,15 @@ skips it.
     so ignored trees stay out) or pass `git grep --untracked`. A scan that
     truly means the index takes a `tracked-only:` comment saying why.
     Checked by: `tools/tests/contract-git-scans-see-untracked-files.test.ts`, `tools/controls.ts`.
+
+92. **An Intl object built at module scope is paid by every cold start.**
+    Constructing an `Intl.Segmenter`, `DateTimeFormat` or any other Intl
+    formatter loads ICU data. At module scope that cost runs when the isolate
+    starts, for every route, not when the one request that needs it arrives.
+    `guestbook.ts`'s `const GRAPHEMES = new Intl.Segmenter()` (#1481) was
+    18.7 ms of self time in a 58 ms node startup of the bundle; built on
+    first use, startup's median fell to 37.8 ms (15 interleaved runs each,
+    2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
+    Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
+    `reading.ts` and `serendipity.ts` already did.
+    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
