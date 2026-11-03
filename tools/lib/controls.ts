@@ -223,10 +223,11 @@ export const CONTROLS: Control[] = [
   // on a preview URL or a replayed 0-RTT GET.
   {
     id: "encodebody-dropped-in-workerd",
-    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body on the image bail is brotli twice",
+    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body is brotli twice",
     gotcha: 13,
-    // The noindex carry, not the main one: the main rebuild sets the flag again
-    // for HTML, so only the svg row (which bails before it) can see this carry go.
+    // The noindex carry, not the main one. A Worker-built response is stamped in
+    // place after it, so nothing sets the flag again and the html noindex row is
+    // the first to see this carry go (the svg row sees it on the image bail).
     mutations: [
       {
         file: "src/worker/lib/security.ts",
@@ -235,7 +236,7 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
-    expect: /the noindex rebuild double-encoded a body that then took the image bail/,
+    expect: /the noindex rebuild double-encoded a precompressed body/,
   },
   {
     id: "encodebody-dropped-at-a-call-site",
@@ -333,6 +334,32 @@ export const CONTROLS: Control[] = [
     expect: /POST \/a-route-invented-tomorrow must be refused on a preview/,
   },
   {
+    id: "gloss-pass-cached-without-the-marked-terms",
+    plants: "glossify's alternation cache keys on `only` alone, so a pass built before any term was marked keeps matching marked terms",
+    mutations: [
+      {
+        file: "src/worker/lens.ts",
+        find: '  const id = (only ? only.join(",") : "*") + "|" + [...seen].sort().join(",");\n',
+        replace: '  const id = only ? only.join(",") : "*";\n',
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /glossify marks each term once, longest spelling first, and honours `only`/,
+  },
+  {
+    id: "robots-matcher-shared-across-rules",
+    plants: "the robots matcher cache keys on nothing, so every rule tests the first rule's pattern",
+    mutations: [
+      {
+        file: "src/worker/lib/robots.ts",
+        find: "  let match = RULE_MATCHERS.get(rule);\n  if (!match) RULE_MATCHERS.set(rule, (match = compilePattern(rule.pattern)));\n",
+        replace: "  let match = RULE_MATCHERS.get(RULE_MATCHERS);\n  if (!match) RULE_MATCHERS.set(RULE_MATCHERS, (match = compilePattern(rule.pattern)));\n",
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /one parsed robots.txt answers every path and bot by its own rules/,
+  },
+  {
     id: "route-reparses-the-request-url",
     plants: "serveWorkerRequest parses request.url again instead of taking the URL the entry already parsed",
     mutations: [
@@ -344,6 +371,20 @@ export const CONTROLS: Control[] = [
     ],
     run: contract("contract-the-dispatch-pipeline"),
     expect: /a request handed its URL is not parsed again on the way to its handler/,
+  },
+  {
+    id: "intl-object-built-at-module-scope",
+    plants: "guestbook.ts builds its Intl.Segmenter at module scope again, so ICU loads on every isolate's startup",
+    gotcha: 92,
+    mutations: [
+      {
+        file: "src/worker/guestbook.ts",
+        find: "let graphemes: Intl.Segmenter | undefined;\n",
+        replace: "let graphemes: Intl.Segmenter | undefined = new Intl.Segmenter();\n",
+      },
+    ],
+    run: contract("contract-no-intl-object-at-module-scope"),
+    expect: /importing every Worker module builds no Intl object/,
   },
   {
     id: "preview-guard-dropped-from-dispatch",

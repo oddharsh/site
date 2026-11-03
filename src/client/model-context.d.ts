@@ -27,11 +27,13 @@ interface RegisteredModelContextTool {
    */
   inputSchema: string;
   /**
-   * Chrome keeps `readOnlyHint` and silently discards `destructiveHint`,
-   * `idempotentHint` and `openWorldHint`. It adds `untrustedContentHint`, which
-   * is not part of the MCP annotation set. Passing all five returns two.
+   * The spec's `ToolAnnotations`. Chrome silently discards MCP's
+   * `destructiveHint`, `idempotentHint` and `openWorldHint`. Chrome 152 kept
+   * only `readOnlyHint` and `untrustedContentHint`; 156 and Canary 159 also keep
+   * `consequentialHint` and `debugging` (measured 2026-11-03). A tool
+   * registered with no annotations reads back with this member absent.
    */
-  annotations: { readOnlyHint?: boolean; untrustedContentHint?: boolean };
+  annotations?: { readOnlyHint?: boolean; untrustedContentHint?: boolean; consequentialHint?: boolean; debugging?: boolean };
   /** Separate from `annotations.title`, which does not survive registration. */
   title: string;
   /** The origin that registered it, so cross-frame provenance is readable. */
