@@ -333,6 +333,32 @@ export const CONTROLS: Control[] = [
     expect: /POST \/a-route-invented-tomorrow must be refused on a preview/,
   },
   {
+    id: "gloss-pass-cached-without-the-marked-terms",
+    plants: "glossify's alternation cache keys on `only` alone, so a pass built before any term was marked keeps matching marked terms",
+    mutations: [
+      {
+        file: "src/worker/lens.ts",
+        find: '  const id = (only ? only.join(",") : "*") + "|" + [...seen].sort().join(",");\n',
+        replace: '  const id = only ? only.join(",") : "*";\n',
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /glossify marks each term once, longest spelling first, and honours `only`/,
+  },
+  {
+    id: "robots-matcher-shared-across-rules",
+    plants: "the robots matcher cache keys on nothing, so every rule tests the first rule's pattern",
+    mutations: [
+      {
+        file: "src/worker/lib/robots.ts",
+        find: "  let match = RULE_MATCHERS.get(rule);\n  if (!match) RULE_MATCHERS.set(rule, (match = compilePattern(rule.pattern)));\n",
+        replace: "  let match = RULE_MATCHERS.get(RULE_MATCHERS);\n  if (!match) RULE_MATCHERS.set(RULE_MATCHERS, (match = compilePattern(rule.pattern)));\n",
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /one parsed robots.txt answers every path and bot by its own rules/,
+  },
+  {
     id: "route-reparses-the-request-url",
     plants: "serveWorkerRequest parses request.url again instead of taking the URL the entry already parsed",
     mutations: [
