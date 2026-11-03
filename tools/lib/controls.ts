@@ -373,6 +373,20 @@ export const CONTROLS: Control[] = [
     expect: /a request handed its URL is not parsed again on the way to its handler/,
   },
   {
+    id: "intl-object-built-at-module-scope",
+    plants: "guestbook.ts builds its Intl.Segmenter at module scope again, so ICU loads on every isolate's startup",
+    gotcha: 92,
+    mutations: [
+      {
+        file: "src/worker/guestbook.ts",
+        find: "let graphemes: Intl.Segmenter | undefined;\n",
+        replace: "let graphemes: Intl.Segmenter | undefined = new Intl.Segmenter();\n",
+      },
+    ],
+    run: contract("contract-no-intl-object-at-module-scope"),
+    expect: /importing every Worker module builds no Intl object/,
+  },
+  {
     id: "preview-guard-dropped-from-dispatch",
     plants: "the dispatcher stops calling the preview guard, so a POST on a preview URL reaches its handler",
     mutations: [

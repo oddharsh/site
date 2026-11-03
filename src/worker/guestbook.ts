@@ -77,14 +77,16 @@ export type Entry = Signature & Observed & { id: number; at: string };
 // and an agent writing the escaped form can land the raw characters instead
 // (Claude Code's tool input decodes them; bun fmt leaves escapes alone).
 const INVISIBLE = /[\p{Cc}\p{Bidi_Control}]/gu;
-const GRAPHEMES = new Intl.Segmenter();
+// Built on first use: constructing a Segmenter loads ICU break data, and at
+// module scope that ran on every isolate's startup (gotcha 92).
+let graphemes: Intl.Segmenter | undefined;
 
 /** Plain one-line text, capped; null when nothing is left. */
 export function clean(value: unknown, max: number): string | null {
   const s = asText(value, "").replace(INVISIBLE, " ").replace(/\s+/g, " ").trim();
   if (!s) return null;
   // Cut on grapheme boundaries, so a cap never splits an emoji or a flag in two.
-  return Array.from(GRAPHEMES.segment(s), (g) => g.segment)
+  return Array.from((graphemes ??= new Intl.Segmenter()).segment(s), (g) => g.segment)
     .slice(0, max)
     .join("");
 }
