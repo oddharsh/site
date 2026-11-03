@@ -338,7 +338,7 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 // (s-maxage=300).
 export const LINES_URL = LEDGER_LINES_URL;
 
-export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext, url = new URL(request.url)) {
   return cachedRender(
     request,
     ctx,
@@ -348,6 +348,7 @@ export function handleLedgerLines(request: SiteRequest, env: Env, ctx: Execution
     },
     LINES_URL,
     env,
+    url,
   );
 }
 

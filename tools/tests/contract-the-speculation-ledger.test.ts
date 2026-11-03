@@ -703,12 +703,14 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   // under plain node could reach it (gotcha 16). Moving it to lib/cache.js is what
   // makes this test possible, and the test is the point of the move.
   const { shouldUseWorkersCache } = await import("../../src/worker/lib/cache.ts");
+  // the Worker entry parses the URL once and hands it down
+  const cacheableAt = (request: Request, paths) => shouldUseWorkersCache(request, paths, new URL(request.url));
   const PATHS = new Set(["/", "/bot", "/lens", "/reading"]);
   const req = (url, headers: Record<string, any> = {}) => new Request(url, { headers });
 
   // the whole reason `/` is in the set: a plain navigation should still be cacheable
   assert.equal(
-    shouldUseWorkersCache(
+    cacheableAt(
       req("https://aadhar.sh/", {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8",
       }),
@@ -725,7 +727,7 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9", "text/markdown, text/html, */*"]) {
     for (const path of ["/", "/bot", "/lens", "/reading"]) {
       assert.equal(
-        shouldUseWorkersCache(req(`https://aadhar.sh${path}`, { accept }), PATHS),
+        cacheableAt(req(`https://aadhar.sh${path}`, { accept }), PATHS),
         false,
         `${path} with "${accept}" must bypass Workers Cache or the stored HTML answers it`,
       );
@@ -737,7 +739,7 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   // keeps a future over-broad "has an accept header" bail from silently disabling
   // the cache for every browser on the site.
   assert.equal(
-    shouldUseWorkersCache(
+    cacheableAt(
       req("https://aadhar.sh/", {
         accept: "text/html, text/markdown;q=0.1",
       }),
@@ -748,12 +750,12 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   );
 
   // the bails that were already there, so a rewrite cannot quietly drop one
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/?cb=1"), PATHS), false, "query strings bypass");
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", { "if-none-match": 'W/"x"' }), PATHS), false, "revalidation bypasses");
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", { range: "bytes=0-9" }), PATHS), false, "range bypasses");
-  assert.equal(shouldUseWorkersCache(new Request("https://aadhar.sh/", { method: "POST" }), PATHS), false, "POST bypasses");
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/nope"), PATHS), false, "an unlisted path bypasses");
-  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
+  assert.equal(cacheableAt(req("https://aadhar.sh/?cb=1"), PATHS), false, "query strings bypass");
+  assert.equal(cacheableAt(req("https://aadhar.sh/", { "if-none-match": 'W/"x"' }), PATHS), false, "revalidation bypasses");
+  assert.equal(cacheableAt(req("https://aadhar.sh/", { range: "bytes=0-9" }), PATHS), false, "range bypasses");
+  assert.equal(cacheableAt(new Request("https://aadhar.sh/", { method: "POST" }), PATHS), false, "POST bypasses");
+  assert.equal(cacheableAt(req("https://aadhar.sh/nope"), PATHS), false, "an unlisted path bypasses");
+  assert.equal(cacheableAt(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
 });
 
 // The same class of bug on the other axis the key cannot see. A hit answers
@@ -769,15 +771,17 @@ test("Workers Cache never answers a content-negotiated request from the stored r
 // the query-string bail.
 test("only the canonical hostname may be served from Workers Cache", async () => {
   const { shouldUseWorkersCache } = await import("../../src/worker/lib/cache.ts");
+  // the Worker entry parses the URL once and hands it down
+  const cacheableAt = (request: Request, paths) => shouldUseWorkersCache(request, paths, new URL(request.url));
   const { isCanonicalHost } = await import("../../src/worker/lib/const.ts");
   const PATHS = new Set(["/", "/photos", "/reading", "/writing"]);
   const req = (url) => new Request(url, { headers: { accept: "text/html" } });
 
   for (const path of ["/", "/photos", "/reading", "/writing/colophon"]) {
-    assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`), PATHS), true, `aadhar.sh${path} is the site and stays cacheable`);
+    assert.equal(cacheableAt(req(`https://aadhar.sh${path}`), PATHS), true, `aadhar.sh${path} is the site and stays cacheable`);
     for (const host of ["cal.aadhar.sh", "aadhar-sh.workers.dev", "a1b2c3-aadhar-sh.workers.dev", "aadhar-sh.pages.dev"]) {
       assert.equal(
-        shouldUseWorkersCache(req(`https://${host}${path}`), PATHS),
+        cacheableAt(req(`https://${host}${path}`), PATHS),
         false,
         `${host}${path} must reach the dispatcher — a hit here publishes the canonical page on a second hostname`,
       );

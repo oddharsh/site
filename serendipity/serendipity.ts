@@ -3822,8 +3822,7 @@ export async function handleMcp(request, env, d) {
   return one === null ? respond(null, 202) : respond(one, mcpHttpStatus(payload));
 }
 
-export async function handleSerendipity(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleSerendipity(request, env, ctx, url = new URL(request.url)) {
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent

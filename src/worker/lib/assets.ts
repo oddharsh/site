@@ -382,8 +382,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
 // encodeBody: "manual" is LOAD-BEARING. The Workers runtime compresses response
 // bodies to match `content-encoding` on its own; without "manual" it would brotli
 // these already-brotli bytes and ship br-in-br, which every client fails to decode.
-export async function servePrecompressedShell(request, env) {
-  const url = new URL(request.url);
+export async function servePrecompressedShell(request, env, url: URL) {
   const ext = url.pathname.split(".").pop().toLowerCase();
 
   // Only the shell's own types (SHELL_TYPES), and only GET. Anything else
@@ -543,8 +542,7 @@ export function hasTextTwin(pathname: string): boolean {
   return TEXT_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
 }
 
-export async function servePrecompressedText(request, env, opts: AssetOptions = {}) {
-  const url = new URL(request.url);
+export async function servePrecompressedText(request, env, url: URL, opts: AssetOptions = {}) {
   if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, opts);
   }
@@ -628,8 +626,7 @@ export function twinPolicy(headers: Record<string, string> = {}): Record<string,
 // arrived. Once both exist, PAGE_FAMILY_MATCH deliberately wins RFC 9842's longest-
 // match selection so an uncaptured exact snapshot cannot shadow a usable family delta.
 // Dynamic Worker pages keep the family Link but never enter this precomputed route.
-export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
-  const url = new URL(request.url);
+export async function serveStaticPage(request, env, url: URL, opts: AssetOptions = {}) {
   // HEAD walks the GET path far enough to answer with the SAME headers, then drops
   // the body. RFC 9110 asks a HEAD to carry the fields its GET would send, and
   // deciding those fields is this function's whole job, so bailing on the method
@@ -683,7 +680,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
     // miss; everything else (the garage's images) goes straight to the asset
     // layer untouched, as it always did.
     if (!rel.includes("..") && hasTextTwin(rel)) {
-      return servePrecompressedText(request, env);
+      return servePrecompressedText(request, env, url);
     }
     return serveAssetWith404Clamp(request, env);
   }

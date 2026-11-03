@@ -690,8 +690,7 @@ export async function photoFacets(env) {
   return { total: records.length, camera: rank(tally.camera), lens: rank(tally.lens), film: rank(tally.film), year: rank(tally.year) };
 }
 
-export async function handlePhotoQuery(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handlePhotoQuery(request, env, ctx, url = new URL(request.url)) {
   const payload = await queryPhotos(
     env,
     {

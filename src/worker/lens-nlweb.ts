@@ -87,6 +87,6 @@ const LENS_NLWEB = defineLens({
   },
 });
 
-export function handleLensNlweb(request, env, ctx?) {
-  return LENS_NLWEB.handle(request, env, ctx);
+export function handleLensNlweb(request, env, ctx?, url = new URL(request.url)) {
+  return LENS_NLWEB.handle(request, env, ctx, url);
 }

@@ -102,10 +102,11 @@ export class CachedPages extends WorkerEntrypoint<Env> {
 
 export default {
   async fetch(request, env, ctx) {
-    if (isEdgeCacheable(request) && ctx.exports?.CachedPages) {
+    const url = new URL(request.url);
+    if (isEdgeCacheable(request, url) && ctx.exports?.CachedPages) {
       return ctx.exports.CachedPages.fetch(request);
     }
-    return serveWorkerRequest(request, env, ctx);
+    return serveWorkerRequest(request, env, ctx, url);
   },
 
   async scheduled(event, env, ctx) {
@@ -254,8 +255,8 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   // and _headers caches the well-known cards for 30 days, so an agent can hold the
   // old path long after a deploy could purge it. Same argument as the /images ->
   // /i/ redirects, on a shorter clock.
-  "/perf": (request) => Response.redirect(new URL("/garage/dyno", request.url).href, 301),
-  "/perf.json": (request) => Response.redirect(new URL("/garage/dyno.json", request.url).href, 301),
+  "/perf": (_request, _env, _ctx, url) => Response.redirect(url.origin + "/garage/dyno", 301),
+  "/perf.json": (_request, _env, _ctx, url) => Response.redirect(url.origin + "/garage/dyno.json", 301),
 
   "/lens": routeLens,
   "/lens/": routeDropSlash,
@@ -418,7 +419,7 @@ const PREFIX_HANDLERS: Record<PrefixLabel, RouteHandler> = {
   "/.well-known/<card>": routeTextTwin,
   "/images/full/<key>": servePhotoFromR2,
   "/images/<thumb>": routeImageThumb,
-  "/og/video/<clip>": (request: SiteRequest, env: Env) => serveOgVideo(request, env.ASSETS),
+  "/og/video/<clip>": (request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) => serveOgVideo(request, env.ASSETS, url),
   // A sub-resource under a static section (images, ask.js, /dotfiles/macos.sh)
   // is matched out by serveStaticPage's extension test and passes straight
   // through to the asset layer.
@@ -452,7 +453,7 @@ const { serveWorkerRequest, withSelfFetch } = createDispatch({
 // staged (bun run dev serves the unbuilt tree) cal renders the same shell.
 async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/coffee") {
-    return serveBuiltPage(request, env, {
+    return serveBuiltPage(request, env, url, {
       headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK, "referrer-policy": "strict-origin-when-cross-origin" },
       live: () => calWorker.fetch(request, env, ctx),
     });
@@ -616,7 +617,7 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
   // which that page's own first line names as its View Source. This prefix wins
   // before the generic "/<path>.src.<ext>" row, and handleSerendipity has no
   // such file, so it answered 404 until 2026-09-26.
-  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedText(request, env);
+  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedText(request, env, url);
   // The dashboard's plain GET and the agents page, both built at deploy; a
   // flash ?msg= belongs to the dashboard only.
   const built = (url.pathname === "/serendipity" && !url.searchParams.has("msg")) || url.pathname === SERENDIPITY_MCP_INFO;
@@ -624,7 +625,7 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
     const hashes = scriptHashesFor(url.pathname);
     if (hashes) {
       const scriptSrc = ["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" ");
-      const response = await serveStaticPage(request, env, {
+      const response = await serveStaticPage(request, env, url, {
         headers: { ...SERENDIPITY_SECURITY_HEADERS, ...GENERATED_PAGE_HEADERS, "content-security-policy": serendipityCsp(scriptSrc) },
       });
       if (response.status !== 404) return response;
@@ -633,7 +634,7 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
       } catch {}
     }
   }
-  const response = await handleSerendipity(request, env, ctx);
+  const response = await handleSerendipity(request, env, ctx, url);
   return withSerendipitySecurityHeaders(response);
 }
 
@@ -690,7 +691,7 @@ function routeTerminalGone() {
 
 function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   const slug = url.pathname.slice("/writing/".length);
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: WRITING_PAGE_HEADERS,
     live: () => handleWritingPost(request, slug, env, ctx),
   });
@@ -713,9 +714,9 @@ const UTILITY_SHELL_HEADERS = {
 
 function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   // A command answers with its own redirect; the bare page is noindex.
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" },
-    divert: () => (url.searchParams.get("cmd") ? handleRun(request, env, ctx) : null),
+    divert: () => (url.searchParams.get("cmd") ? handleRun(request, env, ctx, url) : null),
   });
 }
 
@@ -725,9 +726,9 @@ function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: UR
 // which is how this route has always answered, so the noindex is declared for
 // the negotiated request alone.
 function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: wantsMarkdown(request) ? { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" } : UTILITY_SHELL_HEADERS,
-    divert: () => (url.searchParams.get("q") ? handleSearch(request, env, ctx) : null),
+    divert: () => (url.searchParams.get("q") ? handleSearch(request, env, ctx, url) : null),
   });
 }
 
@@ -743,22 +744,22 @@ const PRIVATE_PAGE_HEADERS = {
   "referrer-policy": "strict-origin-when-cross-origin",
 };
 
-function routeSecurity(request: SiteRequest, env: Env) {
-  return serveBuiltPage(request, env, { headers: PRIVATE_PAGE_HEADERS, live: () => renderSecurityCenter() });
+function routeSecurity(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, { headers: PRIVATE_PAGE_HEADERS, live: () => renderSecurityCenter() });
 }
 
 // /whoareyou is a built document since 2026-09-25, with its per-request values
 // as an island from /whoareyou/values.html (whoareyou.ts says why and what moved).
 // Same shape as routeSecurity above, down to the twin carrying the page's noindex.
-function routeWhoareyou(request: SiteRequest, env: Env) {
-  return serveBuiltPage(request, env, { headers: PRIVATE_PAGE_HEADERS, live: () => renderWhoareyouPage() });
+function routeWhoareyou(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, { headers: PRIVATE_PAGE_HEADERS, live: () => renderWhoareyouPage() });
 }
 
 // /garage/dyno is a built document since 2026-09-25, with its chart and table as
 // an island from /garage/dyno/pulls.html (dyno.ts says why). It takes the same
 // headers as the other garage pages, since the shell only moves on a deploy.
-function routeDyno(request: SiteRequest, env: Env) {
-  return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderDynoPage() });
+function routeDyno(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, { headers: GENERATED_PAGE_HEADERS, live: () => renderDynoPage() });
 }
 
 // /lens/census is a built document since 2026-09-25 (census.ts says why). The
@@ -766,9 +767,9 @@ function routeDyno(request: SiteRequest, env: Env) {
 // to the request that asked for the sweep. /inbox is the same shape, and its
 // route lives in inbox.ts so the contract suite can call it (gotcha 16).
 function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" },
-    divert: () => (url.searchParams.has("refresh") ? handleCensus(request, env, ctx) : null),
+    divert: () => (url.searchParams.has("refresh") ? handleCensus(request, env, ctx, url) : null),
     live: () => renderCensusPage(),
   });
 }
@@ -776,8 +777,8 @@ function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext, url:
 // /ledger and /around are built documents since 2026-09-25, each with its live
 // half as an island (ledger.ts and around.ts say why). The dev fallback is the
 // same as routeDyno's.
-function routeLedger(request: SiteRequest, env: Env) {
-  return serveBuiltPage(request, env, { headers: GENERATED_PAGE_HEADERS, live: () => renderLedgerPage() });
+function routeLedger(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, { headers: GENERATED_PAGE_HEADERS, live: () => renderLedgerPage() });
 }
 
 // The owner's ?bust=SECRET still works at the page URL: it re-crawls and
@@ -786,12 +787,12 @@ function routeLedger(request: SiteRequest, env: Env) {
 // nothing and the static page is served as usual.
 async function routeAround(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
   if (url.searchParams.has("bust")) {
-    const busted = await refreshAroundSnapshot(request, env);
+    const busted = await refreshAroundSnapshot(request, env, url);
     try {
       await busted?.body?.cancel();
     } catch {}
   }
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" },
     live: () => renderAroundPage(),
   });
@@ -801,14 +802,14 @@ function routeLens(request: SiteRequest, env: Env, ctx: ExecutionContext, url: U
   // A target-bearing Lens response spends crawler/browser budget and contains
   // third-party data, so it remains the live no-store Worker path. The bare,
   // deterministic shell is now a built q11/DCZ/304 static page.
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: GENERATED_PAGE_HEADERS,
-    divert: () => (url.searchParams.get("url") ? handleLens(request, env, ctx) : null),
+    divert: () => (url.searchParams.get("url") ? handleLens(request, env, ctx, url) : null),
   });
 }
 
-function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: WRITING_PAGE_HEADERS,
     live: () => handleWritingIndex(request, env, ctx),
   });
@@ -835,36 +836,36 @@ const PHOTOS_PAGE_HEADERS = {
 // Same shape as /photos and /writing. They take the standard generated policy — no
 // shortened window like /photos needs, because their data cannot change between
 // deploys, so a stale copy inside the 7 days is a copy of the same log.
-function routeUpdates(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routeUpdates(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: GENERATED_PAGE_HEADERS,
     live: () => handleWindowsUpdate(request, env, ctx),
   });
 }
 
-function routeRestore(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routeRestore(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: GENERATED_PAGE_HEADERS,
     live: () => handleSystemRestore(request, env, ctx),
   });
 }
 
-function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: PHOTOS_PAGE_HEADERS,
     live: () => handlePhotos(request, env, ctx),
   });
 }
 
-function routeAlbum(album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routeAlbum(album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: PHOTOS_PAGE_HEADERS,
     live: () => handleAlbum(album, request, env, ctx),
   });
 }
 
-function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return serveBuiltPage(request, env, {
+function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
+  return serveBuiltPage(request, env, url, {
     headers: GENERATED_PAGE_HEADERS,
     live: () => handleBotPage(request, env, ctx),
   });
@@ -873,8 +874,8 @@ function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
 // The trust pages (trust.ts) are fixed documents: build.ts bakes each one, and
 // the live render is the fallback for a tree that staged nothing.
 function routeTrustPage(render: () => Response): RouteHandler {
-  return (request: SiteRequest, env: Env) =>
-    serveBuiltPage(request, env, {
+  return (request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) =>
+    serveBuiltPage(request, env, url, {
       headers: GENERATED_PAGE_HEADERS,
       live: () => render(),
     });
@@ -889,8 +890,8 @@ const WRITING_PAGE_HEADERS = {
 // as the 404 fallback for a tree that staged nothing, which is `bun run dev`.
 // IMAGES_MANIFEST_HEADERS overrides the one-year immutable cache _headers puts on
 // /images/*; photos.ts carries the measurement and the reason.
-async function routeImagesManifest(request: SiteRequest, env: Env) {
-  const response = await servePrecompressedText(request, env, { headers: IMAGES_MANIFEST_HEADERS });
+async function routeImagesManifest(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  const response = await servePrecompressedText(request, env, url, { headers: IMAGES_MANIFEST_HEADERS });
   if (response.status !== 404) return response;
   try {
     await response.body?.cancel();
@@ -898,16 +899,16 @@ async function routeImagesManifest(request: SiteRequest, env: Env) {
   return handleImagesManifest();
 }
 
-function routeImagesMetadata(request: SiteRequest, env: Env) {
-  return servePrecompressedText(request, env, {
+function routeImagesMetadata(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return servePrecompressedText(request, env, url, {
     headers: { "cache-control": "public, max-age=60, s-maxage=60, must-revalidate" },
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
   });
 }
 
-function routeImagesMeta(request: SiteRequest, env: Env) {
-  return servePrecompressedText(request, env, {
+function routeImagesMeta(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return servePrecompressedText(request, env, url, {
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
   });
@@ -927,18 +928,18 @@ async function ogVideoPage(request: SiteRequest, env: Env, url: URL): Promise<Re
 }
 
 async function routeStaticPage(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
-  return (await ogVideoPage(request, env, url)) ?? serveStaticPage(request, env);
+  return (await ogVideoPage(request, env, url)) ?? serveStaticPage(request, env, url);
 }
 
-function routeShellAsset(request: SiteRequest, env: Env) {
-  return servePrecompressedShell(request, env);
+function routeShellAsset(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return servePrecompressedShell(request, env, url);
 }
 
 // The q11 twin for a static text asset outside /a/ and outside any page
 // prefix. The reasoning, and the measurement that put these behind the
 // Worker, is on servePrecompressedText.
-function routeTextTwin(request: SiteRequest, env: Env) {
-  return servePrecompressedText(request, env);
+function routeTextTwin(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
+  return servePrecompressedText(request, env, url);
 }
 
 // legacy thumbnail URLs (/images/<stem>.<ext>[?v=N]) 301 into their content-
@@ -1040,5 +1041,5 @@ async function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionConte
   if (video) return video;
   // warm the grid fragment's two memoised maps behind the document (home.ts says why)
   ctx.waitUntil(warmGridData(env));
-  return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
+  return serveStaticPage(request, env, url, { headers: HOMEPAGE_HEADERS });
 }

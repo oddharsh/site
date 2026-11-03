@@ -59,6 +59,6 @@ const LENS_TOOLS = defineLens({
   },
 });
 
-export function handleLensTools(request, env, ctx?) {
-  return LENS_TOOLS.handle(request, env, ctx);
+export function handleLensTools(request, env, ctx?, url = new URL(request.url)) {
+  return LENS_TOOLS.handle(request, env, ctx, url);
 }

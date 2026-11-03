@@ -80,12 +80,16 @@ test("each consumer reads the derived value rather than a copy of it", async () 
   assert.ok(routes.GET_WRITES.has("/hit") && routes.GET_WRITES.has("/coffee/approve"), "the write list lost its routes");
   // Workers Cache: a prefix declared on a route admits a path under it
   const { shouldUseWorkersCache } = await import("../../src/worker/lib/cache.ts");
+  // the Worker entry parses the URL once and hands it down
+  const cacheableAt = (request: Request, paths) => shouldUseWorkersCache(request, paths, new URL(request.url));
   const get = (path) => new Request(`https://aadhar.sh${path}`, { headers: { accept: "text/html" } });
-  assert.equal(shouldUseWorkersCache(get("/writing/big-screens-and-small-screens"), new Set()), true);
-  assert.equal(shouldUseWorkersCache(get("/lens/fetch"), new Set()), false, "the control: an undeclared path stays out");
+  assert.equal(cacheableAt(get("/writing/big-screens-and-small-screens"), new Set()), true);
+  assert.equal(cacheableAt(get("/lens/fetch"), new Set()), false, "the control: an undeclared path stays out");
   const { isEdgeCacheable } = await import("../../src/worker/dispatch.ts");
-  assert.equal(isEdgeCacheable(get("/reading")), true, "/reading is declared cacheable in routes.ts");
-  assert.equal(isEdgeCacheable(get("/reading/list.html")), false, "the control: its island is not");
+  // the Worker entry parses the URL once and hands it down
+  const edgeCacheableAt = (request: Request) => isEdgeCacheable(request, new URL(request.url));
+  assert.equal(edgeCacheableAt(get("/reading")), true, "/reading is declared cacheable in routes.ts");
+  assert.equal(edgeCacheableAt(get("/reading/list.html")), false, "the control: its island is not");
 });
 
 test("the island URLs are routing facts the feature modules import", async () => {

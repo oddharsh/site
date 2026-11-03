@@ -129,17 +129,17 @@ export function renderInboxMail(mentions, state, origin) {
 // The island's response. Moderation state changes rarely and a stale read costs
 // a few minutes of a mention not yet showing, so it takes a short browser cache;
 // it was never edge-cached and is not now, since an approval has no cache to evict.
-export async function handleInboxMail(request, env, ctx) {
+export async function handleInboxMail(request, env, ctx?, url = new URL(request.url)) {
   const { state, mentions } = await readApprovedMentions(env);
-  return islandResponse(renderInboxMail(mentions, state, new URL(request.url).origin), { "cache-control": "public, max-age=60" });
+  return islandResponse(renderInboxMail(mentions, state, url.origin), { "cache-control": "public, max-age=60" });
 }
 
 // The route. It serves the built shell with the page policy every generated
 // document takes, plus the webmention Link header the live render always sent,
 // and falls back to rendering the shell where no bake is staged (bun run dev,
 // and the contract suite, which is why it lives here rather than in index.ts).
-export function handleInbox(request, env) {
-  return serveBuiltPage(request, env, {
+export function handleInbox(request, env, _ctx?, url = new URL(request.url)) {
+  return serveBuiltPage(request, env, url, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: `${SHELL_PRELOAD_LINK}, ${WEBMENTION_LINK}` },
     live: () => renderInboxPage(),
   });

@@ -30,12 +30,12 @@ export type BuiltPage = {
   live?: () => Awaitable<Response>;
 };
 
-export async function serveBuiltPage(request: Request, env, page: BuiltPage = {}): Promise<Response> {
+export async function serveBuiltPage(request: Request, env, url: URL, page: BuiltPage = {}): Promise<Response> {
   if (page.divert) {
     const diverted = await page.divert();
     if (diverted) return diverted;
   }
-  const built = await serveStaticPage(request, env, { headers: page.headers });
+  const built = await serveStaticPage(request, env, url, { headers: page.headers });
   if (built.status !== 404 || !page.live) return built;
   try {
     await built.body?.cancel();

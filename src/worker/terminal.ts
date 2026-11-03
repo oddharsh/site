@@ -1243,9 +1243,7 @@ function toolPage(frame, path) {
 export const TOOL_NAMES = TERMINAL_APPS;
 
 /** Shared by every tool route. */
-async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
-  const url = new URL(request.url);
-
+async function serveFrame(name, request, env, ctx, url: URL, { explicitText = false } = {}) {
   // radar is the ONE tool that takes a POST, because it is the one whose input
   // this server cannot produce: the readings come from a machine with an
   // antenna. Everything else stays GET-only, so the surface does not quietly
@@ -1291,8 +1289,7 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
 }
 
 /** Every tool in TOOL_NAMES, and its .txt representation. */
-export async function handleTool(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleTool(request, env, ctx, url = new URL(request.url)) {
   const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
@@ -1304,7 +1301,7 @@ export async function handleTool(request, env, ctx) {
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
   }
-  return serveFrame(name, request, env, ctx, { explicitText });
+  return serveFrame(name, request, env, ctx, url, { explicitText });
 }
 
 /** The MCP entry point: a frame as plain text, never coloured. */

@@ -333,12 +333,25 @@ export const CONTROLS: Control[] = [
     expect: /POST \/a-route-invented-tomorrow must be refused on a preview/,
   },
   {
+    id: "route-reparses-the-request-url",
+    plants: "serveWorkerRequest parses request.url again instead of taking the URL the entry already parsed",
+    mutations: [
+      {
+        file: "src/worker/dispatch.ts",
+        find: "    // Read before routing: handlers get this same URL object and may rewrite it\n",
+        replace: "    url = new URL(request.url);\n    // Read before routing: handlers get this same URL object and may rewrite it\n",
+      },
+    ],
+    run: contract("contract-the-dispatch-pipeline"),
+    expect: /a request handed its URL is not parsed again on the way to its handler/,
+  },
+  {
     id: "preview-guard-dropped-from-dispatch",
     plants: "the dispatcher stops calling the preview guard, so a POST on a preview URL reaches its handler",
     mutations: [
       {
         file: "src/worker/dispatch.ts",
-        find: "      const denied = previewDenial(url.pathname, request.method);\n      if (denied) return denied;\n",
+        find: "      const denied = previewDenial(pathname, request.method);\n      if (denied) return denied;\n",
         replace: "",
       },
     ],
@@ -364,7 +377,7 @@ export const CONTROLS: Control[] = [
     mutations: [
       {
         file: "src/worker/dispatch.ts",
-        find: "    const tooEarly = earlyDataDenial(request, url.pathname);\n    if (tooEarly) return tooEarly;\n",
+        find: "    const tooEarly = earlyDataDenial(request, pathname);\n    if (tooEarly) return tooEarly;\n",
         replace: "",
       },
     ],

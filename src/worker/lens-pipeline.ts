@@ -204,7 +204,7 @@ export interface LensSpec<In, T extends string | Record<string, string>, A, V> {
 export interface Lens<In, V> {
   run(input: In, request: Request, env: any, ctx?: any): Promise<LensOutcome<V>>;
   // The JSON or PNG route, reading its input from the query string.
-  handle(request: Request, env: any, ctx?: any): Promise<Response>;
+  handle(request: Request, env: any, ctx?: any, url?: URL): Promise<Response>;
 }
 
 const PREFIXES = new Set<string>();
@@ -373,8 +373,8 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
 
   return {
     run,
-    async handle(request, env, ctx) {
-      const outcome = await run(new URL(request.url).searchParams as In, request, env, ctx);
+    async handle(request, env, ctx?, url = new URL(request.url)) {
+      const outcome = await run(url.searchParams as In, request, env, ctx);
       return body === "png" ? lensPng(outcome as LensOutcome<ArrayBuffer>) : lensJson(outcome);
     },
   };

@@ -597,6 +597,6 @@ const LENS_WIRE = defineLens({
   },
 });
 
-export function handleLensWire(request, env, ctx) {
-  return LENS_WIRE.handle(request, env, ctx);
+export function handleLensWire(request, env, ctx, url = new URL(request.url)) {
+  return LENS_WIRE.handle(request, env, ctx, url);
 }
