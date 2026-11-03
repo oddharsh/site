@@ -376,8 +376,13 @@ function relHasWebmention(rel) {
     .some((t) => t.toLowerCase() === "webmention");
 }
 
-function attr(tag, name) {
-  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i"));
+const ATTR_RE = {
+  rel: /\brel\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i,
+  href: /\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i,
+};
+
+function attr(tag, name: keyof typeof ATTR_RE) {
+  const m = tag.match(ATTR_RE[name]);
   return m ? m[1].replace(/^["']|["']$/g, "") : undefined;
 }
 

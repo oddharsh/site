@@ -23,6 +23,12 @@
 //    `representation_capture` (which INSERTs a D1 row) is indistinguishable from
 //    `now_playing`. There is no standard channel that says "this one writes".
 //
+//    Re-measured 2026-11-03 in Chrome 156 and Canary 159: the spec's own
+//    `consequentialHint`, `untrustedContentHint` and `debugging` now survive
+//    beside `readOnlyHint`, and MCP's three are still dropped. So a write now
+//    has a channel (`consequentialHint`), and registerTool() below fills all
+//    three it can.
+//
 // 3. A SERVER REGISTRY CANNOT HOLD A PAGE TOOL. Everything the bridge registers
 //    would work identically as a plain HTTP endpoint with no browser involved.
 //    The tools worth having here read what is on the screen.
@@ -139,8 +145,9 @@ export async function catalog() {
 
 // ---- the annotation channel -------------------------------------------------
 //
-// Chrome keeps `readOnlyHint` and throws the rest away, so the rest is restated
-// as prose on the end of the description. It reads as a sentence to a model and
+// Chrome keeps the WebMCP hints and throws MCP's away, so `destructiveHint`,
+// `idempotentHint` and `openWorldHint` are restated as prose on the end of the
+// description. It reads as a sentence to a model and
 // it is the only place the information survives. Kept short on purpose: this is
 // appended to 25 descriptions and a paragraph each would crowd out the tool.
 
@@ -170,10 +177,11 @@ function safetyNote(a: Record<string, unknown>, writes: boolean): string {
 
 // ---- the consent gate -------------------------------------------------------
 //
-// The standard has no way to tell an agent a tool is destructive, so it equally
-// has no way for an agent to ask about one. That leaves the page as the only
-// party in the room able to check, and the person as the only party able to say
-// yes. A tool whose annotations say it writes gets a real dialog before it runs.
+// `consequentialHint` lets an agent or browser ask first, but it is a hint:
+// nothing makes an agent honor it, and Chrome 152 and 153 drop it on
+// registration. So the page stays the party that checks, and the person the
+// one who says yes. A tool whose annotations say it writes gets a real dialog
+// before it runs.
 //
 // This is deliberately NOT a `confirm()`. A native confirm is modal to the whole
 // tab and gives no room to show what the agent actually asked for, and the
@@ -210,7 +218,7 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
   inner.style.cssText = "padding:10px 12px";
   const p = document.createElement("p");
   p.style.cssText = "margin:0 0 8px";
-  p.textContent = "The tool " + name + " writes data on aadhar.sh. WebMCP has no way to tell your agent that, so this page is asking you instead.";
+  p.textContent = "The tool " + name + " writes data on aadhar.sh. Your agent may not stop to ask, so this page is asking you instead.";
   const pre = document.createElement("pre");
   pre.textContent = body;
   pre.style.cssText =
@@ -293,7 +301,14 @@ export async function registerTool(def: {
   const tool: Record<string, unknown> = {
     name: def.name,
     description: def.description + safetyNote(annotations, writes),
-    annotations: { readOnlyHint: annotations.readOnlyHint !== false },
+    // A UI-only page tool is honestly not read-only, yet repainting the Lens
+    // window is not a consequence worth a prompt, so `consequentialHint`
+    // follows `writes` rather than `readOnlyHint`.
+    annotations: {
+      readOnlyHint: annotations.readOnlyHint !== false,
+      untrustedContentHint: annotations.untrustedContentHint === true,
+      consequentialHint: writes,
+    },
     execute: async (args: any) => {
       const started = Date.now();
       let gated = false;

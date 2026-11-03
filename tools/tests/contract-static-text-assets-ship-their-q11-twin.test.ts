@@ -5,6 +5,9 @@ import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../../src/worker/lib/assets.ts";
 import { claimedByWorker } from "../../src/worker/routes.ts";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const textTwinAt = (request: Request, env, opts?) => servePrecompressedText(request, env, new URL(request.url), opts);
+
 // Every hashed /a/ asset reaches the client at EXACTLY its q11 size, and every
 // text asset without a twin reached it 12-24% larger, because the edge
 // compresses on the fly at roughly brotli q4 (measured 2026-08-31: local q4
@@ -115,7 +118,7 @@ function fakeEnv(overrides: Record<string, any> = {}) {
 const get = (headers: Record<string, any> = {}, method = "GET") => new Request("https://aadhar.sh/garage/feed.xml", { method, headers });
 
 test("headers come from the plain asset and the body from the twin", async () => {
-  const res = await servePrecompressedText(get(), fakeEnv());
+  const res = await textTwinAt(get(), fakeEnv());
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "application/rss+xml; charset=utf-8", "_headers' type on the plain path must survive");
   assert.equal(res.headers.get("cache-control"), "public, max-age=2592000, s-maxage=2592000", "_headers' cache rule on the plain path must survive");
@@ -128,12 +131,12 @@ test("headers come from the plain asset and the body from the twin", async () =>
 });
 
 test("a twin-marked validator revalidates to 304", async () => {
-  const res = await servePrecompressedText(get({ "if-none-match": 'W/"feed-v3-br"' }), fakeEnv());
+  const res = await textTwinAt(get({ "if-none-match": 'W/"feed-v3-br"' }), fakeEnv());
   assert.equal(res.status, 304);
 });
 
 test("caller headers win, the way routeImagesMetadata relies on", async () => {
-  const res = await servePrecompressedText(get(), fakeEnv(), { headers: { "cache-control": "public, max-age=60" } });
+  const res = await textTwinAt(get(), fakeEnv(), { headers: { "cache-control": "public, max-age=60" } });
   assert.equal(res.headers.get("cache-control"), "public, max-age=60");
   assert.equal(res.headers.get("content-encoding"), "br");
 });
@@ -146,7 +149,7 @@ test("every failure path lands on the plain asset, untouched", async () => {
     ["not a GET", get({}, "POST"), fakeEnv()],
   ] as const;
   for (const [label, req, env] of cases) {
-    const res = await servePrecompressedText(req, env);
+    const res = await textTwinAt(req, env);
     assert.equal(res.status, 200, label);
     assert.equal(res.headers.get("content-encoding"), null, `${label}: must not claim an encoding it did not apply`);
     assert.equal(res.headers.get("content-type"), "application/rss+xml; charset=utf-8", label);
@@ -162,11 +165,11 @@ test("a type the build does not twin never takes the path", async () => {
     asked.push(new URL(input instanceof Request ? input.url : input).pathname);
     return inner(input);
   };
-  const res = await servePrecompressedText(new Request("https://aadhar.sh/garage/photo.avif"), env);
+  const res = await textTwinAt(new Request("https://aadhar.sh/garage/photo.avif"), env);
   assert.deepEqual(asked, ["/garage/photo.avif"], "an .avif must go straight to the asset layer without a twin lookup");
   assert.equal(res.status, 404, "the asset layer's own answer comes back");
   // The same spy on a feed, which the build does twin, sees the .br lookup.
   asked.length = 0;
-  await servePrecompressedText(get(), env);
+  await textTwinAt(get(), env);
   assert.ok(asked.includes("/garage/feed.xml.br"), `a feed asks for its twin: ${asked.join(", ")}`);
 });

@@ -204,11 +204,11 @@ export async function captureRepresentation(args, env) {
   if (!profiles) return error("profiles must contain up to four of browser, bot, markdown, or identity");
   const db = database(env);
   if (!db) return error("representation vault is not configured on this deployment");
-  await ensureTable(db);
   // Comparing profiles is explicit caller intent, but four simultaneous reads
   // would be an impolite burst at somebody else's origin. Two workers halve the
   // waterfall while preserving input order and a tight concurrency ceiling.
-  const fetched = await mapWithConcurrency(profiles, 2, (profile) => fetchProfile(target.url, profile, env));
+  // Only the batch write below needs the table, so its DDL rides beside them.
+  const [, fetched] = await Promise.all([ensureTable(db), mapWithConcurrency(profiles, 2, (profile) => fetchProfile(target.url, profile, env))]);
   const rows: any[] = [];
   const successful: any[] = [];
   for (let index = 0; index < profiles.length; index++) {

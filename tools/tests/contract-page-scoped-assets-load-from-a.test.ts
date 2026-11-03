@@ -18,6 +18,9 @@ import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { servePrecompressedShell } from "../../src/worker/lib/assets.ts";
 import { SHELL_DISCOVERY_ROOTS } from "../lib/shell-roots.ts";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const shellAt = (request: Request, env) => servePrecompressedShell(request, env, new URL(request.url));
+
 const BUILT = new URL(".build/public/", ROOT);
 const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
 
@@ -112,7 +115,7 @@ test("an /a/ json is served as the q11 twin, typed as json, and stays off the di
   const available = `:${createHash("sha256").update("a manifest this browser holds").digest("base64")}:`;
   for (const headers of [new Headers(), new Headers({ "available-dictionary": available })]) {
     const ASSETS = fakeAssets();
-    const res = await servePrecompressedShell(new Request(`https://aadhar.sh${MANIFEST}`, { headers }), { ASSETS });
+    const res = await shellAt(new Request(`https://aadhar.sh${MANIFEST}`, { headers }), { ASSETS });
     assert.equal(await res.text(), "brotli json");
     assert.equal(res.headers.get("content-encoding"), "br");
     assert.equal(res.headers.get("content-type"), "application/json; charset=utf-8");

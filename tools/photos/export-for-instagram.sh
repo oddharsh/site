@@ -93,8 +93,8 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ZENC_DIR="$SCRIPT_DIR/zenc"
 ZENC="$ZENC_DIR/target/release/zenc"
-SSIMULACRA2="$(command -v ssimulacra2 || echo /opt/zerobrew/prefix/bin/ssimulacra2)"
-BUTTERAUGLI="$(command -v butteraugli_main || echo /opt/zerobrew/prefix/bin/butteraugli_main)"
+METRICS_DIR="$SCRIPT_DIR/photo-metrics"
+METRICS="$METRICS_DIR/target/release/photo-metrics"
 
 OUT="$HOME/Desktop/ig-export"
 WIDTH=1080
@@ -175,18 +175,20 @@ whole() {  # whole <flag> <value>
 whole --width "$WIDTH"; whole --qmax "$QMAX"; whole --qmin "$QMIN"
 [ "$QMIN" -le "$QMAX" ] || { echo "error: --qmin ($QMIN) is above --qmax ($QMAX)" >&2; exit 1; }
 
-for cmd in sips exif-sooc; do
+for cmd in sips exif-sooc djpeg; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not found in PATH" >&2; exit 1; }
 done
 
 source "$SCRIPT_DIR/require-exif-sooc.sh"
-for tool in "$SSIMULACRA2" "$BUTTERAUGLI"; do
-  [ -x "$tool" ] || { echo "error: $(basename "$tool") not found (brew install jpeg-xl)" >&2; exit 1; }
-done
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
   cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2
+fi
+if [ ! -x "$METRICS" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  echo "building photo-metrics (ssimulacra2 + butteraugli) — first run only…" >&2
+  cargo build --release --locked --manifest-path "$METRICS_DIR/Cargo.toml" >&2
 fi
 
 TMP="$(mktemp -d "/tmp/ig-export-$$-XXXX")"
@@ -196,8 +198,24 @@ trap 'rm -rf "$TMP"' EXIT
 ge() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a>=b)}'; }
 le() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a<=b)}'; }
 
-s2()  { "$SSIMULACRA2" "$1" "$2" 2>/dev/null | awk 'NR==1{printf "%.2f", $1}'; }
-ba()  { "$BUTTERAUGLI" "$1" "$2" 2>/dev/null | awk 'NR==1{printf "%.3f", $1}'; }
+# score <ref.png> <candidate.jpg> prints "<ssimulacra2> <butteraugli max>".
+# photo-metrics replaced libjxl's ssimulacra2 and butteraugli_main here on
+# 2026-10-31. djpeg is libjpeg-turbo, the decoder libjxl's tools read a JPEG
+# with: ssimulacra2 scores the .jpg and djpeg's .ppm identically (84.89105760),
+# where `zenc frame` would have moved it 0.006. Parity on 21 photos from the
+# inbox (every 9th), old script against new, both -n: the same q on 21 of 21 at
+# the default -t 84 and on 21 of 21 at -t 78 --ba-max 2.0. Over --calibrate's
+# 189 rungs the worst gaps were 0.093 ssimulacra2 and 0.000023 butteraugli, and
+# one clear/miss call flipped against targets 70, 78, 84 and 90: XT500257 q75
+# reads 69.9968 to libjxl (70.00, clears 70) and 69.9875 here (69.99, misses).
+# The closest call at 84 was XT508887, which cleared at 84.01 (libjxl 84.02).
+score() {
+  local ppm="${2%.jpg}.ppm"
+  djpeg -outfile "$ppm" "$2" && "$METRICS" "$1" "$ppm" 2>/dev/null |
+    awk '{ match($0, /"s2":[-0-9.e]+/); s = substr($0, RSTART + 5, RLENGTH - 5)
+           match($0, /"ba":[-0-9.e]+/); b = substr($0, RSTART + 5, RLENGTH - 5)
+           printf "%.2f %.3f", s, b }'
+}
 kb()  { awk -v b="$1" 'BEGIN{printf "%.1f KB", b/1024}'; }
 pct() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%+.0f%%", (a-b)*100/b}'; }
 
@@ -385,7 +403,7 @@ while IFS= read -r f; do
     for q in $LADDER; do
       cand="$TMP/$stem-$q.jpg"
       "$ZENC" "$ref" "$cand" -q "$q" --yuv "$YUV" >/dev/null 2>&1 || continue
-      b=$(stat -f%z "$cand"); sc=$(s2 "$ref" "$cand"); bc=$(ba "$ref" "$cand")
+      b=$(stat -f%z "$cand"); read -r sc bc <<< "$(score "$ref" "$cand")"
       mark=""; clears "$sc" "$bc" && mark="← clears $TARGET"
       printf "    %-4s %-11s %-8s %-8s %s\n" "$q" "$(kb "$b")" "$sc" "$bc" "$mark"
       [ "$DRY" -eq 0 ] && cp "$cand" "$dir/q$q.jpg"
@@ -400,7 +418,7 @@ while IFS= read -r f; do
   top_bytes=$(stat -f%z "$top")
 
   if [ "$MODE" = max ]; then
-    sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
+    read -r sc bc <<< "$(score "$ref" "$top")"
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
     printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %s\n" "$stem" "$size" "$QMAX" "$(kb "$out_bytes")" "$sc" "$bc"
     OK=$((OK+1)); continue
@@ -413,11 +431,7 @@ while IFS= read -r f; do
     mid=$(( (lo + hi) / 2 ))
     cand="$TMP/$stem-try.jpg"
     "$ZENC" "$ref" "$cand" -q "$mid" --yuv "$YUV" >/dev/null 2>&1 || break
-    sc=$(s2 "$ref" "$cand")
-    # butteraugli runs inside the loop only when it is actually a gate. Left on
-    # unconditionally it doubled the metric cost of every probe to produce a
-    # number nothing read until the winner was already picked.
-    if [ -n "$BA_MAX" ]; then bc=$(ba "$ref" "$cand"); else bc=""; fi
+    read -r sc bc <<< "$(score "$ref" "$cand")"
     if clears "$sc" "$bc"; then
       best=$mid; best_s2=$sc; best_ba=$bc
       best_file="$TMP/$stem-best.jpg"; cp "$cand" "$best_file"
@@ -430,7 +444,7 @@ while IFS= read -r f; do
   if [ -z "$best" ]; then
     # nothing in range clears it. ship the ceiling and say so rather than
     # silently writing a file that misses the bar you asked for.
-    sc=$(s2 "$ref" "$top"); bc=$(ba "$ref" "$top")
+    read -r sc bc <<< "$(score "$ref" "$top")"
     if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$top" "$stem" "$f"); else out_bytes=$top_bytes; fi
     printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %-7s MISSED target %s at q%s\n" \
       "$stem" "$size" "$QMAX" "$(kb "$out_bytes")" "$sc" "$bc" "$TARGET" "$QMAX"
@@ -438,7 +452,6 @@ while IFS= read -r f; do
   fi
 
   best_bytes=$(stat -f%z "$best_file")
-  [ -n "$best_ba" ] || best_ba=$(ba "$ref" "$best_file")
   if [ "$DRY" -eq 0 ]; then out_bytes=$(finish "$best_file" "$stem" "$f"); else out_bytes=$best_bytes; fi
   printf "  %-14s %-11s q%-3s %-11s s2 %-7s ba %-7s %s vs q%s\n" \
     "$stem" "$size" "$best" "$(kb "$out_bytes")" "$best_s2" "$best_ba" "$(pct "$best_bytes" "$top_bytes")" "$QMAX"

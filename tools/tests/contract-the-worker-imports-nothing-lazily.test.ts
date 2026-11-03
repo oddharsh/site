@@ -1,6 +1,6 @@
 // ── no Worker module imports another lazily ──────────────────────────────────
-import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // Gotcha 56. A module reached through `import()` runs its top level inside the
 // request while wrangler inlines it, and in global scope the moment workerd
@@ -38,12 +38,7 @@ test("the lazy-import matcher finds a lazy import and nothing else", () => {
 });
 
 test("no Worker module imports another lazily", async () => {
-  const files = execFileSync("git", ["ls-files", ...WORKER_SOURCES], {
-    cwd: new URL(".", ROOT),
-    encoding: "utf8",
-  })
-    .split("\n")
-    .filter(Boolean);
+  const files = repoFiles(WORKER_SOURCES);
   // 127 on 2026-10-14; a glob that stopped matching would pass over nothing.
   assert.ok(files.length >= 80, `only ${files.length} Worker sources found; the globs have stopped matching`);
 

@@ -180,14 +180,18 @@ export function queryTerms(query, max = 12) {
 // Prefix matching also carries plural and inflected forms: field "bridges"
 // answers query "bridge", and query "bridges" answers field "bridge" via stem.
 //
-// It never splits the field into tokens, though, because that was the cost:
-// commonPairs plus scoreFields call this once per (term, field, record), up to
-// 8,256 times for a two-term query over 258 photos, and splitting on each call
-// was 5-10ms of every request. Each rule is a statement about where a token
+// It never splits the field into tokens, though, because that was the cost when
+// queryPhotos called this once per (term, field, record), up to 8,256 times
+// for a two-term query over 258 photos, and splitting on each call was 5-10ms
+// of every request. Each rule is a statement about where a token
 // starts, so indexOf finds the candidates and a boundary check confirms them.
 // Checked against the splitting version on 2026-10-07: 3,380 terms (every
 // token in the archive, its prefixes, plurals) against all 2,064 photo fields
 // plus accented, astral and titlecase strings, 7,010,120 pairs, no difference.
+//
+// Since 2026-11-03 the photo query answers these rules from a build-time index
+// (lib/photo-search.ts) and this function is its specification: a contract test
+// holds every bit of that index to it.
 export function fieldMatches(value, term) {
   const haystack = String(value || "").toLowerCase();
   if (!haystack || !term) return false;
@@ -222,7 +226,7 @@ export function fieldMatches(value, term) {
 // complement), applied one code point at a time so astral letters count.
 const WORD_CHAR = /[\p{L}\p{N}]/u;
 const NON_WORD = /[^\p{L}\p{N}]/u;
-const isWord = (text: string) => !NON_WORD.test(text);
+export const isWord = (text: string) => !NON_WORD.test(text);
 const wordAt = (text: string, i: number) => {
   const cp = text.codePointAt(i);
   return cp !== undefined && WORD_CHAR.test(String.fromCodePoint(cp));
@@ -245,96 +249,4 @@ function someTokenStartsWith(text: string, prefix: string) {
     if (tokenStartsAt(text, i)) return true;
   }
   return false;
-}
-
-// The one place that knows how a (term, field) pair is keyed. NUL rather than
-// a space because a field name is a fixed identifier but a TERM is user input,
-// and a term containing the separator would otherwise collide with a different
-// pair. Private on purpose — see commonPairs for what happened when it was not.
-const pairKey = (term, field) => `${term}\u0000${field}`;
-
-// Score one record against the query. `fields` is {name: text}; `weights` is an
-// array of [name, weight] ordered however the caller likes.
-//
-// Each term scores ONCE, at the weight of the best field it hit, rather than
-// accumulating across every field it appears in. A camera name that also
-// appears in the recipe card and the stem would otherwise triple-count, so the
-// photos that rank highest would be the ones with the most redundant metadata
-// rather than the ones that best answer the query.
-export function scoreFields(fields, weights, queryTermList, skip = null) {
-  let score = 0;
-  let hits = 0;
-  const matched = [];
-  for (const term of queryTermList) {
-    let best = 0;
-    let bestField = null;
-    for (const [name, weight] of weights) {
-      if (skip?.has(pairKey(term, name))) continue;
-      if (weight > best && fieldMatches(fields[name], term)) {
-        best = weight;
-        bestField = name;
-      }
-    }
-    if (best) {
-      score += best;
-      hits += 1;
-      if (!matched.includes(bestField)) matched.push(bestField);
-    }
-  }
-  return { score, hits, matched };
-}
-
-// Which (term, field) pairs carry no information, because that field matches
-// the term in most of the corpus.
-//
-// The case that forced this, when the archive held 158 photos: every Fuji
-// recipe card contains "Exposure Compensation", so a query for "long exposure"
-// matched "exposure" in 151 of 158 recipe cards. Nothing was a long exposure
-// then (the longest shutter was well under a second), yet the query returned the whole archive,
-// ranked by a term that told you nothing.
-//
-// Deliberately per FIELD rather than per term. Dropping "chrome" outright
-// because it appears in all 158 recipe cards would also blind the query to the
-// 42 photos whose FILM is Classic Chrome, where the same word is the most
-// discriminating thing about them. The word is noise in one field and signal in
-// another, and only the pair can tell those apart.
-//
-// The threshold is 90%, not a half. A term matching half the corpus is at its
-// MOST discriminating — it splits the set cleanly — so suppressing there would
-// throw away the best signal there is. Only a term matching almost everything
-// has stopped saying anything, and the case that forced this was 151 of 158.
-//
-// A hard threshold rather than a weighted idf: the score is meant to be read by
-// a caller deciding whether to trust a result, and "this field matched 96% of
-// the archive, so it was ignored" survives being explained. A logarithm does not.
-// Returns BOTH the suppression set and the per-term verdict, because the caller
-// needs the second and must not have to reconstruct it. An earlier version
-// returned only the set and left photos.ts to work out which terms had been
-// suppressed by re-deriving the key format — which it got wrong (a space where
-// this file writes a NUL), so the ranking silently reported nothing suppressed
-// while suppression was working fine. The encoding is now private to this file.
-export function commonPairs(records, weights, queryTermList, { threshold = 0.9, floor = 4 } = {}) {
-  const skip = new Set();
-  const common = [];
-  // Below the floor there is no distribution to measure, and pruning on a
-  // handful of records would just be noise amplified into a rule.
-  if (records.length < floor) return { skip, common };
-  for (const term of queryTermList) {
-    let suppressed = false;
-    let informative = false;
-    for (const [name] of weights) {
-      let df = 0;
-      for (const fields of records) if (fieldMatches(fields[name], term)) df += 1;
-      if (!df) continue;
-      if (df / records.length >= threshold) {
-        skip.add(pairKey(term, name));
-        suppressed = true;
-      } else informative = true;
-    }
-    // Suppressed everywhere it appeared, and informative nowhere: the term is
-    // in the corpus and tells you nothing about which part. A term that appears
-    // NOWHERE is absent instead, and is deliberately not reported here.
-    if (suppressed && !informative) common.push(term);
-  }
-  return { skip, common };
 }

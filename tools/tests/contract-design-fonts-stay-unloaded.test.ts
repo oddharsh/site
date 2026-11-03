@@ -5,10 +5,9 @@
 // real faces anyway. design/styles.css imported it for the design skill's
 // prototypes until then. The file stays as a reference; this keeps it unloaded
 // and keeps any other @font-face from reusing a house family name (gotcha 88).
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 const FONTS = "design/tokens/fonts.css";
 const SELF = "tools/tests/contract-design-fonts-stay-unloaded.test.ts";
@@ -48,12 +47,7 @@ test("the matcher finds every way to load fonts.css, and only those", () => {
 
 test(`nothing tracked loads ${FONTS} or reuses a house family in @font-face`, () => {
   const house = families();
-  const files = execFileSync("git", ["ls-files", "-z", "*.css", "*.html", "*.json", "*.ts", "*.js", "*.jsx"], {
-    cwd: fileURLToPath(ROOT),
-    encoding: "utf8",
-  })
-    .split("\0")
-    .filter((f) => f && f !== FONTS && f !== SELF && !f.startsWith("src/dict/"));
+  const files = repoFiles(["*.css", "*.html", "*.json", "*.ts", "*.js", "*.jsx"]).filter((f) => f !== FONTS && f !== SELF && !f.startsWith("src/dict/"));
   assert.ok(files.length >= 500, `scanned ${files.length} files`);
   const offenders = files.flatMap((f) => findings(readFileSync(new URL(f, ROOT), "utf8"), house).map((why) => `${f}: ${why}`));
   assert.deepEqual(offenders, [], `${FONTS} is reference only (gotcha 88):\n  ${offenders.join("\n  ")}`);

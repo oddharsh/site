@@ -9,7 +9,8 @@ import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
-import { commonPairs, compareCodepoints, queryTerms, scoreFields } from "./lib/text.ts";
+import { compareCodepoints, queryTerms } from "./lib/text.ts";
+import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
@@ -354,7 +355,7 @@ export function _resetPhotoCaches() {
   _thumbHashes = undefined;
   _histograms = undefined;
   _photoJson.clear();
-  _preparedFields = undefined;
+  _photoSearch = undefined;
 }
 
 const PHOTO_PUBLIC_FIELDS = [
@@ -420,61 +421,23 @@ function photoMetadata(record) {
 }
 
 // ── ranking ───────────────────────────────────────────────────────────────
-// Which field a term hit says a lot about what the caller meant, so the fields
-// are weighted rather than joined. `film` outranks `alt` deliberately: "classic
-// chrome" is overwhelmingly a film-simulation query, and the same two words
-// appearing in a caption about a chrome bumper is the weaker reading.
-//
-// `expansion` is the offline semantic tier (images/semantics.json). It sits
-// below the caption a model actually looked at the photo to write, and above
-// the recipe card, because it is a recall aid rather than an observation.
-const PHOTO_FIELD_WEIGHTS = [
-  ["film", 6],
-  ["alt", 5],
-  ["camera", 4],
-  ["lens", 4],
-  ["expansion", 3],
-  ["year", 3],
-  ["recipe", 2],
-  ["stem", 1],
-];
+// The ranker and its index live in lib/photo-search.ts. build.ts bakes the
+// index into /images/photo-search.bin; this decodes it once per isolate and,
+// like _photoJson, keeps only a successful read. null where no baked file
+// exists (local dev, the contract fixtures), and queryPhotos then builds the
+// same index from the JSON it read.
+let _photoSearch: PhotoSearchIndex | undefined;
 
-function photoFields(stem, record, alt, expansion): Record<string, string> {
-  const date = String(record.date || "")
-    .slice(0, 10)
-    .replaceAll(":", "-");
-  return {
-    film: String(record.film || ""),
-    alt: String(alt || ""),
-    camera: String(record.camera || ""),
-    lens: String(record.lens || ""),
-    expansion: String(expansion || ""),
-    year: date.slice(0, 4),
-    recipe: Object.entries(record.recipe || {})
-      .map(([k, v]) => `${k}: ${asScalarText(v)}`)
-      .join(" "),
-    stem: String(stem),
-  };
-}
-
-// Every photo's scoring fields, built and lowercased once per isolate rather
-// than on every request: the recipe card alone is a join over each photo's
-// settings, and fieldMatches lowercases whatever it is handed (a no-op on these).
-// Keyed on the identity of the three inputs, which are per-isolate memos
-// themselves, so a test that resets or restubs them gets fresh fields.
-let _preparedFields: { metadata: object; altMap: unknown; semantics: unknown; byStem: Map<string, Record<string, string>> } | undefined;
-
-function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semantics) {
-  const cached = _preparedFields;
-  if (cached && cached.metadata === metadata && cached.altMap === altMap && cached.semantics === semantics) return cached.byStem;
-  const byStem = new Map(
-    Object.entries(metadata).map(([stem, record]) => [
-      stem,
-      Object.fromEntries(Object.entries(photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms)).map(([name, text]) => [name, text.toLowerCase()])),
-    ]),
-  );
-  _preparedFields = { metadata, altMap, semantics, byStem };
-  return byStem;
+async function getPhotoSearchIndex(env): Promise<PhotoSearchIndex | null> {
+  if (_photoSearch) return _photoSearch;
+  try {
+    const r = await env.ASSETS.fetch("https://assets.local/images/photo-search.bin");
+    if (!r.ok) return null;
+    _photoSearch = decodePhotoSearchIndex(await r.arrayBuffer());
+    return _photoSearch;
+  } catch {
+    return null;
+  }
 }
 
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
@@ -512,11 +475,12 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
     .slice(0, dateMax);
   const limit = clampParam(options.limit, PHOTO_QUERY_LIMITS.limitDefault, PHOTO_QUERY_LIMITS.limitMax);
   const offset = clampParam(options.offset, 0, PHOTO_QUERY_LIMITS.offsetMax, 0);
-  const [metadata, altMap, hashes, semantics] = await Promise.all([
+  const [metadata, altMap, hashes, semantics, bakedIndex] = await Promise.all([
     getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {}),
     getAltMap(env),
     getThumbHashes(env),
     getStaticPhotoJson<Record<string, { terms?: unknown }> | null>(env, "images/semantics.json", null),
+    q ? getPhotoSearchIndex(env) : null,
   ]);
   const manifestByStem = new Map(PHOTO_POOL.map((photo) => [photo.stem, photo]));
 
@@ -567,24 +531,20 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
   let common = [];
 
   if (q) {
-    const prepared = preparedFieldsFor(metadata || {}, altMap, semantics);
-    const candidates = kept.map(([stem, record]) => ({ stem, record, fields: prepared.get(stem) }));
+    const index = bakedIndex ?? buildPhotoSearchIndex(metadata || {}, altMap, semantics);
     // Measured against the set that survived the filters, not the whole archive:
     // inside `film=Classic Chrome` the word "chrome" IS in every candidate and
     // genuinely stops discriminating, which is the right answer there.
-    const { skip, common: suppressed } = commonPairs(
-      candidates.map((row) => row.fields),
-      PHOTO_FIELD_WEIGHTS,
+    const { scored, common: suppressed } = rankPhotoRows(
+      index,
       queryTermList,
+      rowsOf(
+        index,
+        kept.map(([stem]) => stem),
+      ),
     );
     common = suppressed;
-    const scoredRows = candidates
-      .map(({ stem, record, fields }) => ({
-        stem,
-        record,
-        scored: scoreFields(fields, PHOTO_FIELD_WEIGHTS, queryTermList, skip),
-      }))
-      .filter((row) => row.scored.hits > 0);
+    const scoredRows = scored.map(({ stem, ...score }) => ({ stem, record: metadata[stem], scored: score }));
     // Prefer photos that answer the WHOLE query. Falling straight to a bag of
     // terms would let one strong field on one term outrank a photo that matched
     // every term, which is how "classic chrome bridge" returns chrome bumpers.
@@ -690,8 +650,7 @@ export async function photoFacets(env) {
   return { total: records.length, camera: rank(tally.camera), lens: rank(tally.lens), film: rank(tally.film), year: rank(tally.year) };
 }
 
-export async function handlePhotoQuery(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handlePhotoQuery(request, env, ctx, url = new URL(request.url)) {
   const payload = await queryPhotos(
     env,
     {

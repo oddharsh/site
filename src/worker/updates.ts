@@ -99,8 +99,8 @@ export async function renderWindowsUpdate(cp) {
 
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
 // read from the same checkpoints projection as /updates and /restore.
-export async function handleUpdatesJson(request, env, ctx) {
-  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env);
+export async function handleUpdatesJson(request, env, ctx, url = new URL(request.url)) {
+  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env, url);
 }
 
 export async function renderUpdatesJson(cp) {

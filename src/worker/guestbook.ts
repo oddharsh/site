@@ -77,14 +77,16 @@ export type Entry = Signature & Observed & { id: number; at: string };
 // and an agent writing the escaped form can land the raw characters instead
 // (Claude Code's tool input decodes them; bun fmt leaves escapes alone).
 const INVISIBLE = /[\p{Cc}\p{Bidi_Control}]/gu;
-const GRAPHEMES = new Intl.Segmenter();
+// Built on first use: constructing a Segmenter loads ICU break data, and at
+// module scope that ran on every isolate's startup (gotcha 92).
+let graphemes: Intl.Segmenter | undefined;
 
 /** Plain one-line text, capped; null when nothing is left. */
 export function clean(value: unknown, max: number): string | null {
   const s = asText(value, "").replace(INVISIBLE, " ").replace(/\s+/g, " ").trim();
   if (!s) return null;
   // Cut on grapheme boundaries, so a cap never splits an emoji or a flag in two.
-  return Array.from(GRAPHEMES.segment(s), (g) => g.segment)
+  return Array.from((graphemes ??= new Intl.Segmenter()).segment(s), (g) => g.segment)
     .slice(0, max)
     .join("");
 }
@@ -148,6 +150,10 @@ export const INSERT_SQL = `INSERT OR IGNORE INTO ${TABLE}
   WHERE (SELECT count(*) FROM ${TABLE} WHERE day = ?1) < ?14
   RETURNING id`;
 
+// The columns rowToEntry reads, and no others: `day` exists for the UNIQUE key
+// and the daily cap, and no reader shows it.
+const ENTRY_COLUMNS = "id, at, name, purpose, tools, note, ip, user_agent, asn, network, country, verified_bot, signature_agent";
+
 export function rowToEntry(r: Record<string, unknown>): Entry {
   let tools: string[] = [];
   try {
@@ -182,7 +188,7 @@ export async function readEntries(env): Promise<Read> {
   const db = env.SOCIAL_DB;
   if (!db) return { state: "unbound", entries: [] };
   try {
-    const { results } = await db.prepare(`SELECT * FROM ${TABLE} ORDER BY id DESC LIMIT ?`).bind(SHOWN).all();
+    const { results } = await db.prepare(`SELECT ${ENTRY_COLUMNS} FROM ${TABLE} ORDER BY id DESC LIMIT ?`).bind(SHOWN).all();
     return { state: "ok", entries: (results || []).map(rowToEntry) };
   } catch (e) {
     if (/no such table/i.test(String(e?.message || e))) return { state: "ok", entries: [] };
@@ -265,10 +271,10 @@ async function sign(request: Request, env) {
 }
 
 /** The route: the page on GET, a signature on POST. */
-export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext) {
+export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext, url = new URL(request.url)) {
   if (request.method === "POST") return sign(request, env);
   if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET the page or POST a signature" }, 405, { allow: "GET, HEAD, POST" });
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK },
     live: () => renderGuestbookPage(),
   });

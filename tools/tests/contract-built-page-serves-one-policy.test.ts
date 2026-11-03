@@ -21,6 +21,10 @@ import { serveBuiltPage } from "../../src/worker/lib/built-page.ts";
 import { handleInbox } from "../../src/worker/inbox.ts";
 import { handleReading } from "../../src/worker/reading.ts";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const builtPageAt = (request: Request, env, page?) => serveBuiltPage(request, env, new URL(request.url), page);
+const staticPageAt = (request: Request, env, opts?) => serveStaticPage(request, env, new URL(request.url), opts);
+
 const PRELOAD = '</a/luna.0dbcdba1.css>; rel="preload"; as="style", </a/nav.684e58a4.js>; rel="preload"; as="script"';
 const POLICY = {
   "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
@@ -58,23 +62,23 @@ test("the q11 twin, the 304 and the HEAD all carry the page's policy", async () 
   const env = { ASSETS: stagedAssets(BUILT) };
   const page = { headers: POLICY, live: () => assert.fail("a staged page must not render live") };
 
-  const get = await serveBuiltPage(ask("/page"), env, page);
+  const get = await builtPageAt(ask("/page"), env, page);
   assert.equal(get.status, 200);
   assert.equal(get.headers.get("content-encoding"), "br", "the fixture reached the precompressed twin");
   for (const [name, value] of Object.entries(POLICY)) assert.equal(get.headers.get(name), value, `GET ${name}`);
 
-  const fresh = await serveBuiltPage(ask("/page", { headers: { "if-none-match": get.headers.get("etag") } }), env, page);
+  const fresh = await builtPageAt(ask("/page", { headers: { "if-none-match": get.headers.get("etag") } }), env, page);
   assert.equal(fresh.status, 304);
   for (const name of ["cache-control", "x-robots-tag"]) assert.equal(fresh.headers.get(name), POLICY[name], `304 ${name}`);
 
-  const head = await serveBuiltPage(ask("/page", { method: "HEAD" }), env, page);
+  const head = await builtPageAt(ask("/page", { method: "HEAD" }), env, page);
   assert.equal(head.status, 200);
   for (const [name, value] of Object.entries(POLICY)) assert.equal(head.headers.get(name), get.headers.get(name) && value, `HEAD ${name}`);
 });
 
 test("the Markdown twin carries the policy, keeps its no-store and drops the shell preloads", async () => {
   const env = { ASSETS: stagedAssets(BUILT) };
-  const get = await serveBuiltPage(ask("/page", { headers: MD }), env, { headers: POLICY });
+  const get = await builtPageAt(ask("/page", { headers: MD }), env, { headers: POLICY });
   assert.equal(get.headers.get("content-type"), "text/markdown; charset=utf-8");
   assert.equal(get.headers.get("x-robots-tag"), "noindex", "a noindex page's twin must not be its indexable copy");
   assert.equal(get.headers.get("referrer-policy"), POLICY["referrer-policy"]);
@@ -89,7 +93,7 @@ test("the Markdown twin carries the policy, keeps its no-store and drops the she
     "the edge keys the URL, never the Accept, so the negotiated twin must stay uncacheable whatever the page says",
   );
 
-  const head = await serveBuiltPage(ask("/page", { method: "HEAD", headers: MD }), env, { headers: POLICY });
+  const head = await builtPageAt(ask("/page", { method: "HEAD", headers: MD }), env, { headers: POLICY });
   assert.equal(await head.text(), "");
   assert.deepEqual(
     [...head.headers].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0)),
@@ -125,19 +129,19 @@ test("a tree with no bake renders live under the same policy", async () => {
   const live = () =>
     new Response("<!doctype html>live", { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-own": "kept" } });
   for (const method of ["GET", "HEAD"]) {
-    const res = await serveBuiltPage(ask("/page", { method }), env, { headers: POLICY, live });
+    const res = await builtPageAt(ask("/page", { method }), env, { headers: POLICY, live });
     assert.equal(res.status, 200);
     for (const [name, value] of Object.entries(POLICY)) assert.equal(res.headers.get(name), value, `${method} live ${name}`);
     assert.equal(res.headers.get("x-own"), "kept", "the policy is laid over the render, not in place of it");
   }
-  const frozen = await serveBuiltPage(ask("/page"), env, { headers: POLICY, live: () => Response.redirect("https://aadhar.sh/x", 302) });
+  const frozen = await builtPageAt(ask("/page"), env, { headers: POLICY, live: () => Response.redirect("https://aadhar.sh/x", 302) });
   assert.equal(frozen.status, 302, "a redirect is not the document and is returned as it came");
   assert.equal(frozen.headers.get("cache-control"), null);
 });
 
 test("a live answer that is not the document keeps its own headers", async () => {
   const env = { ASSETS: stagedAssets({}) };
-  const miss = await serveBuiltPage(ask("/writing/no-such-post"), env, {
+  const miss = await builtPageAt(ask("/writing/no-such-post"), env, {
     headers: POLICY,
     live: () =>
       new Response("<!doctype html>404", { status: 404, headers: { "content-type": "text/html", "cache-control": "public, max-age=30, must-revalidate" } }),
@@ -146,35 +150,40 @@ test("a live answer that is not the document keeps its own headers", async () =>
   assert.equal(miss.headers.get("cache-control"), "public, max-age=30, must-revalidate", "a miss must not inherit a day of shared cache");
   assert.equal(miss.headers.get("x-robots-tag"), null);
 
-  const text = await serveBuiltPage(ask("/writing/post"), env, {
+  const text = await builtPageAt(ask("/writing/post"), env, {
     headers: POLICY,
     live: () => new Response("plain", { headers: { "content-type": "text/plain; charset=utf-8" } }),
   });
   assert.equal(text.headers.get("cache-control"), null, "only an HTML 200 is the page");
 
   // no live renderer declared: the asset layer's clamped 404 is the answer
-  const none = await serveBuiltPage(ask("/page"), env, { headers: POLICY });
+  const none = await builtPageAt(ask("/page"), env, { headers: POLICY });
   assert.equal(none.status, 404);
   assert.equal(none.headers.get("cache-control"), "public, max-age=0, must-revalidate");
 });
 
 test("a diverted request skips the built file and the policy", async () => {
   const env = { ASSETS: stagedAssets(BUILT) };
-  const page = {
+  // The predicate closes over its request's URL, as the route handlers do with
+  // the one dispatch parsed.
+  const page = (request: Request) => ({
     headers: POLICY,
-    divert: (url) => (url.searchParams.get("q") ? new Response("results", { headers: { "content-type": "text/html", "cache-control": "no-store" } }) : null),
+    divert: () =>
+      new URL(request.url).searchParams.get("q") ? new Response("results", { headers: { "content-type": "text/html", "cache-control": "no-store" } }) : null,
     live: () => assert.fail("neither arm renders live here"),
-  };
-  const diverted = await serveBuiltPage(ask("/page?q=photos"), env, page);
+  });
+  const query = ask("/page?q=photos");
+  const diverted = await builtPageAt(query, env, page(query));
   assert.equal(await diverted.text(), "results");
   assert.equal(diverted.headers.get("cache-control"), "no-store", "a per-query answer does not take the shell's cache policy");
   assert.equal(diverted.headers.get("x-robots-tag"), null);
   assert.deepEqual(env.ASSETS.asked, [], "the built file was never asked for");
 
-  const plain = await serveBuiltPage(ask("/page"), env, page);
+  const bare = ask("/page");
+  const plain = await builtPageAt(bare, env, page(bare));
   assert.equal(plain.headers.get("content-encoding"), "br", "without the query the predicate declines and the document is served");
   // an async predicate that declines is awaited, not taken as truthy
-  const declined = await serveBuiltPage(ask("/page"), env, { ...page, divert: async () => null });
+  const declined = await builtPageAt(ask("/page"), env, { ...page(bare), divert: async () => null });
   assert.equal(declined.headers.get("content-encoding"), "br");
 });
 
@@ -212,7 +221,7 @@ test("/inbox and /reading serve their twins under the page's policy", async () =
 // no policy at all. Their twins must be exactly what they were.
 test("a page with no policy serves the twin it always did", async () => {
   const env = { ASSETS: stagedAssets(BUILT) };
-  const viaEngine = await serveStaticPage(ask("/page", { headers: MD }), env);
+  const viaEngine = await staticPageAt(ask("/page", { headers: MD }), env);
   const direct = await serveMarkdownTwin(ask("/page", { headers: MD }), env, "/page.md");
   assert.ok(direct, "the fixture stages the twin");
   assert.deepEqual(

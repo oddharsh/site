@@ -151,8 +151,7 @@ async function readReadingList(request, env, ctx): Promise<{ response: Response;
 // A valid ?bust=SECRET makes getCuriusCached drop the KV payload and re-crawl
 // inline, and the fresh fragment OVERWRITES this colo's cached copy, awaited, so
 // the owner's own next load reads the new list. Anything else is null.
-export async function refreshReadingList(request, env, ctx) {
-  const url = new URL(request.url);
+export async function refreshReadingList(request, env, ctx, url = new URL(request.url)) {
   if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const { ok, response } = await readReadingList(request, env, ctx);
   if (ok) {
@@ -163,10 +162,10 @@ export async function refreshReadingList(request, env, ctx) {
   return response;
 }
 
-export async function handleReadingList(request, env, ctx) {
-  const busted = await refreshReadingList(request, env, ctx);
+export async function handleReadingList(request, env, ctx, url = new URL(request.url)) {
+  const busted = await refreshReadingList(request, env, ctx, url);
   if (busted) return busted;
-  return cachedRender(request, ctx, async () => (await readReadingList(request, env, ctx)).response, LIST_URL, env);
+  return cachedRender(request, ctx, async () => (await readReadingList(request, env, ctx)).response, LIST_URL, env, url);
 }
 
 // The route. ?bust=SECRET still works at the page URL: it refreshes the island's
@@ -175,14 +174,14 @@ export async function handleReadingList(request, env, ctx) {
 // document takes, and falls back to rendering the shell where no bake is staged
 // (bun run dev, and the contract suite, which is why it lives here rather than in
 // index.ts).
-export async function handleReading(request, env, ctx) {
-  if (new URL(request.url).searchParams.has("bust")) {
-    const busted = await refreshReadingList(request, env, ctx);
+export async function handleReading(request, env, ctx, url = new URL(request.url)) {
+  if (url.searchParams.has("bust")) {
+    const busted = await refreshReadingList(request, env, ctx, url);
     try {
       await busted?.body?.cancel();
     } catch {}
   }
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: {
       "cache-control": PAGE_CACHE_CONTROL,
       "link": SHELL_PRELOAD_LINK,

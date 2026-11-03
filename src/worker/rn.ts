@@ -1,7 +1,8 @@
 import { signedFetch } from "./lib/botauth.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget, type Budget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -256,8 +257,19 @@ function artAttrs(kind: "track" | "artist", rawUrl): Html {
   return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
-export async function handleRnArt(request, env, ctx) {
-  const url = new URL(request.url);
+export function handleRnArt(request, env, ctx, url = new URL(request.url)) {
+  return rnArt(request, env, ctx, {}, url);
+}
+
+// `budget` is the art warm's ledger, charged at the moment each call is made:
+// 1 for the probe, then exactly 2 on a miss (the transform, then the put or the
+// fallback fetch, never both). Charging at the call rather than reserving the
+// worst case up front is what lets six concurrent lanes spend the ledger to the
+// last unit. A URL the ledger cannot afford answers `x-art-cache: skipped`.
+// A separate export for the same reason as rnTracksHtml: the router passes the
+// request URL in the fourth slot.
+export async function rnArt(request, env, ctx, opts: { budget?: Budget }, url = new URL(request.url)) {
+  const skipped = () => new Response(null, { status: 503, headers: { "cache-control": "no-store", "x-art-cache": "skipped" } });
   const m = ART_PATH.exec(url.pathname);
   if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
   const [, hash, widthRaw, , ext] = m;
@@ -274,6 +286,7 @@ export async function handleRnArt(request, env, ctx) {
   const cache = caches.default;
   const cacheable = request.method === "GET";
   if (cacheable) {
+    if (opts.budget && !opts.budget.afford(1)) return skipped();
     const hit = await cache.match(request);
     if (hit) {
       const r = new Response(hit.body, hit);
@@ -282,6 +295,7 @@ export async function handleRnArt(request, env, ctx) {
     }
   }
 
+  if (opts.budget && !opts.budget.afford(2)) return skipped();
   const upstream = `https://i.scdn.co/image/${hash}`;
   // fit:scale-down never enlarges, so a source already smaller than the tier is
   // passed through at its own size instead of being upscaled into a bigger file
@@ -416,11 +430,31 @@ export function artWarmList(payload, origin) {
 //
 // Skipping the guard costs one `cache.match` per URL, because `handleRnArt`
 // ALREADY probes the cache first and returns the hit without transforming. So a
-// fully warm colo pays one cache lookup per URL (at most WARM_MAX_URLS) and zero
-// subrequests, which is the cheap case anyway. The guard bought a rounding error
-// and cost the feature.
+// fully warm colo pays one cache lookup per URL (at most WARM_MAX_URLS), which
+// is the cheap case anyway. The guard bought a rounding error and cost the
+// feature.
+//
+// THAT LOOKUP IS A SUBREQUEST, and so is the cache.put. On Workers Free the
+// Cache API shares fetch's 50 calls per invocation (Workers limits page, "Cache
+// API limits"). Until 2026-10-30 this fanned out all 40 URLs at once, so a cold
+// colo spent 40 on cache.match before the first transform, 10 on transforms,
+// and then every cache.put was refused. Production traces 2026-10-23 to 10-30:
+// 120 of 120 warms read warmed 9-10, failed 30-31, already 0, and the refused
+// puts were Workers Issue a40bfd76 (353 hits, all visitor GETs of this
+// fragment, none on the :07/:37 probe). The warm stored nothing at all. Now
+// rnArt charges a ledger at each call and skips what it cannot afford.
+//
+// Held back for what this invocation spends outside the ledger: a lapsed SWR
+// stamp rescrapes in its own waitUntil, ~7 subrequests (scrapePlaylistTracks).
+const WARM_BUDGET_RESERVE = 8;
+// Enough lanes that a cold colo finishes in a few transforms' time (~600ms
+// each). Lanes that probe at the same moment the ledger runs dry each waste
+// one probe, so a cold colo warms 12 to 14 covers a fragment miss, and the
+// next miss in that colo finds those as cheap hits and warms further down.
+const WARM_LANES = 6;
+
 export async function warmArtCache(payload, request, env, ctx) {
-  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0 };
+  const none = { warmed: 0, already: 0, untransformed: 0, failed: 0, skipped: 0, spent: 0 };
   // `caches` is a BARE GLOBAL that may not be declared at all, and referencing
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
@@ -430,42 +464,49 @@ export async function warmArtCache(payload, request, env, ctx) {
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
 
-  const outcomes = await Promise.all(
-    urls.map(async (u) => {
-      try {
-        // Call the handler directly instead of fetching our own origin. A self
-        // fetch would cost a second worker invocation per cover to reach this
-        // same function, and `handleRnArt` already does its own cache.put.
-        const res = await handleRnArt(new Request(u), env, ctx);
-        // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
-        // and a tee branch nobody reads can back-pressure the branch being written
-        // to the cache. These are 5-19KB images, so buffering them is free.
-        if (res.body) await res.arrayBuffer();
-        // handleRnArt marks its own response, so the warm can report what it
-        // actually DID rather than how many URLs it considered. That distinction
-        // is the whole reason the broken guard went unnoticed: the old attribute
-        // counted intent, and intent looked identical to success.
-        //
-        // The same mistake survived one level down until 2026-10-09: anything
-        // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
-        // production that 502 is mostly the 50-subrequest cap: a cold cover costs
-        // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
-        // found nothing cached and tried all 40 (one CDG trace threw "Too many
-        // subrequests" while its span still read warmed 40). Only `miss` means a
-        // transformed cover went to cache.put. A 200 without it is the
-        // untransformed fallback, which is served but never stored.
-        const mark = res.headers.get("x-art-cache");
-        if (mark === "hit") return "already";
-        if (mark === "miss") return "warmed";
-        return res.ok ? "untransformed" : "failed";
-      } catch {
-        return "failed";
-      }
-    }),
-  );
+  const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: WARM_BUDGET_RESERVE });
+  const outcomes = await mapWithConcurrency(urls, WARM_LANES, async (u) => {
+    try {
+      // Call the handler directly instead of fetching our own origin. A self
+      // fetch would cost a second worker invocation per cover to reach this
+      // same function, and `handleRnArt` already does its own cache.put.
+      const res = await rnArt(new Request(u), env, ctx, { budget });
+      // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
+      // and a tee branch nobody reads can back-pressure the branch being written
+      // to the cache. These are 5-19KB images, so buffering them is free.
+      if (res.body) await res.arrayBuffer();
+      // handleRnArt marks its own response, so the warm can report what it
+      // actually DID rather than how many URLs it considered. That distinction
+      // is the whole reason the broken guard went unnoticed: the old attribute
+      // counted intent, and intent looked identical to success.
+      //
+      // The same mistake survived one level down until 2026-10-09: anything
+      // that wasn't a hit read as `warmed`, including handleRnArt's 502. In
+      // production that 502 is mostly the 50-subrequest cap: a cold cover costs
+      // one or two fetches, and 71 of the 79 warms traced 2026-10-02 to 10-09
+      // found nothing cached and tried all 40 (one CDG trace threw "Too many
+      // subrequests" while its span still read warmed 40). Only `miss` means a
+      // transformed cover went to cache.put. A 200 without it is the
+      // untransformed fallback, which is served but never stored.
+      const mark = res.headers.get("x-art-cache");
+      if (mark === "hit") return "already";
+      if (mark === "miss") return "warmed";
+      if (mark === "skipped") return "skipped";
+      return res.ok ? "untransformed" : "failed";
+    } catch {
+      return "failed";
+    }
+  });
 
   const count = (o: string) => outcomes.filter((x) => x === o).length;
-  return { warmed: count("warmed"), already: count("already"), untransformed: count("untransformed"), failed: count("failed") };
+  return {
+    warmed: count("warmed"),
+    already: count("already"),
+    untransformed: count("untransformed"),
+    failed: count("failed"),
+    skipped: count("skipped"),
+    spent: budget.spent,
+  };
 }
 
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
@@ -498,13 +539,11 @@ function trackResponse(payload, status = 200, format = "json") {
 // apart from "no playlist configured" apart from "Spotify refused the scrape",
 // and the second homepage fragment going quiet is exactly the kind of thing that
 // otherwise gets noticed by eye, weeks later.
-async function loadRnTracks(request, env, ctx) {
-  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s));
+async function loadRnTracks(request, env, ctx, url = new URL(request.url)) {
+  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s, url));
 }
 
-async function loadRnTracksInner(request, env, ctx, s) {
-  const url = new URL(request.url);
-
+async function loadRnTracksInner(request, env, ctx, s, url: URL) {
   if (!env.RN_KV) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
@@ -546,12 +585,12 @@ async function loadRnTracksInner(request, env, ctx, s) {
 
 // `/rn/tracks` is the stable machine contract. Keep its representation fixed
 // so callers do not need to negotiate against a browser-oriented HTML shape.
-export async function handleRnTracks(request, env, ctx) {
+export async function handleRnTracks(request, env, ctx, url = new URL(request.url)) {
   // A KV throw used to escape as Cloudflare's HTML 1101 page from the
   // machine-facing contract. It answers in the endpoint's own error shape.
   let result;
   try {
-    result = await loadRnTracks(request, env, ctx);
+    result = await loadRnTracks(request, env, ctx, url);
   } catch (e) {
     console.error("rn/tracks: load failed", e);
     return trackResponse({ error: "playlist read failed", code: "storage_unavailable", tracks: [] }, 503, "json");
@@ -591,27 +630,31 @@ export async function handleRnTracks(request, env, ctx) {
 // the 2026-09-27 15:07 tick: `outcome: exception`, 14 x "Too many subrequests",
 // 3 tracks and 6 artists stuck pending. Warming the cron's colo also bought
 // nothing, since the warm exists for the colo about to serve a hover.
-export function handleRnTracksHtml(request, env, ctx) {
-  return rnTracksHtml(request, env, ctx, { warm: true });
+export function handleRnTracksHtml(request, env, ctx, url = new URL(request.url)) {
+  return rnTracksHtml(request, env, ctx, { warm: true }, url);
 }
 
-export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
-  const result = await loadRnTracks(request, env, ctx);
+export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }, url = new URL(request.url)) {
+  const result = await loadRnTracks(request, env, ctx, url);
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(
       span("rn.art.warm", async (s) => {
-        const { warmed, already, untransformed, failed } = await warmArtCache(result.payload, request, env, ctx);
+        const { warmed, already, untransformed, failed, skipped, spent } = await warmArtCache(result.payload, request, env, ctx);
         // EVERY outcome, because any one alone is ambiguous. `warmed` 0 with
         // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
         // feature not running at all, and the first version of this span could not
         // tell those apart. That is precisely how the broken guard shipped green.
-        // `failed` is the subrequest cap (gotcha 36) and `untransformed` the
-        // Images fallback; the four always sum to the URLs attempted.
+        // `skipped` is what the ledger declined to start, `untransformed` the
+        // Images fallback, and `failed` an upstream refusal or, if the ledger's
+        // count is wrong again, the subrequest cap (gotcha 36). The five always
+        // sum to the URLs considered.
         s.setAttribute("rn.art.warmed", warmed);
         s.setAttribute("rn.art.already", already);
         s.setAttribute("rn.art.untransformed", untransformed);
         s.setAttribute("rn.art.failed", failed);
+        s.setAttribute("rn.art.skipped", skipped);
+        s.setAttribute("budget.spent", spent);
       }).catch(() => {}),
     );
   }
@@ -700,9 +743,9 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 // the cacheable representation of the pair (the negotiated /rn response is
 // no-store, because the edge keys on URL and not on Accept), and it rides the
 // same SWR payload, so answering it costs a KV read.
-export async function handleRnMarkdown(request, env, ctx) {
-  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
-  const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+export async function handleRnMarkdown(request, env, ctx, url = new URL(request.url)) {
+  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx, url), playlistUrl(env)]);
+  const negotiated = wantsMarkdown(request) && !url.pathname.endsWith(".md");
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
   const headers: Record<string, string> = {
@@ -777,8 +820,22 @@ export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean 
 // receipt for when a homepage fragment takes seconds. Each phase's fetches are
 // auto-instrumented as children of its span.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
-  // tier 1: playlist embed → ordered track list
-  const playlistEntity = await span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId });
+  // tier 1: playlist embed → ordered track list. The stored meta map is read
+  // beside it, since neither needs the other, so a cold build waits on one
+  // round trip instead of the embed and then the KV read.
+  const [playlistEntity, meta] = await Promise.all([
+    span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId }),
+    span("rn.scrape.meta", async (s) => {
+      let known: Record<string, StoredTrackMeta> = {};
+      try {
+        known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
+      } catch {
+        /* a missing map means every cover is pending, never an error */
+      }
+      s.setAttribute("rn.meta_known", Object.keys(known).length);
+      return known;
+    }),
+  ]);
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
@@ -808,17 +865,6 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   //
   // What is left inline is ONE fetch and ONE KV read, so a cold build is ~7
   // subrequests and comfortably inside both budgets.
-  const meta = await span("rn.scrape.meta", async (s) => {
-    let known: Record<string, StoredTrackMeta> = {};
-    try {
-      known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
-    } catch {
-      /* a missing map means every cover is pending, never an error */
-    }
-    s.setAttribute("rn.meta_known", Object.keys(known).length);
-    return known;
-  });
-
   const tracks = baseTracks.map((t) => withTrackMeta(t, meta[t.id]));
   return {
     playlist_id: playlistId,
@@ -1248,8 +1294,7 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
 // ── /rn/admin handler ───────────────────────────────────────────────
 // renders the bookmark-friendly form. requires ?secret=<RN_BUST_SECRET>.
 // the form posts to /rn/set so the actual write logic stays in one place.
-export async function handleRnAdmin(request, env) {
-  const url = new URL(request.url);
+export async function handleRnAdmin(request, env, _ctx?, url = new URL(request.url)) {
   const secret = url.searchParams.get("secret") || "";
 
   if (!secretMatches(secret, env.RN_BUST_SECRET)) {
@@ -1291,8 +1336,7 @@ export async function handleRnAdmin(request, env) {
 //   POST /rn/set  with secret+url in form-encoded body  (the admin form)
 //   POST /rn/set  with secret+url as JSON               (programmatic)
 // returns the same tiny period-correct confirmation page in all cases.
-export async function handleRnSet(request, env) {
-  const url = new URL(request.url);
+export async function handleRnSet(request, env, _ctx?, url = new URL(request.url)) {
   const params = await readParams(request, url);
   const secret = params.get("secret") || "";
   const target = params.get("url") || "";

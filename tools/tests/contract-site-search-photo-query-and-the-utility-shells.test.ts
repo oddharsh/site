@@ -17,6 +17,15 @@ import {
 } from "./contract-shared.ts";
 import { _resetSearchIndex } from "../../src/worker/search.ts";
 import { fieldMatches } from "../../src/worker/lib/text.ts";
+import {
+  buildPhotoSearchIndex,
+  decodePhotoSearchIndex,
+  encodePhotoSearchIndex,
+  matchingRows,
+  PHOTO_FIELD_WEIGHTS,
+  photoFields,
+} from "../../src/worker/lib/photo-search.ts";
+import { readFile } from "node:fs/promises";
 
 // Moved out of the interaction-recipes file on 2026-10-24, where they had
 // accumulated: none of them is about /lens, so a change to /lens must never be
@@ -180,7 +189,99 @@ test("fieldMatches finds token starts without splitting, astral letters included
   ];
   for (const [field, term, expected] of cases) {
     assert.equal(fieldMatches(field, term), expected, `fieldMatches(${JSON.stringify(field)}, ${JSON.stringify(term)})`);
+    // The photo index answers the same rules with dictionary lookups.
+    const index = buildPhotoSearchIndex({ x: { film: String(field) } }, {}, null);
+    assert.equal(matchingRows(index.fields[0], String(term), index.words)[0] === 1, expected, `index for (${JSON.stringify(field)}, ${JSON.stringify(term)})`);
   }
+});
+
+const archiveFile = (name) => readFile(new URL(`../../public/images/${name}`, import.meta.url), "utf8");
+
+// The index is right only while it agrees with fieldMatches, its specification.
+// This holds every bit of the real archive's index to it, after a round trip
+// through the baked encoding: every field, every token the archive holds, its
+// plural, a truncation, and a digit run's tail (the substring rule's case).
+test("the baked photo index matches exactly the photos fieldMatches does", async () => {
+  const [metadata, alt, semantics] = (await Promise.all(["metadata.json", "alt.json", "semantics.json"].map(archiveFile))).map((text) => JSON.parse(text));
+  const index = decodePhotoSearchIndex(encodePhotoSearchIndex(buildPhotoSearchIndex(metadata, alt, semantics)).buffer);
+  assert.deepEqual(index.stems, Object.keys(metadata));
+  const texts = index.stems.map((stem) => photoFields(stem, metadata[stem], alt[stem], semantics[stem]?.terms));
+  const probes = new Set<string>();
+  for (const field of index.fields) {
+    for (const token of field.tokens) {
+      probes.add(token);
+      probes.add(`${token}s`);
+      probes.add(token.slice(0, Math.max(2, token.length - 2)));
+      if (/\d/.test(token)) probes.add(token.slice(2));
+    }
+  }
+  const disagreements = (terms: Iterable<string>) => {
+    const found: string[] = [];
+    for (const term of terms) {
+      index.fields.forEach((field, f) => {
+        const name = PHOTO_FIELD_WEIGHTS[f][0];
+        const rows = matchingRows(field, term, index.words);
+        index.stems.forEach((stem, row) => {
+          const indexed = ((rows[row >>> 5] >>> (row & 31)) & 1) === 1;
+          if (indexed !== fieldMatches(texts[row][name], term)) found.push(`${name} ${JSON.stringify(term)} ${stem}`);
+        });
+      });
+    }
+    return found;
+  };
+  assert.deepEqual(disagreements(probes), []);
+
+  // CONTROL: one flipped bit is a disagreement the comparison reports.
+  const film = index.fields[0];
+  film.tokenRows[film.tokens.indexOf("chrome") * index.words] ^= 1;
+  assert.deepEqual(disagreements(["chrome"]), [`film "chrome" ${index.stems[0]}`]);
+});
+
+test("queryPhotos ranks the same from the baked index as from the JSON", async () => {
+  const names = ["metadata.json", "alt.json", "semantics.json", "hashes.json"];
+  const files = Object.fromEntries(await Promise.all(names.map(async (name) => [`/images/${name}`, await archiveFile(name)])));
+  const [metadata, alt, semantics] = names.map((name) => JSON.parse(files[`/images/${name}`]));
+  const envWith = (baked: ReturnType<typeof encodePhotoSearchIndex> | null) => {
+    _resetPhotoCaches();
+    return {
+      ASSETS: {
+        async fetch(input) {
+          const path = new URL(input).pathname;
+          if (path === "/images/photo-search.bin" && baked) return new Response(baked);
+          return path in files ? new Response(files[path]) : new Response("not found", { status: 404 });
+        },
+      },
+    };
+  };
+  const baked = encodePhotoSearchIndex(buildPhotoSearchIndex(metadata, alt, semantics));
+  const queries = [
+    { q: "classic chrome street" },
+    { q: "long exposure" },
+    { q: "monochrome" },
+    { q: "xf27mm" },
+    { q: "leica night street" },
+    { q: "acros portrait 2026" },
+    { q: "bridges" },
+    { q: "chrome", film: "classic chrome" },
+  ];
+  for (const options of queries) {
+    const fromJson = await queryPhotos(envWith(null), { ...options, limit: 50 });
+    const fromBaked = await queryPhotos(envWith(baked), { ...options, limit: 50 });
+    assert.deepEqual(fromBaked, fromJson, JSON.stringify(options));
+  }
+  const street = await queryPhotos(envWith(baked), { q: "classic chrome street" });
+  assert.equal(street.ranking.mode, "all-terms");
+  assert.notEqual(street.total, 0);
+
+  // CONTROL: the baked file is what ranked. Baked from a caption the JSON does
+  // not carry, it answers a query the JSON cannot.
+  const stem = Object.keys(metadata)[0];
+  const altered = encodePhotoSearchIndex(buildPhotoSearchIndex(metadata, { ...alt, [stem]: "zyzzyva" }, semantics));
+  assert.deepEqual(
+    (await queryPhotos(envWith(altered), { q: "zyzzyva" })).photos.map((photo) => photo.stem),
+    [stem],
+  );
+  assert.equal((await queryPhotos(envWith(null), { q: "zyzzyva" })).total, 0);
 });
 
 test("photo query drops stopwords and says which it dropped", async () => {

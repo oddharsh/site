@@ -125,7 +125,7 @@ export function buildTagRequest(ev: TagInput) {
  *  all invalidate a stored tag with no version number to remember to bump.
  *  JSON.stringify is stable here because buildTagRequest builds every object in
  *  one fixed key order. */
-export async function tagInputHash(request: ReturnType<typeof buildTagRequest>): Promise<string> {
+export async function tagInputHash(request: object): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(request));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return new Uint8Array(digest).toHex();

@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { photoInputs } from "../photos/photo-inputs.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -64,9 +65,7 @@ async function fixture(run) {
       "tools/lib/photo-indexes.ts",
       ...new Set<string>(declared),
     ];
-    for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" })
-      .split("\0")
-      .filter(Boolean)) {
+    for (const rel of repoFiles(corpus, REPO)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
     await put("trace", "");
@@ -140,7 +139,6 @@ printf encoded > "$last"`,
     // except the -revert coefficient reorders gen-encoding-samples.sh writes its
     // scan-order twins with, which have no geometry in them.
     await command("mozjpeg/bin/jpegtran", 'echo "jpegtran $*" >> "$TRACE"; case "$*" in *-revert*) printf encoded; exit 0 ;; esac; exit 1');
-    await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     // The metrics answer per file so a test can make a HIF's direct encode
     // beat its JPEG bar (CAND_S2 above 95, CAND_BA below 0.5) or not. hif-archive.ts
     // scores its candidates as cand.png; the bar is base.png. It reaches this
@@ -149,9 +147,10 @@ printf encoded > "$last"`,
       "bin/photo-metrics",
       'case "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac; echo "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"',
     );
-    // export-for-instagram.sh still scores with libjxl's two CLIs.
-    await command("bin/ssimulacra2", 'case "$2" in *cand*) echo "${CAND_S2:-95}" ;; *) echo 95 ;; esac');
-    await command("bin/butteraugli_main", 'case "$2" in *cand*) echo "${CAND_BA:-0.5}" ;; *) echo 0.5 ;; esac');
+    // export-for-instagram.sh runs the crate's own binary, the way it runs zenc,
+    // on djpeg's decode of each candidate.
+    await command("tools/photos/photo-metrics/target/release/photo-metrics", 'echo "{\\"s2\\":95,\\"ba\\":0.5,\\"ba3\\":0.5}"');
+    await command("bin/djpeg", 'printf decoded > "$2"');
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
@@ -289,6 +288,7 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     await put("CLAUDE.md", declaration.tools.map((t) => t.bin).join("\n"));
     await put("docs/MAINTENANCE.md", "fixture");
     await put("tools/check-tools.ts", await readFile(new URL("../check-tools.ts", import.meta.url), "utf8"));
+    await put("tools/lib/repo-files.ts", await readFile(new URL("../lib/repo-files.ts", import.meta.url), "utf8"));
     execFileSync("git", ["init", "-q"], { cwd: root, stdio: "pipe" });
     execFileSync("git", ["add", "."], { cwd: root, stdio: "pipe" });
     const cli = () =>

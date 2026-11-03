@@ -2,12 +2,12 @@
 // JavaScript contract in the build, local staging, and subsequent dev edits.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { browserJavaScript, browserJavaScripts } from "../lib/browser-source.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 import { copyServedTree, linkServedTree, planServedTree } from "../lib/served-tree.ts";
 import { watchClientSources } from "../dev-stage.ts";
 
@@ -15,7 +15,7 @@ const authoredJs = (files: string[]) =>
   files.filter((file) => !file.startsWith("src/dict/") && !file.startsWith("tools/fixtures/") && file !== "src/client/garage/pretext.lib.js");
 
 test("owned JavaScript has migrated; dictionaries, byte fixtures and vendored code keep their bytes", () => {
-  const files = execFileSync("git", ["ls-files", "*.js", "*.mjs", "*.cjs"], { encoding: "utf8" }).trim().split("\n");
+  const files = repoFiles(["*.js", "*.mjs", "*.cjs"]);
   assert.ok(files.length > 50, "the dictionary inventory must not disappear");
   assert.deepEqual(authoredJs(files), []);
   assert.deepEqual(authoredJs([...files, "tools/stale.mjs"]), ["tools/stale.mjs"], "control: a new owned JS file is rejected");

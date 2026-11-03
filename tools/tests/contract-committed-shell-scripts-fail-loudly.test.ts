@@ -1,6 +1,6 @@
 // ── every committed shell script aborts instead of continuing ────────────────
-import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // Gotcha 40 is the bill for a shell script that kept going. `zenc histogram`
 // returns 2 on an unreadable hashes.json, add-photos.sh ran it as
@@ -18,7 +18,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 // somebody remembers into one a PR cannot lose. A twelfth script is covered by
 // existing rather than by an edit here.
 
-/** Committed shell scripts, from `git ls-files` rather than a directory walk.
+/** Shell scripts a commit would hold, from git rather than a directory walk.
  *
  *  THE ENUMERATOR IS THE ASSERTION HERE. This test is about scripts the
  *  repository OWNS, and the walk it used to do could not express that: it read
@@ -30,19 +30,13 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
  *  third-party `.sh` files this repository does not own and may not edit; the
  *  walk found every one of them and failed.
  *
- *  `git ls-files` answers the question the test's own name asks, and it stays
- *  right for the next vendored tree without an edit here. Untracked scripts are
- *  correctly out of scope: a script nobody has committed cannot regress CI.
+ *  Git answers the question the test's own name asks, and it stays right for
+ *  the next vendored tree without an edit here, since that tree is ignored.
+ *  Untracked scripts are in scope: until 2026-10-29 they were left out, so a
+ *  new script read green locally and failed CI once committed (gotcha 91).
  */
 function shellScripts() {
-  const out = execFileSync("git", ["ls-files", "-z", "*.sh"], {
-    cwd: new URL(".", ROOT),
-    encoding: "utf8",
-  });
-  return out
-    .split("\0")
-    .filter(Boolean)
-    .map((rel) => new URL(rel, new URL(".", ROOT)));
+  return repoFiles(["*.sh"]).map((rel) => new URL(rel, new URL(".", ROOT)));
 }
 
 /** A `set` line is only the one that OPENS a line, so the word inside a comment

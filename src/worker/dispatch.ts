@@ -46,7 +46,7 @@ export type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContex
 export type DispatchHandlers = {
   exact: Record<ExactPath, RouteHandler>;
   prefix: Record<PrefixLabel, RouteHandler>;
-  album: (album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) => Response | Promise<Response>;
+  album: (album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
   // everything arriving on cal.aadhar.sh, before any table is consulted
   calHost: RouteHandler;
 };
@@ -90,7 +90,7 @@ export type DispatchHandlers = {
 // function in index.ts it could not be imported under plain node (gotcha 16), so
 // no test could reach it, and the Markdown bug shipped through a green CI.
 // Derived from routes.ts's `cacheable` flags since 2026-10-02.
-export const isEdgeCacheable = (request: Request): boolean => shouldUseWorkersCache(request, CACHEABLE_PATHS);
+export const isEdgeCacheable = (request: Request, url: URL): boolean => shouldUseWorkersCache(request, CACHEABLE_PATHS, url);
 
 export function createDispatch(handlers: DispatchHandlers) {
   // Lens and MCP dispatch back into this Worker. Building that derived env
@@ -123,7 +123,7 @@ export function createDispatch(handlers: DispatchHandlers) {
   // one page per album (albums.ts), generated at deploy like /photos, with the
   // dynamic handler as the 404 fallback and the slashed twin 301ing to it
   for (const album of Object.values(ALBUMS)) {
-    exactRoutes.set(albumPath(album), (request, env, ctx) => handlers.album(album, request, env, ctx));
+    exactRoutes.set(albumPath(album), (request, env, ctx, url) => handlers.album(album, request, env, ctx, url));
     exactRoutes.set(`${albumPath(album)}/`, (_request, _env, _ctx, url) => Response.redirect(url.origin + albumPath(album), 301));
   }
   // Walked in routes.ts's order, which is load-bearing (its PREFIX_ROUTES header).
@@ -140,18 +140,22 @@ export function createDispatch(handlers: DispatchHandlers) {
     };
   }
 
-  async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  // The default entry parses once and hands its URL over; CachedPages arrives
+  // as its own invocation and parses here.
+  async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext, url = new URL(request.url)) {
     env = withBotPolicyCache(env);
-    const url = new URL(request.url);
+    // Read before routing: handlers get this same URL object and may rewrite it
+    // (routeIndexHtml does), and the steps after route() describe the request.
+    const { pathname, hostname } = url;
 
     // Workers preview URLs (see lib/preview.ts). A preview serves the real site
     // from a *.workers.dev host on PRODUCTION bindings and secrets, so writes are
     // refused and every response is marked noindex. Reads pass straight through,
     // which is what the URL is for. Deliberately ABOVE the .pages.dev arm and
     // everything else: a guard that runs after routing has already lost.
-    const onPreview = isPreviewHost(url.hostname);
+    const onPreview = isPreviewHost(hostname);
     if (onPreview) {
-      const denied = previewDenial(url.pathname, request.method);
+      const denied = previewDenial(pathname, request.method);
       if (denied) return denied;
     }
 
@@ -159,11 +163,11 @@ export function createDispatch(handlers: DispatchHandlers) {
     // GET-shaped writes answer 425 and the client retries after the handshake.
     // Same position as the preview guard, and for the same reason: a guard that
     // runs after routing has already lost (lib/early-data.ts).
-    const tooEarly = earlyDataDenial(request, url.pathname);
+    const tooEarly = earlyDataDenial(request, pathname);
     if (tooEarly) return tooEarly;
 
-    if (url.hostname.endsWith(".pages.dev")) {
-      const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+    if (hostname.endsWith(".pages.dev")) {
+      const target = `https://${CANONICAL_HOST}${pathname}${url.search}`;
       return new Response(null, {
         status: 301,
         headers: {
@@ -222,15 +226,15 @@ export function createDispatch(handlers: DispatchHandlers) {
     // empty read budget before any handler runs, and every answer from one
     // carries the service-desc Link (lib/api-contract.ts).
     // cal.aadhar.sh is its own host with its own handler, so it is left alone.
-    const onApiHost = url.hostname !== CAL_HOST.host;
+    const onApiHost = hostname !== CAL_HOST.host;
     // A throw becomes a 500 in the caller's format (lib/server-error.ts). The
     // console.error is what keeps Workers Issues counting it: Issues records a
     // logged error and a 5xx as well as an uncaught throw.
     let response: Response;
     try {
-      response = (onApiHost ? await apiPreflight(request, url.pathname, env) : null) ?? (await route(request, env, ctx));
+      response = (onApiHost ? await apiPreflight(request, pathname, env) : null) ?? (await route(request, env, ctx, url));
     } catch (error) {
-      console.error(`unhandled error on ${request.method} ${url.pathname}:`, error);
+      console.error(`unhandled error on ${request.method} ${pathname}:`, error);
       response = serverError(request);
     }
     // A 404 gets one more look before it leaves (lib/not-found.ts): a redirect
@@ -238,23 +242,23 @@ export function createDispatch(handlers: DispatchHandlers) {
     // sitemap and the closest real pages. cal.aadhar.sh is skipped because its
     // misses would be pointed at paths on a different host. The miss ledger
     // counts every one, recovered or not, by caller class and path bucket.
-    if (response.status === 404 && (request.method === "GET" || request.method === "HEAD") && url.hostname !== CAL_HOST.host) {
+    if (response.status === 404 && (request.method === "GET" || request.method === "HEAD") && hostname !== CAL_HOST.host) {
       const miss = await recoverNotFound(request, env, response);
-      countMiss(env, request, url.pathname, miss);
+      countMiss(env, request, pathname, miss);
       response = miss.response;
     }
     // the bot ledger: identified AI-crawler hits tick into Analytics Engine
     // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
-    if (onApiHost) response = withApiContract(response, url.pathname);
-    countCrawlerHit(env, request, response, url.pathname);
+    if (onApiHost) response = withApiContract(response, pathname);
+    countCrawlerHit(env, request, response, pathname);
     // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
     // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.
-    countSpeculativeLoad(env, request, response, url.pathname);
+    countSpeculativeLoad(env, request, response, pathname);
     const mcpEra = mcpEraOf(request);
     try {
       console.log(
         JSON.stringify({
-          p: url.pathname,
+          p: pathname,
           m: request.method,
           s: response.status,
           ms: Date.now() - t0,
@@ -285,11 +289,12 @@ export function createDispatch(handlers: DispatchHandlers) {
     // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
     // rather than listing the hosts that are not means the next alias is covered by
     // arriving, which is the same argument the preview guard's default-deny wins on.
-    return withSecurityHeaders(response, url.pathname, { noindex: !isCanonicalHost(url.hostname) });
+    return withSecurityHeaders(response, pathname, { noindex: !isCanonicalHost(hostname) });
   }
 
-  async function route(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
+  // SELF_FETCH and the cron arrive without a parsed URL; serveWorkerRequest
+  // hands over the one it already holds.
+  async function route(request: SiteRequest, env: Env, ctx: ExecutionContext, url = new URL(request.url)) {
     // Preserve the legacy Cal subdomain while giving it a small, unlisted
     // work-calendar escape hatch. The bare host is public and goes to the
     // canonical booking page; only the exact secret slug redirects externally.

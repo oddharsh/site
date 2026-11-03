@@ -74,8 +74,7 @@ async function mirrorCount(env, n, force = false) {
 // No file extension: only one of the shapes is an image, and browsers pick a
 // decoder off content-type rather than the path, so the <noscript> <img> is happy
 // against a bare route.
-export async function handleHit(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleHit(request, env, ctx, url = new URL(request.url)) {
   const ua = request.headers.get("user-agent") || "";
   const peek =
     request.method === "HEAD" ||

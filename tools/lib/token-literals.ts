@@ -211,6 +211,9 @@ export function tokenCopiesIn(css: string, map: Map<string, string>): TokenCopy[
       if (near.length === 1) [token, dE] = near[0];
     }
     if (!token) continue;
+    // The token's own definition under its own name is not a copy: the homepage
+    // inlines its tokens because it paints before luna.css lands.
+    if (new RegExp(`(?<![\\w-])${token}\\s*:\\s*$`).test(css.slice(Math.max(0, m.index - 48), m.index))) continue;
     const fix = parsed?.alpha ? `oklch(from var(${token}) l c h / ${parsed.alpha})` : `var(${token})`;
     out.push({ literal: m[0], token, index: m.index, dE: Math.round(dE * 1e4) / 1e4, fix });
   }

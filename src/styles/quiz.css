@@ -16,8 +16,9 @@
 #luq .luq-lead{font-weight:normal;font-size:var(--text-sm);color:#3a4255}
 #luq .luq-opts{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
 #luq label.luq-opt{display:flex;gap:8px;align-items:baseline;font-size:var(--text-sm);color:#2a3346;cursor:pointer;padding:4px 7px;border:1px solid transparent;border-radius:3px}
-#luq label.luq-opt:hover{background:var(--mist-96);border-color:#c8d6ec}
-#luq .luq-done label.luq-opt{cursor:default}#luq .luq-done label.luq-opt:hover{background:none;border-color:transparent}
+@media (hover: hover) and (pointer: fine) {#luq label.luq-opt:hover{background:var(--mist-96);border-color:#c8d6ec}}
+#luq .luq-done label.luq-opt{cursor:default}
+@media (hover: hover) and (pointer: fine) {#luq .luq-done label.luq-opt:hover{background:none;border-color:transparent}}
 #luq .luq-opt input{margin:0;flex:0 0 auto;position:relative;top:1px}
 #luq .luq-opt.hit{background:#eaf6ec;border-color:#7fbb8a}#luq .luq-opt.miss{background:#fbeeee;border-color:#d89a9a}
 #luq .luq-why{font-size:var(--text-xs);line-height:1.5;margin:0 0 10px;padding:7px 10px;border-radius:3px;border:1px solid}
@@ -35,7 +36,7 @@
    garage skin's radio labels, which share the .luq-opt class. */
 .log .luq-opts{display:flex;flex-direction:column;gap:5px;margin-top:7px}
 .log .luq-opt{font-family:var(--font-ui);font-size:var(--text-sm);text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,var(--surface-desktop));border:1px solid var(--slate-63);border-radius:3px;box-shadow:inset 1px 1px 0 #fff}
-.log .luq-opt:hover{border-color:var(--accent,#3a71f5);background:linear-gradient(to bottom,#fff,var(--green-95))}
+@media (hover: hover) and (pointer: fine) {.log .luq-opt:hover{border-color:var(--accent,#3a71f5);background:linear-gradient(to bottom,#fff,var(--green-95))}}
 .log .luq-opt:disabled{cursor:default;color:var(--slate-54);background:#f4f4f0;box-shadow:none}
 .log .luq-opt.was-pick:disabled{color:#1a2030;border-color:var(--accent,#3a71f5)}
 .log .luq-verdict b.hit{color:var(--green-51)}.log .luq-verdict b.miss{color:var(--red-55)}

@@ -1,6 +1,6 @@
 // ── Owner secrets compare in constant time, through one gate ─────────────────
 import { assert, readFileSync, test } from "./contract-shared.ts";
-import { execFileSync } from "node:child_process";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // Owner-only actions (a cache bust, the playlist admin, the census refresh,
 // serendipity's sync triggers) gate on a secret from the request. `===` stops
@@ -53,9 +53,7 @@ test("no Worker module compares an owner secret with === or !==", () => {
   for (const line of ["if (env.CENSUS_KEY === undefined) return;", 'if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {'])
     assert.ok(!BARE.test(line), `the scanner must pass: ${line}`);
 
-  const files = execFileSync("git", ["ls-files", "src/worker", "cal/src", "serendipity", "counter/src"], { encoding: "utf8" })
-    .split("\n")
-    .filter((f) => /\.(?:ts|js|mjs)$/.test(f));
+  const files = repoFiles(["src/worker", "cal/src", "serendipity", "counter/src"]).filter((f) => /\.(?:ts|js|mjs)$/.test(f));
   assert.ok(files.length > 50, `expected the Worker sources, got ${files.length} files`);
   const hits: any[] = [];
   for (const file of files) {

@@ -10,6 +10,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 import { clean, serializeAlt } from "../photos/gen-alt-text.ts";
 
 test("serializeAlt reproduces the committed alt.json byte for byte", async () => {
@@ -108,11 +109,10 @@ const PIPELINE_ENTRIES = [
 ];
 
 test("nothing on the photo pipeline's path spawns python", async () => {
-  const { execFileSync } = await import("node:child_process");
   const { readFileSync } = await import("node:fs");
   const root = fileURLToPath(ROOT);
-  const tracked = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean));
-  const read = (rel) => (tracked.has(rel) ? readFileSync(path.join(root, rel), "utf8") : undefined);
+  const owned = new Set(repoFiles([], root));
+  const read = (rel) => (owned.has(rel) ? readFileSync(path.join(root, rel), "utf8") : undefined);
   const scripts: Record<string, string> = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).scripts;
 
   const closure = invokedClosure(PIPELINE_ENTRIES, read, scripts);
@@ -128,9 +128,9 @@ test("nothing on the photo pipeline's path spawns python", async () => {
   ]) {
     assert.ok(closure.includes(must), `the invocation closure no longer reaches ${must}; it found ${closure.length} nodes`);
   }
-  // Every committed shell script too, reached or not: a script nothing calls
+  // Every shell script too, reached or not: a script nothing calls
   // today is one somebody calls tomorrow.
-  const shells = [...tracked].filter((f) => f.endsWith(".sh"));
+  const shells = [...owned].filter((f) => f.endsWith(".sh"));
   assert.ok(shells.length >= 13, `git ls-files found ${shells.length} shell scripts`);
 
   for (const rel of new Set([...closure, ...shells])) {
@@ -146,13 +146,7 @@ test("no Python is committed, declared, or pinned anywhere in the tree", async (
   // The last three .py files left on 2026-09-15 (gen-alt-text, matched-bytes-
   // probe, gen-pixel-peeper). config/retired.json bans the binary; this holds
   // the other three shapes a return could take.
-  const { execFileSync } = await import("node:child_process");
-  const py = execFileSync("git", ["ls-files", "-z", "*.py", "**/*.py", "*/requirements*.txt", "**/requirements*.txt"], {
-    cwd: fileURLToPath(ROOT),
-    encoding: "utf8",
-  })
-    .split("\0")
-    .filter(Boolean);
+  const py = repoFiles(["*.py", "**/*.py", "*/requirements*.txt", "**/requirements*.txt"]);
   assert.deepEqual(py, [], `Python files are committed: ${py.join(", ")}`);
   const tools = JSON.parse(await readFile(new URL("config/tools.json", ROOT), "utf8")).tools;
   assert.equal(
@@ -163,9 +157,7 @@ test("no Python is committed, declared, or pinned anywhere in the tree", async (
   const dependabot = await readFile(new URL(".github/dependabot.yml", ROOT), "utf8");
   assert.doesNotMatch(dependabot, /package-ecosystem: pip/, "the pip lane is back");
   // Control: the ls-files pathspec matches when there is something to match.
-  const ts = execFileSync("git", ["ls-files", "-z", "tools/photos/*.ts"], { cwd: fileURLToPath(ROOT), encoding: "utf8" })
-    .split("\0")
-    .filter(Boolean);
+  const ts = repoFiles(["tools/photos/*.ts"]);
   assert.ok(ts.includes("tools/photos/gen-pixel-peeper.ts"), "the pathspec scanner sees files that exist");
 });
 

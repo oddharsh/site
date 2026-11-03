@@ -15,6 +15,7 @@ const SECRET = "integration-signing-secret";
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
 let env: import("./harness.ts").CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
+// Booting miniflare took over 5 s, bun's default, on a loaded CI runner on 2026-10-18.
 beforeAll(async () => {
   cal = await bootCal();
   env = {
@@ -23,8 +24,8 @@ beforeAll(async () => {
     RESEND_API_KEY: "test-key",
     ICAL_URL: "https://calendar.test/availability.ics",
   };
-});
-afterAll(() => cal.close());
+}, 30_000);
+afterAll(() => cal?.close());
 
 const EMPTY_ICS = ["BEGIN:VCALENDAR", "VERSION:2.0", "END:VCALENDAR", ""].join("\r\n");
 
@@ -91,6 +92,31 @@ async function postBook(fields, overrides: Record<string, any> = {}) {
     },
     overrides,
   );
+}
+
+// BOOKINGS with a barrier after the read of held slots: each of the first
+// `parties` requests to list them waits there until all have read. That forces
+// the interleaving the race test documents. Left to the scheduler, one request
+// sometimes finished its write before the other read, and CI saw [200, 409] on
+// 2026-10-16.
+function readBeforeEitherWrites(kv, parties = 2) {
+  let arrived = 0;
+  let release = () => {};
+  const allRead = new Promise<void>((r) => (release = r));
+  return new Proxy(kv, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop);
+      if (prop !== "list") return typeof value === "function" ? value.bind(target) : value;
+      return async (opts) => {
+        const page = await target.list(opts);
+        if (opts?.prefix === "held:" && arrived < parties) {
+          if (++arrived === parties) release();
+          await allRead;
+        }
+        return page;
+      };
+    },
+  });
 }
 
 // A stand-in for the COUNTER Durable Object namespace.
@@ -313,9 +339,10 @@ describe("POST /book validation", () => {
   // documents the race rather than hiding it.
   it("without an atomic claim, two simultaneous bookings both take the same slot", async () => {
     const slot = await firstSlot();
+    const BOOKINGS = readBeforeEitherWrites(env.BOOKINGS);
     const [a, b] = await Promise.all([
-      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }),
-      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }),
+      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { BOOKINGS }),
+      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { BOOKINGS }),
     ]);
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(mailCalls.length).toBe(2); // the host is asked to approve one slot twice
@@ -324,9 +351,11 @@ describe("POST /book validation", () => {
   it("with the atomic claim, exactly one of two simultaneous bookings wins", async () => {
     const slot = await firstSlot();
     const COUNTER = stubCounterNamespace();
+    // Both pass the availability read, so the claim is what refuses one.
+    const BOOKINGS = readBeforeEitherWrites(env.BOOKINGS);
     const [a, b] = await Promise.all([
-      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { COUNTER }),
-      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { COUNTER }),
+      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { COUNTER, BOOKINGS }),
+      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { COUNTER, BOOKINGS }),
     ]);
     const statuses = [a.status, b.status].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0));
     expect(statuses).toEqual([200, 409]);

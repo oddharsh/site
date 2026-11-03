@@ -53,13 +53,13 @@
 // the bump and left the lockfile's resolution ahead of it. Every dependabot PR
 // that needs a `main` merge is a candidate, so this is a cadence rather than an
 // accident, the same argument docs/DEPENDENCIES.md's prose check rests on.
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { EXACT_PIN } from "./dependency-docs.ts";
 import { parseJsonc } from "./jsonc.ts";
+import { repoFiles } from "./repo-files.ts";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -197,11 +197,12 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
   return { checked, problems };
 }
 
-/** Every COMMITTED bun lockfile, and for each one the manifests it governs.
+/** Every bun lockfile a commit would hold (untracked ones too, gotcha 91),
+ *  and for each one the manifests it governs.
  *
  *  Both halves are derived rather than listed, and that is the point. The
- *  lockfile set comes from `git ls-files`, so a new sub-project is covered the
- *  day it is committed; the manifest set comes from each lockfile's own
+ *  lockfile set comes from git, so a new sub-project is covered the day its
+ *  bun.lock lands on disk; the manifest set comes from each lockfile's own
  *  `workspaces` keys, so a new workspace is covered by the lockfile that
  *  already had to record it. A hand-kept list (SUB_MANIFEST_POLICY is one) goes
  *  stale without failing anything: it names four package.json manifests while
@@ -209,8 +210,7 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
  *  sit outside it today and inside this.
  */
 export function readLockfilePins(root: string = REPO_ROOT): LockfileInput[] {
-  const listed = execFileSync("git", ["ls-files", "-z", "bun.lock", "*/bun.lock"], { cwd: root, encoding: "utf8" });
-  const locks = listed.split("\0").filter(Boolean).sort();
+  const locks = repoFiles(["bun.lock", "*/bun.lock"], root).sort();
 
   return locks.map((lock) => {
     const parsed = parseJsonc(readFileSync(path.join(root, lock), "utf8"));

@@ -217,8 +217,7 @@ export async function withWeakEtag(response) {
 //   - the key normalizes to a path, so query variants of a query-independent
 //     shell share one entry.
 //   - x-edge-cache: hit|miss makes every request auditable from curl.
-export async function cachedRender(request, ctx, renderFn, keyPath, env) {
-  const url = new URL(request.url);
+export async function cachedRender(request, ctx, renderFn, keyPath, env, url = new URL(request.url)) {
   const key = edgeKey(url.origin, keyPath || url.pathname, env);
   const cache = caches.default;
 
@@ -286,14 +285,13 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 // Bailing rather than varying, for the same reason as the Accept case: there is
 // no Vary that would help (the Host is not a request header the cache varies on
 // here), and the canonical host is the only one whose hit rate matters.
-export function shouldUseWorkersCache(request, cacheablePaths) {
+export function shouldUseWorkersCache(request, cacheablePaths, url: URL) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
   // Content negotiation: any request that asks for a representation other than the
   // cached one has to reach the dispatcher. Kept as a media-type test rather than
   // "has an accept header", since every browser sends one.
   if (wantsMarkdown(request)) return false;
-  const url = new URL(request.url);
   // A preview fetcher that gets an og:video clip gets its own copy of the page
   // (lib/og-video.ts), so it skips the cache both ways: a hit would hand it the
   // plain document, and a miss would store its copy for everyone else. `/` is

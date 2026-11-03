@@ -116,8 +116,7 @@ export function parseRange(header: string | null, size: number): ByteRange | "un
 // anything cleverer.
 const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", webm: "video/webm" };
 
-export async function serveOgVideo(request: Request, assets: { fetch: (r: Request) => Promise<Response> }): Promise<Response> {
-  const url = new URL(request.url);
+export async function serveOgVideo(request: Request, assets: { fetch: (r: Request) => Promise<Response> }, url = new URL(request.url)): Promise<Response> {
   const type = VIDEO_TYPES[url.pathname.split(".").pop()?.toLowerCase() ?? ""];
   const head = request.method === "HEAD";
   if (!type || (!head && request.method !== "GET")) return new Response("not found", { status: 404 });

@@ -1,6 +1,6 @@
 // ── D1 exec() is handed one-line statements only ─────────────────────────────
-import { execFileSync } from "node:child_process";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { repoFiles } from "../lib/repo-files.ts";
 
 // D1's exec() SPLITS ITS INPUT ON NEWLINES and runs each line as its own
 // statement, so a multi-line statement cannot survive it. around.ts handed it a
@@ -25,9 +25,7 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 /** Worker source this repository owns, from `git ls-files` rather than a walk,
  *  so a vendored tree cannot wander into scope. */
 function workerSources() {
-  const out = execFileSync("git", ["ls-files", "-z", "src/worker/*", "cal/src/*", "serendipity/*"], { cwd: new URL(".", ROOT), encoding: "utf8" });
-  return out
-    .split("\0")
+  return repoFiles(["src/worker/*", "cal/src/*", "serendipity/*"])
     .filter((rel) => /\.(ts|js|mjs)$/.test(rel))
     .map((rel) => ({ rel, url: new URL(rel, new URL(".", ROOT)) }));
 }

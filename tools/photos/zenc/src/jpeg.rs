@@ -54,7 +54,7 @@ pub fn encode(decoded: &DynamicImage, q: u8, chroma: ChromaSubsampling) -> Resul
             // a pipeline thumbnail now arrives already 1-channel and takes the
             // Luma8 arm above. This scan is still the only one that sees an
             // input no Frame ever touched, which is six call sites handing this
-            // path bytes straight from sips or ffmpeg: add-photos.sh phase 2,
+            // path bytes straight from sips: add-photos.sh phase 2,
             // add-car-photo.sh, and the two gen-encoding scripts.
             if img.as_raw().as_chunks::<3>().0.iter().all(|p| p[0] == p[1] && p[1] == p[2]) {
                 let gray: Vec<u8> = img.as_raw().as_chunks::<3>().0.iter().map(|p| p[0]).collect();

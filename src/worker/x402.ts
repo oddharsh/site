@@ -32,12 +32,10 @@ const USDC = {
 };
 const FACILITATOR_DEFAULT = "https://x402.org/facilitator";
 
-export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: ExecutionContext) {
-  const url = new URL(request.url);
-
+export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: ExecutionContext, url = new URL(request.url)) {
   // gate off = serve free, and say so. never a broken paywall.
   if (!env.X402_PAY_TO) {
-    return llmsFullResponse(request, env, { "x-payment-note": "x402 gate not configured; served free" });
+    return llmsFullResponse(request, env, url, { "x-payment-note": "x402 gate not configured; served free" });
   }
 
   const requirements = paymentRequirements(env, url);
@@ -93,7 +91,7 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
   // UTF-8 before base64. btoa threw on anything above U+00FF, and this line runs after
   // the payment settled, so one curly quote from the facilitator charged the payer for
   // an error. Identical bytes to btoa for every ASCII receipt.
-  return llmsFullResponse(request, env, {
+  return llmsFullResponse(request, env, url, {
     "x-payment-response": new TextEncoder().encode(JSON.stringify(settle.json)).toBase64(),
   });
 }
@@ -150,18 +148,17 @@ async function facilitatorPost(url, body) {
 //
 // no-store: the paid response carries a per-payment receipt header, so it must
 // never be shared from a cache.
-async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
+async function llmsFullResponse(request: SiteRequest, env: Env, url: URL, extraHeaders) {
   const headers = {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "no-store",
     ...extraHeaders,
   };
-  const served = await servePrecompressedText(request, env, { headers });
+  const served = await servePrecompressedText(request, env, url, { headers });
   if (served.status !== 404) return served;
 
-  const base = new URL(request.url);
   const grab = async (path) => {
-    const r = await env.ASSETS.fetch(new Request(new URL(path, base)));
+    const r = await env.ASSETS.fetch(new Request(new URL(path, url)));
     return r.ok ? await r.text() : null;
   };
   return new Response(await assembleWritingOnly(grab), { headers });

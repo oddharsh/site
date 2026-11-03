@@ -117,3 +117,6 @@ config/.generated/
 # Checkouts that built it before the move keep gigabytes of build trees here.
 tools/photos/libavif-avm/
 tools/photos/av2-metal/
+
+# CI restores the test input map here on pull requests (ci.yml, test-inputs.yml)
+test-inputs.json

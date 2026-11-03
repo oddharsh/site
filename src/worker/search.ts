@@ -182,8 +182,7 @@ export async function searchSite(env, query: string, limit: string | number | nu
   };
 }
 
-export async function handleSearchJson(request, env) {
-  const url = new URL(request.url);
+export async function handleSearchJson(request, env, _ctx?, url = new URL(request.url)) {
   const query = url.searchParams.get("q") || "";
   if (!query.trim())
     return jsonResponse({ ok: false, error: "q is required", results: [] }, 400, { ...publicJsonHeaders(400), "x-robots-tag": "noindex" }, { pretty: false });
@@ -191,13 +190,12 @@ export async function handleSearchJson(request, env) {
   return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
 }
 
-export async function handleSearch(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleSearch(request, env, ctx, url = new URL(request.url)) {
   const query = url.searchParams.get("q") || "";
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
   const render = () => renderSearchPage(query, results);
   // Query-specific HTML must never share the blank/search result cache key.
-  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
+  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env, url);
 }
 
 export function renderSearchPage(query = "", results: Awaited<ReturnType<typeof searchSite>> = { query: "", total: 0, returned: 0, results: [] }) {

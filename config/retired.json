@@ -185,6 +185,14 @@
       "why": "The last three Python files were an HTTP client, a subprocess orchestrator and a Pillow generator, in a tree whose pipeline already ran node four times per add and whose encoder crate already decoded, oriented, resampled and cropped every shipped tile. Each file was the one of its kind outside the checks the rest of the tree gets: gotcha 40's ninth site was the captioner being Python and so outside the shell path sweep, and the generator called cjpegli, a binary this ledger had banned in July, invisible to the ban (it checks declarations) and to tools:check (it reads shell). One language fewer is one blind spot fewer.",
       "measured": "gen-alt-text.ts reproduces the committed alt.json byte for byte and round-tripped one real caption; matched-bytes-probe.ts prints line-identical tables against the Python on the same sources; gen-pixel-peeper.ts regenerated the trial set to the same 24 trials in the same per-axis split (8/6/1/3/6) with the same lone chroma survivor, worst budget drift 1.33%, in 2m36s. The pip dependabot lane, the osv-scanner requirements line, setup-python and the venv left with it.",
       "bans": { "binary": ["python3", "python", "uv"] }
+    },
+    {
+      "id": "ffmpeg",
+      "replaced_by": "zenc frame, the repo's own Rust binary, which gen-encoding-grids.sh already built and already used for the chroma grid's PPM",
+      "on": "2026-10-31",
+      "why": "It did one job: convert one 96x96 PNG crop to the P6 PPM mozjpeg's cjpeg reads. For that the photo-pipeline workflow ran `brew install ffmpeg` on every run, pulling a C media framework and its dependency tree onto the runner, and a workstation without it (this one, on 2026-10-31) could not run the script at all.",
+      "measured": "`zenc frame <png> --out <ppm>` matched an independent PNG decode (inflate plus the five row filters, samples written as stored, which is what ffmpeg's png-to-ppm does) byte for byte on 13 of 13 PNGs under public/garage/enc, including the sips crop the script feeds cjpeg, which carries gAMA and cHRM chunks. Control: the same crop written with --orient 2 differed in 25,776 bytes.",
+      "bans": { "binary": ["ffmpeg"] }
     }
   ]
 }

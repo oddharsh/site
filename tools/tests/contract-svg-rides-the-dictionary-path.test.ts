@@ -40,8 +40,10 @@ function fakeAssets() {
 
 async function serve(path, headers: Record<string, any> = {}) {
   const { servePrecompressedShell } = await import("../../src/worker/lib/assets.ts");
+  // the Worker entry parses the URL once and hands it down
+  const shellAt = (request: Request, env) => servePrecompressedShell(request, env, new URL(request.url));
   const ASSETS = fakeAssets();
-  const res = await servePrecompressedShell(new Request(`https://aadhar.sh${path}`, { headers }), { ASSETS });
+  const res = await shellAt(new Request(`https://aadhar.sh${path}`, { headers }), { ASSETS });
   return { res, asked: ASSETS.asked, body: await res.text() };
 }
 

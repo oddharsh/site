@@ -103,7 +103,7 @@ test("every wrangler config's entry point resolves to a real file", async () => 
   assert.deepEqual(missing, [], `Worker entry points that do not exist:\n  ${missing.join("\n  ")}`);
 });
 
-test("Wrangler check follows every tracked project's installed resolution", async () => {
+test("Wrangler check follows every project's installed resolution", async () => {
   const dir = await mkdtemp(join(tmpdir(), "site-wrangler-check-"));
   const version = "4.129.1";
   const env = { ...process.env };
@@ -135,16 +135,20 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
   try {
     await mkdir(join(dir, "tools"));
     await writeFile(join(dir, "tools/check-wrangler.ts"), await readFile(new URL("tools/check-wrangler.ts", ROOT)));
-    // The script reads the installed tarball's sha through this helper, so the
-    // scratch repository needs it beside the script or every run dies on import.
+    // The script reads the installed tarball's sha and lists manifests through
+    // these helpers, so the scratch repository needs them beside the script or
+    // every run dies on import.
     await mkdir(join(dir, "tools/lib"));
-    await writeFile(join(dir, "tools/lib/wrangler-provenance.ts"), await readFile(new URL("tools/lib/wrangler-provenance.ts", ROOT)));
+    for (const helper of ["tools/lib/wrangler-provenance.ts", "tools/lib/repo-files.ts"])
+      await writeFile(join(dir, helper), await readFile(new URL(helper, ROOT)));
     const pkg = { type: "module", devDependencies: { wrangler: version }, workspaces: ["cal", "cf-garage", "lwe-ask"] };
     await write("package.json", pkg);
     const projects = ["cal", "cf-garage", "lwe-ask", "lens-reader", "nested/new project"];
     for (const project of projects) await write(`${project}/package.json`, {});
     execFileSync("git", ["init", "--quiet", dir]);
     execFileSync("git", ["-C", dir, "add", "package.json", ...projects.map((p) => `${p}/package.json`)]);
+    // as the repo's own .gitignore does, so installs are never projects
+    await writeFile(join(dir, ".gitignore"), "node_modules/\n");
     await write("node_modules/.bun/wrangler@current/node_modules/wrangler/package.json", { version });
     await symlink(".bun/wrangler@current/node_modules/wrangler", join(dir, "node_modules/wrangler"));
     run(0, /Wrangler/);
@@ -184,8 +188,11 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     }
     await symlink(join(dir, "node_modules/wrangler"), join(dir, "cal/node_modules/wrangler"));
     await write("node_modules/.bun/wrangler@unused/node_modules/wrangler/package.json", { version: "9.9.9" });
+    run(0, /6 projects/); // Same physical install; the ignored, unused cache is not a consumer.
+    // An untracked project is one `git add` from CI, so it counts (gotcha 91).
     await write("scratch/package.json", { devDependencies: { wrangler: "9.9.9" } });
-    run(0, /6 projects/); // Same physical install; unused cache and untracked scratch are not consumers.
+    run(1, /scratch: declares Wrangler "9\.9\.9", which is not the root pin/);
+    await rm(join(dir, "scratch"), { recursive: true });
 
     await write("node_modules/.bun/wrangler@current/node_modules/wrangler/package.json", { version: "9.9.9" });
     run(1, /installed.*9\.9\.9|resolves Wrangler.*9\.9\.9/);
@@ -232,8 +239,12 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
     await rm(join(dir, "lens-reader/package.json"));
     run(1, /ENOENT/); // A tracked manifest that cannot be read is not an empty project.
     await write("lens-reader/package.json", {});
+    // A census that lists no root manifest fails rather than checking nothing.
+    // Untracked files count, so it takes untracking and ignoring to get there.
     execFileSync("git", ["-C", dir, "rm", "--cached", "--quiet", "package.json"]);
-    run(1, /no tracked root package.json/);
+    await writeFile(join(dir, ".gitignore"), "node_modules/\n/package.json\n");
+    run(1, /no root package.json/);
+    await writeFile(join(dir, ".gitignore"), "node_modules/\n");
     execFileSync("git", ["-C", dir, "add", "package.json"]);
     await rm(join(dir, ".git"), { recursive: true });
     run(1, /not a git repository/);

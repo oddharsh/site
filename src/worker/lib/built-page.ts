@@ -26,16 +26,16 @@ type Awaitable<T> = T | Promise<T>;
 
 export type BuiltPage = {
   headers?: Record<string, string>;
-  divert?: (url: URL) => Awaitable<Response | null | undefined | false>;
+  divert?: () => Awaitable<Response | null | undefined | false>;
   live?: () => Awaitable<Response>;
 };
 
-export async function serveBuiltPage(request: Request, env, page: BuiltPage = {}): Promise<Response> {
+export async function serveBuiltPage(request: Request, env, url: URL, page: BuiltPage = {}): Promise<Response> {
   if (page.divert) {
-    const diverted = await page.divert(new URL(request.url));
+    const diverted = await page.divert();
     if (diverted) return diverted;
   }
-  const built = await serveStaticPage(request, env, { headers: page.headers });
+  const built = await serveStaticPage(request, env, url, { headers: page.headers });
   if (built.status !== 404 || !page.live) return built;
   try {
     await built.body?.cancel();

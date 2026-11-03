@@ -44,10 +44,14 @@
     "pages:check": "bun tools/check-page-contracts.ts",
     "colors:drift": "bun tools/color-drift.ts",
     "tools:check": "bun tools/check-tools.ts",
+    "controls": "bun tools/controls.ts",
     "derive:check": "bun tools/check-derivations.ts",
+    "gotcha:next": "bun tools/gotcha-next.ts",
+    "ci:census": "bun tools/ci-census.ts",
     "ua:survey": "bun tools/ua-survey.ts",
     "test": "bun test --parallel=4 --no-isolate --timeout=30000 --timings=config/test-timings.json --preload ./tools/lib/no-network.ts tools/tests/",
     "conflicts": "bun tools/conflict-triage.ts",
+    "inflight": "bun tools/inflight.ts",
     "deps:pin": "bun tools/bump-deps.ts",
     "deps:snapshot": "bun --no-install tools/dependency-snapshot.ts",
     "test:node": "node --import ./tools/lib/no-network.ts --test --test-isolation=none tools/tests/*.test.ts",
@@ -58,6 +62,7 @@
     "types:gen": "bun tools/gen-runtime-types.ts",
     "env:check": "bun tools/check-env.ts",
     "check:fast": "bun run --parallel lint typecheck test format:check",
+    "ci:trend": "bun tools/ci-trend.ts",
     "shell:roll": "bun tools/roll-shell-dictionary.ts",
     "pages:roll": "bun tools/roll-shell-dictionary.ts --pages",
     "family:roll": "bun tools/roll-shell-dictionary.ts --family",
@@ -74,6 +79,7 @@
     "timbrado": "bun node_modules/timbrado/src/cli.ts",
     "node:pin": "bun tools/check-node-pin.ts",
     "speculation:report": "bun tools/speculation-report.ts",
+    "serendipity:companies": "bun tools/serendipity-company-baseline.ts",
     "serendipity:roles": "bun tools/serendipity-role-baseline.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
     "checkpoints:check": "bun tools/check-checkpoints.ts",
@@ -84,7 +90,7 @@
     "webmention:eval": "bun tools/webmention-sort-eval.ts"
   },
   "devDependencies": {
-    "@cloudflare/config": "0.28.1",
+    "@cloudflare/config": "0.29.0",
     "@oxlint/plugins": "1.90.0",
     "@types/bun": "1.4.4",
     "av2-tone": "github:oddharsh/av2-tone#462f9ca175a5e4f9c1640ed6d8a47266e2590418",
@@ -110,7 +116,7 @@
     "workerd"
   ],
   "catalog": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@25802bc"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@34f34b3"
   },
   "$comment": "Toolchain ownership and validation commands: docs/TOOLING.md. Shared dependency pins: catalog below; runtime pins: config/bun-pin.json and .node-version."
 }

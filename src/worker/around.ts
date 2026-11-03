@@ -53,8 +53,7 @@ export const NEIGHBORS = [
 // the schedule in cloudflare.config.ts (cronAround, via index.ts's scheduled handler).
 // The page itself is a built file served by index.ts (routeAround); its crawl
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
-export async function handleAroundJson(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleAroundJson(request, env, ctx, url = new URL(request.url)) {
   const isBust = secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET);
   const render = async () => {
     const report = await readAroundReport(request, env);
@@ -76,7 +75,7 @@ export async function handleAroundJson(request, env, ctx) {
       "x-robots-tag": "noindex",
     });
   };
-  return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env);
+  return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env, url);
 }
 
 const AROUND_KEY = "around:report";
@@ -262,8 +261,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
   };
 }
 
-export async function handleAroundChangesJson(request, env) {
-  const url = new URL(request.url);
+export async function handleAroundChangesJson(request, env, _ctx?, url = new URL(request.url)) {
   try {
     const payload = await readAroundChanges(env, url.searchParams.get("limit"));
     return jsonResponse(payload, 200, {
@@ -535,13 +533,14 @@ export function renderAroundSnapshot(report) {
           ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
           : esc(r.title) || "<span class=dim>—</span>";
       const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
+      const host = new URL(r.url).host;
       return `
       <tr>
-        <td class="firm">${esc(r.name)}<div class="host">${esc(new URL(r.url).host)}</div></td>
+        <td class="firm">${esc(r.name)}<div class="host">${esc(host)}</div></td>
         <td class="status">${status}</td>
         <td class="title">${titleCol}${desc}</td>
         <td class="latency">${r.elapsedMs}ms</td>
-        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${new URL(r.url).host}, in a new tab`)}">↗</a></td>
+        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${host}, in a new tab`)}">↗</a></td>
       </tr>`;
     })
     .join("");
@@ -565,8 +564,7 @@ export function renderAroundSnapshot(report) {
 // readAroundReport, renders the fragment from that fresh report, and OVERWRITES
 // this colo's cached copy, awaited, so the owner's own next load reads the new
 // crawl instead of whatever KV's cacheTtl still holds. Anything else is null.
-export async function refreshAroundSnapshot(request, env) {
-  const url = new URL(request.url);
+export async function refreshAroundSnapshot(request, env, url = new URL(request.url)) {
   if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
   const report = await readAroundReport(request, env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
@@ -578,14 +576,14 @@ export async function refreshAroundSnapshot(request, env) {
   return fresh;
 }
 
-export async function handleAroundSnapshot(request, env, ctx) {
-  const busted = await refreshAroundSnapshot(request, env);
+export async function handleAroundSnapshot(request, env, ctx, url = new URL(request.url)) {
+  const busted = await refreshAroundSnapshot(request, env, url);
   if (busted) return busted;
   const render = async () => {
     const report = await readAroundReport(request, env);
     return islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   };
-  return cachedRender(request, ctx, render, SNAPSHOT_URL, env);
+  return cachedRender(request, ctx, render, SNAPSHOT_URL, env, url);
 }
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
