@@ -37,7 +37,9 @@
 // plan; this file symlinks the same plan. A sixth root added there reaches
 // both, and a path two roots claim is refused there, before either adapter runs.
 //
-// Dev derives nothing, so the three DERIVED_PATHS are build-only surfaces here.
+// Dev derives nothing, so the four DERIVED_PATHS are build-only surfaces here.
+// Photo search is the one that loses nothing but speed: without
+// photo-search.bin, queryPhotos builds the same index on every query.
 //
 // **THE TOOLTIP LOSES ITS EXIF UNDER `bun run dev`, and that is new as of
 // 2026-08-29.** Both of its tiers (/images/exif.json and /images/meta/) are
