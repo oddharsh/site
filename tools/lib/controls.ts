@@ -223,10 +223,11 @@ export const CONTROLS: Control[] = [
   // on a preview URL or a replayed 0-RTT GET.
   {
     id: "encodebody-dropped-in-workerd",
-    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body on the image bail is brotli twice",
+    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body is brotli twice",
     gotcha: 13,
-    // The noindex carry, not the main one: the main rebuild sets the flag again
-    // for HTML, so only the svg row (which bails before it) can see this carry go.
+    // The noindex carry, not the main one. A Worker-built response is stamped in
+    // place after it, so nothing sets the flag again and the html noindex row is
+    // the first to see this carry go (the svg row sees it on the image bail).
     mutations: [
       {
         file: "src/worker/lib/security.ts",
@@ -235,7 +236,7 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
-    expect: /the noindex rebuild double-encoded a body that then took the image bail/,
+    expect: /the noindex rebuild double-encoded a precompressed body/,
   },
   {
     id: "encodebody-dropped-at-a-call-site",
