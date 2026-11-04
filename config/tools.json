@@ -198,7 +198,25 @@
         "why": "prints no version; the fast-ssim2 and butteraugli pins are exact in tools/photos/photo-metrics/Cargo.toml and its Cargo.lock, which is the identity an archive decision is made against"
       },
       "bytes": true,
-      "bytes_why": "decides the cjxl distance of every HIF archive it scores, so a metric change can change archive bytes: a pin move is a re-measurement against libjxl (Cargo.toml says how)"
+      "bytes_why": "decides the encoder distance of every HIF archive it scores, so a metric change can change archive bytes: a pin move is a re-measurement against libjxl (Cargo.toml says how)"
+    },
+    {
+      "bin": "jixel-enc",
+      "path": "tools/photos/jixel-enc/target/release/jixel-enc",
+      "install": "cargo build --release --locked --manifest-path tools/photos/jixel-enc/Cargo.toml",
+      "optional": true,
+      "optional_why": "BUILT ON DEMAND like photo-metrics: hif-archive.ts and photo-metrics-parity.ts run the install command before their first encode in a process, so an absent binary on a fresh checkout is repaired rather than installed by hand. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "why": "every lossy encode of a HIF photo's archive: jixel at Speed::Slow with progressive DC, which beat cjxl -e 7 -p at matched ssimulacra2 and butteraugli on 8 of 8 HIFs (median -2.6%, -5.0% bytes-weighted, 2026-10-17) and keeps its 8 to 11 KB first paint. It also carries the PNG's eXIf orientation into the codestream and its Exif into a raw box, which exif-sooc needs. cjxl still makes every lossless repack",
+      "required_by": [
+        "tools/photos/hif-archive.ts",
+        "tools/photos/photo-metrics-parity.ts"
+      ],
+      "version": {
+        "reports": false,
+        "why": "prints no version; the jixel pin is exact in tools/photos/jixel-enc/Cargo.toml and its Cargo.lock, which is the identity an archive is encoded with"
+      },
+      "bytes": true,
+      "bytes_why": "writes the bytes of every HIF archive that beats its bar, so a jixel move changes archive bytes and distances: a pin move is a re-measurement (rerun hif-archive.ts on a few HIFs against their bars, and recheck the first paint)"
     },
     {
       "bin": "timbrado",
@@ -284,7 +302,7 @@
     {
       "bin": "cjxl",
       "install": "brew install jpeg-xl",
-      "why": "each full-resolution original, a lossless JPEG XL transcode (--lossless_jpeg=1 -e 9) of the JPEG it replaces in R2",
+      "why": "each full-resolution original that is not encoded from a HIF, a lossless JPEG XL transcode (--lossless_jpeg=1 -e 9) of the JPEG it replaces in R2, and the repack a HIF archive is scored against and falls back to. jixel-enc makes the HIF-born ones",
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/hif-archive.ts",

@@ -450,7 +450,8 @@ else
     #   the bar now, decoded as a browser decodes its repack. Re-measured on
     #   118 HIF photos (2026-10-14), 99 shrink and the total is -8.6%; where
     #   nothing beats the bar, or only a larger file does, hif-archive.ts
-    #   falls back to the lossless transcode. About four minutes a photo.
+    #   falls back to the lossless transcode. About 9 minutes a photo (jixel-enc,
+    #   2026-11-04).
     jxl="${full%.*}.jxl"; jxlfile="$JXLS/$jxl"
     case "${f##*.}" in
       [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])

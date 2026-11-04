@@ -70,7 +70,9 @@ jobs:
       - name: Restore compiled Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
-          workspaces: tools/photos/zenc -> target
+          workspaces: |
+            tools/photos/zenc -> target
+            tools/photos/jixel-enc -> target
           # The action also keys by job, platform, compiler, flags and Cargo
           # manifests/locks. Include the runner image and native library ABI.
           key: ${{ steps.native.outputs.cache-key }}
@@ -83,6 +85,14 @@ jobs:
           cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
           cargo run --quiet --locked --manifest-path tools/photos/zenc/Cargo.toml -- --avif-version | grep -F "libavif ${LIBAVIF_TAG#v} "
           cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
+
+      # jixel-enc encodes every HIF archive. Its tests pin the eXIf read png
+      # 0.17 won't do (gotcha 95), the raw Exif box exif-sooc needs, and
+      # byte-identical reruns.
+      - name: Test the HIF archive encoder
+        run: |
+          cargo test --locked --manifest-path tools/photos/jixel-enc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/jixel-enc/Cargo.toml --all-targets -- -D warnings
 
       - name: Set up bun
         uses: ./.github/actions/setup-bun
