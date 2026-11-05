@@ -1,5 +1,5 @@
 // ── a HIF photo's archive: JPEG XL from the HIF, against a JPEG bar ──
-// hif-archive.ts bisects cjxl's distance for the fewest bytes that still beat
+// hif-archive.ts bisects jixel's distance for the fewest bytes that still beat
 // the old archive JPEG on BOTH metrics, and the downloader tells its output
 // apart from a lossless transcode by the jbrd box. These pin the pieces whose
 // failure would still look like a working pipeline: a search that settles on
@@ -14,27 +14,42 @@ import { beats, codestreamBytes, RANGE, searchDistance, stripJpegExif, stripPng 
 import { jxlKind } from "../photos/pipeline-json.ts";
 
 // A metric that wins at every distance up to `edge` and loses above it, the
-// monotone shape the 2026-10-08 sweep measured on all 119 photos.
+// shape jixel's scores nearly follow (hif-archive.ts says where they wobble).
 const edgeAt = (edge) => {
   const asked: any[] = [];
   return { asked, wins: async (d) => (asked.push(d), d <= edge) };
 };
 
-test("the search settles on the largest winning distance, within the tolerance", async () => {
-  for (const edge of [0.12, 0.2, 0.31, 0.47, 0.59]) {
+test("the search settles on the largest winning distance, within the ratio", async () => {
+  for (const edge of [0.075, 0.09, 0.137, 0.2, 0.31, 0.49]) {
     const m = edgeAt(edge);
     const d = (await searchDistance(m.wins)) as number;
     assert.ok(d <= edge, `${edge}: chose ${d}, which loses`);
-    assert.ok(edge - d <= RANGE.tolerance, `${edge}: chose ${d}, more than ${RANGE.tolerance} short`);
-    assert.ok(m.asked.length <= 8, `${edge}: ${m.asked.length} encodes`);
+    assert.ok(edge / d <= RANGE.ratio, `${edge}: chose ${d}, more than a ${RANGE.ratio} ratio short`);
+    assert.ok(m.asked.length <= 10, `${edge}: ${m.asked.length} encodes`);
   }
 });
 
 test("the search reports the top when it wins, the floor band below lo, and null when nothing wins", async () => {
   assert.equal(await searchDistance(edgeAt(1).wins), RANGE.hi);
-  const low = (await searchDistance(edgeAt(0.07).wins)) as number;
-  assert.ok(low >= RANGE.floor && low <= 0.07, `chose ${low}`);
+  const low = (await searchDistance(edgeAt(0.06).wins)) as number;
+  assert.ok(low >= RANGE.floor && low <= 0.06 && 0.06 / low <= RANGE.ratio, `chose ${low}`);
   assert.equal(await searchDistance(edgeAt(0.01).wins), null, "below the floor, the archive stays as it was");
+});
+
+test("a metric that wobbles can stop the search short, never on a losing distance", async () => {
+  // Wins up to 0.3 except a band that loses inside it, the way jixel's
+  // ssimulacra2 rose on 21 of 114 neighbouring pairs. The band holds the first
+  // midpoint, sqrt(0.07 * 0.5) = 0.187, so the search has to walk into it.
+  const verdicts = new Map<number, boolean>();
+  const d = (await searchDistance(async (x) => {
+    const won = x <= 0.3 && !(x > 0.15 && x < 0.2);
+    verdicts.set(x, won);
+    return won;
+  })) as number;
+  assert.ok([...verdicts.values()].includes(false) && [...verdicts.keys()].some((x) => x > 0.15 && x < 0.2), "the band was never probed");
+  assert.equal(verdicts.get(d), true, `chose ${d}, which it scored as a loss`);
+  assert.ok(d >= RANGE.lo && d <= 0.15, `chose ${d}: short of the true edge 0.3, below the band`);
 });
 
 test("beating the bar takes both metrics; one win is not enough", () => {

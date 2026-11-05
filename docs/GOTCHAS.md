@@ -899,3 +899,36 @@ skips it.
     dashboard step (docs/MAINTENANCE.md, "Route Workers Issues to GitHub"),
     and `bun run observe:check` reads it live from the workstation.
     Checked by: `tools/tests/contract-observe-check-verdicts.test.ts`, `tools/lib/observe-signals.ts`.
+
+94. **djxl can't see progressive DC, so it reads `-p` as doing nothing.**
+    A progressive-DC JPEG XL stores its 1:8 LF image as a small squeezed
+    frame at the front, and Chrome and jxl-rs paint a whole blurry frame
+    from its first 8 to 11 KB (0.05% of a 40 MP archive). djxl 0.12's
+    `--allow_partial_files` can't render that frame, so it puts first paint
+    at the full LF for every encode, `-p` or not. On 2026-10-17 that read
+    "both paint at 12%" and nearly justified a non-progressive switch: in
+    Chrome 155, Canary 158 and jxl-rs `jxl_cli` (identical byte for byte,
+    3 HIFs), plain cjxl e7 and plain jixel first paint at 750 KB to 1.4 MB.
+    jixel's own `progressive` flag only reorders AC and paints no earlier;
+    `progressive_dc` is the part that matters. Measure paint with jxl-rs or
+    a browser, never djxl, and judge jxl-rs by its pixels: `jxl_cli` 0.7.4
+    `--allow-partial-files` exits 0 and writes an all-black frame before
+    anything is decodable, so its exit code read plain cjxl as painting at
+    5 KB (2026-11-04, XT508252). Counting non-black samples put it at 478 KB
+    and `-p` at 4 KB. jixel-enc's cargo test
+    `keeps_progressive_dc_on_and_progressive_ac_off` (run by `photos.yml`)
+    fails if the setting is dropped.
+    Checked by: `tools/photos/jixel-enc/src/main.rs`.
+
+95. **png 0.17 never decodes a PNG's eXIf chunk.** Its encoder writes
+    `Info::exif_metadata`, but its decoder leaves the field empty, so a
+    Rust encoder reading sips's PNG of a HIF sees no orientation and no
+    EXIF. The archive then decodes sideways, and exif-sooc refuses the
+    bare codestream it gets ("has no box to hold metadata"). `jixel-enc`
+    walks the chunks itself and passes the TIFF bytes to jixel's
+    `with_exif`, which also makes the output a container. On XT500132
+    (2026-10-17) the oriented encode then differs from the scored one by 7
+    to 15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
+    `finds_the_exif_chunk_png_0_17_will_not_decode` and
+    `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
+    Checked by: `tools/photos/jixel-enc/src/main.rs`.

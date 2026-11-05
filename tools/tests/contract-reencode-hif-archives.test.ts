@@ -52,15 +52,21 @@ case "$3" in
 esac`,
     0o755,
   );
-  // cjxl writes a real container without jbrd for a lossy encode (so a rerun
-  // reads it as direct) and copies its input for a lossless repack.
+  // cjxl only repacks now, so it copies its input. jixel-enc (in.png out.jxl
+  // distance) writes a real container without jbrd, so a rerun reads it as
+  // direct.
   await put(
     "bin/cjxl",
     `#!/bin/bash
 for last in "$@"; do :; done
 for a in "$@"; do case "$a" in -*|[0-9]*) ;; *) [ "$a" = "$last" ] || src="$a" ;; esac; done
-case "$*" in *--lossless_jpeg=1*) cp "$src" "$last"; exit 0 ;; esac
-printf '\\000\\000\\000\\014JXL \\015\\012\\207\\012\\000\\000\\000\\024ftypjxl \\000\\000\\000\\000jxl \\000\\000\\000\\014jxlcnew!' > "$last"`,
+cp "$src" "$last"`,
+    0o755,
+  );
+  await put(
+    "bin/jixel-enc",
+    `#!/bin/bash
+printf '\\000\\000\\000\\014JXL \\015\\012\\207\\012\\000\\000\\000\\024ftypjxl \\000\\000\\000\\000jxl \\000\\000\\000\\014jxlcnew!' > "$2"`,
     0o755,
   );
   // djxl rebuilds the same JPEG (with an Exif segment for the bar's strip to
@@ -95,7 +101,14 @@ esac`,
       cwd: root,
       encoding: "utf8",
       timeout: 60_000,
-      env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, PHOTO_METRICS_BIN: `${root}/bin/photo-metrics`, FIXTURE_ROOT: root, ...env },
+      env: {
+        ...process.env,
+        PATH: `${root}/bin:${process.env.PATH}`,
+        PHOTO_METRICS_BIN: `${root}/bin/photo-metrics`,
+        JIXEL_ENC_BIN: `${root}/bin/jixel-enc`,
+        FIXTURE_ROOT: root,
+        ...env,
+      },
     });
   const read = (rel) => readFile(path.join(root, rel)).catch(() => null);
   const calls = async () => ((await read("calls"))?.toString() ?? "").split("\n").filter(Boolean);
@@ -116,7 +129,7 @@ test("a dry run reads and encodes but writes nothing anywhere", async () => {
   const before = await read("src/worker/photo-index.json");
   const r = run(["--dry-run"], WIN);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /✓ X1: d0\.6, .*\(dry run\)/, "a candidate that always wins takes the top of the range");
+  assert.match(r.stdout, /✓ X1: d0\.5, .*\(dry run\)/, "a candidate that always wins takes the top of the range");
   assert.ok(
     (await calls()).every((c) => !c.includes(" put ")),
     "no upload",
@@ -165,7 +178,7 @@ test("a photo whose winning encode is no smaller than its repack keeps its archi
   const { run, read, calls } = await setup();
   const r = run(["--backup", "backup"], { ...WIN, SCAN_BYTES: "1" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.match(r.stdout, /= X1: kept as is \(the smallest encode that beats the bar \(d0\.6, 44 B\) is no smaller than the repack/);
+  assert.match(r.stdout, /= X1: kept as is \(the smallest encode that beats the bar \(d0\.5, 44 B\) is no smaller than the repack/);
   assert.deepEqual(await read("r2/X1.jxl"), TRANSCODE, "R2 untouched");
   assert.ok(
     (await calls()).every((c) => !c.includes(" put ")),
