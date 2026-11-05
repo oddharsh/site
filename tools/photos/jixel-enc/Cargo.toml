@@ -17,7 +17,7 @@ path = "src/main.rs"
 # -e 7 -p): 8 of 8 smaller, median -2.6%, -5.0% bytes-weighted, first paint
 # in Chrome from 8 to 11 KB like cjxl -p. Plain jixel was -3.8% but paints
 # only after 750 KB to 1.4 MB. docs/PHOTO-PIPELINE.md has the method.
-jixel = "=0.4.2"
+jixel = "=0.5.2"
 png = "0.17"
 
 [profile.release]
