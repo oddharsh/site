@@ -131,3 +131,22 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+
+  # hif-archive.ts encodes every HIF archive with tools/photos/jixel-enc (jixel,
+  # exact pin). A bump moves archive bytes and distances and can lose the
+  # progressive-DC first paint, so its PR is the prompt to rerun hif-archive.ts
+  # on a few HIFs against their bars and recheck paint (jixel-enc/Cargo.toml
+  # has the 2026-10-17 numbers) before merging, not a refresh to wave by.
+  - package-ecosystem: cargo
+    directory: "/tools/photos/jixel-enc"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope

@@ -10,6 +10,7 @@ Two systems own dependency updates, split by ecosystem:
 | [Dependabot](../.github/dependabot.yml) | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/photo-metrics` | the fast-ssim2 and butteraugli pins every photo score reads, the HIF archive bar first (a bump is a re-measurement) |
+| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/jixel-enc` | the jixel pin every HIF archive is encoded with (a bump is a re-measurement) |
 
 Dependabot owned npm too until 2026-10-06. Its npm updater has refused any
 directory holding a `bun.lock` since dependabot-core#16220 (2026-09-25), and its
