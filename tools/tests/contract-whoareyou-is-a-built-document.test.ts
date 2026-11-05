@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ISLAND_MARKER, islandMount, islandPreload, islandResponse, islandScript } from "../../src/worker/lib/island.ts";
 import { html } from "../../src/worker/lib/html.ts";
-import { handleWhoareyouValues, renderWhoareyouPage, renderWhoareyouValues, VALUES_URL } from "../../src/worker/whoareyou.ts";
+import { handleWhoareyouValues, parseUA, renderWhoareyouPage, renderWhoareyouValues, VALUES_URL } from "../../src/worker/whoareyou.ts";
 
 test("the island loader is one constant script that checks the marker the response sends", () => {
   const a = islandScript().html;
@@ -125,4 +125,15 @@ test("/whoareyou/values.html answers with this request's values and the island m
   // the transport decides; before the fix both rows rendered on HTTP/2.
   assert.doesNotMatch(body, /QUIC round-trip/);
   assert.doesNotMatch(body, /<html|<head/i, "a fragment, never a document");
+});
+
+test("Ladybird is named before the Chrome token it carries for compatibility", () => {
+  // Ladybird's UA on macOS as its WebDriver reported it, upstream 51ef0d7
+  // (2026-11-04). Photon's engine pin f3ffa37 sends the same string with
+  // Ladybird/1.0.
+  const ladybird = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ladybird/0.1.0 Chrome/153.0.0.0 AppleWebKit/537.36 Safari/537.36";
+  const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+  assert.deepEqual(parseUA(ladybird), { browser: "Ladybird", os: "macOS", device: "" });
+  assert.deepEqual(parseUA(ladybird.replace("Ladybird/0.1.0", "Ladybird/1.0")), { browser: "Ladybird", os: "macOS", device: "" });
+  assert.deepEqual(parseUA(chrome), { browser: "Chrome", os: "macOS", device: "" });
 });
