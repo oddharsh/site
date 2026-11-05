@@ -531,6 +531,16 @@ export const CONTROLS: Control[] = [
     expect: /moved and the issue does not name bun-minifier-not-a-swap\.md/,
   },
   {
+    id: "head-tag-diff-blind-to-og",
+    plants: "the head-tag extractor stops reading og:* tags, so a PR that drops an og:image posts an empty diff",
+    gotcha: 90,
+    // The diff is advisory and fails on nothing, so blindness is its quiet
+    // failure: "No change" reads the same whether the tags matched or went unread.
+    mutations: [{ file: "tools/head-snapshot.ts", find: ' || name.startsWith("og:")', replace: "" }],
+    run: contract("contract-head-tag-diff-reports-each-changed-tag"),
+    expect: /a dropped og:image must be one row/,
+  },
+  {
     id: "suite-map-restored-on-main",
     plants: "validate restores the test input map on every event, so a push to main runs a narrowed suite",
     mutations: [
