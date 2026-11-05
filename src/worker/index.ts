@@ -16,6 +16,7 @@ import { handlePixelPeeperCrowd, handlePixelPeeperRun } from "./pixel-peeper-cro
 import { cronSendWebmentions } from "./webmention-send.ts";
 import { handleLedgerJson, handleLedgerLines, renderLedgerPage } from "./ledger.ts";
 import { handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
+import { handleVitals } from "./vitals.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
@@ -330,6 +331,8 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   // the ledger read back per path: speculations against activations, so the
   // eager candidates are chosen from what got navigated to (speculation.ts).
   "/ledger/speculation.json": handleSpeculationJson,
+  // field Core Web Vitals from /garage/horizon's inline observer (vitals.ts)
+  "/ledger/vitals": handleVitals,
 
   "/writing": routeWritingIndex,
   "/writing/": routeDropSlash,

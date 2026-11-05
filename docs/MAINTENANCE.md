@@ -2180,6 +2180,27 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 ```
 A gap means no datapoint was recorded; it does not identify which stage failed.
 
+### Read the field vitals
+Real visitors to `/garage/horizon` post LCP, CLS and INP once, when the tab
+first hides ([`src/worker/vitals.ts`](../src/worker/vitals.ts)). Each metric is
+its own row in `aadhar_vitals`: `blob1` is the metric, `blob2` the path, `blob3`
+the Worker version, `double1` the value (milliseconds for LCP and INP, unitless
+for CLS). A view with no interaction has no INP row. The p75 per metric over
+the last 28 days, the window Chrome's field data uses:
+```bash
+curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
+  -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \
+  -d "SELECT blob1 AS metric, quantileWeighted(0.75)(double1, _sample_interval) AS p75,
+      sum(_sample_interval) AS views
+      FROM aadhar_vitals WHERE timestamp > NOW() - INTERVAL '28' DAY
+      GROUP BY metric FORMAT JSON"
+```
+Add `blob3 AS version` to the select and the group to split a regression by
+release. LCP and INP come from every current engine (Safari since 26.2,
+Firefox since 144 for INP). CLS comes from Chromium only, since neither
+Safari nor Firefox ships the Layout Instability API, so the CLS rows undercount
+the iOS visitors whose font fallback is the likeliest source of a shift.
+
 ### Read a trace (Workers Traces)
 Enabled in `cloudflare.config.ts` under `observability.traces`, 100% sampled. Read them
 in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.

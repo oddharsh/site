@@ -302,6 +302,9 @@ const worker = defineWorker({
     // ledger drops every response >= 400 and the request log carries no
     // user-agent, so until 2026-10-01 nothing here could say what agents miss.
     MISS_LEDGER: bindings.analyticsEngineDataset({ name: "aadhar_misses" }),
+    // Field Core Web Vitals from /garage/horizon's visitors (vitals.ts); read
+    // back from a workstation with the SQL API (docs/MAINTENANCE.md).
+    VITALS: bindings.analyticsEngineDataset({ name: "aadhar_vitals" }),
 
     PHOTOS_R2: bindings.r2({ name: "aadhar-photos" }),
 
