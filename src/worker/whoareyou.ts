@@ -745,21 +745,26 @@ footer .signature small { color: var(--ink-faint); }
 }
 
 export function parseUA(ua) {
-  const browser = /Edg\//.test(ua)
-    ? "Edge"
-    : /OPR\//.test(ua)
-      ? "Opera"
-      : /Firefox\//.test(ua)
-        ? "Firefox"
-        : /Chrome\//.test(ua)
-          ? "Chrome"
-          : /Safari\//.test(ua)
-            ? "Safari"
-            : /curl/.test(ua)
-              ? "curl"
-              : /bot|spider|crawl/i.test(ua)
-                ? "a bot"
-                : "an unknown browser";
+  // Ladybird (and Photon, which embeds it) appends "Chrome/153.0.0.0
+  // AppleWebKit/537.36 Safari/537.36" for compatibility, so it has to match
+  // before the Chrome and Safari tests do. Ladybird's UserAgent.h, 2026-11-04.
+  const browser = /Ladybird\//.test(ua)
+    ? "Ladybird"
+    : /Edg\//.test(ua)
+      ? "Edge"
+      : /OPR\//.test(ua)
+        ? "Opera"
+        : /Firefox\//.test(ua)
+          ? "Firefox"
+          : /Chrome\//.test(ua)
+            ? "Chrome"
+            : /Safari\//.test(ua)
+              ? "Safari"
+              : /curl/.test(ua)
+                ? "curl"
+                : /bot|spider|crawl/i.test(ua)
+                  ? "a bot"
+                  : "an unknown browser";
   const os = /iPhone|iPad/.test(ua)
     ? "iOS"
     : /Android/.test(ua)
