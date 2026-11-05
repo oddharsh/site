@@ -14,6 +14,11 @@ name: Wire-size diff
 # The split is: perf-budget answers "is this output structurally valid", this
 # answers "did this change move the bytes". Only the second one can catch a slow
 # 500-byte-per-PR drift, and only the first one can stop a broken deploy.
+#
+# The same two builds feed tools/head-snapshot.ts, which diffs the head tags
+# crawlers and link-preview bots read (status, title, description, canonical,
+# robots, og:*, twitter:*, JSON-LD types). Its section joins this comment
+# rather than posting its own, and it is advisory for the same reason.
 
 on:
   pull_request:
@@ -129,6 +134,7 @@ jobs:
           rm -rf .perf-measure
           mkdir .perf-measure
           cp tools/perf-snapshot.ts .perf-measure/perf-snapshot.ts
+          cp tools/head-snapshot.ts .perf-measure/head-snapshot.ts
           cp -R tools/lib .perf-measure/lib
 
           # Prove the stash before measuring, because both ways it can be
@@ -139,6 +145,12 @@ jobs:
           bun .perf-measure/perf-snapshot.ts >/dev/null 2>&1 || status=$?
           if [ "$status" -ne 2 ]; then
             echo "::error title=incomplete stash::the stashed measurement script does not import cleanly (exit $status)"
+            exit 1
+          fi
+          status=0
+          bun .perf-measure/head-snapshot.ts >/dev/null 2>&1 || status=$?
+          if [ "$status" -ne 2 ]; then
+            echo "::error title=incomplete stash::the stashed head-tag script does not import cleanly (exit $status)"
             exit 1
           fi
 
@@ -204,10 +216,12 @@ jobs:
             cd "$base_dir"
             install_for_tree
             bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/base.json" --label "$MERGE_BASE"
+            bun .perf-measure/head-snapshot.ts record "$RUNNER_TEMP/base-head-tags.json" --label "$MERGE_BASE"
           ) > "$RUNNER_TEMP/base.log" 2>&1 &
           base_pid=$!
           (
             bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/head.json" --label "$HEAD_SHA"
+            bun .perf-measure/head-snapshot.ts record "$RUNNER_TEMP/head-head-tags.json" --label "$HEAD_SHA"
           ) > "$RUNNER_TEMP/head.log" 2>&1 &
           head_pid=$!
 
@@ -226,7 +240,11 @@ jobs:
           bun .perf-measure/perf-snapshot.ts compare \
             "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" \
             --out "$RUNNER_TEMP/wire-size.md"
-          cat "$RUNNER_TEMP/wire-size.md" >> "$GITHUB_STEP_SUMMARY"
+          bun .perf-measure/head-snapshot.ts compare \
+            "$RUNNER_TEMP/base-head-tags.json" "$RUNNER_TEMP/head-head-tags.json" \
+            --out "$RUNNER_TEMP/head-tags.md"
+          cat "$RUNNER_TEMP/wire-size.md" "$RUNNER_TEMP/head-tags.md" > "$RUNNER_TEMP/diff.md"
+          cat "$RUNNER_TEMP/diff.md" >> "$GITHUB_STEP_SUMMARY"
 
       # The step summary above is the fallback and always runs. The comment is
       # the thing anyone actually reads, and it is skipped on forks because a
@@ -237,7 +255,7 @@ jobs:
         if: github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          REPORT_PATH: ${{ runner.temp }}/wire-size.md
+          REPORT_PATH: ${{ runner.temp }}/diff.md
         with:
           github-token: ${{ github.token }}
           script: |
