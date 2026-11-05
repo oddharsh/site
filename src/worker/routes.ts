@@ -178,6 +178,9 @@ export const EXACT_ROUTES = [
   // series about the real site
   { path: "/ledger/prefetch", claim: ["/ledger/*"], writes: "get" },
   { path: "/ledger/speculation.json", claim: ["/ledger/*"] },
+  // field vitals from /garage/horizon (vitals.ts). A POST, which preview.ts
+  // and early-data.ts already refuse on a preview and on 0-RTT.
+  { path: "/ledger/vitals", claim: ["/ledger/*"] },
 
   { path: "/writing", cacheable: true },
   { path: "/writing/", claim: ["/writing/*"] },

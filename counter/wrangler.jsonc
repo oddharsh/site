@@ -30,6 +30,11 @@
   "workers_dev": false,
   "preview_urls": false,
   "observability": { "enabled": true },
+  // Declared rather than inherited: wrangler d6b1c82 (workers-sdk#16231,
+  // pinned from #1304) flipped the default to upload, so every deploy since
+  // already sends this map. Kept on to match the site's other four Workers;
+  // the bundle is unminified, so Workers Logs reads the same lines either way.
+  "upload_source_maps": true,
   // HOW LIVE INSTANCES TAKE NEW CODE, declared rather than inherited. Since
   // workers-sdk#15658 (pinned from #945) every deploy sends a strategy, and an
   // unset one means "deferred, up to 300s". "homepage-visits" takes a request
