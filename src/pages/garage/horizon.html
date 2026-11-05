@@ -8621,6 +8621,51 @@ navigation.addEventListener("navigate", (e) =&gt; {
 })();
 </script>
 
+<script>
+// field Core Web Vitals, on this page only (src/worker/vitals.ts says why).
+// One beacon when the tab first hides, carrying what the browser measured so
+// far. CLS follows the standard definition: the worst session window of
+// shifts under 1 s apart, capped at 5 s. INP here is the slowest interaction,
+// which equals the standard p98 below 50 interactions. LCP subtracts
+// activationStart, since the shell's speculation rules prerender this page.
+(function () {
+  var types = (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes) || [];
+  if (!navigator.sendBeacon || !types.length) return;
+  var nav = performance.getEntriesByType("navigation")[0];
+  var activation = (nav && nav.activationStart) || 0;
+  var v = { p: location.pathname };
+  function watch(type, each, extra) {
+    if (types.indexOf(type) === -1) return false;
+    var opts = { type: type, buffered: true };
+    for (var k in extra) opts[k] = extra[k];
+    try {
+      new PerformanceObserver(function (list) { list.getEntries().forEach(each); }).observe(opts);
+      return true;
+    } catch (e) { return false; }
+  }
+  watch("largest-contentful-paint", function (e) { v.lcp = Math.max(0, e.startTime - activation); });
+  var win = 0, first = 0, last = 0;
+  if (watch("layout-shift", function (e) {
+    if (e.hadRecentInput) return;
+    if (e.startTime - last > 1000 || e.startTime - first > 5000) { win = 0; first = e.startTime; }
+    win += e.value;
+    last = e.startTime;
+    v.cls = Math.max(v.cls, win);
+  })) v.cls = 0;
+  // first-input too, so an interaction faster than the 40 ms threshold still
+  // reports an INP rather than none
+  function interaction(e) { if (e.interactionId) v.inp = Math.max(v.inp || 0, e.duration); }
+  watch("event", interaction, { durationThreshold: 40 });
+  watch("first-input", interaction);
+  var sent = false;
+  addEventListener("visibilitychange", function () {
+    if (sent || document.visibilityState !== "hidden") return;
+    sent = true;
+    try { navigator.sendBeacon("/ledger/vitals", JSON.stringify(v)); } catch (e) {}
+  });
+})();
+</script>
+
 <!-- prerender every internal page eagerly (McMaster-style); same exclusions
      as the homepage. Chromium-only, ignored elsewhere. -->
 <script type="application/json" id="luq-data">
