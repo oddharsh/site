@@ -37,6 +37,7 @@ async function fixture(run) {
         PATH: `${root}/bin:/usr/bin:/bin`,
         FIXTURE_ROOT: root,
         PHOTO_METRICS_BIN: `${root}/bin/photo-metrics`,
+        JIXEL_ENC_BIN: `${root}/bin/jixel-enc`,
         TRACE: `${root}/trace`,
         JOBS: "1",
         REMOTE_RENDER_ONLY: "1",
@@ -147,6 +148,10 @@ printf encoded > "$last"`,
       "bin/photo-metrics",
       'case "$2" in *cand*) s2="${CAND_S2:-95}" ba="${CAND_BA:-0.5}" ;; *) s2=95 ba=0.5 ;; esac; echo "{\\"s2\\":$s2,\\"ba\\":$ba,\\"ba3\\":$ba}"',
     );
+    // hif-archive.ts encodes its candidates and the final file through
+    // JIXEL_ENC_BIN (in.png out.jxl distance), wrapping its input in "jxl:" the
+    // way the cjxl stub below does, so an upload body names its source.
+    await command("bin/jixel-enc", 'echo "jixel-enc $*" >> "$TRACE"; { printf "jxl:"; cat "$1"; } > "$2"');
     // export-for-instagram.sh runs the crate's own binary, the way it runs zenc,
     // on djpeg's decode of each candidate.
     await command("tools/photos/photo-metrics/target/release/photo-metrics", 'echo "{\\"s2\\":95,\\"ba\\":0.5,\\"ba3\\":0.5}"');
@@ -493,8 +498,9 @@ test("a HIF photo's archive is its own pixels when they beat the JPEG bar, and t
     const direct = ingest(["source"], win);
     assert.equal(direct.status, 23, direct.stderr + direct.stdout);
     const sent = Object.fromEntries((await uploads()).filter((r) => r.event === "start").map((r) => [r.key, r.body]));
-    // sips's PNG of the HIF ("encoded") went through cjxl, not the JPEG bar
+    // sips's PNG of the HIF ("encoded") went through jixel-enc, not the JPEG bar
     assert.equal(sent["aadhar-photos/companion.jxl"], "jxl:encoded");
+    assert.match(await read("trace"), /^jixel-enc \S+\/raw\.png \S+\.jxl 0\.5$/m, "the final file is encoded from the unstripped PNG at the chosen distance");
     assert.equal(sent["aadhar-photos/frame.jxl"], "jxl:progressive", "a JPEG source is repacked whatever the metrics say");
     // the HIF's EXIF goes onto the .jxl (phase 2 also copies it onto the JPEG bar)
     assert.match(await read("trace"), new RegExp(`metadata -TagsFromFile ${root}/source/companion\\.HIF -all:all -overwrite_original \\S+\\.jxl`));

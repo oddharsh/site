@@ -1517,7 +1517,10 @@ JPEG XL of a HIF that beats the old archive JPEG on both metrics,
 Instagram export also wants **djpeg** (`brew install jpeg-turbo`), because
 photo-metrics reads PNG and PNM only. libjxl's own `ssimulacra2` and
 `butteraugli_main` ship in the `jpeg-xl` bottle and are only the reference
-`photo-metrics-parity.ts` measures against.
+`photo-metrics-parity.ts` measures against. `hif-archive.ts` encodes with
+**jixel-enc**, the in-tree crate at `tools/photos/jixel-enc` (jixel with
+progressive DC), built on first use the same way; cjxl still makes the lossless
+repacks.
 
 Run `bun run tools:check` before a pipeline session on a fresh machine. It
 checks the [declared executables](../config/tools.json) and reports missing tools
@@ -1965,7 +1968,7 @@ move also changes their numbers the next time they run. Its two pins are exact, 
 lane for that directory is a prompt to run this before merging. It replays
 `hif-archive.ts`'s own bisection with photo-metrics and with libjxl's
 `ssimulacra2` and `butteraugli_main`, and prints PASS only when every frame
-lands on the same cjxl distance. It needs libjxl's tools on PATH, which nothing
+lands on the same jixel-enc distance. It needs libjxl's tools on PATH, which nothing
 else in the photo pipeline does now, and about 20 minutes per frame, almost all
 of it in libjxl.
 

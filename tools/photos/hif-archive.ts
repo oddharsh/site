@@ -29,11 +29,26 @@
 // (median -9.4%), 19 cannot beat the bar without growing and keep their
 // repack, and the bucket's HIF archives come to -8.6%, not -33%.
 //
-// WHAT. Score the baseline against the HIF, then bisect cjxl's distance for
-// the LARGEST one (fewest bytes) whose encode beats the baseline on both
-// metrics. Both scores worsen monotonically as distance grows on every photo
-// swept, which is what makes bisection sound. If not even the floor distance
-// wins, the archive stays what it was: the baseline repacked losslessly. Both
+// THE ENCODER MOVED (2026-10-17). Candidates came from cjxl 0.12 -e 7 -p
+// until jixel (tools/photos/jixel-enc) beat it at matched quality: on 8 HIFs,
+// each bisected for the largest jixel distance that beats cjxl -p d0.163 on
+// both metrics, jixel Speed::Slow with progressive DC was smaller on 8 of 8,
+// median -2.6% and -5.0% bytes-weighted. Plain jixel was -3.8%, but only
+// progressive DC keeps -p's early paint (see HOW). jixel distances are not
+// cjxl's: its matched distance ran 0.46 to 0.84 times cjxl's, hence RANGE.
+// Against the real bars (2026-11-04, 10 HIFs, each bar the JPEG inside its
+// pre-migration repack): all 10 direct at d0.088 to d0.114, median -7.5%
+// against the cjxl archives R2 served, including 3 cjxl had to keep as
+// repacks. The price is time: 9 encodes and a median 9.4 minutes a photo.
+//
+// WHAT. Score the baseline against the HIF, then bisect jixel-enc's distance
+// for the LARGEST one (fewest bytes) whose encode beats the baseline on both
+// metrics. Bytes fall monotonically as distance grows; the scores nearly do.
+// Across 114 neighbouring-distance pairs on those 8 HIFs, ssimulacra2 rose 21
+// times (by at most 0.11) and butteraugli once (by 0.0005). The search only
+// ever returns a distance it scored as a win, so a wobble can stop it short
+// of the true edge but never past it. If not even the floor distance wins,
+// the archive stays what it was: the baseline repacked losslessly. Both
 // metrics come from tools/photos/photo-metrics (see score()).
 //
 // HOW, and the traps each step avoids:
@@ -51,36 +66,45 @@
 //   - Candidates decode at 8 bits too. A 16-bit decode scored against an
 //     8-bit baseline flatters the candidate (XT509890's chosen file: 91.41
 //     at 16 bits, 91.24 at 8).
-//   - Candidates are encoded from that stripped reference. The FINAL file is
-//     encoded once more from the unstripped PNG at the chosen distance, so its
-//     codestream carries the camera's orientation, which is the field a
-//     decoder obeys. Orientation is header metadata, not pixels, so the two
-//     codestreams match in size to within a few bytes; a gap means the
-//     pixels differed, and it fails the photo.
+//   - Candidates are encoded from that stripped reference, as bare
+//     codestreams. The FINAL file is encoded once more from the unstripped
+//     PNG at the chosen distance: jixel-enc reads its eXIf chunk, writes the
+//     camera's orientation into the codestream (the field a decoder obeys),
+//     and keeps the chunk as an Exif box, which makes the file a container.
+//     Orientation is header metadata, not pixels, so the two codestreams
+//     match in size to within a few bytes (7 to 15 measured); a gap means
+//     the pixels differed, and it fails the photo.
 //   - sips keeps 40 of a Fujifilm HIF's 75 EXIF tags and drops every maker
 //     note (film simulation, grain, dynamic range), so the HIF's own EXIF and
 //     XMP are copied on with exif-sooc 0.4.0, which also refuses any file
-//     whose JPEG rebuild it would break.
-//   - --compress_boxes=0, because cjxl Brotli-compresses metadata by default
-//     and exif-sooc (no dependencies) cannot read a compressed box. Costs
-//     about 5 KB on a 12.5 MB frame.
-//   - -p: progressive, +1.3% bytes, so a 20 MB download paints early the way
-//     the progressive JPEG archive did. Effort 7: effort 9 saved 0.1% for 40%
-//     more encode time.
+//     whose JPEG rebuild it would break. exif-sooc needs the container (it
+//     refuses a bare codestream) and an uncompressed box, so jixel-enc never
+//     writes Brotli `brob` metadata.
+//   - Progressive DC, so a 20 MB download paints early the way the
+//     progressive JPEG archive did: the 1:8 LF image goes first as its own
+//     frame, and Chrome paints a whole frame from the first 8 to 11 KB
+//     (0.05%). Without it the first paint waits for the full LF, 750 KB to
+//     1.4 MB. jixel's `progressive` (AC passes) paints no earlier, so it is
+//     off. djxl --allow_partial_files cannot render the DC frame and reads
+//     both the same: measure paint with jxl-rs or Chrome (gotcha 94).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ARGS = ["-e", "7", "-p", "--compress_boxes=0"];
-export const RANGE = { lo: 0.1, hi: 0.6, floor: 0.05, tolerance: 0.025 };
+// jixel distances. Below about 0.05 its output stops changing (d0.03 and
+// d0.0482 gave identical bytes); 2026-10-17's winners landed at 0.075 to
+// 0.137. The search stops once hi/lo is within `ratio`, about 1% in bytes,
+// which is finer than one step between neighbouring encodes (1 to 2%).
+export const RANGE = { lo: 0.07, hi: 0.5, floor: 0.05, ratio: 1.03 };
 
 export type Score = { s2: number; ba3: number };
 export const beats = (a: Score, base: Score) => a.s2 > base.s2 && a.ba3 < base.ba3;
 
-/** The largest distance in [floor, hi] whose encode `wins`, by bisection, or
- *  null when not even the floor does. `wins` is called at most ~7 times. */
+/** The largest distance in [floor, hi] whose encode `wins`, by bisection in
+ *  log space, or null when not even the floor does. It returns only a
+ *  distance `wins` accepted, and calls it at most 10 times. */
 export async function searchDistance(wins: (d: number) => Promise<boolean>, r = RANGE): Promise<number | null> {
   let lo = r.lo,
     hi = r.hi;
@@ -90,8 +114,8 @@ export async function searchDistance(wins: (d: number) => Promise<boolean>, r = 
     lo = r.floor;
   }
   if (await wins(hi)) return hi;
-  while (hi - lo > r.tolerance) {
-    const mid = Math.round(((lo + hi) / 2) * 1000) / 1000;
+  while (hi / lo > r.ratio) {
+    const mid = Math.round(Math.sqrt(lo * hi) * 10000) / 10000;
     if (await wins(mid)) lo = mid;
     else hi = mid;
   }
@@ -176,20 +200,27 @@ function sh(cmd: string[], tolerateExit = false): Promise<string> {
 // SSIMULACRA2 and butteraugli, in one call per image. It replaced libjxl's
 // `ssimulacra2` and `butteraugli_main` CLIs on 2026-10-14, after it picked the
 // same distance as they did on 20 of 20 HIFs; its Cargo.toml has the numbers.
-const METRICS = path.join(path.dirname(fileURLToPath(import.meta.url)), "photo-metrics");
-let metricsBin: Promise<string> | undefined;
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const builds = new Map<string, Promise<string>>();
 
-/** The scorer: PHOTO_METRICS_BIN when set (the contract tests' stub), else the
- *  in-tree crate, built once per process like zenc. The build runs even when a
- *  binary exists, because cargo is what checks it against the sources and lock. */
-function metrics(): Promise<string> {
-  const pinned = process.env.PHOTO_METRICS_BIN;
+/** An in-tree Rust tool's binary: `pinned` when set (the contract tests'
+ *  stub), else the crate, built once per process like zenc. The build runs
+ *  even when a binary exists, because cargo is what checks it against the
+ *  sources and lock. */
+function crate(name: "photo-metrics" | "jixel-enc", pinned: string | undefined): Promise<string> {
   if (pinned) return Promise.resolve(pinned);
-  metricsBin ??= sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(METRICS, "Cargo.toml")]).then(() =>
-    path.join(METRICS, "target/release/photo-metrics"),
-  );
-  return metricsBin;
+  const dir = path.join(HERE, name);
+  let bin = builds.get(name);
+  if (!bin) {
+    bin = sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(dir, "Cargo.toml")]).then(() =>
+      path.join(dir, "target/release", name),
+    );
+    builds.set(name, bin);
+  }
+  return bin;
 }
+const metrics = () => crate("photo-metrics", process.env.PHOTO_METRICS_BIN);
+const encoder = () => crate("jixel-enc", process.env.JIXEL_ENC_BIN);
 
 async function score(ref: string, img: string): Promise<Score> {
   const { s2, ba3 } = JSON.parse(await sh([await metrics(), ref, img])) as { s2: number; ba3: number };
@@ -241,7 +272,7 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     const cand = path.join(work, "cand.jxl"),
       dec = path.join(work, "cand.png");
     const d = await searchDistance(async (dist) => {
-      await sh(["cjxl", "--quiet", "-d", String(dist), ...ARGS, ref, cand]);
+      await sh([await encoder(), ref, cand, String(dist)]);
       await sh(["djxl", cand, dec, ...DECODE]);
       const s = await score(ref, dec);
       tried.set(dist, { ...s, bytes: fs.statSync(cand).size, codestream: codestreamBytes(cand) });
@@ -250,7 +281,7 @@ export async function hifArchive(hif: string, baseline: string, out: string) {
     if (d === null) return await transcode(`no distance down to ${RANGE.floor} beats the baseline on both metrics`);
 
     const chosen = tried.get(d)!;
-    await sh(["cjxl", "--quiet", "-d", String(d), ...ARGS, raw, out]);
+    await sh([await encoder(), raw, out, String(d)]);
     const gap = Math.abs(codestreamBytes(out) - chosen.codestream);
     if (gap > 256) throw new Error(`the oriented encode's codestream differs from the scored one by ${gap} bytes`);
     await sh(["exif-sooc", "-TagsFromFile", hif, "-all:all", "-overwrite_original", out]);
