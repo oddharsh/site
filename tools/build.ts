@@ -2280,6 +2280,28 @@ phase("5e build info");
 // against the final page bytes and the committed src/dict/f-dict dictionary.
 let freshFamily: Buffer | null = null;
 
+phase("5f non-blocking shell css");
+// 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
+// blocking first paint, behind the subset of each that can apply to the page.
+// It runs after 5c so the subset carries the same short custom-property names
+// as the stylesheet it came from, and before 6 so the swapped links get hashed
+// like any other. The subset is derived here on every build and never
+// committed, so there is no copy to drift, the same argument as the client edge.
+{
+  const { NON_BLOCKING_PAGES, nonBlockingPage } = await import("./lib/critical-css.ts");
+  const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
+  for (const rel of NON_BLOCKING_PAGES) {
+    const page = await readFile(`${OUT}/public/${rel}`, "utf8");
+    const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
+    const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
+    const out = await nonBlockingPage(page, sheets, scripts);
+    await writeFile(`${OUT}/public/${rel}`, out);
+    console.log(
+      `non-blocking shell css: ${rel} inlines ${out.length - page.length} B for ${sheets.length} stylesheets (scripts read: ${srcs.join(", ") || "none"})`,
+    );
+  }
+}
+
 phase("6 hash shell assets");
 // 6) content-hash the shell assets the client asset registry names (nav.js,
 // luna.css, lens-boot.js and the rest) into immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link

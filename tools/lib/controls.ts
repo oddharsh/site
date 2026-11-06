@@ -553,4 +553,24 @@ export const CONTROLS: Control[] = [
     run: contract("contract-ci-required-gate"),
     expect: /a push to main must find no map and run the whole suite/,
   },
+  {
+    id: "critical-css-drops-script-built-rules",
+    plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: " || namedInScripts(stripPseudos(s), scriptWords)",
+        replace: "",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /a rule only the page's scripts can match was dropped/,
+  },
+  {
+    id: "critical-css-adds-a-rule",
+    plants: "the critical-CSS subset carries a rule luna.css doesn't, which would change /garage's settled render",
+    mutations: [{ file: "tools/lib/critical-css.ts", find: "  return keep(luna);", replace: '  return keep(luna) + ".planted{color:red}";' }],
+    run: BUILD,
+    expect: /critical-css: the \/luna\.css subset is not an ordered subset of it/,
+  },
 ];
