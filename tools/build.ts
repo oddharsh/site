@@ -2280,6 +2280,29 @@ phase("5e build info");
 // against the final page bytes and the committed src/dict/f-dict dictionary.
 let freshFamily: Buffer | null = null;
 
+phase("5f non-blocking shell css");
+// 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
+// blocking first paint, behind the subset of each that can apply to the page.
+// It runs after 5c so the subset carries the same short custom-property names
+// as the stylesheet it came from, and before 6 so the swapped links get hashed
+// like any other. The subset is derived here on every build and never
+// committed, so there is no copy to drift, the same argument as the client edge.
+// Step 7b gives the page's readable twin the same swap, so the twin stays the
+// same program as the page it twins.
+const { NON_BLOCKING_PAGES, nonBlockingPage } = await import("./lib/critical-css.ts");
+const toNonBlocking = async (page: string) => {
+  const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
+  const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
+  const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
+  return nonBlockingPage(page, sheets, scripts);
+};
+for (const rel of NON_BLOCKING_PAGES) {
+  const page = await readFile(`${OUT}/public/${rel}`, "utf8");
+  const out = await toNonBlocking(page);
+  await writeFile(`${OUT}/public/${rel}`, out);
+  console.log(`non-blocking shell css: ${rel} inlines ${out.length - page.length} B for luna.css and prose.css`);
+}
+
 phase("6 hash shell assets");
 // 6) content-hash the shell assets the client asset registry names (nav.js,
 // luna.css, lens-boot.js and the rest) into immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
@@ -2717,6 +2740,9 @@ phase("7b minify pages");
       } catch {
         generated++;
       }
+      // outside the try, so a page that can't take the swap fails the build
+      // instead of reading as "no authored source"
+      if (NON_BLOCKING_PAGES.includes(rel)) twin = await toNonBlocking(twin);
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;
