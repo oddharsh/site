@@ -159,6 +159,13 @@ export const CONTROLS: Control[] = [
     expect: /reads var\(--ink\) but its inline :root does not define it/,
   },
   {
+    id: "parser-pause-before-the-first-fold",
+    plants: "the parser pause ignores a page's rel=expect first fold, so /garage's first paint waits for the pause's stylesheet",
+    mutations: [{ file: "tools/lib/parser-pause.ts", find: " && (!afterFirstFold || b.afterFold)", replace: "" }],
+    run: contract("contract-long-pages-pause-below-the-screen"),
+    expect: /garage\/index\.html: the pause sits before the end of the first fold/,
+  },
+  {
     id: "web-font-in-luna",
     plants: "luna.css downloads a face through @font-face url(), breaking the zero-font-bytes law",
     mutations: [
