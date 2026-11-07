@@ -10,6 +10,7 @@ import worker from "../src/index.ts";
 import { sign } from "../../src/worker/lib/sign.ts";
 import { getBooking, listHeld } from "../src/booking.ts";
 import { reserveSlot } from "../src/reservation.ts";
+import { expireIfStillPending } from "../src/workflow.ts";
 
 const SECRET = "integration-signing-secret";
 
@@ -794,5 +795,96 @@ describe("book → approve / decline lifecycle", () => {
     const res = await dispatch(`/approve?t=${id}&sig=${sig}`); // second
     expect(res.status).toBe(200);
     expect(mailCalls).toHaveLength(0);
+  });
+});
+
+// BOOKINGS that runs `during` to completion just before the SECOND read of
+// `key`. That pins the interleaving the old status races needed: a request
+// reads the booking, decides from that read, and then re-reads it on the way to
+// its write; a second request that finishes its whole transition in that gap
+// used to be overwritten. Left to the scheduler, it almost never lands there,
+// so these would pass on broken code.
+//
+// Code with ONE read before its write has no such gap, and `during` never fires
+// mid-flight; `settle` then runs it afterwards, so both requests always happen.
+// The gap between that one read and its write is the window KV cannot close
+// (no compare-and-set), and these tests do not pretend to.
+function landsBetweenReads(kv: KVNamespace, key: string, during: () => Promise<unknown>) {
+  let reads = 0;
+  let fired = false;
+  const fire = async () => {
+    if (fired) return;
+    fired = true;
+    await during();
+  };
+  const BOOKINGS = new Proxy(kv, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop);
+      if (prop !== "get") return typeof value === "function" ? value.bind(target) : value;
+      return async (k: string, ...rest: unknown[]) => {
+        if (k === key && ++reads === 2) await fire();
+        return (target.get as (...a: unknown[]) => Promise<unknown>)(k, ...rest);
+      };
+    },
+  });
+  return { BOOKINGS, settle: fire };
+}
+
+describe("status transitions under a stale read", () => {
+  // subjects from email.ts: the invite is "confirmed: …", the decline "re: …"
+  const sent = (prefix: string) => mailCalls.filter((m) => m.body.subject.startsWith(prefix)).length;
+  async function pendingBooking() {
+    const slot = await firstSlot();
+    await postBook({ name: "Dana", email: "dana@x.dev", topic: "hi", start: slot.start });
+    const id = lastBookingId();
+    mailCalls.length = 0;
+    const link = async (action: "approve" | "decline") => `/${action}?t=${id}&sig=${await sign(`${id}|${action}`, SECRET)}`;
+    return { id, slot, approve: await link("approve"), decline: await link("decline") };
+  }
+
+  // The timer used to decide on one read and write through a second; an approve
+  // between the two was overwritten, leaving a coffee whose invite had gone out
+  // marked expired with its slot freed. Now the decision and the write share one
+  // read, so whichever lands first wins outright: here the timer, and the
+  // approve that follows finds nothing to confirm.
+  it("the expiry timer and an approve never both win", async () => {
+    const { id, slot, approve } = await pendingBooking();
+    const { BOOKINGS, settle } = landsBetweenReads(env.BOOKINGS, `booking:${id}`, () => dispatch(approve));
+    await expireIfStillPending({ ...env, BOOKINGS }, id);
+    await settle();
+    expect(await statusOf(id)).toBe("expired");
+    expect(sent("confirmed:")).toBe(0);
+    expect(await listHeld(env)).not.toContainEqual({ start: slot.start, end: slot.end });
+  });
+
+  it("a decline that read pending before an approve landed sends no decline", async () => {
+    const { id, slot, approve, decline } = await pendingBooking();
+    const { BOOKINGS, settle } = landsBetweenReads(env.BOOKINGS, `booking:${id}`, () => dispatch(approve));
+    await dispatch(decline, {}, { BOOKINGS });
+    await settle();
+    expect(await statusOf(id)).toBe("confirmed");
+    expect(sent("confirmed:")).toBe(1);
+    expect(sent("re:")).toBe(0);
+    expect(await listHeld(env)).toContainEqual({ start: slot.start, end: slot.end });
+  });
+
+  it("an approve that read pending before a decline landed sends no invite", async () => {
+    const { id, slot, approve, decline } = await pendingBooking();
+    const { BOOKINGS, settle } = landsBetweenReads(env.BOOKINGS, `booking:${id}`, () => dispatch(decline));
+    await dispatch(approve, {}, { BOOKINGS });
+    await settle();
+    expect(await statusOf(id)).toBe("declined");
+    expect(sent("re:")).toBe(1);
+    expect(sent("confirmed:")).toBe(0);
+    expect(await listHeld(env)).not.toContainEqual({ start: slot.start, end: slot.end });
+  });
+
+  it("a double-clicked approve sends one invite", async () => {
+    const { id, approve } = await pendingBooking();
+    const { BOOKINGS, settle } = landsBetweenReads(env.BOOKINGS, `booking:${id}`, () => dispatch(approve));
+    await dispatch(approve, {}, { BOOKINGS });
+    await settle();
+    expect(await statusOf(id)).toBe("confirmed");
+    expect(sent("confirmed:")).toBe(1);
   });
 });
