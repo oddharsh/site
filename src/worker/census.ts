@@ -70,14 +70,50 @@ export const CENSUS_RUN_UPSERT =
 // lets a dispatch row replace only another dispatch row.
 export const CENSUS_RUN_UPSERT_DISPATCH = CENSUS_RUN_UPSERT + " WHERE lens_census_runs.stage = 'dispatch'";
 
+// Every outcome belongs to exactly one stage, so the writers take the stage
+// column from here instead of passing it beside the outcome. The D1 schema
+// keeps both columns: the dispatch upsert's WHERE reads `stage`.
+export const CENSUS_RUN_STAGE = {
+  dispatched: "dispatch",
+  duplicate: "dispatch",
+  dispatch_failed: "dispatch",
+  written: "scan",
+  cap: "scan",
+  failed: "scan",
+} as const;
+export type CensusRunOutcome = keyof typeof CENSUS_RUN_STAGE;
+
+const isCensusRunOutcome = (o: string): o is CensusRunOutcome => Object.hasOwn(CENSUS_RUN_STAGE, o);
+
+/** Where a host stands after its latest record: scanned, still in flight, or stopped short. */
+function censusRunState(outcome: CensusRunOutcome): "done" | "unfinished" | "problem" {
+  switch (outcome) {
+    case "written":
+      return "done";
+    // Dispatched and never heard from: the instance is still running, still
+    // retrying, or died without reaching its catch.
+    case "dispatched":
+    case "duplicate":
+      return "unfinished";
+    case "dispatch_failed":
+    case "cap":
+    case "failed":
+      return "problem";
+    default: {
+      const _exhaustive: never = outcome;
+      return _exhaustive;
+    }
+  }
+}
+
 const detailOf = (e) => ((e && e.message) || (e == null ? null : String(e)))?.slice(0, 300) ?? null;
 
 /** Record one host's scan outcome. Never throws: the record must not be the
  *  thing that turns a written row into a retried step, and on the cap path the
  *  write can itself be refused. */
-async function recordScan(env, ymd, host, outcome, detail) {
+async function recordScan(env, ymd, host, outcome: "cap" | "failed", detail) {
   try {
-    await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), "scan", outcome, detail).run();
+    await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), CENSUS_RUN_STAGE[outcome], outcome, detail).run();
   } catch (_e) {
     /* the span still carries the outcome */
   }
@@ -196,7 +232,7 @@ export async function censusScanOne(env, site, ts, ymd) {
           "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
             "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces",
         ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
-        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), "scan", "written", null),
+        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), CENSUS_RUN_STAGE.written, "written", null),
       ]);
 
       s.setAttribute("census.outcome", "written");
@@ -298,7 +334,7 @@ async function cronCensusInner(env, sSweep) {
   let created = 0,
     duplicate = 0,
     failed = 0;
-  const record: Array<[string, string, string | null]> = [];
+  const record: Array<[string, CensusRunOutcome, string | null]> = [];
   for (const site of CENSUS_ROSTER) {
     try {
       await env.CENSUS_WORKFLOW.create({
@@ -323,7 +359,9 @@ async function cronCensusInner(env, sSweep) {
   // subrequests. A refused record costs the record and never the sweep.
   try {
     await env.RESTORE_DB.batch(
-      record.map(([host, outcome, detail]) => env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)),
+      record.map(([host, outcome, detail]) =>
+        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, CENSUS_RUN_STAGE[outcome], outcome, detail),
+      ),
     );
     sSweep.setAttribute("census.recorded", record.length);
   } catch (e) {
@@ -401,11 +439,9 @@ export function summarizeCensusRuns(rows) {
     recorded: day.length,
     written: outcomes.written || 0,
     outcomes,
-    // Dispatched and never heard from: the instance is still running, still
-    // retrying, or died without reaching its catch.
-    unfinished: day.filter((r) => r.stage === "dispatch" && r.outcome !== "dispatch_failed").map((r) => r.host),
+    unfinished: day.filter((r) => isCensusRunOutcome(r.outcome) && censusRunState(r.outcome) === "unfinished").map((r) => r.host),
     problems: day
-      .filter((r) => r.outcome === "dispatch_failed" || r.outcome === "cap" || r.outcome === "failed")
+      .filter((r) => isCensusRunOutcome(r.outcome) && censusRunState(r.outcome) === "problem")
       .map((r) => ({ host: r.host, outcome: r.outcome, detail: r.detail })),
   };
 }

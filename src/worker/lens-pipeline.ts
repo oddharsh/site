@@ -132,8 +132,30 @@ export type LensSpanName = "lens.shot" | "lens.browser" | "lens.wire" | "lens.to
 // which is a different thing from the payload's own `ok`: the tools and nlweb
 // lenses answer 200 with `ok: false` for a door that is shut, and that answer
 // must not sit in KV for an hour.
+//
+// `outcome` lands on the span as `lens.outcome`. A failure's outcome names its
+// HTTP status once, here: a lens that returns `binding_threw` with anything
+// but 502 is a compile error. `unreadable` and `shut` answer 200 because the
+// payload carries its own `ok: false` and the pane renders it.
+export const LENS_FAILURE_STATUS = {
+  no_engine: 503,
+  binding_threw: 502,
+  browser_budget_spent: 429,
+  not_an_image: 502,
+  upstream_not_ok: 502,
+  invalid_json: 502,
+  session_threw: 502,
+  session_failed: 502,
+  unreadable: 200,
+  shut: 200,
+} as const satisfies Record<string, number>;
+export type LensFailure = keyof typeof LENS_FAILURE_STATUS;
+/** A success the span should tell apart from a plain `ok`. */
+export type LensSuccess = "read" | "markdown" | "html-only";
+
 export type LensRan<V> =
-  { ok: true; value: V; store?: unknown; outcome?: string } | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
+  | { ok: true; value: V; store?: unknown; outcome?: LensSuccess }
+  | { [F in LensFailure]: { ok: false; status: (typeof LENS_FAILURE_STATUS)[F]; payload: Record<string, unknown>; outcome: F } }[LensFailure];
 
 export type LensOutcome<V> =
   | { kind: "ok"; value: V; fromCache?: boolean; budgets?: LensBudget[] }
@@ -384,11 +406,22 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
 // `false`, so a client never has to tell a missing field from a miss. An
 // uncached lens never carries the field.
 export function lensJson(o: LensOutcome<any>): Response {
-  if (o.kind === "ok") {
-    return jsonResponse(o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache }, 200, policyHeaders(o.budgets));
+  switch (o.kind) {
+    case "ok":
+      return jsonResponse(
+        o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache },
+        200,
+        policyHeaders(o.budgets),
+      );
+    case "failed":
+      return jsonResponse(o.payload, o.status);
+    case "refused":
+      return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
+    default: {
+      const _exhaustive: never = o;
+      return _exhaustive;
+    }
   }
-  if (o.kind === "failed") return jsonResponse(o.payload, o.status);
-  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
 }
 
 /** A refusal over our own rate budget says when to come back, and which
@@ -415,7 +448,16 @@ export function lensPng(o: LensOutcome<ArrayBuffer>): Response {
 
 // The SSR shell and /lens/fetch answer a { status, payload } pair.
 export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown>; headers: Record<string, string> } {
-  if (o.kind === "ok") return { status: 200, payload: o.value, headers: policyHeaders(o.budgets) };
-  if (o.kind === "failed") return { status: o.status, payload: o.payload, headers: {} };
-  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
+  switch (o.kind) {
+    case "ok":
+      return { status: 200, payload: o.value, headers: policyHeaders(o.budgets) };
+    case "failed":
+      return { status: o.status, payload: o.payload, headers: {} };
+    case "refused":
+      return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
+    default: {
+      const _exhaustive: never = o;
+      return _exhaustive;
+    }
+  }
 }

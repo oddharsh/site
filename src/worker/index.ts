@@ -209,6 +209,8 @@ export default {
       const self = ctx.exports?.default;
       await cron("cron.serendipity", () => cronSerendipity(env, self ? (url, init) => self.fetch(new Request(url, init)) : null));
     } else {
+      // A new CronJob without a branch above reaches here and fails to compile.
+      const _unmatched: null = job;
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
   },
