@@ -37,6 +37,8 @@
 // Nothing about the caller is stored: no IP, no user agent, no cookie.
 // /privacy says so (trust.ts).
 import { jsonResponse } from "./lib/http.ts";
+import { isolateMemo } from "./lib/isolate-memo.ts";
+import type { Env } from "./lib/env.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 
@@ -228,20 +230,20 @@ export function crowdFromTally(v: string | null | undefined): Crowd {
 // Created lazily, the way webmention.ts does it, so the binding self-provisions.
 // migrations/0002_pixel_peeper.sql carries the same DDL. The INSERT OR IGNORE
 // writes nothing once the row exists.
-let ensured = false;
-async function ensureTables(db) {
-  if (ensured) return;
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS ${TALLY} (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
-    db.prepare(`INSERT OR IGNORE INTO ${TALLY} (k, v) VALUES ('all', '{}')`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS ${RUNS} (
+const ensureTables = isolateMemo(
+  async (db: D1Database) => {
+    await db.batch([
+      db.prepare(`CREATE TABLE IF NOT EXISTS ${TALLY} (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
+      db.prepare(`INSERT OR IGNORE INTO ${TALLY} (k, v) VALUES ('all', '{}')`),
+      db.prepare(`CREATE TABLE IF NOT EXISTS ${RUNS} (
       at INTEGER NOT NULL, mode TEXT NOT NULL, overall INTEGER NOT NULL,
       clear_n INTEGER NOT NULL, clear_hit INTEGER NOT NULL,
       split_s2 INTEGER NOT NULL, split_butter INTEGER NOT NULL, split_neither INTEGER NOT NULL,
       picks TEXT NOT NULL)`),
-  ]);
-  ensured = true;
-}
+    ]);
+  },
+  { onFailure: "retry" },
+);
 
 // Never creates anything: crowd.json is a GET, and a preview URL runs this
 // against the production database (lib/preview.ts). Before the first counted
@@ -255,22 +257,16 @@ async function readTally(db): Promise<string | null> {
 }
 
 // One manifest per isolate: it changes only with a deploy, which starts new ones.
-let manifestIndex: Promise<TileIndex> | null = null;
-function loadIndex(env): Promise<TileIndex> {
-  if (manifestIndex) return manifestIndex;
-  const loading: Promise<TileIndex> = env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`))
-    .then((r: Response) => {
-      if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`);
-      return r.json();
-    })
-    .then((m: Manifest) => indexManifest(m));
-  // a failed load is forgotten, so the next run tries again
-  loading.catch(() => {
-    manifestIndex = null;
-  });
-  manifestIndex = loading;
-  return loading;
-}
+// A failed load is forgotten, so the next run tries again.
+const loadIndex = isolateMemo(
+  async (env: Pick<Env, "ASSETS">): Promise<TileIndex> => {
+    const r: Response = await env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`));
+    if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`);
+    const manifest: Manifest = await r.json();
+    return indexManifest(manifest);
+  },
+  { onFailure: "retry" },
+);
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => jsonResponse(body, status, headers, { pretty: false });
 

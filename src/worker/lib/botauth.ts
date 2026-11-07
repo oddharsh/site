@@ -42,6 +42,7 @@
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
 import { lensParseRobots, lensRobotsVerdict } from "./robots.ts";
 import { isSubrequestLimit } from "./budget.ts";
+import { isolateMemo } from "./isolate-memo.ts";
 import type { Env } from "./env.ts";
 
 const ENCODER = new TextEncoder();
@@ -241,13 +242,9 @@ export async function handleSignatureDirectory(request: Request, env: Pick<Env, 
 // cannot be parsed or imported fails the same way however many times it is
 // retried, and a different secret is a different memo entry. Dropping the entry
 // on rejection was tried against the tests here and changes nothing any caller
-// can observe, so the memo leaves it out.
-let signingKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey }> } | null = null;
-
-function signingMaterial(jwkText: string) {
-  const cached = signingKey;
-  if (cached && cached.jwkText === jwkText) return cached.material;
-  const material = (async () => {
+// can observe, so the memo says onFailure: "keep".
+const signingMaterial = isolateMemo(
+  async (jwkText: string) => {
     const jwk = JSON.parse(jwkText);
     // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
     // architecture-04): a verifier fetches the directory, thumbprints each key,
@@ -257,10 +254,9 @@ function signingMaterial(jwkText: string) {
     // the public members means the two cannot disagree again.
     const [keyId, key] = await Promise.all([jwkThumbprint(jwk), crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"])]);
     return { keyId, key };
-  })();
-  signingKey = { jwkText, material };
-  return material;
-}
+  },
+  { onFailure: "keep", key: (jwkText) => jwkText },
+);
 
 // The same memo for sig2, with the opposite failure policy: it resolves to null
 // instead of rejecting, so a bad ML-DSA key costs the label and never the
@@ -274,12 +270,8 @@ function signingMaterial(jwkText: string) {
 // secret may or may not carry. workerd imports a bare seed JWK, and when `pub`
 // IS present it refuses one that does not match `priv`, so the derived key is
 // the only value that is right in every shape the secret can take.
-let pqSigningKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey } | null> } | null = null;
-
-function pqSigningMaterial(jwkText: string) {
-  const cached = pqSigningKey;
-  if (cached && cached.jwkText === jwkText) return cached.material;
-  const material = (async () => {
+const pqSigningMaterial = isolateMemo(
+  async (jwkText: string): Promise<{ keyId: string; key: CryptoKey } | null> => {
     try {
       const key = await crypto.subtle.importKey("jwk", JSON.parse(jwkText), { name: "ML-DSA-44" }, false, ["sign"]);
       const publicJwk = await crypto.subtle.exportKey("jwk", await crypto.subtle.getPublicKey(key, ["verify"]));
@@ -288,10 +280,9 @@ function pqSigningMaterial(jwkText: string) {
       console.error(`AadharshBot: sig2 disabled, the ML-DSA-44 key is unusable (${error?.name || "Error"})`);
       return null;
     }
-  })();
-  pqSigningKey = { jwkText, material };
-  return material;
-}
+  },
+  { onFailure: "keep", key: (jwkText) => jwkText },
+);
 
 type BotPolicy = { ok: true } | { ok: false; kind: "disallow"; rule: string } | { ok: false; kind: "undetermined"; reason: string };
 
