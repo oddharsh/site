@@ -8,7 +8,7 @@ import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
-import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { errorResp, escAttr, escHtml, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms } from "./lib/text.ts";
 import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
@@ -666,7 +666,7 @@ export async function handlePhotoQuery(request, env, ctx, url = new URL(request.
     },
     ctx,
   );
-  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, 200, { noindex: true });
 }
 
 // /images/manifest.json is BUILD OUTPUT since 2026-09-26: build.ts step 1e stages
