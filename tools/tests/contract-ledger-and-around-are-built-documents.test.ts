@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ISLAND_MARKER, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
 import { CRAWLERS, handleLedgerLines, LINES_URL, renderLedgerLines, renderLedgerPage } from "../../src/worker/ledger.ts";
+import { withBotPolicyCache } from "../../src/worker/lib/botauth.ts";
 import { handleAroundSnapshot, NEIGHBORS, refreshAroundSnapshot, renderAroundPage, renderAroundSnapshot, SNAPSHOT_URL } from "../../src/worker/around.ts";
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
@@ -136,5 +137,64 @@ test("/around/snapshot.html refuses a wrong bust secret and serves the cached re
     // No snapshot in KV: the pending panel, cached briefly, never a table.
     assert.equal(res.headers.get("cache-control"), "public, max-age=60");
     assert.match(await res.text(), /class="pending"/);
+  });
+});
+
+// The owner's bust follows the cron's rule: an all-error crawl never replaces
+// the last good snapshot. Until 2026-11-06 the bust deleted the KV key before
+// crawling and pinned whatever came back at the colo's edge, so one bust during
+// a neighbor outage left an all-error table serving for SNAPSHOT_CACHE.
+test("an owner bust that reaches no neighbor keeps the last good snapshot", async () => {
+  const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const lastGood = {
+    crawledAt: "2026-11-05T05:41:00.000Z",
+    results: NEIGHBORS.map(({ name, url }) => ({ name, url, status: 200, title: `${name} home`, robots: "allow", elapsedMs: 120 })),
+  };
+  const store = new Map([["around:report", JSON.stringify(lastGood)]]);
+  const deleted: string[] = [];
+  const env = withBotPolicyCache({
+    RN_BUST_SECRET: "right",
+    RN_SIGNING_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey("jwk", pair.privateKey)),
+    // Every robots.txt answers 503, so every row is "undetermined, not crawled".
+    OUTBOUND_TRANSPORT: async () => new Response("down", { status: 503 }),
+    RN_KV: {
+      get: async (k, opts) => {
+        const v = store.get(k);
+        return v === undefined ? null : opts?.type === "json" ? JSON.parse(v) : v;
+      },
+      put: async (k, v) => {
+        store.set(k, v);
+      },
+      delete: async (k) => {
+        deleted.push(k);
+        store.delete(k);
+      },
+    },
+  });
+  await withColdCache(async (puts) => {
+    const res = await refreshAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=right"), env);
+    assert.ok(res, "a right secret must bust");
+    assert.equal(res.headers.get("x-around-bust"), "kept-last-good");
+    const html = await res.text();
+    assert.match(html, /2026-11-05T05:41:00\.000Z/, "the owner sees the last good crawl");
+    assert.doesNotMatch(html, /not crawled/);
+    assert.deepEqual(JSON.parse(store.get("around:report") ?? "null"), lastGood, "KV still holds the last good report");
+    assert.deepEqual(deleted, []);
+    assert.equal(puts.length, 0, "nothing new is pinned at the edge");
+  });
+  // The presence half: a bust whose crawl reaches neighbors does replace it.
+  // A fresh robots cache: the first bust remembered every 503.
+  const upEnv = withBotPolicyCache({
+    ...env,
+    OUTBOUND_TRANSPORT: async (url) =>
+      new URL(url).pathname === "/robots.txt"
+        ? new Response("User-agent: *\nAllow: /\n", { headers: { "content-type": "text/plain" } })
+        : new Response("<!doctype html><title>fresh</title>", { headers: { "content-type": "text/html" } }),
+  });
+  await withColdCache(async (puts) => {
+    const res = await refreshAroundSnapshot(new Request("https://aadhar.sh" + SNAPSHOT_URL + "?bust=right"), upEnv);
+    assert.equal(res?.headers.get("x-around-bust"), "published");
+    assert.notEqual(JSON.parse(store.get("around:report") ?? "null").crawledAt, lastGood.crawledAt);
+    assert.equal(puts.length, 1);
   });
 });
