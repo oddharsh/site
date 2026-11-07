@@ -38,7 +38,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { EMPTY, html, type Html } from "./lib/html.ts";
 import { jsonResponse } from "./lib/http.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript, type Pending, type Read } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript, type Pending, type Read } from "./lib/island.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
@@ -46,7 +46,7 @@ import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { GUESTBOOK_ENTRIES_URL } from "./routes.ts";
 
 /** Mirrored in cloudflare.config.ts; contract-lens-per-ip-crawl-budgets pins the pair. */
-export const GUESTBOOK_BUDGET = { binding: "GUESTBOOK_RL", max: 3 };
+export const GUESTBOOK_BUDGET = { name: "guestbook", binding: "GUESTBOOK_RL", max: 3 };
 /** Entries accepted per UTC day, one D1 row each. */
 export const DAILY_SIGN_CAP = 500;
 /** How many entries the page and the JSON show, newest first. */
@@ -206,7 +206,7 @@ async function sign(request: Request, env) {
   if (request.headers.get("sec-fetch-site") === "cross-site") return json({ error: "cross-site" }, 403);
   if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
   if (await overBudget(GUESTBOOK_BUDGET, request, env)) {
-    return json({ error: "too many signatures from this address; try again in a minute" }, 429, rateLimitedHeaders("guestbook", GUESTBOOK_BUDGET.max));
+    return json({ error: "too many signatures from this address; try again in a minute" }, 429, rateLimitedHeaders(GUESTBOOK_BUDGET));
   }
   const text = await request.text();
   if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
@@ -357,13 +357,19 @@ const EXAMPLE = `curl https://aadhar.sh/guestbook \\
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderGuestbookPage() {
+  const { head, mount } = island({
+    id: "gb-entries",
+    url: ENTRIES_URL,
+    placeholder: renderGuestbookEntries(PENDING),
+    fallback: { says: "The entries arrive", shows: "them" },
+  });
   return lunaPage({
     title: "Guestbook · aadhar.sh",
     path: "Guestbook",
     route: "/guestbook",
     width: 760,
     description: "A guestbook for automated visitors: who came by, from where, with what tools, and why.",
-    head: islandPreload(ENTRIES_URL),
+    head,
     css: GB_CSS,
     body: html`
     <h1>Guestbook</h1>
@@ -379,7 +385,7 @@ export function renderGuestbookPage() {
       the server records the rest from the request itself. One entry per name, address and day. Entries appear
       without moderation, as plain text.</p>
     <h2>Visitors</h2>
-    ${islandMount("gb-entries", ENTRIES_URL, renderGuestbookEntries(PENDING), html`<p>The entries arrive in a second request after the page loads, and that needs a script. Without one, <a href="${ENTRIES_URL}">${ENTRIES_URL}</a> shows them as plain HTML.</p>`)}
+    ${mount}
     <p class="gb-fail">The request for the entries failed, so the list stays empty rather than guessed. <a href="${ENTRIES_URL}">${ENTRIES_URL}</a> has it as plain HTML, and <a href="/guestbook.json">/guestbook.json</a> as JSON.</p>
 `,
     scripts: islandScript(),

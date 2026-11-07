@@ -8,7 +8,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
 import { esc, secretMatches } from "./lib/http.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
@@ -269,6 +269,12 @@ export function renderReadingList(read, hn: HnMap = {}): Html {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderReadingPage() {
+  const { head, mount } = island({
+    id: "rd-list",
+    url: LIST_URL,
+    placeholder: renderReadingList(PENDING),
+    fallback: { says: "The list arrives", shows: "it" },
+  });
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
   return lunaPage({
     title: "My Reading · aadhar.sh",
@@ -276,7 +282,7 @@ export function renderReadingPage() {
     route: "/reading",
     width: 720,
     description: "What I've been reading, saved to Curius and mirrored natively here, newest first.",
-    head: islandPreload(LIST_URL),
+    head,
     headers: { "referrer-policy": "strict-origin-when-cross-origin" },
     css: `/*min*/
 .rd-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-body); }
@@ -309,7 +315,7 @@ footer a { color:var(--link); }
     body: html`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${profile}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
-    ${islandMount("rd-list", LIST_URL, renderReadingList(PENDING), html`<p>The list arrives in a second request after the page loads, and that needs a script. Without one, <a href="${LIST_URL}">${LIST_URL}</a> shows it as plain HTML.</p>`)}
+    ${mount}
     <p class="rd-fail">The request for the list failed, so it stays empty rather than guessed. <a href="${LIST_URL}">${LIST_URL}</a> has it as plain HTML, and it always lives at <a href="${profile}" rel="external" target="_blank">curius.app/${CURIUS_HANDLE}</a>.</p>
 `,
     scripts: islandScript(),

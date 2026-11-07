@@ -5,7 +5,7 @@ import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
@@ -446,6 +446,12 @@ export async function handleWhoareyouValues(request, env, ctx, url = new URL(req
 }
 
 export function renderWhoareyouPage() {
+  const { head, mount } = island({
+    id: "wy-values",
+    url: VALUES_URL,
+    placeholder: renderWhoareyouValues(PENDING, null, null),
+    fallback: { says: "These values arrive", shows: "them for your request", json: "/whoareyou.json" },
+  });
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",
     path: "System Properties",
@@ -453,7 +459,7 @@ export function renderWhoareyouPage() {
     width: 720,
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",
-    head: islandPreload(VALUES_URL),
+    head,
     css: `/*min*/
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
@@ -597,7 +603,7 @@ footer .signature small { color: var(--ink-faint); }
       revealed to this site. None of it is logged, none of it is stored. Close this tab and it's gone.
     </p>
 
-    ${islandMount("wy-values", VALUES_URL, renderWhoareyouValues(PENDING, null, null), html`<p>These values arrive in a second request after the page loads, and that needs a script. Without one, <a href="${VALUES_URL}">${VALUES_URL}</a> shows them for your request as plain HTML, and <a href="/whoareyou.json">/whoareyou.json</a> as JSON.</p>`)}
+    ${mount}
     <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>

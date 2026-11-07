@@ -32,7 +32,7 @@ import { lensNeed } from "./lens-need.ts";
 // is optional — several terms are genuinely one sentence and padding them would
 // be worse. Keys are stable ids, so the same definition can be attached from the
 // worker's SSR and from the client's rendered checks without a second copy.
-export const LENS_GLOSSARY = {
+const LENS_GLOSSARY = {
   "llms-txt": {
     label: "llms.txt",
     plain: "A plain-text file a site publishes to tell AI models what it is about and where its real content lives.",
@@ -1953,7 +1953,7 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
   onThrow: () => ({ status: 200, payload: { ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." } }),
 });
 
-export function handleLensCloudflareScore(request, env, ctx, url = new URL(request.url)) {
+function handleLensCloudflareScore(request, env, ctx, url = new URL(request.url)) {
   return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx, url);
 }
 
@@ -2303,7 +2303,7 @@ export async function handleLensBrowser(request, env, ctx, url = new URL(request
 }
 
 // X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
-export function lensFramable(headers) {
+function lensFramable(headers) {
   const xfo = (headers["x-frame-options"] || "").toLowerCase();
   if (xfo.includes("deny") || xfo.includes("sameorigin") || xfo.includes("allow-from")) {
     return { framable: false, reason: "X-Frame-Options: " + xfo.trim() };
@@ -2414,7 +2414,7 @@ const LENS_DEFERRED_NOTE =
 // side that never measured them would report "doors 3 -> null" as a change.
 const LENS_DISCOVERY_FIELDS = new Set(["readiness", "level", "tier", "doors"]);
 
-export function compareLensObservations(left, right) {
+function compareLensObservations(left, right) {
   const bothMeasured = left?.phases?.discovery !== false && right?.phases?.discovery !== false;
   const fields = [
     ["status", "status"],
@@ -2492,7 +2492,7 @@ export const LENS_COMPARE = defineLens({
   onThrow: (e) => ({ status: 502, payload: { ok: false, error: "Lens comparison failed.", detail: lensErrorText(e).slice(0, 240) } }),
 });
 
-export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
+async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
   const o = await LENS_COMPARE.run({ left: leftRaw, right: rightRaw }, request, env, ctx);
   return o.kind === "ok"
     ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value }, headers: policyHeaders(o.budgets) }
@@ -3192,7 +3192,7 @@ export function discoveryScope(origin, env) {
  * what makes the door list greppable in one place instead of being spelled out
  * at three call sites that can drift apart.
  */
-export type DiscoveryPayload = {
+type DiscoveryPayload = {
   robots: any;
   sitemap: any;
   sitemapDeclared: any;
@@ -3243,10 +3243,10 @@ export type DiscoveryPayload = {
 // deferred side says "not measured" and the next compare fills it in, while a
 // refused side reports unknown on every probe it lost, and the rubric counts
 // each unknown against the score.
-export type DiscoveryMode = "live" | "defer" | "share";
-export type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
+type DiscoveryMode = "live" | "defer" | "share";
+type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
 
-export function discoveryBoard(sides: readonly string[]) {
+function discoveryBoard(sides: readonly string[]) {
   const reports = new Map<string, string | null>();
   const runs = new Map<string, { promise: Promise<any>; resolve: (value: any) => void }>();
   let decide: (modes: Map<string, DiscoveryMode>) => void = () => {};
@@ -3302,7 +3302,7 @@ export function discoveryBoard(sides: readonly string[]) {
   };
 }
 
-export type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
+type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
 type DiscoveryOpts = { fresh?: boolean; selfLens?: boolean };
 
 // Two signatures, because only a board can defer: every caller that passes no
@@ -3593,7 +3593,7 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
   return new Response(null, { status: 502, statusText: "Blocked redirect" });
 }
 
-export async function lensProbeBotView(targetUrl, env, profile) {
+async function lensProbeBotView(targetUrl, env, profile) {
   const deadline = AbortSignal.timeout(4500);
   try {
     const res = await lensFetchAsBot(targetUrl, env, deadline, profile.ua);
@@ -3637,7 +3637,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
   }
 }
 
-export function lensProbeBotViews(targetUrl, env) {
+function lensProbeBotViews(targetUrl, env) {
   return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
 }
 
@@ -3678,7 +3678,7 @@ export async function lensProbe(url, env, accept?) {
 // Case varies by host, so try the lowercase web form first, then the uppercase
 // repo form. `present` requires a non-trivial body, not just a 200, so an SPA
 // catch-all serving HTML for everything doesn't read as a real AGENTS.md.
-export async function lensProbeAgentsMd(origin, env) {
+async function lensProbeAgentsMd(origin, env) {
   // A variant that never answered (a thrown fetch, a 5xx, the platform's
   // subrequest ceiling) is not evidence the file is missing. Both variants have
   // to be ASKED before "not found" is a claim, so an unanswered one makes the
@@ -3714,7 +3714,7 @@ export async function lensProbeAgentsMd(origin, env) {
 // HTMLRewriter pass for the attribute-driven extraction it's robust at:
 // meta/OG/Twitter, JSON-LD script bodies, rel-links, img alt coverage,
 // microdata, RDFa, and microformats class tokens.
-export async function lensExtractAttrs(html) {
+async function lensExtractAttrs(html) {
   const acc = {
     meta: {},
     og: {},
@@ -3818,7 +3818,7 @@ export async function lensExtractAttrs(html) {
   return acc;
 }
 
-export function lensParseJsonld(raw) {
+function lensParseJsonld(raw) {
   const trimmed = String(raw || "").trim();
   try {
     const obj = JSON.parse(trimmed);
@@ -3835,7 +3835,7 @@ export function lensParseJsonld(raw) {
   }
 }
 
-export function lensHeadings(html) {
+function lensHeadings(html) {
   const out: { level: number; text: string }[] = [];
   const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
   let m;
@@ -3918,21 +3918,21 @@ export function lensMarkdown(html, baseUrl) {
   return s.trim();
 }
 
-export function lensStripInline(h) {
+function lensStripInline(h) {
   return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
 }
 
 // Built once per name: lensMarkdown asks for alt, src and href on every
 // <img> and <a> of a crawled page.
 const TAG_ATTR_RE = new Map<string, RegExp>();
-export function lensTagAttr(tag, name) {
+function lensTagAttr(tag, name) {
   let re = TAG_ATTR_RE.get(name);
   if (!re) TAG_ATTR_RE.set(name, (re = new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")));
   const m = String(tag).match(re);
   return m ? (m[2] ?? m[3] ?? m[4] ?? "") : "";
 }
 
-export function lensAbs(href, base) {
+function lensAbs(href, base) {
   if (!href) return href;
   try {
     return new URL(href, base).toString();
@@ -3941,7 +3941,7 @@ export function lensAbs(href, base) {
   }
 }
 
-export function lensDecode(s) {
+function lensDecode(s) {
   return String(s)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -4003,7 +4003,7 @@ const LENS_BOTS = [
 export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
 // "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
-export function lensParseContentSignal(raw) {
+function lensParseContentSignal(raw) {
   const out = {};
   for (const part of String(raw || "").split(",")) {
     const kv = part.split("=");
@@ -4164,7 +4164,7 @@ const LENS_RATES = [
  * Every tier is optional: an HTML page prices html/text/markdown/outline, a
  * non-HTML text body prices raw alone, and add() skips whatever is absent.
  */
-export function lensCost({
+function lensCost({
   html,
   text,
   markdown,
@@ -4280,7 +4280,7 @@ export async function lensProbeNlweb(origin, env) {
 
 // Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
 // re-served for machines. Supported iff the content-type actually flips.
-export async function lensProbeMdNego(pageUrl, env) {
+async function lensProbeMdNego(pageUrl, env) {
   try {
     const deadline = AbortSignal.timeout(5000);
     const res = await lensFetch(pageUrl, env, deadline, "text/markdown", FAN_OUT);

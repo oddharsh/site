@@ -4,7 +4,7 @@ import { cachedRender, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
@@ -603,6 +603,12 @@ export async function handleAroundSnapshot(request, env, ctx, url = new URL(requ
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderAroundPage() {
+  const { head, mount } = island({
+    id: "ar-snapshot",
+    url: SNAPSHOT_URL,
+    placeholder: renderAroundSnapshot(PENDING),
+    fallback: { says: "The crawl arrives", shows: "it", json: "/around/json" },
+  });
   return lunaPage({
     title: "aadhar.sh/around",
     path: "aadhar.sh/around",
@@ -610,7 +616,7 @@ export function renderAroundPage() {
     width: 820,
     description: "Snapshot of venture firm homepages I keep tabs on, crawled once a day by AadharshBot.",
     robots: "noindex",
-    head: islandPreload(SNAPSHOT_URL),
+    head,
     css: `/*min*/
   h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
@@ -670,7 +676,7 @@ export function renderAroundPage() {
       request carries two: Ed25519, and a post-quantum ML-DSA-44 second label
       (<a href="/garage/pqc">why</a>).
     </p>
-    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
+    ${mount}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">

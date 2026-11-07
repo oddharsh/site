@@ -501,7 +501,7 @@ const UQ=[
         {t:"lossless JPEG XL",why:"it's the smallest, 11% under WebP on the same figures, but only Chrome 155+ and Safari 17+ draw it. a figure for everyone would need a fallback anyway."},
         {t:"lossless AVIF",why:"every current browser draws it, but on the same figures it came in 52% larger than lossless WebP."}]},
  {fmt:1,q:"Where does AV2 beat AVIF at the same file size?",
-  opts:[{t:"on thin budgets, like thumbnails with little detail",ok:1,why:"right: under half a bit per pixel AV2 won 23 of 24 calls. that's the sparse third of this site's photos."},
+  opts:[{t:"on thin budgets, like thumbnails with little detail",ok:1,why:"right: under half a bit per pixel AV2 won 23 of 24 calls. 71 of this site's 162 colour photos sit there."},
         {t:"on dense detail, like a crop full of grain or lettering",why:"that's where it lost. above half a bit per pixel it won 6 of 30, and on 16 dense crops like this exam's it lost most calls."},
         {t:"everywhere, because it's the newer codec",why:"newer doesn't win at every budget. AOM's 18 to 24% lead comes from video sequences scored by PSNR, SSIM and VMAF; on photos, AV2's edge flips near half a bit per pixel."}]},
 ];

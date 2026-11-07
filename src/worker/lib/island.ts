@@ -11,8 +11,8 @@
 // per-request page has to become to earn any of those.
 //
 // It is the homepage's shape (/photos/grid.html, /rn/tracks.html) and the shape
-// Topcoat calls a "shard", written down once so the next page takes it by
-// importing three functions. The homepage itself runs on it since 2026-09-30:
+// Topcoat calls a "shard", written down once so the next page takes it with
+// one island() call plus islandScript(). The homepage itself runs on it since 2026-09-30:
 // src/pages/index.html is hand-authored rather than rendered, so it carries a
 // copy of islandScript() that a contract test holds byte-identical to this
 // one, and its two fragments answer through islandResponse. A page whose live part is a handful of SCALARS wants /security's
@@ -34,7 +34,7 @@
 //   4. A failure leaves the placeholder and says so (data-state="failed"),
 //      because a page that shows what it read must not show a guess.
 import { cspHashed } from "./csp-policy.ts";
-import { html, type Html } from "./html.ts";
+import { Html, html } from "./html.ts";
 
 // Spelled out again inside islandScript, whose text is a constant on purpose; a
 // contract test holds the two together.
@@ -85,9 +85,29 @@ export type Pending = typeof PENDING;
 export const isPending = (read: unknown): read is Pending => read === PENDING;
 export type Read<T> = { state: "ok"; value: T } | { state: "empty" | "unbound" | "error" };
 
-/** The mount. `noscript` is what a reader without scripts gets instead of the swap. */
-export function islandMount(id: string, url: string, placeholder: Html, noscript: Html): Html {
-  return html`<div id="${id}" data-island="${url}" data-state="pending">${placeholder}<noscript>${noscript}</noscript></div>`;
+/** What a reader without scripts is told, in the words every island page
+ *  shares: `says` opens the sentence ("The entries arrive"), `shows` names what
+ *  the fragment URL shows ("them"), and `json` adds the page's JSON twin. A page
+ *  whose fallback is somewhere else entirely (/coffee's plain booking page)
+ *  passes its own Html. */
+export type IslandFallback = { says: string; shows: string; json?: string } | Html;
+
+/** One island: the preload for `<head>` and the mount for the body, both from
+ *  the one `url`, so the request the preload starts is the one the loader
+ *  makes. `placeholder` comes from the fragment's own renderer (rule 1). Put
+ *  islandScript() once, after the page's last mount. */
+export function island({ id, url, placeholder, fallback }: { id: string; url: string; placeholder: Html; fallback: IslandFallback }): {
+  head: Html;
+  mount: Html;
+} {
+  const noscript =
+    fallback instanceof Html
+      ? fallback
+      : html`<p>${fallback.says} in a second request after the page loads, and that needs a script. Without one, <a href="${url}">${url}</a> shows ${fallback.shows} as plain HTML${fallback.json ? html`, and <a href="${fallback.json}">${fallback.json}</a> as JSON` : ""}.</p>`;
+  return {
+    head: islandPreload(url),
+    mount: html`<div id="${id}" data-island="${url}" data-state="pending">${placeholder}<noscript>${noscript}</noscript></div>`,
+  };
 }
 
 /** The one inline script, and it takes no arguments: it finds every mount by

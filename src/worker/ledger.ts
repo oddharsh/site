@@ -413,6 +413,12 @@ export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | 
 
 /** The shell build step 5b bakes. It takes no arguments, so every build agrees. */
 export function renderLedgerPage() {
+  const { head, mount } = island({
+    id: "lg-lines",
+    url: LINES_URL,
+    placeholder: renderLedgerLines(PENDING, PENDING),
+    fallback: { says: "The line items arrive", shows: "them", json: "/ledger.json" },
+  });
   const css = `/*min*/
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lg-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-ui); }
@@ -468,7 +474,7 @@ footer a { color:var(--link); }
         <div class="lg-invno"><b>INVOICE</b><div>period: trailing ${WINDOW_DAYS} days</div><div>issued monthly &middot; collected never</div></div>
       </div>
       <p class="lg-billto"><b>Bill to:</b> the operators below, per their own user-agent strings.</p>
-      ${islandMount("lg-lines", LINES_URL, renderLedgerLines(PENDING, PENDING), html`<p>The line items arrive in a second request after the page loads, and that needs a script. Without one, <a href="${LINES_URL}">${LINES_URL}</a> shows them as plain HTML, and <a href="/ledger.json">/ledger.json</a> as JSON.</p>`)}
+      ${mount}
       <p class="lg-fail">The request for the line items failed, so the invoice stays blank rather than guessed. <a href="${LINES_URL}">${LINES_URL}</a> has them as plain HTML.</p>
     </div>
 
@@ -493,7 +499,7 @@ footer a { color:var(--link); }
     description:
       "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",
-    head: islandPreload(LINES_URL),
+    head,
     css,
     body,
     scripts: islandScript(),
