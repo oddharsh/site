@@ -46,7 +46,7 @@ import { sortLine, sortMention, sortSubjectTag } from "./webmention-sort.ts";
 // binding (dev): this is abuse control, and the SSRF guard is what enforces
 // safety. `max` is mirrored in cloudflare.config.ts's rate-limit bindings and a contract test
 // pins the pair, the same as every /lens budget.
-export const WEBMENTION_BUDGET = { binding: "WEBMENTION_RL", max: 10 };
+export const WEBMENTION_BUDGET = { name: "webmention", binding: "WEBMENTION_RL", max: 10 };
 const SOURCE_BYTE_CAP = 512 * 1024; // a blog post that needs more isn't a mention
 const SOURCE_TIMEOUT_MS = 8000;
 const EXCERPT_MAX = 320;
@@ -158,7 +158,7 @@ export async function handleWebmention(request, env, ctx) {
   if (sameOriginPath(checked.url, origin)) return text("source must be on another site.", 400);
 
   if (await overBudget(WEBMENTION_BUDGET, request, env)) {
-    return text("Too many webmentions from this address; try again in a minute.", 429, rateLimitedHeaders("webmention", WEBMENTION_BUDGET.max));
+    return text("Too many webmentions from this address; try again in a minute.", 429, rateLimitedHeaders(WEBMENTION_BUDGET));
   }
 
   // Accepted: everything past here is slow (a third-party fetch, D1, email), and

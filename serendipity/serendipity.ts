@@ -17,8 +17,8 @@ import { shareMeta } from "../src/worker/lib/chrome.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
-import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
+import { unsafeHtml } from "../src/worker/lib/html.ts";
+import { island, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { setAttributes, span } from "../src/worker/lib/trace.ts";
@@ -673,17 +673,14 @@ async function renderDashboard(d, path, msg, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderSerendipityPage() {
-  const mount = islandMount(
-    "sd-events",
-    EVENTS_URL,
-    unsafeHtml(pendingDashboardEvents()),
-    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`,
-  );
+  const { head, mount } = island({
+    id: "sd-events",
+    url: EVENTS_URL,
+    placeholder: unsafeHtml(pendingDashboardEvents()),
+    fallback: { says: "The events arrive", shows: "them" },
+  });
   const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
-  return html(
-    200,
-    shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html),
-  );
+  return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, head.html));
 }
 
 // The island's response. Cookie-free and shared, so it may sit in the edge cache.

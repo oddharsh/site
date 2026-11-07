@@ -43,7 +43,7 @@ import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 
 /** Mirrored in cloudflare.config.ts; contract-lens-per-ip-crawl-budgets pins the pair. */
-export const PIXEL_PEEPER_BUDGET = { binding: "PIXEL_PEEPER_RL", max: 6 };
+export const PIXEL_PEEPER_BUDGET = { name: "pixel-peeper", binding: "PIXEL_PEEPER_RL", max: 6 };
 /** Runs counted per UTC day, each costing 2 D1 rows written. */
 export const DAILY_RUN_CAP = 5000;
 /** A normal run is 12 calls and a showdown 6; this leaves room, never a ceiling a run meets. */
@@ -285,7 +285,7 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
   if (request.headers.get("sec-fetch-site") === "cross-site") return json({ error: "cross-site" }, 403);
   if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
   if (await overBudget(PIXEL_PEEPER_BUDGET, request, env)) {
-    return json({ error: "too many runs from this address; try again in a minute" }, 429, rateLimitedHeaders("pixel-peeper", PIXEL_PEEPER_BUDGET.max));
+    return json({ error: "too many runs from this address; try again in a minute" }, 429, rateLimitedHeaders(PIXEL_PEEPER_BUDGET));
   }
   const text = await request.text();
   if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);

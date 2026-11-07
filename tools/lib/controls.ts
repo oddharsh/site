@@ -159,6 +159,13 @@ export const CONTROLS: Control[] = [
     expect: /reads var\(--ink\) but its inline :root does not define it/,
   },
   {
+    id: "parser-pause-before-the-first-fold",
+    plants: "the parser pause ignores a page's rel=expect first fold, so /garage's first paint waits for the pause's stylesheet",
+    mutations: [{ file: "tools/lib/parser-pause.ts", find: " && (!afterFirstFold || b.afterFold)", replace: "" }],
+    run: contract("contract-long-pages-pause-below-the-screen"),
+    expect: /garage\/index\.html: the pause sits before the end of the first fold/,
+  },
+  {
     id: "web-font-in-luna",
     plants: "luna.css downloads a face through @font-face url(), breaking the zero-font-bytes law",
     mutations: [
@@ -194,6 +201,13 @@ export const CONTROLS: Control[] = [
     ],
     run: contract("contract-gotcha-numbers-resolve"),
     expect: /references to gotchas that do not exist: .*999/,
+  },
+  {
+    id: "av2-page-keeps-a-stale-tier-median",
+    plants: "/garage/av2 states the 600px tier's median from before #1222 removed 93 photos, the drift this check was added for",
+    mutations: [{ file: "src/pages/garage/av2.html", find: "the median, 0.53,", replace: "the median, 0.67," }],
+    run: contract("contract-av2-tier-figures-match-the-shipped-tier"),
+    expect: /the thin end, tier size and median must match the shipped 600px tier/,
   },
   {
     id: "em-dash-in-quiz",

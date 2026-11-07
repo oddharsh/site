@@ -64,6 +64,8 @@ import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
+import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
+import { NON_BLOCKING_PAGES } from "./lib/critical-css.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
@@ -1684,6 +1686,9 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     // Here, because every staged page and its readable twin pass through this one
     // function, so the twin keeps being the same program as the page it explains.
     out = foldLongProse(out);
+    // After the folds, so a page whose first paint waits for its first fold
+    // pauses only past it (parser-pause.ts).
+    out = pauseBelowFirstScreen(out, { afterFirstFold: NON_BLOCKING_PAGES.includes(rel) });
     return { html: out, addedLink, addedChrome };
   };
 
@@ -2289,7 +2294,7 @@ phase("5f non-blocking shell css");
 // committed, so there is no copy to drift, the same argument as the client edge.
 // Step 7b gives the page's readable twin the same swap, so the twin stays the
 // same program as the page it twins.
-const { NON_BLOCKING_PAGES, nonBlockingPage } = await import("./lib/critical-css.ts");
+const { nonBlockingPage } = await import("./lib/critical-css.ts");
 const toNonBlocking = async (page: string) => {
   const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
   const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
