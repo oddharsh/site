@@ -490,19 +490,27 @@ async function route_reschedule_save(req, env, ctx) {
     return new Response(errorPage("that slot was taken or expired. pick another.", env), { status: 409, headers: htmlHeaders() });
   }
 
-  // ORDER IS THE SAFETY PROPERTY. Take the new hold first, so no one can win a
+  // ORDER IS THE SAFETY PROPERTY. Take the new slot first, so no one can win a
   // race into it while this writes; then patch the record; then give the old one
   // back. Releasing first would open the old slot to a booking that still owns
   // it, and a failure in between would leave the coffee holding nothing at all.
-  await holdSlot(env, { ...booking, start: slot.start, end: slot.end });
+  // Taking a slot is the same two steps route_book runs: the Durable Object
+  // claim decides who gets it, and the KV hold tells /slots it is gone.
+  const target = { ...booking, start: slot.start, end: slot.end };
+  if (!(await reserveSlot(env, target))) {
+    return new Response(errorPage("that slot was taken or expired. pick another.", env), { status: 409, headers: htmlHeaders() });
+  }
+  await holdSlot(env, target);
   const moved = await setSchedule(env, id, slot);
   if (!moved) {
     // The KV record's 90-day TTL landing between the two reads. Vanishingly
-    // rare, still real, and the hold just taken has to go back.
+    // rare, still real, and the slot just taken has to go back.
     await releaseSlot(env, slot);
+    await releaseSlotClaim(env, target);
     return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   await releaseSlot(env, moved.was);
+  await releaseSlotClaim(env, { id, ...moved.was });
 
   const mailed = moved.booking.status === "confirmed";
   if (mailed) {
@@ -538,6 +546,7 @@ async function route_cancel_apply(req, env, ctx) {
   // the confirmed state it leaves: confirmed bookings hold their slot and count
   // toward the caps, and this one should do neither the moment it is called off.
   await releaseSlot(env, booking);
+  await releaseSlotClaim(env, booking);
   cancelExpiry(env, ctx, id);
   ctx.waitUntil(sendCancel(env, cancelled));
   ctx.waitUntil(sendHostCopy(env, cancelled, { cancelled: true }));
