@@ -14,6 +14,7 @@ import { documentTally, runBrowserAction } from "./lens-render.ts";
 import { LensArgsRefusal, defineLens, lensErrorText, lensSha256Hex, lensStatusPayload, policyHeaders } from "./lens-pipeline.ts";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.ts";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
+import type { ReadinessStatus } from "./lib/readiness-status.ts";
 import { asRecord, asText } from "./lib/parse.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
@@ -4536,7 +4537,7 @@ const LENS_READINESS_CATEGORIES = [
   { key: "execution", label: "Execution in an agent browser", countInScore: true },
 ];
 
-function lensJsonVerdict(probe, validate) {
+function lensJsonVerdict(probe, validate): { status: ReadinessStatus; detail: string } {
   // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
   // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
   // undercounting webBotAuth / the oauth checks that route through here).
@@ -4555,7 +4556,7 @@ type LensReadinessCheck = {
   key: string;
   category: string;
   label: string;
-  status: string;
+  status: ReadinessStatus;
   detail: string;
   optional: boolean;
   countInScore: boolean;
@@ -4564,7 +4565,7 @@ type LensReadinessCheck = {
   notApplicable?: true;
 };
 
-function lensReadinessItem(key, status, detail, notApplicable = false): LensReadinessCheck {
+function lensReadinessItem(key, status: ReadinessStatus, detail, notApplicable = false): LensReadinessCheck {
   const meta = LENS_READINESS_META[key];
   const item: LensReadinessCheck = {
     key,
@@ -4773,7 +4774,7 @@ export function lensReadiness({
   // A pass is still a pass: a keyless site that publishes OAuth anyway gets
   // the credit. Anything else on a declared-keyless site is not applicable.
   const keyless = lensKeylessDeclaration(openapi);
-  const authorityItem = (key, status, detail) =>
+  const authorityItem = (key, status: ReadinessStatus, detail) =>
     keyless && status !== "pass" ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true) : lensReadinessItem(key, status, detail);
 
   items.robotsTxt = lensReadinessItem(

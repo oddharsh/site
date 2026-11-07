@@ -34,14 +34,18 @@
 // site must not be marked down because our browser budget ran out. The checks
 // flip to pass or fail, and start counting, once a run actually happened.
 
+import type { ReadinessStatus } from "./readiness-status.ts";
+
 /** Label and category for each execution check, in the shape LENS_READINESS_META wants. */
 export const EXECUTION_META = {
   agentScripts: { category: "execution", label: "Scripts survive the engine" },
   agentMedia: { category: "execution", label: "Media decodes" },
 };
 
+type ExecutionCheck = { status: ReadinessStatus; detail: string };
+
 /** Turn one agent-browser observation into check statuses. */
-export function executionChecks(ev) {
+export function executionChecks(ev): { agentScripts: ExecutionCheck; agentMedia: ExecutionCheck } {
   if (!ev || ev.ran !== true) {
     const detail = "no agent-browser render in this scan (run the wire lens to measure)";
     return { agentScripts: { status: "neutral", detail }, agentMedia: { status: "neutral", detail } };
@@ -53,7 +57,7 @@ export function executionChecks(ev) {
   // something an outside observer can estimate. On this site one TypeError
   // inside a requestAnimationFrame pass cost every window its maximize control.
   const errs = (Number(ev.consoleErrors) || 0) + (Number(ev.pageErrors) || 0);
-  const agentScripts =
+  const agentScripts: ExecutionCheck =
     errs === 0
       ? { status: "pass", detail: `no uncaught script errors${engine}` }
       : { status: "fail", detail: `${errs} uncaught script error${errs === 1 ? "" : "s"}${engine}${ev.firstError ? ": " + ev.firstError : ""}` };
@@ -62,7 +66,7 @@ export function executionChecks(ev) {
   // this site all returned 200, so a request-level view calls them healthy.
   const total = Number(ev.totalImages) || 0;
   const broken = Number(ev.brokenImages) || 0;
-  let agentMedia;
+  let agentMedia: ExecutionCheck;
   if (total === 0) {
     agentMedia = { status: "neutral", detail: "the page served no images" };
   } else if (broken === 0) {

@@ -26,6 +26,7 @@ import {
   type Schema,
 } from "./public-api.ts";
 import { allowedMethods } from "./api-contract.ts";
+import { READINESS_STATUSES } from "./readiness-status.ts";
 
 export { OPENAPI_PATH } from "./public-api.ts";
 
@@ -276,7 +277,7 @@ export const SCHEMAS: Record<string, Schema> = {
       key: str(),
       category: str(),
       label: str(),
-      status: str(undefined, { enum: ["pass", "fail", "unknown", "neutral"] }),
+      status: str(undefined, { enum: [...READINESS_STATUSES] }),
       detail: str(),
       optional: bool(),
       countInScore: bool(),
