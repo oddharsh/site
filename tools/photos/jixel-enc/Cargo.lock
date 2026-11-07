@@ -57,9 +57,9 @@ dependencies = [
 
 [[package]]
 name = "jixel"
-version = "0.5.2"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce2242dc53f94faa1687d4203204fbf9d2ca555e7d5a4fbbc992c5cf45fe519"
+checksum = "42b7fc88f9c53fe8c38d57a23855a9fb4e1e6710ef8c95d7d30298b9c0e7fa60"
 dependencies = [
  "cvvdp-lite",
  "ssimu2-lite",
