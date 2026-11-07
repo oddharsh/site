@@ -5,7 +5,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { escAttr, escHtml, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
 export type SearchRecord = {
@@ -184,10 +184,9 @@ export async function searchSite(env, query: string, limit: string | number | nu
 
 export async function handleSearchJson(request, env, _ctx?, url = new URL(request.url)) {
   const query = url.searchParams.get("q") || "";
-  if (!query.trim())
-    return jsonResponse({ ok: false, error: "q is required", results: [] }, 400, { ...publicJsonHeaders(400), "x-robots-tag": "noindex" }, { pretty: false });
+  if (!query.trim()) return publicJsonResponse({ ok: false, error: "q is required", results: [] }, 400, { noindex: true });
   const payload = await searchSite(env, query, url.searchParams.get("limit"));
-  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, 200, { noindex: true });
 }
 
 export async function handleSearch(request, env, ctx, url = new URL(request.url)) {

@@ -22,7 +22,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript, type Pending } from "./lib/island.ts";
-import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { esc, publicJsonResponse } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
 
@@ -303,31 +303,24 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
     : { available: false, reason: cost.reason };
   if (!q.ok) {
     const { status, error, code } = analyticsReadError(q.reason);
-    return jsonResponse(
+    return publicJsonResponse(
       { ok: false, error, code, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock },
       status,
-      publicJsonHeaders(status),
-      { pretty: false },
     );
   }
   const { items, totalHits, totalUsd } = priced(q.rows);
-  return jsonResponse(
-    {
-      ok: true,
-      via: q.via,
-      binding_fallback: q.binding_fallback,
-      window_days: WINDOW_DAYS,
-      rate_usd: RATE_USD,
-      note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
-      line_items: items,
-      total_hits: totalHits,
-      total_usd: totalUsd,
-      cost: costBlock,
-    },
-    200,
-    publicJsonHeaders(200),
-    { pretty: false },
-  );
+  return publicJsonResponse({
+    ok: true,
+    via: q.via,
+    binding_fallback: q.binding_fallback,
+    window_days: WINDOW_DAYS,
+    rate_usd: RATE_USD,
+    note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
+    line_items: items,
+    total_hits: totalHits,
+    total_usd: totalUsd,
+    cost: costBlock,
+  });
 }
 
 // /ledger is a BUILT document since 2026-09-25: build step 5b

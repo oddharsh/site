@@ -153,14 +153,19 @@ function acceptQ(accept, type) {
   return best;
 }
 
-// The cache policy for a public, CORS-open JSON read (search, photos, ledger,
-// the playlist): errors get the errorResp() discipline (30s), never the
-// 5-minute success TTL, so a transient scrape 502 does not pin in browsers.
-export function publicJsonHeaders(status) {
-  return {
-    "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-    "access-control-allow-origin": "*",
-  };
+// The cache policy for a public read (search, photos, ledger, the playlist):
+// errors get the errorResp() discipline (30s), never the 5-minute success TTL,
+// so a transient scrape 502 does not pin in browsers.
+export function publicCacheControl(status: number): string {
+  return status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600";
+}
+
+// A public, CORS-open JSON read: publicCacheControl, compact bytes because the
+// payloads are big and machine-read, and `noindex` for a feed worth fetching
+// and worthless in a search index.
+export function publicJsonResponse(body: unknown, status = 200, { noindex = false } = {}): Response {
+  const headers = { "cache-control": publicCacheControl(status), "access-control-allow-origin": "*", "x-robots-tag": noindex ? "noindex" : null };
+  return jsonResponse(body, status, headers, { pretty: false });
 }
 
 export function extractTitle(html) {
