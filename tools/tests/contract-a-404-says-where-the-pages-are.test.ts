@@ -20,6 +20,7 @@ import {
   missPage,
   nearestPages,
   recoverNotFound,
+  sitemapPaths,
 } from "../../src/worker/lib/not-found.ts";
 
 const SITEMAP = `<?xml version="1.0"?><urlset>
@@ -306,4 +307,26 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
     const r = await recover(notApi, env());
     assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${notApi} is not API-shaped`);
   }
+});
+
+test("a sitemap read that fails is retried on the next miss, and a good one is read once", async () => {
+  _resetSitemap();
+  let fetches = 0;
+  let up = false;
+  const env = {
+    ASSETS: {
+      fetch: async () => {
+        fetches++;
+        if (!up) throw new Error("assets blip");
+        return new Response(SITEMAP);
+      },
+    },
+  };
+  assert.deepEqual(await sitemapPaths(env), []);
+  up = true;
+  const [a, b] = await Promise.all([sitemapPaths(env), sitemapPaths(env)]);
+  assert.deepEqual(a.slice(0, 3), ["/", "/garage", "/garage/resample"]);
+  assert.equal(a, b);
+  await sitemapPaths(env);
+  assert.equal(fetches, 2, "one failed read, then one good read shared by every later caller");
 });

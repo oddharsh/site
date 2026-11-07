@@ -1,10 +1,10 @@
 import { BOT_NAME, BOT_UA, SIG_AGENT, botRobotsPolicy, BotPolicyError } from "./lib/botauth.ts";
 import { CHANGE_RADAR_LIMITS, clampParam } from "./lib/api-limits.ts";
-import { cachedRender, deleteSWRKV, edgeKey, withWeakEtag } from "./lib/cache.ts";
+import { cachedRender, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
@@ -286,13 +286,16 @@ export async function handleAroundChangesJson(request, env, _ctx?, url = new URL
 //
 // A crawl where EVERY neighbor errored stores nothing, so the last good snapshot
 // keeps serving. results.length is always NEIGHBORS.length (one row per
-// neighbor, success or error), so the check looks for a non-error row.
+// neighbor, success or error), so the check looks for a non-error row. The
+// owner's bust (bustAround) answers to the same rule.
+const isPublishable = (report) => !!(report && Array.isArray(report.results) && report.results.some((r) => !r.error));
+
 export async function cronAround(env) {
   const report = await runAround(env);
   // the snapshot write is conditional: an all-error crawl deliberately does NOT
   // overwrite the last-good snapshot. Worth recording, because "the page still
   // shows last week" is then a fact about this branch rather than a mystery.
-  const publishable = !!(report && Array.isArray(report.results) && report.results.some((r) => !r.error) && env.RN_KV);
+  const publishable = isPublishable(report) && !!env.RN_KV;
   if (publishable) {
     await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
@@ -313,24 +316,31 @@ export async function cronAround(env) {
   });
 }
 
+// ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
+// still allowed to crawl, because it authenticates as the owner. It replaces the
+// snapshot only when the crawl is publishable, like the cron. Until 2026-11-06 it
+// deleted the KV key before crawling and returned whatever came back, so a bust
+// during a neighbor outage served an all-error table and pinned it at the edge.
+async function bustAround(env) {
+  const report = await runAround(env);
+  if (!isPublishable(report)) return { report: await readSnapshot(env), published: false };
+  if (env.RN_KV) await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
+  return { report, published: true };
+}
+
 async function readAroundReport(request, env) {
-  // ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
-  // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
-    await deleteSWRKV(env, AROUND_KEY); // this key is written by a plain put, never by swrKV
-    const report = await runAround(env);
-    if (report && report.results && report.results.some((r) => !r.error) && env.RN_KV) {
-      await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
-    }
-    return report;
-  }
+  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return (await bustAround(env)).report;
+  return readSnapshot(env);
+}
+
+async function readSnapshot(env) {
   // cacheTtl 1800: cronAround rewrites this key once a DAY, so half an hour is 2%
   // of the snapshot's own cadence and the page already says "as of the last cron
   // crawl". It has to exceed 300 to buy anything at all, because the snapshot
   // island and /around/json both sit behind cachedRender at s-maxage=300 and this read only
   // runs on an edge miss, so a shorter window would expire alongside the render it
-  // was meant to skip ahead of. The owner's ?bust= still renders from its own fresh
+  // was meant to skip ahead of. A publishable ?bust= renders from its own fresh
   // crawl rather than from KV, so the person who ran it is never the one reading
   // stale; other colos catch up as their own cacheTtl lapses.
   try {
@@ -495,7 +505,9 @@ const PENDING_REPORT = { crawledAt: null, results: NEIGHBORS.map(() => null) };
 const SNAPSHOT_CACHE = "public, max-age=60, s-maxage=300";
 
 /** The island: the crawl's meta line and its rows, or the not-built-yet panel. */
-export function renderAroundSnapshot(report) {
+export function renderAroundSnapshot(read) {
+  const pending = isPending(read);
+  const report = pending ? PENDING_REPORT : read;
   // failure honesty: no snapshot means a greyed, period-correct empty panel,
   // never a fabricated table. only ever visible before the first cron run
   // (or after an owner bust that failed to rebuild).
@@ -503,7 +515,6 @@ export function renderAroundSnapshot(report) {
     return unsafeHtml(`<div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
     The crawl runs on a schedule, not on your visit; check back tomorrow.</div>`);
   }
-  const pending = report.crawledAt === null;
   const dots = "…";
 
   const rows = report.results
@@ -561,18 +572,22 @@ export function renderAroundSnapshot(report) {
 
 // The owner's force-refresh, which lives on the island now because the page is
 // a static file and cannot take a query. A valid ?bust=SECRET re-crawls inside
-// readAroundReport, renders the fragment from that fresh report, and OVERWRITES
-// this colo's cached copy, awaited, so the owner's own next load reads the new
-// crawl instead of whatever KV's cacheTtl still holds. Anything else is null.
+// bustAround, renders the fragment from that fresh report, and OVERWRITES this
+// colo's cached copy, awaited, so the owner's own next load reads the new crawl
+// instead of whatever KV's cacheTtl still holds. A crawl with nothing publishable
+// renders the last good snapshot, leaves the edge alone, and says so in
+// x-around-bust. Anything else is null.
 export async function refreshAroundSnapshot(request, env, url = new URL(request.url)) {
   if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
-  const report = await readAroundReport(request, env);
+  const { report, published } = await bustAround(env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
-  if (report) {
+  if (published) {
     try {
       await caches.default.put(edgeKey(url.origin, SNAPSHOT_URL, env), await withWeakEtag(fresh.clone()));
     } catch {}
   }
+  // Set after the put, so only the owner's response carries it.
+  fresh.headers.set("x-around-bust", published ? "published" : "kept-last-good");
   return fresh;
 }
 
@@ -655,7 +670,7 @@ export function renderAroundPage() {
       request carries two: Ed25519, and a post-quantum ML-DSA-44 second label
       (<a href="/garage/pqc">why</a>).
     </p>
-    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
+    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">

@@ -21,7 +21,7 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript, type Pending } from "./lib/island.ts";
 import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
@@ -352,17 +352,15 @@ export function handleLedgerLines(request: SiteRequest, env: Env, ctx: Execution
   );
 }
 
+const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
+
 // The placeholder model: one unread line per crawler this ledger can name,
 // which is what the trailing window has held in production, and the one-line
 // cost note. No crawler is named, since the order is by hits and unknown here.
-const PENDING = { pending: true } as const;
-
-const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
-
 /** The island: line items, total and cost line, for a read or the placeholder. */
-export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: BillableRead | typeof PENDING) {
+export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | Pending) {
   const dots = "…";
-  const pending = "pending" in q;
+  const pending = isPending(q);
   const { items, totalHits, totalUsd } = priced(!pending && q.ok ? q.rows : []);
 
   let tableRows;
@@ -399,7 +397,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
   }
 
   let costLine;
-  if ("pending" in cost) {
+  if (isPending(cost)) {
     costLine = `<div class="lg-cost"><span class="lg-cost-sub">${dots}</span></div>`;
   } else if (cost.ok) {
     const families = cost.services.length ? cost.services.join(", ") : "no billed products";

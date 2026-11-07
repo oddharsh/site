@@ -78,6 +78,13 @@ export function islandPreload(url: string): Html {
   return html`<link rel="preload" as="fetch" href="${url}" crossorigin>`;
 }
 
+// The placeholder is one named value, compared by identity. Guessing it from a
+// model's shape (no dates, an "…" ip) could mistake a live read for it.
+export const PENDING = Object.freeze({ pending: true } as const);
+export type Pending = typeof PENDING;
+export const isPending = (read: unknown): read is Pending => read === PENDING;
+export type Read<T> = { state: "ok"; value: T } | { state: "empty" | "unbound" | "error" };
+
 /** The mount. `noscript` is what a reader without scripts gets instead of the swap. */
 export function islandMount(id: string, url: string, placeholder: Html, noscript: Html): Html {
   return html`<div id="${id}" data-island="${url}" data-state="pending">${placeholder}<noscript>${noscript}</noscript></div>`;

@@ -17,7 +17,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.ts";
 import { INBOX_MAIL_URL } from "./routes.ts";
@@ -48,8 +48,10 @@ export const WEBMENTION_LINK = '</webmention>; rel="webmention"';
 const PENDING_ROWS = 4;
 
 /** The island: folder tree, message list and endpoint line, or the placeholder. */
-export function renderInboxMail(mentions, state, origin) {
-  const pending = state === "pending";
+export function renderInboxMail(read, origin) {
+  const pending = isPending(read);
+  const state = pending ? "pending" : read.state;
+  const mentions = state === "ok" ? read.value : [];
   const dots = "…";
 
   // Folders are the pages that were written about, newest activity first. This
@@ -130,8 +132,7 @@ export function renderInboxMail(mentions, state, origin) {
 // a few minutes of a mention not yet showing, so it takes a short browser cache;
 // it was never edge-cached and is not now, since an approval has no cache to evict.
 export async function handleInboxMail(request, env, ctx?, url = new URL(request.url)) {
-  const { state, mentions } = await readApprovedMentions(env);
-  return islandResponse(renderInboxMail(mentions, state, url.origin), { "cache-control": "public, max-age=60" });
+  return islandResponse(renderInboxMail(await readApprovedMentions(env), url.origin), { "cache-control": "public, max-age=60" });
 }
 
 // The route. It serves the built shell with the page policy every generated
@@ -166,7 +167,7 @@ export function renderInboxPage() {
       does link here), then approved by hand before it appears. The
       <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
       keeps the working notes: who sends, who receives, and what breaks between them.</p>
-    ${islandMount("oe-mail", MAIL_URL, renderInboxMail([], "pending", ""), html`<p>The mail arrives in a second request after the page loads, and that needs a script. Without one, <a href="${MAIL_URL}">${MAIL_URL}</a> shows it as plain HTML.</p>`)}
+    ${islandMount("oe-mail", MAIL_URL, renderInboxMail(PENDING, ""), html`<p>The mail arrives in a second request after the page loads, and that needs a script. Without one, <a href="${MAIL_URL}">${MAIL_URL}</a> shows it as plain HTML.</p>`)}
     <p class="oe-fail">The request for the mail failed, so the inbox stays empty rather than guessed. <a href="${MAIL_URL}">${MAIL_URL}</a> has it as plain HTML.</p>
 `,
     scripts: islandScript(),

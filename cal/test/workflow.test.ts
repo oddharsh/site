@@ -64,7 +64,7 @@ describe("BookingWorkflow expiry timer", () => {
 
   it("host decision arrives → timer ends early and leaves the booking untouched", async () => {
     const b = await heldPending();
-    await setStatus(env, b.id, "confirmed"); // the route already confirmed it
+    await setStatus(env, b.id, { from: "pending", to: "confirmed" }); // the route already confirmed it
     await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => {
       await m.mockEvent({ type: "host-decision", payload: { resolved: true } });
@@ -79,7 +79,7 @@ describe("BookingWorkflow expiry timer", () => {
 
   it("timeout fires but the booking was already resolved → guard leaves it alone", async () => {
     const b = await heldPending();
-    await setStatus(env, b.id, "confirmed"); // resolved, but pretend the host-decision event was lost
+    await setStatus(env, b.id, { from: "pending", to: "confirmed" }); // resolved, but pretend the host-decision event was lost
     await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => {
       await m.forceEventTimeout(WAIT_STEP);

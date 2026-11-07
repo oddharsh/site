@@ -127,7 +127,7 @@ test("visitor text is one plain line, and every render escapes it", async () => 
     user_agent: "<ua>",
     verified_bot: 0,
   });
-  const out = String(renderGuestbookEntries([entry], "ok"));
+  const out = String(renderGuestbookEntries({ state: "ok", value: [entry] }));
   assert.doesNotMatch(out, /<script|<img|<i>|<a href=javascript|<ua>/i, "a tag in any case reaches the page escaped");
   assert.match(out, /&lt;script&gt;/);
 });
@@ -135,7 +135,7 @@ test("visitor text is one plain line, and every render escapes it", async () => 
 test("the read path never creates a table, and an empty database reads as no entries", async () => {
   const { readEntries } = await gb();
   const fresh = d1();
-  assert.deepEqual(await readEntries({ SOCIAL_DB: fresh }), { state: "ok", entries: [] });
+  assert.deepEqual(await readEntries({ SOCIAL_DB: fresh }), { state: "ok", value: [] });
   const tables = fresh.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
   assert.equal(tables.length, 0);
   assert.equal((await readEntries({})).state, "unbound");

@@ -269,7 +269,7 @@ async function route_book(req, env, ctx) {
     // The record was already minted, so retire it rather than leaving a pending
     // booking nobody can act on: `expired` is the one status the approve path
     // refuses, and the 90-day TTL clears the row on its own.
-    await setStatus(env, booking.id, "expired");
+    await setStatus(env, booking.id, { from: "pending", to: "expired" });
     return new Response(errorPage("someone just took that slot. pick another.", env), { status: 409, headers: htmlHeaders() });
   }
   // The KV hold stays: it is what listOpenSlots (/slots, /slots.html, /pick)
@@ -342,18 +342,25 @@ async function route_approve(req, env, ctx, url) {
     return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
   const links = await hostLinks(req, env, booking.id);
-  if (booking.status !== "pending") {
-    return new Response(confirmedPage(booking, env, /*already=*/ true, links.location, links), { headers: htmlHeaders() });
+  // Only the request that WINS pending -> confirmed sends the invite. A decline,
+  // the expiry timer or a second click can each have read the same pending
+  // record; the loser renders what it finds instead.
+  const confirmed = booking.status === "pending" ? await setStatus(env, id, { from: "pending", to: "confirmed" }) : null;
+  if (!confirmed) {
+    const current = (await getBooking(env, id)) ?? booking;
+    return new Response(confirmedPage(current, env, /*already=*/ true, links.location, links), { headers: htmlHeaders() });
   }
-  await setStatus(env, id, "confirmed"); // slot stays held (confirmed coffees hold their slot + count toward caps)
-  ctx.waitUntil(sendInvite(env, booking));
+  // The slot stays held (confirmed coffees hold their slot + count toward caps).
+  // Mail goes from the record as written, which carries any venue or time set
+  // since this request first read it.
+  ctx.waitUntil(sendInvite(env, confirmed));
   // Separate send, separate event: the guest gets an invitation and the host
   // gets a plain PUBLISH copy they own outright. See buildICS in email.ts.
   // The links ride that mail because it is the one the host keeps.
-  ctx.waitUntil(sendHostCopy(env, booking, { links }));
+  ctx.waitUntil(sendHostCopy(env, confirmed, { links }));
   cancelExpiry(env, ctx, id); // end the durable timer early
   ctx.waitUntil(caches.default.delete(calSlotsKey(req, env))); // pending slot resolved
-  return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/ false, links.location, links), { headers: htmlHeaders() });
+  return new Response(confirmedPage(confirmed, env, /*already=*/ false, links.location, links), { headers: htmlHeaders() });
 }
 
 async function hostLink(req, env, id: string, action: "location" | "reschedule" | "cancel") {
@@ -435,13 +442,10 @@ async function route_location_save(req, env, ctx) {
   }
 
   const updated = await setLocation(env, id, location);
-  // resolveLocationTarget already found this record, so a null here means the KV
-  // entry vanished between the two reads — its 90-day TTL landing mid-request.
-  // Vanishingly rare and still a real state, so it gets the same 404 the read
-  // path gives, rather than a `!` that would throw a 500 at the same moment.
-  if (!updated) {
-    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
-  }
+  // resolveLocationTarget already passed this record, so a null here means it
+  // changed between the two reads: declined, expired or cancelled meanwhile, or
+  // its 90-day TTL landing mid-request. The same check answers either way.
+  if (!updated) return changedUnderfoot(env);
   // A pending booking has no invite out yet, so there is nothing to update and
   // the address simply rides the first one. Mailing here would tell a guest
   // where to meet before telling them the meeting is happening.
@@ -490,19 +494,27 @@ async function route_reschedule_save(req, env, ctx) {
     return new Response(errorPage("that slot was taken or expired. pick another.", env), { status: 409, headers: htmlHeaders() });
   }
 
-  // ORDER IS THE SAFETY PROPERTY. Take the new hold first, so no one can win a
+  // ORDER IS THE SAFETY PROPERTY. Take the new slot first, so no one can win a
   // race into it while this writes; then patch the record; then give the old one
   // back. Releasing first would open the old slot to a booking that still owns
   // it, and a failure in between would leave the coffee holding nothing at all.
-  await holdSlot(env, { ...booking, start: slot.start, end: slot.end });
+  // Taking a slot is the same two steps route_book runs: the Durable Object
+  // claim decides who gets it, and the KV hold tells /slots it is gone.
+  const target = { ...booking, start: slot.start, end: slot.end };
+  if (!(await reserveSlot(env, target))) {
+    return new Response(errorPage("that slot was taken or expired. pick another.", env), { status: 409, headers: htmlHeaders() });
+  }
+  await holdSlot(env, target);
   const moved = await setSchedule(env, id, slot);
   if (!moved) {
-    // The KV record's 90-day TTL landing between the two reads. Vanishingly
-    // rare, still real, and the hold just taken has to go back.
+    // The booking left pending/confirmed (or its TTL landed) between the two
+    // reads, and the slot just taken has to go back.
     await releaseSlot(env, slot);
-    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
+    await releaseSlotClaim(env, target);
+    return changedUnderfoot(env);
   }
   await releaseSlot(env, moved.was);
+  await releaseSlotClaim(env, { id, ...moved.was });
 
   const mailed = moved.booking.status === "confirmed";
   if (mailed) {
@@ -527,17 +539,18 @@ async function route_cancel_apply(req, env, ctx) {
   const form = await req.formData();
   const id = (form.get("t") || "").toString();
   const sig = (form.get("sig") || "").toString();
-  const { booking, err } = await resolveHostAction(env, id, sig, "cancel");
+  const { err } = await resolveHostAction(env, id, sig, "cancel");
   if (err) return err;
 
   const cancelled = await cancelBooking(env, id);
-  if (!cancelled) {
-    return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
-  }
+  if (!cancelled) return changedUnderfoot(env);
   // A cancelled coffee gives its slot back, which is what separates this from
   // the confirmed state it leaves: confirmed bookings hold their slot and count
   // toward the caps, and this one should do neither the moment it is called off.
-  await releaseSlot(env, booking);
+  // The slot is the one the record holds as cancelled, in case a reschedule
+  // moved it after the first read.
+  await releaseSlot(env, cancelled);
+  await releaseSlotClaim(env, cancelled);
   cancelExpiry(env, ctx, id);
   ctx.waitUntil(sendCancel(env, cancelled));
   ctx.waitUntil(sendHostCopy(env, cancelled, { cancelled: true }));
@@ -555,17 +568,29 @@ async function route_decline(req, env, ctx, url) {
   if (!booking) {
     return new Response(errorPage("booking not found (already expired?).", env), { status: 404, headers: htmlHeaders() });
   }
-  if (booking.status !== "pending") {
-    return new Response(declinedPage(booking, env, /*already=*/ true), { headers: htmlHeaders() });
+  // Same rule as route_approve: only the winner of pending -> declined mails
+  // the guest and frees the slot.
+  const declined = booking.status === "pending" ? await setStatus(env, id, { from: "pending", to: "declined" }) : null;
+  if (!declined) {
+    const current = (await getBooking(env, id)) ?? booking;
+    return new Response(declinedPage(current, env, /*already=*/ true), { headers: htmlHeaders() });
   }
-  await setStatus(env, id, "declined");
-  await releaseSlot(env, booking); // free the slot NOW so /slots reoffers it immediately
-  await releaseSlotClaim(env, booking); // and give up the atomic claim, so the next booker can take it
-  ctx.waitUntil(sendDecline(env, booking));
+  await releaseSlot(env, declined); // free the slot NOW so /slots reoffers it immediately
+  await releaseSlotClaim(env, declined); // and give up the atomic claim, so the next booker can take it
+  ctx.waitUntil(sendDecline(env, declined));
   cancelExpiry(env, ctx, id); // end the durable timer early
   ctx.waitUntil(caches.default.delete(calSlotsKey(req, env))); // slot freed again
-  return new Response(declinedPage(booking, env, /*already=*/ false), { headers: htmlHeaders() });
+  return new Response(declinedPage(declined, env, /*already=*/ false), { headers: htmlHeaders() });
 }
+
+// A host action whose first read found the booking live, but whose write found
+// it declined, expired or cancelled (or gone, its 90-day TTL landing mid-request).
+// Opening the link again shows which.
+const changedUnderfoot = (env) =>
+  new Response(errorPage("this booking changed while you were on it. open the link again to see where it stands.", env), {
+    status: 409,
+    headers: htmlHeaders(),
+  });
 
 // one edge-cache entry per (origin, basePath) for the slots island. Every action
 // that moves a slot deletes it through this same key, whichever route it came in
