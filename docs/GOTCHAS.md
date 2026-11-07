@@ -932,3 +932,18 @@ skips it.
     `finds_the_exif_chunk_png_0_17_will_not_decode` and
     `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
+
+96. **A preview version writes production's Analytics Engine, and Workers
+    Logs never sees it.** Every version keeps its preview URL, the Workers
+    Builds bot posts each one in this public repo's PR comments, and a
+    preview runs production's bindings (lib/preview.ts). ClaudeBot crawled
+    early-October previews on 2026-11-02 and 11-04 and wrote 2,082 404 rows
+    to `aadhar_misses` for /images/full keys that production 301s. Zone
+    analytics can't see a workers.dev host, and Workers Logs held no
+    workers.dev request in 7 days. A tagged GET to `b945bb91`'s preview
+    (2026-11-07 13:36Z) reached the ledger within a minute and was still
+    missing from Workers Logs 5 minutes later. So a dataset counts
+    production only when its rows say so: `aadhar_misses` carries the
+    hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
+    drops them as well.
+    Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
