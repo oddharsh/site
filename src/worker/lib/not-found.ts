@@ -114,22 +114,29 @@ export function callerClass(ua: string | null): string {
   return "other";
 }
 
-// The sitemap, read once per isolate.
+// The sitemap, read once per isolate. Only a successful read is kept, and the
+// in-flight promise is shared so concurrent cold 404s make one fetch.
 type AssetsEnv = { ASSETS?: { fetch: (r: Request | string) => Promise<Response> } };
-let _sitemap: string[] | undefined;
+let _sitemap: Promise<string[]> | undefined;
+
+async function readSitemap(env: AssetsEnv): Promise<string[]> {
+  const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
+  if (!r?.ok) throw new Error(`sitemap.xml: ${r ? r.status : "no ASSETS binding"}`);
+  const xml = await r.text();
+  return [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
+}
 
 /** The sitemap's paths. Empty when it cannot be read, which degrades every
- *  suggestion to the bare Link headers rather than failing the response. */
+ *  suggestion to the bare Link headers rather than failing the response. A
+ *  failed read is forgotten, so the next request tries again. */
 export async function sitemapPaths(env: AssetsEnv): Promise<string[]> {
-  if (_sitemap) return _sitemap;
+  const read = (_sitemap ??= readSitemap(env));
   try {
-    const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
-    const xml = r?.ok ? await r.text() : "";
-    _sitemap = [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
+    return await read;
   } catch {
-    _sitemap = [];
+    if (_sitemap === read) _sitemap = undefined;
+    return [];
   }
-  return _sitemap;
 }
 
 /** Test seam, never called by the Worker (gotcha 28). */

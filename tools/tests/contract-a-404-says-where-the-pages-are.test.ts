@@ -20,6 +20,7 @@ import {
   missPage,
   nearestPages,
   recoverNotFound,
+  sitemapPaths,
 } from "../../src/worker/lib/not-found.ts";
 
 const SITEMAP = `<?xml version="1.0"?><urlset>
@@ -306,4 +307,41 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
     const r = await recover(notApi, env());
     assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${notApi} is not API-shaped`);
   }
+});
+
+test("a sitemap read that fails is retried, and concurrent cold reads share one fetch", async () => {
+  for (const failure of ["throw", "non-ok"] as const) {
+    _resetSitemap();
+    let calls = 0;
+    const flaky: any = {
+      ASSETS: {
+        async fetch() {
+          calls++;
+          if (calls === 1) {
+            if (failure === "throw") throw new Error("ASSETS blip");
+            return new Response("", { status: 503 });
+          }
+          return new Response(SITEMAP);
+        },
+      },
+    };
+    assert.deepEqual(await sitemapPaths(flaky), [], `${failure}: the failed request degrades to empty`);
+    assert.equal((await sitemapPaths(flaky)).includes("/garage/resample"), true, `${failure}: the next request reads the real sitemap`);
+    assert.equal(calls, 2);
+  }
+
+  _resetSitemap();
+  let fetches = 0;
+  const counting: any = {
+    ASSETS: {
+      async fetch() {
+        fetches++;
+        return new Response(SITEMAP);
+      },
+    },
+  };
+  const [a, b] = await Promise.all([sitemapPaths(counting), sitemapPaths(counting)]);
+  assert.equal(fetches, 1);
+  assert.deepEqual(a, b);
+  assert.equal(a.length, 9);
 });
