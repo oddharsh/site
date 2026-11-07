@@ -874,7 +874,7 @@ const VIEW_CSS = `/*min*/
   .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-resize { grid-row: 4; }
   #ph-view { border: 0; background: none; font: inherit; color: var(--ink); padding: 1px 7px; cursor: default; }
   #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 0; }
-  .ph-drop { position: fixed; inset: auto; margin: 0; padding: 2px; min-width: 140px; background: var(--face-light); border: 1px solid var(--darkshadow); box-shadow: var(--shadow-float); font: 11px/1.5 var(--font-ui); }
+  .ph-drop { position: fixed; inset: auto; margin: 0; padding: 2px; min-width: 140px; background: var(--face-light); border: 1px solid var(--darkshadow); box-shadow: var(--shadow-tip); font: 11px/1.5 var(--font-ui); }
   .ph-drop button { display: flex; align-items: center; width: 100%; padding: 2px 20px 2px 0; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: default; }
   .ph-drop button::before { content: ""; flex: 0 0 20px; text-align: center; font-size: 7px; }
   .ph-drop button[aria-checked="true"]::before { content: "●"; }
@@ -909,7 +909,7 @@ const VIEW_CSS = `/*min*/
   .ph-list { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--slate-80); background: var(--paper); }
   .ph-list table { width: 100%; border-collapse: collapse; font: 11px/1.4 var(--font-ui); white-space: nowrap; }
   .ph-list th { padding: 0; font-weight: 400; text-align: left; }
-  .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-face); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }
+  .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-button); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }
   .ph-list th button:hover { border-bottom-color: var(--amber-70); }
   .ph-list th button:focus-visible { outline: 1px dotted var(--ink); outline-offset: -3px; }
   .ph-list th[aria-sort="ascending"] button::after { content: " ▴"; }
