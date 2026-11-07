@@ -6,7 +6,7 @@ import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { esc, isOwnerBust, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -539,11 +539,11 @@ function trackResponse(payload, status = 200, format = "json") {
 // apart from "no playlist configured" apart from "Spotify refused the scrape",
 // and the second homepage fragment going quiet is exactly the kind of thing that
 // otherwise gets noticed by eye, weeks later.
-async function loadRnTracks(request, env, ctx, url = new URL(request.url)) {
-  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s, url));
+async function loadRnTracks(request, env, ctx) {
+  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s));
 }
 
-async function loadRnTracksInner(request, env, ctx, s, url: URL) {
+async function loadRnTracksInner(request, env, ctx, s) {
   if (!env.RN_KV) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
@@ -558,9 +558,7 @@ async function loadRnTracksInner(request, env, ctx, s, url: URL) {
   const cacheKey = `tracks:${playlistId}`;
 
   // optional bust: drop the value, whose metadata carries the freshness stamp.
-  // constant-time compare, same as the admin/set gate (a plain === leaks the
-  // secret's length + prefix through timing).
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
+  if (isOwnerBust(request, env)) {
     s.setAttribute("rn.busted", true);
     await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
@@ -585,12 +583,12 @@ async function loadRnTracksInner(request, env, ctx, s, url: URL) {
 
 // `/rn/tracks` is the stable machine contract. Keep its representation fixed
 // so callers do not need to negotiate against a browser-oriented HTML shape.
-export async function handleRnTracks(request, env, ctx, url = new URL(request.url)) {
+export async function handleRnTracks(request, env, ctx) {
   // A KV throw used to escape as Cloudflare's HTML 1101 page from the
   // machine-facing contract. It answers in the endpoint's own error shape.
   let result;
   try {
-    result = await loadRnTracks(request, env, ctx, url);
+    result = await loadRnTracks(request, env, ctx);
   } catch (e) {
     console.error("rn/tracks: load failed", e);
     return trackResponse({ error: "playlist read failed", code: "storage_unavailable", tracks: [] }, 503, "json");
@@ -630,12 +628,12 @@ export async function handleRnTracks(request, env, ctx, url = new URL(request.ur
 // the 2026-09-27 15:07 tick: `outcome: exception`, 14 x "Too many subrequests",
 // 3 tracks and 6 artists stuck pending. Warming the cron's colo also bought
 // nothing, since the warm exists for the colo about to serve a hover.
-export function handleRnTracksHtml(request, env, ctx, url = new URL(request.url)) {
-  return rnTracksHtml(request, env, ctx, { warm: true }, url);
+export function handleRnTracksHtml(request, env, ctx) {
+  return rnTracksHtml(request, env, ctx, { warm: true });
 }
 
-export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }, url = new URL(request.url)) {
-  const result = await loadRnTracks(request, env, ctx, url);
+export async function rnTracksHtml(request, env, ctx, opts: { warm: boolean }) {
+  const result = await loadRnTracks(request, env, ctx);
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200 && opts.warm) {
     ctx.waitUntil(
@@ -744,7 +742,7 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 // no-store, because the edge keys on URL and not on Accept), and it rides the
 // same SWR payload, so answering it costs a KV read.
 export async function handleRnMarkdown(request, env, ctx, url = new URL(request.url)) {
-  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx, url), playlistUrl(env)]);
+  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
   const negotiated = wantsMarkdown(request) && !url.pathname.endsWith(".md");
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
