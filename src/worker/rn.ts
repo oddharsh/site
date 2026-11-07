@@ -1002,6 +1002,13 @@ function kvBulkJson(env, budget, keys) {
   return env.RN_KV.get(keys, "json");
 }
 
+// The same single-call read, answering { value, metadata } per key. The setup
+// read needs the payload's swrKV stamp so its write can put it back.
+function kvBulkJsonWithMetadata(env, budget, keys) {
+  budget.charge(1);
+  return env.RN_KV.getWithMetadata(keys, "json");
+}
+
 export async function cronEnrichTracks(env, ctx) {
   if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
 
@@ -1025,9 +1032,10 @@ export async function cronEnrichTracks(env, ctx) {
     // Both setup keys in one read. A key with nothing behind it comes back as
     // null, which is the answer a single get gave, so `no_payload` below is
     // unchanged.
-    const setup = await kvBulkJson(env, budget, [cacheKey, TRACK_META_KEY]);
-    const payload = setup.get(cacheKey);
-    const storedMeta = setup.get(TRACK_META_KEY);
+    const setup = await kvBulkJsonWithMetadata(env, budget, [cacheKey, TRACK_META_KEY]);
+    const payload = setup.get(cacheKey)?.value;
+    const payloadStamp = setup.get(cacheKey)?.metadata;
+    const storedMeta = setup.get(TRACK_META_KEY)?.value;
     if (!payload || !Array.isArray(payload.tracks) || payload.tracks.length === 0) {
       // nothing has built the playlist yet; the SWR path owns that, not this.
       s.setAttribute("rn.outcome", "no_payload");
@@ -1191,10 +1199,19 @@ export async function cronEnrichTracks(env, ctx) {
     // Write the map, then re-project the payload through it so the change is
     // visible without waiting for the SWR sentinel to lapse. The payload write
     // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
-    // read, and this pass did not read it.
+    // read, and this pass did not read it. The swrKV stamp in metadata says the
+    // same thing and goes back unchanged, since a put without metadata clears
+    // it and swrKV reads a missing stamp as stale (a re-scrape per tick).
+    //
+    // No compare-and-set exists in KV, so an SWR refresh landing between the
+    // read above and this put gets overwritten. The older bytes carry their own
+    // older stamp, so they read fresh no longer than they would have anyway.
     const next = { ...payload, tracks: payload.tracks.map((t) => withTrackMeta(t, meta[t.id])) };
     budget.charge(2);
-    await Promise.all([env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)), env.RN_KV.put(cacheKey, JSON.stringify(next))]);
+    await Promise.all([
+      env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
+      env.RN_KV.put(cacheKey, JSON.stringify(next), payloadStamp ? { metadata: payloadStamp } : undefined),
+    ]);
 
     const covered = live.filter((id) => meta[id]?.image_url).length;
     s.setAttribute("rn.tracks_total", live.length);
