@@ -36,11 +36,11 @@
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 // The site's island contract, imported the same way desktop.ts is: island.ts
 // and html.ts are pure modules that never reach cloudflare:workers (gotcha 16).
-// cal builds strings with the site's esc(), so what it hands islandMount is
+// cal builds strings with the site's esc(), so what it hands island() is
 // already escaped and goes in through unsafeHtml.
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { esc } from "../../src/worker/lib/http.ts";
-import { islandMount, islandPreload, islandScript } from "../../src/worker/lib/island.ts";
+import { island, islandScript } from "../../src/worker/lib/island.ts";
 
 const STYLES = `/*min*/
 * { box-sizing: border-box; }
@@ -590,18 +590,17 @@ export function bookingPage(env, opts: { slots?: { start: number; end: number }[
   const message = (key: keyof BookingAnswers["errors"]) => (errors[key] ? `<p class="field-error" id="${key}-error">${esc(errors[key])}</p>` : "");
   const problems = FIELD_ORDER.filter((k) => errors[k]).length;
 
+  const slotsIsland = island({
+    id: "coffee-slots",
+    url: slotsUrl,
+    placeholder: unsafeHtml(renderSlotList({ pending: true }, env)),
+    fallback: unsafeHtml(
+      `<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`,
+    ),
+  });
   const slotMarkup = slots
     ? `<div id="coffee-slots">${renderSlotList({ slots, picked: values.start, invalid: !!errors.start }, env)}</div>${message("start")}`
-    : `${
-        islandMount(
-          "coffee-slots",
-          slotsUrl,
-          unsafeHtml(renderSlotList({ pending: true }, env)),
-          unsafeHtml(
-            `<p class="xp-meta">scripts are off, so the open slots can't load into this page. <a href="${esc(pickUrl)}">see them on a plain page</a>, where the form works without scripts.</p>`,
-          ),
-        ).html
-      }
+    : `${slotsIsland.mount.html}
       <p class="slot-failed">couldn't load the open slots just now. <a href="${esc(pickUrl)}">see them on a plain page</a>, or write to <a href="mailto:${esc(env.HOST_EMAIL)}">${esc(env.HOST_EMAIL)}</a>.</p>`;
 
   const body = `
@@ -694,7 +693,7 @@ export function bookingPage(env, opts: { slots?: { start: number; end: number }[
     ${inline ? "" : islandScript().html}
   `;
 
-  return shell("Coffee or a bagel", body, env, shareCard(env) + (inline ? "" : islandPreload(slotsUrl).html));
+  return shell("Coffee or a bagel", body, env, shareCard(env) + (inline ? "" : slotsIsland.head.html));
 }
 
 // The unfurl card. Absolute URLs on the canonical host, since a crawler reading
