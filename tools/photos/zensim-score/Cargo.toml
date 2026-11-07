@@ -1,0 +1,29 @@
+[package]
+name = "zensim-score"
+version = "0.1.0"
+edition = "2024"
+description = "Scores image pairs with zensim 0.2.7 and zensim's codec-target profile side by side, for zensim-probe.ts. Measurement only: nothing in the photo pipeline or the build runs it."
+license = "AGPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "zensim-score"
+path = "src/main.rs"
+
+[dependencies]
+# Two zensim generations under one roof, renamed so both link. `z02` is the
+# last crates.io release (0.2.7, linear preview-v0.2 profile). `z03` is the
+# repo's 0.3.0 at a full rev, because 0.3.0 is unpublished (its zenpredict
+# dependency is git-only, imazen/zensim#46) and its README warns that a bake
+# can change scores under the same profile name, so a rev is the only identity
+# a score has. This rev predates the approx_* fix for bake-scored profiles;
+# zensim-probe.ts says what that costs. NO dependabot lane on purpose: moving
+# either pin changes every number the probe compares, so a move is a rerun.
+z02 = { package = "zensim", version = "=0.2.7" }
+z03 = { package = "zensim", git = "https://github.com/imazen/zensim.git", rev = "96c3c9bb900b580a4d9c0266a0a0b50203757528" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "pnm"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"
