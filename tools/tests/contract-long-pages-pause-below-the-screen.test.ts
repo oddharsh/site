@@ -71,6 +71,7 @@ test("the pause sits past the first screen, with enough page left below it", nee
     const at = out.indexOf(LINK);
     if (at < 0) continue;
     const open = CONTENT.exec(out);
+    assert.ok(open, `${rel}: paused, but has no .content to measure from`);
     const before = visible(out.slice(open.index, at)).length;
     const total = visible(out.slice(open.index, out.indexOf("</main>", at) >= 0 ? out.indexOf("</main>", at) : out.length)).length;
     assert.ok(before >= FOLD_AFTER_CHARS, `${rel}: the pause sits after ${before} characters, inside the first screen`);
