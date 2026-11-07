@@ -17,7 +17,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.ts";
 import { INBOX_MAIL_URL } from "./routes.ts";
@@ -148,6 +148,12 @@ export function handleInbox(request, env, _ctx?, url = new URL(request.url)) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderInboxPage() {
+  const { head, mount } = island({
+    id: "oe-mail",
+    url: MAIL_URL,
+    placeholder: renderInboxMail(PENDING, ""),
+    fallback: { says: "The mail arrives", shows: "it" },
+  });
   return lunaPage({
     title: "Inbox · aadhar.sh",
     path: "Inbox — Outlook Express",
@@ -157,7 +163,7 @@ export function renderInboxPage() {
     // The endpoint advertised on the page that displays its results, so a reader
     // (or their software) can find it from here too.
     headers: { link: WEBMENTION_LINK },
-    head: islandPreload(MAIL_URL),
+    head,
     css: OE_CSS,
     body: html`
     <h1>Inbox</h1>
@@ -167,7 +173,7 @@ export function renderInboxPage() {
       does link here), then approved by hand before it appears. The
       <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
       keeps the working notes: who sends, who receives, and what breaks between them.</p>
-    ${islandMount("oe-mail", MAIL_URL, renderInboxMail(PENDING, ""), html`<p>The mail arrives in a second request after the page loads, and that needs a script. Without one, <a href="${MAIL_URL}">${MAIL_URL}</a> shows it as plain HTML.</p>`)}
+    ${mount}
     <p class="oe-fail">The request for the mail failed, so the inbox stays empty rather than guessed. <a href="${MAIL_URL}">${MAIL_URL}</a> has it as plain HTML.</p>
 `,
     scripts: islandScript(),

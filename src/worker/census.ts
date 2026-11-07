@@ -1,6 +1,6 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { escHtml, escAttr, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
@@ -655,15 +655,15 @@ export async function handleCensusTable(request, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderCensusPage() {
-  const mount = islandMount(
-    "cx-island",
-    TABLE_URL,
-    censusExhibit(PENDING),
-    html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`,
-  );
+  const { head, mount } = island({
+    id: "cx-island",
+    url: TABLE_URL,
+    placeholder: censusExhibit(PENDING),
+    fallback: { says: "The census table arrives", shows: "it", json: "/lens/census.json" },
+  });
   return censusPage(
     html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
-    { head: islandPreload(TABLE_URL), scripts: islandScript() },
+    { head, scripts: islandScript() },
   );
 }
 

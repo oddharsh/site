@@ -2,7 +2,7 @@ import { BOT_UA } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { asNumber } from "./lib/parse.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -300,6 +300,12 @@ export function renderDynoPulls(read) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderDynoPage() {
+  const { head, mount } = island({
+    id: "dy-pulls",
+    url: PULLS_URL,
+    placeholder: renderDynoPulls(PENDING),
+    fallback: { says: "The chart and the recent pulls arrive", shows: "them", json: "/garage/dyno.json" },
+  });
   return lunaPage({
     title: "Dyno · aadhar.sh",
     path: "Dyno",
@@ -307,7 +313,7 @@ export function renderDynoPage() {
     width: 700,
     description: "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
     explorerName: "Dyno",
-    head: islandPreload(PULLS_URL),
+    head,
     css: `/*min*/
 h1{margin:0 0 3px}
 .lede{font-size:var(--text-xs);color:var(--slate-45);margin:0 0 13px;line-height:1.5}
@@ -354,7 +360,7 @@ td.src{font-size:var(--text-3xs);color:var(--slate-55)}
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
     weighs what would go over the wire, and records a pull.</p>
-    ${islandMount("dy-pulls", PULLS_URL, renderDynoPulls(PENDING), html`<p>The chart and the recent pulls arrive in a second request after the page loads, and that needs a script. Without one, <a href="${PULLS_URL}">${PULLS_URL}</a> shows them as plain HTML, and <a href="/garage/dyno.json">/garage/dyno.json</a> as JSON.</p>`)}
+    ${mount}
     <p class="dy-fail">The request for the series failed, so the chart stays empty rather than drawn from a guess. <a href="${PULLS_URL}">${PULLS_URL}</a> has it as plain HTML.</p>
     <p class="foot">Every number here is deterministic: identical source bytes weigh the same every time, so a
     flat line means nothing changed rather than that nothing was measured. Sampled figures are deliberately
