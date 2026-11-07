@@ -39,6 +39,7 @@ import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { EMPTY, html, type Html } from "./lib/html.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { isolateMemo } from "./lib/isolate-memo.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
@@ -134,12 +135,12 @@ const DDL = [
     verified_bot INTEGER NOT NULL, signature_agent TEXT,
     UNIQUE (day, ip, name))`,
 ];
-let ensured = false;
-async function ensureTable(db) {
-  if (ensured) return;
-  await db.batch(DDL.map((sql) => db.prepare(sql)));
-  ensured = true;
-}
+const ensureTable = isolateMemo(
+  async (db: D1Database) => {
+    await db.batch(DDL.map((sql) => db.prepare(sql)));
+  },
+  { onFailure: "retry" },
+);
 
 // One statement: the one-a-day rule is the UNIQUE key (OR IGNORE), and the
 // daily cap is the WHERE, which counts today's rows through that key's index.
