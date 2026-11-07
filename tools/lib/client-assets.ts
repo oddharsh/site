@@ -110,7 +110,19 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   },
   // quiz.js's stylesheet. Page-scoped: it loads beside quiz.js on the garage and
   // lwe pages, reads --font-ui and --font-caption, and defines no property.
-  { file: "quiz.css", kind: "style", scope: "page", budget: "unbudgeted", load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }], loadedBy: ["public/quiz.js"] },
+  // Long pages also link it in their body, as the parser pause
+  // (lib/parser-pause.ts).
+  {
+    file: "quiz.css",
+    kind: "style",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [
+      { via: "after", prefix: "\\.href\\s*=\\s*" },
+      { via: "attr", attr: "href" },
+    ],
+    loadedBy: ["public/quiz.js", "public/garage/compression.html"],
+  },
   // The shared hover engine. TWO loader shapes, and missing the second cost a
   // serialized fetch in production (2026-07-27): nav.js and index.html reach it
   // through import(), tooltip.js through a static `from`.
