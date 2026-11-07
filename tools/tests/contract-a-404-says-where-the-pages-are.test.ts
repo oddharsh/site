@@ -242,7 +242,11 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   const req = get("/garage/resampe", { headers: { "user-agent": "Mozilla/5.0 (compatible; ClaudeBot/1.0)" } });
   const miss = await recoverNotFound(req, e, empty404());
   countMiss(e, req, "/garage/resampe", miss);
-  assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe"], doubles: [1], indexes: ["page"] }]);
+  assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe", "aadhar.sh"], doubles: [1], indexes: ["page"] }]);
+  // a preview version writes the same dataset, so its host has to tell it apart (gotcha 96)
+  const preview = new Request("https://b945bb91-aadhar-sh.aadharsh2010.workers.dev/garage/resampe");
+  countMiss(e, preview, "/garage/resampe", miss);
+  assert.equal(points[1].blobs[4], "b945bb91-aadhar-sh.aadharsh2010.workers.dev");
   countMiss({}, req, "/x", miss); // no binding: nothing to write, and nothing thrown
 
   assert.equal(callerClass("curl/8.7.1"), "http-tool");

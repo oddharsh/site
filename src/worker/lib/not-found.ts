@@ -385,11 +385,20 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
   return { bucket, outcome: "404", response: out };
 }
 
-/** One data point per miss, answered or recovered. Never throws. */
+/** One data point per miss, answered or recovered. Never throws.
+ *
+ *  blob5 is the hostname because every preview version writes this same
+ *  dataset (lib/preview.ts), and Workers Logs records none of their requests
+ *  (gotcha 96). Measured 2026-11-07: ClaudeBot crawled preview URLs from
+ *  early October, which the Workers Builds bot posts in this public repo's PR
+ *  comments, and wrote 2,082 rows of 404s on /images/full keys that production
+ *  301s.
+ *  Read production as `blob5 = 'aadhar.sh'`. A version older than this field
+ *  writes no blob5, so that filter drops its rows too. */
 export function countMiss(env: { MISS_LEDGER?: AnalyticsEngineDataset }, request: Request, path: string, miss: MissOutcome) {
   try {
     env.MISS_LEDGER?.writeDataPoint({
-      blobs: [callerClass(request.headers.get("user-agent")), miss.bucket, miss.outcome, path.slice(0, 96)],
+      blobs: [callerClass(request.headers.get("user-agent")), miss.bucket, miss.outcome, path.slice(0, 96), new URL(request.url).hostname.slice(0, 64)],
       doubles: [1],
       indexes: [miss.bucket],
     });
