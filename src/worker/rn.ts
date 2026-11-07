@@ -6,7 +6,7 @@ import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { esc, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -522,15 +522,9 @@ function trackResponse(payload, status = 200, format = "json") {
     // 1101 from the edge is also text/html and also resolves fine. Unlike the
     // default island this fragment is cacheable, because the playlist is shared
     // by everyone.
-    return islandResponse(
-      renderTrackListHtml(payload),
-      {
-        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-      },
-      status,
-    );
+    return islandResponse(renderTrackListHtml(payload), { "cache-control": publicCacheControl(status) }, status);
   }
-  return jsonResponse(payload, status, { ...publicJsonHeaders(status), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, status, { noindex: true });
 }
 
 // Traced as `rn.tracks.load` with the OUTCOME on the span, because this handler
