@@ -152,7 +152,8 @@ test("the ramp never double-parses the D1 helper's already-parsed rows", async (
   // both paths. A warning that only appears in --dry-run is worth nothing on the
   // run that skips it, and skipping it is exactly what a hurry looks like.
   const freshnessAt = src.indexOf("await reportTargetFreshness(");
-  const dryRunExitAt = src.indexOf('if (has("dry-run"))');
+  // The RAMP's exit, after the target is resolved; --rollback has its own earlier one.
+  const dryRunExitAt = src.indexOf('if (has("dry-run"))', src.indexOf("const target = "));
   assert.ok(freshnessAt > 0, "the ramp must report target freshness");
   assert.ok(dryRunExitAt > 0, "the --dry-run early exit must still exist");
   assert.ok(freshnessAt < dryRunExitAt, "reportTargetFreshness must run BEFORE the --dry-run exit, or a real ramp loses the warning");
