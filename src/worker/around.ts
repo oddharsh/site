@@ -4,7 +4,7 @@ import { cachedRender, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, isOwnerBust, jsonResponse } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";

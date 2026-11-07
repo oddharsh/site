@@ -8,7 +8,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
 import { esc, isOwnerBust } from "./lib/http.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
