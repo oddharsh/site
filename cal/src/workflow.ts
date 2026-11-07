@@ -21,7 +21,7 @@
 // the deployed Worker.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
-import { getBooking, releaseSlot, setStatus } from "./booking.ts";
+import { releaseSlot, setStatus } from "./booking.ts";
 import { releaseSlotClaim } from "./reservation.ts";
 
 // WorkflowEntrypoint is GENERIC over its Env, and without the parameter
@@ -50,13 +50,18 @@ export class BookingWorkflow extends WorkflowEntrypoint<Record<string, any>> {
     // Timed out. Reclaim the slot, but only if it's still pending: a
     // host-decision event we failed to receive (redeploy, missed sendEvent)
     // must never clobber a booking the route already confirmed.
-    await step.do("expire-if-still-pending", async () => {
-      const booking = await getBooking(this.env, id);
-      if (booking && booking.status === "pending") {
-        await setStatus(this.env, id, "expired");
-        await releaseSlot(this.env, booking);
-        await releaseSlotClaim(this.env, booking);
-      }
-    });
+    await step.do("expire-if-still-pending", () => expireIfStillPending(this.env, id));
   }
+}
+
+// The timeout step's body, outside the class so cal/test can run it on the host
+// with an approve forced into the middle of it (the class itself only runs in
+// workerd). The slot is released only if this step won pending -> expired: an
+// approve that lands first keeps its slot, and the slot released is the one the
+// record holds NOW, which a reschedule may have moved.
+export async function expireIfStillPending(env, id: string) {
+  const expired = await setStatus(env, id, { from: "pending", to: "expired" });
+  if (!expired) return;
+  await releaseSlot(env, expired);
+  await releaseSlotClaim(env, expired);
 }

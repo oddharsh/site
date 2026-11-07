@@ -75,13 +75,22 @@ export async function getBooking(env, id: string): Promise<Booking | null> {
   return raw ? JSON.parse(raw) : null;
 }
 
-// patch a booking's status (pending → confirmed / declined / expired). Records
-// only; slot-holding is a separate concern (holdSlot/releaseSlot), because a
-// confirmed booking keeps its slot while a declined/expired one gives it back.
-export async function setStatus(env, id: string, status: Booking["status"]): Promise<Booking | null> {
+// Move a booking from one status to another, but only if it is still in `from`.
+// Returns the record as written, or null when it is missing or has already
+// moved on, and a null means the caller LOST: it must not send the mail or
+// release the slot that the transition would have earned. Every caller read the
+// booking earlier and decided from that read; this re-read is what stops two of
+// them (approve and decline, approve and the expiry timer, a double click) from
+// both acting on the same `pending`.
+//
+// KV has no compare-and-set, so this narrows the race to the gap between this
+// read and this write rather than closing it. Records only; slot-holding is a
+// separate concern (holdSlot/releaseSlot), because a confirmed booking keeps its
+// slot while a declined/expired one gives it back.
+export async function setStatus(env, id: string, move: { from: Booking["status"]; to: Booking["status"] }): Promise<Booking | null> {
   const b = await getBooking(env, id);
-  if (!b) return null;
-  b.status = status;
+  if (!b || b.status !== move.from) return null;
+  b.status = move.to;
   b.acted_at = Date.now();
   await putBooking(env, b);
   return b;
@@ -90,10 +99,11 @@ export async function setStatus(env, id: string, status: Booking["status"]): Pro
 // Patch the venue and advance the sequence. Separate from setStatus because the
 // two are independent axes: a location can be set on a booking that is still
 // pending (so it rides the first invite out) and changed again long after it is
-// confirmed. Returns null when there is nothing to patch.
+// confirmed. Returns null when there is nothing to patch, including a booking
+// that was declined, expired or cancelled after the caller last read it.
 export async function setLocation(env, id: string, location: string): Promise<Booking | null> {
   const b = await getBooking(env, id);
-  if (!b) return null;
+  if (!b || !isLive(b)) return null;
   b.location = location;
   // Bump only for a booking whose invite is already out. A pending booking has
   // never sent a VEVENT, so its first one must go out at SEQUENCE:0 — starting
@@ -115,7 +125,7 @@ export async function setLocation(env, id: string, location: string): Promise<Bo
 // hold needs exactly those two numbers.
 export async function setSchedule(env, id: string, slot: Interval): Promise<{ booking: Booking; was: Interval } | null> {
   const b = await getBooking(env, id);
-  if (!b) return null;
+  if (!b || !isLive(b)) return null;
   const was = { start: b.start, end: b.end };
   b.start = slot.start;
   b.end = slot.end;
@@ -135,15 +145,20 @@ export async function setSchedule(env, id: string, slot: Interval): Promise<{ bo
 //
 // Unconditional, unlike setLocation's bump, because /cancel only ever reaches a
 // CONFIRMED booking. A pending one has no invite out and is declined instead.
+// That holds at the write too: null means the booking is gone or is no longer
+// confirmed, the same lost-transition answer setStatus gives.
 export async function cancelBooking(env, id: string): Promise<Booking | null> {
   const b = await getBooking(env, id);
-  if (!b) return null;
+  if (!b || b.status !== "confirmed") return null;
   b.status = "cancelled";
   b.acted_at = Date.now();
   b.sequence = (b.sequence ?? 0) + 1;
   await putBooking(env, b);
   return b;
 }
+
+// The two statuses a host can still act on. The other three are terminal.
+const isLive = (b: Booking) => b.status === "pending" || b.status === "confirmed";
 
 async function putBooking(env, b) {
   await env.BOOKINGS.put(`booking:${b.id}`, JSON.stringify(b), {
