@@ -60,7 +60,17 @@ test("arrow keys, Home and End move through the views and the lens tabs", () => 
 test("a late lazy-tab reply never lands on the next scan", () => {
   const body = client.match(/function runLazyTab\([\s\S]*?\n {2}\}\n/)?.[0];
   assert.ok(body, "runLazyTab() is where this test reads it");
-  assert.equal((body.match(/if \(!live\(\)\) return;/g) ?? []).length, 2, "both the reply and the failure check the scan is still current");
+  assert.equal((body.match(/if \(!settled\(\)\) return;/g) ?? []).length, 2, "both the reply and the failure check the scan is still current");
+  // A reply for an old NLWeb question (lens_run_tab rewrites it mid-flight)
+  // must release the busy flag it set before it is dropped, or the tab reads
+  // "asking…" and the agent's wmSettle waits out its full 90 s.
+  const settled = body.match(/function settled\(\) \{([\s\S]*?)\n {4}\}/)?.[1];
+  assert.ok(settled, "settled() is where this test reads it");
+  assert.match(
+    settled,
+    /if \(!sameScan\(\)\) return false;\s+t\.setBusy\(false\);\s+if \(!t\.current \|\| t\.current\.holds\(\)\) return true;\s+t\.current\.rerun\(\);/,
+  );
+  assert.match(client, /current: \{ holds: \(\) => askedFor === nlwebQuery, rerun: runNlweb \}/, "NLWeb asks again for the question now on screen");
   assert.match(body, /if \(!sameScan\(\)\) return;/, "a script that loads after the next scan began does nothing");
   for (const island of ["LensReader", "LensWire", "LensTools", "LensNlweb", "LensMarkdown"])
     assert.match(client, new RegExp(`runLazyTab\\(\\{\\s+island: "${island}"`), `${island} loads through runLazyTab()`);
