@@ -196,6 +196,13 @@ export const CONTROLS: Control[] = [
     expect: /references to gotchas that do not exist: .*999/,
   },
   {
+    id: "av2-page-keeps-a-stale-tier-median",
+    plants: "/garage/av2 states the 600px tier's median from before #1222 removed 93 photos, the drift this check was added for",
+    mutations: [{ file: "src/pages/garage/av2.html", find: "the median, 0.53,", replace: "the median, 0.67," }],
+    run: contract("contract-av2-tier-figures-match-the-shipped-tier"),
+    expect: /the thin end, tier size and median must match the shipped 600px tier/,
+  },
+  {
     id: "em-dash-in-quiz",
     plants: "an em dash in a quiz question, which the house voice bans",
     gotcha: 32,
