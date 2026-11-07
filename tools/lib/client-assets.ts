@@ -402,6 +402,17 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
     load: [{ via: "attr", attr: "src" }],
     loadedBy: ["src/worker/writing.ts"],
   },
+  // The /photos View menu: Filmstrip and Details over the contact sheet.
+  {
+    file: "photos-view.js",
+    kind: "script",
+    marker: "ph-menubar",
+    scope: "page",
+    // 3.4 KiB gzip and 3.1 KiB brotli q11 on 2026-11-07.
+    budget: { role: "photos-only island", gzipKiB: 4, brotliKiB: 3.5 },
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["public/photos.html"],
+  },
   // Shared LWE structure, a separate warm-cache object.
   {
     file: "lwe-base.css",
