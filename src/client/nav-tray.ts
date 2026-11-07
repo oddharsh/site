@@ -193,6 +193,10 @@ export function createTray(options) {
   // tree where the engine supports it. Where it does not, pressing the open
   // icon light-dismisses the balloon before its click lands, and the click
   // would open it again; pressedOpen remembers the press so that click closes.
+  // A keydown on the icon forgets it: a press dragged off the icon never clicks,
+  // and the flag it left would make the next Enter close a closed balloon (a
+  // no-op). Every activation starts with a pointerdown or a keydown on the
+  // control, so neither needs a timer, which a touch tap's late click outruns.
   var pressedOpen = null as string | null;
   function isOpen() {
     return !!balloon && balloon.matches(":popover-open");
@@ -209,13 +213,15 @@ export function createTray(options) {
     balloon = b;
     D.body.appendChild(b);
     b.querySelector(".x").addEventListener("click", close);
-    // Every close path (the ✕, Esc, an outside press, another auto popover
-    // opening) lands here, so the bookkeeping lives in one place.
+    // Every open and close path (the ✕, Esc, an outside press, another auto
+    // popover opening) lands here, so aria-expanded is written in one place.
+    // open() sets balloonKind before showPopover, which fires this synchronously.
     b.addEventListener("beforetoggle", (e) => {
-      if ((e as ToggleEvent).newState !== "closed") return;
-      sound.play("close");
+      var opening = (e as ToggleEvent).newState === "open";
       var ic = iconFor(balloonKind);
-      if (ic) ic.setAttribute("aria-expanded", "false");
+      if (ic) ic.setAttribute("aria-expanded", String(opening));
+      if (opening) return;
+      sound.play("close");
       balloonKind = null;
     });
     // Esc is taken before the platform's close request so that focus goes back
@@ -232,6 +238,9 @@ export function createTray(options) {
     [].forEach.call(D.querySelectorAll(".axp-trayico"), (ic) => {
       ic.addEventListener("pointerdown", () => {
         pressedOpen = isOpen() ? balloonKind : null;
+      });
+      ic.addEventListener("keydown", () => {
+        pressedOpen = null;
       });
     });
     return b;
@@ -256,13 +265,10 @@ export function createTray(options) {
     body().innerHTML = '<div class="load">reading…</div>';
     // No try: an engine without the Popover API throws here, which rejects
     // nav.js's toggleTray promise and falls back to navigating to the page.
-    b.showPopover(ic ? { source: ic } : undefined);
     balloonKind = kind;
+    b.showPopover(ic ? { source: ic } : undefined);
     sound.play("open");
-    if (ic) {
-      ic.setAttribute("aria-expanded", "true");
-      placeTail(b, ic);
-    }
+    if (ic) placeTail(b, ic);
     var x = b.querySelector(".x");
     if (x instanceof HTMLElement)
       try {

@@ -1642,7 +1642,9 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
      InvalidStateError in Chrome 152 (#1032 met it on the tray). And a press on
      View while the menu is open light-dismisses it before the click lands where
      showPopover's `source` is unsupported, so the press is remembered and that
-     click closes instead of reopening. */
+     click closes instead of reopening. A keydown on View forgets it, since a
+     press dragged off View never clicks and would leave the next Enter closing
+     a closed menu (the rule nav-tray.js and notepad.js share). */
   var viewBtn = document.getElementById("m-view"), viewMenu = document.getElementById("view-menu"),
       hiddenItem = document.getElementById("m-hidden");
   var HAS_POPOVER = "showPopover" in HTMLElement.prototype, pressedOpen = false;
@@ -1654,6 +1656,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
       viewBtn.setAttribute("aria-expanded", ev.newState === "open" ? "true" : "false");
     });
     viewBtn.addEventListener("pointerdown", function(){ pressedOpen = menuOpen(); });
+    viewBtn.addEventListener("keydown", function(){ pressedOpen = false; });
   }
   function openMenu(open, restore){
     if (open) {
