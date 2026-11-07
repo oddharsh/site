@@ -21,7 +21,7 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript, type Pending } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript, type Pending } from "./lib/island.ts";
 import { esc, publicJsonResponse } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
