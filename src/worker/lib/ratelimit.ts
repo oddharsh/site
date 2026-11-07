@@ -5,11 +5,18 @@ import { isCallable } from "./parse.ts";
  *  contract-lens-per-ip-crawl-budgets holds the config to it. */
 export const RATE_WINDOW_S = 60;
 
+/** One rate budget: the Rate Limiting binding that counts it, the ceiling our
+ *  own messages and headers quote, and the policy name RateLimit-Policy uses.
+ *  A budget that never names itself in a header (MCP's, /ask's) can leave the
+ *  name out; the header functions require it. */
+export type RateBudget = { binding: string; max: number; key?: string };
+export type NamedBudget = RateBudget & { name: string };
+
 /** The RateLimit-Policy item for one budget (draft-ietf-httpapi-ratelimit-
  *  headers-11, section 3): a String naming the policy, `q` the quota in
  *  requests, `w` the window in seconds. Static, so it is sent on every response
  *  a budgeted door gives, served or refused. */
-export function rateLimitPolicy(name: string, max: number): string {
+export function rateLimitPolicy({ name, max }: Pick<NamedBudget, "name" | "max">): string {
   return `"${name}";q=${max};w=${RATE_WINDOW_S}`;
 }
 
@@ -19,11 +26,11 @@ export function rateLimitPolicy(name: string, max: number): string {
  *  the whole window (t). Retry-After says the same, and the draft lets it take
  *  precedence. A 429 passed through from an upstream (Browser Run) does NOT
  *  take these, because its window is not ours to promise. */
-export function rateLimitedHeaders(name: string, max: number): Record<string, string> {
+export function rateLimitedHeaders(budget: Pick<NamedBudget, "name" | "max">): Record<string, string> {
   return {
     "retry-after": String(RATE_WINDOW_S),
-    "ratelimit-policy": rateLimitPolicy(name, max),
-    "ratelimit": `"${name}";r=0;t=${RATE_WINDOW_S}`,
+    "ratelimit-policy": rateLimitPolicy(budget),
+    "ratelimit": `"${budget.name}";r=0;t=${RATE_WINDOW_S}`,
   };
 }
 
@@ -60,7 +67,7 @@ export function rateLimitedHeaders(name: string, max: number): Record<string, st
 // them. Kept deliberately: the thing being limited is a server-side crawler
 // being pointed at third parties, there is no account to key on, and the
 // alternative to an imperfect key here is no limit at all.
-export async function overBudget(budget, request, env) {
+export async function overBudget(budget: RateBudget, request: Request, env): Promise<boolean> {
   const limiter = env && env[budget.binding];
   if (!limiter || !isCallable(limiter.limit)) return false;
   // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller

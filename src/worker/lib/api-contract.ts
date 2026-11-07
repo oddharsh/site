@@ -22,7 +22,7 @@
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).
-import { OPENAPI_PATH, OPERATIONS, READ_POLICY, sharesReadBudget, type Operation } from "./public-api.ts";
+import { OPENAPI_PATH, OPERATIONS, sharesReadBudget, type Operation } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { jsonResponse } from "./http.ts";
 import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts";
@@ -42,7 +42,7 @@ export function allowedMethods(ops: readonly Operation[]): string[] {
 }
 
 const READ_BUDGETED: ReadonlySet<string> = new Set([...BY_PATH].filter(([, ops]) => ops.every(sharesReadBudget)).map(([path]) => path));
-const READ_POLICY_HEADER = rateLimitPolicy(...READ_POLICY);
+const READ_POLICY_HEADER = rateLimitPolicy(API_READ_BUDGET);
 
 /** A refusal this layer answers before the handler runs, or null to route. */
 export async function apiPreflight(request: Request, pathname: string, env: unknown): Promise<Response | null> {
@@ -65,7 +65,7 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
       "rate_limited",
       `Over the read budget of ${API_READ_BUDGET.max} requests a minute per caller. Retry after the Retry-After seconds.`,
       {},
-      rateLimitedHeaders(...READ_POLICY),
+      rateLimitedHeaders(API_READ_BUDGET),
     );
   }
   return null;

@@ -33,16 +33,14 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders, rateLimitPolicy, type NamedBudget } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { hasRenderEngine } from "./lens-render.ts";
 import type { Span } from "./lib/span-vocabulary.ts";
 
-type LensBudgetDecl = {
-  binding: string;
-  max: number;
+type LensBudgetDecl = NamedBudget & {
   // What the 429 calls the thing being rationed, plural: "Snapshots are…".
   label: string;
   // Why this ceiling is tighter than the ones beside it, said to the reader.
@@ -50,8 +48,6 @@ type LensBudgetDecl = {
   // Which other doors bill the same bucket, so a refusal at one door explains
   // why the other one also says no.
   shares?: string;
-  // A fixed key makes the budget SHARED rather than per-caller.
-  key?: string;
 };
 
 // Browser Run's free plan is account-wide (BROWSER_FREE_PLAN in lens.ts, with
@@ -64,21 +60,22 @@ type LensBudgetDecl = {
 // tools/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
 // in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
-  inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
-  shot: { binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
-  compare: { binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
-  browser: { binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
-  wire: { binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
-  tools: { binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
+  inspect: { name: "inspect", binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
+  shot: { name: "shot", binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
+  compare: { name: "compare", binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
+  browser: { name: "browser", binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
+  wire: { name: "wire", binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
+  tools: { name: "tools", binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
   // Tighter than the catalogue read it sits beside, and deliberately so: a
   // catalogue read costs a foreign server a lookup, and an /ask costs it a
   // retrieval and possibly a model call.
-  nlweb: { binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
+  nlweb: { name: "nlweb", binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
   // Ten plain GETs of one URL per run, deduped by Accept string. No browser
   // and no model, so it is cheaper than the tabs above it on OUR side; what it
   // spends is somebody else's bandwidth, ten times over, on one page. Sat
   // between the catalogue read and the /ask question for that reason.
   markdown: {
+    name: "markdown",
     binding: "LENS_RL_MARKDOWN",
     max: 4,
     label: "Markdown checks",
@@ -93,10 +90,12 @@ export const LENS_BUDGETS = {
   // N colos can still total N x max. That is a large improvement over per-IP and
   // is not a guarantee. The guarantee is the 429 handling in each browser run,
   // which treats an upstream refusal as a normal outcome rather than a fault.
-  browserAll: { binding: "LENS_RL_BROWSER_ALL", max: 4, label: "The shared browser budget", key: "browser-run" },
-} satisfies Record<string, LensBudgetDecl>;
+  browserAll: { name: "browserAll", binding: "LENS_RL_BROWSER_ALL", max: 4, label: "The shared browser budget", key: "browser-run" },
+} as const satisfies Record<string, LensBudgetDecl>;
 
 export type LensBudget = keyof typeof LENS_BUDGETS;
+// Each budget's RateLimit-Policy name is its key; this fails to compile if one drifts.
+LENS_BUDGETS satisfies { [K in LensBudget]: { name: K } };
 
 // The one place a lens 429 is worded. The shared budget reads differently
 // because it is not the reader's own allowance that ran out, and saying "you"
@@ -429,14 +428,14 @@ export function lensJson(o: LensOutcome<any>): Response {
  *  neither. */
 function refusalHeaders(o: LensOutcome<any>): Record<string, string> {
   if (o.kind !== "refused" || o.status !== 429 || !o.budget) return {};
-  return rateLimitedHeaders(o.budget, LENS_BUDGETS[o.budget].max);
+  return rateLimitedHeaders(LENS_BUDGETS[o.budget]);
 }
 
 /** RateLimit-Policy for a served answer: one List member per budget the door
  *  bills (draft-ietf-httpapi-ratelimit-headers-11, section 3). */
 export function policyHeaders(budgets: LensBudget[] | undefined): Record<string, string> {
   if (!budgets || budgets.length === 0) return {};
-  return { "ratelimit-policy": budgets.map((b) => rateLimitPolicy(b, LENS_BUDGETS[b].max)).join(", ") };
+  return { "ratelimit-policy": budgets.map((b) => rateLimitPolicy(LENS_BUDGETS[b])).join(", ") };
 }
 
 // The PNG lens reports its cache state in a header, because the body is an

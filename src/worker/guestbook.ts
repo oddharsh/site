@@ -46,7 +46,7 @@ import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { GUESTBOOK_ENTRIES_URL } from "./routes.ts";
 
 /** Mirrored in cloudflare.config.ts; contract-lens-per-ip-crawl-budgets pins the pair. */
-export const GUESTBOOK_BUDGET = { binding: "GUESTBOOK_RL", max: 3 };
+export const GUESTBOOK_BUDGET = { name: "guestbook", binding: "GUESTBOOK_RL", max: 3 };
 /** Entries accepted per UTC day, one D1 row each. */
 export const DAILY_SIGN_CAP = 500;
 /** How many entries the page and the JSON show, newest first. */
@@ -206,7 +206,7 @@ async function sign(request: Request, env) {
   if (request.headers.get("sec-fetch-site") === "cross-site") return json({ error: "cross-site" }, 403);
   if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
   if (await overBudget(GUESTBOOK_BUDGET, request, env)) {
-    return json({ error: "too many signatures from this address; try again in a minute" }, 429, rateLimitedHeaders("guestbook", GUESTBOOK_BUDGET.max));
+    return json({ error: "too many signatures from this address; try again in a minute" }, 429, rateLimitedHeaders(GUESTBOOK_BUDGET));
   }
   const text = await request.text();
   if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);

@@ -15,10 +15,10 @@
 // use for response shapes it never serves itself.
 //
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
-import { API_READ_BUDGET, ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
+import { ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
-import { RATE_WINDOW_S, rateLimitPolicy } from "./ratelimit.ts";
-import { LENS_BUDGETS, type LensBudget } from "../lens-pipeline.ts";
+import { RATE_WINDOW_S, rateLimitPolicy, type NamedBudget } from "./ratelimit.ts";
+import { LENS_BUDGETS } from "../lens-pipeline.ts";
 import { CENSUS_ROSTER } from "../census.ts";
 
 export type Schema = Record<string, unknown>;
@@ -85,15 +85,12 @@ const json = (description: string, schema: Schema): Responses[string] => ({ desc
 const err = (description: string) => json(description, ref("Error"));
 // The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
 // Structured Field Lists, one member per policy, named by budget.
-export type Policy = readonly [name: string, max: number];
-const lensPolicy = (b: LensBudget): Policy => [b, LENS_BUDGETS[b].max];
-/** The policy every operation without a 429 of its own shares (api-contract.ts). */
-export const READ_POLICY: Policy = ["read", API_READ_BUDGET.max];
+type Policy = Pick<NamedBudget, "name" | "max">;
 /** True for an operation that bills the shared read budget: one whose own
  *  description declares no 429, because it has no limiter of its own. */
 export const sharesReadBudget = (op: Operation): boolean => !("429" in op.responses);
 const policyHeader = (policies: readonly Policy[]): Schema => ({
-  description: `The quota this endpoint bills, as a Structured Field List: ${policies.map(([n, max]) => rateLimitPolicy(n, max)).join(", ")}. q is requests and w the window in seconds.`,
+  description: `The quota this endpoint bills, as a Structured Field List: ${policies.map(rateLimitPolicy).join(", ")}. q is requests and w the window in seconds.`,
   schema: str(),
 });
 /** A 2xx from a budgeted door, which names its policy. */
@@ -244,9 +241,9 @@ export const OPERATIONS: readonly Operation[] = [
       q("mode", str(undefined, { enum: ["cloudflare"] }), "cloudflare returns the Cloudflare Agent Readiness level instead of the full observation."),
     ],
     responses: {
-      200: budgeted(json("The observation.", ref("LensObservation")), [lensPolicy("inspect")]),
+      200: budgeted(json("The observation.", ref("LensObservation")), [LENS_BUDGETS.inspect]),
       400: err("The URL is missing or refused."),
-      429: limited(`Over the ${inspect} per minute budget.`, [lensPolicy("inspect")]),
+      429: limited(`Over the ${inspect} per minute budget.`, [LENS_BUDGETS.inspect]),
       502: err(`The target timed out (${LENS_FETCH_TIMEOUT_MS / 1000} seconds) or failed.`),
     },
     example: "url=example.com",
@@ -260,9 +257,9 @@ export const OPERATIONS: readonly Operation[] = [
     description: `Inspect two public URLs and report the differences in status, content, readiness, tier and agent surfaces. Limited to ${compare} comparisons per caller per minute.`,
     parameters: [q("left", str(), "The first URL, validated like /lens/fetch.", true), q("right", str(), "The second URL.", true)],
     responses: {
-      200: budgeted(json("The comparison.", ref("LensComparison")), [lensPolicy("compare")]),
+      200: budgeted(json("The comparison.", ref("LensComparison")), [LENS_BUDGETS.compare]),
       400: err("left or right is missing or refused."),
-      429: limited(`Over the ${compare} per minute budget.`, [lensPolicy("compare")]),
+      429: limited(`Over the ${compare} per minute budget.`, [LENS_BUDGETS.compare]),
       502: err("The comparison failed."),
     },
     example: "left=example.com&right=aadhar.sh",
