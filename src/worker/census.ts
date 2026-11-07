@@ -1,6 +1,6 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { escHtml, escAttr, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
@@ -432,7 +432,7 @@ const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", un
 export function censusExhibitHtml(grouped) {
   // The placeholder model: one unnamed row per roster host, since the roster is
   // what a sweep reports on. Nothing in it is a claim about any site.
-  if (grouped === PENDING_CENSUS) {
+  if (isPending(grouped)) {
     const cell = "…";
     const rows = CENSUS_ROSTER.map(
       () =>
@@ -605,8 +605,6 @@ export async function handleCensus(request, env, ctx, url = new URL(request.url)
 // to the request that asked for the sweep (index.ts routes it there).
 export const TABLE_URL = CENSUS_TABLE_URL;
 
-const PENDING_CENSUS = { pending: true };
-
 // The one place the string-built exhibit becomes markup. censusExhibitHtml
 // escapes every value it interpolates (escHtml, escAttr), and the three callers
 // above all take it through here rather than wrapping it themselves.
@@ -624,7 +622,7 @@ export function renderCensusPage() {
   const mount = islandMount(
     "cx-island",
     TABLE_URL,
-    censusExhibit(PENDING_CENSUS),
+    censusExhibit(PENDING),
     html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`,
   );
   return censusPage(

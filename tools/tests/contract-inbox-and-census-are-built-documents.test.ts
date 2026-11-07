@@ -75,8 +75,7 @@ test("the two islands carry the marker and their cache policies", async () => {
   assert.equal(census.headers.get("cache-control"), "public, max-age=300, s-maxage=900");
   assert.match(await census.text(), /cx-empty/, "no store is the empty panel, never a table");
   const hostile = renderInboxMail(
-    [{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }],
-    "ok",
+    { state: "ok", value: [{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }] },
     "https://aadhar.sh",
   ).html;
   assert.ok(hostile.includes("&lt;script&gt;x&lt;/script&gt;") && !hostile.includes("<script>x"));
