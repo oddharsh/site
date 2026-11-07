@@ -38,6 +38,7 @@ import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 import { sign, verify } from "./lib/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
+import type { Read } from "./lib/island.ts";
 import { span } from "./lib/trace.ts";
 import { sortLine, sortMention, sortSubjectTag } from "./webmention-sort.ts";
 
@@ -626,8 +627,8 @@ export async function handleWebmentionDecision(request, env, ctx, url) {
   return text(`Already ${row.status}. This link changed nothing.`, 409);
 }
 
-export async function readApprovedMentions(env, limit = 200) {
-  if (!env.SOCIAL_DB) return { state: "unbound", mentions: [] };
+export async function readApprovedMentions(env, limit = 200): Promise<Read<Record<string, unknown>[]>> {
+  if (!env.SOCIAL_DB) return { state: "unbound" };
   try {
     await ensureTable(env.SOCIAL_DB);
     const r = await env.SOCIAL_DB.prepare(
@@ -637,9 +638,9 @@ export async function readApprovedMentions(env, limit = 200) {
       .bind(Math.min(limit, 500))
       .all();
     const mentions = (r && r.results) || [];
-    return { state: mentions.length ? "ok" : "empty", mentions };
+    return mentions.length ? { state: "ok", value: mentions } : { state: "empty" };
   } catch (e) {
-    return { state: "error", mentions: [] };
+    return { state: "error" };
   }
 }
 

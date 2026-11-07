@@ -138,3 +138,16 @@ test("/garage/dyno/pulls.html is an island the browser may cache for five minute
     globalThis.fetch = realFetch;
   }
 });
+
+test("a live dyno read with no dates renders its numbers, not the placeholder", async () => {
+  const { renderDynoPulls } = await import("../../src/worker/dyno.ts");
+  // The placeholder is the shared PENDING value (lib/island.ts), named once and
+  // compared by identity. Rows that merely look like it, undated here, are live.
+  const html = renderDynoPulls([
+    { ts: null, sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
+    { ts: null, sha: "bbb2222", worker_gzip: 266240, pages_br: 476160, assets_br: 58368, source: "nightly" },
+  ]).html;
+  assert.match(html, /<td class="num">260\.0<\/td>/);
+  assert.match(html, /<td class="src">measured<\/td>/);
+  assert.doesNotMatch(html, /Wire size over time, not read yet\./);
+});

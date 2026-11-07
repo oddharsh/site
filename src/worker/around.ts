@@ -4,7 +4,7 @@ import { cachedRender, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
@@ -505,7 +505,9 @@ const PENDING_REPORT = { crawledAt: null, results: NEIGHBORS.map(() => null) };
 const SNAPSHOT_CACHE = "public, max-age=60, s-maxage=300";
 
 /** The island: the crawl's meta line and its rows, or the not-built-yet panel. */
-export function renderAroundSnapshot(report) {
+export function renderAroundSnapshot(read) {
+  const pending = isPending(read);
+  const report = pending ? PENDING_REPORT : read;
   // failure honesty: no snapshot means a greyed, period-correct empty panel,
   // never a fabricated table. only ever visible before the first cron run
   // (or after an owner bust that failed to rebuild).
@@ -513,7 +515,6 @@ export function renderAroundSnapshot(report) {
     return unsafeHtml(`<div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
     The crawl runs on a schedule, not on your visit; check back tomorrow.</div>`);
   }
-  const pending = report.crawledAt === null;
   const dots = "…";
 
   const rows = report.results
@@ -669,7 +670,7 @@ export function renderAroundPage() {
       request carries two: Ed25519, and a post-quantum ML-DSA-44 second label
       (<a href="/garage/pqc">why</a>).
     </p>
-    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
+    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">

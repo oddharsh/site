@@ -243,8 +243,7 @@ test("an author URL that is not http(s) is dropped, and a hostile name stays tex
   assert.equal(p.author, "<img src=x onerror=alert(1)>", "an attribute value arrives decoded, the same text a browser holds");
   assert.equal(p.authorUrl, "https://mari.example", "a javascript: URL never becomes the stored author link");
   const out = renderInboxMail(
-    [{ kind: "reply", author: p.author, source: "https://mari.example/post", target: TARGET, approved_at: 0 }],
-    "ok",
+    { state: "ok", value: [{ kind: "reply", author: p.author, source: "https://mari.example/post", target: TARGET, approved_at: 0 }] },
     "https://aadhar.sh",
   ).html;
   assert.ok(!out.includes("<img src=x"), "the inbox escapes the parsed name");

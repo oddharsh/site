@@ -2,7 +2,7 @@ import { BOT_UA } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { asNumber } from "./lib/parse.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -137,7 +137,7 @@ function dots(rows, sc, pick, cls) {
     .join("");
 }
 
-function chart(rows) {
+function chart(rows, pending) {
   // Three series on one axis. They span 58-666 KiB (2026-10-16), close enough
   // that a shared axis reads fine and far better than three stacked charts: the whole
   // question this page answers is how the parts move against each other.
@@ -150,7 +150,6 @@ function chart(rows) {
   // so it draws the frame alone: the same viewBox, grid and legend, with no
   // lines and no tick values. That keeps the swap to the live chart from moving
   // anything, and it is not a guess at the series.
-  const pending = rows.every((r) => r.ts === null);
   const sc = pending
     ? { x: () => PAD_L, y: (v) => PAD_T + PLOT_H - v * PLOT_H, yMax: 1 }
     : scales(rows, (r) => Math.max(r.pages_br ?? 0, r.worker_gzip ?? 0, r.assets_br ?? 0));
@@ -241,8 +240,9 @@ const delta = (rows, key) => {
 };
 
 /** The island: chart, callout and recent pulls, for `rows` or the placeholder. */
-export function renderDynoPulls(rows) {
-  const pending = rows.length > 0 && rows.every((r) => r.ts === null);
+export function renderDynoPulls(read) {
+  const pending = isPending(read);
+  const rows = pending ? PENDING_ROWS : read;
   const empty = !pending && rows.length < 2;
   const worker = pending ? null : delta(rows, "worker_gzip");
   const dots = "…";
@@ -287,7 +287,7 @@ export function renderDynoPulls(rows) {
     this page exists to replace.</div>`
       : ""
   }
-    ${rows.length ? chart(rows) : ""}
+    ${rows.length ? chart(rows, pending) : ""}
     ${callout}
     <h2>Recent pulls</h2>
     <table>
@@ -354,7 +354,7 @@ td.src{font-size:var(--text-3xs);color:var(--slate-55)}
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
     weighs what would go over the wire, and records a pull.</p>
-    ${islandMount("dy-pulls", PULLS_URL, renderDynoPulls(PENDING_ROWS), html`<p>The chart and the recent pulls arrive in a second request after the page loads, and that needs a script. Without one, <a href="${PULLS_URL}">${PULLS_URL}</a> shows them as plain HTML, and <a href="/garage/dyno.json">/garage/dyno.json</a> as JSON.</p>`)}
+    ${islandMount("dy-pulls", PULLS_URL, renderDynoPulls(PENDING), html`<p>The chart and the recent pulls arrive in a second request after the page loads, and that needs a script. Without one, <a href="${PULLS_URL}">${PULLS_URL}</a> shows them as plain HTML, and <a href="/garage/dyno.json">/garage/dyno.json</a> as JSON.</p>`)}
     <p class="dy-fail">The request for the series failed, so the chart stays empty rather than drawn from a guess. <a href="${PULLS_URL}">${PULLS_URL}</a> has it as plain HTML.</p>
     <p class="foot">Every number here is deterministic: identical source bytes weigh the same every time, so a
     flat line means nothing changed rather than that nothing was measured. Sampled figures are deliberately

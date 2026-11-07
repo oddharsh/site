@@ -63,15 +63,15 @@ test("real fragments hold nothing the policy would block", async () => {
     published: "2026-10-08T00:00:00Z",
     approved: true,
   };
-  const pending = { pending: true } as { readonly pending: true };
-  // The census table is left out: its renderer needs a grouped report, and its
-  // empty state is an identity check on a module-private placeholder.
+  const { PENDING } = await import("../../src/worker/lib/island.ts");
+  const { censusExhibitHtml } = await import("../../src/worker/census.ts");
   const fragments = {
+    "/lens/census/table.html (placeholder)": censusExhibitHtml(PENDING),
     "/around/snapshot.html": renderAroundSnapshot(null),
     "/garage/dyno/pulls.html": renderDynoPulls([]),
-    "/inbox/mail.html (empty)": renderInboxMail([], "ok", "https://aadhar.sh"),
-    "/inbox/mail.html (hostile mention)": renderInboxMail([hostile], "ok", "https://aadhar.sh"),
-    "/ledger/lines.html": renderLedgerLines(pending, pending),
+    "/inbox/mail.html (empty)": renderInboxMail({ state: "empty" }, "https://aadhar.sh"),
+    "/inbox/mail.html (hostile mention)": renderInboxMail({ state: "ok", value: [hostile] }, "https://aadhar.sh"),
+    "/ledger/lines.html": renderLedgerLines(PENDING, PENDING),
     "/reading/list.html": renderReadingList({ items: [] }, {}),
     "/rn/tracks.html": renderTrackListHtml({ tracks: [] }),
     "/whoareyou/values.html": renderWhoareyouValues({}, "<script>ua()</script>", null),

@@ -8,7 +8,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
 import { esc, secretMatches } from "./lib/http.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
@@ -125,7 +125,6 @@ const LIST_CACHE = "public, max-age=300";
 // longer and does not need to match: nothing visible follows the island.
 const PENDING_ROWS = 6;
 const PENDING_MODEL = {
-  pending: true,
   fetchedAt: null,
   items: Array.from({ length: PENDING_ROWS }, () => ({ title: "…", link: "", domain: "…", snippet: "", highlights: [], created: null, favorite: false })),
 };
@@ -207,8 +206,9 @@ const readingDates = () =>
   });
 
 /** The island: the count bar, the rows and the footer, or the placeholder. */
-export function renderReadingList(payload, hn: HnMap = {}): Html {
-  const pending = payload?.pending === true;
+export function renderReadingList(read, hn: HnMap = {}): Html {
+  const pending = isPending(read);
+  const payload = pending ? PENDING_MODEL : read;
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const count = items.length;
   const fetched = payload?.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
@@ -309,7 +309,7 @@ footer a { color:var(--link); }
     body: html`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${profile}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
-    ${islandMount("rd-list", LIST_URL, renderReadingList(PENDING_MODEL), html`<p>The list arrives in a second request after the page loads, and that needs a script. Without one, <a href="${LIST_URL}">${LIST_URL}</a> shows it as plain HTML.</p>`)}
+    ${islandMount("rd-list", LIST_URL, renderReadingList(PENDING), html`<p>The list arrives in a second request after the page loads, and that needs a script. Without one, <a href="${LIST_URL}">${LIST_URL}</a> shows it as plain HTML.</p>`)}
     <p class="rd-fail">The request for the list failed, so it stays empty rather than guessed. <a href="${LIST_URL}">${LIST_URL}</a> has it as plain HTML, and it always lives at <a href="${profile}" rel="external" target="_blank">curius.app/${CURIUS_HANDLE}</a>.</p>
 `,
     scripts: islandScript(),

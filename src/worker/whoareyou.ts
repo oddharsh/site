@@ -5,7 +5,7 @@ import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
@@ -312,59 +312,61 @@ export async function handleWhoareyouJson(request, env, ctx, url = new URL(reque
 // in the browser from document.referrer, which is what the browser sent with
 // the page request. The callout says all of this in the page's own copy.
 export const VALUES_URL = WHOAREYOU_VALUES_URL;
-const PENDING = "…";
+const DOTS = "…";
 
 // The placeholder model. The same renderer draws the baked placeholder and the
 // live fragment, so the swap moves only what the live values add. Optional
 // fields a browser visitor normally has (coords, a round-trip, delivery rate,
-// stream priority, the TLS extensions hash) are PENDING rather than null, so
+// stream priority, the TLS extensions hash) are DOTS rather than null, so
 // their rows are already standing when the values land. Fields most visitors
 // never carry (RDAP until the colo is warm, JA3/JA4, a bot score) stay null.
 const PLACEHOLDER_DATA = {
   host: "aadhar.sh",
   scheme: "https",
-  ray: PENDING,
-  ip: PENDING,
-  asn: PENDING,
-  asOrg: PENDING,
-  country: PENDING,
+  ray: DOTS,
+  ip: DOTS,
+  asn: DOTS,
+  asOrg: DOTS,
+  country: DOTS,
   continent: "—",
   isEU: false,
-  region: PENDING,
-  city: PENDING,
+  region: DOTS,
+  city: DOTS,
   postalCode: "—",
-  latitude: PENDING,
-  longitude: PENDING,
-  timezone: PENDING,
-  colo: PENDING,
-  clientTcpRtt: PENDING,
+  latitude: DOTS,
+  longitude: DOTS,
+  timezone: DOTS,
+  colo: DOTS,
+  clientTcpRtt: DOTS,
   clientQuicRtt: null,
-  deliveryRate: PENDING,
-  requestPriority: PENDING,
-  httpProtocol: PENDING,
-  tlsVersion: PENDING,
-  tlsCipher: PENDING,
-  tlsExtensions: PENDING,
-  acceptEncoding: PENDING,
-  userAgent: PENDING,
-  acceptLanguage: PENDING,
-  dnt: PENDING,
-  referer: PENDING,
-  cookies: PENDING,
+  deliveryRate: DOTS,
+  requestPriority: DOTS,
+  httpProtocol: DOTS,
+  tlsVersion: DOTS,
+  tlsCipher: DOTS,
+  tlsExtensions: DOTS,
+  acceptEncoding: DOTS,
+  userAgent: DOTS,
+  acceptLanguage: DOTS,
+  dnt: DOTS,
+  referer: DOTS,
+  cookies: DOTS,
   botScore: null,
   verifiedBot: false,
   detectionIds: null,
   corporateProxy: null,
   ja3Hash: null,
   ja4: null,
-  when: PENDING,
+  when: DOTS,
 };
-const PLACEHOLDER_UA = { browser: PENDING, os: PENDING, device: "" };
+const PLACEHOLDER_UA = { browser: DOTS, os: DOTS, device: "" };
 
-const unit = (v, u) => (v === PENDING ? v : `${v} ${u}`);
+const unit = (v, u) => (v === DOTS ? v : `${v} ${u}`);
 
-export function renderWhoareyouValues(data, ua, rdap) {
-  const pending = data.ip === PENDING;
+export function renderWhoareyouValues(read, liveUa, rdap) {
+  const pending = isPending(read);
+  const data = pending ? PLACEHOLDER_DATA : read;
+  const ua = pending ? PLACEHOLDER_UA : liveUa;
   const dim = (text) => html` <span class="dim">(${text})</span>`;
   return html`
     <div style="border:1px solid var(--slate-73);background:#fff;box-shadow:inset 1px 1px 0 var(--mist-96);margin:8px 0 2px">
@@ -395,7 +397,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
       <dt>Timezone</dt>             <dd>${data.timezone}</dd>
       ${data.latitude ? html`<dt>Approx. coords</dt><dd>${data.latitude}, ${data.longitude}${pending ? "" : html` <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&amp;mlon=${data.longitude}&amp;zoom=10" target="_blank" rel="noopener">(see on map)</a>`}</dd>` : ""}
       <dt>Cloudflare colo</dt>      <dd>${data.colo}${dim("nearest CF data center serving you")}</dd>
-      ${pending ? html`<dt>Round-trip</dt><dd>${PENDING}</dd>` : ""}
+      ${pending ? html`<dt>Round-trip</dt><dd>${DOTS}</dd>` : ""}
       ${!pending && data.clientTcpRtt !== null ? html`<dt>TCP round-trip</dt><dd>${data.clientTcpRtt} ms</dd>` : ""}
       ${!pending && data.clientQuicRtt !== null ? html`<dt>QUIC round-trip</dt><dd>${data.clientQuicRtt} ms${dim("only set on HTTP/3, so it and the TCP row never both appear")}</dd>` : ""}
       ${data.deliveryRate !== null ? html`<dt>Delivery rate</dt><dd>${unit(data.deliveryRate, "B/s")}${dim("most recent edge estimate for this connection")}</dd>` : ""}
@@ -424,7 +426,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
     <h2>This session</h2>
     <dl class="field-grid">
       <dt>Received at</dt>          <dd>${data.when}${dim("when the edge rendered these values")}</dd>
-      <dt>Referrer</dt>             <dd><span data-referrer>${PENDING}</span>${dim("read by your browser from what it sent with this page")}</dd>
+      <dt>Referrer</dt>             <dd><span data-referrer>${DOTS}</span>${dim("read by your browser from what it sent with this page")}</dd>
       <dt>Cookies sent</dt>         <dd>${data.cookies}</dd>
       <dt>Cloudflare ray</dt>       <dd class="muted">${data.ray}${dim("the edge's id for the request that fetched these values")}</dd>
       ${data.botScore !== null ? html`<dt>CF bot score</dt><dd>${data.botScore} / 99${dim("higher = more human-like")}</dd>` : ""}
@@ -595,7 +597,7 @@ footer .signature small { color: var(--ink-faint); }
       revealed to this site. None of it is logged, none of it is stored. Close this tab and it's gone.
     </p>
 
-    ${islandMount("wy-values", VALUES_URL, renderWhoareyouValues(PLACEHOLDER_DATA, PLACEHOLDER_UA, null), html`<p>These values arrive in a second request after the page loads, and that needs a script. Without one, <a href="${VALUES_URL}">${VALUES_URL}</a> shows them for your request as plain HTML, and <a href="/whoareyou.json">/whoareyou.json</a> as JSON.</p>`)}
+    ${islandMount("wy-values", VALUES_URL, renderWhoareyouValues(PENDING, null, null), html`<p>These values arrive in a second request after the page loads, and that needs a script. Without one, <a href="${VALUES_URL}">${VALUES_URL}</a> shows them for your request as plain HTML, and <a href="/whoareyou.json">/whoareyou.json</a> as JSON.</p>`)}
     <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>
