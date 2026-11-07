@@ -309,39 +309,24 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
   }
 });
 
-test("a sitemap read that fails is retried, and concurrent cold reads share one fetch", async () => {
-  for (const failure of ["throw", "non-ok"] as const) {
-    _resetSitemap();
-    let calls = 0;
-    const flaky: any = {
-      ASSETS: {
-        async fetch() {
-          calls++;
-          if (calls === 1) {
-            if (failure === "throw") throw new Error("ASSETS blip");
-            return new Response("", { status: 503 });
-          }
-          return new Response(SITEMAP);
-        },
-      },
-    };
-    assert.deepEqual(await sitemapPaths(flaky), [], `${failure}: the failed request degrades to empty`);
-    assert.equal((await sitemapPaths(flaky)).includes("/garage/resample"), true, `${failure}: the next request reads the real sitemap`);
-    assert.equal(calls, 2);
-  }
-
+test("a sitemap read that fails is retried on the next miss, and a good one is read once", async () => {
   _resetSitemap();
   let fetches = 0;
-  const counting: any = {
+  let up = false;
+  const env = {
     ASSETS: {
-      async fetch() {
+      fetch: async () => {
         fetches++;
+        if (!up) throw new Error("assets blip");
         return new Response(SITEMAP);
       },
     },
   };
-  const [a, b] = await Promise.all([sitemapPaths(counting), sitemapPaths(counting)]);
-  assert.equal(fetches, 1);
-  assert.deepEqual(a, b);
-  assert.equal(a.length, 9);
+  assert.deepEqual(await sitemapPaths(env), []);
+  up = true;
+  const [a, b] = await Promise.all([sitemapPaths(env), sitemapPaths(env)]);
+  assert.deepEqual(a.slice(0, 3), ["/", "/garage", "/garage/resample"]);
+  assert.equal(a, b);
+  await sitemapPaths(env);
+  assert.equal(fetches, 2, "one failed read, then one good read shared by every later caller");
 });

@@ -114,29 +114,26 @@ export function callerClass(ua: string | null): string {
   return "other";
 }
 
-// The sitemap, read once per isolate. Only a successful read is kept, and the
-// in-flight promise is shared so concurrent cold 404s make one fetch.
+// The sitemap, read once per isolate. The PROMISE is memoized, so concurrent
+// cold misses share one read, and a failed read is dropped rather than kept:
+// caching `[]` once pinned empty suggestions for an isolate's whole life after
+// a single ASSETS blip.
 type AssetsEnv = { ASSETS?: { fetch: (r: Request | string) => Promise<Response> } };
 let _sitemap: Promise<string[]> | undefined;
 
-async function readSitemap(env: AssetsEnv): Promise<string[]> {
-  const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
-  if (!r?.ok) throw new Error(`sitemap.xml: ${r ? r.status : "no ASSETS binding"}`);
-  const xml = await r.text();
-  return [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
-}
-
 /** The sitemap's paths. Empty when it cannot be read, which degrades every
- *  suggestion to the bare Link headers rather than failing the response. A
- *  failed read is forgotten, so the next request tries again. */
-export async function sitemapPaths(env: AssetsEnv): Promise<string[]> {
-  const read = (_sitemap ??= readSitemap(env));
-  try {
-    return await read;
-  } catch {
-    if (_sitemap === read) _sitemap = undefined;
+ *  suggestion to the bare Link headers rather than failing the response. */
+export function sitemapPaths(env: AssetsEnv): Promise<string[]> {
+  _sitemap ??= (async () => {
+    const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
+    if (!r?.ok) throw new Error(`sitemap read: ${r ? r.status : "no ASSETS"}`);
+    const xml = await r.text();
+    return [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
+  })();
+  return _sitemap.catch(() => {
+    _sitemap = undefined;
     return [];
-  }
+  });
 }
 
 /** Test seam, never called by the Worker (gotcha 28). */
