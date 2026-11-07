@@ -9,6 +9,7 @@ import { bootCal, createExecutionContext, waitOnExecutionContext, stubFetch } fr
 import worker from "../src/index.ts";
 import { sign } from "../../src/worker/lib/sign.ts";
 import { getBooking, listHeld } from "../src/booking.ts";
+import { reserveSlot } from "../src/reservation.ts";
 
 const SECRET = "integration-signing-secret";
 
@@ -696,6 +697,70 @@ describe("book → approve / decline lifecycle", () => {
     expect(res.status).toBe(409);
     expect(await statusOf(id)).toBe("pending");
     expect(mailCalls).toHaveLength(0);
+  });
+
+  // The slot lives in two stores: the KV hold that /slots reads, and the
+  // Durable Object claim that decides who may book it. The tests above see only
+  // the hold, so these run with COUNTER bound and book against the claim.
+  describe("with the atomic claim bound", () => {
+    let COUNTER;
+    const withCounter = (path, init: Record<string, any> = {}) => dispatch(path, init, { COUNTER });
+    const postWithCounter = (path, fields) =>
+      withCounter(path, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(fields).toString(),
+      });
+    const claimedBooking = async (who) => {
+      const slot = await firstSlot();
+      expect((await postBook({ name: who, email: `${who.toLowerCase()}@x.dev`, topic: "hi", start: slot.start }, { COUNTER })).status).toBe(200);
+      const id = lastBookingId();
+      await withCounter(`/approve?t=${id}&sig=${await sigFor(id, "approve")}`);
+      return { id, slot };
+    };
+    beforeEach(() => {
+      COUNTER = stubCounterNamespace();
+    });
+
+    it("cancelling releases the claim, so the slot can be booked again", async () => {
+      const { id, slot } = await claimedBooking("Juno");
+      expect((await postWithCounter("/cancel", { t: id, sig: await sigFor(id, "cancel") })).status).toBe(200);
+
+      const next = await postBook({ name: "Lee", email: "lee@x.dev", topic: "hi", start: slot.start }, { COUNTER });
+      expect(next.status).toBe(200);
+    });
+
+    it("rescheduling releases the old slot's claim, so it can be booked again", async () => {
+      const { id, slot } = await claimedBooking("Pax");
+      const target = await otherOpenSlot(slot.start);
+      expect((await postWithCounter("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(target.start) })).status).toBe(200);
+
+      const next = await postBook({ name: "Lee", email: "lee@x.dev", topic: "hi", start: slot.start }, { COUNTER });
+      expect(next.status).toBe(200);
+    });
+
+    it("rescheduling claims the new slot, so a racing booking cannot take it", async () => {
+      const { id, slot } = await claimedBooking("Rue");
+      const target = await otherOpenSlot(slot.start);
+      expect((await postWithCounter("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(target.start) })).status).toBe(200);
+
+      // A /book that read /slots before the hold landed goes straight to the claim.
+      expect(await reserveSlot({ COUNTER }, { id: "racer", start: target.start, end: target.end })).toBe(false);
+      expect(await reserveSlot({ COUNTER }, { id: "racer", start: slot.start, end: slot.end })).toBe(true);
+    });
+
+    it("refuses to move onto a slot another booking has already claimed, and changes nothing", async () => {
+      const { id, slot } = await claimedBooking("Ivo");
+      const target = await otherOpenSlot(slot.start);
+      expect(await reserveSlot({ COUNTER }, { id: "racer", start: target.start, end: target.end })).toBe(true);
+      mailCalls.length = 0;
+
+      const res = await postWithCounter("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(target.start) });
+      expect(res.status).toBe(409);
+      expect((await getBooking(env, id))?.start).toBe(slot.start);
+      expect(mailCalls).toHaveLength(0);
+      expect((await listHeld(env)).map((h) => h.start)).toEqual([slot.start]);
+    });
   });
 
   it("acts on a cancelled booking no further, on any of the three surfaces", async () => {
