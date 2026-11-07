@@ -22,7 +22,10 @@
 //      the same HMAC construction cal uses for booking approvals. Nothing is
 //      displayed unmoderated: verification stops forgeries, moderation stops the
 //      verified-but-garbage.
-//   5. GET /webmention/approve?t=&sig= flips it live; /decline drops it.
+//   5. GET /webmention/approve?t=&sig= flips it live; /decline marks it
+//      declined. Either link acts only on a PENDING mention, so a decision is
+//      final: a re-send of a declined mention stays declined and mails nobody,
+//      and a decline link can't take down a mention that is already live.
 //
 // Re-sending is the spec's own edit/delete signal, so a repeat send re-verifies
 // and, when the source no longer links here (or is gone), retracts the mention.
@@ -55,6 +58,10 @@ const EXCERPT_MAX = 320;
 // requiring a migration step before the route works. migrations/0001_webmentions.sql
 // carries the same DDL for anyone who prefers to apply it up front.
 const TABLE = "webmentions";
+// The status column's only values. pending -> approved and pending -> declined
+// are the only moves; the column has no CHECK constraint, so adding declined
+// needed no migration.
+type MentionStatus = "pending" | "approved" | "declined";
 let ensured = false;
 async function ensureTable(db) {
   if (ensured) return;
@@ -195,8 +202,9 @@ async function processMention(source, target, request, env) {
   await ensureTable(db);
 
   // A re-send of an already-approved mention refreshes its content but keeps it
-  // approved — re-moderating an edit I already blessed would be busywork.
-  const row = await db
+  // approved — re-moderating an edit I already blessed would be busywork. A
+  // declined one keeps its decline too, so a spammer who re-sends mails nobody.
+  const row: { status: MentionStatus } | null = await db
     .prepare(
       `INSERT INTO ${TABLE} (id, source, target, kind, author, author_url, title, excerpt, status, received_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
@@ -208,7 +216,7 @@ async function processMention(source, target, request, env) {
     .bind(id, source, target, parsed.kind, parsed.author, parsed.authorUrl, parsed.title, parsed.excerpt, Date.now())
     .first();
 
-  if (row?.status === "approved") return; // already live; no second email
+  if (row?.status !== "pending") return; // already decided; no second email
 
   await emailHost(env, request, { id, source, target, ...parsed });
 }
@@ -217,7 +225,8 @@ async function retract(env, source, target, why) {
   const db = env.SOCIAL_DB;
   if (!db) return;
   await ensureTable(db);
-  const res = await db.prepare(`DELETE FROM ${TABLE} WHERE source = ? AND target = ?`).bind(source, target).run();
+  // A declined row stays: it's the record that keeps a re-send quiet.
+  const res = await db.prepare(`DELETE FROM ${TABLE} WHERE source = ? AND target = ? AND status != 'declined'`).bind(source, target).run();
   if (res?.meta?.changes) console.log(`webmention retracted (${why})`, source, "->", target);
 }
 
@@ -604,12 +613,17 @@ export async function handleWebmentionDecision(request, env, ctx, url) {
   if (!db) return text("The mention store is not connected.", 503);
   await ensureTable(db);
 
-  if (decision === "approve") {
-    await db.prepare(`UPDATE ${TABLE} SET status = 'approved', approved_at = ? WHERE id = ?`).bind(Date.now(), id).run();
-    return text("Approved — it's live at /inbox.", 200);
+  const res =
+    decision === "approve"
+      ? await db.prepare(`UPDATE ${TABLE} SET status = 'approved', approved_at = ? WHERE id = ? AND status = 'pending'`).bind(Date.now(), id).run()
+      : await db.prepare(`UPDATE ${TABLE} SET status = 'declined' WHERE id = ? AND status = 'pending'`).bind(id).run();
+  if (res.meta.changes) {
+    return decision === "approve" ? text("Approved. It's live at /inbox.", 200) : text("Declined. Nothing published, and a re-send stays declined.", 200);
   }
-  await db.prepare(`DELETE FROM ${TABLE} WHERE id = ?`).bind(id).run();
-  return text("Declined — nothing published.", 200);
+  // The link was signed for this id, so it was pending once; say what it is now.
+  const row: { status: MentionStatus } | null = await db.prepare(`SELECT status FROM ${TABLE} WHERE id = ?`).bind(id).first();
+  if (!row) return text("No such mention. The sender may have retracted it.", 404);
+  return text(`Already ${row.status}. This link changed nothing.`, 409);
 }
 
 export async function readApprovedMentions(env, limit = 200) {
