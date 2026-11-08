@@ -58,6 +58,18 @@ test("both staging adapters serve JavaScript URLs and dev edits recompile and re
       }
       assert.fail("client watcher did not publish the edit");
     };
+    // macOS FSEvents starts its stream after watch() returns, so an edit made
+    // at once can go unseen: 2 of 20 runs failed here on 2026-11-08. Rewriting
+    // a probe until its output lands proves the watcher is live.
+    const probe = join(cwd, "src/client/probe.ts");
+    await waitFor(async () => {
+      await writeFile(probe, "const ready: boolean = true;");
+      return readFile(join(cwd, "dev/probe.js")).then(
+        () => true,
+        () => false,
+      );
+    });
+    await rm(probe);
     await writeFile(source, 'const state: string = "after";');
     await waitFor(async () => (await readFile(join(cwd, "dev/nav.js"), "utf8")).includes('"after"'));
     await rm(source);
