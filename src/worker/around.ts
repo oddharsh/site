@@ -5,7 +5,7 @@ import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
-import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
+import { esc, extractMeta, isOwnerBust, jsonResponse } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
@@ -54,7 +54,7 @@ export const NEIGHBORS = [
 // The page itself is a built file served by index.ts (routeAround); its crawl
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
 export async function handleAroundJson(request, env, ctx, url = new URL(request.url)) {
-  const isBust = secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET);
+  const isBust = isOwnerBust(request, env);
   const render = async () => {
     const report = await readAroundReport(request, env);
     if (!report) {
@@ -329,8 +329,7 @@ async function bustAround(env) {
 }
 
 async function readAroundReport(request, env) {
-  const url = new URL(request.url);
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return (await bustAround(env)).report;
+  if (isOwnerBust(request, env)) return (await bustAround(env)).report;
   return readSnapshot(env);
 }
 
@@ -578,7 +577,7 @@ export function renderAroundSnapshot(read) {
 // renders the last good snapshot, leaves the edge alone, and says so in
 // x-around-bust. Anything else is null.
 export async function refreshAroundSnapshot(request, env, url = new URL(request.url)) {
-  if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
+  if (!isOwnerBust(request, env)) return null;
   const { report, published } = await bustAround(env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   if (published) {

@@ -24,6 +24,15 @@ test("secretMatches: equal only when a configured secret matches exactly", async
   assert.equal(secretMatches(null, "s3cret"), false);
 });
 
+test("isOwnerBust reads ?bust= against RN_BUST_SECRET, and nothing else", async () => {
+  const { isOwnerBust } = await import("../../src/worker/lib/http.ts");
+  const env = { RN_BUST_SECRET: "s3cret" };
+  assert.equal(isOwnerBust(new Request("https://aadhar.sh/rn/tracks?bust=s3cret"), env), true);
+  assert.equal(isOwnerBust(new Request("https://aadhar.sh/rn/tracks?bust=s3cres"), env), false);
+  assert.equal(isOwnerBust(new Request("https://aadhar.sh/rn/tracks?secret=s3cret"), env), false, "the admin pages' parameter is not a bust");
+  assert.equal(isOwnerBust(new Request("https://aadhar.sh/rn/tracks?bust="), {}), false, "closed when the secret is unset");
+});
+
 test("serendipity's admin gate reads the header or the query, through secretMatches", async () => {
   const { adminGated } = await import("../../serendipity/serendipity.ts");
   const env = { SYNC_SECRET: "k" };

@@ -215,6 +215,13 @@ export function secretMatches(supplied: string | null | undefined, secret: strin
   return timingSafeEqual(supplied, secret);
 }
 
+// The owner's refresh: `?bust=<RN_BUST_SECRET>` on /rn, /around and /reading
+// makes that request drop its cache and fetch fresh. One spelling of the
+// parameter and the secret it is checked against, for every page that takes it.
+export function isOwnerBust(request: Request, env: { RN_BUST_SECRET?: string }): boolean {
+  return secretMatches(new URL(request.url).searchParams.get("bust"), env.RN_BUST_SECRET);
+}
+
 export function esc(s) {
   return escape(String(s ?? ""));
 }
