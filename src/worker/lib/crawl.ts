@@ -3,7 +3,6 @@
 // bounded text needed to extract evidence plus a digest of the bytes observed.
 
 import { signedFetch } from "./botauth.ts";
-import type { BotRequestOptions } from "./botauth.ts";
 import { DEFAULT_CRAWL_BODY_CAP, readResponseCapped } from "./public-fetch.ts";
 import { extractMeta, extractTitle } from "./http.ts";
 
@@ -31,14 +30,13 @@ export { DEFAULT_CRAWL_BODY_CAP, readResponseCapped, sha256Hex } from "./public-
 // Fetch one bounded HTML-ish document as AadharshBot. The body is deliberately
 // returned only for the current parser; persistence callers should keep the
 // digest and normalized signals, not the raw third-party text.
-export async function crawlDocument(targetUrl, env, opts: BotRequestOptions & { maxBytes?: number; timeoutMs?: number } = {}) {
-  const { maxBytes = DEFAULT_CRAWL_BODY_CAP, timeoutMs = 4000, signal, ...fetchOpts } = opts;
+// What an around.ts homepage read may spend before it reports the target slow.
+const CRAWL_TIMEOUT_MS = 4000;
+
+export async function crawlDocument(targetUrl: string, env) {
   const started = Date.now();
-  const response = await signedFetch(targetUrl, env, {
-    ...fetchOpts,
-    signal: signal || AbortSignal.timeout(timeoutMs),
-  });
-  const body = await readResponseCapped(response, maxBytes);
+  const response = await signedFetch(targetUrl, env, { signal: AbortSignal.timeout(CRAWL_TIMEOUT_MS) });
+  const body = await readResponseCapped(response, DEFAULT_CRAWL_BODY_CAP);
   const text = body.text;
   return {
     finalUrl: response.url || targetUrl,

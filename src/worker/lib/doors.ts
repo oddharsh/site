@@ -139,8 +139,8 @@ function refusedDoor(refusal: OutboundRefusal): { ok: false; unreadable: true; d
 /**
  * tools/list against a foreign MCP server.
  *
- * A POST with a body, which signedFetch cannot express (it forwards `method` but
- * not `body`), so the signature headers are built directly and the fetch is made
+ * A POST with a body, which signedFetch cannot express (it only GETs), so the
+ * signature headers are built directly and the fetch is made
  * here. The request is still signed and still identifies as AadharshBot — the
  * point of knocking on someone's endpoint under your own name.
  *

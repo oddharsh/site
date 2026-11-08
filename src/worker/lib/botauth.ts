@@ -76,7 +76,6 @@ export type BotRequestOptions = {
   headers?: HeadersInit;
   sign?: boolean;
   method?: string;
-  redirect?: "follow" | "error" | "manual";
   signal?: AbortSignal;
   cf?: RequestInitCfProperties;
   // RN alone opts into the operator-approved exception for Spotify embeds.
@@ -401,19 +400,16 @@ export async function botRequestHeaders(targetUrl: string, env, opts: BotRequest
   return headers;
 }
 
-export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) {
+/** A signed GET that follows public redirects, re-checking robots.txt and the
+ *  target on every hop. `headers` are the caller's own and `signal` its
+ *  deadline. The edge caches nothing unless `cf` says so (RN's embeds do). */
+export async function signedFetch(targetUrl: string, env, opts: Pick<BotRequestOptions, "headers" | "signal" | "cf" | "robots"> = {}) {
   const init = async (url) => ({
-    method: opts.method || "GET",
+    method: "GET",
     headers: await botRequestHeaders(url, env, opts),
-    signal: opts.signal, // optional caller-supplied deadline (AbortSignal)
-    cf: opts.cf || { cacheTtl: 0 }, // caller may set its own edge-cache policy; default is app-layer only
+    signal: opts.signal,
+    cf: opts.cf || { cacheTtl: 0 },
   });
-  if (opts.redirect && opts.redirect !== "follow") {
-    const verdict = validateLensTarget(targetUrl);
-    if (!verdict.ok) throw new TypeError(verdict.error);
-    const single = { ...(await init(targetUrl)), redirect: opts.redirect };
-    return env?.OUTBOUND_TRANSPORT ? env.OUTBOUND_TRANSPORT(targetUrl, single) : fetch(targetUrl, single);
-  }
   const followed = await fetchFollowingPublicRedirects(targetUrl, init, validateLensTarget, 20, env?.OUTBOUND_TRANSPORT);
   if (!followed.ok) throw new TypeError(followed.error);
   return followed.response;

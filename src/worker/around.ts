@@ -425,7 +425,7 @@ async function runAroundInner(env, sCrawl) {
           return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
         }
         // The kernel owns the deadline, stream cap, digest, and normalized signals.
-        const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
+        const crawl = await crawlDocument(url, env);
         s.setAttribute("around.outcome", "crawled");
         s.setAttribute("http.response.status_code", crawl.status);
         s.setAttribute("around.bytes_read", crawl.bytesRead);
