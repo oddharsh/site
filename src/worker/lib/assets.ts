@@ -1,7 +1,7 @@
 // lib/assets.ts: the ways this worker hands out a static file when the default
 // asset path would lie.
 
-import { wantsMarkdown } from "./http.ts";
+import { forMethod, wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
 import { pageDeltaPaths, parseFamilyDictionary, shellDeltaPath, tagFromAvailableDictionary } from "./dictionary-names.ts";
 
@@ -40,17 +40,6 @@ export async function serveFreshAsset(request, env, contentType) {
   if (contentType) headers.set("content-type", contentType);
   headers.set("cache-control", "public, max-age=0, must-revalidate, s-maxage=300");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-}
-
-// Strip the body, keep every header. Not `new Response(null, res)`: Response init
-// is read as a plain object there, so status/headers survive but anything carried
-// out-of-band does not — the same write-only-init trap that made encodeBody a
-// silent no-op site-wide (docs/GOTCHAS.md gotcha 13). Spelled out so it stays visible.
-function bodiless(res) {
-  try {
-    res.body?.cancel();
-  } catch {}
-  return new Response(null, { status: res.status, headers: new Headers(res.headers) });
 }
 
 // serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
@@ -95,7 +84,7 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
   // gets the same header set from one place. The body has already been read to
   // count tokens, so a HEAD carries x-markdown-tokens for the same work a GET
   // does.
-  return request.method === "HEAD" ? bodiless(negotiated) : negotiated;
+  return forMethod(request, negotiated);
 }
 
 // serveAssetWith404Clamp: pass real assets through untouched; clamp only a 404
