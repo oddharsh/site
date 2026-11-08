@@ -474,7 +474,7 @@ does not make a failed write safe to ignore.
   Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
   measurement that decided it. `bun lint --doctor` says which rules run
   natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.91.0 is the adapter the three rules vendored from
+- @oxlint/plugins 1.92.0 is the adapter the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
   `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
   the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
@@ -588,7 +588,7 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core 1.64.1 is the exact root pin for the browser probes. It was
+- playwright-core 1.65.0 is the exact root pin for the browser probes. It was
   caret-ranged until 2026-09-10, on the reasoning that it drives the locally
   installed Google Chrome rather than a bundled browser, so there was no exact
   pin worth stating. That argument is about the BROWSER, and it left the half a
