@@ -46,7 +46,7 @@ import { HASHED_ASSETS, SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
-import { namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
+import { forMethod, namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
 
 export const MISS_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
@@ -354,7 +354,7 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
         return {
           bucket,
           outcome: near.pages.length ? "404:suggested" : "404",
-          response: request.method === "HEAD" ? new Response(null, page) : page,
+          response: forMethod(request, page),
         };
       }
       const text =

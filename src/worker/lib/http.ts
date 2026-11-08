@@ -197,6 +197,21 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
+// A response already built for a GET, answered to the request's method: a HEAD
+// keeps every header and drops the body, cancelling its stream so nothing is
+// left unread. Not `new Response(null, res)`: Response init is read as a plain
+// object there, so status/headers survive but anything carried out-of-band does
+// not, the same write-only-init trap that made encodeBody a silent no-op
+// site-wide (docs/GOTCHAS.md gotcha 13). A route that can skip rendering the
+// body for a HEAD should build it null instead and not call this.
+export function forMethod(request: Request, res: Response): Response {
+  if (request.method !== "HEAD") return res;
+  try {
+    void res.body?.cancel();
+  } catch {}
+  return new Response(null, { status: res.status, headers: new Headers(res.headers) });
+}
+
 // constant-time string compare so we don't leak the secret via timing.
 export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
