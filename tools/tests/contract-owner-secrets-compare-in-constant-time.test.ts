@@ -34,15 +34,15 @@ test("isOwnerBust reads ?bust= against RN_BUST_SECRET, and nothing else", async 
 });
 
 test("serendipity's admin gate reads the header or the query, through secretMatches", async () => {
-  const { adminGated } = await import("../../serendipity/serendipity.ts");
+  const { adminRefusal } = await import("../../serendipity/serendipity.ts");
   const env = { SYNC_SECRET: "k" };
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync?key=k"), env), true);
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync", { headers: { "x-sync-key": "k" } }), env), true);
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync?key=x"), env), false);
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync"), env), false);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync?key=k"), env), null);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync", { headers: { "x-sync-key": "k" } }), env), null);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync?key=x"), env)?.status, 403);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync"), env)?.status, 403);
   // Control for the fail-closed arm: no binding, no parameter, still refused.
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync"), {}), false);
-  assert.equal(adminGated(new Request("https://aadhar.sh/serendipity/sync?key="), { SYNC_SECRET: "" }), false);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync"), {})?.status, 403);
+  assert.equal(adminRefusal(new Request("https://aadhar.sh/serendipity/sync?key="), { SYNC_SECRET: "" })?.status, 403);
 });
 
 // A bare equality against a secret-shaped binding. Comparisons with undefined,
