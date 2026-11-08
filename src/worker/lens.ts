@@ -461,7 +461,7 @@ export async function handleLens(request, env, ctx, url = new URL(request.url)) 
   // Keep a route-local shell key: the production runtime may not expose
   // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
   // the edge cache while the separately served lens.js has already changed.
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env, url);
+  return cachedRender(request, env, ctx, "/lens-shell-v4", () => renderLensShell());
 }
 
 // One label per lens, shared by the SSR tabs, the SSR machine header, and the

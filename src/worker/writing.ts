@@ -223,7 +223,7 @@ export async function readPosts(env) {
 // caches.default layer: edge TTL = each response's max-age (120s index / 300s
 // post). the 404 post path is excluded by cachedRender's 200-only put.
 export function handleWritingPost(request, slug, env, ctx) {
-  return cachedRender(request, ctx, () => renderWritingPost(slug, env), undefined, env);
+  return cachedRender(request, env, ctx, new URL(request.url).pathname, () => renderWritingPost(slug, env));
 }
 
 export async function renderWritingPost(slug, env) {
@@ -260,7 +260,7 @@ export async function renderWritingPost(slug, env) {
 
 export function handleWritingIndex(request, env, ctx) {
   // keyed on the bare path so /writing and /writing/ share one edge entry
-  return cachedRender(request, ctx, () => renderWritingIndex(env), "/writing", env);
+  return cachedRender(request, env, ctx, "/writing", () => renderWritingIndex(env));
 }
 
 export async function renderWritingIndex(env) {

@@ -1046,10 +1046,10 @@ ${tiles}
 
 export async function handleAlbum(album: Album, request, env, ctx) {
   const render = async () => renderAlbumPage(album, PHOTO_POOL, await getAltMap(env));
-  return cachedRender(request, ctx, render, albumPath(album), env);
+  return cachedRender(request, env, ctx, albumPath(album), render);
 }
 
 export async function handlePhotos(request, env, ctx) {
   const render = async () => renderPhotosPage(PHOTO_POOL, await getAltMap(env));
-  return cachedRender(request, ctx, render, "/photos", env);
+  return cachedRender(request, env, ctx, "/photos", render);
 }

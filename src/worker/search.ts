@@ -194,7 +194,7 @@ export async function handleSearch(request, env, ctx, url = new URL(request.url)
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
   const render = () => renderSearchPage(query, results);
   // Query-specific HTML must never share the blank/search result cache key.
-  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env, url);
+  return query.trim() ? render() : cachedRender(request, env, ctx, "/search", render);
 }
 
 export function renderSearchPage(query = "", results: Awaited<ReturnType<typeof searchSite>> = { query: "", total: 0, returned: 0, results: [] }) {
