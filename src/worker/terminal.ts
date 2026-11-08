@@ -44,7 +44,7 @@ import { LENS_BUDGETS, LENS_INSPECT, lensFetch, lensObservationSummary } from ".
 import { defineLens, type LensOutcome } from "./lens-pipeline.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { esc } from "./lib/http.ts";
+import { esc, methodGuard } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
