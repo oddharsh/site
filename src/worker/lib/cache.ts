@@ -214,11 +214,17 @@ export async function withWeakEtag(response) {
 //     shell atomically; within a version the response's max-age still bounds it.
 //   - cache.put fires only on status 200, because a pinned transient 404 is the
 //     poison class this site has already paid for once.
-//   - the key normalizes to a path, so query variants of a query-independent
-//     shell share one entry.
+//   - the key is a path the caller names, so query variants of a
+//     query-independent shell share one entry.
 //   - x-edge-cache: hit|miss makes every request auditable from curl.
-export async function cachedRender(request, ctx, renderFn, keyPath, env, url = new URL(request.url)) {
-  const key = edgeKey(url.origin, keyPath || url.pathname, env);
+export async function cachedRender(
+  request: Request,
+  env,
+  ctx: ExecutionContext | undefined,
+  keyPath: string,
+  renderFn: () => Response | Promise<Response>,
+): Promise<Response> {
+  const key = edgeKey(new URL(request.url).origin, keyPath, env);
   const cache = caches.default;
 
   if (request.method === "GET") {

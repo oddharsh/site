@@ -331,18 +331,11 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 // (s-maxage=300).
 export const LINES_URL = LEDGER_LINES_URL;
 
-export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext, url = new URL(request.url)) {
-  return cachedRender(
-    request,
-    ctx,
-    async () => {
-      const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
-      return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
-    },
-    LINES_URL,
-    env,
-    url,
-  );
+export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  return cachedRender(request, env, ctx, LINES_URL, async () => {
+    const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
+    return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
+  });
 }
 
 const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };

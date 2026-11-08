@@ -75,7 +75,7 @@ export async function handleAroundJson(request, env, ctx, url = new URL(request.
       "x-robots-tag": "noindex",
     });
   };
-  return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env, url);
+  return isBust ? render() : cachedRender(request, env, ctx, "/around/json", render);
 }
 
 const AROUND_KEY = "around:report";
@@ -597,7 +597,7 @@ export async function handleAroundSnapshot(request, env, ctx, url = new URL(requ
     const report = await readAroundReport(request, env);
     return islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   };
-  return cachedRender(request, ctx, render, SNAPSHOT_URL, env, url);
+  return cachedRender(request, env, ctx, SNAPSHOT_URL, render);
 }
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */

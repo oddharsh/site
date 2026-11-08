@@ -163,7 +163,7 @@ export async function refreshReadingList(request, env, ctx, url = new URL(reques
 export async function handleReadingList(request, env, ctx, url = new URL(request.url)) {
   const busted = await refreshReadingList(request, env, ctx, url);
   if (busted) return busted;
-  return cachedRender(request, ctx, async () => (await readReadingList(request, env, ctx)).response, LIST_URL, env, url);
+  return cachedRender(request, env, ctx, LIST_URL, async () => (await readReadingList(request, env, ctx)).response);
 }
 
 // The route. ?bust=SECRET still works at the page URL: it refreshes the island's

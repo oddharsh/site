@@ -12,7 +12,7 @@ export async function handleWindowsUpdate(request, env, ctx) {
   // Version-keyed edge cache (caches.default): the changelog changes only on
   // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
   // for up to s-maxage=300 without re-rendering on every visit.
-  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderWindowsUpdate), "/updates", env);
+  return cachedRender(request, env, ctx, "/updates", () => readCheckpoints(env).then(renderWindowsUpdate));
 }
 
 // The release log, read ONCE and handed to the three renderers that project it.
@@ -99,8 +99,8 @@ export async function renderWindowsUpdate(cp) {
 
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
 // read from the same checkpoints projection as /updates and /restore.
-export async function handleUpdatesJson(request, env, ctx, url = new URL(request.url)) {
-  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env, url);
+export async function handleUpdatesJson(request, env, ctx) {
+  return cachedRender(request, env, ctx, "/updates.json", () => readCheckpoints(env).then(renderUpdatesJson));
 }
 
 export async function renderUpdatesJson(cp) {
@@ -129,7 +129,7 @@ export async function renderUpdatesJson(cp) {
 // A real rollback is `bun run deploy:promote --rollback` from a workstation,
 // never exposed to a visitor.
 export async function handleSystemRestore(request, env, ctx) {
-  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderSystemRestore), "/restore", env);
+  return cachedRender(request, env, ctx, "/restore", () => readCheckpoints(env).then(renderSystemRestore));
 }
 
 export async function renderSystemRestore(cp) {
