@@ -36,7 +36,7 @@
 //
 // Nothing about the caller is stored: no IP, no user agent, no cookie.
 // /privacy says so (trust.ts).
-import { jsonResponse } from "./lib/http.ts";
+import { jsonResponse, methodGuard } from "./lib/http.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import type { Env } from "./lib/env.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -271,14 +271,16 @@ const loadIndex = isolateMemo(
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => jsonResponse(body, status, headers, { pretty: false });
 
 export async function handlePixelPeeperCrowd(request: Request, env) {
-  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET only" }, 405, { allow: "GET, HEAD" });
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   const db = env.SOCIAL_DB;
   if (!db) return json({ error: "the crowd is not bound on this deployment" }, 503);
   return json(crowdFromTally(await readTally(db)), 200, { "cache-control": "public, max-age=60" });
 }
 
 export async function handlePixelPeeperRun(request: Request, env, ctx?: ExecutionContext) {
-  if (request.method !== "POST") return json({ error: "POST a finished run" }, 405, { allow: "POST" });
+  const refused = methodGuard(request, ["POST"]);
+  if (refused) return refused;
   // application/json forces a CORS preflight, which this route never answers,
   // so another site's page can't post runs from its visitors' browsers
   if (!/^application\/json\b/i.test(request.headers.get("content-type") || "")) return json({ error: "send application/json" }, 415);
