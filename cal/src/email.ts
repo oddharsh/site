@@ -66,12 +66,37 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl, 
   });
 }
 
-export async function sendInvite(env, booking) {
+// What happened to a confirmed booking, which decides both mails.
+export type BookingChange = "confirmed" | "updated" | "cancelled";
+
+const firstName = (name: string) => name.split(" ")[0] || name;
+
+// Every change to a confirmed booking mails the guest and the host's own copy,
+// so the route names the change once and this sends both.
+export function mailBooking(env, booking, change: BookingChange, links: HostLinks = {}) {
+  return Promise.all([guestMail(env, booking, change), hostCopy(env, booking, change, links)]);
+}
+
+// Re-send the SAME event at a higher SEQUENCE. RFC 5545 says a calendar client
+// receiving a REQUEST whose UID it already holds must apply it as an update, so
+// this rewrites the guest's existing entry rather than adding a second one,
+// which /location and /reschedule both rely on. The host's own copy moves
+// through hostCopy below; the cc here is the audit trail of what the guest
+// was actually sent, and has never been a calendar entry.
+// Withdraw a CONFIRMED booking from the guest's calendar. Distinct from
+// sendDecline, which answers a request that was never accepted and so has no
+// VEVENT anywhere: this one has to reach an entry the guest is already holding,
+// which is why it carries a METHOD:CANCEL attachment rather than prose alone.
+export async function guestMail(env, booking, change: BookingChange) {
   const { name, email, start, end } = booking;
-  const ics = buildICS(env, booking);
+  const first = firstName(name);
+  const cancelled = change === "cancelled";
+  const ics = buildICS(env, booking, { cancel: cancelled });
   const when = fmtRange(start, end, env.HOST_TIMEZONE);
-  const html = `
-    <p>hi ${esc(name.split(" ")[0] || name)} —</p>
+  const html =
+    change === "confirmed"
+      ? `
+    <p>hi ${esc(first)} —</p>
     <p>confirmed for <strong>${esc(when)}</strong>${booking.location ? `, at <strong>${esc(booking.location)}</strong>` : ""}.</p>
     <p>${
       booking.location
@@ -79,60 +104,44 @@ export async function sendInvite(env, booking) {
         : "i'll send an address closer to the day. meantime: the attached .ics file should add this to your calendar in one click."
     }</p>
     <p>see you soon.<br>${esc(env.HOST_NAME)}</p>
-  `;
-  return resendSend(env, {
-    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to: [email],
-    cc: [env.HOST_EMAIL],
-    subject: `confirmed: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
-    html,
-    attachments: [
-      {
-        filename: "coffee.ics",
-        content: utf8ToBase64(ics),
-        content_type: "text/calendar; method=REQUEST",
-      },
-    ],
-    headers: { "X-Coffee-Booking": booking.id },
-  });
-}
-
-// Re-send the SAME event at a higher SEQUENCE. RFC 5545 says a calendar client
-// receiving a REQUEST whose UID it already holds must apply it as an update, so
-// this rewrites the guest's existing entry rather than adding a second one,
-// which /location and /reschedule both rely on. The host's own copy moves
-// through sendHostCopy below; the cc here is the audit trail of what the guest
-// was actually sent, and has never been a calendar entry.
-export async function sendUpdate(env, booking) {
-  const { name, email, start, end } = booking;
-  const ics = buildICS(env, booking);
-  const when = fmtRange(start, end, env.HOST_TIMEZONE);
-  const html = `
-    <p>hi ${esc(name.split(" ")[0] || name)} —</p>
+  `
+      : change === "updated"
+        ? `
+    <p>hi ${esc(first)} —</p>
     <p>small update: <strong>${esc(when)}</strong> is unchanged, and the spot is
        <strong>${esc(booking.location || "still to come")}</strong>.</p>
     <p>your calendar entry should update itself from the attachment. no need to
        re-accept.</p>
     <p>see you there.<br>${esc(env.HOST_NAME)}</p>
+  `
+        : `
+    <p>hi ${esc(first)} —</p>
+    <p>i have to cancel <strong>${esc(when)}</strong>. sorry for the
+       churn.</p>
+    <p>your calendar entry should clear itself from the attachment. if you still
+       want to do this, grab another slot at
+       <a href="${esc(env.HOST_PUBLIC_URL || "https://aadhar.sh")}/coffee">aadhar.sh/coffee</a>
+       and it comes straight back to me.</p>
+    <p>${esc(env.HOST_NAME)}</p>
   `;
   return resendSend(env, {
     from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
     to: [email],
     cc: [env.HOST_EMAIL],
-    subject: `updated: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
+    subject: `${change}: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
     attachments: [
       {
         filename: "coffee.ics",
         content: utf8ToBase64(ics),
-        content_type: "text/calendar; method=REQUEST",
+        content_type: `text/calendar; method=${cancelled ? "CANCEL" : "REQUEST"}`,
       },
     ],
     headers: { "X-Coffee-Booking": booking.id },
   });
 }
 
-// The signed host links, all optional: sendHostCopy has 4 callers in index.ts,
+// The signed host links, all optional: hostCopy takes them from mailBooking,
 // and the cancellation copy passes none. An annotation rather
 // than a bare `= {}`, which infers `{}` and makes every property access an error
 // under strictNullChecks (gotcha 42's lesson from the other side: a type that is
@@ -150,38 +159,32 @@ type HostLinks = { location?: string; reschedule?: string; cancel?: string };
 //
 // One click is the whole cost of ownership here, and the copy says so, because
 // a PUBLISH attachment renders as a plain add link rather than adding itself.
-export async function sendHostCopy(
-  env,
-  booking,
-  { updated = false, cancelled = false, links = {} }: { updated?: boolean; cancelled?: boolean; links?: HostLinks } = {},
-) {
+export async function hostCopy(env, booking, change: BookingChange, links: HostLinks = {}) {
   const { name, email, topic, start, end, location } = booking;
-  const ics = buildICS(env, booking, { audience: "host", cancel: cancelled });
+  const first = firstName(name);
+  const ics = buildICS(env, booking, { audience: "host", cancel: change === "cancelled" });
   const when = fmtRange(start, end, env.HOST_TIMEZONE);
-  // The signed host surface, carried on the mail the host actually keeps. These
-  // are the ONLY route a change takes to the guest: editing the attached event
-  // moves the host's own calendar and tells nobody, which is the whole reason
-  // this footer exists rather than being left implied.
-  const manage = cancelled
-    ? ""
-    : `
+  const manage =
+    change === "cancelled"
+      ? ""
+      : `
     <p style="color:#888;font-size:12px">
       ${links.location ? `<a href="${esc(links.location)}">set the spot</a> &nbsp;·&nbsp; ` : ""}
       ${links.reschedule ? `<a href="${esc(links.reschedule)}">move it</a> &nbsp;·&nbsp; ` : ""}
       ${links.cancel ? `<a href="${esc(links.cancel)}">cancel</a><br>` : ""}
-      these mail ${esc(name.split(" ")[0] || name)}. editing the calendar entry
+      these mail ${esc(first)}. editing the calendar entry
       above does not.
     </p>`;
   const html = `
-    <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${updated ? ", updated" : ""}.</p>
+    <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${change === "updated" ? ", updated" : ""}.</p>
     <p><strong>when:</strong> ${esc(when)}<br>
        <strong>where:</strong> ${esc(location || "still to set")}</p>
     <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
     ${
-      cancelled
-        ? `<p>cancelled. ${esc(name.split(" ")[0] || name)} has been told and the
+      change === "cancelled"
+        ? `<p>cancelled. ${esc(first)} has been told and the
            slot is open again.</p>
          <p>the attachment withdraws the entry, and it is best-effort here
             because the copy on your calendar is <em>yours</em>: a client is
@@ -189,66 +192,31 @@ export async function sendHostCopy(
             still sitting there, delete it.</p>`
         : `<p>the attached .ics adds this to your calendar as <em>your</em> event:
            you can move it, rename it or invite someone else, and none of that
-           touches what ${esc(name.split(" ")[0] || name)} is holding.
-           ${updated ? "adding it again updates the entry in place." : ""}</p>`
+           touches what ${esc(first)} is holding.
+           ${change === "updated" ? "adding it again updates the entry in place." : ""}</p>`
     }
     ${manage}
   `;
   return resendSend(env, {
     from: `cal.aadhar.sh <noreply@aadhar.sh>`,
     to: [env.HOST_EMAIL],
-    subject: `${cancelled ? "cancelled" : updated ? "updated" : "your copy"}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
+    subject: `${change === "confirmed" ? "your copy" : change}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
     attachments: [
       {
         filename: "coffee-host.ics",
         content: utf8ToBase64(ics),
-        content_type: `text/calendar; method=${cancelled ? "CANCEL" : "PUBLISH"}`,
+        content_type: `text/calendar; method=${change === "cancelled" ? "CANCEL" : "PUBLISH"}`,
       },
     ],
     headers: { "List-Id": LIST_ID, "X-Coffee-Booking": booking.id },
   });
 }
 
-// Withdraw a CONFIRMED booking from the guest's calendar. Distinct from
-// sendDecline, which answers a request that was never accepted and so has no
-// VEVENT anywhere: this one has to reach an entry the guest is already holding,
-// which is why it carries a METHOD:CANCEL attachment rather than prose alone.
-export async function sendCancel(env, booking) {
-  const { name, email, start, end } = booking;
-  const ics = buildICS(env, booking, { cancel: true });
-  const when = fmtRange(start, end, env.HOST_TIMEZONE);
-  const html = `
-    <p>hi ${esc(name.split(" ")[0] || name)} —</p>
-    <p>i have to cancel <strong>${esc(when)}</strong>. sorry for the
-       churn.</p>
-    <p>your calendar entry should clear itself from the attachment. if you still
-       want to do this, grab another slot at
-       <a href="${esc(env.HOST_PUBLIC_URL || "https://aadhar.sh")}/coffee">aadhar.sh/coffee</a>
-       and it comes straight back to me.</p>
-    <p>${esc(env.HOST_NAME)}</p>
-  `;
-  return resendSend(env, {
-    from: `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
-    to: [email],
-    cc: [env.HOST_EMAIL],
-    subject: `cancelled: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
-    html,
-    attachments: [
-      {
-        filename: "coffee.ics",
-        content: utf8ToBase64(ics),
-        content_type: "text/calendar; method=CANCEL",
-      },
-    ],
-    headers: { "X-Coffee-Booking": booking.id },
-  });
-}
-
 export async function sendDecline(env, booking) {
   const { name, email } = booking;
   const html = `
-    <p>hi ${esc(name.split(" ")[0] || name)} —</p>
+    <p>hi ${esc(firstName(name))} —</p>
     <p>thanks for reaching out about coffee. not going to be a fit
        right now, but i appreciate you writing. if context changes
        on either side, don't hesitate to reach out again.</p>
@@ -337,7 +305,7 @@ function buildICS(env, booking, { audience = "guest", cancel = false } = {}) {
     location ? `LOCATION:${escICS(location)}` : null,
     // SEQUENCE is emitted UNCONDITIONALLY, including the 0 on a first invite.
     // A client that never saw a SEQUENCE has nothing to compare a later update
-    // against, so omitting it on the invite is what makes the first sendUpdate
+    // against, so omitting it on the invite is what makes the first update
     // silently do nothing.
     `SEQUENCE:${booking.sequence ?? 0}`,
     cancel ? "STATUS:CANCELLED" : null,
@@ -392,7 +360,7 @@ function foldLine(line) {
 }
 // base64 of the UTF-8 bytes. plain btoa() throws on any code point > 255, so a
 // booking topic/name with an emoji or non-Latin char would otherwise make
-// sendInvite throw — and since it runs in ctx.waitUntil, the confirmation email
+// guestMail throw — and since it runs in ctx.waitUntil, the confirmation email
 // would silently never send.
 function utf8ToBase64(str) {
   return new TextEncoder().encode(str).toBase64();

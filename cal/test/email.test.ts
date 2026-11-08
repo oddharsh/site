@@ -7,7 +7,7 @@
 //   - the .ics attachment is UTF-8→base64 (plain btoa throws on emoji/accents)
 //   - DESCRIPTION newlines are single ICS escapes, not double-escaped literals
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { sendApprovalRequest, sendInvite, sendHostCopy, sendDecline, sendCancel } from "../src/email.ts";
+import { guestMail, hostCopy, sendApprovalRequest, sendDecline } from "../src/email.ts";
 import { stubFetch } from "./harness.ts";
 
 const env = {
@@ -84,12 +84,12 @@ describe("sendApprovalRequest → Resend", () => {
   });
 });
 
-describe("sendCancel → withdrawing the guest's entry", () => {
+describe("guestMail cancelled → withdrawing the guest's entry", () => {
   const icsOf = () => b64ToUtf8(calls[0].body.attachments[0].content);
   const cancelled = { ...booking, sequence: 1 };
 
   it("is a CANCEL at a higher SEQUENCE on the guest's own UID", async () => {
-    await sendCancel(env, cancelled);
+    await guestMail(env, cancelled, "cancelled");
     const ics = icsOf();
     expect(ics).toContain("METHOD:CANCEL");
     expect(ics).toContain("STATUS:CANCELLED");
@@ -102,14 +102,14 @@ describe("sendCancel → withdrawing the guest's entry", () => {
   });
 
   it("stops asking for an RSVP, and still names the organizer", async () => {
-    await sendCancel(env, cancelled);
+    await guestMail(env, cancelled, "cancelled");
     const ics = icsOf();
     expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=FALSE:mailto:jordan@example.com");
     expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
   });
 
   it("goes to the guest, cc's the host, and says cancelled in the subject", async () => {
-    await sendCancel(env, cancelled);
+    await guestMail(env, cancelled, "cancelled");
     const { body } = calls[0];
     expect(body.to).toEqual(["jordan@example.com"]);
     expect(body.cc).toEqual(["coffee@aadhar.sh"]);
@@ -117,7 +117,7 @@ describe("sendCancel → withdrawing the guest's entry", () => {
   });
 
   it("the host's copy withdraws on the HOST uid, not the guest's", async () => {
-    await sendHostCopy(env, cancelled, { cancelled: true });
+    await hostCopy(env, cancelled, "cancelled");
     const ics = icsOf();
     expect(ics).toContain("METHOD:CANCEL");
     expect(ics).toContain("UID:abc123def456-host@cal.aadhar.sh");
@@ -127,7 +127,7 @@ describe("sendCancel → withdrawing the guest's entry", () => {
   });
 });
 
-describe("sendHostCopy → the host's own PUBLISH event", () => {
+describe("hostCopy → the host's own PUBLISH event", () => {
   const icsOf = () => b64ToUtf8(calls[0].body.attachments[0].content);
 
   // The whole point of this mail. A REQUEST would auto-import and arrive as an
@@ -135,7 +135,7 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
   // grants edit rights to the organizer alone. PUBLISH costs one click and
   // hands over ownership, so these three assertions are the feature.
   it("is PUBLISH, and carries neither ORGANIZER nor ATTENDEE", async () => {
-    await sendHostCopy(env, booking);
+    await hostCopy(env, booking, "confirmed");
     const ics = icsOf();
     expect(ics).toContain("METHOD:PUBLISH");
     expect(ics).not.toContain("ORGANIZER");
@@ -144,7 +144,7 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
   });
 
   it("goes to the host alone, from noreply, with the List-Id the host filters on", async () => {
-    await sendHostCopy(env, booking);
+    await hostCopy(env, booking, "confirmed");
     const { body } = calls[0];
     expect(body.to).toEqual(["coffee@aadhar.sh"]);
     expect(body.cc).toBeUndefined();
@@ -156,17 +156,17 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
   // they are cc'd on as one object. Distinct, and still deterministic, so a
   // re-send after /location updates the entry rather than adding a second.
   it("uses a UID distinct from the guest invitation's, and a stable one", async () => {
-    await sendHostCopy(env, booking);
+    await hostCopy(env, booking, "confirmed");
     expect(icsOf()).toContain("UID:abc123def456-host@cal.aadhar.sh");
     calls.length = 0;
-    await sendInvite(env, booking);
+    await guestMail(env, booking, "confirmed");
     expect(icsOf()).toContain("UID:abc123def456@cal.aadhar.sh");
   });
 
   // EVENT_TITLE names the host, which is the wrong name once the entry is on
   // the host's own calendar.
   it("titles the entry with the guest and carries their address in DESCRIPTION", async () => {
-    await sendHostCopy(env, booking);
+    await hostCopy(env, booking, "confirmed");
     const ics = icsOf();
     expect(ics).toContain("SUMMARY:coffee with Jordan Lee");
     expect(ics).toContain("Jordan Lee <jordan@example.com>");
@@ -174,7 +174,7 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
   });
 
   it("says updated on a re-send, and keeps the same UID", async () => {
-    await sendHostCopy(env, { ...booking, location: "Devoción", sequence: 1 }, { updated: true });
+    await hostCopy(env, { ...booking, location: "Devoción", sequence: 1 }, "updated");
     const { body } = calls[0];
     expect(body.subject).toContain("updated");
     const ics = icsOf();
@@ -185,19 +185,19 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
 
   it("carries the signed host links, and drops them once cancelled", async () => {
     const links = { location: "https://x/loc", reschedule: "https://x/move", cancel: "https://x/off" };
-    await sendHostCopy(env, booking, { links });
+    await hostCopy(env, booking, "confirmed", links);
     expect(calls[0].body.html).toContain("https://x/move");
     expect(calls[0].body.html).toContain("https://x/off");
     // Stated on the mail because it is the one thing the attached event cannot
     // do: editing that entry moves the host's calendar and tells nobody.
     expect(calls[0].body.html).toContain("does not");
     calls.length = 0;
-    await sendHostCopy(env, booking, { cancelled: true, links });
+    await hostCopy(env, booking, "cancelled", links);
     expect(calls[0].body.html).not.toContain("https://x/move");
   });
 
   it("escapes an attacker-controlled name and topic into the host's inbox", async () => {
-    await sendHostCopy(env, { ...booking, name: "<script>x</script>", topic: "a & b < c" });
+    await hostCopy(env, { ...booking, name: "<script>x</script>", topic: "a & b < c" }, "confirmed");
     const { body } = calls[0];
     expect(body.html).not.toContain("<script>x</script>");
     expect(body.html).toContain("&lt;script&gt;");
@@ -205,9 +205,9 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
   });
 });
 
-describe("sendInvite → .ics attachment", () => {
+describe("guestMail confirmed → .ics attachment", () => {
   it("attaches a valid REQUEST VCALENDAR/VEVENT", async () => {
-    await sendInvite(env, booking);
+    await guestMail(env, booking, "confirmed");
     const att = calls[0].body.attachments;
     expect(att).toHaveLength(1);
     expect(att[0].filename).toBe("coffee.ics");
@@ -232,7 +232,7 @@ describe("sendInvite → .ics attachment", () => {
 
   it("survives an emoji / non-Latin booking (the btoa→UTF-8 fix) and round-trips", async () => {
     const uni = { ...booking, name: "José Núñez", topic: "grab coffee ☕ and talk café plans" };
-    await expect(sendInvite(env, uni)).resolves.toBeDefined();
+    await expect(guestMail(env, uni, "confirmed")).resolves.toBeDefined();
     const ics = b64ToUtf8(calls[0].body.attachments[0].content);
     expect(ics).toContain("café");
     expect(ics).toContain("☕");
@@ -240,7 +240,7 @@ describe("sendInvite → .ics attachment", () => {
   });
 
   it("escapes ICS specials and emits single (not double) newline escapes in DESCRIPTION", async () => {
-    await sendInvite(env, { ...booking, topic: "x, y; z" });
+    await guestMail(env, { ...booking, topic: "x, y; z" }, "confirmed");
     const ics = b64ToUtf8(calls[0].body.attachments[0].content);
     // comma + semicolon escaped inside the value …
     expect(ics).toContain("requested: x\\, y\\; z");
@@ -264,14 +264,14 @@ describe("sendDecline + error handling", () => {
   // message here that has to reach an inbox. The host finds these by sender.
   it("keeps List-Id off the guest's copies", async () => {
     await sendDecline(env, booking);
-    await sendInvite(env, booking);
+    await guestMail(env, booking, "confirmed");
     expect(calls.map(({ body }) => body.to)).toEqual([["jordan@example.com"], ["jordan@example.com"]]);
     for (const { body } of calls) {
       expect(body.headers["List-Id"]).toBeUndefined();
       expect(body.headers["X-Coffee-Booking"]).toBe("abc123def456");
     }
     // The host's copy of the same booking is the one that carries it.
-    await sendHostCopy(env, booking);
+    await hostCopy(env, booking, "confirmed");
     expect(calls[2].body.headers["List-Id"]).toBe("coffee bookings <coffee.aadhar.sh>");
   });
 
