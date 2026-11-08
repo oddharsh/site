@@ -3,7 +3,7 @@
 //
 // THE PROBLEM. Every Worker-rendered page is a template literal, and every
 // interpolation into one is a decision to escape or not that nothing checks.
-// `escHtml` and `escAttr` are correct functions applied by discipline (104 call
+// `escHtml` and `escAttr` were correct functions applied by discipline (104 call
 // sites in src/worker on 2026-10-16), and the failure mode of forgetting one is
 // an injection rather than a broken build.
 //
@@ -23,8 +23,9 @@
 // so the enforcement is only as good as the annotations at the boundary —
 // annotate the parameter, not just the local.
 //
-// ONE ESCAPE, NOT TWO. `escHtml` escapes `& < >` and `escAttr` also escapes `"`,
-// so picking the wrong one is its own bug class. This escapes `& < > " '`
+// ONE ESCAPE, NOT TWO. `escHtml` escaped `& < >` and `escAttr` also escaped `"`,
+// so picking the wrong one was its own bug class (both deleted 2026-11-08; the
+// string templates call esc() from lib/http.ts, which is this function). This escapes `& < > " '`
 // unconditionally, which is a superset of both and correct in text and
 // attribute contexts alike.
 //
@@ -107,7 +108,7 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
  *  Every use is a claim that the string is either a literal this repository
  *  wrote or was built by `html`. It is the migration marker for the templates
  *  that predate the tagged template, whose interpolations are escaped BY HAND
- *  with escHtml/escAttr, and each one still owes a real migration to `html`.
+ *  with esc(), and each one still owes a real migration to `html`.
  *
  *  IT IS A CALL, NOT A TAG, and that is measured rather than stylistic. A
  *  `tag` + "`" form would have been a one-token edit per call site, which is

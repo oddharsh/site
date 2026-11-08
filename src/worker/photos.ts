@@ -8,7 +8,7 @@ import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
-import { errorResp, escAttr, escHtml, publicJsonResponse } from "./lib/http.ts";
+import { errorResp, esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms } from "./lib/text.ts";
 import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
@@ -943,7 +943,7 @@ export function renderPhotosPage(photos, altMap) {
     .map((a) => ({ album: a, count: albumPool(photos, a).length }))
     .filter(({ count }) => count > 0);
   const albumsLine = albums.length
-    ? `\n    Albums: ${albums.map(({ album, count }) => `<a href="${escAttr(albumPath(album))}">${escHtml(album.title)}</a> (${count})`).join(" &middot; ")}.`
+    ? `\n    Albums: ${albums.map(({ album, count }) => `<a href="${esc(albumPath(album))}">${esc(album.title)}</a> (${count})`).join(" &middot; ")}.`
     : "";
 
   return lunaPage({

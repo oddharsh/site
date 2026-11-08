@@ -5,7 +5,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { escAttr, escHtml, publicJsonResponse } from "./lib/http.ts";
+import { esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
 export type SearchRecord = {
@@ -201,12 +201,12 @@ export function renderSearchPage(query = "", results: Awaited<ReturnType<typeof 
   const rows = results.results
     .map(
       (result) =>
-        `<li><a href="${escAttr(result.url)}"><b>${escHtml(result.title)}</b></a><small>${escHtml(result.kind)} · ${escHtml(result.url)}</small><p>${escHtml(result.snippet || result.description)}</p></li>`,
+        `<li><a href="${esc(result.url)}"><b>${esc(result.title)}</b></a><small>${esc(result.kind)} · ${esc(result.url)}</small><p>${esc(result.snippet || result.description)}</p></li>`,
     )
     .join("\n");
   const body = `<h1>Search aadhar.sh</h1>
-<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
-${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${escHtml(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : '<p class="hint">Search the public pages, writing, garage notes, and utility descriptions.</p>'}`;
+<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${esc(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
+${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${esc(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : '<p class="hint">Search the public pages, writing, garage notes, and utility descriptions.</p>'}`;
   return lunaPage({
     title: "aadhar.sh/search",
     path: "aadhar.sh/search",

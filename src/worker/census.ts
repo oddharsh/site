@@ -1,7 +1,7 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
-import { escHtml, escAttr, jsonResponse, secretMatches } from "./lib/http.ts";
+import { esc, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
@@ -530,22 +530,22 @@ export function censusExhibitHtml(grouped) {
         surf.webBotAuth ? "WebBotAuth" : "",
       ]
         .filter(Boolean)
-        .map((c) => '<span class="cx-surf">' + escHtml(c) + "</span>")
+        .map((c) => '<span class="cx-surf">' + esc(c) + "</span>")
         .join("");
       return (
         "<tr>" +
         '<td class="cx-site"><a href="/lens?url=' +
-        escAttr(encodeURIComponent(h.url)) +
+        esc(encodeURIComponent(h.url)) +
         '">' +
-        escHtml(h.host) +
+        esc(h.host) +
         "</a></td>" +
         '<td><span class="lx-badge ' +
         (TIER_KIND[tier] || "off") +
         '">' +
-        escHtml(tier) +
+        esc(tier) +
         "</span></td>" +
         '<td class="cx-num"><b>' +
-        escHtml(scoreTxt) +
+        esc(scoreTxt) +
         "</b>" +
         (scoreTxt === "—" ? "" : "<span>/100</span>") +
         " " +
@@ -558,9 +558,9 @@ export function censusExhibitHtml(grouped) {
         last.doors +
         "</td>" +
         '<td class="cx-spark" title="' +
-        escAttr(h.scoreSeries.join(" → ")) +
+        esc(h.scoreSeries.join(" → ")) +
         '">' +
-        escHtml(sparkline(h.scoreSeries)) +
+        esc(sparkline(h.scoreSeries)) +
         "</td>" +
         '<td class="cx-surfs">' +
         (chips || '<span class="cx-none">none</span>') +
@@ -571,8 +571,8 @@ export function censusExhibitHtml(grouped) {
     .join("");
   const span =
     grouped.firstYmd === grouped.lastYmd
-      ? "one snapshot, " + escHtml(grouped.firstYmd)
-      : grouped.snapshots + " snapshots, " + escHtml(grouped.firstYmd) + " → " + escHtml(grouped.lastYmd);
+      ? "one snapshot, " + esc(grouped.firstYmd)
+      : grouped.snapshots + " snapshots, " + esc(grouped.firstYmd) + " → " + esc(grouped.lastYmd);
   return (
     '<div class="cx-meta">' +
     grouped.hosts.length +
@@ -642,7 +642,7 @@ export async function handleCensus(request, env, ctx, url = new URL(request.url)
 export const TABLE_URL = CENSUS_TABLE_URL;
 
 // The one place the string-built exhibit becomes markup. censusExhibitHtml
-// escapes every value it interpolates (escHtml, escAttr), and the three callers
+// escapes every value it interpolates with esc(), and the three callers
 // above all take it through here rather than wrapping it themselves.
 function censusExhibit(grouped) {
   return unsafeHtml(censusExhibitHtml(grouped));

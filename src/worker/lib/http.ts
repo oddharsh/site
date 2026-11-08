@@ -4,21 +4,6 @@
 
 import { escape } from "./html.ts";
 
-export function escAttr(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-export function escHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 // The one JSON response every route builds. Defaults to a private reply: never
 // cached, pretty-printed for a person reading it with curl. A route changes the
 // policy through extraHeaders (cache-control, CORS, x-robots-tag, ...), and a
