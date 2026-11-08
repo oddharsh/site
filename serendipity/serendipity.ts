@@ -1822,9 +1822,8 @@ async function syncDescriptions(d, userKey, cookiesJson, limit) {
 // fills up to n (default 30, max 45) missing descriptions per call.
 async function handleSyncDescriptions(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) {
-    return new Response("forbidden", { status: 403 });
-  }
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
   // any enabled cookie can read public event detail; use the first available.
   const set = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
@@ -1910,7 +1909,8 @@ export async function tagEvents(d, env, limit) {
 // secret-gated: POST /serendipity/tag[?n=12], secret in x-sync-key. The cron
 // reaches it by self-dispatch so the tag pass gets its own subrequest ceiling.
 async function handleTag(request, env, d) {
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
   const limit = Math.min(TAG_MAX, Math.max(1, Number.isFinite(n) ? n : TAG_DEFAULT));
   const r = await tagEvents(d, env, limit);
@@ -2050,7 +2050,8 @@ export async function classifyRoles(d, env, limit) {
 // secret in x-sync-key. Reached from the cron by self-dispatch, like /tag, so
 // each pass gets its own subrequest ceiling.
 async function handleBioPass(request, env, d, run: (d, env, limit: number) => Promise<object>) {
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
   const limit = Math.min(BIO_PASS_MAX, Math.max(1, Number.isFinite(n) ? n : BIO_PASS_DEFAULT));
   const r = await run(d, env, limit);
@@ -2094,17 +2095,16 @@ function mcpTags(t) {
 // tag). It reads the secret from the x-sync-key HEADER first, because the cron
 // dispatches to /enrich and /tag over the wire and a secret in a query string
 // lands in request logs; ?key= still works for a manual call.
-export function adminGated(request, env) {
+export function adminRefusal(request, env): Response | null {
   const supplied = request.headers.get("x-sync-key") || new URL(request.url).searchParams.get("key");
-  return !!env && secretMatches(supplied, env.SYNC_SECRET);
+  return env && secretMatches(supplied, env.SYNC_SECRET) ? null : new Response("forbidden", { status: 403 });
 }
 
 // secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
 async function handleSync(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) {
-    return new Response("forbidden", { status: 403 });
-  }
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   const eventId = url.searchParams.get("event");
   const out: any[] = [];
@@ -2937,7 +2937,8 @@ export function enrichBatchLimit(raw, fallback = ENRICH_CRON_BATCH, max = ENRICH
 
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const jerr = (msg, code) => jsonResponse({ error: msg }, code);
   const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
   const P = ENRICH_PROVIDERS[provider];

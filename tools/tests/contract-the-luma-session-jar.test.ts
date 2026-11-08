@@ -2,7 +2,7 @@
 import {
   ROOT,
   SERENDIPITY_SYNC_LIMITS,
-  adminGated,
+  adminRefusal,
   assert,
   cookieJar,
   dispatchEnrich,
@@ -251,14 +251,14 @@ test("the cron batches upcoming and past roster selection into one D1 call", asy
 test("the admin gate takes the secret from a header as well as the query string", () => {
   const env = { SYNC_SECRET: "s3cret" };
   const req = (url, headers?: any) => new Request(url, { headers: headers || {} });
-  assert.equal(adminGated(req("https://x/serendipity/enrich?key=s3cret"), env), true, "query form still works");
-  assert.equal(adminGated(req("https://x/serendipity/enrich", { "x-sync-key": "s3cret" }), env), true, "header form works");
-  assert.equal(adminGated(req("https://x/serendipity/enrich?key=nope"), env), false);
-  assert.equal(adminGated(req("https://x/serendipity/enrich", { "x-sync-key": "nope" }), env), false);
-  assert.equal(adminGated(req("https://x/serendipity/enrich"), env), false, "no secret at all is refused");
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich?key=s3cret"), env), null, "query form still works");
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich", { "x-sync-key": "s3cret" }), env), null, "header form works");
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich?key=nope"), env)?.status, 403);
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich", { "x-sync-key": "nope" }), env)?.status, 403);
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich"), env)?.status, 403, "no secret at all is refused");
   // an unset SYNC_SECRET must never make the gate permissive
-  assert.equal(adminGated(req("https://x/serendipity/enrich?key=undefined"), {}), false);
-  assert.equal(adminGated(req("https://x/serendipity/enrich"), {}), false);
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich?key=undefined"), {})?.status, 403);
+  assert.equal(adminRefusal(req("https://x/serendipity/enrich"), {})?.status, 403);
 });
 
 test("the enrich batch limit clamps, defaults, and refuses garbage", () => {
@@ -271,7 +271,7 @@ test("the enrich batch limit clamps, defaults, and refuses garbage", () => {
 });
 
 test("the cron enrich dispatch never puts the secret in the URL", async () => {
-  // A query-string secret lands in request logs. The whole reason adminGated
+  // A query-string secret lands in request logs. The whole reason adminRefusal
   // grew a header arm is this one call, so the property is worth pinning.
   let seen: any = null;
   await dispatchEnrich({ SYNC_SECRET: "s3cret", EXA_API_KEY: "k", HOST_PUBLIC_URL: "https://aadhar.sh" }, async (url, init) => {
