@@ -727,7 +727,7 @@ export function renderTrackListMarkdown(payload, target) {
 
 // Titles and artist names are arbitrary third-party strings, so the four
 // characters that would otherwise turn one into emphasis, a link, or a heading
-// are escaped. Not esc()/escHtml(): this is not HTML, and entity-encoding here
+// are escaped. Not esc(): this is not HTML, and entity-encoding here
 // would put `&amp;` in front of a reader.
 const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 

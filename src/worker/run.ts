@@ -7,7 +7,7 @@
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { escAttr, escHtml } from "./lib/http.ts";
+import { esc } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { PHOTO_POOL } from "./photos.ts";
 
@@ -74,14 +74,14 @@ async function resolve(cmd, env, request) {
 }
 
 export function renderRun({ cmd = "", notFound = false } = {}) {
-  const options = DESTS.map(([name, path, hint]) => `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
+  const options = DESTS.map(([name, path, hint]) => `<option value="${esc(name)}">${esc(hint)} — ${esc(path)}</option>`).join("\n");
   // XP's own Run error ends "To search for a file, click the Start button, and
   // then click Search." Here the search is one link away, already filled in.
   const search = `/search?q=${encodeURIComponent(cmd.trim())}`;
   const errorBanner = notFound
-    ? `<div class="run-err" role="alert"><b>Windows cannot find '${escHtml(cmd)}'.</b>
+    ? `<div class="run-err" role="alert"><b>Windows cannot find '${esc(cmd)}'.</b>
        Make sure you typed the name correctly, and then try again. To look for it,
-       <a href="${escAttr(search)}">search the site for '${escHtml(cmd.trim())}'</a>.</div>`
+       <a href="${esc(search)}">search the site for '${esc(cmd.trim())}'</a>.</div>`
     : "";
 
   return lunaPage({
@@ -127,7 +127,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
     ${errorBanner}
     <form action="/run" method="get">
       <label for="cmd">Open:</label>
-      <input type="text" id="cmd" name="cmd" list="dests" value="${escAttr(cmd)}" autofocus autocomplete="off" spellcheck="false">
+      <input type="text" id="cmd" name="cmd" list="dests" value="${esc(cmd)}" autofocus autocomplete="off" spellcheck="false">
       <button type="submit">OK</button>
       <datalist id="dests">
 ${options}

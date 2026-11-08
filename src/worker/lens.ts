@@ -8,7 +8,7 @@ import { readResponseCapped } from "./lib/crawl.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
+import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { documentTally, runBrowserAction } from "./lens-render.ts";
 import { LensArgsRefusal, defineLens, lensErrorText, lensSha256Hex, lensStatusPayload, policyHeaders } from "./lens-pipeline.ts";
@@ -281,7 +281,7 @@ const LENS_GLOSSARY = {
 };
 
 // Wrap known glossary terms in the hover markup. Input MUST already be escaped:
-// this inserts real tags, and it is only safe because escHtml has already
+// this inserts real tags, and it is only safe because esc() has already
 // removed every < and > the source string could have carried.
 //
 // First occurrence per term per string, longest spelling first so "llms.txt" is
@@ -363,9 +363,9 @@ export function glossify(escaped, only?: readonly string[]) {
     out +=
       src.slice(pos, best.at) +
       '<abbr class="lx-term" data-t="' +
-      escAttr(best.key) +
+      esc(best.key) +
       '" title="' +
-      escAttr(LENS_GLOSSARY[best.key].plain) +
+      esc(LENS_GLOSSARY[best.key].plain) +
       '">' +
       best.text +
       "</abbr>";
@@ -546,20 +546,20 @@ function lensHttpText(status) {
 }
 
 function lensReaderFragment(data, note?) {
-  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No page to show.") + "</div>";
+  if (!data || !data.ok) return '<div class="lx-empty">' + esc((data && data.error) || "No page to show.") + "</div>";
   const a = data.anatomy;
-  let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
+  let out = note ? '<div class="lx-fallback-note">' + esc(note) + "</div>" : "";
   if (!a) return out + '<div class="lx-empty">No readable text either.</div>';
   const title = (data.structured && data.structured.title) || "";
-  if (title) out += '<div class="lx-h-title">' + escHtml(title) + "</div>";
+  if (title) out += '<div class="lx-h-title">' + esc(title) + "</div>";
   if (a.headings && a.headings.length) {
     out += '<div class="lx-h-outline"><b>Document outline</b><br>';
     for (const h of a.headings.slice(0, 60)) {
-      out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
+      out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + esc(h.text) + "</div>";
     }
     out += "</div>";
   }
-  return out + '<div class="lx-h-text">' + escHtml(a.text || "(no extractable text)") + "</div>";
+  return out + '<div class="lx-h-text">' + esc(a.text || "(no extractable text)") + "</div>";
 }
 
 function lensHumanFragment(data) {
@@ -567,7 +567,7 @@ function lensHumanFragment(data) {
   if (data.framable) {
     return (
       '<iframe class="lx-frame" src="' +
-      escAttr(data.finalUrl) +
+      esc(data.finalUrl) +
       '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
       ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>'
     );
@@ -580,7 +580,7 @@ function lensHumanFragment(data) {
 }
 
 function lensMachineFragment(data, state) {
-  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No evidence yet.") + "</div>";
+  if (!data || !data.ok) return '<div class="lx-empty">' + esc((data && data.error) || "No evidence yet.") + "</div>";
   const a = data.anatomy || {};
   const s = data.structured || {};
   const d = data.discovery || {};
@@ -596,7 +596,7 @@ function lensMachineFragment(data, state) {
     ["headings", a.headings ? a.headings.length : 0],
     ["fetched as", data.fetchedBy || "identified bot"],
   ]
-    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + escHtml(row[1]) + "</td></tr>")
+    .map((row) => "<tr><td>" + esc(row[0]) + "</td><td>" + esc(row[1]) + "</td></tr>")
     .join("");
   const doors = (ag.strategy && ag.strategy.verdict) || "unknown";
   const files = [
@@ -613,18 +613,16 @@ function lensMachineFragment(data, state) {
     rows +
     "</table></div>" +
     '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' +
-    escHtml(doors) +
+    esc(doors) +
     "</span></div>" +
     '<div class="lx-cap">Evidence found during the server-side inspection.</div><div class="lx-tags">' +
-    (files.length
-      ? files.map((file) => '<span class="lx-tag">' + escHtml(file) + "</span>").join("")
-      : '<span class="lx-none">no discovery files found</span>') +
+    (files.length ? files.map((file) => '<span class="lx-tag">' + esc(file) + "</span>").join("") : '<span class="lx-none">no discovery files found</span>') +
     "</div></div>" +
     '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' +
-    escHtml(state.lens) +
+    esc(state.lens) +
     "</span></div>" +
     '<div class="lx-cap">View: ' +
-    escHtml(state.view) +
+    esc(state.view) +
     ". The browser enhancement can open the complete lens without changing the URL.</div></div>"
   );
 }
@@ -644,7 +642,7 @@ function lensBrowserFragment() {
 }
 
 function lensStatusFragment(data, state) {
-  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
+  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + esc((data && data.error) || "unknown error") + "</span>";
   return (
     "<span><b>" +
     data.status +
@@ -652,18 +650,18 @@ function lensStatusFragment(data, state) {
     lensHttpText(data.status) +
     "</span>" +
     "<span>" +
-    escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) +
+    esc(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) +
     "</span>" +
     "<span>" +
-    escHtml(data.contentType || "?") +
+    esc(data.contentType || "?") +
     "</span>" +
     (data.anatomy ? "<span>" + data.anatomy.rawBytes + " B</span>" : "") +
     "<span>" +
-    escHtml(String(data.elapsedMs || 0)) +
+    esc(String(data.elapsedMs || 0)) +
     " ms</span>" +
-    (data.redirected ? "<span>&rarr; " + escHtml(data.finalUrl) + "</span>" : "") +
+    (data.redirected ? "<span>&rarr; " + esc(data.finalUrl) + "</span>" : "") +
     '<span style="margin-left:auto">fetched as ' +
-    escHtml(data.fetchedBy || "identified bot") +
+    esc(data.fetchedBy || "identified bot") +
     "</span>"
   );
 }
@@ -706,7 +704,7 @@ function lensVsColumn(s) {
   // facts about a site nobody asked.
   const measured = !(s.phases && s.phases.discovery === false);
   const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
-    .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>")
+    .map(([, label]) => '<span class="lx-tag">' + esc(label) + "</span>")
     .join("");
   const surfaces =
     pub ||
@@ -730,25 +728,25 @@ function lensVsColumn(s) {
     ["payload", lensVsBytes(s.bytes)],
     ["words", String(s.wordCount || 0)],
   ]
-    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>")
+    .map((row) => "<tr><td>" + esc(row[0]) + "</td><td>" + (row[1] == null ? cost : esc(row[1])) + "</td></tr>")
     .join("");
   return (
     '<div class="lx-vs-col"><div class="lx-vs-h"><span>' +
-    escHtml(host) +
+    esc(host) +
     '</span><a href="/lens?url=' +
-    escAttr(encodeURIComponent(s.url)) +
+    esc(encodeURIComponent(s.url)) +
     '">full scan &rarr;</a></div>' +
     '<div class="lx-vs-body"><div class="lx-vs-score"><b>' +
-    (s.readiness == null ? "?" : escHtml(s.readiness)) +
+    (s.readiness == null ? "?" : esc(s.readiness)) +
     "<span>/100</span></b>" +
     '<span class="lx-badge ' +
     levelKind +
     '"' +
-    (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") +
+    (s.levelNote ? ' title="' + esc(s.levelNote) + '"' : "") +
     ">Level " +
-    (s.level == null ? "?" : escHtml(s.level)) +
+    (s.level == null ? "?" : esc(s.level)) +
     "</span> <span>" +
-    escHtml(s.levelName || "") +
+    esc(s.levelName || "") +
     "</span></div>" +
     '<table class="lx-kv">' +
     rows +
@@ -761,7 +759,7 @@ function lensVsColumn(s) {
 
 export function lensVsFragment(payload) {
   if (!payload || !payload.ok) {
-    return '<div class="lx-empty">' + escHtml((payload && payload.error) || "The comparison did not run.") + "</div>";
+    return '<div class="lx-empty">' + esc((payload && payload.error) || "The comparison did not run.") + "</div>";
   }
   const L = payload.left,
     R = payload.right;
@@ -772,21 +770,21 @@ export function lensVsFragment(payload) {
     const extras = LENS_VS_SURFACES.filter(([key]) => win.surfaces && win.surfaces[key] && !(lose.surfaces && lose.surfaces[key])).map(([, label]) => label);
     const spread =
       win.readiness === lose.readiness
-        ? "<b>" + escHtml(win.readiness) + " apiece.</b> Same score, one rubric."
+        ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
         : "<b>" +
-          escHtml(lensVsHost(win.finalUrl || win.url)) +
+          esc(lensVsHost(win.finalUrl || win.url)) +
           " " +
-          escHtml(win.readiness) +
+          esc(win.readiness) +
           ", " +
-          escHtml(lensVsHost(lose.finalUrl || lose.url)) +
+          esc(lensVsHost(lose.finalUrl || lose.url)) +
           " " +
-          escHtml(lose.readiness) +
+          esc(lose.readiness) +
           ".</b>";
     headline =
       '<div class="lx-vs-headline">' +
       spread +
       (extras.length
-        ? " The gap is published surfaces: " + escHtml(extras.join(", ")) + "."
+        ? " The gap is published surfaces: " + esc(extras.join(", ")) + "."
         : " Both publish the same surfaces; the gap sits in the individual checks.") +
       "</div>";
   }
@@ -905,10 +903,7 @@ function lensStateOfWebRail() {
   // terms that lose a non-technical reader in the first four seconds. glossify
   // makes each one hoverable in place rather than rewriting the fact around it.
   const items = LENS_SOW_FACTS.filter((f) => f.rail)
-    .map(
-      (f, i) =>
-        '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>",
-    )
+    .map((f, i) => '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + esc(f.railStat || f.stat) + "</b> " + glossify(esc(f.rail)) + "</span>")
     .join("");
   return (
     '<div class="lx-sow-rail">' +
@@ -927,15 +922,15 @@ function lensStateOfWebPanel() {
   const cards = LENS_SOW_FACTS.map(
     (f) =>
       '<div class="lx-sow-card"><div class="lx-sow-stat">' +
-      escHtml(f.stat) +
+      esc(f.stat) +
       "</div>" +
       '<div class="lx-sow-claim">' +
-      escHtml(f.claim) +
+      esc(f.claim) +
       "</div>" +
       '<div class="lx-sow-src"><a href="' +
-      escAttr(f.href) +
+      esc(f.href) +
       '" target="_blank" rel="noopener">' +
-      escHtml(f.src) +
+      esc(f.src) +
       "</a> &middot; " +
       LENS_SOW_CHECKED +
       "</div></div>",
@@ -995,25 +990,21 @@ function lensAboutPanel() {
     const jumps = e.jumps
       .map((j) =>
         j.view
-          ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
-          : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' +
-            escAttr(j.lens) +
-            '">' +
-            escHtml(LENS_TAB_LABELS[j.lens] || j.lens) +
-            "</button>",
+          ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + esc(j.view) + '">' + esc(j.label || j.view) + "</button>"
+          : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' + esc(j.lens) + '">' + esc(LENS_TAB_LABELS[j.lens] || j.lens) + "</button>",
       )
       .join(" ");
     return (
       '<div class="lx-abt-era"><div class="lx-abt-when"><b>' +
-      escHtml(e.era) +
+      esc(e.era) +
       "</b><span>" +
-      escHtml(e.years) +
+      esc(e.years) +
       "</span></div>" +
       '<div><div class="lx-abt-label">' +
-      escHtml(e.label) +
+      esc(e.label) +
       "</div>" +
       '<div class="lx-abt-claim">' +
-      glossify(escHtml(e.claim)) +
+      glossify(esc(e.claim)) +
       "</div>" +
       '<div class="lx-abt-jumps"><span>See it live:</span> ' +
       jumps +
@@ -1099,7 +1090,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     head: unsafeHtml(`<meta property="og:type" content="website">
 <meta property="og:site_name" content="aadhar.sh">
 <meta property="og:title" content="The Other Web: how machines read a URL">
-<meta property="og:description" content="${escAttr(lensDescription)}">
+<meta property="og:description" content="${esc(lensDescription)}">
 <meta property="og:url" content="https://${CANONICAL_HOST}/lens">
 <meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.jpg">
 <meta property="og:image:width" content="1200">
@@ -1732,7 +1723,7 @@ footer a { color:var(--link); }
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  ·  paste any URL" autocomplete="off" spellcheck="false"
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${esc(value)}" inputmode="url" placeholder="https://example.com  ·  paste any URL" autocomplete="off" spellcheck="false"
              title="Any http(s) URL. This server fetches it as AadharshBot and shows you what came back.">
       <button class="lx-go" type="submit">Go</button>
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-toggle" title="Compare two sites through one rubric" aria-expanded="${vsActive ? "true" : "false"}" aria-controls="lx-addr-vs">vs&hellip;</button>
@@ -1744,7 +1735,7 @@ footer a { color:var(--link); }
     <div class="lx-addr lx-addr-vs${vsActive ? "" : " lx-off"}" id="lx-addr-vs">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url-vs">vs</label>
-      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  ·  head-to-head, one rubric" autocomplete="off" spellcheck="false"
+      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${esc(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  ·  head-to-head, one rubric" autocomplete="off" spellcheck="false"
              title="A second URL. Both are scanned against one rubric, side by side.">
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-close" title="Back to a single scan">&#215;</button>
     </div>
@@ -1824,11 +1815,11 @@ footer a { color:var(--link); }
       vsActive
         ? compare.payload && compare.payload.ok
           ? "<span><b>Head-to-head</b></span><span>" +
-            escHtml(lensVsHost(value)) +
+            esc(lensVsHost(value)) +
             " vs " +
-            escHtml(lensVsHost(vsValue)) +
+            esc(lensVsHost(vsValue)) +
             '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
-          : '<span class="err">Comparison failed:</span> <span>' + escHtml((compare.payload && compare.payload.error) || "unknown error") + "</span>"
+          : '<span class="err">Comparison failed:</span> <span>' + esc((compare.payload && compare.payload.error) || "unknown error") + "</span>"
         : seeded || (initial && !initial.ok)
           ? lensStatusFragment(initial, state)
           : "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>"

@@ -5,7 +5,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
 import { shareMeta } from "./lib/chrome.ts";
-import { escAttr, escHtml } from "./lib/http.ts";
+import { esc } from "./lib/http.ts";
 import { twinFor } from "./lib/twins.ts";
 
 // Written content lives in plain .txt files under /writing/ + a posts.json registry.
@@ -93,21 +93,21 @@ export function writingShell(o) {
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<meta name="theme-color" content="#2D78BD">' +
     "<title>" +
-    escHtml(o.title) +
+    esc(o.title) +
     "</title>" +
     // The section tile, same as the taskbar pin. Notepad builds its own head
     // rather than going through lunaPage, so it states this itself.
     '<link rel="icon" type="image/svg+xml" href="/section-icons/writing.svg">' +
     '<meta name="description" content="' +
-    escAttr(o.desc) +
+    esc(o.desc) +
     '">' +
     '<link rel="canonical" href="https://aadhar.sh' +
-    escAttr(o.path) +
+    esc(o.path) +
     '">' +
     // A post unfurls as an article and the folder as a site page. No image: a
     // note has none, and an unfurler draws title and description without one.
     String(shareMeta({ title: o.title, description: o.desc, path: o.path, type: o.path === "/writing" ? "website" : "article" })) +
-    (twin ? '<link rel="alternate" type="text/markdown" title="markdown source" href="' + escAttr(twin) + '">' : "") +
+    (twin ? '<link rel="alternate" type="text/markdown" title="markdown source" href="' + esc(twin) + '">' : "") +
     // Feed discovery for the whole section, on the index and on every post, which
     // is where a reader's "subscribe" button actually looks.
     '<link rel="alternate" type="application/rss+xml" title="aadhar.sh — writing" href="/writing/feed.xml">' +
@@ -146,25 +146,23 @@ const MAX_BUTTON = '<button type="button" class="max" title="maximize" aria-labe
 // twice. `name` is the post title without the .txt a filename carries, and
 // `url` is its canonical permalink.
 export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: { name: string; url: string }) {
-  var open = popId
-    ? '<div class="np-window np-note" id="' + escAttr(popId) + '" popover="manual">'
-    : '<div class="np-window' + (entry ? " h-entry" : "") + '">';
+  var open = popId ? '<div class="np-window np-note" id="' + esc(popId) + '" popover="manual">' : '<div class="np-window' + (entry ? " h-entry" : "") + '">';
   // p-name wraps the title inside the caption text, so the caption reads exactly
   // as before and the parsed name is the title alone, without the file
   // extension or the Notepad suffix.
   const title = entry
     ? '<span class="p-name">' +
-      escHtml(entry.name) +
+      esc(entry.name) +
       "</span>" +
-      escHtml(filename.startsWith(entry.name) ? filename.slice(entry.name.length) : "") +
+      esc(filename.startsWith(entry.name) ? filename.slice(entry.name.length) : "") +
       '<data class="u-url" value="' +
-      escAttr(entry.url) +
+      esc(entry.url) +
       '"></data>' +
       AUTHOR_CARD
-    : escHtml(filename);
+    : esc(filename);
   // dt-published reads the ISO date off datetime. posts.json's date is also what
   // the RSS feed sends as pubDate, so the two cannot name different days.
-  const stamp = entry && date ? '<time class="dt-published" datetime="' + escAttr(date) + '">' + escHtml(date) + "</time>" : escHtml(date);
+  const stamp = entry && date ? '<time class="dt-published" datetime="' + esc(date) + '">' + esc(date) + "</time>" : esc(date);
   return (
     open +
     '<div class="np-titlebar">' +
@@ -178,7 +176,7 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     '<span class="np-controls"><span class="min" aria-hidden="true"></span>' +
     (popId ? '<span class="max" aria-hidden="true"></span>' : MAX_BUTTON) +
     '<a class="close" href="' +
-    escAttr(closeHref) +
+    esc(closeHref) +
     '"' +
     (popId ? " data-pop" : "") +
     ' title="back to writing" aria-label="Close">✕</a></span></div>' +
@@ -195,9 +193,9 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     '<textarea class="np-text' +
     (entry ? " e-content" : "") +
     '" spellcheck="false" aria-label="' +
-    escAttr(filename) +
+    esc(filename) +
     '">' +
-    escHtml(text) +
+    esc(text) +
     "</textarea>" +
     (popId ? "" : "</main>") +
     '<div class="xp-statusbar panes np-status"><span class="np-pos">Ln 1, Col 1</span><span class="np-wc fill"></span>' +
@@ -290,16 +288,16 @@ export async function renderWritingIndex(env) {
       // author comes from the feed, which the authorship algorithm allows.
       return (
         '<li class="h-entry"><a class="u-url" href="/writing/' +
-        escAttr(e.p.slug) +
+        esc(e.p.slug) +
         '" data-note="' +
-        escAttr(e.safe) +
+        esc(e.safe) +
         '"><span class="np-file-ico" aria-hidden="true"></span>' +
         '<span class="np-file-name"><span class="p-name">' +
-        escHtml(e.p.title || e.p.slug) +
+        esc(e.p.title || e.p.slug) +
         "</span>.txt</span>" +
         '<span class="np-file-meta">Text Document · ' +
         size +
-        (e.p.date ? ' · <time class="dt-published" datetime="' + escAttr(e.p.date) + '">' + escHtml(e.p.date) + "</time>" : "") +
+        (e.p.date ? ' · <time class="dt-published" datetime="' + esc(e.p.date) + '">' + esc(e.p.date) + "</time>" : "") +
         "</span></a></li>"
       );
     })
