@@ -34,6 +34,18 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
 // answering its own Worker) that should stay byte-identical to it.
 export const PLAIN_JSON = { "content-type": "application/json", "cache-control": null };
 
+// The one 405 a route sends for a method it does not serve: a JSON body naming
+// the methods, and the same list in Allow (RFC 9110 section 15.5.6). GET implies
+// HEAD, as it does everywhere a route answers GET. Returns null to proceed.
+export function methodGuard(request: Request, allow: readonly string[]): Response | null {
+  const methods = allow.includes("GET") ? ["GET", "HEAD", ...allow.filter((m) => m !== "GET" && m !== "HEAD")] : [...allow];
+  if (methods.includes(request.method)) return null;
+  const header = methods.join(", ");
+  return jsonResponse({ ok: false, error: `${request.method} is not served here. Use ${header}.`, code: "method_not_allowed", allow: methods }, 405, {
+    allow: header,
+  });
+}
+
 // short-cache error response. max-age=30 bounds how long a transient 404 from
 // a deploy race can be pinned, at the edge or in the visitor's browser. Use
 // everywhere we emit a 4xx/5xx ourselves.

@@ -37,7 +37,7 @@ import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { EMPTY, html, type Html } from "./lib/html.ts";
-import { jsonResponse } from "./lib/http.ts";
+import { jsonResponse, methodGuard } from "./lib/http.ts";
 import { PENDING, isPending, island, islandResponse, islandScript, type Pending, type Read } from "./lib/island.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -271,8 +271,9 @@ async function sign(request: Request, env) {
 
 /** The route: the page on GET, a signature on POST. */
 export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext, url = new URL(request.url)) {
+  const refused = methodGuard(request, ["GET", "POST"]);
+  if (refused) return refused;
   if (request.method === "POST") return sign(request, env);
-  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET the page or POST a signature" }, 405, { allow: "GET, HEAD, POST" });
   return serveBuiltPage(request, env, url, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK },
     live: () => renderGuestbookPage(),
@@ -286,7 +287,8 @@ export async function handleGuestbookEntries(_request: Request, env) {
 }
 
 export async function handleGuestbookJson(request: Request, env) {
-  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET only" }, 405, { allow: "GET, HEAD" });
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   const read = await readEntries(env);
   if (read.state !== "ok")
     return json({ error: read.state === "unbound" ? "the guestbook is not bound on this deployment" : "the guestbook did not answer" }, 503);

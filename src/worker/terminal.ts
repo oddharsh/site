@@ -44,7 +44,7 @@ import { LENS_BUDGETS, LENS_INSPECT, lensFetch, lensObservationSummary } from ".
 import { defineLens, type LensOutcome } from "./lens-pipeline.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { escHtml } from "./lib/http.ts";
+import { escHtml, methodGuard } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
@@ -1261,12 +1261,8 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
     });
   }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response("method not allowed\n", {
-      status: 405,
-      headers: { allow: name === "radar" ? "GET, HEAD, POST" : "GET, HEAD", "content-type": "text/plain; charset=utf-8" },
-    });
-  }
+  const refused = methodGuard(request, name === "radar" ? ["GET", "POST"] : ["GET"]);
+  if (refused) return refused;
 
   const frame = await buildFrame(name, request, env, ctx, url);
   const wantsHtml = !explicitText && (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain");
