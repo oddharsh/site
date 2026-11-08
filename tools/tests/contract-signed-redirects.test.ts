@@ -103,31 +103,28 @@ for (const reader of readers)
     }
   });
 
-test("signedFetch retains explicit redirect modes, headers, method, deadline and cache policy", async () => {
+test("signedFetch GETs with the caller's headers and deadline, and the edge never caches it", async () => {
   const { env } = await keyPair();
   const signal = new AbortController().signal;
-  const cf = { cacheTtl: 86400, cacheEverything: true };
-  for (const redirect of ["manual", "error"] as const)
-    await withFetch(
-      () => new Response(null, { status: 302, headers: { location: "/next" } }),
-      async (seen) => {
-        await signedFetch(origin, env, { method: "HEAD", headers: { accept: "application/json" }, signal, cf, redirect });
-        assert.equal(seen.length, 2, "one policy read and one content request");
-        assert.equal(seen[0].url, origin + "/robots.txt");
-        assert.equal(seen[1].redirect, redirect);
-        assert.equal(seen[1].method, "HEAD");
-        assert.equal(seen[1].headers.get("accept"), "application/json");
-        assert.equal(seen[1].signal, signal);
-        assert.deepEqual(seen[1].cf, cf);
-      },
-    );
+  await withFetch(
+    () => new Response("ok"),
+    async (seen) => {
+      await signedFetch(origin, env, { headers: { accept: "application/json" }, signal });
+      assert.equal(seen.length, 2, "one policy read and one content request");
+      assert.equal(seen[0].url, origin + "/robots.txt");
+      assert.equal(seen[1].method, "GET");
+      assert.equal(seen[1].headers.get("accept"), "application/json");
+      assert.equal(seen[1].signal, signal);
+      assert.deepEqual(seen[1].cf, { cacheTtl: 0 });
+    },
+  );
   await withFetch(
     () => {
       throw new Error("unexpected fetch");
     },
     async (seen) => {
-      await assert.rejects(signedFetch(origin, {}, { sign: false }), /signing key/);
-      assert.equal(seen.length, 0, "sign:false cannot bypass the signed fetch contract");
+      await assert.rejects(signedFetch(origin, {}), /signing key/);
+      assert.equal(seen.length, 0, "no signing key, no request");
     },
   );
 });
