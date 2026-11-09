@@ -568,6 +568,22 @@ export const CONTROLS: Control[] = [
     expect: /a push to main must find no map and run the whole suite/,
   },
   {
+    id: "engine-races-its-caches",
+    plants: "validate starts timbrado's cargo build without waiting for the Rust caches, so cargo downloads the toolchain the restore is writing",
+    gotcha: 54,
+    mutations: [{ file: ".github/workflows/ci.yml", find: "      - name: Wait for the Rust caches\n        wait: [rust-cache, engine-cache]\n", replace: "" }],
+    run: contract("contract-ci-required-gate"),
+    expect: /the engine must wait for the ~\/\.rustup\/toolchains\/ cache/,
+  },
+  {
+    id: "suite-races-the-build",
+    plants: "validate stops waiting for the background build, so the suite reads a half-written .build/ and two tests skip",
+    gotcha: 54,
+    mutations: [{ file: ".github/workflows/ci.yml", find: "      - name: Wait for the build\n        wait: build\n", replace: "" }],
+    run: contract("contract-ci-required-gate"),
+    expect: /the suite must start after the build it reads has finished/,
+  },
+  {
     id: "critical-css-drops-script-built-rules",
     plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
     mutations: [

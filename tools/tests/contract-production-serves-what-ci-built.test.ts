@@ -188,7 +188,18 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   const steps = ci.jobs.validate.steps;
   const build = steps.findIndex((s) => s.run === "bun run perf-budget");
   const cut = steps.findIndex((s) => s.name === "Cut the served manifest");
-  assert.ok(build >= 0 && cut === build + 1, "the manifest must be cut straight after the build, before any later step touches .build/");
+  // The build runs in the background since 2026-11-09, so "straight after"
+  // means the step before the cut waits for it, and nothing started between
+  // the two is a step that writes .build/ (the engine's cargo build is the one
+  // that may start there; it writes only node_modules/timbrado/target).
+  assert.ok(build >= 0 && cut > build, "the manifest must be cut after the build");
+  assert.ok(!steps[build].background || steps[cut - 1].wait === steps[build].id, "the step before the cut must wait for the background build");
+  for (const s of steps.slice(build + 1, cut)) {
+    assert.ok(
+      s.wait || s.run?.includes("ensureTimbradoEngine"),
+      `\`${s.name}\` runs between the build and the manifest cut, before any later step may touch .build/`,
+    );
+  }
   assert.equal(steps[cut].if, "github.event_name == 'push'", "only a push to main builds the commit Workers Builds ships");
   assert.match(steps[cut].run, /served:manifest --commit "\$\{\{ github\.sha \}\}"/);
 

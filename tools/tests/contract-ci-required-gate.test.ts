@@ -105,9 +105,9 @@ test("manual CI keeps checkout and cache scope on the dispatched revision", () =
 });
 
 // Steps run in the background since 2026-10-06 (gotcha 54). Concurrency is
-// only safe along three edges, and breaking any of them weakens the gate
+// only safe along four edges, and breaking any of them weakens the gate
 // without turning it red, so each is asserted here instead of trusted.
-test("background steps keep the three ordering edges and all join before the job ends", () => {
+test("background steps keep the four ordering edges and all join before the job ends", () => {
   const { steps } = workflow.jobs.validate;
   const at = (run) => {
     const i = steps.findIndex((step) => step.run === run);
@@ -119,12 +119,28 @@ test("background steps keep the three ordering edges and all join before the job
   // A background step needs an id for anything to wait on or cancel it.
   for (const step of steps.filter((s) => s.background)) assert.ok(step.id, `${step.name} runs in the background without an id`);
 
-  // The suite reads .build/, and two of its tests skip without one. The build
-  // stays in the foreground so everything after it sees a finished tree.
+  // The suite reads .build/, and two of its tests skip without one. Since
+  // 2026-11-09 the build runs in the background so the engine can start
+  // beside it, which makes "after the build" mean "after a wait for it".
   const build = at("bun run perf-budget");
-  assert.notEqual(steps[build].background, true, "the build must finish before the manifest cut and the suite read .build/");
-  assert.ok(at(SUITE) > build, "the suite must start after the build it reads");
-  assert.ok(at("bun run routes:check --prebuilt .build/.perfbudget") > build, "the route oracle loads the build's bundle");
+  const built = (i) => i > build && (!steps[build].background || waited(steps[build].id, i));
+  assert.ok(built(at(SUITE)), "the suite must start after the build it reads has finished");
+  assert.ok(built(at("bun run routes:check --prebuilt .build/.perfbudget")), "the route oracle loads the finished build's bundle");
+  const cut = steps.findIndex((step) => /bun run served:manifest/.test(step.run ?? ""));
+  assert.ok(cut >= 0 && built(cut), "the served manifest is cut from a finished .build/");
+
+  // The engine's cargo build needs the toolchain the restore writes, so it
+  // starts only once both Rust caches have landed. The engine key must not
+  // run rustc either, since a rustup proxy call before the restore lands
+  // would download the toolchain into the directory being restored.
+  const engineAt = steps.findIndex((step) => String(step.run ?? "").includes("ensureTimbradoEngine"));
+  for (const path of ["~/.rustup/toolchains/", "steps.timbrado.outputs.target"]) {
+    const cache = steps.findIndex((step) => String(step.uses ?? "").startsWith("actions/cache@") && String(step.with?.path ?? "").includes(path));
+    assert.ok(cache >= 0 && cache < engineAt, `validate restores ${path} before the engine builds`);
+    assert.ok(!steps[cache].background || waited(steps[cache].id, engineAt), `the engine must wait for the ${path} cache it builds into`);
+  }
+  const key = steps.find((step) => step.id === "timbrado");
+  assert.doesNotMatch(key?.run ?? "", /\brustc\b|\bcargo\b/, "the engine cache key must come from the pin, not a rustup proxy call");
 
   // lint and typecheck both open with the generator; it finishes, once, first.
   const gen = at("bun tools/gen-runtime-types.ts");

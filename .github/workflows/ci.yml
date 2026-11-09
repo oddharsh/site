@@ -68,11 +68,13 @@ jobs:
   # the build, then the suite. Measured 2026-10-06: the job took a median 74.5s
   # over 12 green main runs (64 to 92) and 50s over 3 runs of this layout (45
   # to 66). Not the 40s the serial sum suggests, because this runner has 4
-  # vCPUs and the build and the suite each use several of them. Three
+  # vCPUs and the build and the suite each use several of them. Four
   # ordering edges are real, and
   # contract-ci-required-gate holds each one (gotcha 54):
-  #   the suite starts after the build, because eight contract tests read
-  #     .build/ and two of them SKIP when it is missing instead of failing
+  #   the suite starts after the build finishes, because eight contract tests
+  #     read .build/ and two of them SKIP when it is missing instead of failing
+  #   timbrado's engine builds after both Rust caches land, or cargo would
+  #     download the toolchain the restore is still writing
   #   gen-runtime-types finishes before lint and typecheck start, since both
   #     open with it and it deletes, then rewrites, cf-garage's generated types
   #   the suite waits for timbrado's engine (a cold cargo build inside it
@@ -164,33 +166,57 @@ jobs:
           [[ $channel =~ ^[0-9] ]] || echo "::warning title=Rust pin is a channel::rust-toolchain.toml names '$channel', which keys a cache that never refreshes"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
+      # timbrado's engine builds into target/ inside the installed package, and
+      # a fresh install has none, so every run paid a ~13s cold cargo build.
+      # The key names everything that decides the binary: the runner, the
+      # pinned rustc, and the package's real path (bun puts the pinned sha in
+      # it) plus its Cargo.lock. A bump misses and rebuilds; cargo's
+      # fingerprint check still runs on a hit, so a stale restore rebuilds
+      # rather than ships. The compiler comes from the pin, never `rustc -V`:
+      # the toolchain is still restoring here, and rustc's rustup proxy would
+      # download it into the directory the restore is writing.
+      - name: Key timbrado's engine cache
+        id: timbrado
+        env:
+          RUST_CHANNEL: ${{ steps.rust.outputs.channel }}
+        run: |
+          set -euo pipefail
+          pkg=$(realpath node_modules/timbrado)
+          echo "target=$pkg/target" >> "$GITHUB_OUTPUT"
+          echo "key=timbrado-engine-${RUNNER_OS}-$( { echo "toolchain $RUST_CHANNEL"; basename "$(dirname "$(dirname "$pkg")")"; cat "$pkg/Cargo.lock"; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      # Both restores run beside the build, which needs no Rust. In the
+      # foreground they held the build back by a median 7s (5s and 2s over 40
+      # green main pushes to 2026-11-09), on the path every run waits for.
       - name: Restore the Rust toolchain
+        id: rust-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        background: true
         with:
           path: |
             ~/.rustup/toolchains/${{ steps.rust.outputs.channel }}-*
             ~/.rustup/update-hashes/${{ steps.rust.outputs.channel }}-*
           key: rust-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}
 
-      # timbrado's engine builds into target/ inside the installed package, and
-      # a fresh install has none, so every run paid a ~13s cold cargo build.
-      # The key names everything that decides the binary: the runner, rustc
-      # (restored above), and the package's real path (bun puts the pinned
-      # sha in it) plus its Cargo.lock. A bump misses and rebuilds; cargo's fingerprint check still
-      # runs on a hit, so a stale restore rebuilds rather than ships.
-      - name: Key timbrado's engine cache
-        id: timbrado
-        run: |
-          set -euo pipefail
-          pkg=$(realpath node_modules/timbrado)
-          echo "target=$pkg/target" >> "$GITHUB_OUTPUT"
-          echo "key=timbrado-engine-${RUNNER_OS}-$( { rustc -V; basename "$(dirname "$(dirname "$pkg")")"; cat "$pkg/Cargo.lock"; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
-
       - name: Restore timbrado's engine
+        id: engine-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        background: true
         with:
           path: ${{ steps.timbrado.outputs.target }}
           key: ${{ steps.timbrado.outputs.key }}
+
+      # perf-budget owns the build and the Worker dry-run; the route oracle
+      # below loads that exact bundle. It runs in the background so the engine
+      # can start once its caches land, and the wait for it below comes before
+      # the manifest cut and every step that reads .build/.
+      - name: Build, with the performance budget
+        id: build
+        run: bun run perf-budget
+        background: true
+
+      - name: Wait for the Rust caches
+        wait: [rust-cache, engine-cache]
 
       # A cold cargo build; inside the suite it raced one test's 30s clock. So
       # it overlaps the build instead, and the suite waits for it.
@@ -199,12 +225,8 @@ jobs:
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
         background: true
 
-      # perf-budget owns the build and the Worker dry-run; the route oracle
-      # below loads that exact bundle. It stays in the foreground: the
-      # manifest is cut from what it leaves, and every step after it reads
-      # .build/.
-      - name: Build, with the performance budget
-        run: bun run perf-budget
+      - name: Wait for the build
+        wait: build
 
       # What this build stages, URL by URL, for tools/check-served.ts to compare
       # against production. Cut right after the build, before any later step can
