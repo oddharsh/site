@@ -223,16 +223,16 @@
       ]
     },
     {
-      "q": "Demo time. Flip 4 of the 7 nodes to traitors and leave the colluding box unchecked. What do the two verdict cards show?",
+      "q": "Demo time. Flip 4 of the 7 nodes to traitors. What do the two verdict cards show?",
       "options": [
         {
           "t": "BGW breaks at 3 of 7 honest, SPDZ still holds",
           "ok": true,
-          "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node plus no collusion. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
+          "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
         },
         {
           "t": "both break, a dishonest majority sinks everything",
-          "why": "A dishonest majority sinks BGW alone. SPDZ was built for exactly that regime; its card stays secure until the last honest node flips, or until you tick the colluding box with 2 or more traitors."
+          "why": "A dishonest majority sinks BGW alone. SPDZ was built for exactly that regime, so its card stays secure until the last honest node flips."
         },
         {
           "t": "both hold, the split secret protects them equally",
@@ -267,7 +267,7 @@
       ]
     },
     {
-      "q": "Back to the demo with a fresh grid. Flip exactly 3 nodes to traitors and leave the colluding box alone. That still leaves an honest majority, 4 of 7. What does the BGW card say?",
+      "q": "Back to the demo with a fresh grid. Flip exactly 3 nodes to traitors. That still leaves an honest majority, 4 of 7. What does the BGW card say?",
       "options": [
         {
           "t": "BROKEN, since 4 honest of 7 misses BGW's two-thirds bar",
@@ -284,7 +284,7 @@
         },
         {
           "t": "it depends on whether the traitors happen to be colluding",
-          "why": "The colluding box only feeds the SPDZ card; BGW's verdict counts honest nodes and nothing else. Tick and untick it with 3 traitors on the grid and the BGW card never changes."
+          "why": "BGW's verdict counts honest nodes and nothing else. Its rule line asks for at least 5 of 7, and a threshold already assumes the traitors work together, so coordination never moves the card."
         }
       ]
     },
