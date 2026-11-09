@@ -434,7 +434,7 @@
       "install": "cargo build --release --locked --manifest-path tools/photos/zensim-score/Cargo.toml",
       "optional": true,
       "optional_why": "measurement only, and BUILT ON DEMAND like zenc: zensim-probe.ts is its one caller and runs the install command when the binary is missing. Nothing in the photo pipeline or the build needs it",
-      "why": "scores image pairs with zensim 0.2.7 and zensim 0.3.0 profile B (pinned by rev in its Cargo.toml) in one process, at 8 or 16 bits, so zensim-probe.ts can set zensim beside ssimulacra2 and butteraugli on the same pixels",
+      "why": "scores image pairs with zensim 0.2.7 and zensim 0.3.0 profile A (pinned by rev in its Cargo.toml) in one process, at 8 or 16 bits, so zensim-probe.ts can set zensim beside ssimulacra2 and butteraugli on the same pixels",
       "required_by": [
         "tools/photos/zensim-probe.ts"
       ],

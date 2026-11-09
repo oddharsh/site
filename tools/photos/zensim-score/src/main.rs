@@ -1,4 +1,4 @@
-// zensim-score: zensim 0.2.7 and zensim's codec-target profile on one pair.
+// zensim-score: zensim 0.2.7 and zensim 0.3.0 profile A on one pair.
 //
 // zensim-probe.ts drives this beside libjxl's ssimulacra2 and butteraugli_main.
 // Both zensim generations score the same decoded pixels in one process, so a
@@ -8,9 +8,9 @@
 //   zensim-score batch [--st]        stdin "ref\tdist" lines, 8-bit path
 //   zensim-score score16 <ref> <dist> [--st] [--q8]   16-bit path
 //
-// batch prints, per line: ref dist, then for 0.2.7 and for B in turn
+// batch prints, per line: ref dist, then for 0.2.7 and for A in turn
 // `score raw approx_ssim2 approx_butteraugli compute_ms`, then decode_ms.
-// score16 prints `z02_score z02_raw z02_ms zB_score zB_ms`.
+// score16 prints `z02_score z02_raw z02_ms zA_score zA_ms`.
 //
 // --st computes single-threaded. --q8 rounds both images to 8 bits before the
 // 16-bit path sees them: the control for whether 16 bits reach the metric at

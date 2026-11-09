@@ -181,9 +181,9 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.11.6"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
 
 [[package]]
 name = "magetypes"
@@ -358,64 +358,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
-name = "whereat"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
-
-[[package]]
 name = "winarm-cpufeatures"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 
 [[package]]
-name = "zenblend"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d66daf1f95f9f3a3c7c4529ea1f993069e2691cc89a4f8b0f4002ced96179f68"
-dependencies = [
- "archmage",
- "magetypes",
- "safe_unaligned_simd",
-]
-
-[[package]]
-name = "zenpixels"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
-dependencies = [
- "bytemuck",
- "whereat",
-]
-
-[[package]]
 name = "zenpredict"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=417cc785b83bee0b3f827ae85c5203f5e104a308#417cc785b83bee0b3f827ae85c5203f5e104a308"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6470acef02352e08e68f05cf80e5d66588844a366ad2038ad97beb8eb2bf652"
 dependencies = [
  "archmage",
  "bytemuck",
  "libm",
  "lz4_flex",
-]
-
-[[package]]
-name = "zenresize"
-version = "0.3.1"
-source = "git+https://github.com/imazen/zenresize?rev=e3975fb9d6d6b7baa96038a0eb8e27febb37c012#e3975fb9d6d6b7baa96038a0eb8e27febb37c012"
-dependencies = [
- "archmage",
- "imgref",
- "libm",
- "linear-srgb",
- "magetypes",
- "rgb",
- "safe_unaligned_simd",
- "whereat",
- "zenblend",
- "zenpixels",
 ]
 
 [[package]]
@@ -437,7 +394,7 @@ dependencies = [
 [[package]]
 name = "zensim"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zensim.git?rev=96c3c9bb900b580a4d9c0266a0a0b50203757528#96c3c9bb900b580a4d9c0266a0a0b50203757528"
+source = "git+https://github.com/imazen/zensim.git?rev=6060039d8c0ace71d47c722ea76233bb2d745a22#6060039d8c0ace71d47c722ea76233bb2d745a22"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -450,7 +407,6 @@ dependencies = [
  "rgb",
  "thiserror",
  "zenpredict",
- "zenresize",
 ]
 
 [[package]]

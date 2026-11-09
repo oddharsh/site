@@ -1962,9 +1962,9 @@ bun tools/photos/zensim-probe.ts archive --jobs 2  # hif-archive.ts's decision a
 bun tools/photos/zensim-probe.ts speed
 ```
 `zensim-score` in `config/tools.json` is the scorer, built on first run from
-`tools/photos/zensim-score/`. It links zensim 0.2.7 and zensim's profile B
-pinned by rev, so a rerun after moving either pin is a new measurement rather
-than a refresh. The probe header carries the findings and the instrument traps.
+`tools/photos/zensim-score/`. It links zensim 0.2.7 and zensim 0.3.0 profile A
+from imazen/zensim, pinned by rev, so a rerun after moving either pin is a new
+measurement rather than a refresh. The probe header carries the findings and the instrument traps.
 Two `archive` lanes peak near 20 GB, because each 40 MP butteraugli call holds
 9 GB; don't raise `--jobs` on a 36 GB machine. Measurement only: nothing in the
 photo pipeline calls zensim.

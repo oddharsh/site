@@ -12,8 +12,8 @@
 //   1. EVERY SCORER READS THE SAME PIXELS. Each candidate is decoded once and
 //      rewritten as an 8-bit RGB PNG with no ICC by `zensim-score canon`, so a
 //      decoder or colour-management difference cannot pass for a metric one.
-//      The archive mode instead keeps sips's 16-bit reference, as production
-//      does, and feeds zensim through its 16-bit path.
+//      The archive mode instead scores what production scores: sips's 16-bit
+//      reference against djxl's 8-bit decodes, through zensim's 16-bit path.
 //   2. JOIN ON THE IMAGE PATH. libjxl scoring runs in a pool, so its rows land
 //      in completion order. Pasting them beside zensim's line by line once
 //      paired every score with the wrong image and still printed a plausible
@@ -22,11 +22,10 @@
 //      If 16-bit and rounded scores were equal, zensim could not see the 10
 //      bits the archive exists to keep, and the archive verdict would be moot.
 //   4. NO ESTIMATED GAPS. zensim's `approx_*` helpers are reported against the
-//      real libjxl numbers rather than trusted: on the pinned rev they are
-//      broken for profile B (raw_distance holds the bake's score there, and
-//      the helpers feed it to power laws fitted on a distance). The fix is
-//      upstream as an imazen/zensim PR; zensim-score/Cargo.toml says why the
-//      pin has not moved.
+//      real libjxl numbers rather than trusted: they are broken for every
+//      bake-scored profile, B then and A now (raw_distance holds the bake's
+//      output, and the helpers feed it to power laws fitted on a distance).
+//      imazen/zensim#4 tracks the fix (imazen/zensimx#69 didn't port).
 //
 //   bun tools/photos/zensim-probe.ts ladder  [--limit N] [--jobs N] [--work DIR] [--json out]
 //   bun tools/photos/zensim-probe.ts archive [--limit N] [--jobs N] [--work DIR] [--json out]
@@ -40,9 +39,10 @@
 //
 // archive: hif-archive.ts's own decision at full resolution on every 7th HIF
 // (20 frames), made four ways: libjxl's rule (ssimulacra2 AND butteraugli
-// 3-norm, through hif-archive.ts's beats()), zensim B alone, zensim 0.2.7
-// alone, and B on the 8-bit-rounded pair. Bisection, range and cjxl args are
-// IMPORTED from hif-archive.ts, so the search cannot drift from production.
+// 3-norm, through hif-archive.ts's beats()), zensim A alone, zensim 0.2.7
+// alone, and A on the 8-bit-rounded pair. Bisection, range and decode depth
+// are IMPORTED from hif-archive.ts, and the encoder is its jixel-enc, so the
+// search cannot drift from production.
 // Each libjxl score of a 40 MP pair takes 5 s and 7 GB (ssimulacra2) plus
 // 16 s and 9 GB (butteraugli); --jobs defaults to 2 so two lanes fit in 36 GB.
 //
@@ -99,12 +99,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { avifToPng8 } from "./gen-pixel-peeper.ts";
-import { ARGS, beats, searchDistance, stripPng } from "./hif-archive.ts";
+import { beats, DECODE, searchDistance, stripPng } from "./hif-archive.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ZENC = path.join(HERE, "zenc/target/release/zenc");
-const SCORER_DIR = path.join(HERE, "zensim-score");
-const SCORER = path.join(SCORER_DIR, "target/release/zensim-score");
+const SCORER = path.join(HERE, "zensim-score/target/release/zensim-score");
+// hif-archive.ts's encoder; it builds its own copy through the same cargo call.
+const JIXEL = path.join(HERE, "jixel-enc/target/release/jixel-enc");
 // CLAUDE.md: new photos come from here and nowhere else on disk.
 const SRC = "/Users/aadharsh/Downloads/to post (from ssd)";
 
@@ -143,11 +144,13 @@ function prerequisites() {
   if (!fs.existsSync(ZENC)) {
     throw new Error(`zenc is not built: cargo build --release --locked --manifest-path ${path.relative(process.cwd(), path.join(HERE, "zenc/Cargo.toml"))}`);
   }
-  if (!fs.existsSync(SCORER)) {
-    // Built on demand, like zenc in the photo shells.
-    console.error("building zensim-score (once)...");
-    const b = Bun.spawnSync(["cargo", "build", "--release", "--locked", "--manifest-path", path.join(SCORER_DIR, "Cargo.toml")], { stderr: "inherit" });
-    if (b.exitCode !== 0) throw new Error("cargo build of zensim-score failed");
+  // Built on demand, like zenc in the photo shells.
+  for (const bin of [SCORER, JIXEL]) {
+    if (fs.existsSync(bin)) continue;
+    const name = path.basename(bin);
+    console.error(`building ${name} (once)...`);
+    const b = Bun.spawnSync(["cargo", "build", "--release", "--locked", "--manifest-path", path.join(HERE, name, "Cargo.toml")], { stderr: "inherit" });
+    if (b.exitCode !== 0) throw new Error(`cargo build of ${name} failed`);
   }
 }
 
@@ -253,7 +256,7 @@ async function encodeLadder(file: string): Promise<{ ref: string; encs: Enc[] }>
   return { ref, encs };
 }
 
-type Row = Enc & Lib & { z02: number; z02s2: number; z02ba: number; zB: number; zBs2: number; zBba: number; libMs: number; zMs: number };
+type Row = Enc & Lib & { z02: number; z02s2: number; z02ba: number; zA: number; zAs2: number; zAba: number; libMs: number; zMs: number };
 
 async function ladder() {
   prerequisites();
@@ -290,7 +293,7 @@ async function ladder() {
     const l = libBy.get(e.png),
       c = zBy.get(e.png);
     if (!l || !c) throw new Error(`missing score for ${e.png}`);
-    return { ...e, s2: l.s2, ba: l.ba, ba3: l.ba3, libMs: l.ms, z02: c[0], z02s2: c[2], z02ba: c[3], zB: c[5], zBs2: c[7], zBba: c[8], zMs: c[4] + c[9] };
+    return { ...e, s2: l.s2, ba: l.ba, ba3: l.ba3, libMs: l.ms, z02: c[0], z02s2: c[2], z02ba: c[3], zA: c[5], zAs2: c[7], zAba: c[8], zMs: c[4] + c[9] };
   });
   report(rows);
   const out = arg("json");
@@ -301,7 +304,7 @@ function report(rows: Row[]) {
   const stems = [...new Set(rows.map((r) => r.stem))].sort();
   const by = (s: string) => rows.filter((r) => r.stem === s);
   // every metric oriented so higher is better
-  const M: Record<string, (r: Row) => number> = { s2: (r) => r.s2, ba3: (r) => -r.ba3, ba: (r) => -r.ba, z02: (r) => r.z02, zB: (r) => r.zB };
+  const M: Record<string, (r: Row) => number> = { s2: (r) => r.s2, ba3: (r) => -r.ba3, ba: (r) => -r.ba, z02: (r) => r.z02, zA: (r) => r.zA };
   const names = Object.keys(M);
   const table = (title: string, cell: (a: string, b: string) => string) => {
     console.log(`\n${title}\n        ${names.map((n) => n.padStart(8)).join("")}`);
@@ -330,9 +333,9 @@ function report(rows: Row[]) {
   console.log("\nzensim's approximations against the real libjxl numbers:");
   for (const [label, f, g] of [
     ["0.2.7 approx_ssim2 vs ssimulacra2", (r: Row) => r.z02s2, (r: Row) => r.s2],
-    ["B approx_ssim2 vs ssimulacra2", (r: Row) => r.zBs2, (r: Row) => r.s2],
+    ["A approx_ssim2 vs ssimulacra2", (r: Row) => r.zAs2, (r: Row) => r.s2],
     ["0.2.7 approx_butteraugli vs max", (r: Row) => r.z02ba, (r: Row) => r.ba],
-    ["B approx_butteraugli vs max", (r: Row) => r.zBba, (r: Row) => r.ba],
+    ["A approx_butteraugli vs max", (r: Row) => r.zAba, (r: Row) => r.ba],
   ] as const) {
     console.log(
       `  ${label.padEnd(34)} MAE ${mean(rows.map((r) => Math.abs(f(r) - g(r))))
@@ -355,7 +358,7 @@ function report(rows: Row[]) {
   for (const [label, f, lo, hi, inc] of [
     ["butteraugli 3-norm", M.ba3, -3, 0, 0.01],
     ["zensim 0.2.7", M.z02, 0, 100, 0.05],
-    ["zensim B", M.zB, 0, 100, 0.05],
+    ["zensim A", M.zA, 0, 100, 0.05],
   ] as const) {
     let best = { t: lo, err: Infinity };
     for (let t = lo; t <= hi; t += inc) {
@@ -407,11 +410,11 @@ function report(rows: Row[]) {
 }
 
 // ---- archive ----------------------------------------------------------------
-type Z16 = { z02: number; zB: number; z02q8: number; zBq8: number };
+type Z16 = { z02: number; zA: number; z02q8: number; zAq8: number };
 async function zen16(ref: string, img: string): Promise<Z16> {
   const o = (await sh([SCORER, "score16", ref, img])).split("\t").map(Number);
   const q = (await sh([SCORER, "score16", ref, img, "--q8"])).split("\t").map(Number);
-  return { z02: o[0], zB: o[3], z02q8: q[0], zBq8: q[3] };
+  return { z02: o[0], zA: o[3], z02q8: q[0], zAq8: q[3] };
 }
 
 async function archiveOne(hif: string) {
@@ -421,13 +424,16 @@ async function archiveOne(hif: string) {
     const raw = path.join(dir, "raw.png"),
       ref = path.join(dir, "ref.png");
     const baseJpg = path.join(dir, "base.jpg"),
-      base = path.join(dir, "base.ppm");
+      repack = path.join(dir, "base.jxl"),
+      base = path.join(dir, "base.png");
     // hif-archive.ts's reference, and add-photos.sh's baseline (its jpegtran
-    // pass only reorders scans, so the decoded pixels are zenc's).
+    // pass only reorders scans, so the decoded pixels are zenc's), decoded the
+    // way hif-archive.ts decodes it: repacked losslessly, then djxl at 8 bits.
     await sh(["sips", "-s", "format", "png", hif, "--out", raw]);
     stripPng(raw, ref);
     await sh([ZENC, raw, baseJpg, "-q", "100", "--yuv", "422"]);
-    await sh(["djpeg", "-outfile", base, baseJpg]);
+    await sh(["cjxl", "--quiet", "--lossless_jpeg=1", "-e", "1", baseJpg, repack]);
+    await sh(["djxl", repack, base, ...DECODE]);
     const baseLib = await libjxl(ref, base),
       baseZ = await zen16(ref, base);
 
@@ -438,8 +444,8 @@ async function archiveOne(hif: string) {
       if (!c) {
         const jxl = path.join(dir, `d${d}.jxl`),
           dec = path.join(dir, `d${d}.png`);
-        await sh(["cjxl", "--quiet", "-d", String(d), ...ARGS, ref, jxl]);
-        await sh(["djxl", jxl, dec]);
+        await sh([JIXEL, ref, jxl, String(d)]);
+        await sh(["djxl", jxl, dec, ...DECODE]);
         c = { d, bytes: fs.statSync(jxl).size, z: await zen16(ref, dec) };
         cands.set(d, c);
       }
@@ -448,18 +454,18 @@ async function archiveOne(hif: string) {
     const withLib = async (c: Cand) => (c.lib ??= await libjxl(ref, path.join(dir, `d${c.d}.png`)));
 
     const libjxlPick = await searchDistance(async (d) => beats(await withLib(await cand(d)), baseLib));
-    const zB = await searchDistance(async (d) => (await cand(d)).z.zB > baseZ.zB);
+    const zA = await searchDistance(async (d) => (await cand(d)).z.zA > baseZ.zA);
     const z02 = await searchDistance(async (d) => (await cand(d)).z.z02 > baseZ.z02);
-    const zBq8 = await searchDistance(async (d) => (await cand(d)).z.zBq8 > baseZ.zBq8);
+    const zAq8 = await searchDistance(async (d) => (await cand(d)).z.zAq8 > baseZ.zAq8);
     // Would zensim's pick clear libjxl's bar? Score it to find out.
-    for (const d of [zB, z02]) if (d !== null) await withLib(await cand(d));
-    console.error(`${stem} libjxl=${libjxlPick} zB=${zB} z02=${z02} zBq8=${zBq8}`);
+    for (const d of [zA, z02]) if (d !== null) await withLib(await cand(d));
+    console.error(`${stem} libjxl=${libjxlPick} zA=${zA} z02=${z02} zAq8=${zAq8}`);
     return {
       stem,
       baseBytes: fs.statSync(baseJpg).size,
       baseLib,
       baseZ,
-      picks: { libjxl: libjxlPick, zB, z02, zBq8 },
+      picks: { libjxl: libjxlPick, zA, z02, zAq8 },
       cands: [...cands.values()].sort((a, b) => a.d - b.d),
     };
   } finally {
@@ -492,16 +498,16 @@ function archiveReport(recs: Arch[]) {
     const c = d === null ? undefined : r.cands.find((x) => x.d === d);
     return c?.lib ? beats(c.lib, r.baseLib) : false;
   };
-  console.log(`\nArchive decision on ${n} HIFs at full resolution (largest cjxl distance beating the q100 4:2:2 JPEG):`);
-  for (const k of ["zB", "z02", "zBq8"] as const) {
+  console.log(`\nArchive decision on ${n} HIFs at full resolution (largest jixel distance beating the q100 4:2:2 JPEG):`);
+  for (const k of ["zA", "z02", "zAq8"] as const) {
     const same = recs.filter((r) => r.picks[k] === r.picks.libjxl).length;
     const bytes = median(recs.map((r) => bytesAt(r, r.picks[k]) / bytesAt(r, r.picks.libjxl) - 1).filter(Number.isFinite));
-    const pass = k === "zBq8" ? "" : `  its pick clears libjxl's bar ${recs.filter((r) => clears(r, r.picks[k])).length}/${n}`;
+    const pass = k === "zAq8" ? "" : `  its pick clears libjxl's bar ${recs.filter((r) => clears(r, r.picks[k])).length}/${n}`;
     console.log(`  ${k.padEnd(5)} same distance as libjxl ${same}/${n}  median bytes vs libjxl's pick ${pct(bytes)}${pass}`);
   }
-  console.log(`  B on 16 bits vs rounded to 8: same pick ${recs.filter((r) => r.picks.zB === r.picks.zBq8).length}/${n}`);
-  const lift = recs.flatMap((r) => r.cands.map((c) => c.z.zB - c.z.zBq8));
-  console.log(`  B's 16-bit lift over the 8-bit control: median ${median(lift).toFixed(3)}, max ${Math.max(...lift).toFixed(3)} points`);
+  console.log(`  A on 16 bits vs rounded to 8: same pick ${recs.filter((r) => r.picks.zA === r.picks.zAq8).length}/${n}`);
+  const lift = recs.flatMap((r) => r.cands.map((c) => c.z.zA - c.z.zAq8));
+  console.log(`  A's 16-bit lift over the 8-bit control: median ${median(lift).toFixed(3)}, max ${Math.max(...lift).toFixed(3)} points`);
   // hif-archive.ts bisects, which assumes the score worsens as distance grows.
   let inv = 0,
     steps = 0,
@@ -511,7 +517,7 @@ function archiveReport(recs: Arch[]) {
   for (const r of recs) {
     for (let i = 1; i < r.cands.length; i++) {
       steps++;
-      const up = r.cands[i].z.zB - r.cands[i - 1].z.zB;
+      const up = r.cands[i].z.zA - r.cands[i - 1].z.zA;
       if (up > 0) {
         inv++;
         worst = Math.max(worst, up);
@@ -524,7 +530,7 @@ function archiveReport(recs: Arch[]) {
     }
   }
   console.log(
-    `  monotonicity, adjacent tried distances where the score IMPROVES as distance grows: B ${inv}/${steps} (worst +${worst.toFixed(2)}), ssimulacra2 ${invS2}/${stepsS2}`,
+    `  monotonicity, adjacent tried distances where the score IMPROVES as distance grows: A ${inv}/${steps} (worst +${worst.toFixed(2)}), ssimulacra2 ${invS2}/${stepsS2}`,
   );
 }
 
