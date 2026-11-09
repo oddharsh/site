@@ -10,6 +10,7 @@ import { join } from "node:path";
 
 import { parseCss } from "./lib/css-parse.ts";
 import { closeTagSource } from "./lib/html-raw-text.ts";
+import { readManifest } from "./gen-manifest.ts";
 import { validateUnderstanding } from "../pipelines/content/page-contract.ts";
 import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.ts";
 import { pageHtml as renderGaragePage } from "../pipelines/garage/generate.ts";
@@ -99,7 +100,7 @@ for (const file of garageSpecFiles) {
 // Every Garage page has one title, held in site-manifest.json, and it follows
 // the rules in pipelines/garage/README.md ("Titles"). Each page used to carry
 // up to three, mostly fragments, until 2026-11-09.
-const TITLE_BREAKS = [
+const TITLE_BREAKS: [RegExp, string][] = [
   [/,/, "a comma"],
   [/;/, "a semicolon"],
   [/:/, "a colon"],
@@ -109,13 +110,7 @@ const TITLE_BREAKS = [
   [/—/, "an em dash"],
   [/\.$/, "a trailing period"],
 ];
-const garageTitles = [];
-(function collect(node) {
-  if (Array.isArray(node)) return node.forEach(collect);
-  if (!node || typeof node !== "object") return;
-  if (typeof node.path === "string" && node.path.startsWith("/garage/")) garageTitles.push({ path: node.path, title: node.title });
-  Object.values(node).forEach(collect);
-})(JSON.parse(await readFile(join(ROOT, "config/site-manifest.json"), "utf8")));
+const garageTitles: { path: string; title: string }[] = readManifest().surfaces.filter((s) => s.path.startsWith("/garage/"));
 assert.ok(garageTitles.length >= 25, `site-manifest.json yielded ${garageTitles.length} Garage titles; did its shape change?`);
 const unescape = (s) =>
   s
