@@ -172,7 +172,7 @@ export const AGENT_SURFACES = [
     "path": "/lwe/vigenere",
     "title": "Vigenère",
     "mimeType": "text/html",
-    "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench."
+    "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, the solved Paradigm PK puzzles, and a keystream workbench."
   },
   {
     "path": "/lwe/encoding",
