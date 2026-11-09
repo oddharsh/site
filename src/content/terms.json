@@ -609,6 +609,11 @@
     "plain": "A search that starts from a guess and keeps any small change that improves a score, stopping when no change helps.",
     "src": "https://en.wikipedia.org/wiki/Hill_climbing"
   },
+  "hill-cipher": {
+    "label": "Hill cipher",
+    "plain": "A cipher that turns each block of letters into numbers and multiplies the block by a key matrix, mod 26, so every output letter depends on the whole block.",
+    "src": "https://en.wikipedia.org/wiki/Hill_cipher"
+  },
   "hinting": {
     "label": "Font hinting",
     "plain": "Instructions inside a font that move its outlines onto the pixel grid at small sizes, before the letter is rasterized.",
