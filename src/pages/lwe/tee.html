@@ -115,13 +115,16 @@
 
         <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>21:27</time></div>
           <div class="bubble"><span class="tagai">AI &middot; expanding the essay</span>
-          <p>the essay names the symptoms (heat, cache, power); here's the loose <b>taxonomy</b> of side-channels:</p>
+          <p>the essay names the symptoms (heat, cache, power); here's the loose <b>taxonomy</b> of side-channels, plus two cousins that skip the physics:</p>
           <p>• <b>Timing</b>: secret-dependent branches take measurably different times.<br>
-          • <b>Cache</b>: what got cached vs evicted reveals which memory the secret touched (this family powers Spectre/Meltdown-style attacks and the Aepicleak-era tricks).<br>
+          • <b>Cache</b>: what got cached vs evicted reveals which memory the secret touched (this family powers Spectre/Meltdown-style attacks).<br>
           • <b>Power</b>: the current draw traces the exact operations (classic on smartcards and SIMs).<br>
           • <b>EM / thermal</b>: radiated emissions and heat leak the same thing, contactlessly.<br>
-          • <b>Fault injection</b>: glitch the voltage, clock, or memory (Rowhammer, AMD SEV's BadRAM) to make the chip mis-compute and spill secrets.</p>
-          <p>all of them read the <em>physics around</em> the computation and leave the math intact. that's why a sealed chip stays so hard to fully trust.</p></div></div></div>
+          • <b>Fault injection</b>: glitch the voltage, clock, or memory (Plundervolt on SGX, Rowhammer) to make the chip mis-compute and spill secrets.</p>
+          <p>the cousins:<br>
+          • <b>Architectural bugs</b>: the chip just hands back data it shouldn't. Aepicleak read stale enclave data straight out of Intel's APIC registers, no measurement needed.<br>
+          • <b>Memory aliasing</b>: BadRAM reprogrammed a DIMM's SPD chip to report phantom capacity, so two addresses land on one cell and the host can read and replay AMD SEV-SNP memory.</p>
+          <p>side-channels read the <em>physics around</em> the computation; the cousins break the hardware's own rules. either way the math stays intact, and that's why a sealed chip stays so hard to fully trust.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:28</time></div>
           <div class="bubble"><p>These attacks collectively speak to how complex TEEs are, as well as how difficult it can be to use TEEs as the sole layer of security for a network. Given the limited capacity to update a TEE's hardware and firmware, as well as its unique and immutable root of trust, fully trusting a closed source TEE implies trusting the TEE's firmware maintainers as well as manufacturers, who feasibly could have a log matching TEEs to their unique roots of trust. Further, fully trusting a network of closed source TEEs in operation implies fully trusting that the TEE isn't compromised and is operated by a non-malicious actor. As such, <b>the value for malicious actors to exploit a TEE must be lower than the cost to perform said exploit</b> at each of these layers.</p>

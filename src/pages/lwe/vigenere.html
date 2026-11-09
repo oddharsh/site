@@ -168,14 +168,14 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
           <div class="bubble"><p>and Kryptos K1–K3 are these?</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:04</time></div>
-          <div class="bubble"><p><b>K1</b> and <b>K2</b> are Vigenère on a <b>keyed alphabet</b>: the <a class="term" data-t="tabula-recta" href="https://en.wikipedia.org/wiki/Tabula_recta" title="A 26 by 26 table of alphabets, each row shifted one letter from the last, used to encrypt and decrypt Vigenère-style ciphers by lookup." rel="external">tableau</a> is built on the keyword <code>KRYPTOS</code>, so the alphabet becomes <code>KRYPTOSABCDEFGHIJLMNQUVWXZ</code> instead of <code>A…Z</code>. K1's running key is <code>PALIMPSEST</code>; K2's is <code>ABSCISSA</code>. Hit the <b>Kryptos K1</b> preset above and it reproduces the real sculpture ciphertext <span class="mono">EMUFPHZLRFAXYUSDJKZLD…</span>; decrypt that and you get Sanborn's line ending in the deliberate misspelling <em>"…the nuance of iqlusion."</em></p>
+          <div class="bubble"><p><b>K1</b> and <b>K2</b> are Vigenère on a <b>keyed alphabet</b>: the <a class="term" data-t="tabula-recta" href="https://en.wikipedia.org/wiki/Tabula_recta" title="A 26 by 26 table of alphabets, each row shifted one letter from the last, used to encrypt and decrypt Vigenère-style ciphers by lookup." rel="external">tableau</a> is built on the keyword <code>KRYPTOS</code>, so the alphabet becomes <code>KRYPTOSABCDEFGHIJLMNQUVWXZ</code> instead of <code>A…Z</code>. K1's key is <code>PALIMPSEST</code> and K2's is <code>ABSCISSA</code>, each repeated end to end. Hit the <b>Kryptos K1</b> preset above and it reproduces the real sculpture ciphertext <span class="mono">EMUFPHZLRFAXYUSDJKZLD…</span>; decrypt that and you get Sanborn's line ending in the deliberate misspelling <em>"…the nuance of iqlusion."</em></p>
           <p><b>K3</b> plays a different game: it's a <b>transposition</b>. The letters are all correct, just rearranged by a route or columnar scheme. That split, substitution versus transposition, becomes the whole game once you reach the unsolved parts.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:05</time></div>
           <div class="bubble"><p>plain Vigenère gets broken through the repeating key though, right? what's an <b>autokey</b>?</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:05</time></div>
-          <div class="bubble"><p>Exactly: a repeating key has a <b>period</b>, and that period is its weakness. <a class="term" data-t="kasiski-examination" href="https://en.wikipedia.org/wiki/Kasiski_examination" title="A way to find a repeating key's length by measuring the gaps between repeated chunks of ciphertext; the key length usually divides those gaps." rel="external">Kasiski spacing</a> and the Friedman test recover the key length, and then it's 26 little Caesars you solve separately. An <b>autokey</b> kills the period by <em>extending</em> the key with the message itself (the key, then the plaintext). No repeat means no period to find. Switch the demo's mode to <em>autokey</em> and watch the keystream stop repeating.</p></div></div></div>
+          <div class="bubble"><p>Exactly: a repeating key has a <b>period</b>, and that period is its weakness. <a class="term" data-t="kasiski-examination" href="https://en.wikipedia.org/wiki/Kasiski_examination" title="A way to find a repeating key's length by measuring the gaps between repeated chunks of ciphertext; the key length usually divides those gaps." rel="external">Kasiski spacing</a> and the Friedman test recover the key length, and then it's one little Caesar per key letter, each solved separately. An <b>autokey</b> kills the period by <em>extending</em> the key with the message itself (the key, then the plaintext). No repeat means no period to find. Switch the demo's mode to <em>autokey</em> and watch the keystream stop repeating.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:06</time></div>
           <div class="bubble"><p>ok, the unsolved Kryptos-style stuff. how do you even <em>start</em> when you don't know anything?</p></div></div></div>
@@ -290,10 +290,10 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:11</time></div>
           <div class="bubble"><p>back up to the <b>transposition</b> stage for a sec. K3 of Kryptos is pure transposition, no substitution at all, right? show me <b>columnar</b> specifically, and the double version.</p></div></div></div>
 
-        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:12</time></div>
           <div class="bubble"><p>Right: in K3 every letter keeps its identity and only its <em>position</em> moves. Columnar is the workhorse. Write the message into a grid <b>row by row</b> under a keyword, then read it back <b>column by column</b>, taking the columns in the <b>alphabetical order of the keyword's letters</b>. <code>KRYPTOS</code> ranks its seven columns <code>1&nbsp;4&nbsp;7&nbsp;3&nbsp;6&nbsp;2&nbsp;5</code>, so you read the <b>K</b> column first, then <b>O</b>, then <b>P</b>, and so on. Same letters, new order, and a ragged last row is the only bookkeeping. <b>Double</b> columnar just runs that twice, the first ciphertext poured into a fresh grid under a second keyword. The two passes scramble the column structure enough that the hand version resisted <a class="term" data-t="cryptanalysis" href="https://en.wikipedia.org/wiki/Cryptanalysis" title="The study and practice of breaking ciphers and recovering secrets without being given the key." rel="external">cryptanalysis</a> for decades. There's a clean step-by-step <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">walkthrough here</a>. Drag the grid:</p></div></div></div>
 
-        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:12</time></div>
           <div class="demo" id="demo-colt">
             <div class="bar">Vigen&egrave;re shared a demo: columnar transposition</div>
             <div class="pad">
@@ -310,7 +310,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
             </div>
           </div></div></div>
 
-        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:10</time></div>
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:13</time></div>
           <div class="bubble"><p>so cranking Kryptos really means searching the space of (transposition × substitution × key × order), then ranking every candidate by how English-shaped its stats are. thanks, Vigenère.</p>
           <p>→ <a href="https://en.wikipedia.org/wiki/Kryptos" rel="external">Kryptos</a> · <a href="https://en.wikipedia.org/wiki/Vigen%C3%A8re_cipher" rel="external">Vigenère cipher</a> · <a href="https://en.wikipedia.org/wiki/Index_of_coincidence" rel="external">Index of coincidence</a> · <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">columnar transposition (Karl Wang, UCSD)</a> · <a href="/lwe">back to Learning With Errors</a></p></div></div></div>
 
@@ -403,7 +403,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
     if (r.N < 20) { v.className = "st-verdict mid"; v.textContent = "need more text for a stable reading."; }
     else if (r.v >= 0.060) { v.className = "st-verdict eng"; v.innerHTML = "<b>English-shaped</b> (IoC ≈ .067): looks like a solved / single-alphabet text. signal!"; }
     else if (r.v <= 0.045) { v.className = "st-verdict rand"; v.innerHTML = "<b>flat / noisy</b> (IoC ≈ .038): random, or still polyalphabetic. keep cranking."; }
-    else { v.className = "st-verdict mid"; v.innerHTML = "<b>partial structure</b>, between random and English. maybe a transposition (right letters, wrong order) or a short key."; }
+    else { v.className = "st-verdict mid"; v.innerHTML = "<b>partial structure</b>, between random and English. maybe a Vigenère with a very short key. a transposition or a one-alphabet substitution would still read English-shaped, since IoC only counts repeated letters and ignores both their order and their names."; }
   }
   $("st-in").addEventListener("input", renderStat);
   D.querySelectorAll("#demo-stat .preset").forEach(function (b) { b.addEventListener("click", function () { $("st-in").value = ST[b.dataset.st]; renderStat(); }); });
