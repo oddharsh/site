@@ -226,7 +226,7 @@
     {
       "who": "bot",
       "time": "23:05",
-      "html": "<p>A color image carries one luma plane (brightness) plus two chroma planes (color). Drop to grayscale and you delete both chroma planes, roughly two-thirds of the color information, so the file falls hard. The garage study has the side-by-side counts.</p>"
+      "html": "<p>A color image carries one luma plane (brightness) plus two chroma planes (color). Drop to grayscale and you delete both chroma planes: two of every three samples at full color resolution, one in three at the web's usual 4:2:0. The garage study has the side-by-side counts.</p>"
     },
     {
       "who": "you",
