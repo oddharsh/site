@@ -494,7 +494,7 @@
       "section": "lwe",
       "kind": "content",
       "short": "vigenère",
-      "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench.",
+      "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, the solved Paradigm PK puzzles, and a keystream workbench.",
       "hint": "the Vigenère cipher and Kryptos: keystream workbench, cipher stats",
       "flags": {
         "run": true,

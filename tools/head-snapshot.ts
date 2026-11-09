@@ -178,7 +178,7 @@ async function record(outPath: string, root: string, label: string) {
   console.log(`head-snapshot: recorded ${label}, ${pages.length} documents (${canonicals} with a canonical, ${fragments} fragments skipped) -> ${outPath}`);
 }
 
-const cell = (v: string | undefined) => (v === undefined ? "—" : v === "" ? "_(empty)_" : v.replace(/\|/g, "\\|").replace(/\n/g, " "));
+const cell = (v: string | undefined) => (v === undefined ? "—" : v === "" ? "_(empty)_" : v.replace(/[\\|]/g, "\\$&").replace(/\n/g, " "));
 
 /** The diff as Markdown: one row per fact that differs, nothing for the rest. */
 export function compareSnapshots(base: Snapshot, head: Snapshot): string {
