@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/controls: Every check here proves it can still fail on each push</title>
+<meta name="description" content="A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one&#39;s defect in the browser and see which go blind.">
+<link rel="canonical" href="https://aadhar.sh/garage/controls">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/controls: Every check here proves it can still fail on each push">
+<meta property="og:description" content="A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one&#39;s defect in the browser and see which go blind.">
+<meta property="og:url" content="https://aadhar.sh/garage/controls">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-controls.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/controls interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-controls.jpg">
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+@media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
+
+.gc-bench{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;padding:12px;margin:10px 0 14px}
+.gc-presets{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.gc-sum{font-size:var(--text-sm);color:var(--slate-30);margin:0 0 10px;font-family:var(--font-mono)}
+.gc-guard{border:1px solid var(--slate-82);background:var(--surface-field);padding:8px 10px;margin:0 0 8px}
+.gc-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin:0 0 4px}
+.gc-head b{font-family:var(--font-caption);color:var(--luna-44)}
+.gc-cite{font-size:var(--text-micro);color:var(--ink-dim)}
+.gc-guard label{display:flex;gap:6px;align-items:baseline;font-size:var(--text-xs);color:var(--slate-30);margin:2px 0}
+.gc-runs{display:grid;gap:3px;margin:6px 0 0;font-size:var(--text-xs)}
+.gc-run{display:grid;grid-template-columns:84px 44px 1fr;gap:6px;align-items:baseline}
+.gc-run .gc-lbl{color:var(--ink-dim)}
+.gc-run .gc-res{font-family:var(--font-mono);font-weight:bold}
+.gc-run .gc-res.pass{color:var(--green-51)}
+.gc-run .gc-res.fail{color:var(--danger-deep)}
+.gc-run code{font-size:var(--text-micro);white-space:normal;overflow-wrap:anywhere}
+.gc-verdict{margin:6px 0 0;font-size:var(--text-xs);color:var(--slate-30);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.gc-chip{font-family:var(--font-mono);font-size:var(--text-micro);font-weight:bold;letter-spacing:.05em;padding:1px 6px;border:1px solid;border-radius:2px;white-space:nowrap}
+.gc-chip.caught{color:var(--green-51);background:var(--green-97)}
+.gc-chip.blind{color:var(--danger-deep);background:var(--red-95)}
+.gc-chip.wrong,.gc-chip.red{color:var(--warn);background:var(--amber-96)}
+.gc-scroll{overflow-x:auto;margin:0 0 12px}
+.gc-table{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
+.gc-table th,.gc-table td{border:1px solid var(--slate-82);padding:4px 8px;text-align:left;vertical-align:top}
+.gc-table thead th{background:var(--slate-92);font-family:var(--font-caption);color:var(--luna-44)}
+.gc-table tbody tr:nth-child(even){background:var(--row-alt)}
+@media (max-width:520px){.gc-run{grid-template-columns:70px 40px 1fr}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/controls</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div><!-- /axp:window -->
+  <main id="main" class="content prose">
+<h1>Every check here proves it can still fail on each push</h1>
+<p class="garage-intro">Every check in this repo makes two claims: it passes on a good tree, and it fails on the defect it guards. CI tested the first claim on every push. The second was tested once, by hand, in the PR that added the check, and 20 commit bodies record a &quot;Controls:&quot; run that never ran again. In between, three checks read zero files for up to 60 days while every build went green.</p>
+
+<h2>A green check is half a measurement</h2>
+<p>A check that passes says one of two things: the tree is clean, or the check stopped looking. From the outside they read the same. Invariant 8c fails the build when a Garage page has no entry in <code>site-manifest.json</code>. The www/ split in #457 (2026-08-18) left its walk pointed at <code>public/garage</code>, which still held <code>av2/</code> and <code>lean/</code> assets but no <code>.html</code>. The directory existed, so the walk succeeded, found nothing, and reported nothing unregistered. It inspected 0 of 39 pages for 60 days.</p>
+<p>The only way to tell the two apart is to plant the defect and see whether the check notices. That&apos;s a control: the edit that reintroduces the bug, the check that must catch it, and the words the check prints when it does. Since 2026-10-30, <code>tools/lib/controls.ts</code> keeps each one as data, and <code>bun run controls</code> plants every one on every push.</p>
+
+<h2>The bench</h2>
+<p>Four checks from this repo, rebuilt small enough to run in your browser. Each runs twice, the way the harness runs it: once on a good tree, which has to pass, and once with its defect planted. The first box replays the change that blinded the real check. The second applies the fix it got.</p>
+<section class="demo gc-bench" id="gc-bench" aria-label="the bench: four checks, each run on a good tree and with its defect planted">
+  <div class="gc-presets">
+    <button type="button" class="xp-button compact" data-preset="before">the tree on 2026-10-16</button>
+    <button type="button" class="xp-button compact" data-preset="today">today&apos;s tree</button>
+    <button type="button" class="xp-button compact" data-preset="clean">before any of it</button>
+  </div>
+  <p class="gc-sum" id="gc-sum" aria-live="polite"></p>
+  <div id="gc-rows"></div>
+  <noscript><p>The bench needs JavaScript. The ledger below records what the real checks did.</p></noscript>
+</section>
+<p>Press the first preset. Every good tree still passes, which is all <code>validate</code> could see that week, and every planted defect sails through. Then turn on the walk&apos;s drift and its floor together: the good tree goes red. The floor leaves the walk reading the wrong directory and refuses to call the empty walk a pass, so the move that blinds the check fails the build it lands in.</p>
+
+<h2>Four verdicts, and why the words matter</h2>
+<p>The harness reads each planted run as one of four verdicts. <b>CAUGHT</b>: the check went red and printed its own line. <b>BLIND</b>: it passed with the defect in place, which is the finding the harness exists for. <b>WRONG REASON</b>: it went red, but something else failed first. <b>STALE</b>: the text a mutation anchors on has moved, so the defect can&apos;t be planted. A contract test in <code>validate</code> fails on STALE, so the PR that refactors a guarded file has to move its control too.</p>
+<p>WRONG REASON is why every control quotes its check. The first serendipity control planted its conflict marker as bare code. Bun&apos;s parser failed the build before the scan ran, so on the tree before #1390 the harness read WRONG REASON where the truth was BLIND. The marker now sits inside a template literal, where the module still parses and only the scan can see it. Tick &quot;plant it as bare code&quot; on the bench to watch the same thing happen.</p>
+<p>Before any control runs, each distinct check runs once on an unplanted clone and has to pass. A check that&apos;s already red proves nothing by going red again.</p>
+
+<h2>What the first runs found</h2>
+<div class="gc-scroll"><table class="gc-table">
+<thead><tr><th>check</th><th>what changed under it</th><th>what it read</th><th>blind for</th><th>found</th></tr></thead>
+<tbody>
+<tr><td>invariant 8c: every page registered</td><td>#457 moved the pages to <code>src/pages</code> (2026-08-18)</td><td>0 of 39 pages</td><td>60 days</td><td>by luck, #1390</td></tr>
+<tr><td>conflict-marker scan</td><td>#523 made serendipity TypeScript (2026-08-23)</td><td>0 of 3 files</td><td>55 days</td><td>by luck, #1390</td></tr>
+<tr><td>taskbar-floor agreement</td><td>#1369 spelled the floor through <code>--taskbar-h</code> (2026-10-16)</td><td>0 of 3 copies</td><td>1 day</td><td>by luck, #1408</td></tr>
+<tr><td>gotcha 13&apos;s Response walker</td><td>#494 typed two inits as <code>ResponseInit</code> (2026-08-20)</td><td>2 inits misread as Responses</td><td>70 days</td><td>writing a control, #1488</td></tr>
+<tr><td>deploy-command pins</td><td>no check read the 4 deploy scripts outside <code>infra.json</code></td><td>0 of 4 scripts</td><td>always</td><td>writing a control, #1488</td></tr>
+<tr><td>22 git scans</td><td>each listed files from the index, which misses a file before <code>git add</code></td><td>19 of 22 blind on an unadded file</td><td>since each was written</td><td>planting one per scan, #1490</td></tr>
+</tbody></table></div>
+<p>The first three were found by accident. Replayed against the trees before #1390 and #1408, the harness reads BLIND on all three, so it would have caught each one the day it opened. The last three it found itself, within a day of landing. Gotcha 13&apos;s walker is the expensive one: it guards the <code>encodeBody</code> flag that a rebuilt Response drops, and for 70 days a rebuilt Response on the noindex path could drop that flag and the walker would pass it.</p>
+
+<h2>What it costs</h2>
+<p>Each control plants into its own copy-on-write clone of the worktree: one <code>clonefile(2)</code> call, about 130 ms on 2026-10-29. Other sessions work in the same tree, so a planted conflict marker must never land where one of them could commit it. In CI the checkout is private, so the runner plants in place and puts every touched file back.</p>
+<p>The registry went from 11 controls on 2026-10-30 to 25 the next day and 44 on 2026-11-09, covering 11 gotchas. On 2026-11-09 all 44 read CAUGHT across 28 distinct checks in 94.1 s on a 12-core M3 running four clones at a time. CI ran the 42 then on main in 81.3 s. The job reports beside <code>validate</code> with <code>continue-on-error</code>. A blind check is a finding about the checks, so it never holds up a release.</p>
+
+<h2>What it can&apos;t see</h2>
+<p>A control proves a check catches the one defect someone wrote down. A defect nobody planted stays invisible. The deploy-pin gap had no check at all, and the harness found it only because writing that control sent someone looking. Coverage is still a list a person keeps, so gotcha 90 asks every new check to arrive with its control in the same PR, quoting the line the check prints when it catches.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </main>
+  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-11-09</span></div>
+</div>
+
+<script>
+(function(){
+  var bench = document.getElementById("gc-bench");
+  if (!bench) return;
+  var rows = document.getElementById("gc-rows"), sum = document.getElementById("gc-sum");
+  var ok = function(says){ return { fail: false, says: says }; };
+  var no = function(says){ return { fail: true, says: says }; };
+  var GUARDS = [
+    {
+      name: "Every Garage page is registered",
+      cite: "invariant 8c, a build step",
+      drift: "#457: the pages move to src/pages, and the walk still reads public/garage",
+      fix: "#1390: count the pages walked and fail under the floor (3 here, 30 of 39 for real)",
+      expect: "is not registered",
+      run: function(s, planted){
+        var disk = { "src/pages/garage": ["ranges.html", "round-trip.html", "av2.html"], "public/garage": ["av2/tile.avif", "lean/proof.svg"] };
+        if (planted) disk["src/pages/garage"].push("control-probe.html");
+        var dir = s.drift ? "public/garage" : "src/pages/garage";
+        var pages = disk[dir].filter(function(f){ return /\.html$/.test(f); });
+        var walked = "walked " + pages.length + " pages in " + dir;
+        if (s.fix && pages.length < 3) return no(walked + ", under the floor of 3");
+        var stray = pages.filter(function(f){ return ["ranges.html", "round-trip.html", "av2.html"].indexOf(f) < 0; });
+        if (stray.length) return no("/garage/" + stray[0].replace(".html", "") + " exists on disk but is not registered");
+        return ok(walked + ", all registered");
+      }
+    },
+    {
+      name: "No conflict marker in a served file",
+      cite: "invariant 10, a build step",
+      drift: "#523: serendipity becomes TypeScript, and the scan still matches .js",
+      fix: "#1390: count the files each root yields and fail at 0",
+      bare: true,
+      expect: "git conflict marker",
+      run: function(s, planted){
+        var ext = s.drift ? ".ts" : ".js";
+        var files = ["serendipity" + ext, "luma" + ext, "store" + ext];
+        if (planted && s.bare) return no("build: Unexpected token '<<' in serendipity" + ext + ", before any scan ran");
+        var read = files.filter(function(f){ return /\.js$/.test(f) || !s.drift; });
+        if (s.fix && !read.length) return no("serendipity/ yielded 0 files to scan");
+        if (planted && read.length) return no("serendipity/" + read[0] + ":12: git conflict marker in a served file");
+        return ok("read " + read.length + " of 3 files in serendipity/");
+      }
+    },
+    {
+      name: "The taskbar floor agrees across copies",
+      cite: "build step 5",
+      drift: "#1369: luna.css and the homepage spell the floor through var(--taskbar-h)",
+      fix: "#1408: resolve var() through each document, and fail when a copy has no floor",
+      expect: "disagrees",
+      run: function(s, planted){
+        var tok = "calc(100dvh - var(--taskbar-h))", lit = "calc(100dvh - 30px)";
+        var copies = [["luna.css", s.drift ? tok : lit], ["index.html", s.drift ? tok : lit], ["cal/src/templates.ts", planted ? "calc(100dvh - 28px)" : lit]];
+        var found = [], missing = [];
+        copies.forEach(function(c){
+          var css = s.fix ? c[1].replace("var(--taskbar-h)", "30px") : c[1];
+          var m = /calc\(100dvh - (\d+)px\)/.exec(css);
+          if (m) found.push(c[0] + " " + m[1] + "px"); else missing.push(c[0]);
+        });
+        if (s.fix && missing.length) return no("no taskbar floor in " + missing.join(", "));
+        var px = found.map(function(f){ return f.split(" ")[1]; });
+        if (px.some(function(p){ return p !== px[0]; })) return no("taskbar-floor disagrees: " + found.join(", "));
+        return ok("compared " + found.length + " of 3 copies" + (missing.length ? "; warning: no floor found in " + missing.join(", ") : ""));
+      }
+    },
+    {
+      name: "Only index.ts imports cloudflare:workers",
+      cite: "gotcha 16, a contract test",
+      drift: "the new file isn't git added yet, as on a local run",
+      fix: "#1490: list untracked files too, through repoFiles()",
+      expect: "imports cloudflare:workers",
+      run: function(s, planted){
+        // paths are relative to src/worker, where the real control plants lib/control-probe.ts
+        var listed = ["index.ts", "lib/preview.ts", "lib/trace.ts"];
+        if (planted && (!s.drift || s.fix)) listed.push("lib/control-probe.ts");
+        var hit = listed.filter(function(f){ return f === "lib/control-probe.ts"; });
+        if (hit.length) return no(hit[0] + " imports cloudflare:workers; only index.ts may");
+        return ok("scanned " + listed.length + " files in src/worker from " + (s.fix ? "the index and the worktree" : "git ls-files"));
+      }
+    }
+  ];
+  var PRESETS = {
+    before: [{ drift: 1 }, { drift: 1 }, { drift: 1 }, { drift: 1 }],
+    today: [{ fix: 1 }, { fix: 1 }, { drift: 1, fix: 1 }, { drift: 1, fix: 1 }],
+    clean: [{}, {}, {}, {}]
+  };
+  var state = PRESETS.before.map(function(p){ return { drift: !!p.drift, fix: !!p.fix, bare: false }; });
+  var esc = function(t){ return String(t).replace(/[&<>]/g, function(c){ return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); };
+  var box = function(i, k, label){ return '<label><input type="checkbox" data-i="' + i + '" data-k="' + k + '"' + (state[i][k] ? " checked" : "") + "> " + esc(label) + "</label>"; };
+  var line = function(label, r){ return '<div class="gc-run"><span class="gc-lbl">' + label + '</span><span class="gc-res ' + (r.fail ? "fail" : "pass") + '">' + (r.fail ? "FAIL" : "PASS") + "</span><code>" + esc(r.says) + "</code></div>"; };
+  function verdict(g, base, planted){
+    if (base.fail) return ["red", "RED ON A GOOD TREE", "The harness stops here, since a check that's already red proves nothing. On this bench that's the floor doing its job: the change that blinds the check fails the build it lands in."];
+    if (!planted.fail) return ["blind", "BLIND", "It passed with the defect in place. validate shows the good tree, so nobody sees this."];
+    if (planted.says.indexOf(g.expect) < 0) return ["wrong", "WRONG REASON", "Red, without the check's own words, so this run says nothing about the check."];
+    return ["caught", "CAUGHT", "Red, in the check's own words."];
+  }
+  function render(){
+    var n = { caught: 0, blind: 0, wrong: 0, red: 0 }, green = 0;
+    rows.innerHTML = GUARDS.map(function(g, i){
+      var s = state[i], base = g.run(s, false), planted = g.run(s, true), v = verdict(g, base, planted);
+      n[v[0]]++; if (!base.fail) green++;
+      return '<div class="gc-guard"><div class="gc-head"><b>' + esc(g.name) + '</b><span class="gc-cite">' + esc(g.cite) + "</span></div>" +
+        box(i, "drift", g.drift) + box(i, "fix", g.fix) + (g.bare ? box(i, "bare", "plant it as bare code, outside a string") : "") +
+        '<div class="gc-runs">' + line("good tree", base) + line("planted", planted) + "</div>" +
+        '<p class="gc-verdict"><span class="gc-chip ' + v[0] + '">' + v[1] + "</span>" + esc(v[2]) + "</p></div>";
+    }).join("");
+    sum.textContent = "good tree: " + green + " of 4 pass. planted: " + n.caught + " caught, " + n.blind + " blind, " + n.wrong + " wrong reason" + (n.red ? ", " + n.red + " red before planting" : "") + ".";
+  }
+  rows.addEventListener("change", function(e){
+    var t = e.target;
+    if (!t.dataset || t.dataset.i == null) return;
+    state[+t.dataset.i][t.dataset.k] = t.checked;
+    render();
+  });
+  bench.querySelectorAll("[data-preset]").forEach(function(b){
+    b.addEventListener("click", function(){
+      state = PRESETS[b.dataset.preset].map(function(p){ return { drift: !!p.drift, fix: !!p.fix, bare: false }; });
+      render();
+    });
+  });
+  render();
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Four questions on why a green check is half a measurement.",
+  "questions": [
+    {
+      "q": "Invariant 8c passed every build for 60 days while it inspected 0 of 39 pages. What would have exposed it on the first day?",
+      "options": [
+        {
+          "t": "Planting an unregistered page and seeing the build stay green.",
+          "ok": true,
+          "why": "Right. A planted defect that passes is the only signal a blind check gives. The good tree looked the same either way."
+        },
+        {
+          "t": "Running the check twice to see whether its output changed between runs.",
+          "why": "A blind check is deterministic. It passes the same way every time, so a second run adds nothing."
+        },
+        {
+          "t": "Reading the build log for the check's summary line.",
+          "why": "8c printed no count before #1390, so its line read the same whether it walked 39 pages or none."
+        }
+      ]
+    },
+    {
+      "q": "The first serendipity control planted its conflict marker as bare code. On the tree before #1390, what did the harness report?",
+      "options": [
+        {
+          "t": "BLIND, because the scan still matched only files ending in .js.",
+          "why": "That was the truth about the scan, which is the problem. The parser went red first, so the harness never saw the scan pass."
+        },
+        {
+          "t": "WRONG REASON, because Bun's parser failed the build before the scan ran.",
+          "ok": true,
+          "why": "Right. The build failed for another reason, so the run proved nothing about the scan. A marker inside a template literal lets the module parse and leaves only the scan able to see it."
+        },
+        {
+          "t": "CAUGHT, because the build went red with the marker in place.",
+          "why": "The control expects the scan's own words, and the parser's error doesn't contain them, so red alone proves nothing about the scan."
+        }
+      ]
+    },
+    {
+      "q": "#1390 gave invariant 8c a floor: fail when the walk reads under 30 pages. What does the floor change about the next refactor that moves the pages?",
+      "options": [
+        {
+          "t": "The check starts finding unregistered pages in the new directory on its own.",
+          "why": "The floor leaves the walk pointed where it was. All it adds is a refusal to call an empty walk a pass."
+        },
+        {
+          "t": "The good tree goes red on the next build, so the move can't merge quietly.",
+          "ok": true,
+          "why": "Right. A walk that reads 0 pages now fails on a clean tree, so the refactor that blinds the check is the build that breaks."
+        },
+        {
+          "t": "Nothing until someone plants a page, since the floor runs only then.",
+          "why": "The floor runs on every build. A walk under 30 pages fails the clean tree, which is the point."
+        }
+      ]
+    },
+    {
+      "q": "On 2026-10-29 the gotcha 16 guard passed locally on a new file that CI then failed. Why?",
+      "options": [
+        {
+          "t": "The local Bun ran a different parser version than the one CI installs.",
+          "why": "Both run the pinned Bun. The difference was which files the scan was handed."
+        },
+        {
+          "t": "Its scan listed files with git ls-files, which skips unadded files.",
+          "ok": true,
+          "why": "Right. ls-files reads the index, so a file nobody has added is invisible locally and present once committed. 19 of 22 scans had the same blind spot."
+        },
+        {
+          "t": "CI plants defects in place, while local runs plant them in a clone.",
+          "why": "That's how the harness runs, and this guard wasn't under the harness yet. The scan itself never saw the file."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

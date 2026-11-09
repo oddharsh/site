@@ -397,6 +397,12 @@ export const AGENT_SURFACES = [
     "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it."
   },
   {
+    "path": "/garage/controls",
+    "title": "Every check here proves it can still fail on each push",
+    "mimeType": "text/html",
+    "description": "A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one's defect in the browser and see which go blind."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -503,6 +509,7 @@ export const WEBMENTION_PATHS = [
   "/garage/av2",
   "/garage/round-trip",
   "/garage/ranges",
+  "/garage/controls",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

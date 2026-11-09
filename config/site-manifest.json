@@ -1144,6 +1144,23 @@
       }
     },
     {
+      "path": "/garage/controls",
+      "title": "Every check here proves it can still fail on each push",
+      "section": "garage",
+      "kind": "content",
+      "description": "A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one's defect in the browser and see which go blind.",
+      "hint": "controls: plant each check's defect, and the ledger of what went blind",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",
