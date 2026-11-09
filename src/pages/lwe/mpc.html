@@ -93,7 +93,7 @@
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:06</time></div>
-          <div class="bubble"><p>wait, there's a whole spectrum: BGW needs 2/3 honest, but SPDZ survives on even <em>one</em> honest node as long as the bad ones don't collude? let me see that.</p></div></div></div>
+          <div class="bubble"><p>wait, there's a whole spectrum: BGW needs 2/3 honest, but SPDZ survives on even <em>one</em> honest node? let me see that.</p></div></div></div>
 
         <!-- DEMO: honest majority / SPDZ / traitor tracing -->
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:06</time></div>
@@ -103,11 +103,11 @@
               <p class="lead">7 nodes share one secret. <b>Click a node</b> to flip it honest&nbsp;⋔&nbsp;↔&nbsp;traitor&nbsp;☠. Watch when each trust model still holds:</p>
               <div class="nodes" id="mpc-nodes"></div>
               <div class="verdict">
-                <div class="vcard"><b>BGW &middot; honest majority</b><span class="v" id="v-bgw">—</span><span class="rule">needs &gt; 2/3 honest (≥ 5 of 7)</span></div>
-                <div class="vcard"><b>SPDZ &middot; dishonest majority</b><span class="v" id="v-spdz">—</span><span class="rule">needs ≥ 1 honest &amp; no collusion</span></div>
+                <div class="vcard"><b>BGW &middot; honest majority</b><span class="v" id="v-bgw">—</span><span class="rule">needs &gt; 2/3 honest (≥ 5 of 7) against active traitors</span></div>
+                <div class="vcard"><b>SPDZ &middot; dishonest majority</b><span class="v" id="v-spdz">—</span><span class="rule">needs ≥ 1 honest, even if every traitor colludes</span></div>
               </div>
               <div class="mode-row">
-                <label><input type="checkbox" id="mpc-collude"> the traitors are <b>colluding</b> 🤝</label><span id="mpc-collude-hint" style="font-size:7.5pt;color:#9a6a16"></span>
+                <span>🤝 Both cards assume the traitors collude: a threshold counts how many parties one adversary controls, and every traitor works for it.</span>
               </div>
               <div class="ops">
                 <button class="xp-button compact" id="mpc-trace">🔍 trace the leak</button>
@@ -157,15 +157,12 @@
     verdict();
   }
   function verdict() {
-    var h = honest.filter(Boolean).length, t = N - h, collude = document.getElementById("mpc-collude").checked;
+    var h = honest.filter(Boolean).length, t = N - h;
     var bgw = h >= 5; // > 2/3 of 7
-    var spdz = h >= 1 && !(collude && t >= 2);
+    var spdz = h >= 1;
     set("v-bgw", bgw, h + " honest, " + t + " traitor" + (t === 1 ? "" : "s"));
-    set("v-spdz", spdz, collude && t >= 2 ? "traitors colluding → broken" : (h >= 1 ? "≥1 honest holds" : "0 honest"));
-    // collusion only matters with ≥2 traitors; tracing needs ≥1 — gate the controls
-    // so they don't look like no-ops on an all-honest grid.
-    document.getElementById("mpc-collude").disabled = t < 2;
-    document.getElementById("mpc-collude-hint").textContent = t < 2 ? "← flip ≥2 nodes to traitors first" : "";
+    set("v-spdz", spdz, h >= 1 ? "≥1 honest holds" : "0 honest");
+    // tracing needs ≥1 traitor; gate the button so it doesn't look like a no-op on an all-honest grid.
     document.getElementById("mpc-trace").disabled = t < 1;
   }
   function set(id, ok, why) {
@@ -178,10 +175,8 @@
     var i = +n.dataset.i; honest[i] = !honest[i]; traced = -1; draw();
     document.getElementById("mpc-trace-out").innerHTML = "Each share is watermarked. When a key leaks, the watermark says <b>who</b> leaked it: that's traitor tracing. Make a node a traitor, then hit trace.";
   });
-  document.getElementById("mpc-collude").addEventListener("change", verdict);
   document.getElementById("mpc-reset").addEventListener("click", function () {
-    for (var i = 0; i < N; i++) honest[i] = true; traced = -1;
-    document.getElementById("mpc-collude").checked = false; draw();
+    for (var i = 0; i < N; i++) honest[i] = true; traced = -1; draw();
   });
   document.getElementById("mpc-trace").addEventListener("click", function () {
     var traitors = []; for (var i = 0; i < N; i++) if (!honest[i]) traitors.push(i);

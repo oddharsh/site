@@ -104,13 +104,13 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
           <div class="bubble"><p>wait, UTF-32 is always 4 bytes? why not use that everywhere, it's simple.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:13</time></div>
-          <div class="bubble"><p>You <em>could</em>. UTF-32 is dead simple: one code point is exactly 4 bytes, so indexing is trivial. But it wastes space: plain English text becomes <b>4&times; bigger</b> (every <code>A</code> stored as <code>00 00 00 41</code>), and it breaks ASCII compatibility, so every old tool and file chokes on it. For something that's 99% of the internet's text, 4&times; is a lot of wasted bandwidth.</p></div></div></div>
+          <div class="bubble"><p>You <em>could</em>. UTF-32 is dead simple: one code point is exactly 4 bytes, so indexing is trivial. But it wastes space: plain English text becomes <b>4&times; bigger</b> (every <code>A</code> stored as <code>00 00 00 41</code>), and it breaks ASCII compatibility, so every old tool and file chokes on it. Every HTML tag, URL, and JSON key is ASCII, whatever language the page is in, so on the web 4&times; is a lot of wasted bandwidth.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:14</time></div>
           <div class="bubble"><p>so UTF-8 is the compromise?</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:14</time></div>
-          <div class="bubble"><p>Exactly. UTF-8 is <b>variable-width</b>: 1 byte for ASCII, 2 bytes for most Latin and accented letters, 3 for most <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a> like <code lang="zh">中</code>, 4 for emoji and rare scripts. Old English text stays byte-for-byte identical, so backwards compatibility comes free. It's also <b>self-synchronizing</b>: every byte announces whether it's a start byte or a continuation, so you can drop into the middle of a stream and still find the next character. That combination is why it ate the web. Look at how the bits actually pack:</p></div></div></div>
+          <div class="bubble"><p>Exactly. UTF-8 is <b>variable-width</b>: 1 byte for ASCII, 2 bytes for accented Latin letters like <code>é</code> and for Greek, Cyrillic, Hebrew, and Arabic, 3 for most <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a> like <code lang="zh">中</code>, 4 for emoji and rare scripts. Old English text stays byte-for-byte identical, so backwards compatibility comes free. It's also <b>self-synchronizing</b>: every byte announces whether it's a start byte or a continuation, so you can drop into the middle of a stream and still find the next character. That combination is why it ate the web. Look at how the bits actually pack:</p></div></div></div>
 
         <!-- DEMO 2 -->
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:14</time></div>
@@ -168,15 +168,18 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
         '<td class="cp">U+' + cp.toString(16).toUpperCase().padStart(4, "0") + '</td>' +
         '<td>' + (ascii !== null ? '<span class="by">' + ascii + '</span>' : '<span class="na">—</span>') + '</td>' +
         '<td class="by">' + u8hex + ' <span style="color:#66707d">(' + u8.length + ')</span></td>' +
-        '<td class="by">00 00 ' + hex((cp >> 8) & 255) + " " + hex(cp & 255) + ' <span style="color:#66707d">(4)</span></td>';
+        '<td class="by">00 ' + hex((cp >> 16) & 255) + " " + hex((cp >> 8) & 255) + " " + hex(cp & 255) + ' <span style="color:#66707d">(4)</span></td>';
       rows.appendChild(tr);
     });
     var tiles = [
       { b: "ASCII", n: asciiOk ? tA : "✗", u: asciiOk ? "bytes" : "can't encode", cls: asciiOk ? "" : "na" },
-      { b: "UTF-8", n: t8, u: "bytes", cls: "win" },
+      { b: "UTF-8", n: t8, u: "bytes", cls: "" },
       { b: "UTF-16", n: cps(s).reduce(function (a, c) { return a + (c.codePointAt(0) > 0xFFFF ? 4 : 2); }, 0), u: "bytes", cls: "" },
       { b: "UTF-32", n: t32, u: "bytes", cls: "" },
     ];
+    // the smallest encoding that can hold the text wins; ties share the tile
+    var best = Math.min.apply(null, tiles.filter(function (x) { return x.cls !== "na"; }).map(function (x) { return x.n; }));
+    tiles.forEach(function (x) { if (x.n === best) x.cls = "win"; });
     totals.innerHTML = tiles.map(function (x) {
       return '<div class="tcard ' + x.cls + '"><b>' + x.b + '</b><span class="n">' + x.n + '</span><span class="u">' + x.u + '</span></div>';
     }).join("");
@@ -189,7 +192,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
   // ── Demo 2: how the bits pack ───────────────────────────────────────────────
   var anatIn = document.getElementById("anat-input"), anatBytes = document.getElementById("anat-bytes"), anatRe = document.getElementById("anat-reassemble");
   // marker-bit count per leading byte by total length
-  var LEAD = { 1: 0, 2: 3, 3: 4, 4: 5 }; // bits of prefix on the lead byte (0…, 110…, 1110…, 11110…)
+  var LEAD = { 1: 1, 2: 3, 3: 4, 4: 5 }; // bits of prefix on the lead byte (0…, 110…, 1110…, 11110…)
   function renderAnat() {
     var c = cps(anatIn.value)[0]; if (!c) { anatBytes.innerHTML = ""; anatRe.innerHTML = ""; return; }
     var cp = c.codePointAt(0), u8 = U8.encode(c), n = u8.length;

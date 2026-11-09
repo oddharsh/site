@@ -125,7 +125,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>I get the theory, but I still can't reconcile what people MEAN by the multibit sound versus delta-sigma. can you make that difference concrete?</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:30</time></div>
-        <div class="bubble"><p>The honest place it lives is low-level linearity: the soft tail of a note, where only the bottom bits are working. Multibit rounds to its nearest exact level, which down there bends the wave into harmonic distortion. Delta-sigma keeps the level honest on average and trades that for a shaped noise floor. Same quiet tone, two different imperfections. Here they are side by side, as spectra you can also play.</p></div></div></div>
+        <div class="bubble"><p>The honest place it lives is low-level linearity: the soft tail of a note, where the wave spans only a few levels. On a ladder those levels straddle midscale, where the biggest bit hands off to all the small ones (code 31 to 32 on the 6-bit ladder above), so a quiet tone keeps crossing the hardest step to match. Multibit rounds to its nearest exact level, which down there bends the wave into harmonic distortion. Delta-sigma keeps the level honest on average and trades that for a shaped noise floor. Same quiet tone, two different imperfections. Here they are side by side, as spectra you can also play.</p></div></div></div>
 
       <div class="demo" id="demo-music">
         <div class="bar">the contested ground · low-level linearity</div>
@@ -143,10 +143,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="pad"><p class="lead">Quantization noise is audible when the bit depth is low. Click to hear a 440 Hz tone quantized to each depth (about a second each, through your speakers).</p><div class="dac-row" id="hearBtns"><button class="xp-button compact" data-bits="2">2-bit</button><button class="xp-button compact" data-bits="4">4-bit</button><button class="xp-button compact" data-bits="6">6-bit</button><button class="xp-button compact" data-bits="16">16-bit</button></div><p class="dac-cap">Same tone, fewer levels. At 2-bit the error is loud hash; by 16-bit it's gone. Delta-sigma keeps the bits low and moves that hash above 20 kHz instead.</p></div>
       </div>
 
-      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:29</time></div>
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:31</time></div>
         <div class="bubble"><p>yeah, I can hear the hash at 2-bit, and it's gone by 16. and delta-sigma just shoves that hash above 20k instead of spending money to delete it.</p></div></div></div>
 
-      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:29</time></div>
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:31</time></div>
         <div class="bubble"><p>Right. Multibit pays in hardware to make every level physically exact. Delta-sigma pays in cleverness to make the errors inaudible. Both arrive at clean sound; they just disagree about where to put the hard part, and the filter is where a lot of the audible character is decided.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:32</time></div>
@@ -169,7 +169,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>so the 2nd harmonic IS the octave, that's why it reads as musical, and hard clipping just collapses into a square, all odd harmonics. the asymmetry is the whole tell.</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:33</time></div>
-        <div class="bubble"><p>That is the tell, and it is the same axis the DAC argument rides. A little 2nd harmonic is what some people are chasing when a multibit ladder or a tube stage "sounds warm," even as the meter reports higher THD. A square wave is just the far end of that dial: every bit of headroom spent, nothing left but the odd harmonics.</p></div></div></div>
+        <div class="bubble"><p>That is the tell, and it is where the DAC argument gets awkward. A tube's warmth is a lopsided curve and a little 2nd harmonic. The multibit demo above rounds the same way on both sides of zero, so every harmonic it makes is odd, the same family a hard clip makes. A real ladder's mismatched resistors break that symmetry and can add even harmonics, so any 2nd harmonic behind multibit warmth comes from the ladder's imperfections. A square wave is just the far end of that dial: every bit of headroom spent, nothing left but the odd harmonics.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:34</time></div>
         <div class="bubble"><p>clearest version of this I've read. thanks.</p><p>&rarr; <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened (Jason Stoddard)</a> &middot; <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">the head-fi thread</a> &middot; <a href="https://en.wikipedia.org/wiki/Delta-sigma_modulation" rel="external">delta-sigma on Wikipedia</a> &middot; <a href="/lwe">back to Learning With Errors</a></p></div></div></div>
@@ -435,7 +435,7 @@ var DACAudio = (function(){
 
 // ── Demo: the contested ground — low-level linearity, multibit vs delta-sigma ──
 // Where the "musicality" argument actually lives: a QUIET tone (the soft tail of a
-// note), where only the lowest bits are working. Multibit rounds to its nearest
+// note), where the wave spans only a few levels. Multibit rounds to its nearest
 // exact level, which at low level bends the wave into harmonic DISTORTION. Delta-
 // sigma keeps the average level honest but rides a shaped NOISE floor. Same tone,
 // two flavors of imperfection, shown as spectra and playable. Crank the bits toward
