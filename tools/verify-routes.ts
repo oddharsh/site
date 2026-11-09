@@ -361,7 +361,7 @@ const ROUTES = [
     status: 200,
     ct: "application/json",
     headers: { "content-type": "application/json" },
-    marker: "<h1>Horizon",
+    marker: "<h1>Web features wait",
     body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }),
   },
   // The music resource is the one listed surface whose HTML representation

@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/5.6 sol</title>
+<title>aadhar.sh/garage/gpt56: 5.6 Sol&#39;s performance pass came down to three changes</title>
 <meta name="description" content="The performance pass planned with 5.6 Sol: the bytes, cache boundaries and first-paint calls that make aadhar.sh feel instant and still look like XP.">
 <link rel="canonical" href="https://aadhar.sh/garage/gpt56">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/5.6 sol">
+<meta property="og:title" content="aadhar.sh/garage/gpt56: 5.6 Sol&#39;s performance pass came down to three changes">
 <meta property="og:description" content="A performance field note with a local workbench: first paint, immutable bytes, deploy gates, and the trace that checks the work.">
 <meta property="og:url" content="https://aadhar.sh/garage/gpt56">
 <meta name="twitter:card" content="summary_large_image">
@@ -59,7 +59,7 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
   <main id="main" class="content">
     <div class="hero-grid">
       <div>
-        <h1>5.6 Sol&apos;s performance pass</h1>
+        <h1>5.6 Sol&apos;s performance pass came down to three changes</h1>
         <p class="lede">A morning review produced a long list of ways to make this site faster. The useful part came down to three changes: moving bytes out of <a class="term" data-t="first-paint" href="https://developer.mozilla.org/en-US/docs/Glossary/First_paint" title="The moment the browser first draws anything on screen after it starts loading a page." rel="external">first paint</a>, giving every cacheable thing a stable identity, and making the deploy fail before a regression reaches the <a class="term" data-t="edge" href="https://en.wikipedia.org/wiki/Edge_computing" title="A network of servers spread around the world close to users, so each request is answered from somewhere nearby." rel="external">edge</a>.</p>
         <p class="fine">This page is the shop card for that pass. "5.6 Sol" is the reviewer; the evidence is the code, the build gate, and the Chrome trace below. No benchmark theatre, no invented <a class="term" data-t="percentile" href="https://en.wikipedia.org/wiki/Percentile" title="The value a given share of measurements fall at or under; p75 is the value 75 out of every 100 visits meet or beat." rel="external">p75</a>.</p>
       </div>

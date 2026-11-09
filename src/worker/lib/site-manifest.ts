@@ -224,175 +224,175 @@ export const AGENT_SURFACES = [
   },
   {
     "path": "/garage/blueprint",
-    "title": "Blueprint",
+    "title": "Fable 5 reads every file and draws the rebuild plan",
     "mimeType": "text/html",
     "description": "The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from."
   },
   {
     "path": "/garage/chunks",
-    "title": "Content-addressed chunking",
+    "title": "FastCDC splits files into content-addressed chunks in the browser",
     "mimeType": "text/html",
     "description": "Live FastCDC content-defined chunking and content-addressing in the browser: pure JS + crypto.subtle."
   },
   {
     "path": "/garage/cloudflare",
-    "title": "Four free Cloudflare features",
+    "title": "Four free Cloudflare Workers features run live here",
     "mimeType": "text/html",
     "description": "Live demos of four free Cloudflare Workers platform features, from Durable Objects to Workers AI."
   },
   {
     "path": "/garage/encoding",
-    "title": "Thumbnail encoding study",
+    "title": "One photo runs through every thumbnail encoding choice",
     "mimeType": "text/html",
     "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements."
   },
   {
     "path": "/garage/ig-prep",
-    "title": "Pixels Instagram has no reason to resample",
+    "title": "ig-prep downscales a photo before Instagram gets to",
     "mimeType": "text/html",
     "description": "A photo converter that owns the downscale Instagram would otherwise do carelessly, and an MCP mode a model can drive against local files."
   },
   {
     "path": "/garage/resample",
-    "title": "Half the light",
+    "title": "Every resizer averages a checkerboard to 128 where light says 188",
     "mimeType": "text/html",
     "description": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128. The kernels agree; the colour space is where the quality went."
   },
   {
     "path": "/garage/compression",
-    "title": "Compression teardown",
+    "title": "Rebuilding a Response dropped encodeBody on every page",
     "mimeType": "text/html",
     "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them."
   },
   {
     "path": "/garage/gpt56",
-    "title": "5.6 Sol",
+    "title": "5.6 Sol's performance pass came down to three changes",
     "mimeType": "text/html",
     "description": "The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, and first-paint decisions."
   },
   {
     "path": "/garage/horizon",
-    "title": "Web-platform horizon",
+    "title": "Web features wait here until a second engine ships them",
     "mimeType": "text/html",
     "description": "Test-driving upcoming web-platform features (text-box-trim, contrast-color, anchor positioning)."
   },
   {
     "path": "/garage/iroh",
-    "title": "iroh",
+    "title": "iroh dials a machine by its public key",
     "mimeType": "text/html",
     "description": "iroh 1.0: dial a machine by its public key, not its IP. A native in-browser NodeId generator."
   },
   {
     "path": "/garage/masonry",
-    "title": "Masonry",
+    "title": "CSS Grid Lanes lays out a ragged-height contact sheet",
     "mimeType": "text/html",
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
   },
   {
     "path": "/garage/dyno",
-    "title": "Dyno",
+    "title": "A nightly job weighs the Worker bundle and every page",
     "mimeType": "text/html",
     "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time."
   },
   {
     "path": "/garage/octane",
-    "title": "Octane, priced against no framework",
+    "title": "Nextane's benchmark gets a row for a site with no framework",
     "mimeType": "text/html",
     "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all."
   },
   {
     "path": "/garage/pretext",
-    "title": "DOM-free text measurement",
+    "title": "pretext measures multiline text without touching the DOM",
     "mimeType": "text/html",
     "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM."
   },
   {
     "path": "/garage/pqc",
-    "title": "Post-quantum signatures, priced",
+    "title": "workerd signs the crawler's ML-DSA-44 header in 0.12 ms",
     "mimeType": "text/html",
     "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, priced in JavaScript and again natively in workerd."
   },
   {
     "path": "/garage/useragent",
-    "title": "What a crawler name is worth",
+    "title": "nytimes.com refuses 4 real crawler tokens and admits 2 fake ones",
     "mimeType": "text/html",
     "description": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one."
   },
   {
     "path": "/garage/typed-config",
-    "title": "The config that types itself",
+    "title": "A TypeScript Wrangler config types every binding it declares",
     "mimeType": "text/html",
     "description": "Wrangler's TypeScript config, re-measured on wrangler 4.147.0 and cf: a byte-identical upload and a Durable Object type that now threads across Workers."
   },
   {
     "path": "/garage/hidden-flags",
-    "title": "Flags the docs don't list",
+    "title": "Wrangler accepts 19 hidden flags whether they do anything",
     "mimeType": "text/html",
     "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free."
   },
   {
     "path": "/garage/htmx",
-    "title": "Break-even at three submits",
+    "title": "htmx 4.0 pays for itself after three form submits",
     "mimeType": "text/html",
     "description": "htmx 4.0 costs 11.46 KiB Brotli and saves 3,968 bytes per submit. Break-even is 2.96 submits per visitor, on a form submitted once."
   },
   {
     "path": "/garage/safari27",
-    "title": "Safari 27",
+    "title": "Safari 27 ships features this site already uses",
     "mimeType": "text/html",
     "description": "What WWDC26's Safari 27 ships that this site already leans on: base-select, anchor-positioning, more."
   },
   {
     "path": "/garage/scroll",
-    "title": "XP scroll chrome",
+    "title": "Scroll-driven animations draw the XP file-copy progress bar",
     "mimeType": "text/html",
     "description": "Scroll-driven animations in a period-correct Windows XP idiom: the Luna file-copy progress bar and more."
   },
   {
     "path": "/garage/teardown",
-    "title": "Teardown",
+    "title": "Fable 5's audit found homepage HTML served at thumbnail URLs",
     "mimeType": "text/html",
     "description": "What Fable 5's multi-agent audit found and fixed across aadhar.sh, from a cache-poisoning hole on down."
   },
   {
     "path": "/garage/tooltips",
-    "title": "Tooltip experiments",
+    "title": "Tooltips follow the cursor on two custom-property writes",
     "mimeType": "text/html",
     "description": "Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare."
   },
   {
     "path": "/garage/wire",
-    "title": "Bytes on the wire",
+    "title": "Brotli at q11 earned the site its first build step",
     "mimeType": "text/html",
     "description": "The site's first build step, and the brotli rabbit hole that led there: where Cloudflare compresses."
   },
   {
     "path": "/garage/workers",
-    "title": "Off Pages, onto Workers",
+    "title": "Workers with static assets give the site an atomic deploy",
     "mimeType": "text/html",
     "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy."
   },
   {
     "path": "/garage/dictionary",
-    "title": "The dictionary the runtime dropped",
+    "title": "workerd's zstd drops the dictionary 13 pages need",
     "mimeType": "text/html",
     "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach."
   },
   {
     "path": "/garage/av2",
-    "title": "AV2, before anyone can see it",
+    "title": "AV2 stills tie this site's AVIF at the bytes it ships",
     "mimeType": "text/html",
     "description": "AV2 still images scored against the AVIF this site ships at matched bytes: about even at speed 6, ahead on about 148 of 162 thumbnails once TCQ and the IST/CCTX search are back on, behind on dense detail, and why an AV2 file behind a picture fallback still breaks."
   },
   {
     "path": "/garage/round-trip",
-    "title": "There and back",
+    "title": "Every Markdown twin converts back to its page byte for byte",
     "mimeType": "text/html",
     "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading."
   },
   {
     "path": "/garage/ranges",
-    "title": "Ranges, chunk by chunk",
+    "title": "Cloudflare's cache fetches only the chunks a range read touches",
     "mimeType": "text/html",
     "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it."
   },

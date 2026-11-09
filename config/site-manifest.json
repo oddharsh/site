@@ -646,7 +646,7 @@
     },
     {
       "path": "/garage/blueprint",
-      "title": "Blueprint",
+      "title": "Fable 5 reads every file and draws the rebuild plan",
       "section": "garage",
       "kind": "content",
       "description": "The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from.",
@@ -663,7 +663,7 @@
     },
     {
       "path": "/garage/chunks",
-      "title": "Content-addressed chunking",
+      "title": "FastCDC splits files into content-addressed chunks in the browser",
       "section": "garage",
       "kind": "content",
       "description": "Live FastCDC content-defined chunking and content-addressing in the browser: pure JS + crypto.subtle.",
@@ -680,7 +680,7 @@
     },
     {
       "path": "/garage/cloudflare",
-      "title": "Four free Cloudflare features",
+      "title": "Four free Cloudflare Workers features run live here",
       "section": "garage",
       "kind": "content",
       "description": "Live demos of four free Cloudflare Workers platform features, from Durable Objects to Workers AI.",
@@ -697,7 +697,7 @@
     },
     {
       "path": "/garage/encoding",
-      "title": "Thumbnail encoding study",
+      "title": "One photo runs through every thumbnail encoding choice",
       "section": "garage",
       "kind": "content",
       "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements.",
@@ -714,7 +714,7 @@
     },
     {
       "path": "/garage/ig-prep",
-      "title": "Pixels Instagram has no reason to resample",
+      "title": "ig-prep downscales a photo before Instagram gets to",
       "section": "garage",
       "kind": "content",
       "description": "A photo converter that owns the downscale Instagram would otherwise do carelessly, and an MCP mode a model can drive against local files.",
@@ -731,7 +731,7 @@
     },
     {
       "path": "/garage/resample",
-      "title": "Half the light",
+      "title": "Every resizer averages a checkerboard to 128 where light says 188",
       "section": "garage",
       "kind": "content",
       "description": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128. The kernels agree; the colour space is where the quality went.",
@@ -748,7 +748,7 @@
     },
     {
       "path": "/garage/compression",
-      "title": "Compression teardown",
+      "title": "Rebuilding a Response dropped encodeBody on every page",
       "section": "garage",
       "kind": "content",
       "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them.",
@@ -765,7 +765,7 @@
     },
     {
       "path": "/garage/gpt56",
-      "title": "5.6 Sol",
+      "title": "5.6 Sol's performance pass came down to three changes",
       "section": "garage",
       "kind": "content",
       "short": "5.6 sol",
@@ -783,7 +783,7 @@
     },
     {
       "path": "/garage/horizon",
-      "title": "Web-platform horizon",
+      "title": "Web features wait here until a second engine ships them",
       "section": "garage",
       "kind": "content",
       "description": "Test-driving upcoming web-platform features (text-box-trim, contrast-color, anchor positioning).",
@@ -800,7 +800,7 @@
     },
     {
       "path": "/garage/iroh",
-      "title": "iroh",
+      "title": "iroh dials a machine by its public key",
       "section": "garage",
       "kind": "content",
       "description": "iroh 1.0: dial a machine by its public key, not its IP. A native in-browser NodeId generator.",
@@ -817,7 +817,7 @@
     },
     {
       "path": "/garage/masonry",
-      "title": "Masonry",
+      "title": "CSS Grid Lanes lays out a ragged-height contact sheet",
       "section": "garage",
       "kind": "content",
       "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid.",
@@ -834,7 +834,7 @@
     },
     {
       "path": "/garage/dyno",
-      "title": "Dyno",
+      "title": "A nightly job weighs the Worker bundle and every page",
       "section": "garage",
       "kind": "content",
       "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
@@ -851,7 +851,7 @@
     },
     {
       "path": "/garage/octane",
-      "title": "Octane, priced against no framework",
+      "title": "Nextane's benchmark gets a row for a site with no framework",
       "section": "garage",
       "kind": "content",
       "short": "octane",
@@ -869,7 +869,7 @@
     },
     {
       "path": "/garage/pretext",
-      "title": "DOM-free text measurement",
+      "title": "pretext measures multiline text without touching the DOM",
       "section": "garage",
       "kind": "content",
       "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM.",
@@ -886,7 +886,7 @@
     },
     {
       "path": "/garage/pqc",
-      "title": "Post-quantum signatures, priced",
+      "title": "workerd signs the crawler's ML-DSA-44 header in 0.12 ms",
       "section": "garage",
       "kind": "content",
       "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, priced in JavaScript and again natively in workerd.",
@@ -903,7 +903,7 @@
     },
     {
       "path": "/garage/useragent",
-      "title": "What a crawler name is worth",
+      "title": "nytimes.com refuses 4 real crawler tokens and admits 2 fake ones",
       "section": "garage",
       "kind": "content",
       "short": "user-agent",
@@ -921,7 +921,7 @@
     },
     {
       "path": "/garage/typed-config",
-      "title": "The config that types itself",
+      "title": "A TypeScript Wrangler config types every binding it declares",
       "section": "garage",
       "kind": "content",
       "short": "typed config",
@@ -939,7 +939,7 @@
     },
     {
       "path": "/garage/hidden-flags",
-      "title": "Flags the docs don't list",
+      "title": "Wrangler accepts 19 hidden flags whether they do anything",
       "section": "garage",
       "kind": "content",
       "short": "hidden flags",
@@ -957,7 +957,7 @@
     },
     {
       "path": "/garage/htmx",
-      "title": "Break-even at three submits",
+      "title": "htmx 4.0 pays for itself after three form submits",
       "section": "garage",
       "kind": "content",
       "description": "htmx 4.0 costs 11.46 KiB Brotli and saves 3,968 bytes per submit. Break-even is 2.96 submits per visitor, on a form submitted once.",
@@ -974,7 +974,7 @@
     },
     {
       "path": "/garage/safari27",
-      "title": "Safari 27",
+      "title": "Safari 27 ships features this site already uses",
       "section": "garage",
       "kind": "content",
       "short": "safari 27",
@@ -992,7 +992,7 @@
     },
     {
       "path": "/garage/scroll",
-      "title": "XP scroll chrome",
+      "title": "Scroll-driven animations draw the XP file-copy progress bar",
       "section": "garage",
       "kind": "content",
       "description": "Scroll-driven animations in a period-correct Windows XP idiom: the Luna file-copy progress bar and more.",
@@ -1009,7 +1009,7 @@
     },
     {
       "path": "/garage/teardown",
-      "title": "Teardown",
+      "title": "Fable 5's audit found homepage HTML served at thumbnail URLs",
       "section": "garage",
       "kind": "content",
       "description": "What Fable 5's multi-agent audit found and fixed across aadhar.sh, from a cache-poisoning hole on down.",
@@ -1026,7 +1026,7 @@
     },
     {
       "path": "/garage/tooltips",
-      "title": "Tooltip experiments",
+      "title": "Tooltips follow the cursor on two custom-property writes",
       "section": "garage",
       "kind": "content",
       "description": "Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.",
@@ -1043,7 +1043,7 @@
     },
     {
       "path": "/garage/wire",
-      "title": "Bytes on the wire",
+      "title": "Brotli at q11 earned the site its first build step",
       "section": "garage",
       "kind": "content",
       "description": "The site's first build step, and the brotli rabbit hole that led there: where Cloudflare compresses.",
@@ -1060,7 +1060,7 @@
     },
     {
       "path": "/garage/workers",
-      "title": "Off Pages, onto Workers",
+      "title": "Workers with static assets give the site an atomic deploy",
       "section": "garage",
       "kind": "content",
       "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy.",
@@ -1077,7 +1077,7 @@
     },
     {
       "path": "/garage/dictionary",
-      "title": "The dictionary the runtime dropped",
+      "title": "workerd's zstd drops the dictionary 13 pages need",
       "section": "garage",
       "kind": "content",
       "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach.",
@@ -1094,7 +1094,7 @@
     },
     {
       "path": "/garage/av2",
-      "title": "AV2, before anyone can see it",
+      "title": "AV2 stills tie this site's AVIF at the bytes it ships",
       "section": "garage",
       "kind": "content",
       "description": "AV2 still images scored against the AVIF this site ships at matched bytes: about even at speed 6, ahead on about 148 of 162 thumbnails once TCQ and the IST/CCTX search are back on, behind on dense detail, and why an AV2 file behind a picture fallback still breaks.",
@@ -1111,7 +1111,7 @@
     },
     {
       "path": "/garage/round-trip",
-      "title": "There and back",
+      "title": "Every Markdown twin converts back to its page byte for byte",
       "section": "garage",
       "kind": "content",
       "description": "Rebuild a page here from its Markdown twin and convert it back. All 46 generated twins survive the trip byte for byte, after it caught five converter bugs that agents had been reading.",
@@ -1128,7 +1128,7 @@
     },
     {
       "path": "/garage/ranges",
-      "title": "Ranges, chunk by chunk",
+      "title": "Cloudflare's cache fetches only the chunks a range read touches",
       "section": "garage",
       "kind": "content",
       "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it.",

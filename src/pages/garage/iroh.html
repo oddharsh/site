@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/iroh</title>
+<title>aadhar.sh/garage/iroh: iroh dials a machine by its public key</title>
 <meta name="description" content="iroh 1.0 dials a machine by its public key instead of its IP. A live in-browser NodeId generator, and why a megabyte of wasm stays off a lean site.">
 <link rel="canonical" href="https://aadhar.sh/garage/iroh">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/iroh">
+<meta property="og:title" content="aadhar.sh/garage/iroh: iroh dials a machine by its public key">
 <meta property="og:description" content="iroh hit 1.0: dial a machine by its public key rather than its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
 <meta property="og:url" content="https://aadhar.sh/garage/iroh">
 <meta name="twitter:card" content="summary_large_image">
@@ -51,7 +51,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-    <h1>Dial by key</h1>
+    <h1>iroh dials a machine by its public key</h1>
     <p class="lede"><a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0. It is a networking library where you reach another machine by its <a class="term" data-t="public-key-cryptography" href="https://en.wikipedia.org/wiki/Public-key_cryptography" title="Cryptography with a key pair: a public key anyone can see and a private key kept secret. What one key signs or locks, the other checks or opens." rel="external">public key</a> rather than its IP address: a 32-byte <a class="term" data-t="ed25519" href="https://en.wikipedia.org/wiki/EdDSA" title="A widely used digital signature scheme built on an elliptic curve, with 32-byte public keys and 64-byte signatures that are fast to make and check." rel="external">ed25519</a> identity that stays put while the network under it changes, with <a class="term" data-t="quic" href="https://www.rfc-editor.org/rfc/rfc9000.html" title="A transport protocol that runs fast, encrypted connections over UDP, with many streams sharing one connection. HTTP/3 is built on it." rel="external">QUIC</a> <a class="term" data-t="hole-punching" href="https://en.wikipedia.org/wiki/Hole_punching_(networking)" title="A trick that lets two devices behind home routers or firewalls connect directly, by having both send packets toward each other at the same time." rel="external">hole-punching</a> for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
 
     <h2>The core idea, natively</h2>

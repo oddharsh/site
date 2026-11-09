@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/ranges: Ranges, chunk by chunk</title>
+<title>aadhar.sh/garage/ranges: Cloudflare&#39;s cache fetches only the chunks a range read touches</title>
 <meta name="description" content="Cloudflare&#39;s cache now pulls big files from the origin one chunk at a time. The chunk arithmetic, ten viewers sharing one fetch, and a live probe of why this site&#39;s 3.26 GB of photos can&#39;t use it.">
 <link rel="canonical" href="https://aadhar.sh/garage/ranges">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/garage/ranges: Ranges, chunk by chunk">
+<meta property="og:title" content="aadhar.sh/garage/ranges: Cloudflare&#39;s cache fetches only the chunks a range read touches">
 <meta property="og:description" content="Cloudflare&#39;s cache now pulls big files from the origin one chunk at a time. The chunk arithmetic, ten viewers sharing one fetch, and a live probe of why this site&#39;s 3.26 GB of photos can&#39;t use it.">
 <meta property="og:url" content="https://aadhar.sh/garage/ranges">
 <meta name="twitter:card" content="summary_large_image">
@@ -80,7 +80,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-<h1>Ranges, chunk by chunk</h1>
+<h1>Cloudflare&apos;s cache fetches only the chunks a range read touches</h1>
 <p class="garage-intro">On 2026-10-23 Cloudflare shipped <a href="https://blog.cloudflare.com/origin-range-requests/">Origin Range Requests</a>, a <a class="term" data-t="cache-rules" href="https://developers.cloudflare.com/cache/how-to/cache-rules/" title="A Cloudflare zone setting that changes how the cache treats requests matching a filter, such as whether to cache them and for how long." rel="external">Cache Rule</a> switch for big files. When a client asks for a slice of a file the edge doesn't hold, the edge now fetches only the chunks that slice touches, keeps them, and builds later answers from whatever chunks it has. Three demos below: the chunk arithmetic, ten viewers sharing one fetch, and a live probe of the one place this site serves big files. That place can't use the switch, and why is half the story.</p>
 
 <h2>What the old cache did</h2>
