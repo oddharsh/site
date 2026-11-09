@@ -46,11 +46,11 @@ fn config(distance: f32) -> EncodeConfig {
 }
 
 fn encode_png(png: &[u8], distance: f32) -> Result<Vec<u8>, String> {
-    let mut decoder = png::Decoder::new(png);
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png));
     decoder.set_transformations(png::Transformations::IDENTITY);
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
     let icc = reader.info().icc_profile.as_ref().map(|c| c.to_vec());
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut buf = vec![0; reader.output_buffer_size().ok_or("PNG too large")?];
     let frame = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
     if frame.color_type != png::ColorType::Rgb {
         return Err(format!("{:?} PNG; only RGB is supported", frame.color_type));
