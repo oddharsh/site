@@ -1,0 +1,10 @@
+{
+  "$comment": [
+    "The Playwright image canary.yml's browsers leg runs in, by tag and index digest.",
+    "Its tag must name the playwright-core version package.json pins (gotcha 75), so",
+    "tools/bump-deps.ts moves it in the same PR and holds playwright-core back until",
+    "MCR publishes the matching -noble tag. It lives here rather than in canary.yml",
+    "because the App token that pushes bump branches has no workflows permission."
+  ],
+  "image": "mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d"
+}
