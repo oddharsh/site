@@ -95,6 +95,44 @@ for (const file of garageSpecFiles) {
   const published = await readFile(join(ROOT, "src/pages/garage", `${spec.id}.html`), "utf8");
   assert.equal(html, published, `src/pages/garage/${spec.id}.html: run node pipelines/garage/generate.ts page ${spec.id}`);
 }
+
+// Every Garage page has one title, held in site-manifest.json, and it follows
+// the rules in pipelines/garage/README.md ("Titles"). Each page used to carry
+// up to three, mostly fragments, until 2026-11-09.
+const TITLE_BREAKS = [
+  [/,/, "a comma"],
+  [/;/, "a semicolon"],
+  [/:/, "a colon"],
+  [/[()]/, "a parenthetical"],
+  [/["“”]/, "quotation marks"],
+  [/\binstead of\b|\brather than\b/i, "an instead-of contrast"],
+  [/—/, "an em dash"],
+  [/\.$/, "a trailing period"],
+];
+const garageTitles = [];
+(function collect(node) {
+  if (Array.isArray(node)) return node.forEach(collect);
+  if (!node || typeof node !== "object") return;
+  if (typeof node.path === "string" && node.path.startsWith("/garage/")) garageTitles.push({ path: node.path, title: node.title });
+  Object.values(node).forEach(collect);
+})(JSON.parse(await readFile(join(ROOT, "config/site-manifest.json"), "utf8")));
+assert.ok(garageTitles.length >= 25, `site-manifest.json yielded ${garageTitles.length} Garage titles; did its shape change?`);
+const unescape = (s) =>
+  s
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
+for (const { path, title } of garageTitles) {
+  for (const [rule, what] of TITLE_BREAKS) assert.doesNotMatch(title, rule, `${path}: the title has ${what}: ${title}`);
+  const words = title.split(/\s+/).length;
+  assert.ok(words <= 11, `${path}: the title runs ${words} words, over 11: ${title}`);
+  const html = await readFile(join(ROOT, "src/pages", `${path}.html`), "utf8").catch(() => null);
+  if (html === null) continue; // /garage/dyno is a document the Worker builds
+  const h1 = unescape((html.match(/<h1>([\s\S]*?)<\/h1>/)?.[1] ?? "").replace(/\s*<span class="badge[^"]*">[^<]*<\/span>/, ""));
+  assert.equal(h1, title, `${path}: the h1 says "${h1}" where site-manifest.json says "${title}"`);
+  const head = unescape(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "");
+  assert.equal(head, `aadhar.sh${path}: ${title}`, `${path}: the <title> says "${head}"`);
+}
 const garageFixture = {
   id: "contract-fixture",
   title: "Contract fixture",

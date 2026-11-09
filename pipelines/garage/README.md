@@ -48,16 +48,34 @@ agent discovery projections. The shelf cards remain authored prose, and the
 sitemap retains per-page freshness dates. `tools/build.ts` checks their coverage.
 The retired Garage `wire` command now refuses before writing; use steps 5 and 6.
 
+## Titles
+
+A page has one title. `site-manifest.json` holds it, and the spec, the h1, the
+`<title>`, `og:title` and the shelf card all repeat it word for word. The
+rules are the ones houseguest holds a PR title to
+(`~/noodling/houseguest/skills/oss-pr/references/pr-copy.md`, "The title"):
+one plain statement of what the page found, with a verb and concrete nouns
+from the page. "Every resizer averages a checkerboard to 128 where light says
+188" passes; "Half the light" names a mood and says nothing a reader can
+check.
+
+`bun run pages:check` refuses a comma, semicolon, colon, parenthetical,
+quotation mark, "instead of" contrast, em dash or trailing period, any title
+over 11 words, and an h1 or `<title>` that disagrees with the manifest. It
+can't see a verbless fragment, so read the title once as a sentence. To check
+a draft against the same rules houseguest uses, run its `scripts/title.sh`
+with `--stats` and a profile of 0% for every feature.
+
 ## Spec shape
 
 ```json
 {
   "id": "cache-boundaries",
-  "title": "Cache boundaries under load",
+  "title": "A cache key has to name the exact bytes it reuses",
   "description": "A small field note about cache identity and stale bytes.",
   "status": "prototype",
   "added": "2026-07-18",
-  "bodyHtml": "<h1>Cache boundaries under load</h1><p class=\"garage-intro\">Write the explanation here.</p>",
+  "bodyHtml": "<h1>A cache key has to name the exact bytes it reuses</h1><p class=\"garage-intro\">Write the explanation here.</p>",
   "pageCss": "",
   "pageJs": "",
   "editorial": {
