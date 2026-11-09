@@ -626,14 +626,20 @@ skips it.
 75. **A playwright-core bump strands the canary's browser image.** The
     browsers leg in `canary.yml` runs in `mcr.microsoft.com/playwright`,
     pinned by tag and digest, and its pull step refuses an image whose
-    version differs from the installed playwright-core. Dependabot moves the
+    version differs from the installed playwright-core. Dependabot moved the
     npm pin and never the image. #1364 moved playwright-core to 1.64.1 with
     the image left on 1.63.0, and the leg failed at the pull step, before any
-    probe, on every nightly from 2026-10-15 to 2026-10-17. Move the tag and
-    its digest in the same PR; `curl -sI -H 'Accept:
-    application/vnd.oci.image.index.v1+json'
+    probe, on every nightly from 2026-10-15 to 2026-10-17. #1602 (1.65.0)
+    arrived red the same way from `deps-pin.yml`. Since then `bump-deps.ts`
+    carries the image: it reads the index digest from MCR (`curl -sI -H
+    'Accept: application/vnd.oci.image.index.v1+json'
     https://mcr.microsoft.com/v2/playwright/manifests/v<version>-noble`
-    prints the index digest as `docker-content-digest`.
+    prints it as `docker-content-digest`), writes it to
+    `config/browser-image.json`, and holds playwright-core back while the
+    `-noble` tag is missing. The pin left `canary.yml` because the App token
+    that pushes bump branches has no workflows permission, and GitHub refuses
+    its push of any file under `.github/workflows/`. A hand bump still moves
+    both.
     Checked by: `tools/tests/contract-the-browser-image-matches-playwright-core.test.ts`.
 
 76. **`avifdec -d 8` truncates a 10-bit image before converting it.** libavif

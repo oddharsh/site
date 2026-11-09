@@ -4,8 +4,9 @@
 // The npm half of Dependabot, run by this repo, because Dependabot can no longer
 // read it. tools/lib/deps-plan.ts says why and holds the policy; this file
 // fetches the registry, prints the plan, and with --write carries ONE group into
-// the tree: package.json pins, bun.lock, lens-reader/bun.lock, and the version
-// claims in docs/DEPENDENCIES.md. .github/workflows/deps-pin.yml runs it nightly
+// the tree: package.json pins, bun.lock, lens-reader/bun.lock, the version
+// claims in docs/DEPENDENCIES.md, and canary.yml's browser image when
+// playwright-core moves. .github/workflows/deps-pin.yml runs it nightly
 // and opens one PR per group.
 //
 // With no flags it only reads, so it is safe to run anywhere. --write edits the
@@ -31,6 +32,7 @@ import { branchFor, exactPins, planBumps, rewriteManifest } from "./lib/deps-pla
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const REGISTRY = "https://registry.npmjs.org";
+const BROWSER_IMAGE_PIN = "config/browser-image.json";
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -79,6 +81,25 @@ async function registryFor(names: string[]) {
     batch.forEach((n, j) => docs[j] && registry.set(n, docs[j]!));
   }
   return registry;
+}
+
+// canary.yml's browsers leg runs in the Playwright image whose tag matches
+// playwright-core, and refuses any other (gotcha 75). MCR publishes that tag
+// after npm, so a missing tag holds the bump back a night instead of opening a
+// PR that validate rejects. The digest is the multi-arch index's, which is what
+// `docker pull` resolves the tag to.
+async function browserImageFor(version: string): Promise<string | null> {
+  const tag = `v${version}-noble`;
+  const res = await fetch(`https://mcr.microsoft.com/v2/playwright/manifests/${tag}`, {
+    method: "HEAD",
+    headers: { accept: "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json" },
+  });
+  const digest = res.headers.get("docker-content-digest") ?? "";
+  if (!res.ok || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
+    console.error(`  mcr ${res.status} for playwright:${tag}; holding playwright-core ${version} back`);
+    return null;
+  }
+  return `mcr.microsoft.com/playwright:${tag}@${digest}`;
 }
 
 function install(dir: string, frozen: boolean) {
@@ -143,7 +164,10 @@ const manifests: Manifest[] = manifestPaths().map((p) => ({ path: p, json: JSON.
 const names = [...exactPins(manifests).keys()].sort();
 
 const registry = await registryFor(names);
-const bumps = planBumps({ manifests, registry, nowMs: Date.now(), minAgeSeconds: minimumReleaseAgeSeconds(ROOT) });
+const planned = planBumps({ manifests, registry, nowMs: Date.now(), minAgeSeconds: minimumReleaseAgeSeconds(ROOT) });
+const playwright = planned.find((b) => b.pkg === "playwright-core");
+const browserImage = playwright ? await browserImageFor(playwright.to) : null;
+const bumps = playwright && !browserImage ? planned.filter((b) => b !== playwright) : planned;
 const groups = [...new Set(bumps.map((b) => b.group))];
 
 for (const g of groups) {
@@ -179,6 +203,13 @@ if (WRITE) {
   const lensReader = [...touched].some((m) => m.startsWith("lens-reader/"));
   if (lensReader) install("lens-reader", false);
   for (const e of rewriteDocPins()) console.log(`  prose: ${e.prose} ${e.from} -> ${e.to}`);
+  if (browserImage && playwright && mine.includes(playwright)) {
+    const before = read(BROWSER_IMAGE_PIN);
+    const after = before.replace(/"image": "[^"]+"/, `"image": "${browserImage}"`);
+    if (after === before) throw new Error(`${BROWSER_IMAGE_PIN}: found no "image" to rewrite`);
+    writeFileSync(path.join(ROOT, BROWSER_IMAGE_PIN), after);
+    console.log(`  image: ${browserImage}`);
+  }
   // The frozen install is its own assertion: it is the exact command CI runs
   // first, and a plain install succeeding does not prove it.
   install("", true);

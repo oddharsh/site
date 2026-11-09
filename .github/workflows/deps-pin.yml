@@ -150,7 +150,7 @@ jobs:
           git checkout -B "$BRANCH"
           # Named rather than `git add -A`: these are the only files the writer
           # may touch, so anything else in the tree stays out of the commit.
-          git add -u -- package.json bun.lock '*/package.json' lens-reader/bun.lock docs/DEPENDENCIES.md
+          git add -u -- package.json bun.lock '*/package.json' lens-reader/bun.lock docs/DEPENDENCIES.md config/browser-image.json
           git -c core.hooksPath=/dev/null commit -m "$TITLE" -m "Opened by .github/workflows/deps-pin.yml."
           git -c core.hooksPath=/dev/null push --force origin "$BRANCH"
 
