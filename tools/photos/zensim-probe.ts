@@ -46,54 +46,66 @@
 // Each libjxl score of a 40 MP pair takes 5 s and 7 GB (ssimulacra2) plus
 // 16 s and 9 GB (butteraugli); --jobs defaults to 2 so two lanes fit in 36 GB.
 //
-// FOUND, M3 Max, zensim 0.2.7 + 0.3.0 at 96c3c9b, libjxl 0.12.0. The ladder
-// was rerun on 2026-11-02 with AVIF decoded exactly (avifToPng8; the
-// 2026-10-13 run used avifdec -d 8, gotcha 76). aom (3.15.1 to 3.15.3) and
-// zenc (#1511) had moved too, and JPEG-only rows shifted, so not every change
-// below is the decode. The archive and speed numbers are from 2026-10-13.
+// FOUND 2026-11-09, M3 Max, zensim 0.2.7 + 0.3.0 profile A at imazen/zensim
+// 6060039, libjxl 0.12.0. The libjxl and 0.2.7 ladder rows match the
+// 2026-11-02 run to the third decimal, so every change in zensim's column is
+// zensim's.
 //
 //   ladder, 868 pairs           vs ssimulacra2   cross-codec calls that
 //                               (Spearman)       disagree with ssimulacra2
 //   butteraugli 3-norm           0.977            5.8%
 //   zensim 0.2.7                 0.991            3.7%
-//   zensim B                     0.966            4.2%
+//   zensim A                     0.960            3.8%
+//   (zensim B, 2026-11-02        0.966            4.2%)
 //
 //   zensim disagrees with ssimulacra2 less often than butteraugli does, on
-//   808 pairs of different codecs within 15% of each other's bytes.
+//   808 pairs of different codecs within 15% of each other's bytes. Within
+//   one photo A ranks like ssimulacra2 (median Spearman 0.996).
 //
 //   Instagram decision (lowest JPEG q with ssimulacra2 >= 84), threshold fit
-//   on 16 photos, tested on 15: B at 78.95 picks the same q on 9 of 15,
-//   0.2.7 on 10, butteraugli on 6. A one-photo gap is noise at n = 15 (the
-//   2026-10-13 run had 9, 8 and 7).
+//   on 16 photos, tested on 15: A at 83.50 picks the same q on 10 of 15 and
+//   lands within one step on all 15; 0.2.7 matches 10, butteraugli 6, B had
+//   9. A one-photo gap is noise at n = 15. A's fitted threshold sits half a
+//   point from ssimulacra2's own 84, where B's sat at 78.95.
 //
-//   Codec verdicts move: at equal quality B puts AVIF at -44% bytes against
-//   zenc JPEG, where ssimulacra2 says -36% and butteraugli -34%. JPEG XL reads
-//   -17% to -20% under every metric.
+//   Codec verdicts still lean: at equal quality A puts AVIF at -41.7% bytes
+//   against zenc JPEG, where ssimulacra2 says -36.4% and butteraugli -34.1%
+//   (B said -44%). JPEG XL reads -16.5% to -20.2% under every metric.
 //
-//   speed, per pair, wall clock with decode (5 runs, median):
-//                  ssimulacra2     butteraugli     zensim B, all cores / 1 core
-//   1080px          100 ms          220 ms          30 ms / 60 ms
-//   2048px          330 ms          760 ms          80 ms / 250 ms
-//   40 MP           5.2 s, 7.2 GB   16.2 s, 9.0 GB  1.0 s, 1.5 GB / 2.9 s
+//   speed, per pair, wall clock with decode (10 runs, median), zensim's
+//   column scoring 0.2.7 and A in one process:
+//                  ssimulacra2     butteraugli      zensim, all cores / 1 core
+//   1080px          170 ms          230 ms          40 ms / 190 ms
+//   2048px          325 ms          750 ms          140 ms / 710 ms
+//   40 MP           5.2 s, 7.0 GB   16.7 s, 7.9 GB  2.5 s, 2.2 GB / 9.9 s
+//   A is about 2.5x slower than B was (40 MP: 1.0 s / 2.9 s on 2026-10-13).
 //
-//   archive, 20 HIFs at 40 MP and 16 bits (hif-archive.ts's own bisection):
-//     B picks libjxl's distance                4 / 20  (9 looser, 7 stricter)
-//     bytes at B's pick vs libjxl's            median 0.0%, -22.7% to +50.1%
-//     B's pick clears libjxl's both-metric bar 11 / 20
-//     score improves as distance worsens       B 18 of 219 steps (worst
-//                                              +1.23), ssimulacra2 0 / 141,
-//                                              butteraugli 2 / 141
-//   Totals land close (279 MB at libjxl's picks, 270 MB at B's), but per photo
-//   B scatters around libjxl rather than leaning one way. The first 4 frames
-//   all ran looser and looked like a bias; the next 16 said otherwise, which
-//   is why the full run matters. B is too non-monotone at near-lossless
-//   distances to drive a bisection: its steps swing as far as the margins
-//   being decided. 16 bits do reach it (+1.25 to +1.47 points over the 8-bit
-//   control at d0.1), and they move its pick on 16 of 20 frames.
+//   archive, 20 HIFs at 40 MP, jixel-enc and 8-bit djxl decodes, 2 h:
+//     A picks libjxl's distance                3 / 20  (4 looser, 12 stricter,
+//                                              1 where nothing beats the JPEG)
+//     bytes at A's pick vs libjxl's            median +2.2%, -3.2% to +49.6%
+//     A's pick clears libjxl's both-metric bar 15 / 20
+//     score improves as distance worsens       A 3 of 385 steps (worst
+//                                              +0.01), ssimulacra2 30 / 188
+//   Totals: 368.7 MB at libjxl's picks, 379.2 MB at A's (+2.8%). A leans
+//   strict where B scattered both ways, and it is now the monotone one: the
+//   8-bit decodes production scores since #1552 make ssimulacra2 wobble at
+//   near-lossless distances (hif-archive.ts's header saw the same), while A
+//   barely moves. 16 bits still reach A (median +0.47 points over the 8-bit
+//   control), and they move its pick on 19 of 20 frames.
 //
-//   VERDICT: zensim does not replace libjxl in hif-archive.ts. For the
-//   Instagram search B ranks well enough, but only on its own recalibrated
-//   scale, and libjxl at 1080px costs 100-220 ms against seconds of encoding.
+//   B's archive run (2026-10-13, cjxl -e 7 and 16-bit decodes, so not the
+//   same setup): same distance 4 / 20, 9 looser and 7 stricter, cleared
+//   libjxl's bar 11 / 20, and B rose on 18 of 219 steps (worst +1.23), too
+//   non-monotone to drive a bisection.
+//
+//   VERDICT: zensim A still doesn't replace libjxl in hif-archive.ts, since it
+//   decides differently on 17 of 20 frames and costs 2.8% more bytes. The old
+//   blocker is gone, though: A bisects cleanly. Whether its stricter picks are
+//   the better judgment is a question for eyes or human ratings, which this
+//   probe has neither of. For the Instagram search A ranks well on nearly
+//   ssimulacra2's own scale, but libjxl at 1080px costs 170-230 ms against
+//   seconds of encoding, so there's still no reason to switch.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
