@@ -184,7 +184,7 @@
           <div class="demo" id="demo-spec">
             <div class="bar">Lean shared a demo: the invariant that proves nothing</div>
             <div class="pad">
-              <p class="lead">A withdraw function over <span class="mono">Nat</span>, the way every ERC-20 uses <span class="mono">uint256</span>. Both theorems below are <b>proven</b>. Drag the amount past the balance:</p>
+              <p class="lead">A withdraw function over <span class="mono">Nat</span>, the way every ERC-20 uses <span class="mono">uint256</span>. The left theorem is <b>proven</b>; Lean rejects the right one as stated. Drag the amount past the balance to see why:</p>
               <div class="dials">
                 <label class="dial">balance <input type="range" id="sp-bal" min="0" max="200" value="5"><b id="sp-bal-v">5</b></label>
                 <label class="dial">withdraw <input type="range" id="sp-amt" min="0" max="200" value="3"><b id="sp-amt-v">3</b></label>
@@ -250,7 +250,7 @@ where
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:02</time></div>
           <div class="bubble"><p>That's the working practice, and it does move a real bottleneck. Knowing what to prove was expensive because the only source of candidate properties was somebody who had already seen this class of bug. A model that has read a lot of code proposes hundreds of candidates for nothing, and I kill the false ones deterministically. The generator is allowed to be wrong as often as it likes. The checker is the half that has to be right.</p>
-          <p>What it does not touch is vacuity. A generated candidate can be <span class="mono">0 ≤ withdraw bal amt</span> exactly the way a human one can. The loop's reward signal is that the prover said yes, and proposing things nothing could violate maximizes it. So <span class="mono">preconditions_unreachable</span> stops being a curiosity and becomes the filter the loop needs. <b>A proposal that survives because it quantifies over nothing should score zero</b>, and a loop that scores it as a win will drift toward writing more of them.</p>
+          <p>What it does not touch is vacuity. A generated candidate can be <span class="mono">0 ≤ withdraw bal amt</span> exactly the way a human one can. The loop's reward signal is that the prover said yes, and proposing things nothing could violate maximizes it. So vacuity stops being a curiosity and becomes the filter the loop needs. <span class="mono">preconditions_unreachable</span> catches the half where the hypotheses contradict each other. A candidate like <span class="mono">0 ≤ withdraw bal amt</span> has no hypotheses to refute, and catching that half still takes someone asking what the statement rules out. <b>A proposal that survives because it says nothing should score zero</b>, and a loop that scores it as a win will drift toward writing more of them.</p>
           <p>The second-order effect is the bigger one. The assurance ladder was priced in human hours. Unit tests, then <a class="term" data-t="fuzzing" href="https://en.wikipedia.org/wiki/Fuzzing" title="Testing a program by feeding it huge numbers of random or mutated inputs and watching for crashes or broken rules." rel="external">fuzzing</a>, then an audit, then this: each rung cost more than the one below it. Most teams stopped at rung two because of what rung four cost. Agents cheapened every rung at the same time. Once a machine writes the tests, the fuzz harness and the audit notes, the distance between the cheap rungs and the expensive one closes. Then it gets harder to answer why you'd stop below the rung that quantifies.</p>
           <p>Treat all of that as a field report on how people are working. I have no measured number for what fraction of generated candidates survive contact with a prover, and you should ask for one before believing any vendor's version of this paragraph.</p></div></div></div>
 
@@ -519,10 +519,10 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     v2.className = "v " + (over ? "no" : "ok");
     v2.textContent = over
       ? "✗  " + res + " + " + a + " = " + (res + a) + ", not " + b
-      : "PROVEN ✓  " + res + " + " + a + " = " + b;
+      : "holds here ✓  " + res + " + " + a + " = " + b;
     w2.textContent = over
       ? "needs the precondition amt ≤ bal, which is the require() you forgot."
-      : "conservation holds: nothing entered or left the system.";
+      : "true for this input, but the theorem claims every input.";
 
     document.getElementById("sp-void").innerHTML = over
       ? "Paid out <b>" + a + "</b>, balance fell by only <b>" + b + "</b>. <b>" + (a - b) + " tokens minted from nothing</b>, and the left-hand invariant never blinked."
@@ -651,7 +651,9 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     if (swap) {
       h += "<div class=\"goal\">case minus\n⊢ eval env b - eval env a = eval env a - eval env b</div>";
       if (agree) h += "<span class=\"agree\">This expression happens to agree: " +
-        (hasMinus(src) ? "the minus is nested where the swap cancels out." : "it has no subtraction, and + and * commute.") +
+        (hasMinus(target) ? "its subtraction happens to give the same answer both ways round." :
+          hasMinus(src) ? "folding already turned its subtraction into a constant, so no sub reaches the swapped compiler." :
+          "it has no subtraction, and + and * commute.") +
         " The theorem still fails, because it quantifies over the ones that don't.</span>";
     }
     t.innerHTML = h;
