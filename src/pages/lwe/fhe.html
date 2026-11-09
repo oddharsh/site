@@ -333,71 +333,71 @@
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you close this window: a short check. Five questions on what we just covered, no stakes. If the ideas made it through with less noise than the ciphertexts did, this will be quick.",
+  "intro": "Before you close this window: a short check. Six questions on what we just covered, no stakes. If the ideas made it through with less noise than the ciphertexts did, this will be quick.",
   "questions": [
     {
-      "q": "Quick check, starting with the add demo. The server returned the correct encrypted sum. What was the server holding while it computed?",
+      "q": "Quick check, starting with the add demo. A friend watching it says: the server must decrypt for a moment, or its sum could never come out right. Where does that reasoning break?",
       "options": [
         {
-          "t": "just the two ciphertexts, no key and no plaintext ever",
+          "t": "the add works on the noisy ciphertexts, and only you round noise off",
           "ok": true,
-          "why": "Right. That is the whole trick: the math runs on the encrypted values directly, and your key only comes out at the end, on your side, to round the noise away."
+          "why": "The server adds Enc(a) and Enc(b) as plain big numbers, noise included, and the total is already an encryption of a + b. Your key only shows up at the end, on your side, dividing by 1000 and rounding. Which also means the server can't read the answer it just produced."
         },
         {
-          "t": "the key too, it just promises to only use it for the addition",
-          "why": "If the server ever held the key, the privacy would rest on a promise. Scroll back to the add demo: the server box computes with no key and no plaintext, and only you decrypt."
+          "t": "it doesn't break, the server holds the key and only uses it for the add",
+          "why": "If the server held the key, the privacy would rest on a promise. Scroll back to the add demo: the server box computes with no key and no plaintext, and only you decrypt."
         },
         {
-          "t": "the plaintexts briefly, inside secure hardware, then it re-encrypts",
-          "why": "That describes a trusted enclave, which carries its own separate trust assumptions. In FHE the plaintext stays sealed everywhere: the addition runs on the noisy ciphertexts themselves."
+          "t": "the server strips the noise first, so the clean numbers add exactly",
+          "why": "Stripping the noise would mean knowing the plaintext, which is what the key is for. The noise rides through the whole sum: the decrypt line even prints the combined noise it rounded away."
         },
         {
-          "t": "the ciphertexts with the noise stripped off",
-          "why": "The noise stays in through the whole computation, since it is what keeps the ciphertext safe. Decryption rounds it away at the very end: the demo even prints the combined noise it rounded off."
+          "t": "the server never sees your numbers, so the friend's worry can't apply",
+          "why": "True about the server, and it skips the friend's actual puzzle: how a blind server lands on the right sum. Adding the ciphertexts adds the hidden numbers underneath them, so there's no decryption step anywhere to point at."
         }
       ]
     },
     {
-      "q": "Privacy homomorphisms were theorized in the late 1970s, yet FHE only arrived in 2009. What did Gentry's scheme contribute that made encryption fully homomorphic?",
+      "q": "Same demo, an input the chat never tried: push both secrets to 20, the max, and hit re-roll noise as often as you like. What does the decrypt line show?",
       "options": [
         {
-          "t": "lattices that express arbitrary circuits, so any computation",
+          "t": "20 + 20 = 40 with a check mark, on every single roll",
           "ok": true,
-          "why": "Yes. Earlier constructions supported only limited operations; lattices expressing arbitrary circuits turned a 30-year open problem into a working scheme, and that generality is what the word fully means."
+          "why": "Each ciphertext's noise is at most 40, so the combined noise tops out at 80, far below the 500 it would take to round onto the wrong multiple of 1000. Noise past half the scale is the line the second demo lets you cross, and there decode does land on the wrong number."
         },
         {
-          "t": "a way to strip out the random noise entirely, so nothing corrupts",
-          "why": "The noise is load-bearing: it is the randomness that makes the scheme secure. Gentry contributed a way to manage it, via bootstrapping, while keeping it in place."
+          "t": "a wrong sum now and then, when both rolls land high",
+          "why": "Take the worst case: each noise maxes out at 40, so the pair adds to at most 80. Rounding by 1000 only slips once the combined noise reaches 500, and no roll of this demo gets near that."
         },
         {
-          "t": "encrypted operations that ran as fast as normal ones",
-          "why": "Speed came much later and only partially: the first implementation needed 30 minutes per bit operation, and even the millisecond-era schemes ran about a million times slower than plaintext computing. 2009 solved feasibility."
+          "t": "a wrong sum every time, since big secrets carry big noise",
+          "why": "The noise is drawn fresh, 0 to 40, whatever number you pick; the secret only sets the multiple of 1000. Big secrets and small ones get the same small noise, and both round back cleanly."
         },
         {
-          "t": "the original idea of computing on data while it stays encrypted",
-          "why": "Privacy homomorphisms carried that idea back in the late 1970s. What stayed open for three decades was a workable construction, and that is what Gentry delivered in 2009."
+          "t": "40 on most rolls, 41 whenever the combined noise rounds up",
+          "why": "Rounding up needs the combined noise to reach half the scale, 500, and this demo caps it at 80. A 41 would be corruption, and the gap between the noise and the scale is what keeps it from happening here."
         }
       ]
     },
     {
-      "q": "In the noise demo, multiply corrupted the data far sooner than add. Why does homomorphic multiplication burn through the noise budget faster?",
+      "q": "Now the noise demo, from reset (m = 9). Run A presses add, add, multiply, multiply. Run B presses multiply, multiply, add, add. Same four ops. What does decode show at the end of each run?",
       "options": [
         {
-          "t": "add nudges the noise, multiply compounds whatever has built up",
+          "t": "A is corrupted and decodes 10, while B still decodes 9",
           "ok": true,
-          "why": "Exactly. Additions add small fresh noise while multiplications multiply the accumulated noise, so it compounds, climbs past the gap into the bits carrying your data, and decode rounds to the wrong number."
+          "why": "Multiply scales whatever noise has built up, so noise added before a multiply gets tripled. A goes 3, 19, 35, 105, then past the corrupt point at 128; B goes 3, 9, 27, 43, 59 and never nears it. So when you budget noise, the order of the ops matters as much as their count."
         },
         {
-          "t": "multiply makes the ciphertext too big a number to store",
-          "why": "The danger sits in the low bits, underneath your data. The demo's bar shows corruption the moment noise crosses the gap and rounding lands on the wrong plaintext, long before any number outgrows storage."
+          "t": "both decode 9, since the same four ops add the same noise",
+          "why": "That holds for adds, which bump the noise by a fixed 16. Multiply multiplies the noise already there, so the order decides how much it gets to work with: run both and watch A's bar turn red."
         },
         {
-          "t": "each multiply gives the server another peek at the plaintext",
-          "why": "Every operation runs on ciphertext, so the server stays blind either way. Corruption is an accuracy failure: enough accumulated noise makes decoding round wrong even for the honest key holder."
+          "t": "both are corrupted, since two multiplies always cross the gap",
+          "why": "From a fresh ciphertext two multiplies take the noise from 3 to 27, nowhere near the corrupt point at 128. What sinks run A is the adds that came first and handed the multiplies a bigger number to triple."
         },
         {
-          "t": "they grow noise at the same rate, multiply just counts as more ops",
-          "why": "The growth rates genuinely differ, and that difference drives all of FHE engineering. Try the demo again: a handful of multiplies reaches the corrupt line while adds barely move the bar."
+          "t": "B decodes 10 and A survives, the adds at the end pile on",
+          "why": "Adds at the end bump B's noise by 16 each, 27 to 59, still under 128. The damage runs the other way: A's early adds raise the noise to 35, and the multiplies after them compound it past the gap."
         }
       ]
     },
@@ -407,7 +407,7 @@
         {
           "t": "it homomorphically re-encrypts to reset the noise, at a big cost",
           "ok": true,
-          "why": "Right: bootstrapping refreshes the ciphertext by re-encrypting it under a different key, resetting the noise before it bleeds into the data. The cost is speed and compute; Gentry's scheme needed 30 minutes per bit operation when first implemented."
+          "why": "Bootstrapping refreshes the ciphertext by re-encrypting it under a different key, resetting the noise before it bleeds into the data. The cost is speed and compute; Gentry's scheme needed 30 minutes per bit operation when first implemented."
         },
         {
           "t": "it decrypts the data, cleans it up, then encrypts it again",
@@ -424,24 +424,46 @@
       ]
     },
     {
-      "q": "Last one. Assume FHE someday runs fast enough for real applications. What catch appears the moment an application needs the plaintext answer?",
+      "q": "Multiply is the op that burns through the noise budget. So why doesn't FHE just drop multiplication and live on adds?",
       "options": [
         {
-          "t": "you have to trust whoever holds the decryption key",
+          "t": "it would lose arbitrary circuits, the thing fully refers to",
           "ok": true,
-          "why": "That is the caveat that closes the loop: outputs for non-FHE use need a decryption key, and in practice a single party or a set of MPC nodes controls it. The trust assumptions collapse back to MPC's, only slower."
+          "why": "Gentry's 2009 result was a lattice scheme that expresses arbitrary circuits, and the chat's first message says FHE runs on addition and multiplication together. Drop multiply and you're back to the limited schemes that left the problem open for 30 years. The noise from multiplying is the price of that generality, and bootstrapping is how you pay it."
         },
         {
-          "t": "the ciphertext just decrypts itself after enough operations",
-          "why": "Accumulated noise corrupts the ciphertext; recovering the plaintext always takes the key. Who controls that key is exactly the trust question the conversation ends on."
+          "t": "adds pile up noise too, so dropping multiply saves nothing",
+          "why": "Half right: the demo corrupts after 8 adds from reset, so adds do accumulate. They grow the noise far slower than multiply, so dropping it would save plenty. The real cost is what you'd lose: arbitrary circuits, the thing the word fully names."
         },
         {
-          "t": "no catch, decryption is the easy part of the pipeline",
-          "why": "Mechanically it is the easy step; politically it is the catch. Whoever holds the key can decrypt, so key control ends up defining the trust assumptions of the whole system."
+          "t": "multiplication is what keeps the ciphertexts secure",
+          "why": "The security comes from the noise itself, which is why bootstrapping resets it instead of removing it. Multiply is what eats the margin around that noise, and FHE keeps it anyway for what it lets you compute."
         },
         {
-          "t": "the server already learned the answer while computing it",
-          "why": "The computation itself stays blind, as the add demo showed. The exposure arrives at the edge of the system, where a decryption key has to exist so a non-FHE application can read the result."
+          "t": "nothing stops it, add-only is just a faster flavor of FHE",
+          "why": "Faster, yes, and also smaller in what it can compute. The fully in FHE means arbitrary circuits, the 2009 result, and the chat's first message says FHE runs on addition and multiplication both."
+        }
+      ]
+    },
+    {
+      "q": "Last one. A startup pitch: once bootstrapping gets fast, FHE needs no trust at all, since the server computes blind start to finish. Where's the hole?",
+      "options": [
+        {
+          "t": "someone still holds the key that turns the answer to plaintext",
+          "ok": true,
+          "why": "Fast bootstrapping fixes the noise and the speed, and it never touches the key. Any output headed to a non-FHE application needs decrypting, and in practice one party or a set of MPC nodes holds that key. That puts you back on MPC's trust assumptions, only slower."
+        },
+        {
+          "t": "bootstrapping can't get fast, since noise can never fully reset",
+          "why": "The demo's bootstrap button drops the noise straight back to its floor every time; the cost is compute, and GSW-era schemes already took operations from minutes to milliseconds. Even granting the pitch its speed, a hole remains at the end of the pipeline."
+        },
+        {
+          "t": "the server learns the inputs whenever it runs a bootstrap",
+          "why": "Bootstrapping is itself homomorphic: it re-encrypts the ciphertext without decrypting it, so the server stays blind through every refresh. The exposure sits elsewhere, at the point where someone reads the result."
+        },
+        {
+          "t": "speed was the real catch all along, so the pitch basically holds",
+          "why": "Speed was a catch: millisecond gates still ran about a million times slower than plaintext computing. The conversation ends on a second one that speed can't touch: whoever holds the decryption key decides who reads the answer."
         }
       ]
     }

@@ -449,7 +449,7 @@ initWhenNear("demo-ppi", function() {
         {
           "t": "nothing at all, since 1 and 3 grow every stem by exactly the same amount",
           "ok": true,
-          "why": "Right. The 48-case sweep produced byte-identical bitmaps for 1, 2 and 3. The light, medium and strong names belong to the LCD era."
+          "why": "The 48-case sweep produced byte-identical bitmaps for 1, 2 and 3. The light, medium and strong names belong to the LCD era."
         },
         {
           "t": "stems thicken about three times as much, since the value scales the growth",
@@ -462,20 +462,24 @@ initWhenNear("demo-ppi", function() {
       ]
     },
     {
-      "q": "At smoothing on, why does white-on-black text look heavier than black-on-white on a 1x monitor?",
+      "q": "In the dial demo, leave the dial at 2, set size to 24 pt and screen to 2x, Retina. Now flip text from black on white to white on black. What does the 'every stem grows by' readout do?",
       "options": [
         {
-          "t": "light text grows 2.75 times faster per ppem, so a 13 pt stem gains 0.41 px",
+          "t": "it creeps from 0.56 px to 0.60 px, since both now sit at or near the cap",
           "ok": true,
-          "why": "Right. Dark text gains 0.15 px at the same size. The measured rates are 0.032 and 0.0116 px per ppem, both capped at 0.6 px."
+          "why": "A 2x screen doubles pixels per em, so 24 pt is 48 ppem. Black text grows 0.0116 x 48 = 0.56 px, and white text's 0.032 x 48 = 1.54 px gets cut to the 0.6 px cap. So the 2.75x asymmetry is a low-ppem story: it shows in full at 13 pt on a 1x screen, where the page measures 0.15 px against 0.41."
         },
         {
-          "t": "dark backgrounds trigger subpixel rendering, and its fringes add weight",
-          "why": "No polarity brings back subpixel rendering. The extra weight is greyscale coverage from a larger outline."
+          "t": "it jumps from 0.56 px to 1.54 px, since light text grows 2.75 times faster",
+          "why": "The rate is right and the cap is missing. Growth stops at 0.6 px. On a 2x screen black text reaches that near 26 pt, and white text, growing 2.75 times faster, gets there far sooner. Which number in the chat's growth rule did 1.54 skip?"
         },
         {
-          "t": "the eye spreads light into dark surroundings, so equal stems look unequal",
-          "why": "That effect exists, but the stems here are unequal on disk too: at 0 both polarities had identical ink, and smoothing grew the light stems far more."
+          "t": "it jumps from 0.28 px to 0.77 px, since growth scales with the point size",
+          "why": "Growth follows pixels per em, and the screen setting doubles them: 24 pt on 2x is 48 ppem. The readout itself says 'at 48 pixels per em'. Even on points, 0.77 px would overshoot the 0.6 px cap."
+        },
+        {
+          "t": "it stays at 0.56 px, since polarity only changes how heavy text looks",
+          "why": "Polarity changes the outline itself. The page's 13 pt measurement on 1x had dark-mode stems gaining 0.41 px against 0.15 for black text. Here the gap shrinks because white text hits the cap, and the readout still moves."
         }
       ]
     },
@@ -485,7 +489,7 @@ initWhenNear("demo-ppi", function() {
         {
           "t": "it needs the background color at raster time, since each stripe blends alone",
           "ok": true,
-          "why": "Right. One alpha can blend over anything later. Three alphas need the color behind the glyph before compositing has decided it."
+          "why": "One alpha can blend over anything later. Three alphas need the color behind the glyph before compositing has decided it."
         },
         {
           "t": "it needs a Retina display, since stripes are too small to address at 1x",
@@ -498,56 +502,46 @@ initWhenNear("demo-ppi", function() {
       ]
     },
     {
-      "q": "A 27-inch 4K monitor is set to look like 2560x1440. What happens to a glyph on its way to the panel?",
+      "q": "In the monitor demo, pick the 27-inch 5K and switch its mode from 'looks like 2560x1440' to 'looks like 3200x1800'. What does the table report?",
       "options": [
         {
-          "t": "macOS draws it into a 5120x2880 frame, then shrinks that frame by 0.75",
+          "t": "it draws at 6400x3600, then resamples by 0.800, just like a 4K at 2560",
           "ok": true,
-          "why": "Right. The glyph gets filtered twice, once by the rasterizer and once by the scaler, which is the softness people notice."
+          "why": "macOS draws every HiDPI mode at twice its looks-like size, so 3200 becomes 6400, and 5120 / 6400 = 0.8. Exact 2x belongs to the mode: the same panel at 2560x1440 resamples by nothing. So on a 5K, asking for more space buys back the double filtering 4K owners live with."
         },
         {
-          "t": "macOS draws it straight at 3840x2160 with stems snapped to panel pixels",
-          "why": "That's closer to what Windows does at 150%. macOS renders a HiDPI mode at exactly 2x and resamples the result."
+          "t": "nothing gets resampled, since 5K is the exact-2x panel macOS is built for",
+          "why": "Exact fit is a property of the mode, and the demo shows it: the 5K's 2560x1440 default reads 'nothing, exact fit', and 3200x1800 doesn't. Nothing is resampled only when twice the looks-like width equals the panel's 5120."
         },
         {
-          "t": "macOS sends 2560x1440 and the monitor's own scaler stretches it to 4K",
-          "why": "The Mac sends native 3840x2160. The resample happens on the Mac's GPU, before the signal leaves the machine."
+          "t": "macOS sends 3200x1800 and the monitor's own scaler stretches it to 5K",
+          "why": "The table's second row says macOS draws at 6400x3600. Every HiDPI mode runs the same way on the Mac: draw at twice the looks-like size, then resample to the panel's native pixels."
+        },
+        {
+          "t": "it draws at 6400x3600, then resamples by 1.250 to reach the panel",
+          "why": "The frame size is right and the direction isn't. A 6400-wide frame has to shrink to fit 5120 pixels, so the factor is 5120 / 6400 = 0.800. 1.25 is how much more room you asked for, which is exactly why the frame comes out too big."
         }
       ]
     },
     {
-      "q": "On a Mac whose system setting is left on, what can a page's CSS do about the thickening?",
+      "q": "A forum reply says: 'AppleFontSmoothing 0 turns antialiasing off, which is why text gets crisper, like Windows.' What's wrong with it?",
       "options": [
         {
-          "t": "switch it off per element with -webkit-font-smoothing: antialiased",
+          "t": "0 keeps antialiasing and drops only the stem growth, so edges stay grey",
           "ok": true,
-          "why": "Right, and only in that direction. With the system at 0, subpixel-antialiased drew the same pixels as antialiased in Chrome and WebKit."
+          "why": "The page counted grey levels on one 13 pt line: 224 at 0, 229 with smoothing on, and 2 with antialiasing actually off. 0 drops the thickening and keeps the greys. The 'like Windows' half fails too, since Windows gets its crisp columns from hinting, which no value of this key turns on."
         },
         {
-          "t": "pick light, medium or strong through font-smooth values from 1 to 3",
-          "why": "No CSS value maps to the old strengths, and on 27.2 the strengths themselves no longer exist."
+          "t": "nothing: 0 is the off position, and the old checkbox called it smoothing",
+          "why": "The checkbox and the key both named the thickening. The measurement settles it: 224 grey levels at 0, against 2 with antialiasing switched off in the graphics context. Pick 1-bit in the letter demo to see what off looks like: stairs."
         },
         {
-          "t": "bring back ClearType-style stripes with subpixel-antialiased",
-          "why": "The keyword survives from the LCD era. Since Mojave it can't bring stripes back, and at system 0 it changed no pixel in either engine."
-        }
-      ]
-    },
-    {
-      "q": "Which setting turns a Mac's text into pure black and white pixels?",
-      "options": [
-        {
-          "t": "switching antialiasing off, since smoothing 0 still draws 224 grey levels",
-          "ok": true,
-          "why": "Right. AppleFontSmoothing 0 keeps antialiasing and drops only the stem growth. Antialiasing off left 2 levels, and then the smoothing value changed nothing."
+          "t": "only the Windows part: its text is crisper because of ClearType alone",
+          "why": "That clause is shaky, and ClearType is only half of it: hinting snaps the stem to whole columns before the stripes go on, which the stem demo's bottom two rows show. The bigger error is up front. 0 leaves 224 grey levels on a 13 pt line."
         },
         {
-          "t": "AppleFontSmoothing 0, since it removes the smoothing that greys the edges",
-          "why": "The name suggests it, but the edges stay grey at 0. Only the thickening goes away, and the line still used 224 grey levels."
-        },
-        {
-          "t": "AppleFontSmoothing 3, since strong smoothing snaps every edge to the grid",
-          "why": "No value of this key snaps anything to the grid, and on 27.2 the value 3 draws the same pixels as 1."
+          "t": "0 turns it off, but only below the AppleAntiAliasingThreshold size",
+          "why": "That threshold is a separate key, and on 27.2 it changed nothing measurable: set to 14, it left 13 pt text antialiased. AppleFontSmoothing drops the growth at every size and leaves antialiasing alone."
         }
       ]
     },
@@ -557,7 +551,7 @@ initWhenNear("demo-ppi", function() {
         {
           "t": "almost nowhere, since each glyph is thickened once and then cached",
           "ok": true,
-          "why": "Right. Fresh rasterization ran about 20% slower with smoothing on, and drawing cached glyphs took 41 to 44 ms either way."
+          "why": "Fresh rasterization ran about 20% slower with smoothing on, and drawing cached glyphs took 41 to 44 ms either way."
         },
         {
           "t": "on every frame, since the GPU thickens each glyph again as it composites",
@@ -566,6 +560,28 @@ initWhenNear("demo-ppi", function() {
         {
           "t": "on every line, since each new line of text is rasterized again from outlines",
           "why": "A new line reuses glyphs already in the cache. Only a letter at a size the cache hasn't seen gets rasterized."
+        }
+      ]
+    },
+    {
+      "q": "Your 27-inch 1440p monitor runs dark mode, and you set AppleFontSmoothing 0 hoping 13 pt text will look like Windows on the same panel. What do you get?",
+      "options": [
+        {
+          "t": "lighter, even stems that stay soft, since stripes and hinting don't return",
+          "ok": true,
+          "why": "At 109 PPI macOS draws at 1x, and dark mode is where growth bites hardest: 0 strips the 0.41 px that made the stem 36% heavier. The 1.14 px stem still straddles two columns as two greys, since 0 restores neither subpixel stripes nor hinting. That's why the page says no setting makes 109 PPI on a Mac look like ClearType."
+        },
+        {
+          "t": "Windows-sharp text, since 0 hands the stems back to grid snapping",
+          "why": "Snapping is hinting, and macOS skips it at every value of the key. Drag the stem demo: the two macOS rows always spread a 1.14 px stem over two or more columns, and only the snapped to the grid row holds it to one dark column."
+        },
+        {
+          "t": "no visible change, since smoothing only thickens text on Retina screens",
+          "why": "Growth tracks pixels per em on any screen. At 1x it adds 0.41 px to a 1.14 px dark-mode stem, and the monitor demo's verdict for a 1x panel under 150 PPI is that this is where AppleFontSmoothing 0 earns its keep."
+        },
+        {
+          "t": "lighter stems, but only by the 0.15 px that black-on-white text gains",
+          "why": "Lighter, yes, and by more: 0.15 px is the black-on-white growth at 13 pt. White on black grows 2.75 times faster, so dark mode sheds 0.41 px, the biggest saving the key offers on this panel."
         }
       ]
     }
