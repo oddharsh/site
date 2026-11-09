@@ -36,12 +36,14 @@
 //
 // Nothing about the caller is stored: no IP, no user agent, no cookie.
 // /privacy says so (trust.ts).
-import { jsonResponse } from "./lib/http.ts";
+import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { isolateMemo } from "./lib/isolate-memo.ts";
+import type { Env } from "./lib/env.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 
 /** Mirrored in cloudflare.config.ts; contract-lens-per-ip-crawl-budgets pins the pair. */
-export const PIXEL_PEEPER_BUDGET = { binding: "PIXEL_PEEPER_RL", max: 6 };
+export const PIXEL_PEEPER_BUDGET = { name: "pixel-peeper", binding: "PIXEL_PEEPER_RL", max: 6 };
 /** Runs counted per UTC day, each costing 2 D1 rows written. */
 export const DAILY_RUN_CAP = 5000;
 /** A normal run is 12 calls and a showdown 6; this leaves room, never a ceiling a run meets. */
@@ -228,20 +230,20 @@ export function crowdFromTally(v: string | null | undefined): Crowd {
 // Created lazily, the way webmention.ts does it, so the binding self-provisions.
 // migrations/0002_pixel_peeper.sql carries the same DDL. The INSERT OR IGNORE
 // writes nothing once the row exists.
-let ensured = false;
-async function ensureTables(db) {
-  if (ensured) return;
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS ${TALLY} (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
-    db.prepare(`INSERT OR IGNORE INTO ${TALLY} (k, v) VALUES ('all', '{}')`),
-    db.prepare(`CREATE TABLE IF NOT EXISTS ${RUNS} (
+const ensureTables = isolateMemo(
+  async (db: D1Database) => {
+    await db.batch([
+      db.prepare(`CREATE TABLE IF NOT EXISTS ${TALLY} (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
+      db.prepare(`INSERT OR IGNORE INTO ${TALLY} (k, v) VALUES ('all', '{}')`),
+      db.prepare(`CREATE TABLE IF NOT EXISTS ${RUNS} (
       at INTEGER NOT NULL, mode TEXT NOT NULL, overall INTEGER NOT NULL,
       clear_n INTEGER NOT NULL, clear_hit INTEGER NOT NULL,
       split_s2 INTEGER NOT NULL, split_butter INTEGER NOT NULL, split_neither INTEGER NOT NULL,
       picks TEXT NOT NULL)`),
-  ]);
-  ensured = true;
-}
+    ]);
+  },
+  { onFailure: "retry" },
+);
 
 // Never creates anything: crowd.json is a GET, and a preview URL runs this
 // against the production database (lib/preview.ts). Before the first counted
@@ -255,41 +257,37 @@ async function readTally(db): Promise<string | null> {
 }
 
 // One manifest per isolate: it changes only with a deploy, which starts new ones.
-let manifestIndex: Promise<TileIndex> | null = null;
-function loadIndex(env): Promise<TileIndex> {
-  if (manifestIndex) return manifestIndex;
-  const loading: Promise<TileIndex> = env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`))
-    .then((r: Response) => {
-      if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`);
-      return r.json();
-    })
-    .then((m: Manifest) => indexManifest(m));
-  // a failed load is forgotten, so the next run tries again
-  loading.catch(() => {
-    manifestIndex = null;
-  });
-  manifestIndex = loading;
-  return loading;
-}
+// A failed load is forgotten, so the next run tries again.
+const loadIndex = isolateMemo(
+  async (env: Pick<Env, "ASSETS">): Promise<TileIndex> => {
+    const r: Response = await env.ASSETS.fetch(new Request(`https://assets.local${MANIFEST_PATH}`));
+    if (!r.ok) throw new Error(`manifest: HTTP ${r.status}`);
+    const manifest: Manifest = await r.json();
+    return indexManifest(manifest);
+  },
+  { onFailure: "retry" },
+);
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => jsonResponse(body, status, headers, { pretty: false });
 
 export async function handlePixelPeeperCrowd(request: Request, env) {
-  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "GET only" }, 405, { allow: "GET, HEAD" });
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   const db = env.SOCIAL_DB;
   if (!db) return json({ error: "the crowd is not bound on this deployment" }, 503);
   return json(crowdFromTally(await readTally(db)), 200, { "cache-control": "public, max-age=60" });
 }
 
 export async function handlePixelPeeperRun(request: Request, env, ctx?: ExecutionContext) {
-  if (request.method !== "POST") return json({ error: "POST a finished run" }, 405, { allow: "POST" });
+  const refused = methodGuard(request, ["POST"]);
+  if (refused) return refused;
   // application/json forces a CORS preflight, which this route never answers,
   // so another site's page can't post runs from its visitors' browsers
   if (!/^application\/json\b/i.test(request.headers.get("content-type") || "")) return json({ error: "send application/json" }, 415);
   if (request.headers.get("sec-fetch-site") === "cross-site") return json({ error: "cross-site" }, 403);
   if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
   if (await overBudget(PIXEL_PEEPER_BUDGET, request, env)) {
-    return json({ error: "too many runs from this address; try again in a minute" }, 429, rateLimitedHeaders("pixel-peeper", PIXEL_PEEPER_BUDGET.max));
+    return json({ error: "too many runs from this address; try again in a minute" }, 429, rateLimitedHeaders(PIXEL_PEEPER_BUDGET));
   }
   const text = await request.text();
   if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);

@@ -29,6 +29,8 @@ name: Canary tripwire
 # per upstream fix this repository is waiting on, each reading false on the
 # pinned toolchain today, answered under the pin and under the candidate. A
 # row that differs is `changed`, naming the fix and the build it arrived in.
+# The bun leg also reads VERDICT_WATCHES, the premises of this repository's
+# own declines, and a moved one names the memory file to re-measure.
 #
 # WHY IT EXISTS. Every pin here is exact and every served URL is a hash of
 # what the toolchain emitted, so a regression in a runtime, a bundler or an

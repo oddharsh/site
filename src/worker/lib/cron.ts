@@ -23,7 +23,9 @@
 // An unknown expression returns null so the caller can surface it as its own
 // traced event instead of running somebody else's job.
 
-export function cronJob(expr) {
+export type CronJob = "home_probe" | "census" | "around" | "webmention_send" | "serendipity";
+
+export function cronJob(expr: string | null): CronJob | null {
   const sig = String(expr || "")
     .trim()
     .split(/\s+/)

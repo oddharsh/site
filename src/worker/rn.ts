@@ -6,7 +6,7 @@ import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, jsonResponse, publicJsonHeaders, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -257,8 +257,8 @@ function artAttrs(kind: "track" | "artist", rawUrl): Html {
   return kind === "track" ? html` data-track-image="${art.src}"` : html` data-artist-image="${art.src}"`;
 }
 
-export function handleRnArt(request, env, ctx) {
-  return rnArt(request, env, ctx, {});
+export function handleRnArt(request, env, ctx, url = new URL(request.url)) {
+  return rnArt(request, env, ctx, {}, url);
 }
 
 // `budget` is the art warm's ledger, charged at the moment each call is made:
@@ -268,9 +268,8 @@ export function handleRnArt(request, env, ctx) {
 // last unit. A URL the ledger cannot afford answers `x-art-cache: skipped`.
 // A separate export for the same reason as rnTracksHtml: the router passes the
 // request URL in the fourth slot.
-export async function rnArt(request, env, ctx, opts: { budget?: Budget }) {
+export async function rnArt(request, env, ctx, opts: { budget?: Budget }, url = new URL(request.url)) {
   const skipped = () => new Response(null, { status: 503, headers: { "cache-control": "no-store", "x-art-cache": "skipped" } });
-  const url = new URL(request.url);
   const m = ART_PATH.exec(url.pathname);
   if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
   const [, hash, widthRaw, , ext] = m;
@@ -523,15 +522,9 @@ function trackResponse(payload, status = 200, format = "json") {
     // 1101 from the edge is also text/html and also resolves fine. Unlike the
     // default island this fragment is cacheable, because the playlist is shared
     // by everyone.
-    return islandResponse(
-      renderTrackListHtml(payload),
-      {
-        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-      },
-      status,
-    );
+    return islandResponse(renderTrackListHtml(payload), { "cache-control": publicCacheControl(status) }, status);
   }
-  return jsonResponse(payload, status, { ...publicJsonHeaders(status), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, status, { noindex: true });
 }
 
 // Traced as `rn.tracks.load` with the OUTCOME on the span, because this handler
@@ -545,8 +538,6 @@ async function loadRnTracks(request, env, ctx) {
 }
 
 async function loadRnTracksInner(request, env, ctx, s) {
-  const url = new URL(request.url);
-
   if (!env.RN_KV) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
@@ -561,9 +552,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
   const cacheKey = `tracks:${playlistId}`;
 
   // optional bust: drop the value, whose metadata carries the freshness stamp.
-  // constant-time compare, same as the admin/set gate (a plain === leaks the
-  // secret's length + prefix through timing).
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
+  if (isOwnerBust(request, env)) {
     s.setAttribute("rn.busted", true);
     await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
@@ -738,7 +727,7 @@ export function renderTrackListMarkdown(payload, target) {
 
 // Titles and artist names are arbitrary third-party strings, so the four
 // characters that would otherwise turn one into emphasis, a link, or a heading
-// are escaped. Not esc()/escHtml(): this is not HTML, and entity-encoding here
+// are escaped. Not esc(): this is not HTML, and entity-encoding here
 // would put `&amp;` in front of a reader.
 const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 
@@ -746,9 +735,9 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 // the cacheable representation of the pair (the negotiated /rn response is
 // no-store, because the edge keys on URL and not on Accept), and it rides the
 // same SWR payload, so answering it costs a KV read.
-export async function handleRnMarkdown(request, env, ctx) {
+export async function handleRnMarkdown(request, env, ctx, url = new URL(request.url)) {
   const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
-  const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+  const negotiated = wantsMarkdown(request) && !url.pathname.endsWith(".md");
   // Record<string, string> because `vary` is added conditionally below. A bare
   // literal freezes the key set at the three declared here.
   const headers: Record<string, string> = {
@@ -823,8 +812,22 @@ export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean 
 // receipt for when a homepage fragment takes seconds. Each phase's fetches are
 // auto-instrumented as children of its span.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
-  // tier 1: playlist embed → ordered track list
-  const playlistEntity = await span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId });
+  // tier 1: playlist embed → ordered track list. The stored meta map is read
+  // beside it, since neither needs the other, so a cold build waits on one
+  // round trip instead of the embed and then the KV read.
+  const [playlistEntity, meta] = await Promise.all([
+    span("rn.scrape.playlist", () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env), { "rn.playlist_id": playlistId }),
+    span("rn.scrape.meta", async (s) => {
+      let known: Record<string, StoredTrackMeta> = {};
+      try {
+        known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
+      } catch {
+        /* a missing map means every cover is pending, never an error */
+      }
+      s.setAttribute("rn.meta_known", Object.keys(known).length);
+      return known;
+    }),
+  ]);
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
@@ -854,17 +857,6 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   //
   // What is left inline is ONE fetch and ONE KV read, so a cold build is ~7
   // subrequests and comfortably inside both budgets.
-  const meta = await span("rn.scrape.meta", async (s) => {
-    let known: Record<string, StoredTrackMeta> = {};
-    try {
-      known = readTrackMeta(await env?.RN_KV?.get(TRACK_META_KEY, "json"));
-    } catch {
-      /* a missing map means every cover is pending, never an error */
-    }
-    s.setAttribute("rn.meta_known", Object.keys(known).length);
-    return known;
-  });
-
   const tracks = baseTracks.map((t) => withTrackMeta(t, meta[t.id]));
   return {
     playlist_id: playlistId,
@@ -1002,6 +994,13 @@ function kvBulkJson(env, budget, keys) {
   return env.RN_KV.get(keys, "json");
 }
 
+// The same single-call read, answering { value, metadata } per key. The setup
+// read needs the payload's swrKV stamp so its write can put it back.
+function kvBulkJsonWithMetadata(env, budget, keys) {
+  budget.charge(1);
+  return env.RN_KV.getWithMetadata(keys, "json");
+}
+
 export async function cronEnrichTracks(env, ctx) {
   if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
 
@@ -1025,9 +1024,10 @@ export async function cronEnrichTracks(env, ctx) {
     // Both setup keys in one read. A key with nothing behind it comes back as
     // null, which is the answer a single get gave, so `no_payload` below is
     // unchanged.
-    const setup = await kvBulkJson(env, budget, [cacheKey, TRACK_META_KEY]);
-    const payload = setup.get(cacheKey);
-    const storedMeta = setup.get(TRACK_META_KEY);
+    const setup = await kvBulkJsonWithMetadata(env, budget, [cacheKey, TRACK_META_KEY]);
+    const payload = setup.get(cacheKey)?.value;
+    const payloadStamp = setup.get(cacheKey)?.metadata;
+    const storedMeta = setup.get(TRACK_META_KEY)?.value;
     if (!payload || !Array.isArray(payload.tracks) || payload.tracks.length === 0) {
       // nothing has built the playlist yet; the SWR path owns that, not this.
       s.setAttribute("rn.outcome", "no_payload");
@@ -1191,10 +1191,19 @@ export async function cronEnrichTracks(env, ctx) {
     // Write the map, then re-project the payload through it so the change is
     // visible without waiting for the SWR sentinel to lapse. The payload write
     // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
-    // read, and this pass did not read it.
+    // read, and this pass did not read it. The swrKV stamp in metadata says the
+    // same thing and goes back unchanged, since a put without metadata clears
+    // it and swrKV reads a missing stamp as stale (a re-scrape per tick).
+    //
+    // No compare-and-set exists in KV, so an SWR refresh landing between the
+    // read above and this put gets overwritten. The older bytes carry their own
+    // older stamp, so they read fresh no longer than they would have anyway.
     const next = { ...payload, tracks: payload.tracks.map((t) => withTrackMeta(t, meta[t.id])) };
     budget.charge(2);
-    await Promise.all([env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)), env.RN_KV.put(cacheKey, JSON.stringify(next))]);
+    await Promise.all([
+      env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
+      env.RN_KV.put(cacheKey, JSON.stringify(next), payloadStamp ? { metadata: payloadStamp } : undefined),
+    ]);
 
     const covered = live.filter((id) => meta[id]?.image_url).length;
     s.setAttribute("rn.tracks_total", live.length);
@@ -1294,8 +1303,7 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
 // ── /rn/admin handler ───────────────────────────────────────────────
 // renders the bookmark-friendly form. requires ?secret=<RN_BUST_SECRET>.
 // the form posts to /rn/set so the actual write logic stays in one place.
-export async function handleRnAdmin(request, env) {
-  const url = new URL(request.url);
+export async function handleRnAdmin(request, env, _ctx?, url = new URL(request.url)) {
   const secret = url.searchParams.get("secret") || "";
 
   if (!secretMatches(secret, env.RN_BUST_SECRET)) {
@@ -1337,8 +1345,7 @@ export async function handleRnAdmin(request, env) {
 //   POST /rn/set  with secret+url in form-encoded body  (the admin form)
 //   POST /rn/set  with secret+url as JSON               (programmatic)
 // returns the same tiny period-correct confirmation page in all cases.
-export async function handleRnSet(request, env) {
-  const url = new URL(request.url);
+export async function handleRnSet(request, env, _ctx?, url = new URL(request.url)) {
   const params = await readParams(request, url);
   const secret = params.get("secret") || "";
   const target = params.get("url") || "";

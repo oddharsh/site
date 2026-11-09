@@ -1,7 +1,7 @@
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { escHtml, escAttr, jsonResponse, secretMatches } from "./lib/http.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
+import { esc, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
@@ -70,14 +70,50 @@ export const CENSUS_RUN_UPSERT =
 // lets a dispatch row replace only another dispatch row.
 export const CENSUS_RUN_UPSERT_DISPATCH = CENSUS_RUN_UPSERT + " WHERE lens_census_runs.stage = 'dispatch'";
 
+// Every outcome belongs to exactly one stage, so the writers take the stage
+// column from here instead of passing it beside the outcome. The D1 schema
+// keeps both columns: the dispatch upsert's WHERE reads `stage`.
+export const CENSUS_RUN_STAGE = {
+  dispatched: "dispatch",
+  duplicate: "dispatch",
+  dispatch_failed: "dispatch",
+  written: "scan",
+  cap: "scan",
+  failed: "scan",
+} as const;
+export type CensusRunOutcome = keyof typeof CENSUS_RUN_STAGE;
+
+const isCensusRunOutcome = (o: string): o is CensusRunOutcome => Object.hasOwn(CENSUS_RUN_STAGE, o);
+
+/** Where a host stands after its latest record: scanned, still in flight, or stopped short. */
+function censusRunState(outcome: CensusRunOutcome): "done" | "unfinished" | "problem" {
+  switch (outcome) {
+    case "written":
+      return "done";
+    // Dispatched and never heard from: the instance is still running, still
+    // retrying, or died without reaching its catch.
+    case "dispatched":
+    case "duplicate":
+      return "unfinished";
+    case "dispatch_failed":
+    case "cap":
+    case "failed":
+      return "problem";
+    default: {
+      const _exhaustive: never = outcome;
+      return _exhaustive;
+    }
+  }
+}
+
 const detailOf = (e) => ((e && e.message) || (e == null ? null : String(e)))?.slice(0, 300) ?? null;
 
 /** Record one host's scan outcome. Never throws: the record must not be the
  *  thing that turns a written row into a retried step, and on the cap path the
  *  write can itself be refused. */
-async function recordScan(env, ymd, host, outcome, detail) {
+async function recordScan(env, ymd, host, outcome: "cap" | "failed", detail) {
   try {
-    await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), "scan", outcome, detail).run();
+    await env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, host, Date.now(), CENSUS_RUN_STAGE[outcome], outcome, detail).run();
   } catch (_e) {
     /* the span still carries the outcome */
   }
@@ -196,7 +232,7 @@ export async function censusScanOne(env, site, ts, ymd) {
           "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
             "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces",
         ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
-        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), "scan", "written", null),
+        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), CENSUS_RUN_STAGE.written, "written", null),
       ]);
 
       s.setAttribute("census.outcome", "written");
@@ -298,7 +334,7 @@ async function cronCensusInner(env, sSweep) {
   let created = 0,
     duplicate = 0,
     failed = 0;
-  const record: Array<[string, string, string | null]> = [];
+  const record: Array<[string, CensusRunOutcome, string | null]> = [];
   for (const site of CENSUS_ROSTER) {
     try {
       await env.CENSUS_WORKFLOW.create({
@@ -323,7 +359,9 @@ async function cronCensusInner(env, sSweep) {
   // subrequests. A refused record costs the record and never the sweep.
   try {
     await env.RESTORE_DB.batch(
-      record.map(([host, outcome, detail]) => env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, "dispatch", outcome, detail)),
+      record.map(([host, outcome, detail]) =>
+        env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT_DISPATCH).bind(ymd, host, ts, CENSUS_RUN_STAGE[outcome], outcome, detail),
+      ),
     );
     sSweep.setAttribute("census.recorded", record.length);
   } catch (e) {
@@ -401,11 +439,9 @@ export function summarizeCensusRuns(rows) {
     recorded: day.length,
     written: outcomes.written || 0,
     outcomes,
-    // Dispatched and never heard from: the instance is still running, still
-    // retrying, or died without reaching its catch.
-    unfinished: day.filter((r) => r.stage === "dispatch" && r.outcome !== "dispatch_failed").map((r) => r.host),
+    unfinished: day.filter((r) => isCensusRunOutcome(r.outcome) && censusRunState(r.outcome) === "unfinished").map((r) => r.host),
     problems: day
-      .filter((r) => r.outcome === "dispatch_failed" || r.outcome === "cap" || r.outcome === "failed")
+      .filter((r) => isCensusRunOutcome(r.outcome) && censusRunState(r.outcome) === "problem")
       .map((r) => ({ host: r.host, outcome: r.outcome, detail: r.detail })),
   };
 }
@@ -432,7 +468,7 @@ const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", un
 export function censusExhibitHtml(grouped) {
   // The placeholder model: one unnamed row per roster host, since the roster is
   // what a sweep reports on. Nothing in it is a claim about any site.
-  if (grouped === PENDING_CENSUS) {
+  if (isPending(grouped)) {
     const cell = "…";
     const rows = CENSUS_ROSTER.map(
       () =>
@@ -494,22 +530,22 @@ export function censusExhibitHtml(grouped) {
         surf.webBotAuth ? "WebBotAuth" : "",
       ]
         .filter(Boolean)
-        .map((c) => '<span class="cx-surf">' + escHtml(c) + "</span>")
+        .map((c) => '<span class="cx-surf">' + esc(c) + "</span>")
         .join("");
       return (
         "<tr>" +
         '<td class="cx-site"><a href="/lens?url=' +
-        escAttr(encodeURIComponent(h.url)) +
+        esc(encodeURIComponent(h.url)) +
         '">' +
-        escHtml(h.host) +
+        esc(h.host) +
         "</a></td>" +
         '<td><span class="lx-badge ' +
         (TIER_KIND[tier] || "off") +
         '">' +
-        escHtml(tier) +
+        esc(tier) +
         "</span></td>" +
         '<td class="cx-num"><b>' +
-        escHtml(scoreTxt) +
+        esc(scoreTxt) +
         "</b>" +
         (scoreTxt === "—" ? "" : "<span>/100</span>") +
         " " +
@@ -522,9 +558,9 @@ export function censusExhibitHtml(grouped) {
         last.doors +
         "</td>" +
         '<td class="cx-spark" title="' +
-        escAttr(h.scoreSeries.join(" → ")) +
+        esc(h.scoreSeries.join(" → ")) +
         '">' +
-        escHtml(sparkline(h.scoreSeries)) +
+        esc(sparkline(h.scoreSeries)) +
         "</td>" +
         '<td class="cx-surfs">' +
         (chips || '<span class="cx-none">none</span>') +
@@ -535,8 +571,8 @@ export function censusExhibitHtml(grouped) {
     .join("");
   const span =
     grouped.firstYmd === grouped.lastYmd
-      ? "one snapshot, " + escHtml(grouped.firstYmd)
-      : grouped.snapshots + " snapshots, " + escHtml(grouped.firstYmd) + " → " + escHtml(grouped.lastYmd);
+      ? "one snapshot, " + esc(grouped.firstYmd)
+      : grouped.snapshots + " snapshots, " + esc(grouped.firstYmd) + " → " + esc(grouped.lastYmd);
   return (
     '<div class="cx-meta">' +
     grouped.hosts.length +
@@ -578,8 +614,7 @@ export const CENSUS_CSS = `/*min*/
 // sweep now, so the first snapshot doesn't have to wait for the weekly cron.
 // index.ts diverts only a ?refresh request here; the plain page is the built
 // shell below.
-export async function handleCensus(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleCensus(request, env, ctx, url = new URL(request.url)) {
   const refresh = url.searchParams.get("refresh");
   let banner = html``;
   if (refresh) {
@@ -606,10 +641,8 @@ export async function handleCensus(request, env, ctx) {
 // to the request that asked for the sweep (index.ts routes it there).
 export const TABLE_URL = CENSUS_TABLE_URL;
 
-const PENDING_CENSUS = { pending: true };
-
 // The one place the string-built exhibit becomes markup. censusExhibitHtml
-// escapes every value it interpolates (escHtml, escAttr), and the three callers
+// escapes every value it interpolates with esc(), and the three callers
 // above all take it through here rather than wrapping it themselves.
 function censusExhibit(grouped) {
   return unsafeHtml(censusExhibitHtml(grouped));
@@ -622,15 +655,15 @@ export async function handleCensusTable(request, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderCensusPage() {
-  const mount = islandMount(
-    "cx-island",
-    TABLE_URL,
-    censusExhibit(PENDING_CENSUS),
-    html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`,
-  );
+  const { head, mount } = island({
+    id: "cx-island",
+    url: TABLE_URL,
+    placeholder: censusExhibit(PENDING),
+    fallback: { says: "The census table arrives", shows: "it", json: "/lens/census.json" },
+  });
   return censusPage(
     html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
-    { head: islandPreload(TABLE_URL), scripts: islandScript() },
+    { head, scripts: islandScript() },
   );
 }
 

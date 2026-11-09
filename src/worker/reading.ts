@@ -7,8 +7,8 @@ import { cachedRender, deleteSWRKV, edgeKey, swrKV, withWeakEtag } from "./lib/c
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
-import { esc, secretMatches } from "./lib/http.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { esc, isOwnerBust } from "./lib/http.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
@@ -83,8 +83,7 @@ async function buildCuriusPayload(env) {
 }
 
 export async function getCuriusCached(request, env, ctx) {
-  const url = new URL(request.url);
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET) && env.RN_KV) {
+  if (isOwnerBust(request, env) && env.RN_KV) {
     // drop the value itself, since the persistent key is what a rebuild is gated on.
     await deleteSWRKV(env, CURIUS_CACHE_KEY);
   }
@@ -125,7 +124,6 @@ const LIST_CACHE = "public, max-age=300";
 // longer and does not need to match: nothing visible follows the island.
 const PENDING_ROWS = 6;
 const PENDING_MODEL = {
-  pending: true,
   fetchedAt: null,
   items: Array.from({ length: PENDING_ROWS }, () => ({ title: "…", link: "", domain: "…", snippet: "", highlights: [], created: null, favorite: false })),
 };
@@ -151,9 +149,8 @@ async function readReadingList(request, env, ctx): Promise<{ response: Response;
 // A valid ?bust=SECRET makes getCuriusCached drop the KV payload and re-crawl
 // inline, and the fresh fragment OVERWRITES this colo's cached copy, awaited, so
 // the owner's own next load reads the new list. Anything else is null.
-export async function refreshReadingList(request, env, ctx) {
-  const url = new URL(request.url);
-  if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
+export async function refreshReadingList(request, env, ctx, url = new URL(request.url)) {
+  if (!isOwnerBust(request, env)) return null;
   const { ok, response } = await readReadingList(request, env, ctx);
   if (ok) {
     try {
@@ -163,10 +160,10 @@ export async function refreshReadingList(request, env, ctx) {
   return response;
 }
 
-export async function handleReadingList(request, env, ctx) {
-  const busted = await refreshReadingList(request, env, ctx);
+export async function handleReadingList(request, env, ctx, url = new URL(request.url)) {
+  const busted = await refreshReadingList(request, env, ctx, url);
   if (busted) return busted;
-  return cachedRender(request, ctx, async () => (await readReadingList(request, env, ctx)).response, LIST_URL, env);
+  return cachedRender(request, env, ctx, LIST_URL, async () => (await readReadingList(request, env, ctx)).response);
 }
 
 // The route. ?bust=SECRET still works at the page URL: it refreshes the island's
@@ -175,14 +172,14 @@ export async function handleReadingList(request, env, ctx) {
 // document takes, and falls back to rendering the shell where no bake is staged
 // (bun run dev, and the contract suite, which is why it lives here rather than in
 // index.ts).
-export async function handleReading(request, env, ctx) {
-  if (new URL(request.url).searchParams.has("bust")) {
-    const busted = await refreshReadingList(request, env, ctx);
+export async function handleReading(request, env, ctx, url = new URL(request.url)) {
+  if (url.searchParams.has("bust")) {
+    const busted = await refreshReadingList(request, env, ctx, url);
     try {
       await busted?.body?.cancel();
     } catch {}
   }
-  return serveBuiltPage(request, env, {
+  return serveBuiltPage(request, env, url, {
     headers: {
       "cache-control": PAGE_CACHE_CONTROL,
       "link": SHELL_PRELOAD_LINK,
@@ -208,8 +205,9 @@ const readingDates = () =>
   });
 
 /** The island: the count bar, the rows and the footer, or the placeholder. */
-export function renderReadingList(payload, hn: HnMap = {}): Html {
-  const pending = payload?.pending === true;
+export function renderReadingList(read, hn: HnMap = {}): Html {
+  const pending = isPending(read);
+  const payload = pending ? PENDING_MODEL : read;
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const count = items.length;
   const fetched = payload?.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
@@ -270,6 +268,12 @@ export function renderReadingList(payload, hn: HnMap = {}): Html {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderReadingPage() {
+  const { head, mount } = island({
+    id: "rd-list",
+    url: LIST_URL,
+    placeholder: renderReadingList(PENDING),
+    fallback: { says: "The list arrives", shows: "it" },
+  });
   const profile = `https://curius.app/${CURIUS_HANDLE}`;
   return lunaPage({
     title: "My Reading · aadhar.sh",
@@ -277,7 +281,7 @@ export function renderReadingPage() {
     route: "/reading",
     width: 720,
     description: "What I've been reading, saved to Curius and mirrored natively here, newest first.",
-    head: islandPreload(LIST_URL),
+    head,
     headers: { "referrer-policy": "strict-origin-when-cross-origin" },
     css: `/*min*/
 .rd-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-body); }
@@ -310,7 +314,7 @@ footer a { color:var(--link); }
     body: html`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${profile}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
-    ${islandMount("rd-list", LIST_URL, renderReadingList(PENDING_MODEL), html`<p>The list arrives in a second request after the page loads, and that needs a script. Without one, <a href="${LIST_URL}">${LIST_URL}</a> shows it as plain HTML.</p>`)}
+    ${mount}
     <p class="rd-fail">The request for the list failed, so it stays empty rather than guessed. <a href="${LIST_URL}">${LIST_URL}</a> has it as plain HTML, and it always lives at <a href="${profile}" rel="external" target="_blank">curius.app/${CURIUS_HANDLE}</a>.</p>
 `,
     scripts: islandScript(),

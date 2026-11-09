@@ -41,7 +41,10 @@ import {
 // truncated playlist embed stored a 6-track playlist as the whole thing and
 // took 15 covers with it. Absence from a single read is not evidence.
 
-function metaEnv({ tracks, meta, seed = {} }) {
+function metaEnv({ tracks, meta, seed = {}, metadata = {} }: { tracks; meta; seed?; metadata?: Record<string, unknown> }) {
+  // KV metadata per key, as a put leaves it: a put without `metadata` clears
+  // it, which is the half of the real contract the SWR stamp depends on.
+  const metas = new Map<string, unknown>(Object.entries(metadata));
   const store = new Map<string, string>([
     ["playlist-id", "0raTdu2MZH4dNvfG5keVAL"],
     ["tracks:0raTdu2MZH4dNvfG5keVAL", JSON.stringify({ tracks, playlist_id: "0raTdu2MZH4dNvfG5keVAL" })],
@@ -71,9 +74,21 @@ function metaEnv({ tracks, meta, seed = {} }) {
           assert.ok(k.length <= 100, "a bulk read carries at most 100 keys");
           return new Map(k.map((key) => [key, decode(store.get(key), t)]));
         },
-        put: async (k, v) => void store.set(k, v),
+        // Bulk getWithMetadata answers a Map of { value, metadata } per key.
+        getWithMetadata: async (k, t) => {
+          reads.push(k);
+          const one = (key) => ({ value: decode(store.get(key), t), metadata: metas.get(key) ?? null });
+          if (!Array.isArray(k)) return one(k);
+          assert.ok(k.length <= 100, "a bulk read carries at most 100 keys");
+          return new Map(k.map((key) => [key, one(key)]));
+        },
+        put: async (k, v, opts) => {
+          store.set(k, v);
+          metas.set(k, opts?.metadata ?? null);
+        },
       },
     },
+    metas,
   };
 }
 
@@ -95,6 +110,27 @@ test("a SHORT playlist read cannot delete track meta", async () => {
   // did not see keep the stamp they had.
   for (const id of ["a", "b"]) assert.ok(after[id].seen > dayAgo, `${id} was seen on this read`);
   for (const id of ["c", "d", "e", "f", "g", "h"]) assert.equal(after[id].seen, dayAgo, `${id} keeps its old stamp`);
+});
+
+test("the enrich write keeps the playlist's SWR stamp, so a tick never marks it stale", async () => {
+  // swrKV keeps freshness in the key's metadata and reads a missing stamp as
+  // stale. The cron rewrote `tracks:<pid>` with a bare put, so every tick
+  // wiped the stamp and the next visitor paid a background re-scrape. The
+  // stamp names when the PLAYLIST was read; this pass did not read it, so the
+  // stamp must come through unchanged rather than be re-minted.
+  const readAt = Date.now() - 10 * 60 * 1000;
+  const { store, metas, env } = metaEnv({
+    tracks: [{ id: "a" }],
+    meta: metaFor(["a"]),
+    metadata: { "tracks:0raTdu2MZH4dNvfG5keVAL": { t: readAt } },
+  });
+  const result = await cronEnrichTracks(env, null);
+  assert.equal(result.ok, true);
+  // The payload really was rewritten (the cover is projected in), so the
+  // stamp below survived a write rather than the absence of one.
+  const payload = JSON.parse(store.get("tracks:0raTdu2MZH4dNvfG5keVAL")!);
+  assert.equal(payload.tracks[0].image_url, "https://i.scdn.co/image/a");
+  assert.deepEqual(metas.get("tracks:0raTdu2MZH4dNvfG5keVAL"), { t: readAt });
 });
 
 test("an entry unseen past the age window is pruned, so the map stays bounded", async () => {

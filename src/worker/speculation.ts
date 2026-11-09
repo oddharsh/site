@@ -123,9 +123,8 @@ export function countSpeculativeLoad(env, request, response, pathname) {
 export function handlePrefetchActivation(request, env) {
   // GET is accepted alongside HEAD purely so this is curl-able while the
   // origin trial is pending; the browser itself only ever sends HEAD.
-  if (request.method !== "HEAD" && request.method !== "GET") {
-    return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
-  }
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   try {
     if (env.SPECULATION) {
       const params = new URL(request.url).searchParams;
@@ -163,7 +162,7 @@ export function handlePrefetchActivation(request, env) {
 // is also where any promotion to a more eager rule is decided; this route only
 // answers.
 import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
-import { jsonResponse } from "./lib/http.ts";
+import { jsonResponse, methodGuard } from "./lib/http.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
@@ -210,9 +209,8 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
 }
 
 export async function handleSpeculationJson(request, env) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return jsonResponse({ ok: false, error: "method not allowed", code: "method_not_allowed", allow: ["GET", "HEAD"] }, 405, { allow: "GET, HEAD" });
-  }
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   const read = await analyticsSql(
     env,
     SPECULATION_DATASET,

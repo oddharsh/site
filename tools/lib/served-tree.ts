@@ -62,7 +62,12 @@ export const BROWSER_IMPORT_ROOTS: readonly string[] = rootsHolding("client", "s
 // Nothing writes them into the source tree any more, so a file at one of them
 // can only be a leftover from an older checkout, and staging it would make the
 // served tree depend on whatever a given machine happens to still hold.
-export const DERIVED_PATHS: readonly string[] = ["public/images/meta", "public/images/exif.json", "public/images/fingerprints.json"];
+export const DERIVED_PATHS: readonly string[] = [
+  "public/images/meta",
+  "public/images/exif.json",
+  "public/images/fingerprints.json",
+  "public/images/photo-search.bin",
+];
 
 export type ServedTreePlan = {
   // The roots that were merged, in order.

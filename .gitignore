@@ -68,6 +68,8 @@ tools/photos/zenc/target/
 tools/photos/zensim-score/target/
 # photo-metrics (hif-archive.ts scorer): same split, Cargo.lock committed
 tools/photos/photo-metrics/target/
+# jixel-enc (hif-archive.ts encoder): same split
+tools/photos/jixel-enc/target/
 
 # dcz deltas are BUILD OUTPUT now (build.ts generates them with node:zlib zstd), not
 # committed artifacts. Nothing to ignore here; this note exists so the directory is not
@@ -119,3 +121,6 @@ config/.generated/
 # Checkouts that built it before the move keep gigabytes of build trees here.
 tools/photos/libavif-avm/
 tools/photos/av2-metal/
+
+# CI restores the test input map here on pull requests (ci.yml, test-inputs.yml)
+test-inputs.json

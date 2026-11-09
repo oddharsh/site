@@ -870,3 +870,80 @@ skips it.
     so ignored trees stay out) or pass `git grep --untracked`. A scan that
     truly means the index takes a `tracked-only:` comment saying why.
     Checked by: `tools/tests/contract-git-scans-see-untracked-files.test.ts`, `tools/controls.ts`.
+
+92. **An Intl object built at module scope is paid by every cold start.**
+    Constructing an `Intl.Segmenter`, `DateTimeFormat` or any other Intl
+    formatter loads ICU data. At module scope that cost runs when the isolate
+    starts, for every route, not when the one request that needs it arrives.
+    `guestbook.ts`'s `const GRAPHEMES = new Intl.Segmenter()` (#1481) was
+    18.7 ms of self time in a 58 ms node startup of the bundle; built on
+    first use, startup's median fell to 37.8 ms (15 interleaved runs each,
+    2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
+    Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
+    `reading.ts` and `serendipity.ts` already did.
+    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
+
+93. **An Issues automation can exist and still send nowhere.** Workers
+    Issues hands an issue to its automation, the automation names a
+    Notifications policy, and the policy names the destination. A disabled
+    automation, a disabled policy, an email-only policy or a generic webhook
+    each pass a count of automations, and none of them fires the triage
+    routine. A generic webhook can't anyway: the routine's `/fire` wants
+    `Authorization: Bearer` and an `anthropic-beta` header, and a webhook
+    sends its secret as `cf-webhook-auth`. The count was the only test until
+    2026-11-03, and on 2026-10-30 the list read `[]` with 3 exception Issues
+    stranded, so no Issue had ever reached GitHub. `observe:check` now walks
+    automation, policy and webhook, and reads FIRED only on an enabled chain
+    ending at a routine fire URL whose last delivery didn't fail. The
+    routine's token is minted on claude.ai only, so the route is a
+    dashboard step (docs/MAINTENANCE.md, "Route Workers Issues to GitHub"),
+    and `bun run observe:check` reads it live from the workstation.
+    Checked by: `tools/tests/contract-observe-check-verdicts.test.ts`, `tools/lib/observe-signals.ts`.
+
+94. **djxl can't see progressive DC, so it reads `-p` as doing nothing.**
+    A progressive-DC JPEG XL stores its 1:8 LF image as a small squeezed
+    frame at the front, and Chrome and jxl-rs paint a whole blurry frame
+    from its first 8 to 11 KB (0.05% of a 40 MP archive). djxl 0.12's
+    `--allow_partial_files` can't render that frame, so it puts first paint
+    at the full LF for every encode, `-p` or not. On 2026-10-17 that read
+    "both paint at 12%" and nearly justified a non-progressive switch: in
+    Chrome 155, Canary 158 and jxl-rs `jxl_cli` (identical byte for byte,
+    3 HIFs), plain cjxl e7 and plain jixel first paint at 750 KB to 1.4 MB.
+    jixel's own `progressive` flag only reorders AC and paints no earlier;
+    `progressive_dc` is the part that matters. Measure paint with jxl-rs or
+    a browser, never djxl, and judge jxl-rs by its pixels: `jxl_cli` 0.7.4
+    `--allow-partial-files` exits 0 and writes an all-black frame before
+    anything is decodable, so its exit code read plain cjxl as painting at
+    5 KB (2026-11-04, XT508252). Counting non-black samples put it at 478 KB
+    and `-p` at 4 KB. jixel-enc's cargo test
+    `keeps_progressive_dc_on_and_progressive_ac_off` (run by `photos.yml`)
+    fails if the setting is dropped.
+    Checked by: `tools/photos/jixel-enc/src/main.rs`.
+
+95. **png 0.17 never decodes a PNG's eXIf chunk.** Its encoder writes
+    `Info::exif_metadata`, but its decoder leaves the field empty, so a
+    Rust encoder reading sips's PNG of a HIF sees no orientation and no
+    EXIF. The archive then decodes sideways, and exif-sooc refuses the
+    bare codestream it gets ("has no box to hold metadata"). `jixel-enc`
+    walks the chunks itself and passes the TIFF bytes to jixel's
+    `with_exif`, which also makes the output a container. On XT500132
+    (2026-10-17) the oriented encode then differs from the scored one by 7
+    to 15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
+    `finds_the_exif_chunk_png_0_17_will_not_decode` and
+    `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
+    Checked by: `tools/photos/jixel-enc/src/main.rs`.
+
+96. **A preview version writes production's Analytics Engine, and Workers
+    Logs never sees it.** Every version keeps its preview URL, the Workers
+    Builds bot posts each one in this public repo's PR comments, and a
+    preview runs production's bindings (lib/preview.ts). ClaudeBot crawled
+    early-October previews on 2026-11-02 and 11-04 and wrote 2,082 404 rows
+    to `aadhar_misses` for /images/full keys that production 301s. Zone
+    analytics can't see a workers.dev host, and Workers Logs held no
+    workers.dev request in 7 days. A tagged GET to `b945bb91`'s preview
+    (2026-11-07 13:36Z) reached the ledger within a minute and was still
+    missing from Workers Logs 5 minutes later. So a dataset counts
+    production only when its rows say so: `aadhar_misses` carries the
+    hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
+    drops them as well.
+    Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.

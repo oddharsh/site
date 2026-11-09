@@ -366,11 +366,40 @@ function cdpSession(env, sessionId: string) {
   };
 }
 
+// What one session hands back: our own browser budget spent, a session that
+// never reached the page, or the page's events. The `?: never` keys keep
+// `out.budget` and `out.error` readable on every variant.
+type WireExecution = {
+  ran: true;
+  engine: "chromium-cdp";
+  pageErrors: number;
+  consoleErrors: number;
+  firstError?: string;
+  totalImages?: number;
+  brokenImages?: number;
+  /** The rest of EXECUTION_PROBE's census, passed through to the payload. */
+  [field: string]: unknown;
+};
+export type WireSession =
+  | { budget: true; error?: never }
+  | { budget?: never; error: string; detail?: string; status?: number }
+  | {
+      budget?: never;
+      error?: never;
+      events: unknown[];
+      navMs: number;
+      loadFired: boolean;
+      uaApplied: boolean;
+      execution: WireExecution | null;
+      webmcp: ReturnType<typeof readWebmcpProbe>;
+      sessionId: string;
+    };
+
 // Open a session, drive one navigation, return the raw events. Every exit path
 // after the session exists runs the DELETE, and the socket closes before it.
 // Disposal runs in reverse declaration order, so the order is written once,
 // in the order the two resources were acquired.
-export async function runWireSession(env, url) {
+export async function runWireSession(env, url): Promise<WireSession> {
   const created = await env.BROWSER.fetch(CDP_BASE, { method: "POST" });
   if (created.status === 429) return { budget: true };
   if (!created.ok) {
@@ -450,7 +479,7 @@ export async function runWireSession(env, url) {
   // finished loading yet reports naturalWidth 0 and is not broken, so probing
   // at the load event would invent failures. EXECUTION_PROBE only counts an
   // image once `complete` is true.
-  let execution = null;
+  let execution: WireExecution | null = null;
   if (execDomains) {
     try {
       const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
@@ -523,7 +552,7 @@ const LENS_WIRE = defineLens({
   targets: (params: URLSearchParams) => params.get("url") || "",
   cache: { prefix: "lens:wire:", ttl: WIRE_CACHE_TTL },
   run: async ({ target, env, span: s }) => {
-    let out;
+    let out: WireSession;
     try {
       out = await span("lens.wire.session", () => runWireSession(env, target));
     } catch (e) {
@@ -545,7 +574,7 @@ const LENS_WIRE = defineLens({
         },
       };
     }
-    if (out.error) {
+    if (out.error !== undefined) {
       if (out.status) s.setAttribute("http.response.status_code", out.status);
       return { ok: false, status: 502, outcome: "session_failed", payload: { ok: false, error: out.error, detail: out.detail } };
     }
@@ -597,6 +626,6 @@ const LENS_WIRE = defineLens({
   },
 });
 
-export function handleLensWire(request, env, ctx) {
-  return LENS_WIRE.handle(request, env, ctx);
+export function handleLensWire(request, env, ctx, url = new URL(request.url)) {
+  return LENS_WIRE.handle(request, env, ctx, url);
 }

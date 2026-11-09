@@ -256,6 +256,145 @@ export const BUN_WATCHES: Watch[] = [
   },
 ];
 
+// VERDICT WATCHES, since 2026-10-29: the same probe pointed at this
+// repository's own "measured, not worth it" decisions. A decline is true on
+// the day it is written and nothing reopens it when bun moves, so each entry
+// below probes the PREMISE a decline rests on and reads false while that
+// premise holds. The three rules apply unchanged. Each one names the memory
+// file that records the decline (the owner's Claude memory for this
+// repository, ~/.claude/projects/-Users-aadharsh-noodling-site/memory/), and
+// the export appends it to `landed`, so a moved row in the nightly issue says
+// which verdict to re-measure. A verdict watch reading landed in both columns
+// is the same cue as a moved one: the premise broke, so re-measure before
+// retiring the row.
+//
+// All four premises move with BUN, which is why they ride the bun leg: the
+// canary answers first, so a flip arrives as `changed` a pin bump early
+// rather than as a silent "landed in both" after one. Declines whose premise
+// is a browser's paint, a CI timing, or a judgement call stay out; the PR that
+// added this list names each one and why.
+//
+// `issue` is the upstream thread when one asks for what reopens the decline,
+// and otherwise the repository, as with the oxc row above.
+const dependency = (name: string) => createRequire(import.meta.url).resolve(name);
+const brotliQ11 = `(s) => require("node:zlib").brotliCompressSync(Buffer.from(s), { params: { [require("node:zlib").constants.BROTLI_PARAM_QUALITY]: 11 } }).length`;
+
+export type VerdictWatch = Watch & { memory: string };
+
+export const VERDICT_WATCHES: VerdictWatch[] = (
+  [
+    {
+      // Both sides minify the frozen parity fixtures in the same run, so
+      // neither number is a constant that can go stale; only bun moves
+      // between the pin and the canary, because oxc-minify is a package pin.
+      name: "verdict-bun-js-minify-trails-oxc",
+      memory: "bun-minifier-not-a-swap.md",
+      issue: "https://github.com/oven-sh/bun",
+      landed:
+        "`Bun.build({ minify: true })` produces no more brotli q11 bytes than the pinned oxc-minify, with the build's options, on the two frozen parity fixtures",
+      measured:
+        "2026-10-29, bun 1.4.4-canary.20261028.1+11c3671 and oxc-minify 0.156.0: bun 5927 B against oxc 5843 B, +84 B (+1.4%); the memory's nav.js reading on bun 1.4.2 was +0.86%",
+      runtime: "bun",
+      script: `
+        const { minifySync } = require(${JSON.stringify(dependency("oxc-minify"))});
+        const { readFileSync, writeFileSync } = require("node:fs");
+        const br = ${brotliQ11};
+        const OPTS = ${JSON.stringify(OXC_MINIFY_OPTIONS)};
+        let oxc = 0, bun = 0;
+        for (const f of ["quiz.js", "lens-wire.js"]) {
+          const src = readFileSync(${JSON.stringify(REPO + "tools/fixtures/minify-parity/")} + f, "utf8");
+          const o = minifySync(f, src, OPTS);
+          if (o.errors.length) throw new Error(f + ": " + o.errors[0].message);
+          oxc += br(o.code);
+          writeFileSync(f, src);
+          const r = await Bun.build({ entrypoints: ["./" + f], minify: true, external: ["*"], outdir: "out" });
+          if (!r.success) throw new Error(f + ": " + String(r.logs[0]));
+          bun += br(await r.outputs[0].text());
+        }
+        const gap = bun - oxc;
+        ${out('{ landed: gap <= 0, detail: "bun " + bun + " B vs oxc " + oxc + " B brotli q11 on the frozen fixtures (" + (gap > 0 ? "+" : "") + gap + " B)" }')}
+      `,
+    },
+    {
+      // The live luna.css, read by both sides in one run, so the file can
+      // drift without moving a constant. The browserslist gives bun its best
+      // chance: the memory found it changes nothing, and the day it does,
+      // bun stops emitting the fallbacks and the gap closes. oven-sh/bun#40369
+      // (newer default targets) would close it here unaided; #40368 asks for
+      // a `cssTarget` option, and if that ships, pass it in this probe too.
+      name: "verdict-bun-css-ignores-browser-targets",
+      memory: "bun-minifier-not-a-swap.md",
+      issue: "https://github.com/oven-sh/bun/issues/40368",
+      landed:
+        "`Bun.build({ minify: true })` on luna.css, with a `last 1 chrome version` browserslist beside it, produces no more brotli q11 bytes than lightningcss with no targets, the way build.ts calls it",
+      measured:
+        "2026-10-29, bun 1.4.4-canary.20261028.1+11c3671 and lightningcss 1.33.0: bun 12540 B against 9843 B, +2697 B (+27%); bun's output carries 137 color(display-p3) and 137 lab() fallbacks and lightningcss's carries none",
+      runtime: "bun",
+      script: `
+        const { transform } = require(${JSON.stringify(dependency("lightningcss"))});
+        const { readFileSync, writeFileSync } = require("node:fs");
+        const br = ${brotliQ11};
+        const src = readFileSync(${JSON.stringify(REPO + "src/styles/luna.css")});
+        const lightning = br(transform({ filename: "luna.css", code: src, minify: true }).code);
+        writeFileSync("luna.css", src);
+        writeFileSync("package.json", JSON.stringify({ browserslist: ["last 1 chrome version"] }));
+        const r = await Bun.build({ entrypoints: ["./luna.css"], minify: true, outdir: "out" });
+        if (!r.success) throw new Error(String(r.logs[0]));
+        const bun = br(await r.outputs[0].text());
+        const gap = bun - lightning;
+        ${out('{ landed: gap <= 0, detail: "luna.css: bun " + bun + " B vs lightningcss " + lightning + " B brotli q11 (" + (gap > 0 ? "+" : "") + gap + " B)" }')}
+      `,
+    },
+    {
+      name: "verdict-bun-html-minify-is-a-no-op",
+      memory: "bun-minifier-not-a-swap.md",
+      issue: "https://github.com/oven-sh/bun",
+      landed: "`Bun.build({ minify: true })` on an HTML entry drops its comments and comes out smaller than it went in",
+      measured:
+        "2026-10-29, bun 1.4.4-canary.20261028.1+11c3671: 192 B in, 261 B out, both comments kept, plus an injected <script> for an empty chunk, as on 1.4.2",
+      runtime: "bun",
+      script: `
+        const page = "<!doctype html>\\n<html lang=\\"en\\">\\n  <head>\\n    <!-- one -->\\n    <title>watch</title>\\n  </head>\\n  <body>\\n    <main>\\n      <p>   one   two   </p>\\n      <!-- two -->\\n    </main>\\n  </body>\\n</html>\\n";
+        await Bun.write("w.html", page);
+        const r = await Bun.build({ entrypoints: ["./w.html"], minify: true, outdir: "out" });
+        if (!r.success) throw new Error(String(r.logs[0]));
+        const html = await Bun.file("out/w.html").text();
+        const kept = (html.match(/<!--/g) || []).length;
+        ${out('{ landed: kept === 0 && html.length < page.length, detail: page.length + " B in, " + html.length + " B out, " + kept + " of 2 comments kept" }')}
+      `,
+    },
+    {
+      // The checker ships inside bun since 1.4.3, so a canary that moves its
+      // TypeScript lib moves this row. Two controls ride in the probe: a line
+      // the lib has typed since ES2024 must check clean, so "landed" is
+      // reachable, and a planted unknown method must error, so a checker that
+      // ran nothing reads as "did not run" rather than as either answer. Node
+      // lacking Math.sumPrecise is the decline's other half, and this leg
+      // cannot see it.
+      name: "verdict-checker-lacks-es2026-types",
+      memory: "es2026-adoption-audit.md",
+      issue: "https://github.com/microsoft/typescript-go",
+      landed: '`bun check` with `lib: ["esnext"]` types Math.sumPrecise, Iterator.concat and JSON.rawJSON',
+      measured: "2026-10-29, bun 1.4.4-canary.20261028.1+11c3671: all three draw TS2339; Array.fromAsync checks clean and the planted Math.notAMethod() errors",
+      runtime: "bun",
+      script: `
+        const { spawnSync } = require("node:child_process");
+        const { writeFileSync } = require("node:fs");
+        writeFileSync("tsconfig.json", JSON.stringify({ compilerOptions: { lib: ["esnext"], target: "esnext", module: "esnext", strict: true, noEmit: true, types: [] }, files: ["w.ts"] }));
+        const lines = ["Math.sumPrecise([1, 2])", "Iterator.concat([1].values())", 'JSON.rawJSON("1")', "Array.fromAsync([1])", "Math.notAMethod()"];
+        writeFileSync("w.ts", lines.map((l, i) => "export const v" + i + " = " + l + ";").join("\\n") + "\\n");
+        const r = spawnSync(process.execPath, ["check", "-p", "tsconfig.json", "--no-pretty"], { encoding: "utf8" });
+        const said = (r.stdout || "") + (r.stderr || "");
+        const errs = (n) => said.split("\\n").some((l) => l.startsWith("w.ts(" + n + ","));
+        if (!errs(5)) throw new Error("the planted Math.notAMethod() drew no error, so the checker did not run: " + said.trim().split("\\n")[0]);
+        if (errs(4)) throw new Error("Array.fromAsync drew an error, so the lib is not esnext: " + said.trim().split("\\n")[0]);
+        const missing = ["Math.sumPrecise", "Iterator.concat", "JSON.rawJSON"].filter((_, i) => errs(i + 1));
+        ${out('{ landed: missing.length === 0, detail: missing.length ? "bun check lacks " + missing.join(", ") : "bun check types all three" }')}
+      `,
+    },
+  ] satisfies VerdictWatch[]
+).map((w) => ({ ...w, landed: `${w.landed}; that breaks the premise of the declined verdict in memory ${w.memory}, so re-measure it` }));
+
 /**
  * The wrangler leg's watches. These need a tree and a wrangler entry file
  * rather than a bun executable, so canary-wrangler.ts holds the runners and

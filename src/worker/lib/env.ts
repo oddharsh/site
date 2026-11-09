@@ -69,6 +69,8 @@ export interface EnvBindings {
   PERF_PROBE: AnalyticsEngineDataset;
   /** 404s answered or recovered, by caller class and path bucket. */
   MISS_LEDGER: AnalyticsEngineDataset;
+  /** LCP, CLS and INP from real visits to /garage/horizon (vitals.ts). */
+  VITALS: AnalyticsEngineDataset;
 
   // The eight per-IP /lens budgets plus the one account-wide browser bucket.
   // LENS_BUDGETS in lens-pipeline.ts mirrors these ceilings because that is

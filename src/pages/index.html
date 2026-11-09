@@ -95,6 +95,58 @@
   --text-ui:10pt;
   --text-xs:9pt;
   --text-mono:9pt;
+  /* the colour and bevel tokens it reads, from design/tokens/colors.css and
+     bevels.css. Every inline rule spelled its colour through var() from #1196
+     (2026-10-06) with none of these defined here, so until luna landed the
+     window had no frame, the title bar no gradient, and the text browser
+     colours. The missing 2px frame and 1px title rule dropped the content 3px
+     (24px at 412 wide with the scrollbar below), Lighthouse CLS 0.116.
+     tools/tests/contract-type-comes-from-the-tokens.test.ts holds this copy
+     to the token files. */
+  --hue-luna:263;
+  --hue-danger:25;
+  --hue-warn:47.10;
+  --hue-rowhover:95.44;
+  --chroma-luna:0.2274;
+  --blue-95:oklch(66.95% 0.178 calc(var(--hue-luna) - 7.83));
+  --blue-80:oklch(60% 0.200 calc(var(--hue-luna) - 2));
+  --blue-65:oklch(50.49% var(--chroma-luna) calc(var(--hue-luna) - 1.37));
+  --blue-60:oklch(50% var(--chroma-luna) var(--hue-luna));
+  --blue-55:oklch(58% 0.180 calc(var(--hue-luna) - 3));
+  --blue-40:oklch(41.92% 0.0962 250.51);
+  --frame:oklch(61.14% 0.0611 253.60);
+  --ink:oklch(21.78% 0 0);
+  --ink-soft:oklch(38.67% 0 0);
+  --ink-quiet:oklch(44.95% 0 0);
+  --ink-faint:oklch(56.58% 0 0);
+  --rule:oklch(86.67% 0.0294 calc(var(--hue-luna) - 4));
+  --row-hover:oklch(97.73% 0.0373 var(--hue-rowhover));
+  --warn:oklch(54.44% 0.150 var(--hue-warn));
+  --gold:oklch(86.52% 0.177 90.38);
+  --link:oklch(42.61% 0.235 263.74);
+  --link-visited:oklch(42.09% 0.194 328.36);
+  --link-hover:oklch(58.50% 0.258 29.23);
+  --luna-56:oklch(55.93% 0.2133 calc(var(--hue-luna) - 2.85));
+  --luna-44:oklch(43.93% 0.2509 calc(var(--hue-luna) + 1.57));
+  --luna-34:oklch(34.47% 0.2038 calc(var(--hue-luna) + 1.07));
+  --luna-31:oklch(30.54% 0.1896 calc(var(--hue-luna) + 1.19));
+  --luna-30:oklch(30.29% 0.1850 calc(var(--hue-luna) + 4.77));
+  --red-70:oklch(69.69% 0.1432 calc(var(--hue-danger) + 9.32));
+  --red-65:oklch(64.91% 0.1729 calc(var(--hue-danger) + 10.11));
+  --red-59:oklch(59.03% 0.1944 calc(var(--hue-danger) + 9.09));
+  --red-50:oklch(50.13% 0.1667 calc(var(--hue-danger) + 9.66));
+  --amber-88:oklch(87.82% 0.0877 calc(var(--hue-warn) + 19.17));
+  --amber-70:oklch(69.58% 0.2043 calc(var(--hue-warn) - 3.61));
+  --grad-title:linear-gradient(180deg, var(--blue-95) 0%, var(--blue-80) 8%, var(--blue-65) 18%, var(--blue-60) 86%, var(--blue-55) 100%);
+  --xp-transition:60ms ease-out;
+}
+@media (--p3) {
+  :root {
+    --link:oklch(42.61% 0.30 263.74);
+    --link-visited:oklch(42.09% 0.27 328.36);
+    --link-hover:oklch(58.50% 0.33 29.23);
+    --gold:oklch(86.52% 0.22 90.38);
+  }
 }
 /* ─── personal homepage, circa 2003 ────────────────────────────────────
    period cues: verdana body, trebuchet headings, web-safe blues, 3D
@@ -495,6 +547,15 @@ footer .signature small { color: var(--ink-faint); }
      puts content 22px in from the frame and the grip is clear without depending
      on a scrollbar being there to do it. */
   .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 16px !important; }
+  /* luna.css's native XP scrollbar geometry (search "native XP scrollbars"),
+     for this one scroller. Styling ::-webkit-scrollbar opts it out of overlay
+     bars, so once luna landed a 16px bar appeared beside the padding above and
+     the lede rewrapped a line. Measured 2026-11-02 at 412px: the column went
+     352 to 332px and everything under the lede dropped 21px. */
+  .window > .content { scrollbar-color: auto; }
+  @supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) { .window > .content { scrollbar-color: oklch(63% 0.16 257) oklch(92% 0.015 250); } }
+  .window > .content::-webkit-scrollbar { width: 16px; height: 16px; }
+  .window > .content::-webkit-scrollbar-track { background: oklch(92% 0.015 250); box-shadow: inset 1px 0 0 oklch(72% 0.03 250), inset -1px 0 0 oklch(100% 0 0); }
   /* The CLIENT EDGE that sits alongside this line at first paint is NOT authored
      here — build.ts injects it, reading the declaration out of luna.css so there
      is exactly one definition of it (luna.css, search "THE CLIENT EDGE"). Nothing

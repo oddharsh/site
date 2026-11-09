@@ -4,21 +4,6 @@
 
 import { escape } from "./html.ts";
 
-export function escAttr(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-export function escHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 // The one JSON response every route builds. Defaults to a private reply: never
 // cached, pretty-printed for a person reading it with curl. A route changes the
 // policy through extraHeaders (cache-control, CORS, x-robots-tag, ...), and a
@@ -33,6 +18,18 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
 // The headers Response.json() sends, for an internal hop (a Durable Object
 // answering its own Worker) that should stay byte-identical to it.
 export const PLAIN_JSON = { "content-type": "application/json", "cache-control": null };
+
+// The one 405 a route sends for a method it does not serve: a JSON body naming
+// the methods, and the same list in Allow (RFC 9110 section 15.5.6). GET implies
+// HEAD, as it does everywhere a route answers GET. Returns null to proceed.
+export function methodGuard(request: Request, allow: readonly string[]): Response | null {
+  const methods = allow.includes("GET") ? ["GET", "HEAD", ...allow.filter((m) => m !== "GET" && m !== "HEAD")] : [...allow];
+  if (methods.includes(request.method)) return null;
+  const header = methods.join(", ");
+  return jsonResponse({ ok: false, error: `${request.method} is not served here. Use ${header}.`, code: "method_not_allowed", allow: methods }, 405, {
+    allow: header,
+  });
+}
 
 // short-cache error response. max-age=30 bounds how long a transient 404 from
 // a deploy race can be pinned, at the edge or in the visitor's browser. Use
@@ -153,14 +150,19 @@ function acceptQ(accept, type) {
   return best;
 }
 
-// The cache policy for a public, CORS-open JSON read (search, photos, ledger,
-// the playlist): errors get the errorResp() discipline (30s), never the
-// 5-minute success TTL, so a transient scrape 502 does not pin in browsers.
-export function publicJsonHeaders(status) {
-  return {
-    "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-    "access-control-allow-origin": "*",
-  };
+// The cache policy for a public read (search, photos, ledger, the playlist):
+// errors get the errorResp() discipline (30s), never the 5-minute success TTL,
+// so a transient scrape 502 does not pin in browsers.
+export function publicCacheControl(status: number): string {
+  return status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600";
+}
+
+// A public, CORS-open JSON read: publicCacheControl, compact bytes because the
+// payloads are big and machine-read, and `noindex` for a feed worth fetching
+// and worthless in a search index.
+export function publicJsonResponse(body: unknown, status = 200, { noindex = false } = {}): Response {
+  const headers = { "cache-control": publicCacheControl(status), "access-control-allow-origin": "*", "x-robots-tag": noindex ? "noindex" : null };
+  return jsonResponse(body, status, headers, { pretty: false });
 }
 
 export function extractTitle(html) {
@@ -192,6 +194,21 @@ function decodeEntities(s) {
     .replace(/&amp;/g, "&");
 }
 
+// A response already built for a GET, answered to the request's method: a HEAD
+// keeps every header and drops the body, cancelling its stream so nothing is
+// left unread. Not `new Response(null, res)`: Response init is read as a plain
+// object there, so status/headers survive but anything carried out-of-band does
+// not, the same write-only-init trap that made encodeBody a silent no-op
+// site-wide (docs/GOTCHAS.md gotcha 13). A route that can skip rendering the
+// body for a HEAD should build it null instead and not call this.
+export function forMethod(request: Request, res: Response): Response {
+  if (request.method !== "HEAD") return res;
+  try {
+    void res.body?.cancel();
+  } catch {}
+  return new Response(null, { status: res.status, headers: new Headers(res.headers) });
+}
+
 // constant-time string compare so we don't leak the secret via timing.
 export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
@@ -208,6 +225,13 @@ export function timingSafeEqual(a: string, b: string) {
 export function secretMatches(supplied: string | null | undefined, secret: string | undefined): boolean {
   if (!secret || supplied == null) return false;
   return timingSafeEqual(supplied, secret);
+}
+
+// The owner's refresh: `?bust=<RN_BUST_SECRET>` on /rn, /around and /reading
+// makes that request drop its cache and fetch fresh. One spelling of the
+// parameter and the secret it is checked against, for every page that takes it.
+export function isOwnerBust(request: Request, env: { RN_BUST_SECRET?: string }): boolean {
+  return secretMatches(new URL(request.url).searchParams.get("bust"), env.RN_BUST_SECRET);
 }
 
 export function esc(s) {

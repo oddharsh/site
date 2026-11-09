@@ -5,7 +5,7 @@ import { BUILD_INFO } from "./lib/build-info.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { WHOAREYOU_VALUES_URL } from "./routes.ts";
 
@@ -110,10 +110,9 @@ export async function fetchRdap(ip) {
 // gather everything one HTTP request revealed: the cf.* edge signals, the
 // request headers, a parsed UA, and the (optional, cached) RDAP enrichment.
 // shared by the /whoareyou page and the /whoareyou.json popout feed.
-export async function gatherWhoareyou(request, ctx) {
+export async function gatherWhoareyou(request, ctx, url = new URL(request.url)) {
   const cf = request.cf || {};
   const h = request.headers;
-  const url = new URL(request.url);
 
   const bm = cf.botManagement || {};
   const data = {
@@ -275,8 +274,8 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
   ];
 }
 
-export async function handleWhoareyouJson(request, env, ctx) {
-  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
+export async function handleWhoareyouJson(request, env, ctx, url = new URL(request.url)) {
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx, url);
   const version = env?.CF_VERSION_METADATA?.id;
   // `build` is the same facts as the Server group, for a reader that wants them
   // without walking the groups. Null when there is neither a version binding nor
@@ -313,59 +312,61 @@ export async function handleWhoareyouJson(request, env, ctx) {
 // in the browser from document.referrer, which is what the browser sent with
 // the page request. The callout says all of this in the page's own copy.
 export const VALUES_URL = WHOAREYOU_VALUES_URL;
-const PENDING = "…";
+const DOTS = "…";
 
 // The placeholder model. The same renderer draws the baked placeholder and the
 // live fragment, so the swap moves only what the live values add. Optional
 // fields a browser visitor normally has (coords, a round-trip, delivery rate,
-// stream priority, the TLS extensions hash) are PENDING rather than null, so
+// stream priority, the TLS extensions hash) are DOTS rather than null, so
 // their rows are already standing when the values land. Fields most visitors
 // never carry (RDAP until the colo is warm, JA3/JA4, a bot score) stay null.
 const PLACEHOLDER_DATA = {
   host: "aadhar.sh",
   scheme: "https",
-  ray: PENDING,
-  ip: PENDING,
-  asn: PENDING,
-  asOrg: PENDING,
-  country: PENDING,
+  ray: DOTS,
+  ip: DOTS,
+  asn: DOTS,
+  asOrg: DOTS,
+  country: DOTS,
   continent: "—",
   isEU: false,
-  region: PENDING,
-  city: PENDING,
+  region: DOTS,
+  city: DOTS,
   postalCode: "—",
-  latitude: PENDING,
-  longitude: PENDING,
-  timezone: PENDING,
-  colo: PENDING,
-  clientTcpRtt: PENDING,
+  latitude: DOTS,
+  longitude: DOTS,
+  timezone: DOTS,
+  colo: DOTS,
+  clientTcpRtt: DOTS,
   clientQuicRtt: null,
-  deliveryRate: PENDING,
-  requestPriority: PENDING,
-  httpProtocol: PENDING,
-  tlsVersion: PENDING,
-  tlsCipher: PENDING,
-  tlsExtensions: PENDING,
-  acceptEncoding: PENDING,
-  userAgent: PENDING,
-  acceptLanguage: PENDING,
-  dnt: PENDING,
-  referer: PENDING,
-  cookies: PENDING,
+  deliveryRate: DOTS,
+  requestPriority: DOTS,
+  httpProtocol: DOTS,
+  tlsVersion: DOTS,
+  tlsCipher: DOTS,
+  tlsExtensions: DOTS,
+  acceptEncoding: DOTS,
+  userAgent: DOTS,
+  acceptLanguage: DOTS,
+  dnt: DOTS,
+  referer: DOTS,
+  cookies: DOTS,
   botScore: null,
   verifiedBot: false,
   detectionIds: null,
   corporateProxy: null,
   ja3Hash: null,
   ja4: null,
-  when: PENDING,
+  when: DOTS,
 };
-const PLACEHOLDER_UA = { browser: PENDING, os: PENDING, device: "" };
+const PLACEHOLDER_UA = { browser: DOTS, os: DOTS, device: "" };
 
-const unit = (v, u) => (v === PENDING ? v : `${v} ${u}`);
+const unit = (v, u) => (v === DOTS ? v : `${v} ${u}`);
 
-export function renderWhoareyouValues(data, ua, rdap) {
-  const pending = data.ip === PENDING;
+export function renderWhoareyouValues(read, liveUa, rdap) {
+  const pending = isPending(read);
+  const data = pending ? PLACEHOLDER_DATA : read;
+  const ua = pending ? PLACEHOLDER_UA : liveUa;
   const dim = (text) => html` <span class="dim">(${text})</span>`;
   return html`
     <div style="border:1px solid var(--slate-73);background:#fff;box-shadow:inset 1px 1px 0 var(--mist-96);margin:8px 0 2px">
@@ -396,7 +397,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
       <dt>Timezone</dt>             <dd>${data.timezone}</dd>
       ${data.latitude ? html`<dt>Approx. coords</dt><dd>${data.latitude}, ${data.longitude}${pending ? "" : html` <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&amp;mlon=${data.longitude}&amp;zoom=10" target="_blank" rel="noopener">(see on map)</a>`}</dd>` : ""}
       <dt>Cloudflare colo</dt>      <dd>${data.colo}${dim("nearest CF data center serving you")}</dd>
-      ${pending ? html`<dt>Round-trip</dt><dd>${PENDING}</dd>` : ""}
+      ${pending ? html`<dt>Round-trip</dt><dd>${DOTS}</dd>` : ""}
       ${!pending && data.clientTcpRtt !== null ? html`<dt>TCP round-trip</dt><dd>${data.clientTcpRtt} ms</dd>` : ""}
       ${!pending && data.clientQuicRtt !== null ? html`<dt>QUIC round-trip</dt><dd>${data.clientQuicRtt} ms${dim("only set on HTTP/3, so it and the TCP row never both appear")}</dd>` : ""}
       ${data.deliveryRate !== null ? html`<dt>Delivery rate</dt><dd>${unit(data.deliveryRate, "B/s")}${dim("most recent edge estimate for this connection")}</dd>` : ""}
@@ -425,7 +426,7 @@ export function renderWhoareyouValues(data, ua, rdap) {
     <h2>This session</h2>
     <dl class="field-grid">
       <dt>Received at</dt>          <dd>${data.when}${dim("when the edge rendered these values")}</dd>
-      <dt>Referrer</dt>             <dd><span data-referrer>${PENDING}</span>${dim("read by your browser from what it sent with this page")}</dd>
+      <dt>Referrer</dt>             <dd><span data-referrer>${DOTS}</span>${dim("read by your browser from what it sent with this page")}</dd>
       <dt>Cookies sent</dt>         <dd>${data.cookies}</dd>
       <dt>Cloudflare ray</dt>       <dd class="muted">${data.ray}${dim("the edge's id for the request that fetched these values")}</dd>
       ${data.botScore !== null ? html`<dt>CF bot score</dt><dd>${data.botScore} / 99${dim("higher = more human-like")}</dd>` : ""}
@@ -437,14 +438,20 @@ export function renderWhoareyouValues(data, ua, rdap) {
 }
 
 // The island. Everything in it is this one request's, so it is never cached.
-export async function handleWhoareyouValues(request, env, ctx) {
-  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
+export async function handleWhoareyouValues(request, env, ctx, url = new URL(request.url)) {
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx, url);
   return islandResponse(renderWhoareyouValues(data, ua, rdap), {
     "referrer-policy": "strict-origin-when-cross-origin",
   });
 }
 
 export function renderWhoareyouPage() {
+  const { head, mount } = island({
+    id: "wy-values",
+    url: VALUES_URL,
+    placeholder: renderWhoareyouValues(PENDING, null, null),
+    fallback: { says: "These values arrive", shows: "them for your request", json: "/whoareyou.json" },
+  });
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",
     path: "System Properties",
@@ -452,7 +459,7 @@ export function renderWhoareyouPage() {
     width: 720,
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",
-    head: islandPreload(VALUES_URL),
+    head,
     css: `/*min*/
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
@@ -596,7 +603,7 @@ footer .signature small { color: var(--ink-faint); }
       revealed to this site. None of it is logged, none of it is stored. Close this tab and it's gone.
     </p>
 
-    ${islandMount("wy-values", VALUES_URL, renderWhoareyouValues(PLACEHOLDER_DATA, PLACEHOLDER_UA, null), html`<p>These values arrive in a second request after the page loads, and that needs a script. Without one, <a href="${VALUES_URL}">${VALUES_URL}</a> shows them for your request as plain HTML, and <a href="/whoareyou.json">/whoareyou.json</a> as JSON.</p>`)}
+    ${mount}
     <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>
@@ -746,21 +753,26 @@ footer .signature small { color: var(--ink-faint); }
 }
 
 export function parseUA(ua) {
-  const browser = /Edg\//.test(ua)
-    ? "Edge"
-    : /OPR\//.test(ua)
-      ? "Opera"
-      : /Firefox\//.test(ua)
-        ? "Firefox"
-        : /Chrome\//.test(ua)
-          ? "Chrome"
-          : /Safari\//.test(ua)
-            ? "Safari"
-            : /curl/.test(ua)
-              ? "curl"
-              : /bot|spider|crawl/i.test(ua)
-                ? "a bot"
-                : "an unknown browser";
+  // Ladybird (and Photon, which embeds it) appends "Chrome/153.0.0.0
+  // AppleWebKit/537.36 Safari/537.36" for compatibility, so it has to match
+  // before the Chrome and Safari tests do. Ladybird's UserAgent.h, 2026-11-04.
+  const browser = /Ladybird\//.test(ua)
+    ? "Ladybird"
+    : /Edg\//.test(ua)
+      ? "Edge"
+      : /OPR\//.test(ua)
+        ? "Opera"
+        : /Firefox\//.test(ua)
+          ? "Firefox"
+          : /Chrome\//.test(ua)
+            ? "Chrome"
+            : /Safari\//.test(ua)
+              ? "Safari"
+              : /curl/.test(ua)
+                ? "curl"
+                : /bot|spider|crawl/i.test(ua)
+                  ? "a bot"
+                  : "an unknown browser";
   const os = /iPhone|iPad/.test(ua)
     ? "iOS"
     : /Android/.test(ua)

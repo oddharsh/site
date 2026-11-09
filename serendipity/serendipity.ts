@@ -17,8 +17,8 @@ import { shareMeta } from "../src/worker/lib/chrome.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
 import { titleBar } from "../src/worker/lib/window.ts";
-import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
+import { unsafeHtml } from "../src/worker/lib/html.ts";
+import { island, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { setAttributes, span } from "../src/worker/lib/trace.ts";
@@ -673,17 +673,14 @@ async function renderDashboard(d, path, msg, env) {
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderSerendipityPage() {
-  const mount = islandMount(
-    "sd-events",
-    EVENTS_URL,
-    unsafeHtml(pendingDashboardEvents()),
-    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`,
-  );
+  const { head, mount } = island({
+    id: "sd-events",
+    url: EVENTS_URL,
+    placeholder: unsafeHtml(pendingDashboardEvents()),
+    fallback: { says: "The events arrive", shows: "them" },
+  });
   const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
-  return html(
-    200,
-    shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html),
-  );
+  return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, head.html));
 }
 
 // The island's response. Cookie-free and shared, so it may sit in the edge cache.
@@ -1825,9 +1822,8 @@ async function syncDescriptions(d, userKey, cookiesJson, limit) {
 // fills up to n (default 30, max 45) missing descriptions per call.
 async function handleSyncDescriptions(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) {
-    return new Response("forbidden", { status: 403 });
-  }
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
   // any enabled cookie can read public event detail; use the first available.
   const set = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
@@ -1913,7 +1909,8 @@ export async function tagEvents(d, env, limit) {
 // secret-gated: POST /serendipity/tag[?n=12], secret in x-sync-key. The cron
 // reaches it by self-dispatch so the tag pass gets its own subrequest ceiling.
 async function handleTag(request, env, d) {
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
   const limit = Math.min(TAG_MAX, Math.max(1, Number.isFinite(n) ? n : TAG_DEFAULT));
   const r = await tagEvents(d, env, limit);
@@ -2053,7 +2050,8 @@ export async function classifyRoles(d, env, limit) {
 // secret in x-sync-key. Reached from the cron by self-dispatch, like /tag, so
 // each pass gets its own subrequest ceiling.
 async function handleBioPass(request, env, d, run: (d, env, limit: number) => Promise<object>) {
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
   const limit = Math.min(BIO_PASS_MAX, Math.max(1, Number.isFinite(n) ? n : BIO_PASS_DEFAULT));
   const r = await run(d, env, limit);
@@ -2097,17 +2095,16 @@ function mcpTags(t) {
 // tag). It reads the secret from the x-sync-key HEADER first, because the cron
 // dispatches to /enrich and /tag over the wire and a secret in a query string
 // lands in request logs; ?key= still works for a manual call.
-export function adminGated(request, env) {
+export function adminRefusal(request, env): Response | null {
   const supplied = request.headers.get("x-sync-key") || new URL(request.url).searchParams.get("key");
-  return !!env && secretMatches(supplied, env.SYNC_SECRET);
+  return env && secretMatches(supplied, env.SYNC_SECRET) ? null : new Response("forbidden", { status: 403 });
 }
 
 // secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
 async function handleSync(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) {
-    return new Response("forbidden", { status: 403 });
-  }
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   const eventId = url.searchParams.get("event");
   const out: any[] = [];
@@ -2675,10 +2672,13 @@ const cleanVal = (raw) => {
   if (!s || s.length < 3 || /^(unknown|n\/?a|none)$/i.test(s) || GARBAGE.has(s.toLowerCase())) return null;
   return s;
 };
+const fieldLine = (k: string) => new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im");
+const STRUCTURED_KV = /^\s*(?:ROLE|COMPANY|LOCATION|PAST|BIO)\s*:/im;
+const STRUCTURED_LINE = { ROLE: fieldLine("ROLE"), COMPANY: fieldLine("COMPANY"), LOCATION: fieldLine("LOCATION"), PAST: fieldLine("PAST") };
+const STEALTH_LINE = { Domain: fieldLine("Domain"), Thesis: fieldLine("Thesis"), Signal: fieldLine("Signal") };
 function parseStructured(text) {
   if (!text) return { role: null, company: null, location: null, bio: null, work_history: [] };
-  const KV = new RegExp(`^\\s*(?:ROLE|COMPANY|LOCATION|PAST|BIO)\\s*:`, "im");
-  const m = KV.exec(text);
+  const m = STRUCTURED_KV.exec(text);
   const proseEnd = m ? m.index : text.length;
   let bio =
     text
@@ -2689,8 +2689,8 @@ function parseStructured(text) {
       .replace(/\s+/g, " ")
       .trim() || null;
   const kv = m ? text.slice(proseEnd) : "";
-  const line = (k) => {
-    const lm = kv.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+  const line = (k: keyof typeof STRUCTURED_LINE) => {
+    const lm = kv.match(STRUCTURED_LINE[k]);
     return cleanVal(lm?.[1]);
   };
   const role = line("ROLE"),
@@ -2708,8 +2708,8 @@ function parseStructured(text) {
 }
 function parseStealth(text) {
   if (!text) return { domain: null, thesis: null, signal: null };
-  const line = (k) => {
-    const m = text.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im"));
+  const line = (k: keyof typeof STEALTH_LINE) => {
+    const m = text.match(STEALTH_LINE[k]);
     if (!m) return null;
     const v = m[1].replace(/^["']|["']$/g, "").trim();
     return !v || /^unknown$/i.test(v) || /^n\/?a$/i.test(v) ? null : v;
@@ -2937,7 +2937,8 @@ export function enrichBatchLimit(raw, fallback = ENRICH_CRON_BATCH, max = ENRICH
 
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
-  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const refused = adminRefusal(request, env);
+  if (refused) return refused;
   const jerr = (msg, code) => jsonResponse({ error: msg }, code);
   const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
   const P = ENRICH_PROVIDERS[provider];
@@ -3590,14 +3591,13 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     // "discovered" returns only the not-RSVP'd ones.
     const rsvp = ["going", "all", "discovered"].includes(args.rsvp) ? args.rsvp : "going";
     const now = Date.now();
-    let rows = await queryEvents(d);
+    let [rows, tags] = await Promise.all([queryEvents(d), queryEventTags(d)]);
     if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     else if (when === "past")
       rows = rows
         .filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
         .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
-    const tags = await queryEventTags(d);
     // A topic/format filter can only match what was classified with confidence,
     // so it also reports how many events in the slice it could not judge. Without
     // that count, "2 AI events" and "2 AI events out of the 9 we could read" are
@@ -3820,8 +3820,7 @@ export async function handleMcp(request, env, d) {
   return one === null ? respond(null, 202) : respond(one, mcpHttpStatus(payload));
 }
 
-export async function handleSerendipity(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleSerendipity(request, env, ctx, url = new URL(request.url)) {
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent

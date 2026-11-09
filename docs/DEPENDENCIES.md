@@ -10,6 +10,7 @@ Two systems own dependency updates, split by ecosystem:
 | [Dependabot](../.github/dependabot.yml) | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 | [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/photo-metrics` | the fast-ssim2 and butteraugli pins every photo score reads, the HIF archive bar first (a bump is a re-measurement) |
+| [Dependabot](../.github/dependabot.yml) | cargo | `/tools/photos/jixel-enc` | the jixel pin every HIF archive is encoded with (a bump is a re-measurement) |
 
 Dependabot owned npm too until 2026-10-06. Its npm updater has refused any
 directory holding a `bun.lock` since dependabot-core#16220 (2026-09-25), and its
@@ -439,7 +440,7 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.29.0 is the exact root pin for the helpers
+- @cloudflare/config 0.30.2 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
   0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
@@ -451,7 +452,7 @@ does not make a failed write safe to ignore.
   `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
   package. Bump it with the wrangler pin when a new wrangler commit's generated
   types need a newer version; `cf`'s own dependency on it shows which.
-- Oxc Minify 0.156.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.157.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
@@ -473,7 +474,7 @@ does not make a failed write safe to ignore.
   Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
   measurement that decided it. `bun lint --doctor` says which rules run
   natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.90.0 is the adapter the three rules vendored from
+- @oxlint/plugins 1.91.0 is the adapter the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
   `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
   the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
@@ -660,7 +661,7 @@ the reason, rather than written here with the caret quietly dropped.
   whether it changes what the extractor DISCARDS, since the discard is the
   lens's whole artifact.
 
-  `linkedom` 0.18.14 is a DEV dependency as of 2026-08-23 and ships in nothing.
+  `linkedom` 0.18.15 is a DEV dependency as of 2026-08-23 and ships in nothing.
   It supplied the DOM that Workers lack, and it was several times the weight of
   the extractor it served: 65.27 KiB gzip of an 80.57 KiB Worker, measured by
   bundling each package alone under that project's wrangler config.
@@ -715,7 +716,7 @@ the reason, rather than written here with the caret quietly dropped.
 
   **Version 12 was deliberately REFUSED here until 2026-08-24, and the reason it
   is taken now is that a browser was finally asked.** The refusal read: its
-  WHATWG raw-text change breaks linkedom 0.18.14's self-closing-script
+  WHATWG raw-text change breaks linkedom 0.18.15's self-closing-script
   serialization in linkedom's own upstream suite. That is accurate about the
   suite and says nothing about which parse is right, which is the question this
   Worker actually has, because /lens exists to show what a machine saw rather

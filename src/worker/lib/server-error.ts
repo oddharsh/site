@@ -17,7 +17,7 @@
 
 import { lunaPage } from "./chrome.ts";
 import { html } from "./html.ts";
-import { namesHtml, wantsJson } from "./http.ts";
+import { forMethod, namesHtml, wantsJson } from "./http.ts";
 import { API_CALL_PATH } from "./not-found.ts";
 
 export function serverError(request: Request): Response {
@@ -58,7 +58,7 @@ export function serverError(request: Request): Response {
       }
 <p><a href="/">Back to the homepage</a></p>`,
     });
-    return head ? new Response(null, page) : page;
+    return forMethod(request, page);
   }
 
   const text = `500 Internal Server Error: ${url.pathname}\n${ray ? `ray: ${ray}\n` : ""}`;

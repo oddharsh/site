@@ -18,6 +18,9 @@ import { svcbHasEch } from "../../src/worker/lens.ts";
 import { handleLlmsFull } from "../../src/worker/x402.ts";
 import { handleSerendipity } from "../../serendipity/serendipity.ts";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const staticPageAt = (request: Request, env, opts?) => serveStaticPage(request, env, new URL(request.url), opts);
+
 test("Available-Dictionary selects the delta named by the digest's first 8 bytes, in hex", async () => {
   // 0x07 needs its leading zero and 0xb8 is past 0x7f: the two places a hand-rolled
   // hex encoder goes wrong. An all-0x01 digest, which the older negotiation test
@@ -38,7 +41,7 @@ test("Available-Dictionary selects the delta named by the digest's first 8 bytes
     },
   };
   const offer = (bytes) =>
-    serveStaticPage(
+    staticPageAt(
       new Request("https://aadhar.sh/lwe/drivers", {
         headers: { "available-dictionary": `:${Buffer.from(bytes).toString("base64")}:` },
       }),

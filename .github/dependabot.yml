@@ -131,3 +131,30 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+
+  # hif-archive.ts encodes every HIF archive with tools/photos/jixel-enc (jixel,
+  # exact pin). A bump moves archive bytes and distances and can lose the
+  # progressive-DC first paint, so its PR is the prompt to rerun hif-archive.ts
+  # on a few HIFs against their bars and recheck paint (jixel-enc/Cargo.toml
+  # has the 2026-10-17 numbers) before merging, not a refresh to wave by.
+  #
+  # Weekly keeps that to one re-measurement a week; the cooldown is 1 day, not
+  # 7, because jixel ships faster than a week. It cut 5 releases from 2026-11-02
+  # to 2026-11-06 (0.5.3 to 0.5.7), so a 7-day cooldown on a Monday run always
+  # found the newest eligible release was the pin we already had: the
+  # 2026-11-09 run would have offered nothing, and the next one 0.5.5, 3
+  # releases behind. With 1 day, each Monday offers whatever shipped through
+  # Sunday morning, and the PR body carries that week's release notes.
+  - package-ecosystem: cargo
+    directory: "/tools/photos/jixel-enc"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 1
+    commit-message:
+      prefix: chore
+      include: scope

@@ -110,7 +110,19 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
   },
   // quiz.js's stylesheet. Page-scoped: it loads beside quiz.js on the garage and
   // lwe pages, reads --font-ui and --font-caption, and defines no property.
-  { file: "quiz.css", kind: "style", scope: "page", budget: "unbudgeted", load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }], loadedBy: ["public/quiz.js"] },
+  // Long pages also link it in their body, as the parser pause
+  // (lib/parser-pause.ts).
+  {
+    file: "quiz.css",
+    kind: "style",
+    scope: "page",
+    budget: "unbudgeted",
+    load: [
+      { via: "after", prefix: "\\.href\\s*=\\s*" },
+      { via: "attr", attr: "href" },
+    ],
+    loadedBy: ["public/quiz.js", "public/garage/compression.html"],
+  },
   // The shared hover engine. TWO loader shapes, and missing the second cost a
   // serialized fetch in production (2026-07-27): nav.js and index.html reach it
   // through import(), tooltip.js through a static `from`.
@@ -401,6 +413,17 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
     budget: { role: "writing-only island", gzipKiB: 4, brotliKiB: 3.5 },
     load: [{ via: "attr", attr: "src" }],
     loadedBy: ["src/worker/writing.ts"],
+  },
+  // The /photos View menu: Filmstrip and Details over the contact sheet.
+  {
+    file: "photos-view.js",
+    kind: "script",
+    marker: "ph-menubar",
+    scope: "page",
+    // 3.4 KiB gzip and 3.1 KiB brotli q11 on 2026-11-07.
+    budget: { role: "photos-only island", gzipKiB: 4, brotliKiB: 3.5 },
+    load: [{ via: "attr", attr: "src" }],
+    loadedBy: ["public/photos.html"],
   },
   // Shared LWE structure, a separate warm-cache object.
   {

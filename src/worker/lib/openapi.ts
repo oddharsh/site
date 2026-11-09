@@ -10,7 +10,6 @@
 import {
   LEAVES_OUT,
   OPERATIONS,
-  READ_POLICY,
   arr,
   bool,
   budgeted,
@@ -25,7 +24,9 @@ import {
   type Operation,
   type Schema,
 } from "./public-api.ts";
+import { API_READ_BUDGET } from "./api-limits.ts";
 import { allowedMethods } from "./api-contract.ts";
+import { READINESS_STATUSES } from "./readiness-status.ts";
 
 export { OPENAPI_PATH } from "./public-api.ts";
 
@@ -276,7 +277,7 @@ export const SCHEMAS: Record<string, Schema> = {
       key: str(),
       category: str(),
       label: str(),
-      status: str(undefined, { enum: ["pass", "fail", "unknown", "neutral"] }),
+      status: str(undefined, { enum: [...READINESS_STATUSES] }),
       detail: str(),
       optional: bool(),
       countInScore: bool(),
@@ -833,8 +834,8 @@ function specOperation(op: Operation, allow: string[]) {
   };
   // No limiter of its own, so it bills the shared read budget (api-contract.ts).
   if (sharesReadBudget(op)) {
-    for (const status of Object.keys(responses)) if (status.startsWith("2")) responses[status] = budgeted(responses[status], [READ_POLICY]);
-    responses[429] = limited(`Over the shared read budget of ${READ_POLICY[1]} requests a minute per caller (code rate_limited).`, [READ_POLICY]);
+    for (const status of Object.keys(responses)) if (status.startsWith("2")) responses[status] = budgeted(responses[status], [API_READ_BUDGET]);
+    responses[429] = limited(`Over the shared read budget of ${API_READ_BUDGET.max} requests a minute per caller (code rate_limited).`, [API_READ_BUDGET]);
   }
   for (const r of Object.values(responses)) r.headers = { ...r.headers, ...CONTRACT_HEADERS };
   return { ...rest, responses };

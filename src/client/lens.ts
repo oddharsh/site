@@ -2501,7 +2501,10 @@
   // paints over site B's. A wire trace takes long enough that a second URL
   // mid-run is the normal case. Each caller supplies only what differs: which
   // island, how to start it, and what a reply or a failure leaves behind.
-  // `current` is an extra check on top of the URL (NLWeb's question).
+  // `current` is an extra check on top of the URL (NLWeb's question). A reply
+  // it rejects still releases the busy flag it set, then asks again for what is
+  // current: lens_run_tab writes a new question mid-flight and its starter no-ops
+  // while busy, so dropping the reply left the tab "asking…" until the next scan.
   function runLazyTab(t: {
     island: "LensReader" | "LensWire" | "LensTools" | "LensNlweb" | "LensMarkdown";
     src: string;
@@ -2509,15 +2512,23 @@
     start: (run: (...args: any[]) => any, targetUrl: string, done: (json: any) => void, failed: () => void) => void;
     done: (json: any) => void;
     failed?: () => void;
-    current?: () => boolean;
+    current?: { holds: () => boolean; rerun: () => void };
     status?: boolean;
   }) {
     var targetUrl = data.finalUrl || data.url;
     var sameScan = () => !!data && (data.finalUrl || data.url) === targetUrl;
-    var live = () => sameScan() && (!t.current || t.current());
     function stop() {
       t.setBusy(false);
       renderMachine();
+    }
+    // false when the reply is someone else's to paint. The next scan reset every
+    // busy flag (clearScanResults) and owns them now, so leave those alone.
+    function settled() {
+      if (!sameScan()) return false;
+      t.setBusy(false);
+      if (!t.current || t.current.holds()) return true;
+      t.current.rerun();
+      return false;
     }
     t.setBusy(true);
     renderMachine();
@@ -2530,15 +2541,13 @@
         run,
         targetUrl,
         (json) => {
-          if (!live()) return;
-          t.setBusy(false);
+          if (!settled()) return;
           t.done(json);
           renderMachine();
           if (t.status) renderStatus();
         },
         () => {
-          if (!live()) return;
-          t.setBusy(false);
+          if (!settled()) return;
           if (t.failed) t.failed();
           renderMachine();
         },
@@ -2757,7 +2766,7 @@
       setBusy: (b) => (nlwebBusy = b),
       // a visitor may change the QUESTION as well as the URL while a request is
       // in flight, and a late reply must not be labelled with the new question
-      current: () => askedFor === nlwebQuery,
+      current: { holds: () => askedFor === nlwebQuery, rerun: runNlweb },
       start: (run, url, done, failed) => run(url, askedFor, done, failed),
       done: (json) => (nlwebData = json),
       failed: () => (nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" }),

@@ -37,7 +37,12 @@ export function isCanonicalHost(hostname) {
 // which sent all of luma before any chroma, so Chromium painted nothing until
 // 66-99% of the file) and XT508887, the camera's own baseline JPEG.
 // /garage/encoding.
-export const ARCHIVE_VERSION = 3;
+//
+// 4 (2026-10-16): 103 HIF archives re-encoded as JPEG XL straight from the HIF by
+// tools/photos/reencode-hif-archives.ts, 2.090 -> 1.883 GB. Lossy, so the pixels
+// change; the other 16 HIF archives stayed JPEG repacks, since no direct encode
+// that beat their bar came out smaller.
+export const ARCHIVE_VERSION = 4;
 
 // The freshness contract every deploy-time HTML document ships, `/` included as of
 // 2026-07-31. Each clause is load-bearing and none of them is a default:

@@ -6,6 +6,7 @@ import { createBudget, isSubrequestLimit, meteredTransport, recordBudget } from 
 import { span } from "./lib/trace.ts";
 import type { PublicTransport } from "./lib/public-fetch.ts";
 import { asText } from "./lib/parse.ts";
+import { isolateMemo } from "./lib/isolate-memo.ts";
 
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;
@@ -63,12 +64,11 @@ export const SELF_LINK_HOSTS = [
 ];
 
 const TABLE = "webmentions_sent";
-let ensured = false;
-async function ensureTable(db) {
-  if (ensured) return;
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS ${TABLE} (
+const ensureTable = isolateMemo(
+  async (db: D1Database) => {
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS ${TABLE} (
       source TEXT NOT NULL,
       target TEXT NOT NULL,
       endpoint TEXT,
@@ -76,10 +76,11 @@ async function ensureTable(db) {
       last_sent_at INTEGER NOT NULL,
       PRIMARY KEY (source, target)
     )`,
-    )
-    .run();
-  ensured = true;
-}
+      )
+      .run();
+  },
+  { onFailure: "retry" },
+);
 
 // ── the cron entry point ───────────────────────────────────────────────────
 // Traced with both CAPS as first-class attributes. A run stops on whichever of
@@ -376,8 +377,13 @@ function relHasWebmention(rel) {
     .some((t) => t.toLowerCase() === "webmention");
 }
 
-function attr(tag, name) {
-  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i"));
+const ATTR_RE = {
+  rel: /\brel\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i,
+  href: /\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i,
+};
+
+function attr(tag, name: keyof typeof ATTR_RE) {
+  const m = tag.match(ATTR_RE[name]);
   return m ? m[1].replace(/^["']|["']$/g, "") : undefined;
 }
 

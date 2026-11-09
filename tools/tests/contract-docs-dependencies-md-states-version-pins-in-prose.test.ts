@@ -20,6 +20,9 @@ import {
 } from "./contract-shared.ts";
 import { spawnSync } from "node:child_process";
 
+// The Worker entry parses a request's URL once and hands it down; these stand in for it.
+const staticPageAt = (request: Request, env, opts?) => serveStaticPage(request, env, new URL(request.url), opts);
+
 // docs/DEPENDENCIES.md states version pins in prose, and the nightly pin bumpers
 // (deps-pin.yml, wrangler-pin.yml, bun-pin.yml, plus Dependabot for cargo)
 // rewrite those pins, so the file goes stale on a cadence rather than by
@@ -437,8 +440,8 @@ test("HEAD advertises the same representation its GET would serve", async () => 
     },
   };
   const md = { accept: "text/markdown" };
-  const get = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { headers: md }), env);
-  const head = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD", headers: md }), env);
+  const get = await staticPageAt(new Request("https://aadhar.sh/garage/encoding", { headers: md }), env);
+  const head = await staticPageAt(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD", headers: md }), env);
 
   assert.equal(get.headers.get("content-type"), "text/markdown; charset=utf-8");
   assert.equal(head.headers.get("content-type"), "text/markdown; charset=utf-8", "HEAD must not advertise HTML for a URL whose GET negotiates Markdown");
@@ -453,7 +456,7 @@ test("HEAD advertises the same representation its GET would serve", async () => 
   assert.equal(head.headers.get("x-markdown-tokens"), get.headers.get("x-markdown-tokens"));
 
   // A HEAD that is NOT negotiating still takes the asset layer, exactly as before.
-  const plain = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD" }), env);
+  const plain = await staticPageAt(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD" }), env);
   assert.equal(plain.status, 200);
   assert.match(plain.headers.get("content-type"), /text\/html/);
 });
@@ -485,7 +488,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   const env = makeEnv("public, max-age=0, s-maxage=86400");
   const currentBr = 'W/"page-br"';
   const currentDcz = 'W/"page-dcz"';
-  const unchanged = await serveStaticPage(
+  const unchanged = await staticPageAt(
     new Request("https://aadhar.sh/lwe/drivers", {
       headers: { "if-none-match": currentBr, "available-dictionary": available },
     }),
@@ -494,7 +497,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(unchanged.status, 304);
   assert.equal(unchanged.headers.get("etag"), currentBr);
 
-  const changed = await serveStaticPage(
+  const changed = await staticPageAt(
     new Request("https://aadhar.sh/lwe/drivers", {
       headers: { "if-none-match": '"old"', "available-dictionary": available },
     }),
@@ -507,7 +510,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
   assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
 
-  const dczUnchanged = await serveStaticPage(
+  const dczUnchanged = await staticPageAt(
     new Request("https://aadhar.sh/lwe/drivers", {
       headers: { "if-none-match": currentDcz, "available-dictionary": available },
     }),
@@ -531,7 +534,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
     "max-age=3600, no-cache", // no-cache vetoes a live max-age
     "no-store",
   ]) {
-    const res = await serveStaticPage(
+    const res = await staticPageAt(
       new Request("https://aadhar.sh/lwe/drivers", {
         headers: { "available-dictionary": available },
       }),
@@ -545,7 +548,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // cancels only that second arm, so a positive max-age still registers under it
   // (measured in Chrome 152, 2026-09-23).
   for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800", "max-age=3600, must-revalidate"]) {
-    const res = await serveStaticPage(
+    const res = await staticPageAt(
       new Request("https://aadhar.sh/lwe/drivers", {
         headers: { "available-dictionary": available },
       }),
@@ -559,7 +562,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // is spent on offers no browser keeps. Pinned against the live constant rather than a
   // copy, so editing the policy runs this check instead of quietly bypassing it.
   const { PAGE_CACHE_CONTROL } = await import("../../src/worker/lib/const.ts");
-  const shipped = await serveStaticPage(
+  const shipped = await staticPageAt(
     new Request("https://aadhar.sh/lwe/drivers", {
       headers: { "available-dictionary": available },
     }),

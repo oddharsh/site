@@ -3,12 +3,11 @@
 // view over the same slot calculation.
 
 import { getPublicAvailability } from "../../cal/src/slots.ts";
-import { jsonResponse } from "./lib/http.ts";
+import { jsonResponse, methodGuard } from "./lib/http.ts";
 
 export async function handleCoffeeAvailability(request, env, ctx) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return jsonResponse({ ok: false, error: "method not allowed" }, 405, { allow: "GET, HEAD" });
-  }
+  const refused = methodGuard(request, ["GET"]);
+  if (refused) return refused;
   try {
     const payload = await getPublicAvailability(env, ctx);
     const status = payload.available ? 200 : 503;

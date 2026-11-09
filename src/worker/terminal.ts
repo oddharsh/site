@@ -44,7 +44,7 @@ import { LENS_BUDGETS, LENS_INSPECT, lensFetch, lensObservationSummary } from ".
 import { defineLens, type LensOutcome } from "./lens-pipeline.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { escHtml } from "./lib/http.ts";
+import { esc, methodGuard } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
@@ -1221,7 +1221,7 @@ function toolPage(frame, path) {
     cache: "no-store",
     css: `/*min*/\n.tool-out{font:12px/1.5 var(--font-mono);white-space:pre;overflow-x:auto;margin:0}`,
     headers: { "x-robots-tag": "noindex" },
-    body: unsafeHtml(`<pre class="tool-out">${escHtml(frameText(frame))}</pre>`),
+    body: unsafeHtml(`<pre class="tool-out">${esc(frameText(frame))}</pre>`),
   });
 }
 
@@ -1243,9 +1243,7 @@ function toolPage(frame, path) {
 export const TOOL_NAMES = TERMINAL_APPS;
 
 /** Shared by every tool route. */
-async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
-  const url = new URL(request.url);
-
+async function serveFrame(name, request, env, ctx, url: URL, { explicitText = false } = {}) {
   // radar is the ONE tool that takes a POST, because it is the one whose input
   // this server cannot produce: the readings come from a machine with an
   // antenna. Everything else stays GET-only, so the surface does not quietly
@@ -1263,12 +1261,8 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
     });
   }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response("method not allowed\n", {
-      status: 405,
-      headers: { allow: name === "radar" ? "GET, HEAD, POST" : "GET, HEAD", "content-type": "text/plain; charset=utf-8" },
-    });
-  }
+  const refused = methodGuard(request, name === "radar" ? ["GET", "POST"] : ["GET"]);
+  if (refused) return refused;
 
   const frame = await buildFrame(name, request, env, ctx, url);
   const wantsHtml = !explicitText && (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain");
@@ -1291,8 +1285,7 @@ async function serveFrame(name, request, env, ctx, { explicitText = false } = {}
 }
 
 /** Every tool in TOOL_NAMES, and its .txt representation. */
-export async function handleTool(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleTool(request, env, ctx, url = new URL(request.url)) {
   const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
@@ -1304,7 +1297,7 @@ export async function handleTool(request, env, ctx) {
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
   }
-  return serveFrame(name, request, env, ctx, { explicitText });
+  return serveFrame(name, request, env, ctx, url, { explicitText });
 }
 
 /** The MCP entry point: a frame as plain text, never coloured. */

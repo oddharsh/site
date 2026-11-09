@@ -48,6 +48,7 @@ import { spliceMinLiterals } from "./lib/css-literal.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
+import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
 import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
@@ -63,6 +64,8 @@ import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
+import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
+import { NON_BLOCKING_PAGES } from "./lib/critical-css.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
@@ -886,10 +889,11 @@ phase("1 stage");
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
 //
-// Which roots, in what order, and which three paths under public/ are left out
-// because steps 1a and 1a2 DERIVE them (images/meta, exif.json and
-// fingerprints.json) is tools/lib/served-tree.ts's declaration. checkInvariants
-// planned the tree from it, and local dev symlinks the same plan.
+// Which roots, in what order, and which four paths under public/ are left out
+// because steps 1a and 1a2 DERIVE them (images/meta, exif.json,
+// fingerprints.json and photo-search.bin) is tools/lib/served-tree.ts's
+// declaration. checkInvariants planned the tree from it, and local dev
+// symlinks the same plan.
 //
 // The plan proves that the five served roots do not contend for a destination
 // file, but directories are intentionally shared: public/ and src/pages/ both
@@ -1033,7 +1037,18 @@ phase("1a photo indexes");
     throw new Error(`image fingerprints: only ${tiers} tiers digested (expected 400+) — is public/images/hashes.json readable and whole?`);
   }
   await writeFile(`${OUT}/public/images/fingerprints.json`, serializeFingerprints(index));
-  console.log(`photo indexes: exif.json ${stems.length} stems, fingerprints.json ${tiers} tiers across ${photos} photos`);
+
+  // The photo query's ranking index (src/worker/lib/photo-search.ts). Baked here
+  // because building it inside an isolate cost what it saved: 3.00 ms against
+  // 3.02 ms for a cold query on 2026-11-03, where decoding this file took 0.77 ms.
+  const [metadata, alt, semantics] = await Promise.all(
+    ["metadata", "alt", "semantics"].map(async (name) => JSON.parse(await readFile(`public/images/${name}.json`, "utf8"))),
+  );
+  const search = encodePhotoSearchIndex(buildPhotoSearchIndex(metadata, alt, semantics));
+  await writeFile(`${OUT}/public/images/photo-search.bin`, search);
+  console.log(
+    `photo indexes: exif.json ${stems.length} stems, fingerprints.json ${tiers} tiers across ${photos} photos, photo-search.bin ${search.length} bytes`,
+  );
 }
 
 // 1a2) /images/meta/<stem>.json, DERIVED rather than copied.
@@ -1671,6 +1686,9 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     // Here, because every staged page and its readable twin pass through this one
     // function, so the twin keeps being the same program as the page it explains.
     out = foldLongProse(out);
+    // After the folds, so a page whose first paint waits for its first fold
+    // pauses only past it (parser-pause.ts).
+    out = pauseBelowFirstScreen(out, { afterFirstFold: NON_BLOCKING_PAGES.includes(rel) });
     return { html: out, addedLink, addedChrome };
   };
 
@@ -2267,6 +2285,29 @@ phase("5e build info");
 // against the final page bytes and the committed src/dict/f-dict dictionary.
 let freshFamily: Buffer | null = null;
 
+phase("5f non-blocking shell css");
+// 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
+// blocking first paint, behind the subset of each that can apply to the page.
+// It runs after 5c so the subset carries the same short custom-property names
+// as the stylesheet it came from, and before 6 so the swapped links get hashed
+// like any other. The subset is derived here on every build and never
+// committed, so there is no copy to drift, the same argument as the client edge.
+// Step 7b gives the page's readable twin the same swap, so the twin stays the
+// same program as the page it twins.
+const { nonBlockingPage } = await import("./lib/critical-css.ts");
+const toNonBlocking = async (page: string) => {
+  const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
+  const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
+  const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
+  return nonBlockingPage(page, sheets, scripts);
+};
+for (const rel of NON_BLOCKING_PAGES) {
+  const page = await readFile(`${OUT}/public/${rel}`, "utf8");
+  const out = await toNonBlocking(page);
+  await writeFile(`${OUT}/public/${rel}`, out);
+  console.log(`non-blocking shell css: ${rel} inlines ${out.length - page.length} B for luna.css and prose.css`);
+}
+
 phase("6 hash shell assets");
 // 6) content-hash the shell assets the client asset registry names (nav.js,
 // luna.css, lens-boot.js and the rest) into immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
@@ -2704,6 +2745,9 @@ phase("7b minify pages");
       } catch {
         generated++;
       }
+      // outside the try, so a page that can't take the swap fails the build
+      // instead of reading as "no authored source"
+      if (NON_BLOCKING_PAGES.includes(rel)) twin = await toNonBlocking(twin);
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;

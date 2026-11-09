@@ -77,14 +77,21 @@ describe("booking record CRUD", () => {
 
   it("setStatus patches status + acted_at and persists it", async () => {
     const b = await createBooking(env, pending());
-    const updated = must(await setStatus(env, b.id, "confirmed"));
+    const updated = must(await setStatus(env, b.id, { from: "pending", to: "confirmed" }));
     expect(updated.status).toBe("confirmed");
     expect(updated.acted_at).toBeTypeOf("number");
     expect(must(await getBooking(env, b.id)).status).toBe("confirmed");
   });
 
+  it("setStatus refuses a booking that has left the expected status, and leaves it as it was", async () => {
+    const b = await createBooking(env, pending());
+    must(await setStatus(env, b.id, { from: "pending", to: "confirmed" }));
+    expect(await setStatus(env, b.id, { from: "pending", to: "expired" })).toBeNull();
+    expect(must(await getBooking(env, b.id)).status).toBe("confirmed");
+  });
+
   it("setStatus on a missing booking returns null (no throw)", async () => {
-    expect(await setStatus(env, "does-not-exist", "confirmed")).toBeNull();
+    expect(await setStatus(env, "does-not-exist", { from: "pending", to: "confirmed" })).toBeNull();
   });
 });
 
@@ -116,7 +123,7 @@ describe("held slots (per-slot keys)", () => {
   it("a released slot leaves the booking record intact (record != hold)", async () => {
     const b = await createBooking(env, pending());
     await holdSlot(env, b);
-    await setStatus(env, b.id, "declined");
+    await setStatus(env, b.id, { from: "pending", to: "declined" });
     await releaseSlot(env, b);
     // the record still exists (kept 90d) even though the slot is free again
     expect(must(await getBooking(env, b.id)).status).toBe("declined");

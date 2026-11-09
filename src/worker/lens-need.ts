@@ -25,6 +25,7 @@
 // holds, so this adds zero subrequests.
 
 import { asRecord, asText } from "./lib/parse.ts";
+import type { NeedStatus } from "./lib/readiness-status.ts";
 
 // Checked against https://is-agentic.com/scan/aadhar.sh on this date; the
 // catalog is the 132 check ids embedded in that report.
@@ -41,7 +42,7 @@ const HTML_TAX_RATIO = 5;
 const HTML_TAX_TOKENS = 8000;
 
 type Credit = number | null;
-type NeedCheck = { key: string; label: string; status: string; credit: Credit; detail: string };
+type NeedCheck = { key: string; label: string; status: NeedStatus; credit: Credit; detail: string };
 
 // pass 1, fail 0, partial in between. `unknown` means we asked and the site did
 // not answer, which is the site's fact, so it counts at zero. `neutral` means

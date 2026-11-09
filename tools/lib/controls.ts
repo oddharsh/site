@@ -152,6 +152,20 @@ export const CONTROLS: Control[] = [
     expect: /@import of tokens\/fonts\.css/,
   },
   {
+    id: "homepage-reads-an-undefined-token",
+    plants: "the homepage's inline :root drops a colour token its first-paint CSS reads, so that colour paints at the browser default until luna.css lands",
+    mutations: [{ file: "src/pages/index.html", find: "  --ink:oklch(21.78% 0 0);\n", replace: "" }],
+    run: contract("contract-type-comes-from-the-tokens"),
+    expect: /reads var\(--ink\) but its inline :root does not define it/,
+  },
+  {
+    id: "parser-pause-before-the-first-fold",
+    plants: "the parser pause ignores a page's rel=expect first fold, so /garage's first paint waits for the pause's stylesheet",
+    mutations: [{ file: "tools/lib/parser-pause.ts", find: " && (!afterFirstFold || b.afterFold)", replace: "" }],
+    run: contract("contract-long-pages-pause-below-the-screen"),
+    expect: /garage\/index\.html: the pause sits before the end of the first fold/,
+  },
+  {
     id: "web-font-in-luna",
     plants: "luna.css downloads a face through @font-face url(), breaking the zero-font-bytes law",
     mutations: [
@@ -189,6 +203,13 @@ export const CONTROLS: Control[] = [
     expect: /references to gotchas that do not exist: .*999/,
   },
   {
+    id: "av2-page-keeps-a-stale-tier-median",
+    plants: "/garage/av2 states the 600px tier's median from before #1222 removed 93 photos, the drift this check was added for",
+    mutations: [{ file: "src/pages/garage/av2.html", find: "the median, 0.53,", replace: "the median, 0.67," }],
+    run: contract("contract-av2-tier-figures-match-the-shipped-tier"),
+    expect: /the thin end, tier size and median must match the shipped 600px tier/,
+  },
+  {
     id: "em-dash-in-quiz",
     plants: "an em dash in a quiz question, which the house voice bans",
     gotcha: 32,
@@ -216,10 +237,11 @@ export const CONTROLS: Control[] = [
   // on a preview URL or a replayed 0-RTT GET.
   {
     id: "encodebody-dropped-in-workerd",
-    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body on the image bail is brotli twice",
+    plants: "security.ts's noindex rebuild stops carrying encodeBody, so a precompressed body is brotli twice",
     gotcha: 13,
-    // The noindex carry, not the main one: the main rebuild sets the flag again
-    // for HTML, so only the svg row (which bails before it) can see this carry go.
+    // The noindex carry, not the main one. A Worker-built response is stamped in
+    // place after it, so nothing sets the flag again and the html noindex row is
+    // the first to see this carry go (the svg row sees it on the image bail).
     mutations: [
       {
         file: "src/worker/lib/security.ts",
@@ -228,7 +250,7 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
-    expect: /the noindex rebuild double-encoded a body that then took the image bail/,
+    expect: /the noindex rebuild double-encoded a precompressed body/,
   },
   {
     id: "encodebody-dropped-at-a-call-site",
@@ -326,12 +348,65 @@ export const CONTROLS: Control[] = [
     expect: /POST \/a-route-invented-tomorrow must be refused on a preview/,
   },
   {
+    id: "gloss-pass-cached-without-the-marked-terms",
+    plants: "glossify's alternation cache keys on `only` alone, so a pass built before any term was marked keeps matching marked terms",
+    mutations: [
+      {
+        file: "src/worker/lens.ts",
+        find: '  const id = (only ? only.join(",") : "*") + "|" + [...seen].sort().join(",");\n',
+        replace: '  const id = only ? only.join(",") : "*";\n',
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /glossify marks each term once, longest spelling first, and honours `only`/,
+  },
+  {
+    id: "robots-matcher-shared-across-rules",
+    plants: "the robots matcher cache keys on nothing, so every rule tests the first rule's pattern",
+    mutations: [
+      {
+        file: "src/worker/lib/robots.ts",
+        find: "  let match = RULE_MATCHERS.get(rule);\n  if (!match) RULE_MATCHERS.set(rule, (match = compilePattern(rule.pattern)));\n",
+        replace: "  let match = RULE_MATCHERS.get(RULE_MATCHERS);\n  if (!match) RULE_MATCHERS.set(RULE_MATCHERS, (match = compilePattern(rule.pattern)));\n",
+      },
+    ],
+    run: contract("contract-lens-glossary-and-robots-compile-once"),
+    expect: /one parsed robots.txt answers every path and bot by its own rules/,
+  },
+  {
+    id: "route-reparses-the-request-url",
+    plants: "serveWorkerRequest parses request.url again instead of taking the URL the entry already parsed",
+    mutations: [
+      {
+        file: "src/worker/dispatch.ts",
+        find: "    // Read before routing: handlers get this same URL object and may rewrite it\n",
+        replace: "    url = new URL(request.url);\n    // Read before routing: handlers get this same URL object and may rewrite it\n",
+      },
+    ],
+    run: contract("contract-the-dispatch-pipeline"),
+    expect: /a request handed its URL is not parsed again on the way to its handler/,
+  },
+  {
+    id: "intl-object-built-at-module-scope",
+    plants: "guestbook.ts builds its Intl.Segmenter at module scope again, so ICU loads on every isolate's startup",
+    gotcha: 92,
+    mutations: [
+      {
+        file: "src/worker/guestbook.ts",
+        find: "let graphemes: Intl.Segmenter | undefined;\n",
+        replace: "let graphemes: Intl.Segmenter | undefined = new Intl.Segmenter();\n",
+      },
+    ],
+    run: contract("contract-no-intl-object-at-module-scope"),
+    expect: /importing every Worker module builds no Intl object/,
+  },
+  {
     id: "preview-guard-dropped-from-dispatch",
     plants: "the dispatcher stops calling the preview guard, so a POST on a preview URL reaches its handler",
     mutations: [
       {
         file: "src/worker/dispatch.ts",
-        find: "      const denied = previewDenial(url.pathname, request.method);\n      if (denied) return denied;\n",
+        find: "      const denied = previewDenial(pathname, request.method);\n      if (denied) return denied;\n",
         replace: "",
       },
     ],
@@ -357,7 +432,7 @@ export const CONTROLS: Control[] = [
     mutations: [
       {
         file: "src/worker/dispatch.ts",
-        find: "    const tooEarly = earlyDataDenial(request, url.pathname);\n    if (tooEarly) return tooEarly;\n",
+        find: "    const tooEarly = earlyDataDenial(request, pathname);\n    if (tooEarly) return tooEarly;\n",
         replace: "",
       },
     ],
@@ -462,6 +537,24 @@ export const CONTROLS: Control[] = [
     expect: /tools\/control-probe\.ts:2: export const probe = execFileSync/,
   },
   {
+    id: "verdict-watch-forgets-its-memory-file",
+    plants:
+      "a verdict watch whose landed sentence no longer names the memory file, so a moved row's issue says what landed but not which decline to re-measure",
+    mutations: [{ file: "tools/lib/upstream-watches.ts", find: ".map((w) => ({ ...w, landed:", replace: ".map((w) => ({ ...w, unused:" }],
+    run: [...contract("contract-canary-tripwire-proposes-nothing"), "-t", "a verdict watch that moves"],
+    expect: /moved and the issue does not name bun-minifier-not-a-swap\.md/,
+  },
+  {
+    id: "head-tag-diff-blind-to-og",
+    plants: "the head-tag extractor stops reading og:* tags, so a PR that drops an og:image posts an empty diff",
+    gotcha: 90,
+    // The diff is advisory and fails on nothing, so blindness is its quiet
+    // failure: "No change" reads the same whether the tags matched or went unread.
+    mutations: [{ file: "tools/head-snapshot.ts", find: ' || name.startsWith("og:")', replace: "" }],
+    run: contract("contract-head-tag-diff-reports-each-changed-tag"),
+    expect: /a dropped og:image must be one row/,
+  },
+  {
     id: "suite-map-restored-on-main",
     plants: "validate restores the test input map on every event, so a push to main runs a narrowed suite",
     mutations: [
@@ -473,5 +566,25 @@ export const CONTROLS: Control[] = [
     ],
     run: contract("contract-ci-required-gate"),
     expect: /a push to main must find no map and run the whole suite/,
+  },
+  {
+    id: "critical-css-drops-script-built-rules",
+    plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: " || namedInScripts(stripPseudos(s), scriptWords)",
+        replace: "",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /a rule only the page's scripts can match was dropped/,
+  },
+  {
+    id: "critical-css-adds-a-rule",
+    plants: "the critical-CSS subset carries a rule luna.css doesn't, which would change /garage's settled render",
+    mutations: [{ file: "tools/lib/critical-css.ts", find: "  return keep(luna);", replace: '  return keep(luna) + ".planted{color:red}";' }],
+    run: BUILD,
+    expect: /critical-css: the \/luna\.css subset is not an ordered subset of it/,
   },
 ];

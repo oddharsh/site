@@ -135,6 +135,9 @@ export type LunaPageOptions = {
   closeHref?: string;
   closeTitle?: string;
   closeLabel?: string;
+  /** A menu bar row under the caption, the way Explorer drew File, Edit, View.
+   *  The caller supplies only menus it wires up; see renderPhotosPage. */
+  menubar?: Html;
 };
 
 // lunaPage: the one place a worker-rendered page becomes a Luna window. Every
@@ -192,6 +195,7 @@ export function lunaPage({
   closeTitle = "back to aadhar.sh",
   closeLabel = closeTitle,
   scripts = EMPTY,
+  menubar = EMPTY,
 }: LunaPageOptions = {}) {
   const documentTitle = title || path || "aadhar.sh";
   const windowTitle = path || title || "aadhar.sh";
@@ -243,7 +247,7 @@ ${unsafeHtml(css || "")}
 <body>
 ${unsafeHtml(DESKTOP_TOP)}
 <div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
-  ${titleBar({ caption: windowTitle, titleClass, histnav, closeHref, closeTitle, closeLabel })}${addressHtml}
+  ${titleBar({ caption: windowTitle, titleClass, histnav, closeHref, closeTitle, closeLabel })}${menubar}${addressHtml}
   ${paneHtml}<main id="main" class="content${contentClass ? " " + contentClass : ""}">
 ${body}
   </main>

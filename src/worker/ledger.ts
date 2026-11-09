@@ -21,8 +21,8 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { esc, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { PENDING, isPending, island, islandResponse, islandScript, type Pending } from "./lib/island.ts";
+import { esc, publicJsonResponse } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
 
@@ -303,31 +303,24 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
     : { available: false, reason: cost.reason };
   if (!q.ok) {
     const { status, error, code } = analyticsReadError(q.reason);
-    return jsonResponse(
+    return publicJsonResponse(
       { ok: false, error, code, reason: q.reason, binding_fallback: q.binding_fallback, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock },
       status,
-      publicJsonHeaders(status),
-      { pretty: false },
     );
   }
   const { items, totalHits, totalUsd } = priced(q.rows);
-  return jsonResponse(
-    {
-      ok: true,
-      via: q.via,
-      binding_fallback: q.binding_fallback,
-      window_days: WINDOW_DAYS,
-      rate_usd: RATE_USD,
-      note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
-      line_items: items,
-      total_hits: totalHits,
-      total_usd: totalUsd,
-      cost: costBlock,
-    },
-    200,
-    publicJsonHeaders(200),
-    { pretty: false },
-  );
+  return publicJsonResponse({
+    ok: true,
+    via: q.via,
+    binding_fallback: q.binding_fallback,
+    window_days: WINDOW_DAYS,
+    rate_usd: RATE_USD,
+    note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
+    line_items: items,
+    total_hits: totalHits,
+    total_usd: totalUsd,
+    cost: costBlock,
+  });
 }
 
 // /ledger is a BUILT document since 2026-09-25: build step 5b
@@ -339,29 +332,21 @@ export async function handleLedgerJson(request: SiteRequest, env: Env) {
 export const LINES_URL = LEDGER_LINES_URL;
 
 export function handleLedgerLines(request: SiteRequest, env: Env, ctx: ExecutionContext) {
-  return cachedRender(
-    request,
-    ctx,
-    async () => {
-      const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
-      return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
-    },
-    LINES_URL,
-    env,
-  );
+  return cachedRender(request, env, ctx, LINES_URL, async () => {
+    const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
+    return islandResponse(renderLedgerLines(q, cost), { "cache-control": "public, max-age=60, s-maxage=300" });
+  });
 }
+
+const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
 
 // The placeholder model: one unread line per crawler this ledger can name,
 // which is what the trailing window has held in production, and the one-line
 // cost note. No crawler is named, since the order is by hits and unknown here.
-const PENDING = { pending: true } as const;
-
-const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
-
 /** The island: line items, total and cost line, for a read or the placeholder. */
-export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: BillableRead | typeof PENDING) {
+export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | Pending) {
   const dots = "…";
-  const pending = "pending" in q;
+  const pending = isPending(q);
   const { items, totalHits, totalUsd } = priced(!pending && q.ok ? q.rows : []);
 
   let tableRows;
@@ -398,7 +383,7 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
   }
 
   let costLine;
-  if ("pending" in cost) {
+  if (isPending(cost)) {
     costLine = `<div class="lg-cost"><span class="lg-cost-sub">${dots}</span></div>`;
   } else if (cost.ok) {
     const families = cost.services.length ? cost.services.join(", ") : "no billed products";
@@ -421,6 +406,12 @@ export function renderLedgerLines(q: LedgerRead | typeof PENDING, cost: Billable
 
 /** The shell build step 5b bakes. It takes no arguments, so every build agrees. */
 export function renderLedgerPage() {
+  const { head, mount } = island({
+    id: "lg-lines",
+    url: LINES_URL,
+    placeholder: renderLedgerLines(PENDING, PENDING),
+    fallback: { says: "The line items arrive", shows: "them", json: "/ledger.json" },
+  });
   const css = `/*min*/
 h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lg-lede { margin:0 0 12px; color:var(--ink-soft); font-size:var(--text-ui); }
@@ -476,7 +467,7 @@ footer a { color:var(--link); }
         <div class="lg-invno"><b>INVOICE</b><div>period: trailing ${WINDOW_DAYS} days</div><div>issued monthly &middot; collected never</div></div>
       </div>
       <p class="lg-billto"><b>Bill to:</b> the operators below, per their own user-agent strings.</p>
-      ${islandMount("lg-lines", LINES_URL, renderLedgerLines(PENDING, PENDING), html`<p>The line items arrive in a second request after the page loads, and that needs a script. Without one, <a href="${LINES_URL}">${LINES_URL}</a> shows them as plain HTML, and <a href="/ledger.json">/ledger.json</a> as JSON.</p>`)}
+      ${mount}
       <p class="lg-fail">The request for the line items failed, so the invoice stays blank rather than guessed. <a href="${LINES_URL}">${LINES_URL}</a> has them as plain HTML.</p>
     </div>
 
@@ -501,7 +492,7 @@ footer a { color:var(--link); }
     description:
       "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",
-    head: islandPreload(LINES_URL),
+    head,
     css,
     body,
     scripts: islandScript(),

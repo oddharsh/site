@@ -1,0 +1,26 @@
+[package]
+name = "jixel-enc"
+version = "0.1.0"
+edition = "2024"
+description = "The lossy JPEG XL encoder behind a HIF photo's archive: jixel at Speed::Slow with progressive DC, driven by hif-archive.ts."
+license = "BSD-3-Clause OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "jixel-enc"
+path = "src/main.rs"
+
+[dependencies]
+# Exact on purpose: hif-archive.ts bisects distance against this encoder, so a
+# move is a re-measurement, not a refresh. Chosen 2026-10-17 on 8 HIFs at
+# matched quality (both ssimulacra2 and butteraugli 3-norm beating cjxl 0.12
+# -e 7 -p): 8 of 8 smaller, median -2.6%, -5.0% bytes-weighted, first paint
+# in Chrome from 8 to 11 KB like cjxl -p. Plain jixel was -3.8% but paints
+# only after 750 KB to 1.4 MB. docs/PHOTO-PIPELINE.md has the method.
+jixel = "=0.5.7"
+png = "0.18"
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"

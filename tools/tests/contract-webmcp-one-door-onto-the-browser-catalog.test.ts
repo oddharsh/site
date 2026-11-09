@@ -255,3 +255,64 @@ test("the tray reads the log rather than fetching it, and renders every outcome"
     assert.ok(new RegExp(`export function ${name}\\b`).test(WEBMCP), `webmcp.js must export ${name}; nav.js depends on it`);
   }
 });
+
+// Chrome 156 and Canary 159 keep readOnlyHint, untrustedContentHint and
+// consequentialHint through registerTool (measured 2026-11-03), so what the
+// registrar hands the browser is the claim an agent sees. This runs the real
+// registerTool against a stand-in document.modelContext and reads back exactly
+// what it was given.
+test("registerTool hands the browser the three WebMCP hints, derived from the tool's own claims", async () => {
+  const received: Array<{ name: string; annotations: unknown }> = [];
+  const fake = {
+    getTools: async () => received.map(({ name }) => ({ name })),
+    registerTool: async (tool) => {
+      received.push({ name: tool.name, annotations: tool.annotations });
+    },
+  };
+  // webmcp.ts captures the API once at module load, so the stand-in has to be
+  // on globalThis for the import and can come off right after it.
+  const had = Object.prototype.hasOwnProperty.call(globalThis, "document");
+  const previous = (globalThis as any).document;
+  (globalThis as any).document = { modelContext: fake };
+  let wm;
+  try {
+    // A query of its own, so no other importer inherits the stand-in.
+    wm = await import(new URL("../../src/client/webmcp.ts?hints", import.meta.url).href);
+  } finally {
+    if (had) (globalThis as any).document = previous;
+    else delete (globalThis as any).document;
+  }
+  const execute = () => "ok";
+  // The /mcp vault writer: not read-only, so `writes` defaults on.
+  assert.equal(
+    await wm.registerTool({ name: "capture", description: "d", annotations: { readOnlyHint: false, untrustedContentHint: true }, execute }),
+    "registered",
+  );
+  // A read that returns this origin's own text.
+  assert.equal(
+    await wm.registerTool({ name: "own_read", description: "d", annotations: { readOnlyHint: true, untrustedContentHint: false }, execute }),
+    "registered",
+  );
+  // A Lens page tool: repaints the screen, writes nothing.
+  assert.equal(
+    await wm.registerTool({ name: "repaint", description: "d", annotations: { readOnlyHint: false, untrustedContentHint: true }, writes: false, execute }),
+    "registered",
+  );
+  assert.deepEqual(received, [
+    { name: "capture", annotations: { readOnlyHint: false, untrustedContentHint: true, consequentialHint: true } },
+    { name: "own_read", annotations: { readOnlyHint: true, untrustedContentHint: false, consequentialHint: false } },
+    { name: "repaint", annotations: { readOnlyHint: false, untrustedContentHint: true, consequentialHint: false } },
+  ]);
+});
+
+test("every Lens page tool marks its output untrusted", () => {
+  const start = LENS_WEBMCP.indexOf("const defs = [");
+  const end = LENS_WEBMCP.indexOf("\n  ];", start);
+  assert.ok(start > 0 && end > start, "the defs array moved; point this test at it");
+  const body = LENS_WEBMCP.slice(start, end);
+  // Each handler returns wmScreen(), which carries the scanned site's final URL
+  // and Content-Type, so none of the six returns only this origin's text.
+  const count = pageToolNames().length;
+  assert.ok(count >= 6, `expected at least 6 page tools, found ${count}`);
+  assert.equal((body.match(/untrustedContentHint: true/g) || []).length, count);
+});

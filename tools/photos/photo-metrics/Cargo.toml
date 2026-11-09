@@ -34,7 +34,7 @@ path = "src/main.rs"
 # rust-av's `ssimulacra2` crate was the other candidate and drifts up to 0.66.
 # A dependabot lane opens the PR; run tools/photos/photo-metrics-parity.ts
 # (the archive half above) before merging it.
-fast-ssim2 = "=0.9.0"
+fast-ssim2 = "=0.9.1"
 butteraugli = "=0.9.3"
 # PNG for the HIF reference and djxl's decodes, PNM for djpeg's baseline.
 image = { version = "0.25", default-features = false, features = ["png", "pnm"] }

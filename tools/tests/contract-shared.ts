@@ -61,7 +61,7 @@ import {
   SERENDIPITY_MCP_SERVER_INFO,
   SERENDIPITY_SYNC_LIMITS,
   cookieJar,
-  adminGated,
+  adminRefusal,
   dispatchEnrich,
   enrichBatchLimit,
   fetchEventGuests,
@@ -323,27 +323,29 @@ function fakeD1() {
       if (/RETURNING status/i.test(s)) return existing || rows.at(-1);
       return { meta: { changes: 1 } };
     }
+    if (/^SELECT status FROM webmentions WHERE id/i.test(s)) {
+      return rows.find((r) => r.id === args[0]) || null;
+    }
     if (/^SELECT status FROM webmentions/i.test(s)) {
       const [source, target] = args;
       return rows.find((r) => r.source === source && r.target === target) || null;
     }
-    if (/^UPDATE webmentions SET status = 'approved'/i.test(s)) {
-      const [ts, id] = args;
-      const r = rows.find((x) => x.id === id);
+    // Both decisions: SET status = '<to>' [, approved_at = ?] WHERE id = ? [AND status = 'pending'].
+    const decision = /^UPDATE webmentions SET status = '(\w+)'/i.exec(s);
+    if (decision) {
+      const to = decision[1];
+      const id = args.at(-1);
+      const r = rows.find((x) => x.id === id && (!/AND status = 'pending'/i.test(s) || x.status === "pending"));
       if (r) {
-        r.status = "approved";
-        r.approved_at = ts;
+        r.status = to;
+        if (to === "approved") r.approved_at = args[0];
       }
       return { meta: { changes: r ? 1 : 0 } };
     }
-    if (/^DELETE FROM webmentions WHERE id/i.test(s)) {
-      const i = rows.findIndex((x) => x.id === args[0]);
-      if (i >= 0) rows.splice(i, 1);
-      return { meta: { changes: i >= 0 ? 1 : 0 } };
-    }
     if (/^DELETE FROM webmentions WHERE source/i.test(s)) {
       const [source, target] = args;
-      const i = rows.findIndex((x) => x.source === source && x.target === target);
+      const keepDeclined = /AND status != 'declined'/i.test(s);
+      const i = rows.findIndex((x) => x.source === source && x.target === target && !(keepDeclined && x.status === "declined"));
       if (i >= 0) rows.splice(i, 1);
       return { meta: { changes: i >= 0 ? 1 : 0 } };
     }
@@ -606,7 +608,7 @@ export {
   sign,
   speculationRulesJson,
   spotifyArtHash,
-  adminGated,
+  adminRefusal,
   dispatchEnrich,
   enrichBatchLimit,
   fetchEventGuests,

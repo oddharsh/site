@@ -30,6 +30,46 @@ const OPEN_WORLD_TOOLS = new Set([
   "representation_compare",
 ]);
 
+// Tools whose OUTPUT carries text a third party chose: a scanned site's headers,
+// URL or body, Spotify track names, Luma event titles and attendee names, the
+// crawled VC neighborhood, an image's own metadata. `untrustedContentHint` is a
+// WebMCP annotation rather than an MCP one; Chrome 156 and Canary 159 carry it
+// through registerTool (measured 2026-11-03) and an MCP client ignores it.
+//
+// It is not openWorldHint under another name. photo_recipe and image_compare
+// fetch, but return only this origin's recipe or byte counts. change_radar,
+// representation_read, finger and the Serendipity pool never fetch, but replay
+// stored third-party text.
+const UNTRUSTED_CONTENT_TOOLS = new Set([
+  "now_playing",
+  "change_radar",
+  "lens_inspect",
+  "lens_page",
+  "lens_compare",
+  "find_events",
+  "image_inspect",
+  "image_transform",
+  "representation_capture",
+  "representation_read",
+  "representation_compare",
+  "finger",
+  "encode",
+  "agent_ready",
+  "dict",
+  "cache",
+  "lens",
+  // /serendipity/mcp: every tool but `stats` returns event or people names.
+  "list_events",
+  "get_event",
+  "search_people",
+  "list_contributors",
+  "contributor_events",
+  "frequent_people",
+  "co_attendees",
+  "connections",
+  "shared_events",
+]);
+
 const genericObjectOutput = () => ({ type: "object", additionalProperties: true });
 
 function titleFor(name) {
@@ -52,6 +92,7 @@ export function mcpTool(tool, { title, openWorldHint }: { title?: string; openWo
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: openWorldHint ?? OPEN_WORLD_TOOLS.has(tool.name),
+      untrustedContentHint: UNTRUSTED_CONTENT_TOOLS.has(tool.name),
       ...tool.annotations,
     },
   };

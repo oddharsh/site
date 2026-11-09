@@ -1,11 +1,11 @@
 import { BOT_NAME, BOT_UA, SIG_AGENT, botRobotsPolicy, BotPolicyError } from "./lib/botauth.ts";
 import { CHANGE_RADAR_LIMITS, clampParam } from "./lib/api-limits.ts";
-import { cachedRender, deleteSWRKV, edgeKey, withWeakEtag } from "./lib/cache.ts";
+import { cachedRender, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
-import { esc, extractMeta, jsonResponse, secretMatches } from "./lib/http.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
+import { esc, extractMeta, isOwnerBust, jsonResponse } from "./lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
@@ -53,9 +53,8 @@ export const NEIGHBORS = [
 // the schedule in cloudflare.config.ts (cronAround, via index.ts's scheduled handler).
 // The page itself is a built file served by index.ts (routeAround); its crawl
 // half is renderAroundSnapshot below. The JSON twin keeps its own bust.
-export async function handleAroundJson(request, env, ctx) {
-  const url = new URL(request.url);
-  const isBust = secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET);
+export async function handleAroundJson(request, env, ctx, url = new URL(request.url)) {
+  const isBust = isOwnerBust(request, env);
   const render = async () => {
     const report = await readAroundReport(request, env);
     if (!report) {
@@ -76,7 +75,7 @@ export async function handleAroundJson(request, env, ctx) {
       "x-robots-tag": "noindex",
     });
   };
-  return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env);
+  return isBust ? render() : cachedRender(request, env, ctx, "/around/json", render);
 }
 
 const AROUND_KEY = "around:report";
@@ -262,8 +261,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
   };
 }
 
-export async function handleAroundChangesJson(request, env) {
-  const url = new URL(request.url);
+export async function handleAroundChangesJson(request, env, _ctx?, url = new URL(request.url)) {
   try {
     const payload = await readAroundChanges(env, url.searchParams.get("limit"));
     return jsonResponse(payload, 200, {
@@ -288,13 +286,16 @@ export async function handleAroundChangesJson(request, env) {
 //
 // A crawl where EVERY neighbor errored stores nothing, so the last good snapshot
 // keeps serving. results.length is always NEIGHBORS.length (one row per
-// neighbor, success or error), so the check looks for a non-error row.
+// neighbor, success or error), so the check looks for a non-error row. The
+// owner's bust (bustAround) answers to the same rule.
+const isPublishable = (report) => !!(report && Array.isArray(report.results) && report.results.some((r) => !r.error));
+
 export async function cronAround(env) {
   const report = await runAround(env);
   // the snapshot write is conditional: an all-error crawl deliberately does NOT
   // overwrite the last-good snapshot. Worth recording, because "the page still
   // shows last week" is then a fact about this branch rather than a mystery.
-  const publishable = !!(report && Array.isArray(report.results) && report.results.some((r) => !r.error) && env.RN_KV);
+  const publishable = isPublishable(report) && !!env.RN_KV;
   if (publishable) {
     await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
@@ -315,24 +316,30 @@ export async function cronAround(env) {
   });
 }
 
+// ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
+// still allowed to crawl, because it authenticates as the owner. It replaces the
+// snapshot only when the crawl is publishable, like the cron. Until 2026-11-06 it
+// deleted the KV key before crawling and returned whatever came back, so a bust
+// during a neighbor outage served an all-error table and pinned it at the edge.
+async function bustAround(env) {
+  const report = await runAround(env);
+  if (!isPublishable(report)) return { report: await readSnapshot(env), published: false };
+  if (env.RN_KV) await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
+  return { report, published: true };
+}
+
 async function readAroundReport(request, env) {
-  // ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
-  // still allowed to crawl, because it authenticates as the owner.
-  const url = new URL(request.url);
-  if (secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) {
-    await deleteSWRKV(env, AROUND_KEY); // this key is written by a plain put, never by swrKV
-    const report = await runAround(env);
-    if (report && report.results && report.results.some((r) => !r.error) && env.RN_KV) {
-      await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
-    }
-    return report;
-  }
+  if (isOwnerBust(request, env)) return (await bustAround(env)).report;
+  return readSnapshot(env);
+}
+
+async function readSnapshot(env) {
   // cacheTtl 1800: cronAround rewrites this key once a DAY, so half an hour is 2%
   // of the snapshot's own cadence and the page already says "as of the last cron
   // crawl". It has to exceed 300 to buy anything at all, because the snapshot
   // island and /around/json both sit behind cachedRender at s-maxage=300 and this read only
   // runs on an edge miss, so a shorter window would expire alongside the render it
-  // was meant to skip ahead of. The owner's ?bust= still renders from its own fresh
+  // was meant to skip ahead of. A publishable ?bust= renders from its own fresh
   // crawl rather than from KV, so the person who ran it is never the one reading
   // stale; other colos catch up as their own cacheTtl lapses.
   try {
@@ -417,7 +424,7 @@ async function runAroundInner(env, sCrawl) {
           return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
         }
         // The kernel owns the deadline, stream cap, digest, and normalized signals.
-        const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
+        const crawl = await crawlDocument(url, env);
         s.setAttribute("around.outcome", "crawled");
         s.setAttribute("http.response.status_code", crawl.status);
         s.setAttribute("around.bytes_read", crawl.bytesRead);
@@ -497,7 +504,9 @@ const PENDING_REPORT = { crawledAt: null, results: NEIGHBORS.map(() => null) };
 const SNAPSHOT_CACHE = "public, max-age=60, s-maxage=300";
 
 /** The island: the crawl's meta line and its rows, or the not-built-yet panel. */
-export function renderAroundSnapshot(report) {
+export function renderAroundSnapshot(read) {
+  const pending = isPending(read);
+  const report = pending ? PENDING_REPORT : read;
   // failure honesty: no snapshot means a greyed, period-correct empty panel,
   // never a fabricated table. only ever visible before the first cron run
   // (or after an owner bust that failed to rebuild).
@@ -505,7 +514,6 @@ export function renderAroundSnapshot(report) {
     return unsafeHtml(`<div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
     The crawl runs on a schedule, not on your visit; check back tomorrow.</div>`);
   }
-  const pending = report.crawledAt === null;
   const dots = "…";
 
   const rows = report.results
@@ -535,13 +543,14 @@ export function renderAroundSnapshot(report) {
           ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
           : esc(r.title) || "<span class=dim>—</span>";
       const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
+      const host = new URL(r.url).host;
       return `
       <tr>
-        <td class="firm">${esc(r.name)}<div class="host">${esc(new URL(r.url).host)}</div></td>
+        <td class="firm">${esc(r.name)}<div class="host">${esc(host)}</div></td>
         <td class="status">${status}</td>
         <td class="title">${titleCol}${desc}</td>
         <td class="latency">${r.elapsedMs}ms</td>
-        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${new URL(r.url).host}, in a new tab`)}">↗</a></td>
+        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="${esc(`Open ${r.name}, ${host}, in a new tab`)}">↗</a></td>
       </tr>`;
     })
     .join("");
@@ -562,34 +571,43 @@ export function renderAroundSnapshot(report) {
 
 // The owner's force-refresh, which lives on the island now because the page is
 // a static file and cannot take a query. A valid ?bust=SECRET re-crawls inside
-// readAroundReport, renders the fragment from that fresh report, and OVERWRITES
-// this colo's cached copy, awaited, so the owner's own next load reads the new
-// crawl instead of whatever KV's cacheTtl still holds. Anything else is null.
-export async function refreshAroundSnapshot(request, env) {
-  const url = new URL(request.url);
-  if (!secretMatches(url.searchParams.get("bust"), env.RN_BUST_SECRET)) return null;
-  const report = await readAroundReport(request, env);
+// bustAround, renders the fragment from that fresh report, and OVERWRITES this
+// colo's cached copy, awaited, so the owner's own next load reads the new crawl
+// instead of whatever KV's cacheTtl still holds. A crawl with nothing publishable
+// renders the last good snapshot, leaves the edge alone, and says so in
+// x-around-bust. Anything else is null.
+export async function refreshAroundSnapshot(request, env, url = new URL(request.url)) {
+  if (!isOwnerBust(request, env)) return null;
+  const { report, published } = await bustAround(env);
   const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
-  if (report) {
+  if (published) {
     try {
       await caches.default.put(edgeKey(url.origin, SNAPSHOT_URL, env), await withWeakEtag(fresh.clone()));
     } catch {}
   }
+  // Set after the put, so only the owner's response carries it.
+  fresh.headers.set("x-around-bust", published ? "published" : "kept-last-good");
   return fresh;
 }
 
-export async function handleAroundSnapshot(request, env, ctx) {
-  const busted = await refreshAroundSnapshot(request, env);
+export async function handleAroundSnapshot(request, env, ctx, url = new URL(request.url)) {
+  const busted = await refreshAroundSnapshot(request, env, url);
   if (busted) return busted;
   const render = async () => {
     const report = await readAroundReport(request, env);
     return islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
   };
-  return cachedRender(request, ctx, render, SNAPSHOT_URL, env);
+  return cachedRender(request, env, ctx, SNAPSHOT_URL, render);
 }
 
 /** The shell build.ts bakes. It takes no arguments, so every build agrees. */
 export function renderAroundPage() {
+  const { head, mount } = island({
+    id: "ar-snapshot",
+    url: SNAPSHOT_URL,
+    placeholder: renderAroundSnapshot(PENDING),
+    fallback: { says: "The crawl arrives", shows: "it", json: "/around/json" },
+  });
   return lunaPage({
     title: "aadhar.sh/around",
     path: "aadhar.sh/around",
@@ -597,7 +615,7 @@ export function renderAroundPage() {
     width: 820,
     description: "Snapshot of venture firm homepages I keep tabs on, crawled once a day by AadharshBot.",
     robots: "noindex",
-    head: islandPreload(SNAPSHOT_URL),
+    head,
     css: `/*min*/
   h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
@@ -657,7 +675,7 @@ export function renderAroundPage() {
       request carries two: Ed25519, and a post-quantum ML-DSA-44 second label
       (<a href="/garage/pqc">why</a>).
     </p>
-    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
+    ${mount}
     <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">

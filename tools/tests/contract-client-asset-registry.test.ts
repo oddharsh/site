@@ -284,6 +284,7 @@ const HAND_SORTED = [
   "serendipity.js",
   "quiz.js",
   "notepad.js",
+  "photos-view.js",
   "lwe-base.css",
   "prose.css",
   "lwe/ask.js",
@@ -334,8 +335,8 @@ test("perf-budget and the route oracle read projections of the same rows", () =>
   const budgeted = budgetedAssets().map((b) => b.file);
   const unbudgeted = unbudgetedAssets();
   assert.deepEqual([...budgeted, ...unbudgeted].sort(), [...minified].sort(), "every minified asset is either budgeted or declared unbudgeted");
-  // The 16 envelopes perf-budget.ts carried by hand, unchanged in number.
-  assert.equal(budgeted.length, 16);
+  // The 16 envelopes perf-budget.ts carried by hand, plus photos-view.js (2026-11-07).
+  assert.equal(budgeted.length, 17);
   assert.deepEqual(budgetedAssets().find((b) => b.file === "nav.js")?.envelope, { role: "shared deferred shell", gzipKiB: 20, brotliKiB: 18 });
   // The declared gap, named so that closing part of it is a visible edit.
   assert.deepEqual([...unbudgeted].sort(), [

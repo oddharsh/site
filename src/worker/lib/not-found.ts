@@ -46,7 +46,7 @@ import { HASHED_ASSETS, SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
-import { namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
+import { forMethod, namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
 
 export const MISS_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
@@ -114,22 +114,26 @@ export function callerClass(ua: string | null): string {
   return "other";
 }
 
-// The sitemap, read once per isolate.
+// The sitemap, read once per isolate. The PROMISE is memoized, so concurrent
+// cold misses share one read, and a failed read is dropped rather than kept:
+// caching `[]` once pinned empty suggestions for an isolate's whole life after
+// a single ASSETS blip.
 type AssetsEnv = { ASSETS?: { fetch: (r: Request | string) => Promise<Response> } };
-let _sitemap: string[] | undefined;
+let _sitemap: Promise<string[]> | undefined;
 
 /** The sitemap's paths. Empty when it cannot be read, which degrades every
  *  suggestion to the bare Link headers rather than failing the response. */
-export async function sitemapPaths(env: AssetsEnv): Promise<string[]> {
-  if (_sitemap) return _sitemap;
-  try {
+export function sitemapPaths(env: AssetsEnv): Promise<string[]> {
+  _sitemap ??= (async () => {
     const r = await env.ASSETS?.fetch("https://assets.local/sitemap.xml");
-    const xml = r?.ok ? await r.text() : "";
-    _sitemap = [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
-  } catch {
-    _sitemap = [];
-  }
-  return _sitemap;
+    if (!r?.ok) throw new Error(`sitemap read: ${r ? r.status : "no ASSETS"}`);
+    const xml = await r.text();
+    return [...xml.matchAll(/<loc>\s*https?:\/\/[^/<]+([^<\s]*)\s*<\/loc>/g)].map((m) => m[1] || "/");
+  })();
+  return _sitemap.catch(() => {
+    _sitemap = undefined;
+    return [];
+  });
 }
 
 /** Test seam, never called by the Worker (gotcha 28). */
@@ -350,7 +354,7 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
         return {
           bucket,
           outcome: near.pages.length ? "404:suggested" : "404",
-          response: request.method === "HEAD" ? new Response(null, page) : page,
+          response: forMethod(request, page),
         };
       }
       const text =
@@ -381,11 +385,20 @@ export async function recoverNotFound(request: Request, env: AssetsEnv, response
   return { bucket, outcome: "404", response: out };
 }
 
-/** One data point per miss, answered or recovered. Never throws. */
+/** One data point per miss, answered or recovered. Never throws.
+ *
+ *  blob5 is the hostname because every preview version writes this same
+ *  dataset (lib/preview.ts), and Workers Logs records none of their requests
+ *  (gotcha 96). Measured 2026-11-07: ClaudeBot crawled preview URLs from
+ *  early October, which the Workers Builds bot posts in this public repo's PR
+ *  comments, and wrote 2,082 rows of 404s on /images/full keys that production
+ *  301s.
+ *  Read production as `blob5 = 'aadhar.sh'`. A version older than this field
+ *  writes no blob5, so that filter drops its rows too. */
 export function countMiss(env: { MISS_LEDGER?: AnalyticsEngineDataset }, request: Request, path: string, miss: MissOutcome) {
   try {
     env.MISS_LEDGER?.writeDataPoint({
-      blobs: [callerClass(request.headers.get("user-agent")), miss.bucket, miss.outcome, path.slice(0, 96)],
+      blobs: [callerClass(request.headers.get("user-agent")), miss.bucket, miss.outcome, path.slice(0, 96), new URL(request.url).hostname.slice(0, 64)],
       doubles: [1],
       indexes: [miss.bucket],
     });

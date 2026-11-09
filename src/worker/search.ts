@@ -5,7 +5,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { SEARCH_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
-import { escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
+import { esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
 export type SearchRecord = {
@@ -182,34 +182,31 @@ export async function searchSite(env, query: string, limit: string | number | nu
   };
 }
 
-export async function handleSearchJson(request, env) {
-  const url = new URL(request.url);
+export async function handleSearchJson(request, env, _ctx?, url = new URL(request.url)) {
   const query = url.searchParams.get("q") || "";
-  if (!query.trim())
-    return jsonResponse({ ok: false, error: "q is required", results: [] }, 400, { ...publicJsonHeaders(400), "x-robots-tag": "noindex" }, { pretty: false });
+  if (!query.trim()) return publicJsonResponse({ ok: false, error: "q is required", results: [] }, 400, { noindex: true });
   const payload = await searchSite(env, query, url.searchParams.get("limit"));
-  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, 200, { noindex: true });
 }
 
-export async function handleSearch(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleSearch(request, env, ctx, url = new URL(request.url)) {
   const query = url.searchParams.get("q") || "";
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
   const render = () => renderSearchPage(query, results);
   // Query-specific HTML must never share the blank/search result cache key.
-  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
+  return query.trim() ? render() : cachedRender(request, env, ctx, "/search", render);
 }
 
 export function renderSearchPage(query = "", results: Awaited<ReturnType<typeof searchSite>> = { query: "", total: 0, returned: 0, results: [] }) {
   const rows = results.results
     .map(
       (result) =>
-        `<li><a href="${escAttr(result.url)}"><b>${escHtml(result.title)}</b></a><small>${escHtml(result.kind)} · ${escHtml(result.url)}</small><p>${escHtml(result.snippet || result.description)}</p></li>`,
+        `<li><a href="${esc(result.url)}"><b>${esc(result.title)}</b></a><small>${esc(result.kind)} · ${esc(result.url)}</small><p>${esc(result.snippet || result.description)}</p></li>`,
     )
     .join("\n");
   const body = `<h1>Search aadhar.sh</h1>
-<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
-${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${escHtml(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : '<p class="hint">Search the public pages, writing, garage notes, and utility descriptions.</p>'}`;
+<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${esc(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
+${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${esc(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : '<p class="hint">Search the public pages, writing, garage notes, and utility descriptions.</p>'}`;
   return lunaPage({
     title: "aadhar.sh/search",
     path: "aadhar.sh/search",

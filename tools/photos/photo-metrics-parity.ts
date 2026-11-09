@@ -19,7 +19,8 @@
 // than to merge it as a refresh.
 //
 // MEASURED 2026-10-14, at the pins in Cargo.toml, against libjxl 0.12.0, on
-// the bar hif-archive.ts used then (djpeg's decode, candidates at 16 bits):
+// the bar and encoder hif-archive.ts used then (djpeg's decode, cjxl
+// candidates at 16 bits):
 //   same distance on 20 of 20 HIFs; same verdict on 161 of 161 candidates
 //   worst gap over those candidates: ssimulacra2 0.19, 3-norm 0.00001
 // The ssimulacra2 gap is the one to watch: its half of the verdict flipped on
@@ -35,11 +36,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARGS, DECODE, beats, searchDistance, stripJpegExif, stripPng, type Score } from "./hif-archive.ts";
+import { DECODE, beats, searchDistance, stripJpegExif, stripPng, type Score } from "./hif-archive.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ZENC = path.join(HERE, "zenc/target/release/zenc");
 const METRICS = path.join(HERE, "photo-metrics");
+const JIXEL = path.join(HERE, "jixel-enc");
 const SRC = "/Users/aadharsh/Downloads/to post (from ssd)";
 const argv = process.argv.slice(2);
 const arg = (name: string) => {
@@ -66,6 +68,8 @@ function libjxl(ref: string, img: string): Score {
 
 if (!fs.existsSync(ZENC)) throw new Error(`zenc is not built: cargo build --release --locked --manifest-path ${path.join(HERE, "zenc/Cargo.toml")}`);
 sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(METRICS, "Cargo.toml")]);
+sh(["cargo", "build", "--release", "--locked", "--quiet", "--manifest-path", path.join(JIXEL, "Cargo.toml")]);
+const ENC = path.join(JIXEL, "target/release/jixel-enc");
 const BIN = path.join(METRICS, "target/release/photo-metrics");
 const ours = (ref: string, img: string): Score => JSON.parse(sh([BIN, ref, img])) as Score;
 
@@ -101,7 +105,7 @@ for (const f of hifs) {
       if (!p) {
         const jxl = path.join(dir, `d${d}.jxl`);
         p = path.join(dir, `d${d}.png`);
-        sh(["cjxl", "--quiet", "-d", String(d), ...ARGS, ref, jxl]);
+        sh([ENC, ref, jxl, String(d)]);
         sh(["djxl", jxl, p, ...DECODE]);
         decoded.set(d, p);
       }

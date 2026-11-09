@@ -520,6 +520,6 @@ const LENS_MARKDOWN = defineLens({
   },
 });
 
-export function handleLensMarkdown(request, env, ctx?) {
-  return LENS_MARKDOWN.handle(request, env, ctx);
+export function handleLensMarkdown(request, env, ctx?, url = new URL(request.url)) {
+  return LENS_MARKDOWN.handle(request, env, ctx, url);
 }

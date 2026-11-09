@@ -46,8 +46,10 @@ import { configText, ROOT, assert, test } from "./contract-shared.ts";
 // because the main rebuild after it sets the flag again, and an intermediate
 // Response that dropped it hands its body stream on untouched. So that first
 // carry is load-bearing only when the main rebuild never runs, which is the
-// image and redirect bails. The svg row takes the image bail and is the one row
-// that fails without it; the html row covers two rebuilds in a row.
+// image and redirect bails, and, since 2026-11-03, any response the Worker
+// built: withSecurityHeaders stamps those in place and rebuilds nothing after
+// the noindex rebuild. So deleting that carry now fails the html noindex row
+// first; the svg row still isolates it on the image bail.
 const workerSource = (security) => `
 import { withSecurityHeaders } from ${JSON.stringify(security)};
 
@@ -143,12 +145,16 @@ test(
       // passing vacuously: a withSecurityHeaders that bailed before its rebuild
       // would hand the body through untouched and read exactly like a carry.
       const secured = await send("/security-headers");
-      assert.ok(secured.headers.get("content-security-policy"), "withSecurityHeaders did not reach its rebuild, so this row proves nothing");
+      assert.ok(secured.headers.get("content-security-policy"), "withSecurityHeaders did not stamp its headers, so this row proves nothing");
       assert.deepEqual(await decodedOnce(secured), PAGE, "withSecurityHeaders double-encoded a precompressed body: its init must carry encodeBody");
 
       const noindex = await send("/security-headers-noindex");
       assert.ok(noindex.headers.get("x-robots-tag"), "the noindex rebuild did not run, so this row proves nothing");
-      assert.deepEqual(await decodedOnce(noindex), PAGE, "the noindex path double-encoded a precompressed body across its two rebuilds");
+      assert.deepEqual(
+        await decodedOnce(noindex),
+        PAGE,
+        "the noindex rebuild double-encoded a precompressed body: its init must carry encodeBody, since the in-place stamp after it rebuilds nothing",
+      );
 
       // The early rebuild ALONE. x-robots-tag says the noindex rebuild ran and a
       // missing CSP says the image bail returned before the main one could set the

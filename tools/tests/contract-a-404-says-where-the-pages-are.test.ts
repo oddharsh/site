@@ -20,6 +20,7 @@ import {
   missPage,
   nearestPages,
   recoverNotFound,
+  sitemapPaths,
 } from "../../src/worker/lib/not-found.ts";
 
 const SITEMAP = `<?xml version="1.0"?><urlset>
@@ -241,7 +242,11 @@ test("the counter records caller class, bucket and outcome for every miss", asyn
   const req = get("/garage/resampe", { headers: { "user-agent": "Mozilla/5.0 (compatible; ClaudeBot/1.0)" } });
   const miss = await recoverNotFound(req, e, empty404());
   countMiss(e, req, "/garage/resampe", miss);
-  assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe"], doubles: [1], indexes: ["page"] }]);
+  assert.deepEqual(points, [{ blobs: ["ai-crawler", "page", "404:suggested", "/garage/resampe", "aadhar.sh"], doubles: [1], indexes: ["page"] }]);
+  // a preview version writes the same dataset, so its host has to tell it apart (gotcha 96)
+  const preview = new Request("https://b945bb91-aadhar-sh.aadharsh2010.workers.dev/garage/resampe");
+  countMiss(e, preview, "/garage/resampe", miss);
+  assert.equal(points[1].blobs[4], "b945bb91-aadhar-sh.aadharsh2010.workers.dev");
   countMiss({}, req, "/x", miss); // no binding: nothing to write, and nothing thrown
 
   assert.equal(callerClass("curl/8.7.1"), "http-tool");
@@ -306,4 +311,26 @@ test("an API-shaped miss answers JSON unless the caller names HTML", async () =>
     const r = await recover(notApi, env());
     assert.match(r.response.headers.get("content-type") || "", /^text\/plain/, `${notApi} is not API-shaped`);
   }
+});
+
+test("a sitemap read that fails is retried on the next miss, and a good one is read once", async () => {
+  _resetSitemap();
+  let fetches = 0;
+  let up = false;
+  const env = {
+    ASSETS: {
+      fetch: async () => {
+        fetches++;
+        if (!up) throw new Error("assets blip");
+        return new Response(SITEMAP);
+      },
+    },
+  };
+  assert.deepEqual(await sitemapPaths(env), []);
+  up = true;
+  const [a, b] = await Promise.all([sitemapPaths(env), sitemapPaths(env)]);
+  assert.deepEqual(a.slice(0, 3), ["/", "/garage", "/garage/resample"]);
+  assert.equal(a, b);
+  await sitemapPaths(env);
+  assert.equal(fetches, 2, "one failed read, then one good read shared by every later caller");
 });

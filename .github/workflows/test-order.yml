@@ -1,0 +1,172 @@
+name: Randomized suite order
+
+# The contract suite in a new order every night, to find tests that pass only
+# because of what ran before them.
+#
+# `validate` runs the suite as `--parallel=4 --no-isolate`: each worker keeps
+# one global and one module registry across every file it is handed, and which
+# files share a worker depends on timing. So a test that leans on another
+# file's leftovers (a cache it filled, a stub it forgot to restore, a global it
+# set) is green on most runs and red on the run where the scheduler pairs them
+# differently. That red lands on an unrelated PR, a re-run turns it green, and
+# the dependency survives. package.json's comment:test-node names the hazard;
+# this job hunts it.
+#
+# SEQUENTIAL ON PURPOSE, and it is the stronger instrument, not the cheaper
+# one. Without --parallel, bun runs every file in ONE global, so every pair of
+# files shares state on every run. Under --parallel=4 --no-isolate any two files
+# CAN land on one worker, so any leak found here is reachable in `validate`.
+# And a sequential order is a pure function of the seed: --randomize shuffles
+# the file order and the test order inside each file, and the same seed
+# replays both exactly (measured 2026-10-07 on bun 1.4.3). A parallel run adds
+# a worker assignment that depends on timing, so its seed alone does not
+# reproduce it.
+#
+# CONTROL, 2026-11-06 on bun 1.4.4, in a scratch directory: one file sets a
+# global and never restores it, another asserts the global is absent, and four
+# fillers sit beside them. Without --randomize, bun runs files in the order the
+# directory lists them, and that APFS listing put the leaker first, so the
+# fixed order failed on every run. With the reader named first on the command
+# line it passed 3 of 3 runs, which is the leak this job exists for. Under
+# --randomize, 7 of seeds 1-20 failed, and seed 2 failed on each of three
+# replays. (2026-10-07 on bun 1.4.3: 13 of 20.)
+#
+# A failure files ONE issue and adds each later failing seed to it as a
+# comment, so a week of reds is one thread with seven seeds rather than seven
+# issues. Reproduce any of them locally with the command the issue quotes.
+# A dispatch can replay a seed in CI: `gh workflow run test-order.yml -f seed=N`.
+
+on:
+  schedule:
+    - cron: "37 8 * * *" # daily, off the hour so it does not pile onto the :00 rush
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Replay this seed instead of drawing a new one"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-order
+  cancel-in-progress: false
+
+jobs:
+  shuffle:
+    name: Contract suite in a random order
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write # the only write it has, and only to report a failing seed
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # wrangler runs under node (gotcha 38), and a few contract tests spawn it.
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 19 contract tests read .build/, and one can SKIP when it is
+      # missing instead of failing, so a suite run without a build is quietly
+      # thinner than the one `validate` runs.
+      - name: Build
+        run: bun run build
+
+      # Built before the suite for the reason ci.yml gives: a cold cargo build
+      # inside the suite raced one test's 30s clock. No cache here; a nightly
+      # can afford the ~20s that ci.yml's two caches save.
+      - name: Build timbrado's watch engine
+        run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
+
+      - name: Run the suite in a random order
+        id: suite
+        env:
+          INPUT_SEED: ${{ inputs.seed }}
+        run: |
+          set -euo pipefail
+
+          # A 30-bit seed from bash's two 15-bit draws. A dispatch with a seed
+          # replays it instead.
+          seed="${INPUT_SEED:-$(( (RANDOM << 15) | RANDOM ))}"
+          [[ $seed =~ ^[0-9]+$ ]] || { echo "::error title=Bad seed::'$seed' is not a non-negative integer"; exit 2; }
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          echo "seed $seed"
+
+          # gotcha 40: no pipe in front of the command whose status is the
+          # answer. The suite's exit code is data here, read after the tee-free
+          # redirect, so `set -e` steps aside for exactly this line.
+          set +e
+          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed="$seed" tools/tests/ > suite.txt 2>&1
+          verdict=$?
+          set -e
+          cat suite.txt
+
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          exit "$verdict"
+
+      - name: Report the seed
+        if: failure() && steps.suite.outputs.verdict != '' && steps.suite.outputs.verdict != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEED: ${{ steps.suite.outputs.seed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          title="Randomized suite order: a seed fails"
+          failed=$(grep -E '^\(fail\)' suite.txt | head -20 || true)
+          [ -n "$failed" ] || failed="(no (fail) lines; the run failed outside a test, see the log)"
+
+          body=$(cat <<BODY
+          Seed **$SEED** fails on \`$(git rev-parse --short HEAD)\` ([run]($RUN_URL)).
+
+          \`\`\`
+          $failed
+          \`\`\`
+
+          Reproduce:
+
+          \`\`\`bash
+          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed=$SEED tools/tests/
+          \`\`\`
+
+          Then confirm the order is the cause: the same files pass under \`bun run test\`, and a failing file passes when run alone (\`bun test --preload ./tools/lib/no-network.ts tools/tests/<file>\`). The usual culprit is an earlier file that sets a global, fills a module-level cache, or stubs \`fetch\` without restoring it.
+          BODY
+          )
+
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --assignee oddharsh \
+              --label "type: test" --label "area: tools" \
+              --title "$title" --body "$body"
+          fi
+
+      - name: Summary
+        if: always()
+        env:
+          SEED: ${{ steps.suite.outputs.seed }}
+        run: |
+          {
+            echo "### Randomized suite order"
+            echo
+            echo "Seed: \`${SEED:-(not drawn)}\`"
+            echo
+            echo '```'
+            grep -E '^\(fail\)|^ [0-9]+ (pass|fail|skip)|^Ran ' suite.txt 2>/dev/null || echo "(the suite did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

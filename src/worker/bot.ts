@@ -20,7 +20,7 @@ export async function handleBotPage(request, env, ctx) {
     const md = await serveMarkdownTwin(request, env, "/bot.md");
     if (md) return md;
   }
-  return cachedRender(request, ctx, () => Promise.resolve(renderBotPage()), "/bot", env);
+  return cachedRender(request, env, ctx, "/bot", () => renderBotPage());
 }
 
 export function renderBotPage() {

@@ -209,7 +209,7 @@
       },
       "regenerate": "bun tools/gen-llms-api.ts",
       "recorded": {
-        "inputs": "b7d8fd4635f4ba8fc2927d373fa83534151f7a87d1c9e993e92525cf37f466d4",
+        "inputs": "77919979774706d2c0d05fbde9ce4bb5cd19c25e2e4adcfaa526b096ef3618d1",
         "count": 2
       }
     },
@@ -345,6 +345,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/push-gate.ts": "writes only push-gate-passed in the worktree's git dir (git rev-parse --git-path), the tree ids that passed its gates, so a re-push of the same tree skips them. Never inside the tree, never committed or served.",
       "tools/test-inputs.ts": "trace writes the map of which repo paths each contract test file opened (--out, test-inputs.json by default) and per-file strace logs under a mkdtemp it deletes. The nightly workflow saves the map to the Actions cache; nothing is committed or served.",
       "tools/controls.ts": "plants each guard's defect in a copy-on-write clone under a mkdtemp it deletes on exit, and writes the tree itself only under CI=true, where the checkout is private and every touched file is restored after its control. Nothing it writes is committed or served.",
       "tools/lib/controls.ts": "plant() writes the mutations of one control under the root its caller hands it, which tools/controls.ts makes a disposable clone (or the CI checkout, restored after); the contract suite calls it with dryRun, which writes nothing.",
@@ -373,6 +374,7 @@
       "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
       "tools/typecheck.ts": "--update writes the typecheck ratchet baseline, a machine-owned record of owed errors",
       "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
+      "tools/head-snapshot.ts": "writes a snapshot or its Markdown diff to a path named on the command line, which perf-diff.yml posts and discards; never a fixed committed path",
       "tools/dependency-snapshot.ts": "--out writes the dependency submission body to a path named on the command line, which dependency-snapshot.yml posts and discards; it commits nothing",
       "tools/conflict-triage.ts": "--html writes a conflict view to a path named on the command line, for a person to read once; it commits nothing and derives nothing",
       "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
@@ -383,6 +385,7 @@
       "tools/bump-bun-pin.ts": "writes the JSON report bun-pin.yml files its one issue from, into a path the caller names with --json; the pin itself goes through lib/bun-pin.ts's writePin and every gate's scratch writes are bun-gates.ts's, both listed here",
       "tools/canary-wrangler.ts": "writes into a detached worktree it creates in the temp directory and removes in a finally (the candidate wrangler's install, its dry-run bundle), plus the pinned dry-run's bundle beside it and the JSON report the caller names. Nothing under the repository moves except `.build/`, which the pinned dry-run re-stages with the pinned toolchain exactly as `validate` does",
       "tools/canary-browsers.ts": "writes the JSON report the canary workflow files an issue from, into a path the caller names, and nothing else; the page it reads is loaded over file://, and the two live probes beside it only READ production (a dictionary exchange and a data-URI decode)",
+      "tools/lib/upstream-watches.ts": "the LIST of upstream and verdict watches, which is a record rather than an artifact; the verdict watches carry `Bun.write` or `writeFileSync` inside their probe scripts, which timbrado's runner executes in a mkdtemp directory it removes, so nothing under the repository is touched",
       "tools/workerd-zstd-probe.ts": "writes a two-file probe Worker into a mkdtemp directory, boots it through wrangler's createTestHarness, and removes the directory in a finally; its one output is a JSON line on stdout that canary-wrangler.ts reads",
       "tools/workerd-temporal-probe.ts": "writes a two-file probe Worker into a mkdtemp directory, boots it through wrangler's createTestHarness under the site's compatibility date and flags, and removes the directory in a finally; its one output is a JSON line on stdout that canary-wrangler.ts reads",
       "tools/lib/bun-pin.ts": "writes config/bun-pin.json, rewriting ONLY its `bun` pin (it was package.json's packageManager until 2026-09-15), which is a maintenance edit to a hand-authored file rather than a derived artifact. contract-the-bun-pin-is-declared-once.test.ts holds that pin and its three readers together. THIS ENTRY FIRST SAID IT WROTE A TEMP RELEASE ZIP, which is bump-bun-pin.ts and not this: the census caught the file correctly and the reason beside it was wrong, which is the failure mode an exemption list has",

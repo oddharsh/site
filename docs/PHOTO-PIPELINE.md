@@ -71,8 +71,9 @@ photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
   metadata boxes saved 7 KB in all.
 - **A HIF photo**: encoded from the HIF's own 10-bit pixels by
   `tools/photos/hif-archive.ts`. The JPEG ingest prepares (zenc's q100 4:2:2
-  export, or the camera's JPEG) is only the bar. The encoder bisects cjxl's
-  distance for the fewest bytes that still beat that JPEG on both ssimulacra2
+  export, or the camera's JPEG) is only the bar. It bisects the distance of
+  `tools/photos/jixel-enc` (jixel, since 2026-11) for the fewest bytes that
+  still beat that JPEG on both ssimulacra2
   and butteraugli (scored by `tools/photos/photo-metrics`, imazen's Rust ports,
   since 2026-10-14; they picked libjxl's distance on 20 of 20 HIFs), then copies the HIF's EXIF and XMP on with exif-sooc 0.4.0,
   because sips keeps 40 of 75 tags and none of the Fujifilm maker notes.
@@ -83,10 +84,14 @@ photo, so the bucket stays inside R2's 10 GB free tier. It comes in two kinds:
   shrink (median -9.4%) and the total is -8.6%. Where nothing beats the bar,
   or only a file larger than the repack does, it falls back to the lossless
   transcode.
-  Settings: `-e 7 -p --compress_boxes=0`. Progressive keeps a 20 MB download
-  painting early (+1.3% bytes); effort 9 saved 0.1% for 40% more time; and
-  cjxl Brotli-compresses metadata by default, which exif-sooc cannot read.
-  About four minutes a photo.
+  Settings: jixel Speed::Slow with progressive DC, so a 20 MB download
+  paints a whole frame from its first 3 to 5 KB (plain cjxl: 478 KB), and
+  Exif in a raw box, because exif-sooc can't read a Brotli one. On 10 HIFs
+  against their real bars (2026-11-04), all 10 went direct, median -7.5%
+  against the cjxl `-e 7 -p` archives R2 served then (-6.7% in total); the
+  3 whose cjxl encode lost to the repack won at -7.5% to -8.5%. The search
+  takes 9 encodes and 4 to 20 minutes a photo (median 9.4), about twice
+  cjxl's.
 
 Browsers without JPEG XL (Safari before 17, Chrome before 155, and Firefox
 before 158, which turned it on 2026-10-13) can't open an original; the grid

@@ -605,10 +605,10 @@ test("cached renders stream the first miss while tagging the background copy", a
   try {
     const first = await cachedRender(
       new Request("https://aadhar.sh/whoareyou"),
-      { waitUntil: (promise) => pending.push(promise) },
-      async () => new Response("rendered", { headers: { "content-type": "text/html" } }),
-      "/whoareyou",
       { CF_VERSION_METADATA: { id: "test" } },
+      { waitUntil: (promise) => pending.push(promise) },
+      "/whoareyou",
+      async () => new Response("rendered", { headers: { "content-type": "text/html" } }),
     );
     assert.equal(first.headers.get("etag"), null, "the miss does not buffer before sending");
     assert.equal(await first.text(), "rendered");

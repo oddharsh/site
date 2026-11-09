@@ -8,8 +8,9 @@ import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
-import { errorResp, escAttr, escHtml, jsonResponse, publicJsonHeaders } from "./lib/http.ts";
-import { commonPairs, compareCodepoints, queryTerms, scoreFields } from "./lib/text.ts";
+import { errorResp, esc, publicJsonResponse } from "./lib/http.ts";
+import { compareCodepoints, queryTerms } from "./lib/text.ts";
+import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
@@ -354,7 +355,7 @@ export function _resetPhotoCaches() {
   _thumbHashes = undefined;
   _histograms = undefined;
   _photoJson.clear();
-  _preparedFields = undefined;
+  _photoSearch = undefined;
 }
 
 const PHOTO_PUBLIC_FIELDS = [
@@ -420,61 +421,23 @@ function photoMetadata(record) {
 }
 
 // ── ranking ───────────────────────────────────────────────────────────────
-// Which field a term hit says a lot about what the caller meant, so the fields
-// are weighted rather than joined. `film` outranks `alt` deliberately: "classic
-// chrome" is overwhelmingly a film-simulation query, and the same two words
-// appearing in a caption about a chrome bumper is the weaker reading.
-//
-// `expansion` is the offline semantic tier (images/semantics.json). It sits
-// below the caption a model actually looked at the photo to write, and above
-// the recipe card, because it is a recall aid rather than an observation.
-const PHOTO_FIELD_WEIGHTS = [
-  ["film", 6],
-  ["alt", 5],
-  ["camera", 4],
-  ["lens", 4],
-  ["expansion", 3],
-  ["year", 3],
-  ["recipe", 2],
-  ["stem", 1],
-];
+// The ranker and its index live in lib/photo-search.ts. build.ts bakes the
+// index into /images/photo-search.bin; this decodes it once per isolate and,
+// like _photoJson, keeps only a successful read. null where no baked file
+// exists (local dev, the contract fixtures), and queryPhotos then builds the
+// same index from the JSON it read.
+let _photoSearch: PhotoSearchIndex | undefined;
 
-function photoFields(stem, record, alt, expansion): Record<string, string> {
-  const date = String(record.date || "")
-    .slice(0, 10)
-    .replaceAll(":", "-");
-  return {
-    film: String(record.film || ""),
-    alt: String(alt || ""),
-    camera: String(record.camera || ""),
-    lens: String(record.lens || ""),
-    expansion: String(expansion || ""),
-    year: date.slice(0, 4),
-    recipe: Object.entries(record.recipe || {})
-      .map(([k, v]) => `${k}: ${asScalarText(v)}`)
-      .join(" "),
-    stem: String(stem),
-  };
-}
-
-// Every photo's scoring fields, built and lowercased once per isolate rather
-// than on every request: the recipe card alone is a join over each photo's
-// settings, and fieldMatches lowercases whatever it is handed (a no-op on these).
-// Keyed on the identity of the three inputs, which are per-isolate memos
-// themselves, so a test that resets or restubs them gets fresh fields.
-let _preparedFields: { metadata: object; altMap: unknown; semantics: unknown; byStem: Map<string, Record<string, string>> } | undefined;
-
-function preparedFieldsFor(metadata: Record<string, PhotoRecord>, altMap, semantics) {
-  const cached = _preparedFields;
-  if (cached && cached.metadata === metadata && cached.altMap === altMap && cached.semantics === semantics) return cached.byStem;
-  const byStem = new Map(
-    Object.entries(metadata).map(([stem, record]) => [
-      stem,
-      Object.fromEntries(Object.entries(photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms)).map(([name, text]) => [name, text.toLowerCase()])),
-    ]),
-  );
-  _preparedFields = { metadata, altMap, semantics, byStem };
-  return byStem;
+async function getPhotoSearchIndex(env): Promise<PhotoSearchIndex | null> {
+  if (_photoSearch) return _photoSearch;
+  try {
+    const r = await env.ASSETS.fetch("https://assets.local/images/photo-search.bin");
+    if (!r.ok) return null;
+    _photoSearch = decodePhotoSearchIndex(await r.arrayBuffer());
+    return _photoSearch;
+  } catch {
+    return null;
+  }
 }
 
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
@@ -512,11 +475,12 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
     .slice(0, dateMax);
   const limit = clampParam(options.limit, PHOTO_QUERY_LIMITS.limitDefault, PHOTO_QUERY_LIMITS.limitMax);
   const offset = clampParam(options.offset, 0, PHOTO_QUERY_LIMITS.offsetMax, 0);
-  const [metadata, altMap, hashes, semantics] = await Promise.all([
+  const [metadata, altMap, hashes, semantics, bakedIndex] = await Promise.all([
     getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {}),
     getAltMap(env),
     getThumbHashes(env),
     getStaticPhotoJson<Record<string, { terms?: unknown }> | null>(env, "images/semantics.json", null),
+    q ? getPhotoSearchIndex(env) : null,
   ]);
   const manifestByStem = new Map(PHOTO_POOL.map((photo) => [photo.stem, photo]));
 
@@ -567,24 +531,20 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
   let common = [];
 
   if (q) {
-    const prepared = preparedFieldsFor(metadata || {}, altMap, semantics);
-    const candidates = kept.map(([stem, record]) => ({ stem, record, fields: prepared.get(stem) }));
+    const index = bakedIndex ?? buildPhotoSearchIndex(metadata || {}, altMap, semantics);
     // Measured against the set that survived the filters, not the whole archive:
     // inside `film=Classic Chrome` the word "chrome" IS in every candidate and
     // genuinely stops discriminating, which is the right answer there.
-    const { skip, common: suppressed } = commonPairs(
-      candidates.map((row) => row.fields),
-      PHOTO_FIELD_WEIGHTS,
+    const { scored, common: suppressed } = rankPhotoRows(
+      index,
       queryTermList,
+      rowsOf(
+        index,
+        kept.map(([stem]) => stem),
+      ),
     );
     common = suppressed;
-    const scoredRows = candidates
-      .map(({ stem, record, fields }) => ({
-        stem,
-        record,
-        scored: scoreFields(fields, PHOTO_FIELD_WEIGHTS, queryTermList, skip),
-      }))
-      .filter((row) => row.scored.hits > 0);
+    const scoredRows = scored.map(({ stem, ...score }) => ({ stem, record: metadata[stem], scored: score }));
     // Prefer photos that answer the WHOLE query. Falling straight to a bag of
     // terms would let one strong field on one term outrank a photo that matched
     // every term, which is how "classic chrome bridge" returns chrome bumpers.
@@ -690,8 +650,7 @@ export async function photoFacets(env) {
   return { total: records.length, camera: rank(tally.camera), lens: rank(tally.lens), film: rank(tally.film), year: rank(tally.year) };
 }
 
-export async function handlePhotoQuery(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handlePhotoQuery(request, env, ctx, url = new URL(request.url)) {
   const payload = await queryPhotos(
     env,
     {
@@ -707,7 +666,7 @@ export async function handlePhotoQuery(request, env, ctx) {
     },
     ctx,
   );
-  return jsonResponse(payload, 200, { ...publicJsonHeaders(200), "x-robots-tag": "noindex" }, { pretty: false });
+  return publicJsonResponse(payload, 200, { noindex: true });
 }
 
 // /images/manifest.json is BUILD OUTPUT since 2026-09-26: build.ts step 1e stages
@@ -877,6 +836,90 @@ const SHEET_CSS = `/*min*/
   a { color: var(--link); }
 `;
 
+// ── the View menu: Filmstrip, Thumbnails, Details ───────────────────────────
+// Explorer's View menu, the top idea from the 2026-10-29 gallery review (three
+// of its four survey batches reached it on their own). The sheet above stays
+// the page: every tile is still a link to its original, with or without
+// JavaScript. photos-view.js adds the two other views over the same tiles and
+// fetches the data they show (manifest.json, exif.json) on first use, so a
+// visitor who never opens the menu pays for the script and nothing else.
+//
+// The menu is static markup so the row has its height at first paint and a
+// late script never pushes the sheet down. It stays invisible until the script
+// marks it .on: without JavaScript, or without the Popover API the menu opens
+// through, a View button that changed nothing would be UI the page doesn't have.
+//
+// The window grid in luna.css has rows for caption, address and workspace. The
+// menu bar takes a row between caption and address, as in Explorer, so this
+// page alone moves the workspace to row 4. Each selector here carries one more
+// :has() than the luna.css rule it overrides, so it wins on specificity
+// whichever order the sheets load in.
+const VIEW_MENUBAR = html`
+  <div class="ph-menubar" role="menubar" aria-label="Photos">
+<button type="button" role="menuitem" id="ph-view" aria-haspopup="menu" aria-expanded="false" popovertarget="ph-views">View</button>
+<div class="ph-drop" id="ph-views" role="menu" aria-label="View" popover>
+<button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-view="filmstrip">Filmstrip</button>
+<button type="button" role="menuitemradio" tabindex="-1" aria-checked="true" data-view="thumbnails">Thumbnails</button>
+<button type="button" role="menuitemradio" tabindex="-1" aria-checked="false" data-view="details">Details</button>
+</div>
+  </div>`;
+
+const VIEW_CSS = `/*min*/
+  .ph-menubar { display: flex; padding: 1px 2px; background: var(--face); border-bottom: 1px solid var(--shadow); font: 11px/1.5 var(--font-ui); }
+  .ph-menubar:not(.on) > * { visibility: hidden; }
+  .window:has(>.axp-tasks):has(>.ph-menubar) { grid-template-rows: auto auto auto minmax(0, 1fr); }
+  .window:has(>.axp-tasks):has(>.ph-menubar) > .ph-menubar { grid-column: 1 / -1; }
+  .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-tasks,
+  .window:has(>.axp-tasks):has(>.ph-menubar) > .content,
+  .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-resize { grid-row: 4; }
+  #ph-view { border: 0; background: none; font: inherit; color: var(--ink); padding: 1px 7px; cursor: default; }
+  #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 0; }
+  .ph-drop { position: fixed; inset: auto; margin: 0; padding: 2px; min-width: 140px; background: var(--face-light); border: 1px solid var(--darkshadow); box-shadow: var(--shadow-tip); font: 11px/1.5 var(--font-ui); }
+  .ph-drop button { display: flex; align-items: center; width: 100%; padding: 2px 20px 2px 0; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: default; }
+  .ph-drop button::before { content: ""; flex: 0 0 20px; text-align: center; font-size: 7px; }
+  .ph-drop button[aria-checked="true"]::before { content: "●"; }
+  .ph-drop button:hover, .ph-drop button:focus { background: var(--selection); color: var(--selection-text); outline: 0; }
+
+  [data-view="details"] .sheet { display: none; }
+  [data-view="filmstrip"] .sheet { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 16px; padding: 3px 3px 8px; }
+  [data-view="filmstrip"] .ph { flex: 0 0 84px; contain-intrinsic-size: auto 84px; }
+  [data-view="filmstrip"] .ph-name { display: none; }
+  [data-view="filmstrip"] .ph-open[aria-current="true"] img { border: 2px solid var(--selection); }
+
+  /* The frame shrinks with the window so the strip stays on the first screen:
+     370px is the chrome, heading, lede, buttons and strip around it at 800x600. */
+  .ph-film { display: grid; grid-template-columns: minmax(0, min(480px, max(220px, 100dvh - 370px))) minmax(0, 1fr); gap: 16px; align-items: start; margin: 8px 0 10px; }
+  .ph-film[hidden] { display: none; }
+  .ph-frame { margin: 0; }
+  .ph-frame a { display: block; }
+  .ph-frame img { display: block; width: 100%; height: auto; aspect-ratio: 1; border: 1px solid var(--slate-80); background: var(--paper); box-sizing: border-box; }
+  .ph-steps { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+  .ph-info h2 { margin: 0 0 6px; font: 700 var(--text-ui) var(--font-ui); color: var(--ink); overflow-wrap: anywhere; }
+  .ph-info dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 0; font: 11px/1.45 var(--font-ui); }
+  .ph-info dt { color: var(--ink-soft); white-space: nowrap; }
+  .ph-info dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .ph-hist { display: block; width: 100%; height: 56px; margin-top: 10px; border: 1px solid var(--slate-80); background: var(--paper); box-sizing: border-box; }
+  .ph-hist .luma { fill: var(--grey-35); opacity: 0.35; }
+  .ph-hist polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
+  .ph-hist .r { stroke: oklch(45% 0.22 25); }
+  .ph-hist .g { stroke: oklch(50% 0.20 145); }
+  .ph-hist .b { stroke: oklch(45% 0.22 260); }
+  @media (max-width: 640px) { .ph-film { grid-template-columns: minmax(0, 1fr); } }
+
+  .ph-list { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--slate-80); background: var(--paper); }
+  .ph-list table { width: 100%; border-collapse: collapse; font: 11px/1.4 var(--font-ui); white-space: nowrap; }
+  .ph-list th { padding: 0; font-weight: 400; text-align: left; }
+  .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-button); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }
+  .ph-list th button:hover { border-bottom-color: var(--amber-70); }
+  .ph-list th button:focus-visible { outline: 1px dotted var(--ink); outline-offset: -3px; }
+  .ph-list th[aria-sort="ascending"] button::after { content: " ▴"; }
+  .ph-list th[aria-sort="descending"] button::after { content: " ▾"; }
+  .ph-list th.num, .ph-list td.num { text-align: right; }
+  .ph-list td { padding: 2px 6px; color: var(--ink); }
+  .ph-list td.sorted { background: var(--row-alt); }
+  .ph-list tbody tr:hover td { background: var(--row-hover); }
+`;
+
 // `photos` is the WHOLE pool. The sheet lists the curated part and the lede
 // links each album with its count, so the two halves are derived from one input
 // and cannot disagree about which photo went where.
@@ -900,7 +943,7 @@ export function renderPhotosPage(photos, altMap) {
     .map((a) => ({ album: a, count: albumPool(photos, a).length }))
     .filter(({ count }) => count > 0);
   const albumsLine = albums.length
-    ? `\n    Albums: ${albums.map(({ album, count }) => `<a href="${escAttr(albumPath(album))}">${escHtml(album.title)}</a> (${count})`).join(" &middot; ")}.`
+    ? `\n    Albums: ${albums.map(({ album, count }) => `<a href="${esc(albumPath(album))}">${esc(album.title)}</a> (${count})`).join(" &middot; ")}.`
     : "";
 
   return lunaPage({
@@ -909,10 +952,12 @@ export function renderPhotosPage(photos, altMap) {
     route: "/photos",
     width: 980,
     description: `All ${curated.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
+    menubar: VIEW_MENUBAR,
+    scripts: html`<script src="/photos-view.js" defer></script>`,
     // The unfurl card shows the sheet's first photo, the same one the page opens on.
     ogImage: curated[0].thumb_jpg,
     ogImageAlt: (altMap && altMap[curated[0].stem]) || curated[0].stem,
-    css: SHEET_CSS,
+    css: SHEET_CSS + VIEW_CSS,
     body: unsafeHtml(`
   <h1>Photos</h1>
   <p class="lede">
@@ -1001,10 +1046,10 @@ ${tiles}
 
 export async function handleAlbum(album: Album, request, env, ctx) {
   const render = async () => renderAlbumPage(album, PHOTO_POOL, await getAltMap(env));
-  return cachedRender(request, ctx, render, albumPath(album), env);
+  return cachedRender(request, env, ctx, albumPath(album), render);
 }
 
 export async function handlePhotos(request, env, ctx) {
   const render = async () => renderPhotosPage(PHOTO_POOL, await getAltMap(env));
-  return cachedRender(request, ctx, render, "/photos", env);
+  return cachedRender(request, env, ctx, "/photos", render);
 }

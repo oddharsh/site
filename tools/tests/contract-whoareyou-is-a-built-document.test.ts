@@ -11,9 +11,9 @@
 //     is the page and reporting it would be a false claim about the visitor.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ISLAND_MARKER, islandMount, islandPreload, islandResponse, islandScript } from "../../src/worker/lib/island.ts";
+import { ISLAND_MARKER, island, islandPreload, islandResponse, islandScript } from "../../src/worker/lib/island.ts";
 import { html } from "../../src/worker/lib/html.ts";
-import { handleWhoareyouValues, renderWhoareyouPage, renderWhoareyouValues, VALUES_URL } from "../../src/worker/whoareyou.ts";
+import { handleWhoareyouValues, parseUA, renderWhoareyouPage, renderWhoareyouValues, VALUES_URL } from "../../src/worker/whoareyou.ts";
 
 test("the island loader is one constant script that checks the marker the response sends", () => {
   const a = islandScript().html;
@@ -26,9 +26,17 @@ test("the island loader is one constant script that checks the marker the respon
   assert.match(a, /data-state","failed"/, "a failed fetch must leave the placeholder and say so");
   // Without crossorigin the preload is no-cors and cannot satisfy the cors fetch.
   assert.equal(islandPreload("/x.html").html, '<link rel="preload" as="fetch" href="/x.html" crossorigin>');
-  assert.match(
-    islandMount("m", "/x.html", html`<i>p</i>`, html`n`).html,
-    /^<div id="m" data-island="\/x\.html" data-state="pending"><i>p<\/i><noscript>n<\/noscript><\/div>$/,
+  const own = island({ id: "m", url: "/x.html", placeholder: html`<i>p</i>`, fallback: html`n` });
+  assert.equal(own.mount.html, '<div id="m" data-island="/x.html" data-state="pending"><i>p</i><noscript>n</noscript></div>');
+  assert.equal(own.head.html, islandPreload("/x.html").html, "the preload names the mount's own URL");
+  // The shared fallback sentence links the fragment, and the JSON twin only when named.
+  assert.equal(
+    island({ id: "m", url: "/x.html", placeholder: html``, fallback: { says: "The rows arrive", shows: "them" } }).mount.html,
+    '<div id="m" data-island="/x.html" data-state="pending"><noscript><p>The rows arrive in a second request after the page loads, and that needs a script. Without one, <a href="/x.html">/x.html</a> shows them as plain HTML.</p></noscript></div>',
+  );
+  assert.equal(
+    island({ id: "m", url: "/x.html", placeholder: html``, fallback: { says: "The rows arrive", shows: "them", json: "/x.json" } }).mount.html,
+    '<div id="m" data-island="/x.html" data-state="pending"><noscript><p>The rows arrive in a second request after the page loads, and that needs a script. Without one, <a href="/x.html">/x.html</a> shows them as plain HTML, and <a href="/x.json">/x.json</a> as JSON.</p></noscript></div>',
   );
 });
 
@@ -125,4 +133,15 @@ test("/whoareyou/values.html answers with this request's values and the island m
   // the transport decides; before the fix both rows rendered on HTTP/2.
   assert.doesNotMatch(body, /QUIC round-trip/);
   assert.doesNotMatch(body, /<html|<head/i, "a fragment, never a document");
+});
+
+test("Ladybird is named before the Chrome token it carries for compatibility", () => {
+  // Ladybird's UA on macOS as its WebDriver reported it, upstream 51ef0d7
+  // (2026-11-04). Photon's engine pin f3ffa37 sends the same string with
+  // Ladybird/1.0.
+  const ladybird = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ladybird/0.1.0 Chrome/153.0.0.0 AppleWebKit/537.36 Safari/537.36";
+  const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+  assert.deepEqual(parseUA(ladybird), { browser: "Ladybird", os: "macOS", device: "" });
+  assert.deepEqual(parseUA(ladybird.replace("Ladybird/0.1.0", "Ladybird/1.0")), { browser: "Ladybird", os: "macOS", device: "" });
+  assert.deepEqual(parseUA(chrome), { browser: "Chrome", os: "macOS", device: "" });
 });

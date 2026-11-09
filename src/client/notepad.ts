@@ -84,7 +84,9 @@
     // Which button's menu was open when the pointer went down. Pressing the open
     // menu's own button light-dismisses the drop before the click arrives (where
     // showPopover's `source` is unsupported), and without this the click would
-    // open it again instead of closing it.
+    // open it again instead of closing it. Any keydown in the menubar forgets
+    // it, because a press dragged off the button never clicks and would leave
+    // the next Enter closing a closed menu (nav-tray.js has the same rule).
 
     var pressedOpen: HTMLElement | null = null;
     menubar.replaceChildren();
@@ -204,6 +206,7 @@
       if (!menubar.contains(e.relatedTarget as Node | null)) close();
     });
     menubar.addEventListener("keydown", (e) => {
+      pressedOpen = null;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       var active = D.activeElement;
       var top = buttons.indexOf(active as HTMLElement);

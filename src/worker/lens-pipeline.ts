@@ -33,16 +33,14 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders, rateLimitPolicy, type NamedBudget } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { hasRenderEngine } from "./lens-render.ts";
 import type { Span } from "./lib/span-vocabulary.ts";
 
-type LensBudgetDecl = {
-  binding: string;
-  max: number;
+type LensBudgetDecl = NamedBudget & {
   // What the 429 calls the thing being rationed, plural: "Snapshots are…".
   label: string;
   // Why this ceiling is tighter than the ones beside it, said to the reader.
@@ -50,8 +48,6 @@ type LensBudgetDecl = {
   // Which other doors bill the same bucket, so a refusal at one door explains
   // why the other one also says no.
   shares?: string;
-  // A fixed key makes the budget SHARED rather than per-caller.
-  key?: string;
 };
 
 // Browser Run's free plan is account-wide (BROWSER_FREE_PLAN in lens.ts, with
@@ -64,21 +60,22 @@ type LensBudgetDecl = {
 // tools/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
 // in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
-  inspect: { binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
-  shot: { binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
-  compare: { binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
-  browser: { binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
-  wire: { binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
-  tools: { binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
+  inspect: { name: "inspect", binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },
+  shot: { name: "shot", binding: "LENS_RL_SHOT", max: 3, label: "Snapshots" },
+  compare: { name: "compare", binding: "LENS_RL_COMPARE", max: 4, label: "Lens comparisons", shares: "/lens/compare and /mcp" },
+  browser: { name: "browser", binding: "LENS_RL_BROWSER", max: 3, label: "Browser Run snapshots" },
+  wire: { name: "wire", binding: "LENS_RL_WIRE", max: 2, label: "Wire traces" },
+  tools: { name: "tools", binding: "LENS_RL_TOOLS", max: 10, label: "Catalogue reads" },
   // Tighter than the catalogue read it sits beside, and deliberately so: a
   // catalogue read costs a foreign server a lookup, and an /ask costs it a
   // retrieval and possibly a model call.
-  nlweb: { binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
+  nlweb: { name: "nlweb", binding: "LENS_RL_NLWEB", max: 4, label: "NLWeb reads", why: "because each one asks somebody else's server a real question" },
   // Ten plain GETs of one URL per run, deduped by Accept string. No browser
   // and no model, so it is cheaper than the tabs above it on OUR side; what it
   // spends is somebody else's bandwidth, ten times over, on one page. Sat
   // between the catalogue read and the /ask question for that reason.
   markdown: {
+    name: "markdown",
     binding: "LENS_RL_MARKDOWN",
     max: 4,
     label: "Markdown checks",
@@ -93,10 +90,12 @@ export const LENS_BUDGETS = {
   // N colos can still total N x max. That is a large improvement over per-IP and
   // is not a guarantee. The guarantee is the 429 handling in each browser run,
   // which treats an upstream refusal as a normal outcome rather than a fault.
-  browserAll: { binding: "LENS_RL_BROWSER_ALL", max: 4, label: "The shared browser budget", key: "browser-run" },
-} satisfies Record<string, LensBudgetDecl>;
+  browserAll: { name: "browserAll", binding: "LENS_RL_BROWSER_ALL", max: 4, label: "The shared browser budget", key: "browser-run" },
+} as const satisfies Record<string, LensBudgetDecl>;
 
 export type LensBudget = keyof typeof LENS_BUDGETS;
+// Each budget's RateLimit-Policy name is its key; this fails to compile if one drifts.
+LENS_BUDGETS satisfies { [K in LensBudget]: { name: K } };
 
 // The one place a lens 429 is worded. The shared budget reads differently
 // because it is not the reader's own allowance that ran out, and saying "you"
@@ -132,8 +131,30 @@ export type LensSpanName = "lens.shot" | "lens.browser" | "lens.wire" | "lens.to
 // which is a different thing from the payload's own `ok`: the tools and nlweb
 // lenses answer 200 with `ok: false` for a door that is shut, and that answer
 // must not sit in KV for an hour.
+//
+// `outcome` lands on the span as `lens.outcome`. A failure's outcome names its
+// HTTP status once, here: a lens that returns `binding_threw` with anything
+// but 502 is a compile error. `unreadable` and `shut` answer 200 because the
+// payload carries its own `ok: false` and the pane renders it.
+export const LENS_FAILURE_STATUS = {
+  no_engine: 503,
+  binding_threw: 502,
+  browser_budget_spent: 429,
+  not_an_image: 502,
+  upstream_not_ok: 502,
+  invalid_json: 502,
+  session_threw: 502,
+  session_failed: 502,
+  unreadable: 200,
+  shut: 200,
+} as const satisfies Record<string, number>;
+export type LensFailure = keyof typeof LENS_FAILURE_STATUS;
+/** A success the span should tell apart from a plain `ok`. */
+export type LensSuccess = "read" | "markdown" | "html-only";
+
 export type LensRan<V> =
-  { ok: true; value: V; store?: unknown; outcome?: string } | { ok: false; status: number; payload: Record<string, unknown>; outcome: string };
+  | { ok: true; value: V; store?: unknown; outcome?: LensSuccess }
+  | { [F in LensFailure]: { ok: false; status: (typeof LENS_FAILURE_STATUS)[F]; payload: Record<string, unknown>; outcome: F } }[LensFailure];
 
 export type LensOutcome<V> =
   | { kind: "ok"; value: V; fromCache?: boolean; budgets?: LensBudget[] }
@@ -204,7 +225,7 @@ export interface LensSpec<In, T extends string | Record<string, string>, A, V> {
 export interface Lens<In, V> {
   run(input: In, request: Request, env: any, ctx?: any): Promise<LensOutcome<V>>;
   // The JSON or PNG route, reading its input from the query string.
-  handle(request: Request, env: any, ctx?: any): Promise<Response>;
+  handle(request: Request, env: any, ctx?: any, url?: URL): Promise<Response>;
 }
 
 const PREFIXES = new Set<string>();
@@ -373,8 +394,8 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
 
   return {
     run,
-    async handle(request, env, ctx) {
-      const outcome = await run(new URL(request.url).searchParams as In, request, env, ctx);
+    async handle(request, env, ctx?, url = new URL(request.url)) {
+      const outcome = await run(url.searchParams as In, request, env, ctx);
       return body === "png" ? lensPng(outcome as LensOutcome<ArrayBuffer>) : lensJson(outcome);
     },
   };
@@ -384,11 +405,22 @@ export function defineLens<In, T extends string | Record<string, string>, A = un
 // `false`, so a client never has to tell a missing field from a miss. An
 // uncached lens never carries the field.
 export function lensJson(o: LensOutcome<any>): Response {
-  if (o.kind === "ok") {
-    return jsonResponse(o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache }, 200, policyHeaders(o.budgets));
+  switch (o.kind) {
+    case "ok":
+      return jsonResponse(
+        o.fromCache === undefined ? { ok: true, ...o.value } : { ok: true, ...o.value, fromCache: o.fromCache },
+        200,
+        policyHeaders(o.budgets),
+      );
+    case "failed":
+      return jsonResponse(o.payload, o.status);
+    case "refused":
+      return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
+    default: {
+      const _exhaustive: never = o;
+      return _exhaustive;
+    }
   }
-  if (o.kind === "failed") return jsonResponse(o.payload, o.status);
-  return jsonResponse({ ok: false, error: o.error, ...o.extra }, o.status, refusalHeaders(o));
 }
 
 /** A refusal over our own rate budget says when to come back, and which
@@ -396,14 +428,14 @@ export function lensJson(o: LensOutcome<any>): Response {
  *  neither. */
 function refusalHeaders(o: LensOutcome<any>): Record<string, string> {
   if (o.kind !== "refused" || o.status !== 429 || !o.budget) return {};
-  return rateLimitedHeaders(o.budget, LENS_BUDGETS[o.budget].max);
+  return rateLimitedHeaders(LENS_BUDGETS[o.budget]);
 }
 
 /** RateLimit-Policy for a served answer: one List member per budget the door
  *  bills (draft-ietf-httpapi-ratelimit-headers-11, section 3). */
 export function policyHeaders(budgets: LensBudget[] | undefined): Record<string, string> {
   if (!budgets || budgets.length === 0) return {};
-  return { "ratelimit-policy": budgets.map((b) => rateLimitPolicy(b, LENS_BUDGETS[b].max)).join(", ") };
+  return { "ratelimit-policy": budgets.map((b) => rateLimitPolicy(LENS_BUDGETS[b])).join(", ") };
 }
 
 // The PNG lens reports its cache state in a header, because the body is an
@@ -415,7 +447,16 @@ export function lensPng(o: LensOutcome<ArrayBuffer>): Response {
 
 // The SSR shell and /lens/fetch answer a { status, payload } pair.
 export function lensStatusPayload(o: LensOutcome<any>): { status: number; payload: Record<string, unknown>; headers: Record<string, string> } {
-  if (o.kind === "ok") return { status: 200, payload: o.value, headers: policyHeaders(o.budgets) };
-  if (o.kind === "failed") return { status: o.status, payload: o.payload, headers: {} };
-  return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
+  switch (o.kind) {
+    case "ok":
+      return { status: 200, payload: o.value, headers: policyHeaders(o.budgets) };
+    case "failed":
+      return { status: o.status, payload: o.payload, headers: {} };
+    case "refused":
+      return { status: o.status, payload: { ok: false, error: o.error, ...o.extra }, headers: refusalHeaders(o) };
+    default: {
+      const _exhaustive: never = o;
+      return _exhaustive;
+    }
+  }
 }

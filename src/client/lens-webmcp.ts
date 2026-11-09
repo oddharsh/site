@@ -45,13 +45,16 @@ export async function boot(load) {
   // copying LENS_TAB_LABELS into a third client module.
   const tabs = [...document.querySelectorAll(".lx-tab")].map((tab) => tab.getAttribute("data-lens")).filter((tab) => tab);
 
+  // Every handler answers with wmScreen(), which carries the scanned site's
+  // final URL and Content-Type, so even lens_read_screen returns text a third
+  // party chose. Hence untrustedContentHint on all six.
   const defs = [
     {
       name: "lens_scan",
       description:
         "Scan a URL in the Lens window on this page, the one the person is watching. The panes repaint as it runs and this returns once the scan has settled. Prefer lens_inspect when you only want the data: that one answers you privately and leaves the screen alone. Use this one when the person should SEE what you found.",
       inputSchema: { type: "object", properties: { url: { type: "string", description: "an absolute http(s) URL" } }, required: ["url"] },
-      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_scan"),
     },
@@ -60,7 +63,7 @@ export async function boot(load) {
       description:
         "Put two URLs through the same rubric side by side, in the Lens window on this page. Returns the comparison and leaves it on screen. The head-to-head costs a tighter per-visitor budget than a single scan, so do not loop it.",
       inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
-      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_compare_onscreen"),
     },
@@ -73,7 +76,7 @@ export async function boot(load) {
         tabs.join(", ") +
         "). This only moves the view. Five tabs hold nothing until somebody pays for the fetch, so follow it with lens_run_tab when the pane comes back empty.",
       inputSchema: { type: "object", properties: { pane: { type: "string", enum: VIEWS }, tab: { type: "string", enum: tabs } } },
-      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_show"),
     },
@@ -89,7 +92,7 @@ export async function boot(load) {
         },
         required: ["tab"],
       },
-      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_run_tab"),
     },
@@ -98,7 +101,7 @@ export async function boot(load) {
       description:
         "Read what the Lens window is showing right now: the URL that was scanned, its status, which pane and machine tab are open, the agent-readiness score, which Delta switches are flipped, and which opt-in tabs already hold data. The one tool here that changes nothing. Call it to find out what the person is looking at before you touch anything.",
       inputSchema: { type: "object", properties: {} },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_read_screen"),
     },
@@ -116,7 +119,7 @@ export async function boot(load) {
         },
         required: ["switch"],
       },
-      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false, untrustedContentHint: true },
       writes: false,
       execute: proxy("lens_delta"),
     },

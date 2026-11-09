@@ -247,7 +247,7 @@ test("/lens/fetch, /lens/compare.json and webmention say when to come back, too"
   const { rateLimitedHeaders, RATE_WINDOW_S } = await import("../../src/worker/lib/ratelimit.ts");
   // The exact strings, so a serializer slip (a missing quote, a `;` for a `,`)
   // fails here rather than in a client's Structured Fields parser.
-  assert.deepEqual(rateLimitedHeaders("webmention", 10), {
+  assert.deepEqual(rateLimitedHeaders({ name: "webmention", max: 10 }), {
     "retry-after": "60",
     "ratelimit-policy": '"webmention";q=10;w=60',
     "ratelimit": '"webmention";r=0;t=60',

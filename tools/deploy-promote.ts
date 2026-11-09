@@ -7,7 +7,8 @@
 //   bun run deploy:promote --version <id>
 //   bun run deploy:promote --dry-run     # resolve the target, move nothing
 //   bun run deploy:promote --steps 5,25,100
-//   bun run deploy:promote --rollback    # 100% back to the previously active version
+//   bun run deploy:promote --rollback    # 100% back to the release before the serving one
+//   bun run deploy:promote --rollback --dry-run   # name that release, move nothing
 //   bun run deploy:promote --status      # what is serving right now, and nothing else
 //
 // WHERE IT SITS. Since 2026-09-28 (#1002) the production deploy_command is
@@ -67,6 +68,7 @@ import { promisify } from "node:util";
 import { cf, d1Rows, D1 } from "./lib/cf.ts";
 import { checkpointInsert } from "./lib/checkpoints.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
+import { aliasOf, pickRollbackTarget, productionVersions } from "./lib/rollback-target.ts";
 import { probePinned, sampleSplit } from "./lib/version-probe.ts";
 
 const exec = promisify(execFile);
@@ -212,9 +214,7 @@ async function newestVersion() {
   const list = await versionList();
   // Sort on the timestamp rather than trusting the API's order.
   const sorted = [...list].sort((a, b) => String(b.created_on || "").localeCompare(String(a.created_on || "")));
-
-  const aliasOf = (v) => (v.annotations || {})["workers/alias"] || "(no alias)";
-  const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
+  const production = productionVersions(list, productionAliasName);
 
   if (!production.length) {
     // FAIL CLOSED. Under wrangler's 10-version cap this really happened on
@@ -371,19 +371,22 @@ if (has("status")) {
 }
 
 if (has("rollback")) {
-  // The previously active version is whatever holds traffic that is NOT the
-  // newest upload. With a single active version there is nothing to roll back
-  // TO from here, and guessing would be worse than refusing.
-  const newest = await newestVersion();
-  const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
-  if (!older.length) {
-    die(
-      `nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run deploy:promote --version <id> --to 100\`, or re-upload the previous commit.`,
-    );
+  // lib/rollback-target.ts picks the target and owns every refusal: no alias
+  // annotations, a serving version it cannot place, and the fc50de44 floor.
+  const versions = await versionList();
+  const pick = pickRollbackTarget({ active, versions, alias: await productionAlias() });
+  if ("refuse" in pick) die(pick.refuse);
+  // Versions carry no commit sha, so the build's own message is the closest
+  // thing to "which commit" there is to print.
+  const message = versions.find((v) => v.id.slice(0, 8) === pick.to.slice(0, 8))?.annotations?.["workers/message"];
+  console.log(`serving now:  ${activeIds}`);
+  console.log(`rolling back: 100% to ${pick.to}, ${pick.why}`);
+  if (message) console.log(`  its build:  ${message.split("\n")[0]}`);
+  if (has("dry-run")) {
+    console.log("--dry-run: nothing was changed.");
+    process.exit(0);
   }
-  const to = older.sort((a, b) => b.pct - a.pct)[0];
-  console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
-  await deployVersions([{ id: to.id, pct: 100 }], "rollback via deploy:promote");
+  await deployVersions([{ id: pick.to, pct: 100 }], "rollback via deploy:promote");
   console.log("done. verify with --status.");
   process.exit(0);
 }

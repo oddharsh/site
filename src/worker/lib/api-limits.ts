@@ -29,7 +29,7 @@ export const CHANGE_RADAR_LIMITS = { limitDefault: 50, limitMax: 100 } as const;
  *  shares, per caller per minute (lib/api-contract.ts). Sized so a person or
  *  an agent paging the photo archive never meets it; it exists so the API
  *  can say what it tolerates (RateLimit-Policy) and mean it. */
-export const API_READ_BUDGET = { binding: "API_RL", max: 120 } as const;
+export const API_READ_BUDGET = { name: "read", binding: "API_RL", max: 120 } as const;
 
 /** How long /lens/fetch waits on the target before answering 502. */
 export const LENS_FETCH_TIMEOUT_MS = 8000;

@@ -8,12 +8,13 @@ import { readResponseCapped } from "./lib/crawl.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
+import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { documentTally, runBrowserAction } from "./lens-render.ts";
 import { LensArgsRefusal, defineLens, lensErrorText, lensSha256Hex, lensStatusPayload, policyHeaders } from "./lens-pipeline.ts";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.ts";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
+import type { ReadinessStatus } from "./lib/readiness-status.ts";
 import { asRecord, asText } from "./lib/parse.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
@@ -31,7 +32,7 @@ import { lensNeed } from "./lens-need.ts";
 // is optional — several terms are genuinely one sentence and padding them would
 // be worse. Keys are stable ids, so the same definition can be attached from the
 // worker's SSR and from the client's rendered checks without a second copy.
-export const LENS_GLOSSARY = {
+const LENS_GLOSSARY = {
   "llms-txt": {
     label: "llms.txt",
     plain: "A plain-text file a site publishes to tell AI models what it is about and where its real content lives.",
@@ -280,7 +281,7 @@ export const LENS_GLOSSARY = {
 };
 
 // Wrap known glossary terms in the hover markup. Input MUST already be escaped:
-// this inserts real tags, and it is only safe because escHtml has already
+// this inserts real tags, and it is only safe because esc() has already
 // removed every < and > the source string could have carried.
 //
 // First occurrence per term per string, longest spelling first so "llms.txt" is
@@ -301,6 +302,31 @@ const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
   .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
   .sort((a, b) => b[1].length - a[1].length);
 
+// One alternation per set of terms still unmarked, in LENS_SPELLINGS order. At a
+// given position the regex engine tries the alternatives in that order, so the
+// longer spelling claims a tie exactly as the per-term scan did, and the leftmost
+// position still wins because the engine tries positions left to right. Measured
+// 2026-11-03 under bun: 15.3 us per call on a typical finding sentence with a
+// regex per spelling (63 of them, each re-run after every marked term).
+// Cached per (only, marked) pair: a report marks a handful of terms, so the
+// distinct sets stay few.
+type GlossPass = { re: RegExp; keyOf: Map<string, string> };
+const GLOSS_PASSES = new Map<string, GlossPass | null>();
+function glossPass(only: readonly string[] | undefined, seen: ReadonlySet<string>): GlossPass | null {
+  const id = (only ? only.join(",") : "*") + "|" + [...seen].sort().join(",");
+  let pass = GLOSS_PASSES.get(id);
+  if (pass !== undefined) return pass;
+  const keyOf = new Map<string, string>();
+  for (const [key, spelling] of LENS_SPELLINGS) {
+    if (seen.has(key) || (only && only.indexOf(key) === -1) || keyOf.has(spelling)) continue;
+    keyOf.set(spelling, key);
+  }
+  const alternatives = [...keyOf.keys()].map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  pass = alternatives.length ? { re: new RegExp("(^|[^\\w.-])(" + alternatives.join("|") + ")(?!\\w)(?!\\.\\w)"), keyOf } : null;
+  GLOSS_PASSES.set(id, pass);
+  return pass;
+}
+
 // ONE LEFT-TO-RIGHT PASS OVER THE SOURCE, and that is the load-bearing part
 // rather than a style preference. The old version looped the terms and re-matched
 // against its own accumulating OUTPUT, so every tag it inserted became fair game
@@ -318,23 +344,18 @@ const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
 // Semantics kept: one definition per key per string, leftmost match wins, and on
 // a tie the longer spelling wins (LENS_SPELLINGS is sorted longest-first, so the
 // longer one claims the position before the shorter one is tried).
-export function glossify(escaped, only?) {
+export function glossify(escaped, only?: readonly string[]) {
   const src = String(escaped);
-  const pairs = only ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1) : LENS_SPELLINGS;
-  const seen = new Set();
+  const seen = new Set<string>(); // one definition per string, not one per spelling
   let out = "";
   let pos = 0;
   for (;;) {
-    let best: { key: any; spelling: string; index: number; m: RegExpMatchArray } | null = null;
-    for (const [key, spelling] of pairs) {
-      if (seen.has(key)) continue; // one definition per string, not one per spelling
-      const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
-      const m = src.slice(pos).match(re);
-      if (!m) continue;
-      const at = pos + m.index + m[1].length;
-      if (!best || at < best.at) best = { at, key, text: m[2] };
-    }
-    if (!best) break;
+    const pass = glossPass(only, seen);
+    const m = pass && src.slice(pos).match(pass.re);
+    if (!pass || !m || m.index === undefined) break;
+    const key = pass.keyOf.get(m[2]);
+    if (key === undefined) throw new Error(`glossify: "${m[2]}" matched but names no glossary term`);
+    const best = { at: pos + m.index + m[1].length, key, text: m[2] };
     seen.add(best.key);
     // The title is the no-JS / touch fallback and what a screen reader reads.
     // On a hover-capable pointer the client strips it the moment the richer
@@ -342,9 +363,9 @@ export function glossify(escaped, only?) {
     out +=
       src.slice(pos, best.at) +
       '<abbr class="lx-term" data-t="' +
-      escAttr(best.key) +
+      esc(best.key) +
       '" title="' +
-      escAttr(LENS_GLOSSARY[best.key].plain) +
+      esc(LENS_GLOSSARY[best.key].plain) +
       '">' +
       best.text +
       "</abbr>";
@@ -414,8 +435,7 @@ export { LENS_BUDGETS, budgetMessage, lensPngHeaders, lensSha256Hex } from "./le
 // /lens/fetch, so no-JS visitors still get a useful result. The empty shell is
 // keyed on the bare path and remains cacheable; targeted inspections are
 // private because they spend the crawler budget and contain third-party data.
-export async function handleLens(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleLens(request, env, ctx, url = new URL(request.url)) {
   const target = url.searchParams.get("url");
   const vs = url.searchParams.get("vs");
   if (target && vs) {
@@ -431,7 +451,7 @@ export async function handleLens(request, env, ctx) {
     return response;
   }
   if (target) {
-    const result = await inspectLensRequest(request, env, ctx);
+    const result = await inspectLensRequest(request, env, ctx, url);
     const response = renderLensShell(result.payload, lensState(url), target);
     response.headers.set("cache-control", "no-store, must-revalidate");
     response.headers.set("x-content-type-options", "nosniff");
@@ -441,7 +461,7 @@ export async function handleLens(request, env, ctx) {
   // Keep a route-local shell key: the production runtime may not expose
   // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
   // the edge cache while the separately served lens.js has already changed.
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env);
+  return cachedRender(request, env, ctx, "/lens-shell-v4", () => renderLensShell());
 }
 
 // One label per lens, shared by the SSR tabs, the SSR machine header, and the
@@ -526,20 +546,20 @@ function lensHttpText(status) {
 }
 
 function lensReaderFragment(data, note?) {
-  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No page to show.") + "</div>";
+  if (!data || !data.ok) return '<div class="lx-empty">' + esc((data && data.error) || "No page to show.") + "</div>";
   const a = data.anatomy;
-  let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
+  let out = note ? '<div class="lx-fallback-note">' + esc(note) + "</div>" : "";
   if (!a) return out + '<div class="lx-empty">No readable text either.</div>';
   const title = (data.structured && data.structured.title) || "";
-  if (title) out += '<div class="lx-h-title">' + escHtml(title) + "</div>";
+  if (title) out += '<div class="lx-h-title">' + esc(title) + "</div>";
   if (a.headings && a.headings.length) {
     out += '<div class="lx-h-outline"><b>Document outline</b><br>';
     for (const h of a.headings.slice(0, 60)) {
-      out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
+      out += '<div style="padding-left:' + (h.level - 1) * 12 + 'px"><span style="color:#9aa">h' + h.level + "</span> " + esc(h.text) + "</div>";
     }
     out += "</div>";
   }
-  return out + '<div class="lx-h-text">' + escHtml(a.text || "(no extractable text)") + "</div>";
+  return out + '<div class="lx-h-text">' + esc(a.text || "(no extractable text)") + "</div>";
 }
 
 function lensHumanFragment(data) {
@@ -547,7 +567,7 @@ function lensHumanFragment(data) {
   if (data.framable) {
     return (
       '<iframe class="lx-frame" src="' +
-      escAttr(data.finalUrl) +
+      esc(data.finalUrl) +
       '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
       ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>'
     );
@@ -560,7 +580,7 @@ function lensHumanFragment(data) {
 }
 
 function lensMachineFragment(data, state) {
-  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No evidence yet.") + "</div>";
+  if (!data || !data.ok) return '<div class="lx-empty">' + esc((data && data.error) || "No evidence yet.") + "</div>";
   const a = data.anatomy || {};
   const s = data.structured || {};
   const d = data.discovery || {};
@@ -576,7 +596,7 @@ function lensMachineFragment(data, state) {
     ["headings", a.headings ? a.headings.length : 0],
     ["fetched as", data.fetchedBy || "identified bot"],
   ]
-    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + escHtml(row[1]) + "</td></tr>")
+    .map((row) => "<tr><td>" + esc(row[0]) + "</td><td>" + esc(row[1]) + "</td></tr>")
     .join("");
   const doors = (ag.strategy && ag.strategy.verdict) || "unknown";
   const files = [
@@ -593,18 +613,16 @@ function lensMachineFragment(data, state) {
     rows +
     "</table></div>" +
     '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' +
-    escHtml(doors) +
+    esc(doors) +
     "</span></div>" +
     '<div class="lx-cap">Evidence found during the server-side inspection.</div><div class="lx-tags">' +
-    (files.length
-      ? files.map((file) => '<span class="lx-tag">' + escHtml(file) + "</span>").join("")
-      : '<span class="lx-none">no discovery files found</span>') +
+    (files.length ? files.map((file) => '<span class="lx-tag">' + esc(file) + "</span>").join("") : '<span class="lx-none">no discovery files found</span>') +
     "</div></div>" +
     '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' +
-    escHtml(state.lens) +
+    esc(state.lens) +
     "</span></div>" +
     '<div class="lx-cap">View: ' +
-    escHtml(state.view) +
+    esc(state.view) +
     ". The browser enhancement can open the complete lens without changing the URL.</div></div>"
   );
 }
@@ -624,7 +642,7 @@ function lensBrowserFragment() {
 }
 
 function lensStatusFragment(data, state) {
-  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
+  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + esc((data && data.error) || "unknown error") + "</span>";
   return (
     "<span><b>" +
     data.status +
@@ -632,18 +650,18 @@ function lensStatusFragment(data, state) {
     lensHttpText(data.status) +
     "</span>" +
     "<span>" +
-    escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) +
+    esc(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) +
     "</span>" +
     "<span>" +
-    escHtml(data.contentType || "?") +
+    esc(data.contentType || "?") +
     "</span>" +
     (data.anatomy ? "<span>" + data.anatomy.rawBytes + " B</span>" : "") +
     "<span>" +
-    escHtml(String(data.elapsedMs || 0)) +
+    esc(String(data.elapsedMs || 0)) +
     " ms</span>" +
-    (data.redirected ? "<span>&rarr; " + escHtml(data.finalUrl) + "</span>" : "") +
+    (data.redirected ? "<span>&rarr; " + esc(data.finalUrl) + "</span>" : "") +
     '<span style="margin-left:auto">fetched as ' +
-    escHtml(data.fetchedBy || "identified bot") +
+    esc(data.fetchedBy || "identified bot") +
     "</span>"
   );
 }
@@ -686,7 +704,7 @@ function lensVsColumn(s) {
   // facts about a site nobody asked.
   const measured = !(s.phases && s.phases.discovery === false);
   const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
-    .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>")
+    .map(([, label]) => '<span class="lx-tag">' + esc(label) + "</span>")
     .join("");
   const surfaces =
     pub ||
@@ -710,25 +728,25 @@ function lensVsColumn(s) {
     ["payload", lensVsBytes(s.bytes)],
     ["words", String(s.wordCount || 0)],
   ]
-    .map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>")
+    .map((row) => "<tr><td>" + esc(row[0]) + "</td><td>" + (row[1] == null ? cost : esc(row[1])) + "</td></tr>")
     .join("");
   return (
     '<div class="lx-vs-col"><div class="lx-vs-h"><span>' +
-    escHtml(host) +
+    esc(host) +
     '</span><a href="/lens?url=' +
-    escAttr(encodeURIComponent(s.url)) +
+    esc(encodeURIComponent(s.url)) +
     '">full scan &rarr;</a></div>' +
     '<div class="lx-vs-body"><div class="lx-vs-score"><b>' +
-    (s.readiness == null ? "?" : escHtml(s.readiness)) +
+    (s.readiness == null ? "?" : esc(s.readiness)) +
     "<span>/100</span></b>" +
     '<span class="lx-badge ' +
     levelKind +
     '"' +
-    (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") +
+    (s.levelNote ? ' title="' + esc(s.levelNote) + '"' : "") +
     ">Level " +
-    (s.level == null ? "?" : escHtml(s.level)) +
+    (s.level == null ? "?" : esc(s.level)) +
     "</span> <span>" +
-    escHtml(s.levelName || "") +
+    esc(s.levelName || "") +
     "</span></div>" +
     '<table class="lx-kv">' +
     rows +
@@ -741,7 +759,7 @@ function lensVsColumn(s) {
 
 export function lensVsFragment(payload) {
   if (!payload || !payload.ok) {
-    return '<div class="lx-empty">' + escHtml((payload && payload.error) || "The comparison did not run.") + "</div>";
+    return '<div class="lx-empty">' + esc((payload && payload.error) || "The comparison did not run.") + "</div>";
   }
   const L = payload.left,
     R = payload.right;
@@ -752,21 +770,21 @@ export function lensVsFragment(payload) {
     const extras = LENS_VS_SURFACES.filter(([key]) => win.surfaces && win.surfaces[key] && !(lose.surfaces && lose.surfaces[key])).map(([, label]) => label);
     const spread =
       win.readiness === lose.readiness
-        ? "<b>" + escHtml(win.readiness) + " apiece.</b> Same score, one rubric."
+        ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
         : "<b>" +
-          escHtml(lensVsHost(win.finalUrl || win.url)) +
+          esc(lensVsHost(win.finalUrl || win.url)) +
           " " +
-          escHtml(win.readiness) +
+          esc(win.readiness) +
           ", " +
-          escHtml(lensVsHost(lose.finalUrl || lose.url)) +
+          esc(lensVsHost(lose.finalUrl || lose.url)) +
           " " +
-          escHtml(lose.readiness) +
+          esc(lose.readiness) +
           ".</b>";
     headline =
       '<div class="lx-vs-headline">' +
       spread +
       (extras.length
-        ? " The gap is published surfaces: " + escHtml(extras.join(", ")) + "."
+        ? " The gap is published surfaces: " + esc(extras.join(", ")) + "."
         : " Both publish the same surfaces; the gap sits in the individual checks.") +
       "</div>";
   }
@@ -804,8 +822,8 @@ export const LENS_INSPECT = defineLens({
   }),
 });
 
-async function inspectLensRequest(request, env, ctx) {
-  const params = new URL(request.url).searchParams;
+async function inspectLensRequest(request, env, ctx, url = new URL(request.url)) {
+  const params = url.searchParams;
   // ?phases=page returns only what derives from the page's own bytes: one
   // subrequest instead of twenty-eight. The UI asks for this first so readiness
   // paints at ~29ms rather than behind a 656ms fan-out, then asks for the rest.
@@ -885,10 +903,7 @@ function lensStateOfWebRail() {
   // terms that lose a non-technical reader in the first four seconds. glossify
   // makes each one hoverable in place rather than rewriting the fact around it.
   const items = LENS_SOW_FACTS.filter((f) => f.rail)
-    .map(
-      (f, i) =>
-        '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>",
-    )
+    .map((f, i) => '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + esc(f.railStat || f.stat) + "</b> " + glossify(esc(f.rail)) + "</span>")
     .join("");
   return (
     '<div class="lx-sow-rail">' +
@@ -907,15 +922,15 @@ function lensStateOfWebPanel() {
   const cards = LENS_SOW_FACTS.map(
     (f) =>
       '<div class="lx-sow-card"><div class="lx-sow-stat">' +
-      escHtml(f.stat) +
+      esc(f.stat) +
       "</div>" +
       '<div class="lx-sow-claim">' +
-      escHtml(f.claim) +
+      esc(f.claim) +
       "</div>" +
       '<div class="lx-sow-src"><a href="' +
-      escAttr(f.href) +
+      esc(f.href) +
       '" target="_blank" rel="noopener">' +
-      escHtml(f.src) +
+      esc(f.src) +
       "</a> &middot; " +
       LENS_SOW_CHECKED +
       "</div></div>",
@@ -975,25 +990,21 @@ function lensAboutPanel() {
     const jumps = e.jumps
       .map((j) =>
         j.view
-          ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
-          : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' +
-            escAttr(j.lens) +
-            '">' +
-            escHtml(LENS_TAB_LABELS[j.lens] || j.lens) +
-            "</button>",
+          ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + esc(j.view) + '">' + esc(j.label || j.view) + "</button>"
+          : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' + esc(j.lens) + '">' + esc(LENS_TAB_LABELS[j.lens] || j.lens) + "</button>",
       )
       .join(" ");
     return (
       '<div class="lx-abt-era"><div class="lx-abt-when"><b>' +
-      escHtml(e.era) +
+      esc(e.era) +
       "</b><span>" +
-      escHtml(e.years) +
+      esc(e.years) +
       "</span></div>" +
       '<div><div class="lx-abt-label">' +
-      escHtml(e.label) +
+      esc(e.label) +
       "</div>" +
       '<div class="lx-abt-claim">' +
-      glossify(escHtml(e.claim)) +
+      glossify(esc(e.claim)) +
       "</div>" +
       '<div class="lx-abt-jumps"><span>See it live:</span> ' +
       jumps +
@@ -1079,7 +1090,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     head: unsafeHtml(`<meta property="og:type" content="website">
 <meta property="og:site_name" content="aadhar.sh">
 <meta property="og:title" content="The Other Web: how machines read a URL">
-<meta property="og:description" content="${escAttr(lensDescription)}">
+<meta property="og:description" content="${esc(lensDescription)}">
 <meta property="og:url" content="https://${CANONICAL_HOST}/lens">
 <meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.jpg">
 <meta property="og:image:width" content="1200">
@@ -1712,7 +1723,7 @@ footer a { color:var(--link); }
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  ·  paste any URL" autocomplete="off" spellcheck="false"
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${esc(value)}" inputmode="url" placeholder="https://example.com  ·  paste any URL" autocomplete="off" spellcheck="false"
              title="Any http(s) URL. This server fetches it as AadharshBot and shows you what came back.">
       <button class="lx-go" type="submit">Go</button>
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-toggle" title="Compare two sites through one rubric" aria-expanded="${vsActive ? "true" : "false"}" aria-controls="lx-addr-vs">vs&hellip;</button>
@@ -1724,7 +1735,7 @@ footer a { color:var(--link); }
     <div class="lx-addr lx-addr-vs${vsActive ? "" : " lx-off"}" id="lx-addr-vs">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url-vs">vs</label>
-      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  ·  head-to-head, one rubric" autocomplete="off" spellcheck="false"
+      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${esc(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  ·  head-to-head, one rubric" autocomplete="off" spellcheck="false"
              title="A second URL. Both are scanned against one rubric, side by side.">
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-close" title="Back to a single scan">&#215;</button>
     </div>
@@ -1804,11 +1815,11 @@ footer a { color:var(--link); }
       vsActive
         ? compare.payload && compare.payload.ok
           ? "<span><b>Head-to-head</b></span><span>" +
-            escHtml(lensVsHost(value)) +
+            esc(lensVsHost(value)) +
             " vs " +
-            escHtml(lensVsHost(vsValue)) +
+            esc(lensVsHost(vsValue)) +
             '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
-          : '<span class="err">Comparison failed:</span> <span>' + escHtml((compare.payload && compare.payload.error) || "unknown error") + "</span>"
+          : '<span class="err">Comparison failed:</span> <span>' + esc((compare.payload && compare.payload.error) || "unknown error") + "</span>"
         : seeded || (initial && !initial.ok)
           ? lensStatusFragment(initial, state)
           : "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>"
@@ -1845,11 +1856,11 @@ footer a { color:var(--link); }
 }
 
 // /lens/fetch?url=… → the stable machine-facing JSON contract.
-export async function handleLensFetch(request, env, ctx) {
-  if (new URL(request.url).searchParams.get("mode") === "cloudflare") {
-    return handleLensCloudflareScore(request, env, ctx);
+export async function handleLensFetch(request, env, ctx, url = new URL(request.url)) {
+  if (url.searchParams.get("mode") === "cloudflare") {
+    return handleLensCloudflareScore(request, env, ctx, url);
   }
-  const result = await inspectLensRequest(request, env, ctx);
+  const result = await inspectLensRequest(request, env, ctx, url);
   return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
 
@@ -1933,8 +1944,8 @@ const LENS_CLOUDFLARE_SCORE = defineLens({
   onThrow: () => ({ status: 200, payload: { ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." } }),
 });
 
-export function handleLensCloudflareScore(request, env, ctx) {
-  return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx);
+function handleLensCloudflareScore(request, env, ctx, url = new URL(request.url)) {
+  return LENS_CLOUDFLARE_SCORE.handle(request, env, ctx, url);
 }
 
 // How long a render waits for the page to settle, shared by /lens/shot and
@@ -2044,8 +2055,8 @@ const LENS_SHOT = defineLens({
   },
 });
 
-export function handleLensShot(request, env, ctx) {
-  return LENS_SHOT.handle(request, env, ctx);
+export function handleLensShot(request, env, ctx, url = new URL(request.url)) {
+  return LENS_SHOT.handle(request, env, ctx, url);
 }
 
 // Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an
@@ -2271,19 +2282,19 @@ const LENS_BROWSER = defineLens({
   },
 });
 
-export async function handleLensBrowser(request, env, ctx) {
+export async function handleLensBrowser(request, env, ctx, url = new URL(request.url)) {
   // The published allowlist, answered without a url and without a render, so
   // anyone can read exactly what this route is willing to run before they let
   // it run anything. Same route rather than a new one: run_worker_first is
   // capped at 100 rules and a query parameter costs none of them.
-  if (new URL(request.url).searchParams.has("recipes")) {
+  if (url.searchParams.has("recipes")) {
     return jsonResponse({ ok: true, recipes: lensRecipeCatalog() });
   }
-  return LENS_BROWSER.handle(request, env, ctx);
+  return LENS_BROWSER.handle(request, env, ctx, url);
 }
 
 // X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
-export function lensFramable(headers) {
+function lensFramable(headers) {
   const xfo = (headers["x-frame-options"] || "").toLowerCase();
   if (xfo.includes("deny") || xfo.includes("sameorigin") || xfo.includes("allow-from")) {
     return { framable: false, reason: "X-Frame-Options: " + xfo.trim() };
@@ -2394,7 +2405,7 @@ const LENS_DEFERRED_NOTE =
 // side that never measured them would report "doors 3 -> null" as a change.
 const LENS_DISCOVERY_FIELDS = new Set(["readiness", "level", "tier", "doors"]);
 
-export function compareLensObservations(left, right) {
+function compareLensObservations(left, right) {
   const bothMeasured = left?.phases?.discovery !== false && right?.phases?.discovery !== false;
   const fields = [
     ["status", "status"],
@@ -2472,15 +2483,14 @@ export const LENS_COMPARE = defineLens({
   onThrow: (e) => ({ status: 502, payload: { ok: false, error: "Lens comparison failed.", detail: lensErrorText(e).slice(0, 240) } }),
 });
 
-export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
+async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
   const o = await LENS_COMPARE.run({ left: leftRaw, right: rightRaw }, request, env, ctx);
   return o.kind === "ok"
     ? { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...o.value }, headers: policyHeaders(o.budgets) }
     : lensStatusPayload(o);
 }
 
-export async function handleLensCompare(request, env, ctx) {
-  const url = new URL(request.url);
+export async function handleLensCompare(request, env, ctx, url = new URL(request.url)) {
   const result = await compareLensRequest(request, env, ctx, url.searchParams.get("left"), url.searchParams.get("right"));
   return jsonResponse(result.payload, result.status, result.headers ?? {});
 }
@@ -3173,7 +3183,7 @@ export function discoveryScope(origin, env) {
  * what makes the door list greppable in one place instead of being spelled out
  * at three call sites that can drift apart.
  */
-export type DiscoveryPayload = {
+type DiscoveryPayload = {
   robots: any;
   sitemap: any;
   sitemapDeclared: any;
@@ -3224,10 +3234,10 @@ export type DiscoveryPayload = {
 // deferred side says "not measured" and the next compare fills it in, while a
 // refused side reports unknown on every probe it lost, and the rubric counts
 // each unknown against the score.
-export type DiscoveryMode = "live" | "defer" | "share";
-export type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
+type DiscoveryMode = "live" | "defer" | "share";
+type DiscoveryBoard = ReturnType<typeof discoveryBoard>;
 
-export function discoveryBoard(sides: readonly string[]) {
+function discoveryBoard(sides: readonly string[]) {
   const reports = new Map<string, string | null>();
   const runs = new Map<string, { promise: Promise<any>; resolve: (value: any) => void }>();
   let decide: (modes: Map<string, DiscoveryMode>) => void = () => {};
@@ -3283,7 +3293,7 @@ export function discoveryBoard(sides: readonly string[]) {
   };
 }
 
-export type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
+type OriginDiscovery = DiscoveryPayload & { cached: boolean; shared?: boolean; refused?: boolean };
 type DiscoveryOpts = { fresh?: boolean; selfLens?: boolean };
 
 // Two signatures, because only a board can defer: every caller that passes no
@@ -3574,7 +3584,7 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
   return new Response(null, { status: 502, statusText: "Blocked redirect" });
 }
 
-export async function lensProbeBotView(targetUrl, env, profile) {
+async function lensProbeBotView(targetUrl, env, profile) {
   const deadline = AbortSignal.timeout(4500);
   try {
     const res = await lensFetchAsBot(targetUrl, env, deadline, profile.ua);
@@ -3618,7 +3628,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
   }
 }
 
-export function lensProbeBotViews(targetUrl, env) {
+function lensProbeBotViews(targetUrl, env) {
   return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
 }
 
@@ -3659,7 +3669,7 @@ export async function lensProbe(url, env, accept?) {
 // Case varies by host, so try the lowercase web form first, then the uppercase
 // repo form. `present` requires a non-trivial body, not just a 200, so an SPA
 // catch-all serving HTML for everything doesn't read as a real AGENTS.md.
-export async function lensProbeAgentsMd(origin, env) {
+async function lensProbeAgentsMd(origin, env) {
   // A variant that never answered (a thrown fetch, a 5xx, the platform's
   // subrequest ceiling) is not evidence the file is missing. Both variants have
   // to be ASKED before "not found" is a claim, so an unanswered one makes the
@@ -3695,7 +3705,7 @@ export async function lensProbeAgentsMd(origin, env) {
 // HTMLRewriter pass for the attribute-driven extraction it's robust at:
 // meta/OG/Twitter, JSON-LD script bodies, rel-links, img alt coverage,
 // microdata, RDFa, and microformats class tokens.
-export async function lensExtractAttrs(html) {
+async function lensExtractAttrs(html) {
   const acc = {
     meta: {},
     og: {},
@@ -3799,7 +3809,7 @@ export async function lensExtractAttrs(html) {
   return acc;
 }
 
-export function lensParseJsonld(raw) {
+function lensParseJsonld(raw) {
   const trimmed = String(raw || "").trim();
   try {
     const obj = JSON.parse(trimmed);
@@ -3816,7 +3826,7 @@ export function lensParseJsonld(raw) {
   }
 }
 
-export function lensHeadings(html) {
+function lensHeadings(html) {
   const out: { level: number; text: string }[] = [];
   const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
   let m;
@@ -3899,16 +3909,21 @@ export function lensMarkdown(html, baseUrl) {
   return s.trim();
 }
 
-export function lensStripInline(h) {
+function lensStripInline(h) {
   return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
 }
 
-export function lensTagAttr(tag, name) {
-  const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i"));
+// Built once per name: lensMarkdown asks for alt, src and href on every
+// <img> and <a> of a crawled page.
+const TAG_ATTR_RE = new Map<string, RegExp>();
+function lensTagAttr(tag, name) {
+  let re = TAG_ATTR_RE.get(name);
+  if (!re) TAG_ATTR_RE.set(name, (re = new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")));
+  const m = String(tag).match(re);
   return m ? (m[2] ?? m[3] ?? m[4] ?? "") : "";
 }
 
-export function lensAbs(href, base) {
+function lensAbs(href, base) {
   if (!href) return href;
   try {
     return new URL(href, base).toString();
@@ -3917,7 +3932,7 @@ export function lensAbs(href, base) {
   }
 }
 
-export function lensDecode(s) {
+function lensDecode(s) {
   return String(s)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -3979,7 +3994,7 @@ const LENS_BOTS = [
 export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
 // "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
-export function lensParseContentSignal(raw) {
+function lensParseContentSignal(raw) {
   const out = {};
   for (const part of String(raw || "").split(",")) {
     const kv = part.split("=");
@@ -4140,7 +4155,7 @@ const LENS_RATES = [
  * Every tier is optional: an HTML page prices html/text/markdown/outline, a
  * non-HTML text body prices raw alone, and add() skips whatever is absent.
  */
-export function lensCost({
+function lensCost({
   html,
   text,
   markdown,
@@ -4256,7 +4271,7 @@ export async function lensProbeNlweb(origin, env) {
 
 // Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
 // re-served for machines. Supported iff the content-type actually flips.
-export async function lensProbeMdNego(pageUrl, env) {
+async function lensProbeMdNego(pageUrl, env) {
   try {
     const deadline = AbortSignal.timeout(5000);
     const res = await lensFetch(pageUrl, env, deadline, "text/markdown", FAN_OUT);
@@ -4513,7 +4528,7 @@ const LENS_READINESS_CATEGORIES = [
   { key: "execution", label: "Execution in an agent browser", countInScore: true },
 ];
 
-function lensJsonVerdict(probe, validate) {
+function lensJsonVerdict(probe, validate): { status: ReadinessStatus; detail: string } {
   // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
   // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
   // undercounting webBotAuth / the oauth checks that route through here).
@@ -4532,7 +4547,7 @@ type LensReadinessCheck = {
   key: string;
   category: string;
   label: string;
-  status: string;
+  status: ReadinessStatus;
   detail: string;
   optional: boolean;
   countInScore: boolean;
@@ -4541,7 +4556,7 @@ type LensReadinessCheck = {
   notApplicable?: true;
 };
 
-function lensReadinessItem(key, status, detail, notApplicable = false): LensReadinessCheck {
+function lensReadinessItem(key, status: ReadinessStatus, detail, notApplicable = false): LensReadinessCheck {
   const meta = LENS_READINESS_META[key];
   const item: LensReadinessCheck = {
     key,
@@ -4750,7 +4765,7 @@ export function lensReadiness({
   // A pass is still a pass: a keyless site that publishes OAuth anyway gets
   // the credit. Anything else on a declared-keyless site is not applicable.
   const keyless = lensKeylessDeclaration(openapi);
-  const authorityItem = (key, status, detail) =>
+  const authorityItem = (key, status: ReadinessStatus, detail) =>
     keyless && status !== "pass" ? lensReadinessItem(key, "neutral", "not applicable: " + keyless, true) : lensReadinessItem(key, status, detail);
 
   items.robotsTxt = lensReadinessItem(
