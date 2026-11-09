@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/lwe/vigenere · the Vigenère cipher & Kryptos</title>
-<meta name="description" content="The Vigenère cipher and Kryptos at MSN-chat pace: keyed alphabets, autokeys, K1 to K3, and how to crank a Kryptos-shaped problem. Live workbench included.">
+<meta name="description" content="The Vigenère cipher and Kryptos at MSN-chat pace: keyed alphabets, autokeys, K1 to K3, the solved Paradigm PK recipes, and how to crank a Kryptos-shaped problem. Live workbench included.">
 <link rel="canonical" href="https://aadhar.sh/lwe/vigenere">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%2392722f'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2.4'%3E%3Ccircle%20cx='12'%20cy='16'%20r='5'/%3E%3Cpath%20d='M16.5%2016%20H26%20M22%2016%20v4%20M26%2016%20v5'/%3E%3C/g%3E%3C/svg%3E">
 <meta property="og:type" content="article">
@@ -128,7 +128,7 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
         <div class="pets">Learning&nbsp;With&nbsp;Errors<br>keys &amp; keystreams</div>
       </div>
 
-      <p class="disclosure"><b>Heads up:</b> a <b>first-pass</b> walkthrough. <b>K1&ndash;K3</b> are the publicly-solved parts of <a href="https://en.wikipedia.org/wiki/Kryptos" rel="external">Kryptos</a> (Jim Sanborn, CIA HQ), so their mechanisms are public. The unsolved, private "Paradigm" work stays <b>abstract</b> here: methods only, no solutions. The demos compute <b>real ciphertext and real statistics</b> live.</p>
+      <p class="disclosure"><b>Heads up:</b> a <b>first-pass</b> walkthrough. <b>K1&ndash;K3</b> are the publicly-solved parts of <a href="https://en.wikipedia.org/wiki/Kryptos" rel="external">Kryptos</a> (Jim Sanborn, CIA HQ), so their mechanisms are public. Paradigm's ten Kryptos-style <a href="https://paradigm.xyz/kryptos-ctf/" rel="external">PK puzzles</a> are all solved too (the last two fell on 2026-10-02), so the back half opens our solver group's private notes: the PK1&ndash;PK8 recipes, PK7 as we solved it, and where we went wrong on PK8. The demos compute <b>real ciphertext and real statistics</b> live.</p>
 
       <div class="log">
 
@@ -178,16 +178,16 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
           <div class="bubble"><p>Exactly: a repeating key has a <b>period</b>, and that period is its weakness. <a class="term" data-t="kasiski-examination" href="https://en.wikipedia.org/wiki/Kasiski_examination" title="A way to find a repeating key's length by measuring the gaps between repeated chunks of ciphertext; the key length usually divides those gaps." rel="external">Kasiski spacing</a> and the Friedman test recover the key length, and then it's 26 little Caesars you solve separately. An <b>autokey</b> kills the period by <em>extending</em> the key with the message itself (the key, then the plaintext). No repeat means no period to find. Switch the demo's mode to <em>autokey</em> and watch the keystream stop repeating.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:06</time></div>
-          <div class="bubble"><p>ok, the unsolved Kryptos-style stuff. how do you even <em>start</em> when you don't know anything?</p></div></div></div>
+          <div class="bubble"><p>ok, the Kryptos-style puzzles. how do you even <em>start</em> when you don't know anything?</p></div></div></div>
 
         <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>23:07</time></div>
-          <div class="bubble"><span class="tagai">AI &middot; general method only, PK solutions stay off-page</span>
+          <div class="bubble"><span class="tagai">AI &middot; the general method</span>
           <p>you treat it as a <b>search over a pipeline</b>, because you don't know the alphabet, the key, <em>or</em> the order of operations. the toolkit, in the abstract:</p>
           <p>• <b>transposition</b>: columnar, route, rotation, skip-reads (rearrange the letters)<br>
           • <b>substitution</b>: Vigenère and the <b>Quagmire I–IV</b> family, which differ in <em>which</em> of the plaintext, ciphertext, or key alphabets are keyed (QIII is the Kryptos one; <b>QIV</b> keys all three)<br>
           • <b>running keys</b>: a long text used as the key, plus <b>autokeys</b><br>
           • <b>order</b>: transpose-then-Vig, Vig-then-transpose, "Vig first" versus "Vig last," stacked stages</p>
-          <p>you compose a candidate <em>pipeline</em> from those, run the text through it, and <b>score the output</b>. then crank the next combination. (the specific Paradigm PK1–PK6 pipelines we've run stay off this page.)</p></div></div></div>
+          <p>you compose a candidate <em>pipeline</em> from those, run the text through it, and <b>score the output</b>. then crank the next combination. (the real PK pipelines, public now, close out this conversation.)</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:07</time></div>
           <div class="bubble"><p>let me actually try that, stack a couple of those ops, paste a ciphertext, and crank it by hand.</p></div></div></div>
@@ -197,11 +197,14 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
           <div class="demo" id="demo-crank">
             <div class="bar">Vigen&egrave;re shared a demo: the cranking workbench</div>
             <div class="pad">
-              <p class="lead">Stack operations, paste text, and run it. To <b>decode</b>, set every stage to <em>dec</em> and list them in the reverse of how it was encoded. Set the right recipe and a Kryptos-shaped ciphertext falls out as plaintext. The Paradigm PK recipes stay off this page; the tool is general enough to run them once you know the recipe.</p>
+              <p class="lead">Stack operations, paste text, and run it. To <b>decode</b>, set every stage to <em>dec</em> and list them in the reverse of how it was encoded. Set the right recipe and a Kryptos-shaped ciphertext falls out as plaintext. The <b>PK</b> presets load real Paradigm ciphertext with its published recipe, already set to decode.</p>
               <div class="field" style="gap:5px"><span style="font-size:8.5pt;color:#6b7280">presets:</span>
                 <button class="preset" data-crank="k1">K1 (one Vigenère)</button>
                 <button class="preset" data-crank="trans">transpose, then Vig</button>
                 <button class="preset" data-crank="vigfirst">Vig, then transpose</button>
+                <button class="preset" data-crank="pk3">PK3 (two keys)</button>
+                <button class="preset" data-crank="pk4">PK4 (two keys + columns)</button>
+                <button class="preset" data-crank="pk8">PK8 (four keys)</button>
               </div>
               <div class="field"><label for="cr-in">input</label><textarea id="cr-in">EMUFPHZLRFAXYUSDJKZLDKRNSHGNFIVJ</textarea></div>
               <div id="cr-stages"></div>
@@ -310,9 +313,58 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
             </div>
           </div></div></div>
 
-        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:10</time></div>
-          <div class="bubble"><p>so cranking Kryptos really means searching the space of (transposition × substitution × key × order), then ranking every candidate by how English-shaped its stats are. thanks, Vigenère.</p>
-          <p>→ <a href="https://en.wikipedia.org/wiki/Kryptos" rel="external">Kryptos</a> · <a href="https://en.wikipedia.org/wiki/Vigen%C3%A8re_cipher" rel="external">Vigenère cipher</a> · <a href="https://en.wikipedia.org/wiki/Index_of_coincidence" rel="external">Index of coincidence</a> · <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">columnar transposition (Karl Wang, UCSD)</a> · <a href="/lwe">back to Learning With Errors</a></p></div></div></div>
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:12</time></div>
+          <div class="bubble"><p>ok, the Paradigm puzzles. all ten are solved now (PK9 and PK10 fell on 2026-10-02), so we can open the notes. what were they actually?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:12</time></div>
+          <div class="bubble"><p>Mostly the toolkit on this page, stacked. The ten puzzles tell one story, a narrator chasing a legendary needle "fine enough to split a hair," and every substitution in the first eight is the same move: a Vigenère on the KRYPTOS alphabet (Quagmire III), each letter worth its index in <code>KRYPTOSABCDEFGHIJLMNQUVWXZ</code>. A test that runs in A&ndash;Z never sees it. The recipes, in encryption order:</p>
+          <p>• <b>PK1</b>: one Vigenère, <code>PROVENANCE</code><br>
+          • <b>PK2</b>: one columnar, width 7, <code>MARGINS</code><br>
+          • <b>PK3</b>: two Vigenères, <code>ORDINATE</code> + <code>PENTIMENTO</code><br>
+          • <b>PK4</b>: columnar <code>UNDERLAY</code>, then <code>OCHRE</code> + <code>VERDIGRIS</code><br>
+          • <b>PK5</b>: columnar <code>TWOYEARS</code>, then a running key that is all 224 letters of PK4's plaintext<br>
+          • <b>PK6</b>: two width-9 columnars, <code>HANDIWORK</code> and <code>SMITHWORK</code>, then <code>PORTAL</code><br>
+          • <b>PK7</b>: <code>ANNEAL</code>, then a 3&times;3 matrix spelled by <code>ALCHEMIST</code><br>
+          • <b>PK8</b>: four Vigenères, <code>METE</code>, <code>METER</code>, <code>METIER</code>, <code>MASTERY</code></p>
+          <p>PK9 and PK10 fell after our shared notes stop, so their recipes aren't here. Two house rules held. The keys name the scene they hide in: <code>ALCHEMIST</code> encrypts PK7, whose whitesmith shows "his technique for purifying his metal." And every grid divides its text exactly: 350 = 7 &times; 50, 224 = 8 &times; 28, 272 = 8 &times; 34, 315 = 9 &times; 35, 279 = 3 &times; 93. No ragged last row anywhere, so the length hands you the admissible widths before you search.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:13</time></div>
+          <div class="bubble"><p>wait, PK3 puts two keys on the same letters. doesn't that just add up to one key?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:13</time></div>
+          <div class="bubble"><p>It does, and that's the trick. Add two repeating keys letter by letter and you get one repeating key whose period is their <b>least common multiple</b>. <code>ORDINATE</code> is 8 and <code>PENTIMENTO</code> is 10, so the sum repeats every 40, and collapsed it reads <code>BFPNBZITCSGKFENPJQHQVMWIQNUBWFAVXOZATKBJ</code>. That buys the setter two things. The period gets long: 280 letters over 40 columns is 7 per column, under the 8 where the cracker above got 6 of 12. And a solver who does recover the stream tends to throw it out, because no dictionary has it.</p>
+          <p>Our notes split PK3's stream back into its two words, and PK4's period-45 stream into <code>OCHRE</code> + <code>VERDIGRIS</code> (5 &times; 9). The rule we wrote down: never reject a recovered key for failing to be a word. Press <b>PK3</b> in the cranking workbench: two stages, real ciphertext in, "SEVENTH MONTH. I WROTE TO FIFTEEN CORRESPONDENTS" out.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:14</time></div>
+          <div class="bubble"><p>so PK8 is the same move with four words?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:14</time></div>
+          <div class="bubble"><p>Four words, and four is where the attack on this page dies. The periods are 4, 5, 6 and 7, their least common multiple is 420, and PK8 is 153 letters long. The summed key never repeats inside the text, so the cracker's step one has no period to find. Four short words built a running key. They're one word family, too: <code>METER</code>, drop a letter for <code>METE</code>, add one for <code>METIER</code> (a trade, a calling; PK8 ends on "the archive is my true calling"), then <code>MASTERY</code>.</p>
+          <p>The instruction sat in PK7's plaintext the whole time: "He has me repeat the same step four times with slight variations." Our group read that as structure, a period of 28 or four interleaved lanes. The solver who cracked it on 2026-09-06 read it as a recipe: the series' one substitution, four times, with keys that vary slightly. Press <b>PK8</b> in the workbench and watch "I LEAVE AT MIDNIGHT" fall out of four stages.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:15</time></div>
+          <div class="bubble"><p>how close did we get?</p></div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>23:15</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; from our PK8 notes, 2026-07-02 to 2026-09-06</span>
+          <p>close on the family, wrong on the word bank. word-sum Vigenère was on our list from the day PK3 came apart. we ran every pair from a 4,375-word thematic bank, three-word sums, and every subset of one to five of the keys harvested from PK1&ndash;PK7, in both alphabets. all cold, and correctly cold: <code>METER</code> was the only one of the four words in any bank, and nobody had tried four at once.</p>
+          <p>the instrument that misled us was a real one. we measured a faint period 7 in PK8 (column IC 0.0536, at the 99th percentile of a fixed-period null) and spent weeks on period-7 substitution under a transposition. the post-mortem found the signal at lags 28, 35 and 42, where <code>MASTERY</code> and one shorter word cancel at once, and found lags 7, 14 and 21, where <code>MASTERY</code> cancels alone, dead. every number we measured was right, and the model we built on them was wrong. forward-model the candidate keys before you trust what a period count implies.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:16</time></div>
+          <div class="bubble"><p>and PK7, the one we cracked ourselves?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:16</time></div>
+          <div class="bubble"><p>PK7 is a Vigenère hidden under a <a class="term" data-t="hill-cipher" href="https://en.wikipedia.org/wiki/Hill_cipher" title="A cipher that turns each block of letters into numbers and multiplies the block by a key matrix, mod 26, so every output letter depends on the whole block." rel="external">Hill cipher</a>. Encrypt with <code>ANNEAL</code> (period 6), cut the result into 3-letter blocks, and multiply each block by the matrix <code>ALCHEMIST</code> spells in KRYPTOS indices, <code>[[7,17,9],[14,11,18],[15,6,4]]</code>, mod 26.</p>
+          <p>Each layer blinds the other's detector. The Hill's input is Vigenère-of-English, so every Hill attack scoring against English frequencies read noise. The Vigenère sits under a three-letter mix, so Kasiski, the IoC period chart and every word-sum test read flat. We validated each single-layer attack on a planted cipher first, and each was correctly cold on PK7. What broke it was arithmetic, from a nudge by another solver in the group: 279 is odd, 279 = 3 &times; 93, so take the 3 literally. Solved 2026-07-02, and the re-encryption matched the official ciphertext on all 279 letters.</p>
+          <p>The cleanest lesson came on 2026-07-22. A Hill is linear, so <code>M(p + k) = Mp + Mk</code>, which makes Vigenère-then-Hill the same cipher as Hill-then-a-different-period-6-Vigenère (its key is the matrix applied to <code>ANNEAL</code>). For any linear layer, substitution-inside and substitution-outside are one family, and testing both spends the budget twice.</p></div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>23:16</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; the false positive worth stealing</span>
+          <p>our general-Hill attack once returned a "plaintext" scoring &minus;5.16 per letter on quadgrams, about what English scores, and it was <code>WOLLASTONITE</code> repeated end to end: the Vigenère key it had guessed. a quadgram model rewards real words, and a key spelled over and over is wall-to-wall real words. two checks before calling anything solved: the decrypt isn't the key repeated, and it re-encrypts to the exact official ciphertext. it's the same reason the cracker above ends on a verdict instead of its best guess.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:17</time></div>
+          <div class="bubble"><p>so cranking Kryptos really means searching the space of (transposition × substitution × key × order), then ranking every candidate by how English-shaped its stats are, and re-encrypting before you believe any of them. thanks, Vigenère.</p>
+          <p>→ <a href="https://paradigm.xyz/kryptos-ctf/" rel="external">Paradigm's Kryptos CTF</a> · <a href="https://en.wikipedia.org/wiki/Kryptos" rel="external">Kryptos</a> ·<a href="https://en.wikipedia.org/wiki/Vigen%C3%A8re_cipher" rel="external">Vigenère cipher</a> · <a href="https://en.wikipedia.org/wiki/Index_of_coincidence" rel="external">Index of coincidence</a> · <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">columnar transposition (Karl Wang, UCSD)</a> · <a href="/lwe">back to Learning With Errors</a></p></div></div></div>
 
       </div>
       <div class="scrollnote">end of conversation (first pass)</div>
@@ -512,10 +564,17 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
     renderStages(); runCrank();
   });
   $("cr-add").addEventListener("click", function () { stages.push(freshStage("transposition")); renderStages(); runCrank(); });
+  function q3(key) { return { type: "vigenere", dir: "dec", key: key, alpha: "KRYPTOSABCDEFGHIJLMNQUVWXZ", mode: "repeat" }; }
   var CRANK_PRE = {
     k1: { in: "EMUFPHZLRFAXYUSDJKZLDKRNSHGNFIVJ", stages: [freshStage("vigenere")] },
     trans: { in: "ATTACKATDAWN", stages: [{ type: "transposition", dir: "enc", kw: "ZEBRA" }, { type: "vigenere", dir: "enc", key: "LEMON", alpha: AZ, mode: "repeat" }] },
-    vigfirst: { in: "ATTACKATDAWN", stages: [{ type: "vigenere", dir: "enc", key: "LEMON", alpha: AZ, mode: "repeat" }, { type: "transposition", dir: "enc", kw: "ZEBRA" }] }
+    vigfirst: { in: "ATTACKATDAWN", stages: [{ type: "vigenere", dir: "enc", key: "LEMON", alpha: AZ, mode: "repeat" }, { type: "transposition", dir: "enc", kw: "ZEBRA" }] },
+    // Paradigm's official ciphertexts. Each recipe decodes byte-exact through
+    // this page's own vig() and transpose() (checked 2026-11-09), and PK4's
+    // UNDERLAY ranks to the emit order the puzzle used, [6,2,3,5,1,4,0,7].
+    pk3: { in: "HWZTRPPVHZLHRBQBQOMZBACNOTHLYGBATBTKHERQHRVZWWXCTZLRRVZCROHCIOTBVJKCALNKFJHEIMKUHJPFNVBCGQYNZMOHGBUTDPTJTDSUBOLYPLSKIEMANXMFNDBCTNRTLLVQOXUBPAXQUVDNXUMCIFOGETZWHJDIWDBWQFXAOMWBBCQXYZFZBTRIQMYOFFMVWSFLPTHFFQUINGLAMSQJOPUESPIQGZZCTJVRLQMIIRROOGBWNPQMXFQDVFTCVGNRIXQKUYYKBRTWPCDHLAWC", stages: [q3("ORDINATE"), q3("PENTIMENTO")] },
+    pk4: { in: "YOVISYUAFKUQNRJQLZTAZTMQOUKELJKCYUWIDSPSWRJRUEZNIFPUMUHQFFVBGOBEPWNTZGKVUTOVFSADUJUAYGWKQYOGNKHZVQMEWHSJGJFOBPHXKAPEXPWRJTSPSIJLCSXYTLDFBNZNPUAZNBZPKRFCUZDDZHZULZVPVWCXSIUVSCCFATGSJPNIGCJVTMUPTCGRTOFRXWCYKOMXOJKCECRUCKBDCIYJ", stages: [q3("OCHRE"), q3("VERDIGRIS"), { type: "transposition", dir: "dec", kw: "UNDERLAY" }] },
+    pk8: { in: "COPVEJJVSVURTVIPYOTPLHGBTMAUCCPESIWIGZBWSJPKTRPUEKQFIFCLHMXTHIMHWOYIGURBOMPARCVXVKBDDVBVHDRHGCVNWWVLBMYWMWHICFIXZWBVZYCQGNOGJGUMLNPUTHQCXNWPQZOIRJZGSWVPY", stages: [q3("METE"), q3("METER"), q3("METIER"), q3("MASTERY")] }
   };
   D.querySelectorAll("#demo-crank .preset[data-crank]").forEach(function (b) {
     b.addEventListener("click", function () { var p = CRANK_PRE[b.dataset.crank]; $("cr-in").value = p.in; stages = JSON.parse(JSON.stringify(p.stages)); renderStages(); runCrank(); });
@@ -983,68 +1042,24 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       ]
     },
     {
-      "q": "In the keystream workbench, flip the mode from repeating key to autokey and watch the key row. What changes, and why does an attacker care?",
+      "q": "PK8 stacks four Vigenère keys of lengths 4, 5, 6 and 7 on 153 letters. Why does the cracker's period step come up empty?",
       "options": [
         {
-          "t": "the keystream stops repeating, leaving kasiski and friedman no period to find",
+          "t": "the summed key repeats every 420 letters, so it never repeats inside 153",
           "ok": true,
-          "why": "Autokey extends the key with the message itself, so the stream never cycles. Kasiski and Friedman work by finding the period and splitting the text into little Caesars; no repeat, no period, no split."
+          "why": "Adding repeating keys gives one key whose period is the least common multiple of their lengths, here 420. At 153 letters there is no second cycle, so no column ever holds two letters under the same shift."
         },
         {
-          "t": "the keystream gets longer, so brute-forcing the key takes millions of extra tries",
-          "why": "A repeating key of any length still has a period, and Kasiski spacing recovers it statistically, no brute force involved. Autokey wins by having no period at all, which the demo's key row shows directly."
+          "t": "four layers of encryption scramble the letter order and hide the period",
+          "why": "A Vigenère never moves a letter, and all four stages only shift. Order survives intact, which is why the PK8 preset in the workbench needs no transposition stage. The period goes missing for arithmetic reasons: 420 is longer than the text."
         },
         {
-          "t": "the key gets applied twice, once forward and once backward over the text",
-          "why": "It stays one pass in one direction. The change is where the keystream comes from: after the keyword runs out, the plaintext itself takes over as the key. Flip the mode switch and read the demo's key row."
+          "t": "the keys share letters, so their shifts cancel and the key turns random",
+          "why": "Shared letters add like any others. The sum is fixed by the four words, and the four-stage PK8 preset reproduces the plaintext exactly. It only looks random because its period, 420, outruns the 153 letters."
         },
         {
-          "t": "the alphabet reshuffles every few letters, which hides the frequencies",
-          "why": "The alphabet stays fixed in autokey mode. Only the shift at each position varies, drawn from the message instead of a cycling keyword, which is exactly what the keystream row shows."
-        }
-      ]
-    },
-    {
-      "q": "A friend encrypts MEET ME AT THE DOCK in the keystream workbench with key LEMON on the KRYPTOS alphabet. You paste in the ciphertext, keep LEMON, switch to plain A to Z, and decrypt. What do you get?",
-      "options": [
-        {
-          "t": "letters that read as noise, since each shift counted along a different order",
-          "ok": true,
-          "why": "The workbench returns RRDORNIJONNQKTA, with zero letters in the right place. Each shift counts along the alphabet's order, so the same key on a different order is a different cipher. It's the second reason the page gives for K1 resisting the cracker: even a correct key decrypts to nothing on the wrong alphabet."
-        },
-        {
-          "t": "MEET ME AT THE DOCK, since the key does the work and the alphabet only labels it",
-          "why": "Run it: the workbench returns RRDORNIJONNQKTA. The tableau is built on the alphabet's order, so moving KRYPTOS to the front changes where every shift lands. The alphabet is part of the secret, which is why K1 and K2 key it."
-        },
-        {
-          "t": "the message under one fixed relabeling, a single substitution from readable",
-          "why": "That would hold if every position used the same shift. LEMON gives five different shifts, and each one leaves its own relabeling, so you get five substitutions taking turns: the same flat, polyalphabetic noise a Vigenère makes."
-        },
-        {
-          "t": "the message moved by one constant shift, since KRYPTOS rotates the alphabet",
-          "why": "A rotation would keep the gap between every pair of letters, and then the decrypt would come out as a Caesar shift of the message. KRYPTOS pulls seven letters to the front and leaves the rest in order, so the gaps change, and RRDORNIJONNQKTA is no shift of MEETMEATTHEDOCK."
-        }
-      ]
-    },
-    {
-      "q": "In the cranking workbench you stack a Vigenère stage with a transposition stage. Why does the order of the two stages matter?",
-      "options": [
-        {
-          "t": "they don't commute: each order feeds different letters to the shifts, a different cipher",
-          "ok": true,
-          "why": "A Vigenère keys off position and a transposition rewrites every position, so each order shifts different letters by different amounts. That is why order sits inside the search space alongside alphabet and key."
-        },
-        {
-          "t": "it doesn't really, both orders scramble and shift the same letters either way",
-          "why": "The two order presets refute this: same input, same keys, swapped order, different ciphertext. The stages interact through position, so each order is a distinct cipher to crank."
-        },
-        {
-          "t": "transposition has to go first or the vigenère key won't line up with the text",
-          "why": "Either order is a legitimate cipher, and the setter picks freely. That freedom is the attacker's problem: Vig-first and Vig-last have to be cranked as separate candidates."
-        },
-        {
-          "t": "order only changes how long it takes, the pipeline lands on the same output",
-          "why": "The output itself differs, and a decoder must undo the stages in the exact reverse order. Run both order presets in the cranking workbench and compare the final lines."
+          "t": "153 letters is too short for any vigenère, whatever the key length",
+          "why": "Under the 4-letter key alone, 153 letters is 38 per column, inside the range where the cracker solved every test. Text length matters relative to the period, and stacking four keys pushed the period to 420."
         }
       ]
     },
@@ -1071,6 +1086,50 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
         {
           "t": "an IoC can't rate a candidate until you know which key produced it",
           "why": "Keyless scoring is the whole point of IoC: it reads a candidate's shape without knowing how the candidate was made. The trouble is what that shape can't tell apart."
+        }
+      ]
+    },
+    {
+      "q": "The PK7 notes' general-Hill attack once returned a candidate scoring -5.16 per letter on quadgrams, about what English scores. It was the attack's own guessed key, WOLLASTONITE, spelled end to end. Why did the scorer rate it like English?",
+      "options": [
+        {
+          "t": "quadgrams reward real words, and a repeated key is wall-to-wall words",
+          "ok": true,
+          "why": "The model scores 4-letter windows against English and never asks whether the text says anything. Spell one word over and over and every window is a piece of it. Hence the two checks the notes add: the decrypt isn't the key repeated, and it re-encrypts to the exact official ciphertext."
+        },
+        {
+          "t": "the scorer was miscalibrated, since real English scores well above -5.16",
+          "why": "The notes put -5.16 at about what English scores, so the instrument read its input correctly. The trouble is what it measures. A quadgram model counts familiar 4-letter windows, and a word repeated end to end supplies nothing else."
+        },
+        {
+          "t": "WOLLASTONITE was the real plaintext, a mineral that fits the metal theme",
+          "why": "PK7's plaintext is the whitesmith's story, and the real solve re-encrypted to the official ciphertext on all 279 letters. A key spelled forever reads as words while saying nothing, which is exactly what the re-encryption check exists to catch."
+        },
+        {
+          "t": "the Hill layer leaks the key into the output whenever the matrix is wrong",
+          "why": "The repeated word was the Vigenère key the attack itself had guessed, so nothing leaked out of the cipher. What fooled the score was that guess being a real word, spelled over and over, which is why the first check asks whether the decrypt is just the key repeated."
+        }
+      ]
+    },
+    {
+      "q": "Swap a Vigenère stage and a transposition stage in the cranking workbench and the output changes. Yet the PK7 notes call Vigenère-then-Hill and Hill-then-Vigenère one family. What makes the Hill different?",
+      "options": [
+        {
+          "t": "it's linear, so the key passes through as another period-6 key",
+          "ok": true,
+          "why": "M(p + k) = Mp + Mk, so Vigenère-then-Hill equals Hill-then-a-Vigenère keyed by the matrix applied to ANNEAL. A transposition has no such identity: it moves each letter away from the position whose key letter shifted it. That's why the notes say testing both orders spends the budget twice."
+        },
+        {
+          "t": "it works on 3-letter blocks, so it never moves a letter out of place",
+          "why": "A Hill doesn't keep letters at all: each output letter mixes all three letters of its block. The two orders collapse for an algebraic reason the notes spell out, M(p + k) = Mp + Mk, so the key can pass through the matrix."
+        },
+        {
+          "t": "the order still matters, which is why the notes tested both and kept both",
+          "why": "The notes draw the opposite lesson. Every Vigenère-then-Hill has a Hill-then-Vigenère twin whose key is the matrix times ANNEAL, so testing both orders searches the same cipher twice. They found that on 2026-07-22, from linearity."
+        },
+        {
+          "t": "the Hill hides the Vigenère, so nobody can detect which order ran",
+          "why": "Hiding is real (each layer blinds the other's detector), but it's a separate effect. Whether two orders give the same cipher is a question about the math, and the answer comes from linearity: M(p + k) = Mp + Mk."
         }
       ]
     },
