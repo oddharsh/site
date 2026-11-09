@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
 
@@ -133,6 +134,14 @@ test("background steps keep the three ordering edges and all join before the job
     assert.ok(gen < i && (!steps[gen].background || waited(steps[gen].id, i)), `generate the runtime types before \`${run}\` races to`);
   }
 
+  // The generator reads and rewrites what the types cache restores, so it
+  // starts only once the restore has landed.
+  const typesCache = steps.findIndex(
+    (step) => String(step.uses ?? "").startsWith("actions/cache@") && String(step.with?.path ?? "").includes("config/.generated"),
+  );
+  assert.ok(typesCache >= 0 && typesCache < gen, "validate restores the runtime types before generating them");
+  assert.ok(!steps[typesCache].background || waited(steps[typesCache].id, gen), "the generator must wait for the types cache it reads");
+
   // The suite needs timbrado's engine finished, not merely started.
   const engine = steps.find((step) => String(step.run ?? "").includes("ensureTimbradoEngine"));
   assert.ok(engine?.id, "the engine build needs an id to wait on");
@@ -140,4 +149,24 @@ test("background steps keep the three ordering edges and all join before the job
 
   // Nothing ends the job unjoined: the last step waits for every background one.
   assert.ok(Object.hasOwn(steps.at(-1), "wait-all"), "validate must end with a wait-all, so a failed background check fails by name");
+});
+
+// The types cache is keyed on what the generator's output depends on. A
+// config the generator reads but the key leaves out would restore types for
+// a runtime that config no longer asks for, and the generator's own key line
+// is what would then disagree, so it would pay a cold run on every push.
+test("the runtime types cache key names every input the generator reads", () => {
+  const source = readFileSync(new URL("tools/gen-runtime-types.ts", ROOT), "utf8");
+  const read = [...source.matchAll(/config: "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(
+    read,
+    ["cloudflare.config.ts", "lwe-ask/cloudflare.config.ts", "lens-reader/cloudflare.config.ts"],
+    "the generator's CONFIGS list moved; re-read it",
+  );
+  const cache = workflow.jobs.validate.steps.find((step) => step.id === "types-cache");
+  assert.ok(cache, "validate restores the runtime types");
+  const key = String(cache.with.key);
+  for (const input of ["bun.lock", ...read, "cf-garage/cloudflare.config.ts", "tools/gen-runtime-types.ts"]) {
+    assert.ok(key.includes(`'${input}'`), `the runtime types cache key leaves out ${input}`);
+  }
 });

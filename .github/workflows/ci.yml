@@ -89,6 +89,24 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The runtime types generator boots workerd three times on a cold tree:
+      # 6.6 CPU-s on a workstation and 18 s on this runner (median of 40 green
+      # main pushes to 2026-11-09), all of it while the build runs. On 4 vCPUs
+      # that time comes out of the build (#1631 measured the contention). Its
+      # output is a pure function of the wrangler pin and the configs, so it's
+      # cached on exactly those. The generator still checks its own key line
+      # and regenerates on a mismatch, so a stale restore costs a cold run,
+      # never wrong types. Restored this early so it lands behind setup.
+      - name: Restore the Workers runtime types
+        id: types-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        background: true
+        with:
+          path: |
+            config/.generated
+            cf-garage/.cloudflare/types
+          key: runtime-types-${{ hashFiles('bun.lock', 'cloudflare.config.ts', 'lwe-ask/cloudflare.config.ts', 'lens-reader/cloudflare.config.ts', 'cf-garage/cloudflare.config.ts', 'tools/gen-runtime-types.ts') }}
+
       # wrangler and the route oracle run under node (gotcha 38). It overlaps
       # bun's install; its PATH change lands at the wait below. Bun stays in
       # the foreground because its composite action puts bun on PATH in one
@@ -122,7 +140,11 @@ jobs:
       # other just deleted. So it runs once, here, and both start after it and
       # find it current. It boots workerd and takes about 9s, which is why it
       # runs beside the build: nothing the build, the route oracle or the suite
-      # reads comes from it.
+      # reads comes from it. On a cache hit it finds its key current and exits
+      # in well under a second.
+      - name: Wait for the cached runtime types
+        wait: types-cache
+
       - name: Generate the Workers runtime types
         id: types
         run: bun tools/gen-runtime-types.ts

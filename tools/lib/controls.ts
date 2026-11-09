@@ -568,6 +568,21 @@ export const CONTROLS: Control[] = [
     expect: /a push to main must find no map and run the whole suite/,
   },
   {
+    id: "types-generated-before-restore",
+    plants: "validate starts the runtime types generator without waiting for its cache, so the restore overwrites what the generator writes",
+    gotcha: 54,
+    mutations: [{ file: ".github/workflows/ci.yml", find: "      - name: Wait for the cached runtime types\n        wait: types-cache\n", replace: "" }],
+    run: contract("contract-ci-required-gate"),
+    expect: /the generator must wait for the types cache it reads/,
+  },
+  {
+    id: "types-cache-key-misses-a-config",
+    plants: "the runtime types cache key drops lens-reader's config, so a change there restores types for the old runtime",
+    mutations: [{ file: ".github/workflows/ci.yml", find: " 'lens-reader/cloudflare.config.ts',", replace: "" }],
+    run: contract("contract-ci-required-gate"),
+    expect: /the runtime types cache key leaves out lens-reader\/cloudflare\.config\.ts/,
+  },
+  {
     id: "critical-css-drops-script-built-rules",
     plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
     mutations: [
