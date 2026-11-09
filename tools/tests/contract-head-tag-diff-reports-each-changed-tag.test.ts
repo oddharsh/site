@@ -60,6 +60,14 @@ test("an edited description is exactly one row", { skip: noRewriter }, () => {
   assert.deepEqual(rows, [`| \`/garage/horizon\` | \`description\` | ${DESCRIPTION} | Five new CSS features, tried here first. |`]);
 });
 
+test("a backslash in a value survives the table", { skip: noRewriter }, () => {
+  // Escaping only the pipe wrote `C:\\|D`, which GitHub renders as `C:|D`
+  // (checked with `gh api markdown`, 2026-11-09): the backslash needs its own
+  // escape or the report shows a value the page never had.
+  const { rows } = diffAgainstPage(PAGE.replace(DESCRIPTION, "C:\\|D"));
+  assert.deepEqual(rows, [`| \`/garage/horizon\` | \`description\` | ${DESCRIPTION} | C:\\\\\\|D |`]);
+});
+
 test("a dropped og:image is exactly one row", { skip: noRewriter }, () => {
   const tag = /<meta content=https:\/\/aadhar\.sh\/og\/garage-horizon\.jpg property=og:image>/;
   assert.match(PAGE, tag, "the minified fixture no longer writes og:image unquoted");
