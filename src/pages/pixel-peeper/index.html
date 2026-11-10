@@ -157,6 +157,41 @@ a{color:var(--link)}
 .lkey{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--ink-dim)}
 .zoompatch{width:192px;max-width:calc(50% - 5px);height:auto;aspect-ratio:1;image-rendering:pixelated;background:#000;border:2px solid var(--shadow);box-shadow:var(--bevel-sunken);border-radius:2px}
 .sharecard{display:block;width:100%;height:auto;margin:8px 0 0;border:1px solid var(--shadow);box-shadow:var(--bevel-sunken)}
+/* The share card as HTML, painted into its 1200x630 canvas by HTML-in-Canvas
+   (cardCanvas below). The holder has to keep the canvas laid out and painted
+   but invisible. Measured in Chrome 157 on 2026-11-10: a 1px clipping box at
+   the viewport origin draws the whole card, even on a 390px phone and below
+   the fold. visibility:hidden, display:none, a zero-size box, and parking it
+   off-screen (left:-10000px, left:200vw, a translate) all throw "No cached
+   paint record". A canvas shrunk by CSS clips its drawable child, so the card
+   never draws in the preview itself. */
+.cardhold{position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;pointer-events:none}
+.pc{box-sizing:border-box;width:1200px;height:630px;display:flex;flex-direction:column;background:var(--face);color:var(--ink-soft);font:18px var(--font-ui)}
+.pc small{font:15px var(--font-mono);color:var(--ink-dim)}
+.pc-title{height:56px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--grad-title);color:#fff;font:bold 24px var(--font-caption)}
+.pc-title small{color:rgba(255,255,255,.85)}
+.pc-body{box-sizing:border-box;height:346px;display:flex;gap:40px;padding:44px 48px 0 56px}
+.pc-score{flex:none;width:504px}
+.pc-run{min-width:0}
+.pc-pct{font:bold 130px/1 var(--font-mono);color:var(--navy);letter-spacing:0;margin:14px 0 0 -4px}
+.pc-pct span{font-size:50px;margin-left:8px}
+.pc-grade{font:bold 34px var(--font-caption);color:var(--go);margin:8px 0 6px}
+.pc-run small{display:block;margin-bottom:12px}
+.pc .sharegrid{gap:12px;align-items:flex-start;margin:0 0 18px}
+.pc .sharegrid .r{gap:12px}
+.pc .sq{width:70px;height:70px;border-radius:0}
+.pc .sharekey{justify-content:flex-start;gap:8px 22px;font-size:14px;color:var(--ink-soft)}
+.pc .sharekey i{display:inline-block;width:13px;height:13px;margin-right:6px;vertical-align:-1px;box-shadow:var(--bevel-raised)}
+.pc-axis{padding:0 56px}
+.pc-axis .axislabels{font-size:22px}
+.pc-axis .axislabels small{font-size:13px;margin-top:2px}
+.pc-bar{position:relative;height:20px;margin:8px 0;border:1px solid var(--shadow)}
+/* inset 11px so a 100%-one-way lean still draws a whole arrowhead inside the bar */
+.pc-needle{position:absolute;top:-8px;width:3px;height:36px;margin-left:-1.5px;background:var(--navy)}
+.pc-needle::before{content:"";position:absolute;left:-7.5px;top:0;border:9px solid transparent;border-top:15px solid var(--navy);border-bottom:0}
+.pc-lean{margin:26px 56px 0;text-align:center;font-size:20px;color:var(--ink)}
+.pc-foot{height:52px;flex:none;margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-top:1px solid var(--shadow)}
+.pc-foot b{font:15px var(--font-mono);color:var(--link)}
 /* metric-alignment axis (the hero) */
 .axiswrap{margin:4px 2px 2px}
 .axislabels{display:flex;justify-content:space-between;font-family:var(--font-caption);font-weight:700;font-size:var(--text-ui)}
@@ -889,13 +924,63 @@ function shareKeyHTML(m){
   return seen.map(k=>`<span><i style="background:${MARK[k].c}"></i>${MARK[k].t}</span>`).join("");
 }
 
-// The PNG. Twitter renders an image far louder than it renders text art, and
-// canvas keeps the site's no-web-fonts rule: every face here is one the OS
-// already has, exactly like the page itself.
+// the needle line: which metric this eye thinks like, or in a showdown, which format it picked
+const needleLabels=showdown=>showdown?{l:"JPEG XL",r:state.av2?"AVIF or AV2":"AVIF",ls:"picked more often",rs:"picked more often",cl:"#0a246a",cr:"#0a246a",gl:"#8a866f",gr:"#8a866f"}
+  :{l:"ssimulacra2",r:"butteraugli",ls:"structure / detail",rs:"color / masking",cl:"#0b57c9",cr:"#9c640d",gl:"#0b57c9",gr:"#c8811c"};
+const cardFoot=showdown=>(showdown?"real encodes · cjxl · avifenc":"real encodes · zenc · mozjpeg · sips · cjxl · avifenc")+(state.av2?" · AVM":"")+" · equal byte budgets";
+
+// The card as the page's own HTML and tokens, for HTML-in-Canvas. It reuses the
+// share grid and key the page shows above it, so the two can't drift.
+function cardHTML(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
+  const L=needleLabels(showdown);
+  return `<div class="pc" drawable>
+    <div class="pc-title"><span>${showdown?`Pixel Peeper · ${VS()}`:"Pixel Peeper · compression eye exam"}</span><small>aadhar.sh/pixel-peeper</small></div>
+    <div class="pc-body">
+      <div class="pc-score"><small>your visual system, profiled</small>
+        <div class="pc-pct">${overall}<span>%</span></div>
+        <div class="pc-grade">${grade}</div><div>${clearLine}</div></div>
+      <div class="pc-run"><small>how the calls went</small>${shareGridHTML(m)}<div class="sharekey">${shareKeyHTML(m)}</div></div>
+    </div>
+    <div class="pc-axis">
+      <div class="axislabels"><span style="color:${L.cl}">${L.l}</span><span style="color:${L.cr}">${L.r}</span></div>
+      <div class="pc-bar" style="background:linear-gradient(90deg,${L.gl},${L.gr})">${decisive?`<i class="pc-needle" style="left:${11+lean*(1088-22)}px"></i>`:""}</div>
+      <div class="axislabels"><small>${L.ls}</small><small>${L.rs}</small></div>
+    </div>
+    <div class="pc-lean">${leanLine}</div>
+    <div class="pc-foot"><small>${cardFoot(showdown)}</small><b>whose eye do you have?</b></div>
+  </div>`;
+}
+
+// Paints the HTML card into a canvas on the browser's next paint. Rejects when
+// the browser can't, so the caller falls back to drawCard.
+function cardCanvas(html){
+  return new Promise((resolve,reject)=>{
+    const hold=document.createElement("div");hold.className="cardhold";hold.setAttribute("aria-hidden","true");
+    const cv=document.createElement("canvas");cv.width=1200;cv.height=630;cv.setAttribute("content","drawable");
+    cv.innerHTML=html;hold.appendChild(cv);document.body.appendChild(hold);
+    const fail=e=>{hold.remove();reject(e);};
+    const late=setTimeout(()=>fail(new Error("no paint event")),2000);
+    cv.addEventListener("paint",()=>{
+      clearTimeout(late);
+      try{
+        const x=cv.getContext("2d");x.reset();x.drawElementImage(cv.firstElementChild,0,0);
+        // On this page an unpainted source throws, but on a bare test page in
+        // Chrome 157 (2026-11-10) an off-screen one drew transparent without
+        // throwing, so read the title bar back before trusting the card.
+        if(x.getImageData(600,28,1,1).data[3]!==255) throw new Error("card drew blank");
+        cv.replaceChildren();cv.removeAttribute("content");hold.remove();resolve(cv);
+      }catch(e){fail(e);}
+    },{once:true});
+    cv.requestPaint();
+  });
+}
+
+// The canvas-primitives card, for browsers without HTML-in-Canvas (Safari and
+// Firefox, Chrome before 157). Twitter renders an image far louder than it
+// renders text art, and canvas keeps the site's no-web-fonts rule: every face
+// here is one the OS already has, exactly like the page itself.
 function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
-  // the needle line: which metric this eye thinks like, or in a showdown, which format it picked
-  const L=showdown?{l:"JPEG XL",r:state.av2?"AVIF or AV2":"AVIF",ls:"picked more often",rs:"picked more often",cl:"#0a246a",cr:"#0a246a",gl:"#8a866f",gr:"#8a866f"}
-    :{l:"ssimulacra2",r:"butteraugli",ls:"structure / detail",rs:"color / masking",cl:"#0b57c9",cr:"#9c640d",gl:"#0b57c9",gr:"#c8811c"};
+  const L=needleLabels(showdown);
   const W=1200,H=630,cv=document.createElement("canvas");cv.width=W;cv.height=H;
   const x=cv.getContext("2d");
   const UI='Tahoma,Verdana,Geneva,sans-serif',CAP='"Trebuchet MS",Verdana,sans-serif',MONO='"Courier New",Courier,monospace';
@@ -962,8 +1047,7 @@ function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   // footer
   x.fillStyle="#ACA899";x.fillRect(0,H-52,W,1);
   x.fillStyle="#636363";x.font=`15px ${MONO}`;
-  const avm=state.av2?" · AVM":"";
-  x.fillText(showdown?`real encodes · cjxl · avifenc${avm} · equal byte budgets`:`real encodes · zenc · mozjpeg · sips · cjxl · avifenc${avm} · equal byte budgets`,24,H-22);
+  x.fillText(cardFoot(showdown),24,H-22);
   x.textAlign="right";x.fillStyle="#0b3fae";
   x.fillText("whose eye do you have?",W-24,H-22);x.textAlign="left";
   return cv;
@@ -972,8 +1056,12 @@ function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
 function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   const txt=shareText(m,`${showdown?`${VS()} · `:""}${overall}% · ${grade}`,leanLine,showdown);
   const flash=(el,msg)=>{const was=el.textContent;el.textContent=msg;setTimeout(()=>el.textContent=was,1500);};
-  let card=null; const png=()=>(card=card||drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown));
-  const blob=()=>new Promise(res=>png().toBlob(res,"image/png"));
+  const args=[m,overall,grade,clearLine,leanLine,lean,decisive,showdown];
+  let card=null;
+  const png=()=>(card=card||("drawElementImage" in CanvasRenderingContext2D.prototype
+    ?cardCanvas(cardHTML(...args)).catch(()=>drawCard(...args))
+    :Promise.resolve(drawCard(...args))));
+  const blob=()=>png().then(c=>new Promise(res=>c.toBlob(res,"image/png")));
 
   document.getElementById("copytext").onclick=ev=>{
     navigator.clipboard&&navigator.clipboard.writeText(txt);flash(ev.target,"Copied ✓");};
@@ -997,9 +1085,10 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   document.getElementById("showcard").onclick=ev=>{
     const holder=document.getElementById("cardwrap");
     if(holder.firstChild){holder.innerHTML="";ev.target.textContent="Preview image";return;}
-    const c=png();c.className="sharecard";c.setAttribute("role","img");
-    c.setAttribute("aria-label",`Pixel Peeper result card: ${overall}%, ${grade}. ${leanLine}`);
-    holder.appendChild(c);ev.target.textContent="Hide image";
+    ev.target.textContent="Hide image";
+    png().then(c=>{c.className="sharecard";c.setAttribute("role","img");
+      c.setAttribute("aria-label",`Pixel Peeper result card: ${overall}%, ${grade}. ${leanLine}`);
+      holder.appendChild(c);});
   };
 }
 

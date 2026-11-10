@@ -147,6 +147,13 @@ export async function renderSystemRestore(cp) {
 
   let main;
   if (state === "ok") {
+    // The inline script names months and weekdays itself. toLocaleDateString
+    // with options builds an Intl formatter on every call, and the first Intl
+    // object in a renderer process loads ICU data (gotcha 92): 131 calls took
+    // 60 to 76 ms before first paint under 4x CPU throttle, and one per month
+    // still took a median of 40 (7 runs each, 2026-11-10). The text matches
+    // what en-US printed for all 131 points; a visitor in another locale reads
+    // English dates on an English page now.
     const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
     main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point.</p>
     <div class="sr-stage">
@@ -165,9 +172,10 @@ var POINTS = ${JSON.stringify(data)};
   var R = document.getElementById('srRange'), L = document.getElementById('srList'), D = document.getElementById('srDetail');
   if (!R || !L || !D) return;
   function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return c=='&'?'&amp;':c=='<'?'&lt;':'&gt;'; }); }
-  function dfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'}); } catch(e){ return d; } }
-  var months = {};
-  function mfmt(d){ var k = d.slice(0,7); if (months[k]) return months[k]; var x = new Date(d + 'T12:00:00'); try { return months[k] = x.toLocaleDateString(undefined, {year:'numeric', month:'long'}); } catch(e){ return k; } }
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function dfmt(d){ var p = d.split('-'); return DAYS[new Date(Date.UTC(+p[0], p[1] - 1, +p[2])).getUTCDay()] + ', ' + MONTHS[p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0]; }
+  function mfmt(d){ return MONTHS[d.slice(5,7) - 1] + ' ' + d.slice(0,4); }
   var html = '', lastM = '';
   for (var i = 0; i < POINTS.length; i++) {
     var m = mfmt(POINTS[i].d);
@@ -249,7 +257,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-btn:hover{background:linear-gradient(180deg,#fff,#e8f0fb)}
 .sr-note{margin-top:8px;font-size:var(--text-micro);color:var(--slate-55);background:#fffbe6;border:1px solid #f0e3a8;border-radius:3px;padding:6px 9px;line-height:1.5}
 .sr-scrub{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
-.sr-scrub input[type=range]{flex:1;accent-color:#2f6fd0}
+.sr-scrub input[type=range]{flex:1;min-width:0;accent-color:#2f6fd0}
 .sr-scrub-end{font-family:var(--font-mono);font-size:var(--text-2xs);color:#9aa6b8;flex:0 0 auto}
 .sr-foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:8px;margin-top:12px;line-height:1.5}
 .sr-foot b{color:var(--slate-26)}

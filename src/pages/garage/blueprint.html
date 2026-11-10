@@ -51,7 +51,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 .rest th, .rest td { text-align: left; padding: 5px 8px; border-bottom: 1px solid oklch(89% 0.02 255); vertical-align: top; }
 .rest th { font: bold var(--text-2xs) var(--font-mono); text-transform: uppercase; letter-spacing: .04em; color: oklch(40% 0.05 255); }
 .rest td:first-child { white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-micro); color: oklch(35% 0.06 255); }
-@media (max-width: 540px) { .rest td:first-child { white-space: normal; } }
+@media (max-width: 540px) { .rest th, .rest td { padding-inline: 5px; } .rest td:first-child { white-space: normal; overflow-wrap: anywhere; } }
 .map { font-family: var(--font-mono); font-size: var(--text-micro); line-height: 1.55; background: var(--row-alt); border: 1px solid var(--slate-85); padding: 10px 12px; overflow-x: auto; white-space: pre; margin: 8px 0; color: oklch(28% 0.02 250); }
 
 </style>

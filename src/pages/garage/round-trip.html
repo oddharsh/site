@@ -24,7 +24,7 @@
 .garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
-.rt-pending{min-height:60vh}
+.rt-pending{min-height:100vh}
 .rt-proof{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:14px;padding-top:6px}
 .rt-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;margin:10px 0}
 .rt-pick{font-size:var(--text-xs);margin:0 0 8px}
@@ -38,7 +38,9 @@
 .rt-pane pre{margin:0;white-space:pre-wrap;font-family:var(--font-mono);font-size:var(--text-2xs)}
 .rt-cap{font-size:var(--text-2xs);color:var(--slate-40);margin:2px 0 0}
 .rt-drop{font-size:var(--text-micro);margin:8px 0 0}
-@media (max-width:640px){.rt-legs,.rt-panes{grid-template-columns:1fr}}
+/* the demo's output is the same height for every page it rebuilds (the panes are fixed), so its box holds that height while the fetch is out and the essay below never moves */
+#rt-out{min-height:443px}
+@media (max-width:640px){.rt-legs,.rt-panes{grid-template-columns:1fr}#rt-out{min-height:904px}}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>

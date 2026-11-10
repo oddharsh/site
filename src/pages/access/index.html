@@ -156,6 +156,11 @@ select{font:inherit;font-size:calc(var(--text-sm) * var(--sc));border:1px solid 
    a 41px strip before this line existed. */
 .mmc-head{flex:0 0 auto;background:var(--face-light);border-bottom:1px solid var(--shadow);overflow:hidden}
 .mmc-head svg{display:block;margin:0 auto}
+/* The header strip holds its drawn height while it is still empty. The script
+   at the end of the page fills it with an SVG 1002 by 26 scaled to the pane's
+   width, and when paint beat that script the graph below dropped 21px: layout
+   shift 0.021 in 4 of 9 loads under 4x CPU throttle (2026-11-10). */
+.mmc-head:empty{aspect-ratio:1002/26}
 .mmc-board{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 
 /* left pane: the tree, as a tree */
