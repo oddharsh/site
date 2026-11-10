@@ -1176,6 +1176,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
 .lx-view { display:inline-flex; }
 .lx-seg { font-size:var(--text-xs); padding:3px 11px; color:var(--grey-28); background:linear-gradient(180deg,#fbfbfb,#e3e3da); border:1px solid oklch(55% 0 0); border-right-width:0; }
+@media (max-width:420px){ .lx-seg { padding-inline:7px; } }
 .lx-seg:first-child { border-radius:3px 0 0 3px; }
 .lx-seg:last-child { border-right-width:1px; border-radius:0 3px 3px 0; }
 .lx-seg.is-on { color:#fff; background:linear-gradient(180deg, oklch(58% 0.15 255), oklch(44% 0.18 257)); }

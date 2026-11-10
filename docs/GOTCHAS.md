@@ -886,7 +886,14 @@ skips it.
     first use, startup's median fell to 37.8 ms (15 interleaved runs each,
     2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
     Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
-    `reading.ts` and `serendipity.ts` already did.
+    `reading.ts` and `serendipity.ts` already did. A browser pays the same
+    way, once per renderer process: the taskbar clock's `Intl.DateTimeFormat`
+    in `nav.ts` cost the first page of a visit 8 to 17 ms in Chrome and 30 to
+    53 ms under 4x CPU throttle (later pages in the tab, about 1 ms), and
+    /restore's `toLocaleDateString`, which builds a formatter per call,
+    ran 131 times before first paint (60 to 76 ms throttled; 40 once it ran
+    per month, 2026-11-10). The clock is formatted by hand now and `nav.ts`
+    may not touch Intl.
     Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers
@@ -953,3 +960,19 @@ skips it.
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
     Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+
+97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
+    whole window sideways on a phone.** An `<input>` keeps its 20-character
+    intrinsic width as a flex item unless it has `min-width: 0`, a `<pre>`
+    is as wide as its longest line unless it scrolls itself, and a
+    `nowrap` table cell holds its column open. The window's scroller
+    (`main.content`) then grows past its box, the page drags left and right,
+    and whatever is past the edge sits off screen. On 2026-11-10 six pages
+    did at 360px: /search and /run (the submit button 52px and 39px out),
+    /lens (the view switcher, 9px), and /garage/pqc, /garage/compression and
+    /garage/blueprint (289px, 295px and 174px of code and table). No check
+    saw it, because the window clips its scroller and the document itself
+    never overflows. `prose.css` now scrolls every prose `<pre>` on its own.
+    `bun run phone:check` opens every manifest page in Chrome at 360 and
+    390px, and plants a 600px block first to prove it can fail.
+    Checked by: `tools/check-phone-layout.ts`.
