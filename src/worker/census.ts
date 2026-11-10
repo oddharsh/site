@@ -500,7 +500,7 @@ export function censusExhibitHtml(grouped) {
     );
   }
   if (!grouped || !grouped.hosts.length) {
-    return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run; an owner can seed it immediately with the refresh key.</div>';
+    return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run.</div>';
   }
   const rows = grouped.hosts
     .map((h) => {
@@ -661,10 +661,10 @@ export function renderCensusPage() {
     placeholder: censusExhibit(PENDING),
     fallback: { says: "The census table arrives", shows: "it", json: "/lens/census.json" },
   });
-  return censusPage(
-    html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
-    { head, scripts: islandScript() },
-  );
+  return censusPage(html`${mount}<p class="cx-fail">The census didn't load. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`, {
+    head,
+    scripts: islandScript(),
+  });
 }
 
 // One page frame for both renders, so the live refresh view and the baked shell

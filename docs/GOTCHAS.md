@@ -886,7 +886,16 @@ skips it.
     first use, startup's median fell to 37.8 ms (15 interleaved runs each,
     2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
     Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
-    `reading.ts` and `serendipity.ts` already did.
+    `reading.ts` and `serendipity.ts` already did. A browser pays the same
+    way, once per renderer process: the taskbar clock's `Intl.DateTimeFormat`
+    in `nav.ts` cost the first page of a visit 8 to 17 ms in Chrome and 30 to
+    53 ms under 4x CPU throttle (later pages in the tab, about 1 ms), and
+    /restore's `toLocaleDateString`, which builds a formatter per call,
+    ran 131 times before first paint (60 to 76 ms throttled; 40 once it ran
+    per month, 2026-11-10). The clock is formatted by hand now and `nav.ts`
+    may not touch Intl. `toLocaleString()` on a number is the same call:
+    eight essay pages grouped digits with it at load, 36 to 58 ms throttled
+    on a landing view, and group integers with a regex now.
     Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers
@@ -926,16 +935,18 @@ skips it.
     fails if the setting is dropped.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 
-95. **png 0.17 never decodes a PNG's eXIf chunk.** Its encoder writes
-    `Info::exif_metadata`, but its decoder leaves the field empty, so a
-    Rust encoder reading sips's PNG of a HIF sees no orientation and no
-    EXIF. The archive then decodes sideways, and exif-sooc refuses the
-    bare codestream it gets ("has no box to hold metadata"). `jixel-enc`
-    walks the chunks itself and passes the TIFF bytes to jixel's
-    `with_exif`, which also makes the output a container. On XT500132
-    (2026-10-17) the oriented encode then differs from the scored one by 7
-    to 15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
-    `finds_the_exif_chunk_png_0_17_will_not_decode` and
+95. **A HIF archive's orientation and container both come from the eXIf
+    chunk in sips's PNG.** `jixel-enc` writes the chunk's orientation into
+    the codestream and passes the chunk to jixel's `with_exif`, whose
+    `Exif` box makes the output a container. Lose the chunk and the
+    archive decodes sideways, and exif-sooc refuses the bare codestream
+    ("has no box to hold metadata"). png 0.17 wrote eXIf but never decoded
+    it, so `jixel-enc` walked the chunks by hand until png 0.18 filled
+    `Info::exif_metadata`. On XT509488 (Rotate 270 CW, 2026-11-10) both
+    reads gave a byte-identical 3,369,960-byte archive. On XT500132
+    (2026-10-17) the oriented encode differs from the scored one by 7 to
+    15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
+    `png_decodes_the_exif_chunk` and
     `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 
@@ -953,3 +964,19 @@ skips it.
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
     Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+
+97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
+    whole window sideways on a phone.** An `<input>` keeps its 20-character
+    intrinsic width as a flex item unless it has `min-width: 0`, a `<pre>`
+    is as wide as its longest line unless it scrolls itself, and a
+    `nowrap` table cell holds its column open. The window's scroller
+    (`main.content`) then grows past its box, the page drags left and right,
+    and whatever is past the edge sits off screen. On 2026-11-10 six pages
+    did at 360px: /search and /run (the submit button 52px and 39px out),
+    /lens (the view switcher, 9px), and /garage/pqc, /garage/compression and
+    /garage/blueprint (289px, 295px and 174px of code and table). No check
+    saw it, because the window clips its scroller and the document itself
+    never overflows. `prose.css` now scrolls every prose `<pre>` on its own.
+    `bun run phone:check` opens every manifest page in Chrome at 360 and
+    390px, and plants a 600px block first to prove it can fail.
+    Checked by: `tools/check-phone-layout.ts`.

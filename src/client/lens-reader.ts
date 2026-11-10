@@ -74,7 +74,7 @@
     return section(
       "What the extractor threw away",
       { text: pct == null ? "n/a" : pct + "% dropped", kind: kind },
-      "Both counts come from the same function on the same fetch, so the difference is extraction and not two definitions of a word.",
+      "",
       kvTable({
         "page as served": num(d.source && d.source.words) + " words · " + bytes(d.source && d.source.bytes),
         "extractor kept": num(d.kept && d.kept.words) + " words · " + bytes(d.kept && d.kept.bytes),
@@ -142,7 +142,7 @@
     return section(
       "What the extractor claims this is",
       { text: d.title ? "titled" : "untitled" },
-      "Metadata Readability lifted while extracting. Unset fields are omitted rather than guessed.",
+      "Metadata Readability lifted while extracting.",
       kvTable({
         title: d.title,
         author: d.author,

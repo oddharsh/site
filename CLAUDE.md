@@ -47,6 +47,7 @@ bun run --filter cal-aadhar-sh test
 bun run routes:check        # route oracle against an in-process Worker
 bun run derive:check        # derived artifacts still match their inputs (gotcha 46)
 bun run pages:check         # house-voice lint on page text (gotcha 32)
+bun run phone:check         # every page in Chrome at 360 and 390px; none scrolls sideways (gotcha 97)
 bun run controls            # plant each guard's defect; fails if a guard misses it (gotcha 90)
 bun run wrangler:site <cmd> # wrangler against the site config (gotcha 48)
 bun run photos <paths>      # add photos: encode, upload to R2, index, caption

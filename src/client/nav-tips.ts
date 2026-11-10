@@ -150,24 +150,20 @@ export function createTips(options) {
       '<div id="axp-tips" popover="auto" role="dialog" aria-labelledby="axp-tips-t">' +
       '<div class="tb"><span class="ic" aria-hidden="true">' +
       BULB +
-      '</span><span class="t" id="axp-tips-t">Tip of the Day</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
+      '</span><span class="t" id="axp-tips-t">Tip of the Day</span><button class="x" type="button" popovertarget="axp-tips" popovertargetaction="hide" title="Close" aria-label="Close">✕</button></div>' +
       '<div class="bd"><p class="ln" aria-live="polite"></p></div>' +
       '<div class="ft"><label class="chk"><input type="checkbox"> Show tips at startup</label></div>' +
       "</div>";
     const node = t.content.firstElementChild;
     if (!(node instanceof HTMLElement)) throw new Error("Tip of the Day template must produce an element");
     const p = node.querySelector(".bd p"),
-      cb = node.querySelector(".chk input"),
-      x = node.querySelector(".x");
-    if (!(p instanceof HTMLElement) || !(cb instanceof HTMLInputElement) || !x) throw new Error("Tip of the Day template lost its parts");
+      cb = node.querySelector(".chk input");
+    if (!(p instanceof HTMLElement) || !(cb instanceof HTMLInputElement)) throw new Error("Tip of the Day template lost its parts");
     box = node;
     text = p;
     check = cb;
     D.body.appendChild(node);
 
-    x.addEventListener("click", () => {
-      node.hidePopover();
-    });
     // Ticked keeps today's stamp, so the next tip arrives tomorrow; unticked
     // stops the automatic one for good. Run can still open it either way.
     cb.addEventListener("change", () => {

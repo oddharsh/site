@@ -679,7 +679,7 @@ export function renderSerendipityPage() {
     placeholder: unsafeHtml(pendingDashboardEvents()),
     fallback: { says: "The events arrive", shows: "them" },
   });
-  const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
+  const fail = `<p class="sd-fail">The events didn't load. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
   return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, head.html));
 }
 

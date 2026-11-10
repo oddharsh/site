@@ -43,8 +43,11 @@ test("CI is one required job named validate that cannot be skipped or softened",
   // `controls` (2026-10-29) plants each guard's defect and fails if the guard
   // misses it. A blind guard is a finding about the checks, not about the
   // commit, so it reports on the same terms as the CPU job.
-  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "controls", "attest"]);
-  for (const name of ["cpu-sweep", "controls"]) {
+  // `phone-layout` (2026-11-10) opens every page at phone width in Chrome
+  // (gotcha 97). A page that scrolls sideways is a bug to fix, and it reports
+  // on the same terms.
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "controls", "phone-layout", "attest"]);
+  for (const name of ["cpu-sweep", "controls", "phone-layout"]) {
     const job = workflow.jobs[name];
     assert.equal(job["continue-on-error"], true, `${name} may fail its job, never the run promote-production waits on`);
     assert.equal(job.needs, undefined, `nothing waits on ${name}, and it waits on nothing`);

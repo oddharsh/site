@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .av2-demo{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}
@@ -273,7 +273,6 @@ bun run av2:wasm</code></pre>
 <h2>What would change this</h2>
 <p>The result is small, and it cuts both ways. It covers 38 tiles, sparser than the tier they sample, and 16 crops from one camera. It runs the reference encoder rather than a production one, in a container libavif itself labels experimental, and scores with two metrics that both come from the JPEG XL project. A production AV2 encoder is the likeliest thing to move the dense end, the way SVT-AV1 and later libaom releases did for AV1, and a still-image tune is the first place to look. The thin end is already a win, and it covers 71 of this site's 162 colour thumbnails. To ship those, AV2 waits on a browser that decodes it and a name that browser can decline. When either arrives, both probes re-run in an afternoon.</p>
     <section id="luq" aria-label="understanding check"></section>
-    <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
   </main>
   <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-09-27</span></div>
 </div>

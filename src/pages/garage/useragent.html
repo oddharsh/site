@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .ua-ids{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 10px;padding:2px 0}
@@ -114,6 +114,36 @@
 <h2>What the survey sends</h2>
 <p>Sixteen identities, grouped by what they claim. Three are controls, and they carry the weight of the whole table.</p>
 <div class="ua-ids" id="ua-ids"></div>
+<script>
+// Three scripts, each straight after the markup it fills, so a demo exists before
+// anything below it is laid out. As one script at the end of the page they ran
+// after first paint and pushed the essay down: layout shift 0.049 in each of 3
+// loads under 4x CPU throttle (2026-11-10). window.UA carries the survey data
+// and the two helpers to the next two scripts; the build scopes each inline
+// script, so a top-level var would not reach them.
+window.UA = (function () {
+  var D = {"measuredAt":"2026-08-21","trials":3,"ids":[{"k":"chrome","l":"Chrome","o":"a browser","r":"control","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36","h":null},{"k":"curl","l":"curl","o":"a plain HTTP client","r":"control","ua":"curl/8.7.1","h":null},{"k":"honest","l":"ua-survey (ours)","o":"aadhar.sh","r":"control","ua":"aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)","h":null},{"k":"bingbot","l":"Bingbot","o":"Microsoft","r":"search","ua":"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)","h":null},{"k":"googlebot","l":"Googlebot","o":"Google","r":"search","ua":"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)","h":null},{"k":"applebot","l":"Applebot","o":"Apple","r":"search","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)","h":null},{"k":"duckduckbot","l":"DuckDuckBot","o":"DuckDuckGo","r":"search","ua":"DuckDuckBot/1.1; (+http://duckduckgo.com/duckduckbot.html)","h":null},{"k":"amazonbot","l":"Amazonbot","o":"Amazon","r":"train","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.214 Safari/537.36 (compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)","h":null},{"k":"facebookbot","l":"facebookexternalhit","o":"Meta","r":"answers","ua":"facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)","h":null},{"k":"gptbot","l":"GPTBot","o":"OpenAI","r":"train","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot","h":null},{"k":"claudebot","l":"ClaudeBot","o":"Anthropic","r":"train","ua":"Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)","h":null},{"k":"claudeuser","l":"Claude-User","o":"Anthropic","r":"answers","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Claude-User/1.0; +Claude-User@anthropic.com","h":null},{"k":"perplexity","l":"PerplexityBot","o":"Perplexity","r":"answers","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot","h":null},{"k":"wba_unsigned","l":"Signature-Agent, unsigned","o":"aadhar.sh","r":"probe","ua":"aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)","h":{"signature-agent":"\"https://aadhar.sh\""}},{"k":"oai_fd","l":"OpenAI File Downloader","o":"OpenAI (claimed)","r":"claimed","ua":"OpenAI File Downloader","h":null},{"k":"xai_img","l":"XaiImageApiFetch","o":"xAI (claimed)","r":"claimed","ua":"XaiImageApiFetch/1.0","h":null}],"tg":[{"k":"linkedin-profile","u":"https://www.linkedin.com/in/williamhgates","n":"a public person profile, the source claim's own example","v":"unmeasurable","r":{"chrome":[999,0,1,0],"curl":[999,0,1,0],"honest":[999,0,1,0],"bingbot":[999,0,1,0],"googlebot":[999,0,1,0],"applebot":[999,0,1,0],"duckduckbot":[999,0,1,0],"amazonbot":[999,0,1,0],"facebookbot":[200,3285,0,0],"gptbot":[999,42,1,0],"claudebot":[999,0,1,0],"claudeuser":[999,0,1,0],"perplexity":[999,0,1,0],"wba_unsigned":[999,0,1,0],"oai_fd":[999,0,1,0],"xai_img":[999,0,1,0]}},{"k":"nytimes","u":"https://www.nytimes.com/","n":"a paywalled newsroom homepage","v":"measurable","r":{"chrome":[200,1255,0,0],"curl":[200,1255,0,0],"honest":[200,1438,0,0],"bingbot":[200,1438,0,0],"googlebot":[200,1438,0,0],"applebot":[200,1438,0,0],"duckduckbot":[200,1438,0,0],"amazonbot":[403,21,1,0],"facebookbot":[200,1438,0,0],"gptbot":[403,135,1,0],"claudebot":[403,135,1,0],"claudeuser":[403,135,1,0],"perplexity":[403,135,1,0],"wba_unsigned":[200,1438,0,0],"oai_fd":[200,1255,0,0],"xai_img":[200,1438,0,0]}},{"k":"stackoverflow","u":"https://stackoverflow.com/","n":"answers 402 to some crawlers","v":"unmeasurable","r":{"chrome":[403,9,1,0],"curl":[403,9,1,0],"honest":[403,9,1,0],"bingbot":[403,9,1,0],"googlebot":[403,9,1,0],"applebot":[403,9,1,0],"duckduckbot":[403,9,1,0],"amazonbot":[403,9,1,0],"facebookbot":[429,9,1,0],"gptbot":[429,9,1,0],"claudebot":[429,9,1,0],"claudeuser":[429,9,1,0],"perplexity":[429,9,1,0],"wba_unsigned":[429,9,1,0],"oai_fd":[429,9,1,0],"xai_img":[429,9,1,0]}},{"k":"wikipedia","u":"https://en.wikipedia.org/wiki/Web_crawler","n":"an open reference article","v":"measurable","r":{"chrome":[200,8243,0,0],"curl":[200,8243,0,0],"honest":[200,8243,0,0],"bingbot":[403,10,1,0],"googlebot":[403,10,1,0],"applebot":[403,10,1,0],"duckduckbot":[403,10,1,0],"amazonbot":[200,8243,0,0],"facebookbot":[403,10,1,0],"gptbot":[200,8243,0,0],"claudebot":[403,9,1,0],"claudeuser":[200,8243,0,0],"perplexity":[200,8243,0,0],"wba_unsigned":[200,8243,0,0],"oai_fd":[200,8243,0,0],"xai_img":[200,8243,0,0]}},{"k":"reddit","u":"https://www.reddit.com/r/programming/","n":"post-Google-deal access control","v":"measurable","r":{"chrome":[200,1,0,1],"curl":[200,1,0,1],"honest":[200,1,0,1],"bingbot":[403,133,1,0],"googlebot":[403,132,1,0],"applebot":[200,1,0,1],"duckduckbot":[200,1,0,1],"amazonbot":[429,0,1,0],"facebookbot":[200,1640,0,0],"gptbot":[403,133,1,0],"claudebot":[429,0,1,0],"claudeuser":[200,1,0,1],"perplexity":[200,1,0,1],"wba_unsigned":[200,1,0,1],"oai_fd":[200,44,0,1],"xai_img":[200,44,0,1]}},{"k":"theatlantic","u":"https://www.theatlantic.com/","n":"a second paywalled newsroom, testing whether the denylist shape repeats","v":"measurable","r":{"chrome":[200,1344,0,0],"curl":[200,1344,0,0],"honest":[200,1344,0,0],"bingbot":[200,1344,0,0],"googlebot":[200,1344,0,0],"applebot":[402,7,1,0],"duckduckbot":[200,1344,0,0],"amazonbot":[200,1344,0,0],"facebookbot":[200,1344,0,0],"gptbot":[200,1344,0,0],"claudebot":[402,7,1,0],"claudeuser":[402,7,1,0],"perplexity":[402,7,1,0],"wba_unsigned":[200,1344,0,0],"oai_fd":[200,1344,0,0],"xai_img":[200,1344,0,0]}},{"k":"github","u":"https://github.com/","n":"a developer platform with no AI-crawler position","v":"measurable","r":{"chrome":[200,1135,0,0],"curl":[200,1135,0,0],"honest":[200,1135,0,0],"bingbot":[200,1135,0,0],"googlebot":[200,1135,0,0],"applebot":[200,1135,0,0],"duckduckbot":[200,1135,0,0],"amazonbot":[200,1135,0,0],"facebookbot":[200,1135,0,0],"gptbot":[200,1135,0,0],"claudebot":[200,1135,0,0],"claudeuser":[200,1135,0,0],"perplexity":[200,1135,0,0],"wba_unsigned":[200,1135,0,0],"oai_fd":[200,1135,0,0],"xai_img":[200,1135,0,0]}},{"k":"hackernews","u":"https://news.ycombinator.com/","n":"plain HTML, no CDN bot management","v":"measurable","r":{"chrome":[200,747,0,0],"curl":[200,747,0,0],"honest":[200,747,0,0],"bingbot":[200,747,0,0],"googlebot":[200,747,0,0],"applebot":[200,747,0,0],"duckduckbot":[200,747,0,0],"amazonbot":[200,747,0,0],"facebookbot":[200,747,0,0],"gptbot":[200,747,0,0],"claudebot":[200,747,0,0],"claudeuser":[200,747,0,0],"perplexity":[200,747,0,0],"wba_unsigned":[200,747,0,0],"oai_fd":[200,747,0,0],"xai_img":[200,747,0,0]}},{"k":"medium","u":"https://medium.com/","n":"expected to fail its controls","v":"unmeasurable","r":{"chrome":[403,127,1,0],"curl":[403,127,1,0],"honest":[403,127,1,0],"bingbot":[403,127,1,0],"googlebot":[403,127,1,0],"applebot":[403,127,1,0],"duckduckbot":[403,127,1,0],"amazonbot":[403,127,1,0],"facebookbot":[403,127,1,0],"gptbot":[403,127,1,0],"claudebot":[403,127,1,0],"claudeuser":[403,127,1,0],"perplexity":[403,127,1,0],"wba_unsigned":[403,127,1,0],"oai_fd":[403,127,1,0],"xai_img":[403,127,1,0]}},{"k":"quora","u":"https://www.quora.com/","n":"expected to fail its controls","v":"unmeasurable","r":{"chrome":[403,9,1,0],"curl":[403,9,1,0],"honest":[403,9,1,0],"bingbot":[403,9,1,0],"googlebot":[403,9,1,0],"applebot":[403,9,1,0],"duckduckbot":[403,9,1,0],"amazonbot":[403,9,1,0],"facebookbot":[403,9,1,0],"gptbot":[403,9,1,0],"claudebot":[403,9,1,0],"claudeuser":[403,9,1,0],"perplexity":[403,9,1,0],"wba_unsigned":[403,9,1,0],"oai_fd":[403,9,1,0],"xai_img":[403,9,1,0]}},{"k":"aadharsh","u":"https://aadhar.sh/","n":"this site, which serves everyone the same document","v":"measurable","r":{"chrome":[200,314,0,0],"curl":[200,314,0,0],"honest":[200,314,0,0],"bingbot":[200,314,0,0],"googlebot":[200,314,0,0],"applebot":[200,314,0,0],"duckduckbot":[200,314,0,0],"amazonbot":[200,314,0,0],"facebookbot":[200,314,0,0],"gptbot":[200,314,0,0],"claudebot":[200,314,0,0],"claudeuser":[200,314,0,0],"perplexity":[200,314,0,0],"wba_unsigned":[200,314,0,0],"oai_fd":[200,314,0,0],"xai_img":[200,314,0,0]}}]};
+  var ids = document.getElementById("ua-ids");
+  // The compact header rotates, so a long label costs HEIGHT rather than width and
+  // "Signature-Agent, unsigned" clipped to "Signat-" at any header size worth
+  // having. Abbreviations are for the rotated header alone; the identity list
+  // above the matrix and every cell title still carry the full name and the exact
+  // user-agent string, so nothing is only ever shown in short form.
+  var SHORT = { honest: "ua-survey", facebookbot: "facebook", perplexity: "Perplexity",
+                wba_unsigned: "sig-agent", oai_fd: "OpenAI FD", xai_img: "xAI" };
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  var commas = function (n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
+
+  if (ids) ids.innerHTML = D.ids.map(function (i) {
+    return '<div class="row' + (i.r === "control" ? " ctl" : "") + '"><b>' + esc(i.l) +
+      (i.r === "control" ? '<span class="tag">control</span>' : "") + '</b><span class="who">' + esc(i.o) +
+      '</span><span class="ua">' + esc(i.ua) + "</span></div>";
+  }).join("");
+  return { D: D, SHORT: SHORT, commas: commas, esc: esc };
+})();
+</script>
 <p class="ua-note">The row labelled <b>ua-survey (ours)</b> is the honest one. It claims nothing it cannot back and points at this page. Read it against <code>googlebot</code> further down, because the gap between those two rows is the argument in miniature.</p>
 
 <h2>The control is what makes the table readable</h2>
@@ -132,6 +162,76 @@
     </span>
   </div>
   <div class="ua-scroll"><table class="ua-matrix" id="ua-matrix"></table></div>
+<script>
+(function () {
+  var D = window.UA.D, SHORT = window.UA.SHORT, commas = window.UA.commas, esc = window.UA.esc;
+  var matrix = document.getElementById("ua-matrix");
+  var toggle = document.getElementById("ua-toggle");
+  if (!matrix) return;
+  // Two densities, and COMPACT is the default on purpose. The detail view is
+  // 16 columns of "200 ok 1,255w", which overflows the window and hides the AI
+  // crawlers and the two invented names behind a horizontal scroll. Those are
+  // the columns the page is about, so the default has to fit them on screen.
+  // One glyph per cell answers "was this identity served" at a glance; the
+  // numbers stay one click away, and on the title of every glyph.
+  function cell(v, mode) {
+    if (!v || v[0] == null) return mode === "compact"
+      ? '<td class="no c" title="no answer">&middot;</td>'
+      : '<td class="no">no answer</td>';
+    var status = v[0], words = v[1], blocked = v[2], shell = v[3];
+    var cls = blocked ? "no" : shell ? "sh" : "ok";
+    var what = blocked ? "blocked" : shell ? "shell" : "ok";
+    if (mode === "compact") {
+      var glyph = blocked ? "\u00d7" : shell ? "\u25d0" : "\u2713";
+      return '<td class="' + cls + ' c" title="' + status + " " + what + ", " +
+        (words == null ? "-" : commas(words)) + ' words">' + glyph +
+        (blocked ? '<span class="s">' + status + "</span>" : "") + "</td>";
+    }
+    return '<td class="' + cls + '">' + status + " " + what + "<br>" + (words == null ? "-" : commas(words)) + "w</td>";
+  }
+
+  function draw(filter, mode) {
+    var rows = D.tg.filter(function (t) { return filter === "all" || t.v === "measurable"; });
+    var head = '<tr><th class="hsite">target</th>' + D.ids.map(function (i) {
+      // Compact turns the header on its side, which is what buys 16 columns the
+      // room to fit. The full label stays on the title for a hover and for AT.
+      return '<th class="' + (i.r === "control" ? "ctl" : "") + (mode === "compact" ? " rot" : "") +
+        '" title="' + esc(i.l) + " \u2014 " + esc(i.ua) + '"><span>' +
+        esc(mode === "compact" ? (SHORT[i.k] || i.l) : i.l) + "</span></th>";
+    }).join("") + "</tr>";
+    matrix.innerHTML = head + rows.map(function (t) {
+      return '<tr class="' + t.v + '"><td class="site"><b>' + esc(t.k) + '</b><span>' + esc(t.n) +
+        '</span><span class="ua-verdict">' + t.v + "</span></td>" +
+        D.ids.map(function (i) { return cell(t.r[i.k], mode); }).join("") + "</tr>";
+    }).join("");
+    // Control COLUMNS are marked here rather than in the cell builder, because the
+    // builder returns one cell without knowing which column it lands in.
+    Array.prototype.forEach.call(matrix.rows, function (row) {
+      D.ids.forEach(function (i, n) {
+        if (i.r === "control" && row.cells[n + 1]) row.cells[n + 1].classList.add("ctl");
+      });
+    });
+  }
+
+  var filter = "all", mode = "compact";
+  if (toggle) {
+    toggle.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var group = b.getAttribute("data-f") ? "f" : "m";
+      Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+        var same = (x.getAttribute("data-f") ? "f" : "m") === group;
+        if (same) x.classList.toggle("on", x === b);
+      });
+      if (group === "f") filter = b.getAttribute("data-f"); else mode = b.getAttribute("data-m");
+      matrix.className = mode === "compact" ? "ua-matrix compact" : "ua-matrix";
+      draw(filter, mode);
+    });
+  }
+  matrix.className = "ua-matrix compact";
+  draw(filter, mode);
+})();
+</script>
   <p class="ua-legend"><b>&#10003;</b> served a readable document &middot; <b>&#215;</b> refused, with the status beside it &middot; <b>&#9680;</b> a 200 carrying under 50 words, so the request was allowed and the content is still absent &middot; hover any cell for its status and word count, or switch to <b>with counts</b>. Counts are the median of three trials with scripts and styles stripped.</p>
 </div>
 
@@ -175,91 +275,9 @@
 <p>Two labels sit close together here and are worth keeping apart. A valid Web Bot Auth signature classifies traffic as a <b>signed agent</b>, and Verified Bot status is a further step judging behaviour rather than cryptography. Cloudflare's own <a href="https://blog.cloudflare.com/signed-agents/" target="_blank" rel="noopener">announcement</a> uses itself as the example: Browser Run (Browser Rendering when the post ran) sends signed Web Bot Auth headers and does not qualify as a verified bot, while Radar's URL Scanner does. Signing proves who is asking. Verification judges whether that identity has earned an allowlist entry.</p>
 <p>So the fix for everything above is deployed, at one of the largest <a class="term" data-t="reverse-proxy" href="https://en.wikipedia.org/wiki/Reverse_proxy" title="A server that sits in front of websites and receives their incoming requests, often adding caching and security on the way." rel="external">reverse proxies</a> on the web, and a site gets it by turning it on rather than by building it. Whether anything in this sample looks for it is a separate question, and the survey carries one small piece of evidence.</p>
 <div class="ua-wba" id="ua-wba"></div>
-<p>That row sends the pointer and signs nothing. It sets <code>Signature-Agent</code> to a directory that genuinely exists and omits <code>Signature</code> and <code>Signature-Input</code> entirely, so an origin actually verifying has everything it needs to reject the request. Read it against the plain <b>ua-survey (ours)</b> row in the matrix, which is the same user-agent carrying no header at all.</p>
-<p class="ua-note">Worth stating the limit of that probe. It shows whether an origin reacts to an unsigned Web Bot Auth attempt, and it cannot show whether an origin would honour a correctly signed one, because signing needs AadharshBot's private key and that key is a Worker secret this survey cannot reach. A run from inside the Worker would answer the second question and is the obvious next experiment.</p>
-<p>One more data point arrived by accident while this page was being written. Cloudflare's own Radar bot directory answered 403 to the unverified fetcher used to read it, and served the same page to an ordinary browser seconds later. The registry of verified bots sits behind the wall that verification exists to open.</p>
-
-<h2>What this site serves</h2>
-<p>The last row of the matrix is aadhar.sh, which answered all sixteen identities with the same 314-word document. That is a deliberate position: the pages here publish a Markdown twin, an <a class="term" data-t="mcp" href="https://modelcontextprotocol.io/" title="Model Context Protocol: an open standard for offering tools and data to AI models through one common interface." rel="external">MCP endpoint</a> and a machine catalog precisely so a crawler has a cheaper option than scraping the HTML. Serving one document to everyone is easy when there is nothing you are trying to keep from them.</p>
-<p>It also means this page cannot claim to have tested its own defense, because it has none to test.</p>
-<p>The crawler is a different story, and the honest version implicates us. AadharshBot signs its outbound requests under RFC 9421 and publishes an Ed25519 key at <a href="/.well-known/http-message-signatures-directory">the exact well-known path</a> Cloudflare's documentation specifies, served as <code>application/jwk-set+json</code>. That clears the technical bar and stops there, because the bot has never been submitted to the Verified Bots program. So the signature it has been sending all along buys it nothing at any origin that checks a registry rather than a signature, and this page argues for a thing its own crawler has half done.</p>
-
-<div class="ua-falsify">
-  <p><b>What would falsify this.</b> The denylist reading dies if the Times refuses <code>OpenAI File Downloader</code> on a later run, which would mean the list is maintained faster than a survey can exploit it. The verification reading dies if Wikimedia turns out to refuse <code>googlebot</code> from every address including Google's, which would make it an ordinary denylist that happens to name six crawlers. The rendering explanation for Reddit dies if <code>facebookexternalhit</code> is served more than a browser on a server-rendered page, where there is no JavaScript gap to explain it. The adoption reading dies if any origin treats the unsigned <code>Signature-Agent</code> row differently from the bare row beside it. All four are one re-run of <code>bun run ua:survey</code> away, and the survey prints its own control rows so a future reader can tell a changed policy from a changed instrument.</p>
-</div>
-    <section id="luq" aria-label="understanding check"></section>
-    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
-  </main>
-  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-21</span></div>
-</div>
-
 <script>
 (function () {
-  var D = {"measuredAt":"2026-08-21","trials":3,"ids":[{"k":"chrome","l":"Chrome","o":"a browser","r":"control","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36","h":null},{"k":"curl","l":"curl","o":"a plain HTTP client","r":"control","ua":"curl/8.7.1","h":null},{"k":"honest","l":"ua-survey (ours)","o":"aadhar.sh","r":"control","ua":"aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)","h":null},{"k":"bingbot","l":"Bingbot","o":"Microsoft","r":"search","ua":"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)","h":null},{"k":"googlebot","l":"Googlebot","o":"Google","r":"search","ua":"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)","h":null},{"k":"applebot","l":"Applebot","o":"Apple","r":"search","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)","h":null},{"k":"duckduckbot","l":"DuckDuckBot","o":"DuckDuckGo","r":"search","ua":"DuckDuckBot/1.1; (+http://duckduckgo.com/duckduckbot.html)","h":null},{"k":"amazonbot","l":"Amazonbot","o":"Amazon","r":"train","ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.214 Safari/537.36 (compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)","h":null},{"k":"facebookbot","l":"facebookexternalhit","o":"Meta","r":"answers","ua":"facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)","h":null},{"k":"gptbot","l":"GPTBot","o":"OpenAI","r":"train","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot","h":null},{"k":"claudebot","l":"ClaudeBot","o":"Anthropic","r":"train","ua":"Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)","h":null},{"k":"claudeuser","l":"Claude-User","o":"Anthropic","r":"answers","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Claude-User/1.0; +Claude-User@anthropic.com","h":null},{"k":"perplexity","l":"PerplexityBot","o":"Perplexity","r":"answers","ua":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot","h":null},{"k":"wba_unsigned","l":"Signature-Agent, unsigned","o":"aadhar.sh","r":"probe","ua":"aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)","h":{"signature-agent":"\"https://aadhar.sh\""}},{"k":"oai_fd","l":"OpenAI File Downloader","o":"OpenAI (claimed)","r":"claimed","ua":"OpenAI File Downloader","h":null},{"k":"xai_img","l":"XaiImageApiFetch","o":"xAI (claimed)","r":"claimed","ua":"XaiImageApiFetch/1.0","h":null}],"tg":[{"k":"linkedin-profile","u":"https://www.linkedin.com/in/williamhgates","n":"a public person profile, the source claim's own example","v":"unmeasurable","r":{"chrome":[999,0,1,0],"curl":[999,0,1,0],"honest":[999,0,1,0],"bingbot":[999,0,1,0],"googlebot":[999,0,1,0],"applebot":[999,0,1,0],"duckduckbot":[999,0,1,0],"amazonbot":[999,0,1,0],"facebookbot":[200,3285,0,0],"gptbot":[999,42,1,0],"claudebot":[999,0,1,0],"claudeuser":[999,0,1,0],"perplexity":[999,0,1,0],"wba_unsigned":[999,0,1,0],"oai_fd":[999,0,1,0],"xai_img":[999,0,1,0]}},{"k":"nytimes","u":"https://www.nytimes.com/","n":"a paywalled newsroom homepage","v":"measurable","r":{"chrome":[200,1255,0,0],"curl":[200,1255,0,0],"honest":[200,1438,0,0],"bingbot":[200,1438,0,0],"googlebot":[200,1438,0,0],"applebot":[200,1438,0,0],"duckduckbot":[200,1438,0,0],"amazonbot":[403,21,1,0],"facebookbot":[200,1438,0,0],"gptbot":[403,135,1,0],"claudebot":[403,135,1,0],"claudeuser":[403,135,1,0],"perplexity":[403,135,1,0],"wba_unsigned":[200,1438,0,0],"oai_fd":[200,1255,0,0],"xai_img":[200,1438,0,0]}},{"k":"stackoverflow","u":"https://stackoverflow.com/","n":"answers 402 to some crawlers","v":"unmeasurable","r":{"chrome":[403,9,1,0],"curl":[403,9,1,0],"honest":[403,9,1,0],"bingbot":[403,9,1,0],"googlebot":[403,9,1,0],"applebot":[403,9,1,0],"duckduckbot":[403,9,1,0],"amazonbot":[403,9,1,0],"facebookbot":[429,9,1,0],"gptbot":[429,9,1,0],"claudebot":[429,9,1,0],"claudeuser":[429,9,1,0],"perplexity":[429,9,1,0],"wba_unsigned":[429,9,1,0],"oai_fd":[429,9,1,0],"xai_img":[429,9,1,0]}},{"k":"wikipedia","u":"https://en.wikipedia.org/wiki/Web_crawler","n":"an open reference article","v":"measurable","r":{"chrome":[200,8243,0,0],"curl":[200,8243,0,0],"honest":[200,8243,0,0],"bingbot":[403,10,1,0],"googlebot":[403,10,1,0],"applebot":[403,10,1,0],"duckduckbot":[403,10,1,0],"amazonbot":[200,8243,0,0],"facebookbot":[403,10,1,0],"gptbot":[200,8243,0,0],"claudebot":[403,9,1,0],"claudeuser":[200,8243,0,0],"perplexity":[200,8243,0,0],"wba_unsigned":[200,8243,0,0],"oai_fd":[200,8243,0,0],"xai_img":[200,8243,0,0]}},{"k":"reddit","u":"https://www.reddit.com/r/programming/","n":"post-Google-deal access control","v":"measurable","r":{"chrome":[200,1,0,1],"curl":[200,1,0,1],"honest":[200,1,0,1],"bingbot":[403,133,1,0],"googlebot":[403,132,1,0],"applebot":[200,1,0,1],"duckduckbot":[200,1,0,1],"amazonbot":[429,0,1,0],"facebookbot":[200,1640,0,0],"gptbot":[403,133,1,0],"claudebot":[429,0,1,0],"claudeuser":[200,1,0,1],"perplexity":[200,1,0,1],"wba_unsigned":[200,1,0,1],"oai_fd":[200,44,0,1],"xai_img":[200,44,0,1]}},{"k":"theatlantic","u":"https://www.theatlantic.com/","n":"a second paywalled newsroom, testing whether the denylist shape repeats","v":"measurable","r":{"chrome":[200,1344,0,0],"curl":[200,1344,0,0],"honest":[200,1344,0,0],"bingbot":[200,1344,0,0],"googlebot":[200,1344,0,0],"applebot":[402,7,1,0],"duckduckbot":[200,1344,0,0],"amazonbot":[200,1344,0,0],"facebookbot":[200,1344,0,0],"gptbot":[200,1344,0,0],"claudebot":[402,7,1,0],"claudeuser":[402,7,1,0],"perplexity":[402,7,1,0],"wba_unsigned":[200,1344,0,0],"oai_fd":[200,1344,0,0],"xai_img":[200,1344,0,0]}},{"k":"github","u":"https://github.com/","n":"a developer platform with no AI-crawler position","v":"measurable","r":{"chrome":[200,1135,0,0],"curl":[200,1135,0,0],"honest":[200,1135,0,0],"bingbot":[200,1135,0,0],"googlebot":[200,1135,0,0],"applebot":[200,1135,0,0],"duckduckbot":[200,1135,0,0],"amazonbot":[200,1135,0,0],"facebookbot":[200,1135,0,0],"gptbot":[200,1135,0,0],"claudebot":[200,1135,0,0],"claudeuser":[200,1135,0,0],"perplexity":[200,1135,0,0],"wba_unsigned":[200,1135,0,0],"oai_fd":[200,1135,0,0],"xai_img":[200,1135,0,0]}},{"k":"hackernews","u":"https://news.ycombinator.com/","n":"plain HTML, no CDN bot management","v":"measurable","r":{"chrome":[200,747,0,0],"curl":[200,747,0,0],"honest":[200,747,0,0],"bingbot":[200,747,0,0],"googlebot":[200,747,0,0],"applebot":[200,747,0,0],"duckduckbot":[200,747,0,0],"amazonbot":[200,747,0,0],"facebookbot":[200,747,0,0],"gptbot":[200,747,0,0],"claudebot":[200,747,0,0],"claudeuser":[200,747,0,0],"perplexity":[200,747,0,0],"wba_unsigned":[200,747,0,0],"oai_fd":[200,747,0,0],"xai_img":[200,747,0,0]}},{"k":"medium","u":"https://medium.com/","n":"expected to fail its controls","v":"unmeasurable","r":{"chrome":[403,127,1,0],"curl":[403,127,1,0],"honest":[403,127,1,0],"bingbot":[403,127,1,0],"googlebot":[403,127,1,0],"applebot":[403,127,1,0],"duckduckbot":[403,127,1,0],"amazonbot":[403,127,1,0],"facebookbot":[403,127,1,0],"gptbot":[403,127,1,0],"claudebot":[403,127,1,0],"claudeuser":[403,127,1,0],"perplexity":[403,127,1,0],"wba_unsigned":[403,127,1,0],"oai_fd":[403,127,1,0],"xai_img":[403,127,1,0]}},{"k":"quora","u":"https://www.quora.com/","n":"expected to fail its controls","v":"unmeasurable","r":{"chrome":[403,9,1,0],"curl":[403,9,1,0],"honest":[403,9,1,0],"bingbot":[403,9,1,0],"googlebot":[403,9,1,0],"applebot":[403,9,1,0],"duckduckbot":[403,9,1,0],"amazonbot":[403,9,1,0],"facebookbot":[403,9,1,0],"gptbot":[403,9,1,0],"claudebot":[403,9,1,0],"claudeuser":[403,9,1,0],"perplexity":[403,9,1,0],"wba_unsigned":[403,9,1,0],"oai_fd":[403,9,1,0],"xai_img":[403,9,1,0]}},{"k":"aadharsh","u":"https://aadhar.sh/","n":"this site, which serves everyone the same document","v":"measurable","r":{"chrome":[200,314,0,0],"curl":[200,314,0,0],"honest":[200,314,0,0],"bingbot":[200,314,0,0],"googlebot":[200,314,0,0],"applebot":[200,314,0,0],"duckduckbot":[200,314,0,0],"amazonbot":[200,314,0,0],"facebookbot":[200,314,0,0],"gptbot":[200,314,0,0],"claudebot":[200,314,0,0],"claudeuser":[200,314,0,0],"perplexity":[200,314,0,0],"wba_unsigned":[200,314,0,0],"oai_fd":[200,314,0,0],"xai_img":[200,314,0,0]}}]};
-  var ids = document.getElementById("ua-ids");
-  var matrix = document.getElementById("ua-matrix");
-  var toggle = document.getElementById("ua-toggle");
-  if (!ids || !matrix) return;
-  // The compact header rotates, so a long label costs HEIGHT rather than width and
-  // "Signature-Agent, unsigned" clipped to "Signat-" at any header size worth
-  // having. Abbreviations are for the rotated header alone; the identity list
-  // above the matrix and every cell title still carry the full name and the exact
-  // user-agent string, so nothing is only ever shown in short form.
-  var SHORT = { honest: "ua-survey", facebookbot: "facebook", perplexity: "Perplexity",
-                wba_unsigned: "sig-agent", oai_fd: "OpenAI FD", xai_img: "xAI" };
-  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
-
-  ids.innerHTML = D.ids.map(function (i) {
-    return '<div class="row' + (i.r === "control" ? " ctl" : "") + '"><b>' + esc(i.l) +
-      (i.r === "control" ? '<span class="tag">control</span>' : "") + '</b><span class="who">' + esc(i.o) +
-      '</span><span class="ua">' + esc(i.ua) + "</span></div>";
-  }).join("");
-
-  // Two densities, and COMPACT is the default on purpose. The detail view is
-  // 16 columns of "200 ok 1,255w", which overflows the window and hides the AI
-  // crawlers and the two invented names behind a horizontal scroll. Those are
-  // the columns the page is about, so the default has to fit them on screen.
-  // One glyph per cell answers "was this identity served" at a glance; the
-  // numbers stay one click away, and on the title of every glyph.
-  function cell(v, mode) {
-    if (!v || v[0] == null) return mode === "compact"
-      ? '<td class="no c" title="no answer">&middot;</td>'
-      : '<td class="no">no answer</td>';
-    var status = v[0], words = v[1], blocked = v[2], shell = v[3];
-    var cls = blocked ? "no" : shell ? "sh" : "ok";
-    var what = blocked ? "blocked" : shell ? "shell" : "ok";
-    if (mode === "compact") {
-      var glyph = blocked ? "\u00d7" : shell ? "\u25d0" : "\u2713";
-      return '<td class="' + cls + ' c" title="' + status + " " + what + ", " +
-        (words == null ? "-" : words.toLocaleString()) + ' words">' + glyph +
-        (blocked ? '<span class="s">' + status + "</span>" : "") + "</td>";
-    }
-    return '<td class="' + cls + '">' + status + " " + what + "<br>" + (words == null ? "-" : words.toLocaleString()) + "w</td>";
-  }
-
-  function draw(filter, mode) {
-    var rows = D.tg.filter(function (t) { return filter === "all" || t.v === "measurable"; });
-    var head = '<tr><th class="hsite">target</th>' + D.ids.map(function (i) {
-      // Compact turns the header on its side, which is what buys 16 columns the
-      // room to fit. The full label stays on the title for a hover and for AT.
-      return '<th class="' + (i.r === "control" ? "ctl" : "") + (mode === "compact" ? " rot" : "") +
-        '" title="' + esc(i.l) + " \u2014 " + esc(i.ua) + '"><span>' +
-        esc(mode === "compact" ? (SHORT[i.k] || i.l) : i.l) + "</span></th>";
-    }).join("") + "</tr>";
-    matrix.innerHTML = head + rows.map(function (t) {
-      return '<tr class="' + t.v + '"><td class="site"><b>' + esc(t.k) + '</b><span>' + esc(t.n) +
-        '</span><span class="ua-verdict">' + t.v + "</span></td>" +
-        D.ids.map(function (i) { return cell(t.r[i.k], mode); }).join("") + "</tr>";
-    }).join("");
-    // Control COLUMNS are marked here rather than in the cell builder, because the
-    // builder returns one cell without knowing which column it lands in.
-    Array.prototype.forEach.call(matrix.rows, function (row) {
-      D.ids.forEach(function (i, n) {
-        if (i.r === "control" && row.cells[n + 1]) row.cells[n + 1].classList.add("ctl");
-      });
-    });
-  }
-
+  var D = window.UA.D, commas = window.UA.commas, esc = window.UA.esc;
   // The Web Bot Auth enforcement probe, rendered as a paired comparison. Same
   // user-agent, one row carrying a Signature-Agent pointer and one carrying
   // nothing. A difference in either column is an origin that parsed the header.
@@ -273,7 +291,7 @@
         if (!plain || !probe) return "";
         var same = plain[0] === probe[0] && plain[1] === probe[1];
         if (!same) diffs++;
-        var fmt = function (v) { return v[0] + " " + (v[2] ? "blocked" : v[3] ? "shell" : "ok") + ", " + (v[1] == null ? "-" : v[1].toLocaleString()) + "w"; };
+        var fmt = function (v) { return v[0] + " " + (v[2] ? "blocked" : v[3] ? "shell" : "ok") + ", " + (v[1] == null ? "-" : commas(v[1])) + "w"; };
         return '<div class="r"><span class="t">' + esc(t.k) + '</span><span class="v same">' + fmt(plain) +
           '</span><span class="v ' + (same ? "same" : "diff") + '">' + fmt(probe) + "</span></div>";
       }).join("");
@@ -282,26 +300,25 @@
         ? "Every one served the signature pointer exactly what it served the bare string, to the word. Nothing in this sample read the header."
         : "Something parsed the header, so the reading above needs revisiting against those rows.") + "</div>";
   }
-
-  var filter = "all", mode = "compact";
-  if (toggle) {
-    toggle.addEventListener("click", function (e) {
-      var b = e.target.closest("button");
-      if (!b) return;
-      var group = b.getAttribute("data-f") ? "f" : "m";
-      Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
-        var same = (x.getAttribute("data-f") ? "f" : "m") === group;
-        if (same) x.classList.toggle("on", x === b);
-      });
-      if (group === "f") filter = b.getAttribute("data-f"); else mode = b.getAttribute("data-m");
-      matrix.className = mode === "compact" ? "ua-matrix compact" : "ua-matrix";
-      draw(filter, mode);
-    });
-  }
-  matrix.className = "ua-matrix compact";
-  draw(filter, mode);
 })();
 </script>
+<p>That row sends the pointer and signs nothing. It sets <code>Signature-Agent</code> to a directory that genuinely exists and omits <code>Signature</code> and <code>Signature-Input</code> entirely, so an origin actually verifying has everything it needs to reject the request. Read it against the plain <b>ua-survey (ours)</b> row in the matrix, which is the same user-agent carrying no header at all.</p>
+<p class="ua-note">Worth stating the limit of that probe. It shows whether an origin reacts to an unsigned Web Bot Auth attempt, and it cannot show whether an origin would honour a correctly signed one, because signing needs AadharshBot's private key and that key is a Worker secret this survey cannot reach. A run from inside the Worker would answer the second question and is the obvious next experiment.</p>
+<p>One more data point arrived by accident while this page was being written. Cloudflare's own Radar bot directory answered 403 to the unverified fetcher used to read it, and served the same page to an ordinary browser seconds later. The registry of verified bots sits behind the wall that verification exists to open.</p>
+
+<h2>What this site serves</h2>
+<p>The last row of the matrix is aadhar.sh, which answered all sixteen identities with the same 314-word document. That is a deliberate position: the pages here publish a Markdown twin, an <a class="term" data-t="mcp" href="https://modelcontextprotocol.io/" title="Model Context Protocol: an open standard for offering tools and data to AI models through one common interface." rel="external">MCP endpoint</a> and a machine catalog precisely so a crawler has a cheaper option than scraping the HTML. Serving one document to everyone is easy when there is nothing you are trying to keep from them.</p>
+<p>It also means this page cannot claim to have tested its own defense, because it has none to test.</p>
+<p>The crawler is a different story, and the honest version implicates us. AadharshBot signs its outbound requests under RFC 9421 and publishes an Ed25519 key at <a href="/.well-known/http-message-signatures-directory">the exact well-known path</a> Cloudflare's documentation specifies, served as <code>application/jwk-set+json</code>. That clears the technical bar and stops there, because the bot has never been submitted to the Verified Bots program. So the signature it has been sending all along buys it nothing at any origin that checks a registry rather than a signature, and this page argues for a thing its own crawler has half done.</p>
+
+<div class="ua-falsify">
+  <p><b>What would falsify this.</b> The denylist reading dies if the Times refuses <code>OpenAI File Downloader</code> on a later run, which would mean the list is maintained faster than a survey can exploit it. The verification reading dies if Wikimedia turns out to refuse <code>googlebot</code> from every address including Google's, which would make it an ordinary denylist that happens to name six crawlers. The rendering explanation for Reddit dies if <code>facebookexternalhit</code> is served more than a browser on a server-rendered page, where there is no JavaScript gap to explain it. The adoption reading dies if any origin treats the unsigned <code>Signature-Agent</code> row differently from the bare row beside it. All four are one re-run of <code>bun run ua:survey</code> away, and the survey prints its own control rows so a future reader can tell a changed policy from a changed instrument.</p>
+</div>
+    <section id="luq" aria-label="understanding check"></section>
+  </main>
+  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-21</span></div>
+</div>
+
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",

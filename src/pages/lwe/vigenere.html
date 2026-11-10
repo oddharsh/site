@@ -1020,90 +1020,24 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       ]
     },
     {
-      "q": "K1 decrypts with the key PALIMPSEST, but only when the alphabet reads KRYPTOSABCDEFGHIJLMNQUVWXZ. What is the keyed alphabet doing in the cipher?",
+      "q": "In the columnar demo, type MEET ME AT THE DOCK under the keyword CAB, single pass. What ciphertext comes out?",
       "options": [
         {
-          "t": "every shift counts along that order, so it changes every mapping",
+          "t": "EMTEC EETDK MTAHO",
           "ok": true,
-          "why": "The tableau is built on the alphabet's order, so moving KRYPTOS to the front reshapes every shift. Swap in plain A to Z in the workbench, same key, and the ciphertext changes everywhere."
+          "why": "CAB ranks its columns 3 1 2, so the A column leaves first (EMTEC), then B (EETDK), then C (MTAHO). Each group of five is one whole column read top to bottom. Every letter of the message is still there, which is why the statistics demo would score this exactly like the plaintext."
         },
         {
-          "t": "it just relabels the output at the end, all the security lives in the key",
-          "why": "The keystream workbench disproves this in one edit: hold the key fixed, restore plain A to Z, and every output letter moves. The alphabet's order is part of the secret, which is the point of keying it."
+          "t": "MTAHO EMTEC EETDK",
+          "why": "That reads the columns left to right as the keyword is written. The demo's lead says to read them lowest number first, and the rank row over CAB reads 3 1 2, so the C column goes last."
         },
         {
-          "t": "the alphabet is the real key and palimpsest is basically decoration",
-          "why": "Both are load-bearing. K1 and K2 share the KRYPTOS alphabet but use different running keys, PALIMPSEST versus ABSCISSA, and they decrypt to different plaintexts."
+          "t": "EEMME TTTAE DHCKO",
+          "why": "That reorders the letters inside each row and reads across. Columnar writes in by rows and reads out by columns, so each group the demo prints is one column top to bottom: M, T, A, H, O is the whole C column."
         },
         {
-          "t": "it's there to make the deliberate misspellings like iqlusion come out",
-          "why": "Sanborn planted iqlusion in the plaintext itself, before any encryption. The keyed alphabet is structural: it defines the tableau every single letter passes through."
-        }
-      ]
-    },
-    {
-      "q": "In the keystream workbench, flip the mode from repeating key to autokey and watch the key row. What changes, and why does an attacker care?",
-      "options": [
-        {
-          "t": "the keystream stops repeating, leaving kasiski and friedman no period to find",
-          "ok": true,
-          "why": "Autokey extends the key with the message itself, so the stream never cycles. Kasiski and Friedman work by finding the period and splitting the text into little Caesars; no repeat, no period, no split."
-        },
-        {
-          "t": "the keystream gets longer, so brute-forcing the key takes millions of extra tries",
-          "why": "A repeating key of any length still has a period, and Kasiski spacing recovers it statistically, no brute force involved. Autokey wins by having no period at all, which the demo's key row shows directly."
-        },
-        {
-          "t": "the key gets applied twice, once forward and once backward over the text",
-          "why": "It stays one pass in one direction. The change is where the keystream comes from: after the keyword runs out, the plaintext itself takes over as the key. Flip the mode switch and read the demo's key row."
-        },
-        {
-          "t": "the alphabet reshuffles every few letters, which hides the frequencies",
-          "why": "The alphabet stays fixed in autokey mode. Only the shift at each position varies, drawn from the message instead of a cycling keyword, which is exactly what the keystream row shows."
-        }
-      ]
-    },
-    {
-      "q": "In the cranking workbench you stack a Vigenère stage with a transposition stage. Why does the order of the two stages matter?",
-      "options": [
-        {
-          "t": "they don't commute: each order feeds different letters to the shifts, a different cipher",
-          "ok": true,
-          "why": "A Vigenère keys off position and a transposition rewrites every position, so each order shifts different letters by different amounts. That is why order sits inside the search space alongside alphabet and key."
-        },
-        {
-          "t": "it doesn't really, both orders scramble and shift the same letters either way",
-          "why": "The two order presets refute this: same input, same keys, swapped order, different ciphertext. The stages interact through position, so each order is a distinct cipher to crank."
-        },
-        {
-          "t": "transposition has to go first or the vigenère key won't line up with the text",
-          "why": "Either order is a legitimate cipher, and the setter picks freely. That freedom is the attacker's problem: Vig-first and Vig-last have to be cranked as separate candidates."
-        },
-        {
-          "t": "order only changes how long it takes, the pipeline lands on the same output",
-          "why": "The output itself differs, and a decoder must undo the stages in the exact reverse order. Run both order presets in the cranking workbench and compare the final lines."
-        }
-      ]
-    },
-    {
-      "q": "You crank a candidate decrypt, paste it into the statistics demo, and the Index of Coincidence reads 0.038. What is that number telling you?",
-      "options": [
-        {
-          "t": "still noise, the letters are near-uniform; solved text sits near 0.067",
-          "ok": true,
-          "why": "IoC is the chance two random letters of the text match: lumpy English lands near 0.067, flat polyalphabetic noise near 0.038. It scores a candidate with zero knowledge of the key, which is what makes the crank loop work."
-        },
-        {
-          "t": "that's english, a lower ioc means less randomness left in the text",
-          "why": "The direction is backwards: real language is lumpy, E, T and A spike, and lumps raise the collision chance, so English scores high. Hit the English and random presets in the stats demo and watch the number move."
-        },
-        {
-          "t": "it must be a transposition, those flatten the ioc down to random",
-          "why": "A transposition keeps every letter and IoC ignores order, so transposed English still scores English-shaped, near 0.067. A flat 0.038 means the letters themselves were substituted."
-        },
-        {
-          "t": "nothing on its own, you can't score a candidate without knowing the key",
-          "why": "Keyless scoring is the entire point: you cannot read the candidate, but you can measure its statistical shape, and the shape says solved or keep cranking."
+          "t": "EETDK MTAHO EMTEC",
+          "why": "That treats the rank row 3 1 2 as a list of positions to visit: column 3, then 1, then 2. Each number labels its column with that column's place in alphabetical order, so the column marked 1, under the A, is read first."
         }
       ]
     },
@@ -1130,24 +1064,94 @@ button.sv-go { font-weight: bold; padding: 4px 12px; }
       ]
     },
     {
-      "q": "Last one. The cracker solves a 200-letter message under a 4-letter key and fails on the same 200 letters under a 20-letter key. What runs out?",
+      "q": "You crank 300 letters through a candidate pipeline, paste the output into the statistics demo, and it reads 0.066, English-shaped. A teammate says that means it's solved. What's the flaw?",
       "options": [
         {
-          "t": "letters per column: each column is its own caesar, solved from its own slice",
+          "t": "IoC ignores order and labels, so transposed or relabeled English reads 0.066 too",
           "ok": true,
-          "why": "200 under a 4-letter key is 50 letters per column; under a 20-letter key it is 10. Every column is solved from its own slice, so the key length is a divisor on your evidence. Measured on this solver: 20+ per column solved every test, 8 got 6 of 12."
+          "why": "IoC counts matching pairs of letters, so shuffling positions or renaming letters leaves it where it was. A columnar pass over English, or English still under one fixed substitution, scores just like the answer. So 0.066 says the letters are single-alphabet, and the pipeline may still owe you a transposition, the way K3 does."
         },
         {
-          "t": "the longer key has more possible values, so the search space got too big to brute-force",
-          "why": "Nothing here brute-forces the key, so the size of the search space never bites. Each column is solved independently in 26 tries, and a 20-letter key costs 520 evaluations rather than 26^20. What runs out is the evidence inside each column."
+          "t": "there isn't one, an IoC near 0.067 only shows up when the text is readable English",
+          "why": "Run any English sentence through the columnar demo and paste the ciphertext into the statistics demo: it reads exactly what the sentence read, because a transposition keeps every letter. A high IoC says single-alphabet letters, and readable is a stronger claim."
         },
         {
-          "t": "the quadgram table only has 4,000 entries, so it stops recognising longer keys",
-          "why": "The table scores plaintext and knows nothing about keys at all. Measured on this exact page: at 120 letters the full 46,040-gram table and the shipped 4,000 solve identically, so text length is the variable that moved the result while model size sat still."
+          "t": "it's backwards, 0.066 is the noise end and solved text sits near 0.038",
+          "why": "English is lumpy, and lumps raise the chance that two letters match, so English scores high, near 0.067, while flat noise sits near 0.038. The English and random presets in the statistics demo show it in two clicks."
         },
         {
-          "t": "a 20-letter key has no repeats within the message, so it behaves like a one-time pad",
-          "why": "Close to a real idea, but off by the numbers: 200 letters still cycles a 20-letter key ten times, so the period is very much there and step 1 can still find it. A key as long as the message with no reuse would be the one-time pad."
+          "t": "300 letters is too few for an IoC to settle, so the reading could be luck",
+          "why": "The statistics demo calls a reading stable from 20 letters, and 300 is fifteen times that. The sample size is fine. The gap is in what IoC can see."
+        },
+        {
+          "t": "an IoC can't rate a candidate until you know which key produced it",
+          "why": "Keyless scoring is the whole point of IoC: it reads a candidate's shape without knowing how the candidate was made. The trouble is what that shape can't tell apart."
+        }
+      ]
+    },
+    {
+      "q": "The PK7 notes' general-Hill attack once returned a candidate scoring -5.16 per letter on quadgrams, about what English scores. It was the attack's own guessed key, WOLLASTONITE, spelled end to end. Why did the scorer rate it like English?",
+      "options": [
+        {
+          "t": "quadgrams reward real words, and a repeated key is wall-to-wall words",
+          "ok": true,
+          "why": "The model scores 4-letter windows against English and never asks whether the text says anything. Spell one word over and over and every window is a piece of it. Hence the two checks the notes add: the decrypt isn't the key repeated, and it re-encrypts to the exact official ciphertext."
+        },
+        {
+          "t": "the scorer was miscalibrated, since real English scores well above -5.16",
+          "why": "The notes put -5.16 at about what English scores, so the instrument read its input correctly. The trouble is what it measures. A quadgram model counts familiar 4-letter windows, and a word repeated end to end supplies nothing else."
+        },
+        {
+          "t": "WOLLASTONITE was the real plaintext, a mineral that fits the metal theme",
+          "why": "PK7's plaintext is the whitesmith's story, and the real solve re-encrypted to the official ciphertext on all 279 letters. A key spelled forever reads as words while saying nothing, which is exactly what the re-encryption check exists to catch."
+        },
+        {
+          "t": "the Hill layer leaks the key into the output whenever the matrix is wrong",
+          "why": "The repeated word was the Vigenère key the attack itself had guessed, so nothing leaked out of the cipher. What fooled the score was that guess being a real word, spelled over and over, which is why the first check asks whether the decrypt is just the key repeated."
+        }
+      ]
+    },
+    {
+      "q": "Swap a Vigenère stage and a transposition stage in the cranking workbench and the output changes. Yet the PK7 notes call Vigenère-then-Hill and Hill-then-Vigenère one family. What makes the Hill different?",
+      "options": [
+        {
+          "t": "it's linear, so the key passes through as another period-6 key",
+          "ok": true,
+          "why": "M(p + k) = Mp + Mk, so Vigenère-then-Hill equals Hill-then-a-Vigenère keyed by the matrix applied to ANNEAL. A transposition has no such identity: it moves each letter away from the position whose key letter shifted it. That's why the notes say testing both orders spends the budget twice."
+        },
+        {
+          "t": "it works on 3-letter blocks, so it never moves a letter out of place",
+          "why": "A Hill doesn't keep letters at all: each output letter mixes all three letters of its block. The two orders collapse for an algebraic reason the notes spell out, M(p + k) = Mp + Mk, so the key can pass through the matrix."
+        },
+        {
+          "t": "the order still matters, which is why the notes tested both and kept both",
+          "why": "The notes draw the opposite lesson. Every Vigenère-then-Hill has a Hill-then-Vigenère twin whose key is the matrix times ANNEAL, so testing both orders searches the same cipher twice. They found that on 2026-07-22, from linearity."
+        },
+        {
+          "t": "the Hill hides the Vigenère, so nobody can detect which order ran",
+          "why": "Hiding is real (each layer blinds the other's detector), but it's a separate effect. Whether two orders give the same cipher is a question about the math, and the answer comes from linearity: M(p + k) = Mp + Mk."
+        }
+      ]
+    },
+    {
+      "q": "Last one. Suppose K1 ran 600 letters instead of 63, same 10-letter key, same KRYPTOS alphabet, and you handed it to a solver built like this page's cracker, which only shifts along plain A to Z. What happens?",
+      "options": [
+        {
+          "t": "it still fails: the columns get fed, but no plain shift undoes a keyed alphabet",
+          "ok": true,
+          "why": "The page gives K1 two independent defenses, and 600 letters removes one. At 60 letters per column the statistics have plenty, and each column is still one fixed alphabet, so step 1 can read the period. Steps 2 and 3 then try the 26 shifts along plain A to Z, and none of them undoes a shift counted along KRYPTOS. Hand the solver the KRYPTOS order too and both defenses are gone."
+        },
+        {
+          "t": "it solves, since 60 letters per column is three times what the gauge calls comfortable",
+          "why": "The arithmetic holds: 600 over 10 is 60 per column, well past the gauge's 20. That cures the first defense. The second is the alphabet, and the gauge never looks at it. Recall the keystream workbench: the right key on the wrong alphabet came back as noise."
+        },
+        {
+          "t": "it solves once the climb runs long enough, since quadgrams see across columns",
+          "why": "The climb only tries the 26 plain shifts at each key position, so every plaintext it can reach is some plain A to Z Vigenère decrypt. The real answer sits outside that set, and no number of passes gets there."
+        },
+        {
+          "t": "it fails at step 1, since a keyed alphabet makes every column read flat",
+          "why": "Each column of K1 is enciphered by one key letter, so it's one fixed alphabet, and a fixed relabeling keeps the IoC where English had it. Step 1 can still read the period. The trouble starts at step 2, where the solver assumes each column is a plain Caesar."
         }
       ]
     }
