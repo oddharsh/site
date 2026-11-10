@@ -148,6 +148,12 @@ export async function renderSystemRestore(cp) {
   let main;
   if (state === "ok") {
     const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    // The inline script's mfmt keeps one label per month, not per point:
+    // toLocaleDateString with options builds an Intl formatter on every call.
+    // Under 4x CPU throttle 131 calls took 60 to 76 ms before first paint and
+    // the 5 distinct months take a median of 40 (7 runs each, 2026-11-10); the
+    // first call's ICU load is most of what is left. The note lives here so it
+    // costs the bundle nothing.
     main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
     <div class="sr-stage">
       <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
@@ -166,10 +172,6 @@ var POINTS = ${JSON.stringify(data)};
   if (!R || !L || !D) return;
   function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return c=='&'?'&amp;':c=='<'?'&lt;':'&gt;'; }); }
   function dfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'}); } catch(e){ return d; } }
-  // One label per month, not per point: toLocaleDateString with options builds
-  // an Intl formatter on every call. Under 4x CPU throttle 131 calls took 60
-  // to 76 ms before first paint and the 5 distinct months take a median of 40
-  // (7 runs each, 2026-11-10); the first call's ICU load is most of what is left.
   var months = {};
   function mfmt(d){ var k = d.slice(0,7); if (months[k]) return months[k]; var x = new Date(d + 'T12:00:00'); try { return months[k] = x.toLocaleDateString(undefined, {year:'numeric', month:'long'}); } catch(e){ return k; } }
   var html = '', lastM = '';
