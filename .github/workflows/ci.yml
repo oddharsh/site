@@ -348,14 +348,16 @@ jobs:
       - name: Plant each guard's defect
         run: bun run controls
 
-  # Opens every manifest page in Chrome at 360 and 390px and fails when one
-  # scrolls sideways (tools/check-phone-layout.ts, gotcha 97). It drives the
-  # Chrome the runner image ships; with none, the launch fails by name. Its own
-  # runner because it builds and boots its own Worker, about 40 s on top of the
-  # install, and continue-on-error because a layout slip is a finding to fix,
-  # never a reason to hold up a release.
-  phone-layout:
-    name: phone layout
+  # Opens every manifest page in Chrome and reads what a visitor's browser
+  # would: sideways scroll at phone widths, layout shift after paint, Intl
+  # before the reader acts, uncaught errors (tools/check-browser.ts, gotchas 92,
+  # 97 and 98). It drives the Chrome the runner image ships; with none, the
+  # launch fails by name. Its own runner because it builds and boots its own
+  # Worker, about two minutes on top of the install, and continue-on-error
+  # because a page that shifts is a finding to fix, never a reason to hold up a
+  # release.
+  browser-check:
+    name: browser check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -374,8 +376,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check no page scrolls sideways on a phone
-        run: bun run phone:check
+      - name: Read every page in a browser
+        run: bun run browser:check
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
