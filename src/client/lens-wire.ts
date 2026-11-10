@@ -185,8 +185,7 @@
         "</tbody></table>" +
         more +
         '<div class="lx-cap">"Not this site" compares the last two labels of the hostname, so a page and its own CDN on a ' +
-        "different domain read as separate, and two subdomains of one site read as one. The host list above is the " +
-        "observation; the grouping is a convenience laid over it.</div>",
+        "different domain read as separate, and two subdomains of one site read as one.</div>",
     );
   }
 
@@ -234,7 +233,7 @@
     return section(
       "The load, in order",
       { text: num(d.rows.length) + " shown" },
-      "Each row is one request the browser made. Failures, cancellations and cache hits are marked rather than dropped.",
+      "Each row is one request the browser made.",
       '<div class="lx-wire-scroll"><table class="lx-kv lx-wire-list"><thead><tr><th>kind</th><th>status</th><th>bytes</th><th>time</th><th>host</th></tr></thead><tbody>' +
         rows +
         "</tbody></table></div>" +
@@ -251,17 +250,14 @@
     return section(
       "What this measurement is",
       { text: "one cold load" },
-      "The honest scope of the number above.",
+      "",
       kvTable({
         "who asked": d.identifiedAs || "an unidentified headless Chrome (the UA override did not apply)",
         "cache state": "cold — no cookies, no storage, nothing warmed",
         "consent": "no banner was dismissed, so anything gated behind consent did not load",
         "observation window": (d.navMs || 0) + " ms, ending " + (d.loadFired ? "2.5s after the load event" : "at the navigation timeout"),
         "recorded": d.fromCache ? "from this lens's 6h cache" : "just now",
-      }) +
-        '<div class="lx-cap">A page that serves fewer trackers to a declared bot than to a person will look cleaner here ' +
-        "than it is. That gap is itself worth knowing, and this lens cannot measure it without pretending to be someone " +
-        "it is not, which it will not do.</div>",
+      }) + '<div class="lx-cap">A page that serves fewer trackers to a declared bot than to a person will look cleaner here than it is.</div>',
     );
   }
 

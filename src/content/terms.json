@@ -944,11 +944,6 @@
     "plain": "A network where devices talk directly to each other as equals, instead of each one going through a central server.",
     "src": "https://en.wikipedia.org/wiki/Peer-to-peer"
   },
-  "percentile": {
-    "label": "percentile",
-    "plain": "The value a given share of measurements fall at or under; p75 is the value 75 out of every 100 visits meet or beat.",
-    "src": "https://en.wikipedia.org/wiki/Percentile"
-  },
   "pingora": {
     "label": "Pingora",
     "plain": "Cloudflare's open-source Rust framework for building network proxies. Cloudflare's own cache is built on it.",

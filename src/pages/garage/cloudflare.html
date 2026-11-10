@@ -88,9 +88,6 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
         pointed a client at. Now it&apos;s an option on the call you were already making, and naming one
         gets the account full request and response payloads, token counts per model, and cost
         attribution, with nothing to set up first. Section&nbsp;3&apos;s log line knows this call took about 5 seconds. It has never known what it cost.</p>
-      <p class="note">Caching is off here on purpose. The button sends a byte-identical request every
-        time, so one cached answer would quietly become every visitor&apos;s answer and the neuron counter
-        would stop moving. The lede promises nothing is faked, and a replay is faked.</p>
     </div>
 
     <div class="cf-feat">
@@ -140,7 +137,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>demos hit a real worker (<code style="font-family:var(--font-mono);font-size:9pt">cf-garage</code>) on the free Workers plan. nothing mocked.</small></p>
+      <p><small>demos hit a real worker (<code style="font-family:var(--font-mono);font-size:9pt">cf-garage</code>) on the free Workers plan.</small></p>
     </footer>
 
     <hr>
