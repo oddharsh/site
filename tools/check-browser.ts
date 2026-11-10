@@ -223,9 +223,14 @@ async function sweep(browser: Browser, base: string) {
       for (const width of WIDTHS) for (const line of p.scroll[width] ?? []) fail("scroll", `${width}px: ${line}`);
       // A budget the page no longer needs. Only a local sweep says so: a
       // deployment's data can make a page quieter than the fallback state.
+      // Stale means under HALF the limit, so a page that sits on the line
+      // (/lens/census reads 0.011 against 0.01) cannot flap between failing
+      // and stale. The first CI run read /access 0.000 where 4 of 9 loads
+      // here read 0.021, and called its budget stale: a page whose shift
+      // depends on the machine gets fixed, never budgeted.
       if (!values.base) {
         const allowed = budget.shift[path];
-        if (allowed && Math.max(d.shift, p.shift) <= SHIFT_MAX)
+        if (allowed && Math.max(d.shift, p.shift) <= SHIFT_MAX / 2)
           stale.push(`${path} holds a shift budget of ${allowed.max} and read ${Math.max(d.shift, p.shift).toFixed(3)}`);
         if (budget.intl[path] && !calls.length) stale.push(`${path} holds an intl exception and called none`);
       }

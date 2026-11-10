@@ -8,10 +8,6 @@
     "production, with its data, does not do (0 on all three, 2026-11-10)."
   ],
   "shift": {
-    "/access": {
-      "max": 0.03,
-      "why": "The console sizes its graph pane from measured layout once the status bar has its text. 0.021 on every load."
-    },
     "/around": {
       "max": 0.06,
       "why": "Local fallback only: the snapshot placeholder is sized for the real table and the empty-KV note is 80px. 0.031 to 0.051 locally."
