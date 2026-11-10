@@ -933,16 +933,18 @@ skips it.
     fails if the setting is dropped.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 
-95. **png 0.17 never decodes a PNG's eXIf chunk.** Its encoder writes
-    `Info::exif_metadata`, but its decoder leaves the field empty, so a
-    Rust encoder reading sips's PNG of a HIF sees no orientation and no
-    EXIF. The archive then decodes sideways, and exif-sooc refuses the
-    bare codestream it gets ("has no box to hold metadata"). `jixel-enc`
-    walks the chunks itself and passes the TIFF bytes to jixel's
-    `with_exif`, which also makes the output a container. On XT500132
-    (2026-10-17) the oriented encode then differs from the scored one by 7
-    to 15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
-    `finds_the_exif_chunk_png_0_17_will_not_decode` and
+95. **A HIF archive's orientation and container both come from the eXIf
+    chunk in sips's PNG.** `jixel-enc` writes the chunk's orientation into
+    the codestream and passes the chunk to jixel's `with_exif`, whose
+    `Exif` box makes the output a container. Lose the chunk and the
+    archive decodes sideways, and exif-sooc refuses the bare codestream
+    ("has no box to hold metadata"). png 0.17 wrote eXIf but never decoded
+    it, so `jixel-enc` walked the chunks by hand until png 0.18 filled
+    `Info::exif_metadata`. On XT509488 (Rotate 270 CW, 2026-11-10) both
+    reads gave a byte-identical 3,369,960-byte archive. On XT500132
+    (2026-10-17) the oriented encode differs from the scored one by 7 to
+    15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
+    `png_decodes_the_exif_chunk` and
     `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 

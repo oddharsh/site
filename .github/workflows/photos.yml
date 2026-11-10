@@ -86,9 +86,9 @@ jobs:
           cargo run --quiet --locked --manifest-path tools/photos/zenc/Cargo.toml -- --avif-version | grep -F "libavif ${LIBAVIF_TAG#v} "
           cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
-      # jixel-enc encodes every HIF archive. Its tests pin the eXIf read png
-      # 0.17 won't do (gotcha 95), the raw Exif box exif-sooc needs, and
-      # byte-identical reruns.
+      # jixel-enc encodes every HIF archive. Its tests pin png's eXIf decode
+      # (gotcha 95), the raw Exif box exif-sooc needs, and byte-identical
+      # reruns.
       - name: Test the HIF archive encoder
         run: |
           cargo test --locked --manifest-path tools/photos/jixel-enc/Cargo.toml
