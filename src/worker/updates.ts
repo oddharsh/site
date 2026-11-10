@@ -166,7 +166,12 @@ var POINTS = ${JSON.stringify(data)};
   if (!R || !L || !D) return;
   function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return c=='&'?'&amp;':c=='<'?'&lt;':'&gt;'; }); }
   function dfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'}); } catch(e){ return d; } }
-  function mfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {year:'numeric', month:'long'}); } catch(e){ return d.slice(0,7); } }
+  // One label per month, not per point: toLocaleDateString with options builds
+  // an Intl formatter on every call. Under 4x CPU throttle 131 calls took 60
+  // to 76 ms before first paint and the 5 distinct months take a median of 40
+  // (7 runs each, 2026-11-10); the first call's ICU load is most of what is left.
+  var months = {};
+  function mfmt(d){ var k = d.slice(0,7); if (months[k]) return months[k]; var x = new Date(d + 'T12:00:00'); try { return months[k] = x.toLocaleDateString(undefined, {year:'numeric', month:'long'}); } catch(e){ return k; } }
   var html = '', lastM = '';
   for (var i = 0; i < POINTS.length; i++) {
     var m = mfmt(POINTS[i].d);

@@ -886,7 +886,13 @@ skips it.
     first use, startup's median fell to 37.8 ms (15 interleaved runs each,
     2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
     Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
-    `reading.ts` and `serendipity.ts` already did.
+    `reading.ts` and `serendipity.ts` already did. A document pays the same
+    way: the taskbar clock's `Intl.DateTimeFormat` in `nav.ts` cost every
+    page load 8 to 17 ms in Chrome and 30 to 53 ms under 4x CPU throttle,
+    and /restore's `toLocaleDateString`, which builds a formatter per call,
+    ran 131 times before first paint (60 to 76 ms throttled; 40 once it ran
+    per month, 2026-11-10). The clock is formatted by hand now and `nav.ts`
+    may not touch Intl.
     Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers

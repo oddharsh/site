@@ -49,3 +49,22 @@ test("importing every Worker module builds no Intl object", () => {
   assert.deepEqual(failed, [], "a module that cannot be imported here is a module this test cannot check");
   assert.deepEqual(made, [], "build it on first use instead (`x ??= new Intl.…()`), as tui.ts and reading.ts do");
 });
+
+// The browser's half. nav.ts is the one script every page runs, and the first
+// Intl object in a document loads ICU data there too: the taskbar clock's
+// Intl.DateTimeFormat was 8 to 17 ms of every page load in Chrome on a
+// workstation and 30 to 53 ms under 4x CPU throttle, the largest script cost
+// on a median page (2026-11-10). The islands nav.ts imports on demand
+// (nav-run, infotip, nav-tips) may use Intl; they run after a click or hover.
+const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+test("the shell script every page runs touches no Intl API", () => {
+  const INTL = /\bIntl\.|\.toLocale\w*String\(/;
+  assert.match(code('// prose about Intl.DateTimeFormat\nvar f = new Intl.DateTimeFormat("en-US");'), INTL, "the scan must see Intl in code");
+  assert.doesNotMatch(code("// prose about Intl.DateTimeFormat\nvar f = 1;"), INTL, "and must not read it out of a comment");
+  assert.doesNotMatch(
+    code(readFileSync(new URL("src/client/nav.ts", ROOT), "utf8")),
+    INTL,
+    "format by hand in nav.ts, or move the work into an island that loads on demand",
+  );
+});
