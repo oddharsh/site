@@ -953,3 +953,19 @@ skips it.
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
     Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+
+97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
+    whole window sideways on a phone.** An `<input>` keeps its 20-character
+    intrinsic width as a flex item unless it has `min-width: 0`, a `<pre>`
+    is as wide as its longest line unless it scrolls itself, and a
+    `nowrap` table cell holds its column open. The window's scroller
+    (`main.content`) then grows past its box, the page drags left and right,
+    and whatever is past the edge sits off screen. On 2026-11-10 six pages
+    did at 360px: /search and /run (the submit button 52px and 39px out),
+    /lens (the view switcher, 9px), and /garage/pqc, /garage/compression and
+    /garage/blueprint (289px, 295px and 174px of code and table). No check
+    saw it, because the window clips its scroller and the document itself
+    never overflows. `prose.css` now scrolls every prose `<pre>` on its own.
+    `bun run phone:check` opens every manifest page in Chrome at 360 and
+    390px, and plants a 600px block first to prove it can fail.
+    Checked by: `tools/check-phone-layout.ts`.
