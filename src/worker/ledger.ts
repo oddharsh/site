@@ -468,7 +468,7 @@ footer a { color:var(--link); }
       </div>
       <p class="lg-billto"><b>Bill to:</b> the operators below, per their own user-agent strings.</p>
       ${mount}
-      <p class="lg-fail">The request for the line items failed, so the invoice stays blank rather than guessed. <a href="${LINES_URL}">${LINES_URL}</a> has them as plain HTML.</p>
+      <p class="lg-fail">The line items didn't load. <a href="${LINES_URL}">${LINES_URL}</a> has them as plain HTML.</p>
     </div>
 
     <div class="lg-terms">

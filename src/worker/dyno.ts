@@ -361,7 +361,7 @@ td.src{font-size:var(--text-3xs);color:var(--slate-55)}
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
     weighs what would go over the wire, and records a pull.</p>
     ${mount}
-    <p class="dy-fail">The request for the series failed, so the chart stays empty rather than drawn from a guess. <a href="${PULLS_URL}">${PULLS_URL}</a> has it as plain HTML.</p>
+    <p class="dy-fail">The series didn't load. <a href="${PULLS_URL}">${PULLS_URL}</a> has it as plain HTML.</p>
     <p class="foot">Every number here is deterministic: identical source bytes weigh the same every time, so a
     flat line means nothing changed rather than that nothing was measured. Sampled figures are deliberately
     absent, because <code>wrangler check startup</code> read 9.6, 7.6, 6.4 and 16.4&nbsp;ms across bytes nobody

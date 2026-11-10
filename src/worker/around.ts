@@ -676,7 +676,7 @@ export function renderAroundPage() {
       (<a href="/garage/pqc">why</a>).
     </p>
     ${mount}
-    <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
+    <p class="ar-fail">The snapshot didn't load. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">
       Also available as JSON: <a href="/around/json">/around/json</a> &middot;

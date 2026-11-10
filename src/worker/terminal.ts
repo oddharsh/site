@@ -377,13 +377,7 @@ function renderCoffee(data) {
   const avail = data.availability;
   if (!avail) return [[s("availability is unavailable right now.", "bad")]];
   if (!avail.available) {
-    return rows(
-      [s("CLOSED — the calendar could not be read, so no slot is offered.", "warn")],
-      blank(),
-      ...wrap("This fails closed on purpose: showing every slot as free when the calendar is unreadable is how you double-book a real person.", INNER).map(
-        (row) => [s(row, "dim")],
-      ),
-    );
+    return rows([s("CLOSED — the calendar could not be read, so no slot is offered.", "warn")]);
   }
   const slots = (avail.slots || []).slice(0, 12);
   return rows(

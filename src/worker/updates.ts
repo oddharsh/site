@@ -51,7 +51,7 @@ export async function renderWindowsUpdate(cp) {
         state === "unbound"
           ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
           : state === "error"
-            ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
+            ? "The update log did not answer just now."
             : "No updates recorded yet.",
       )}</span></li>`;
   return lunaPage({
@@ -148,13 +148,7 @@ export async function renderSystemRestore(cp) {
   let main;
   if (state === "ok") {
     const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
-    // The inline script's mfmt keeps one label per month, not per point:
-    // toLocaleDateString with options builds an Intl formatter on every call.
-    // Under 4x CPU throttle 131 calls took 60 to 76 ms before first paint and
-    // the 5 distinct months take a median of 40 (7 runs each, 2026-11-10); the
-    // first call's ICU load is most of what is left. The note lives here so it
-    // costs the bundle nothing.
-    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
+    main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point.</p>
     <div class="sr-stage">
       <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
       <div class="sr-detail" id="srDetail"></div>
@@ -164,7 +158,7 @@ export async function renderSystemRestore(cp) {
       <input type="range" id="srRange" min="0" max="${points.length - 1}" value="${points.length - 1}" step="1" aria-label="restore point">
       <span class="sr-scrub-end">${esc(points[points.length - 1].ymd)}</span>
     </div>
-    <p class="sr-foot">Restoring for real is a destructive <b>D1 Time Travel</b> operation: a point-in-time restore run from the CLI, with a 7-day window on the free plan. This page never fires it; it only reads the log. See what shipped at each point in <a href="/updates">Windows Update</a>.</p>
+    <p class="sr-foot">Restoring for real is a destructive <b>D1 Time Travel</b> operation: a point-in-time restore run from the CLI, with a 7-day window on the free plan. See what shipped at each point in <a href="/updates">Windows Update</a>.</p>
     <script>
 var POINTS = ${JSON.stringify(data)};
 (function(){
@@ -189,7 +183,7 @@ var POINTS = ${JSON.stringify(data)};
       '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
       '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
       '<button class="sr-btn" type="button" id="srGo">Restore to this point</button>' +
-      '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback is a destructive D1 Time Travel restore run from the CLI, not something a visitor page should ever fire.</div>';
+      '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>';
     var go = document.getElementById('srGo'), note = document.getElementById('srNote');
     if (go) go.onclick = function(){ if (note) note.hidden = !note.hidden; };
     var items = L.querySelectorAll('.sr-pt');
@@ -210,7 +204,7 @@ var POINTS = ${JSON.stringify(data)};
         ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
         : state === "empty"
           ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
-          : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
+          : "The restore-point database didn't answer just now.";
     main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
     <div class="sr-pending"><span class="sr-gear"></span><div><b>System Restore is finishing setup.</b><div class="sub">${esc(msg)}</div></div></div>
     <p class="sr-foot">Backed by <b>Cloudflare D1</b>, with a 7-day Time Travel window underneath for real recovery. See what's shipped in <a href="/updates">Windows Update</a>.</p>`;

@@ -388,7 +388,7 @@ export function renderGuestbookPage() {
       without moderation, as plain text.</p>
     <h2>Visitors</h2>
     ${mount}
-    <p class="gb-fail">The request for the entries failed, so the list stays empty rather than guessed. <a href="${ENTRIES_URL}">${ENTRIES_URL}</a> has it as plain HTML, and <a href="/guestbook.json">/guestbook.json</a> as JSON.</p>
+    <p class="gb-fail">The entries didn't load. <a href="${ENTRIES_URL}">${ENTRIES_URL}</a> has it as plain HTML, and <a href="/guestbook.json">/guestbook.json</a> as JSON.</p>
 `,
     scripts: islandScript(),
   });
