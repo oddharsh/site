@@ -51,10 +51,11 @@ test("importing every Worker module builds no Intl object", () => {
 });
 
 // The browser's half. nav.ts is the one script every page runs, and the first
-// Intl object in a document loads ICU data there too: the taskbar clock's
-// Intl.DateTimeFormat was 8 to 17 ms of every page load in Chrome on a
-// workstation and 30 to 53 ms under 4x CPU throttle, the largest script cost
-// on a median page (2026-11-10). The islands nav.ts imports on demand
+// Intl object in a renderer process loads ICU data there too: the taskbar
+// clock's Intl.DateTimeFormat cost the first page of a visit 8 to 17 ms in
+// Chrome on a workstation and 30 to 53 ms under 4x CPU throttle, the largest
+// script cost on that page; later pages in the same tab paid about 1 ms
+// (2026-11-10). The islands nav.ts imports on demand
 // (nav-run, infotip, nav-tips) may use Intl; they run after a click or hover.
 const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 

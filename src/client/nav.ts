@@ -519,11 +519,12 @@
   // The taskbar clock, formatted by hand: XP's taskbar read "3:07 PM" and this
   // is that clock, whatever the visitor's locale. Intl.DateTimeFormat("en-US",
   // { hour: "numeric", minute: "2-digit" }) printed the same text until
-  // 2026-11-10, and building it was the largest script cost on every page:
-  // 8 to 17 ms in Chrome on a workstation, 30 to 53 ms under 4x CPU throttle
-  // (15 loads across /about, /around and /garage/hidden-flags), because the
-  // first Intl object in a document loads ICU data (gotcha 92 is the Worker's
-  // half). Date rather than Temporal: they read the same wall clock, and Date
+  // 2026-11-10, and building it was the largest script cost on the first page
+  // of a visit: 8 to 17 ms in Chrome on a workstation, 30 to 53 ms under 4x
+  // CPU throttle (15 fresh loads across /about, /around and
+  // /garage/hidden-flags), because the first Intl object in a renderer process
+  // loads ICU data. Later pages in the same tab paid about 1 ms (gotcha 92 is
+  // the Worker's half). Date rather than Temporal: they read the same wall clock, and Date
   // is the primitive every engine agrees on (a workerd build once shipped a
   // Temporal whose clock read epoch 0).
   //
