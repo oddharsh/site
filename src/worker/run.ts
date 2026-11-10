@@ -101,7 +101,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   .content form { display: flex; gap: 8px; align-items: center; margin: 0 0 4px; }
   .content label { font-size: var(--text-ui); }
   .content input[type=text] {
-    flex: 1; font-family: var(--font-ui); font-size: var(--text-ui); padding: 3px 5px;
+    flex: 1; min-width: 0; font-family: var(--font-ui); font-size: var(--text-ui); padding: 3px 5px;
     border: 1px solid oklch(56.86% 0.0525 249.86);
     box-shadow: inset 1px 1px 0 oklch(80.63% 0.0281 250.85);
     background: oklch(100% 0 0);
