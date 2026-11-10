@@ -77,14 +77,13 @@
     '<div class="lwe-dlg-bd">' +
       '<p class="lwe-dlg-lead">Click every photo with a <b>car</b>, then hit verify.</p>' +
       '<div class="lwe-tiles"></div>' +
-      '<div class="lwe-dlg-foot"><div class="lwe-status" role="status"></div>' +
+      '<form method="dialog" class="lwe-dlg-foot"><div class="lwe-status" role="status"></div>' +
       '<button class="lwe-btn go lwe-submit" type="button">verify</button>' +
-      '<button class="lwe-btn lwe-cancel" type="button">cancel</button></div>' +
+      '<button class="lwe-btn lwe-cancel" value="cancel">cancel</button></form>' +
     '</div>';
   D.body.appendChild(dlg);
   var tilesEl = (dlg.querySelector(".lwe-tiles") as HTMLElement),
       dlgStatus = dlg.querySelector(".lwe-dlg-foot .lwe-status");
-  dlg.querySelector(".lwe-cancel").addEventListener("click", function () { dlg.close(); });
 
   function setBar(s, cls?: any) { barStatus.innerHTML = s || ""; barStatus.className = "lwe-status " + (cls || ""); }
   function setDlg(s, cls?: any) { dlgStatus.innerHTML = s || ""; dlgStatus.className = "lwe-status " + (cls || ""); }
@@ -131,7 +130,7 @@
 
   // ── ask ──────────────────────────────────────────────────────────────────
   go.addEventListener("click", doAsk);
-  q.addEventListener("keydown", function (e) { if (e.key === "Enter") doAsk(); });
+  q.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.isComposing) doAsk(); });
   function doAsk() {
     var question = q.value.trim(); if (question.length < 3) return;
     if (!askToken || Date.now() > askExp) { q.disabled = true; go.disabled = true; setBar("verify again to keep asking", "no"); loadChallenge(); return; }
