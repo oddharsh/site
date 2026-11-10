@@ -684,7 +684,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   ];
   var MAX = 130430, pick = 2, mag = false;
 
-  function n(v) { return v.toLocaleString("en-US"); }
+  function n(v) { return String(v).replace(/\B(?=(\d{3})+$)/g, ","); }
 
   var pickbar = document.getElementById("su-pick");
   R.forEach(function (r, i) {

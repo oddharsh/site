@@ -206,6 +206,9 @@
   // user-agent string, so nothing is only ever shown in short form.
   var SHORT = { honest: "ua-survey", facebookbot: "facebook", perplexity: "Perplexity",
                 wba_unsigned: "sig-agent", oai_fd: "OpenAI FD", xai_img: "xAI" };
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  var commas = function (n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
 
   ids.innerHTML = D.ids.map(function (i) {
@@ -230,10 +233,10 @@
     if (mode === "compact") {
       var glyph = blocked ? "\u00d7" : shell ? "\u25d0" : "\u2713";
       return '<td class="' + cls + ' c" title="' + status + " " + what + ", " +
-        (words == null ? "-" : words.toLocaleString()) + ' words">' + glyph +
+        (words == null ? "-" : commas(words)) + ' words">' + glyph +
         (blocked ? '<span class="s">' + status + "</span>" : "") + "</td>";
     }
-    return '<td class="' + cls + '">' + status + " " + what + "<br>" + (words == null ? "-" : words.toLocaleString()) + "w</td>";
+    return '<td class="' + cls + '">' + status + " " + what + "<br>" + (words == null ? "-" : commas(words)) + "w</td>";
   }
 
   function draw(filter, mode) {
@@ -272,7 +275,7 @@
         if (!plain || !probe) return "";
         var same = plain[0] === probe[0] && plain[1] === probe[1];
         if (!same) diffs++;
-        var fmt = function (v) { return v[0] + " " + (v[2] ? "blocked" : v[3] ? "shell" : "ok") + ", " + (v[1] == null ? "-" : v[1].toLocaleString()) + "w"; };
+        var fmt = function (v) { return v[0] + " " + (v[2] ? "blocked" : v[3] ? "shell" : "ok") + ", " + (v[1] == null ? "-" : commas(v[1])) + "w"; };
         return '<div class="r"><span class="t">' + esc(t.k) + '</span><span class="v same">' + fmt(plain) +
           '</span><span class="v ' + (same ? "same" : "diff") + '">' + fmt(probe) + "</span></div>";
       }).join("");

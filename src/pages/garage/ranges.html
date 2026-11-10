@@ -164,7 +164,9 @@
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   var KiB = 1024, MiB = 1048576, GiB = 1073741824;
-  var commas = function(n){ return n.toLocaleString("en-US"); };
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  var commas = function(n){ return String(n).replace(/\B(?=(\d{3})+$)/g, ","); };
   // Binary units throughout, because the chunk sizes are powers of two and the
   // post quotes R2's old range as 64 MiB.
   var human = function(n){

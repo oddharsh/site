@@ -893,7 +893,9 @@ skips it.
     /restore's `toLocaleDateString`, which builds a formatter per call,
     ran 131 times before first paint (60 to 76 ms throttled; 40 once it ran
     per month, 2026-11-10). The clock is formatted by hand now and `nav.ts`
-    may not touch Intl.
+    may not touch Intl. `toLocaleString()` on a number is the same call:
+    eight essay pages grouped digits with it at load, 36 to 58 ms throttled
+    on a landing view, and group integers with a regex now.
     Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers

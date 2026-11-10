@@ -83,6 +83,9 @@
   var lib = import("./md-to-html.js");
   var text = function(r){ if (!r.ok) throw new Error(r.url + " answered " + r.status); return r.text(); };
   var ORIGIN = "https://aadhar.sh";
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  var commas = function(n){ return String(n).replace(/\B(?=(\d{3})+$)/g, ","); };
   Promise.all([fetch("/garage/round-trip.md").then(text), lib]).then(function(got){
     var md = got[0], t0 = performance.now();
     // With its origin, the parser writes the page a hand-written Garage page
@@ -98,8 +101,8 @@
     var nav = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
     var htmlBytes = nav && nav.decodedBodySize ? nav.decodedBodySize : document.documentElement.outerHTML.length;
     doc.after(proof);
-    proof.textContent = "Measured on this visit: the HTML file was " + htmlBytes.toLocaleString("en-US") +
-      " bytes, the Markdown was " + new Blob([md]).size.toLocaleString("en-US") +
+    proof.textContent = "Measured on this visit: the HTML file was " + commas(htmlBytes) +
+      " bytes, the Markdown was " + commas(new Blob([md]).size) +
       " bytes, and building this page from the Markdown took " + (ms < 1 ? "under 1" : Math.round(ms)) + " ms.";
     proof.hidden = false;
     run();
@@ -109,7 +112,7 @@
     doc.querySelector("p").textContent = "This page is written in Markdown, and the Markdown did not load (" + e.message + "). It lives at /garage/round-trip.md.";
   });
 
-  var fmt = function(n){ return n.toLocaleString("en-US") + " B"; };
+  var fmt = function(n){ return commas(n) + " B"; };
   var words = function(s){ return (s.toLowerCase().match(/[a-z0-9]+/g) || []); };
   var recall = function(a, b){
     var bag = {}, hit = 0;

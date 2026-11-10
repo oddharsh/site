@@ -212,11 +212,15 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
   var list = host.querySelector(".pqc-bars"), read = host.querySelector(".pqc-read");
   var metric = "bytes";
 
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  function commas(n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); }
+
   function fmt(v) {
-    if (metric === "bytes") return v.toLocaleString("en-US") + " B";
+    if (metric === "bytes") return commas(v) + " B";
     // a native ML-DSA result can land well under 0.01ms, where two decimals
     // would round a real measurement down to "0.00".
-    var s = v < 1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
+    var s = v < 1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : commas(Math.round(v));
     return s + " ms";
   }
   // bytes read honestly on a linear scale; sign times span microseconds to
@@ -285,7 +289,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
             render();
             show('<span class="pqc-native-note"><b>' + (ms < 0.1 ? ms.toPrecision(2) : ms.toFixed(2)) +
                  "ms</b> per signature natively, versus 8.58ms in JavaScript: about <b>" +
-                 Math.round(8.58 / ms) + "x</b>. Same " + sigs[0].byteLength.toLocaleString("en-US") +
+                 Math.round(8.58 / ms) + "x</b>. Same " + commas(sigs[0].byteLength) +
                  " bytes on the wire, because that part is FIPS 204 and no implementation gets to improve it.</span>");
           });
         }).catch(function () { show('<span class="pqc-native-note">The native run failed partway.</span>'); });
@@ -314,10 +318,10 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
     var raw = atob(akp.pub.replace(/-/g, "+").replace(/_/g, "/"));
     live.innerHTML =
       "<b>" + akp.kid + "</b> &middot; kty " + akp.kty + " &middot; alg " + akp.alg +
-      " &middot; <b>" + raw.length.toLocaleString("en-US") + " bytes</b> of public key" +
+      " &middot; <b>" + commas(raw.length) + " bytes</b> of public key" +
       (ed ? "<br><b>" + ed.kid + "</b> &middot; kty " + ed.crv + " &middot; <b>32 bytes</b>, and the one your verifier should use" : "") +
       "<br>" + akp.pub.slice(0, 96) + "&hellip; <span style='font-family:var(--font-ui)'>(" +
-      akp.pub.length.toLocaleString("en-US") + " base64url chars)</span>";
+      commas(akp.pub.length) + " base64url chars)</span>";
   }).catch(function () {
     live.textContent = "Could not read the key directory from here.";
   });

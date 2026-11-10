@@ -76,89 +76,18 @@
   <div class="hf-scroll"><table class="hf-table" id="hf-table"></table></div>
   <p class="hf-legend">Marked rows are the ones that touch this site. The rest are here so the list is the whole list: a survey that reports only the interesting rows cannot tell you how many rows it skipped.</p>
 </div>
-
-<h2>Two questions, and only one of them is free</h2>
-<p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
-<p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor? <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
-<p>The first question is usually free, and that is the part people skip. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
-<pre class="hf-code"><code>$ wrangler deploy --x-bogus-flag ; echo $?
-1
-$ wrangler deploy --x-provision=false --dry-run ; echo $?
-0</code></pre>
-<p>Two commands, no account touched, and the answer is decisive: wrangler validates flag names, so a flag it accepts is a flag it knows. Run that before trusting any option a help page omits.</p>
-<p>The second question costs a real run, and its answer is worth much less than it looks like when the failure mode is silence.</p>
-
-<h2>When silence is the failure mode</h2>
-<p>Four cases from this site, each of which cost time in proportion to how late the control was run.</p>
-
-<h3>A payload schema that refuses unknown keys</h3>
-<p>Cloudflare's <a class="term" data-t="browser-run" href="https://developers.cloudflare.com/browser-run/" title="Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs." rel="external">Browser Run</a> binding takes a JSON payload. A launch post described selecting a rendering engine with one extra key; the Quick Actions reference did not list it. Sending it answered:</p>
-<pre class="hf-code"><code>{"code":"unrecognized_keys","keys":["browser"]}</code></pre>
-<p>An invented engine name returned the byte-identical error, which is the useful half of the result. The schema is closed, so it refuses the option rather than failing on the value, and a closed schema is a gift: it answers "is this accepted" for free, every time, with no render performed and no browser minutes spent.</p>
-<p>The same feature then produced the opposite trap through the <a class="term" data-t="rest-api" href="https://en.wikipedia.org/wiki/REST" title="A common style of web API where each URL names a resource and standard HTTP methods such as GET and POST act on it." rel="external">REST</a> door, where the parameter is merely ignored. A 200 came back either way, so the code labelled the render with the engine it had asked for. On a page whose entire premise is showing what a machine actually saw, that label was a claim nobody had checked. It reads <code>kitesurf-requested</code> now.</p>
-
-<h3>A compression option three runtimes disagree about</h3>
-<p><a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">Dictionary compression</a> takes a <code>dictionary</code> option. <a class="term" data-t="nodejs" href="https://en.wikipedia.org/wiki/Node.js" title="A program that runs JavaScript outside the browser, widely used for servers and build tools." rel="external">Node 26</a> honours it. <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Workers</a> ignore it for <a class="term" data-t="zstd" href="https://en.wikipedia.org/wiki/Zstd" title="Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit." rel="external">zstd</a> and say nothing. <a class="term" data-t="bun" href="https://en.wikipedia.org/wiki/Bun_(software)" title="A JavaScript runtime that also bundles a package manager, bundler and test runner, built to work as a replacement for Node.js." rel="external">Bun</a> ignored it through 1.3.14 and fixed it in <a href="https://github.com/oven-sh/bun/pull/34427" rel="external">oven-sh/bun#34427</a>. Every one of those failures is silent, because a frame compressed <em>without</em> a dictionary still decodes perfectly <em>with</em> one. Nothing throws. The only symptom is a byte count that never got smaller.</p>
-<p>The control is four lines and it needs no deploy: compress one target three times, with no dictionary, with the right one, and with a deliberately wrong one. An engine that honours the option prints a smaller number for the right dictionary alone. An engine that ignores it prints the same number three times.</p>
-<div class="hf-scroll"><table class="hf-table hf-static">
-  <thead><tr><th scope="col">engine</th><th scope="col">no dictionary</th><th scope="col">right dictionary</th><th scope="col">verdict</th></tr></thead>
-  <tr><td>node 26</td><td>70 B</td><td>18 B</td><td class="hf-ok">honours it</td></tr>
-  <tr><td>workerd</td><td colspan="2">same number three times</td><td class="hf-no">ignores it</td></tr>
-  <tr><td>bun through 1.3.14</td><td colspan="2">same number three times</td><td class="hf-no">ignored it</td></tr>
-</table></div>
-<p>Sending the option and reading the exit code would have passed on all three.</p>
-
-<h3>A key that is accepted and still unmeasured</h3>
-<p>The Browser Run payload takes a <code>waitForTimeout</code>. Whether the binding accepts the key was answered for free, using the closed schema above: send it alongside a deliberately invalid URL, and a bogus key comes back as <code>unrecognized_keys</code> while an accepted one leaves only the URL error. Three keys passed that test individually and together.</p>
-<p>Whether the capture actually waits out the timeout is a different question, it needs a real render, and it is still open. Both halves are written down separately for that reason. An entry claiming the key works, on evidence that only shows it is accepted, is the exact error this page is about.</p>
-
-<h3>A path that routes either way</h3>
-<p>The engine selector above only functions on one of two URL spellings. Both route. Probed unauthenticated against a real account, each answers <code>10000 Authentication error</code> rather than <code>7003 Could not route to</code>. So the wrong path costs the feature, silently: no error, no retry, no log line. One reference page documents the selector on the newer spelling while older pages show the other, so reading either one alone hands you a path that looks right.</p>
-
-<h2>A flag that proves the limit is somewhere else</h2>
-<p>Among the nineteen is <code>--max-versions</code>, on the command that shifts production traffic between Worker versions. This site's release script walks a version to 10%, then 50%, then 100%, and it can only ever name two versions in a step, which shapes the whole procedure: a ramp starting from a three-way split has to drop one of them. The obvious hope is that a hidden flag raises the ceiling. The definition answers it without a single request:</p>
-<pre class="hf-code"><code>"max-versions": {
-  hidden: true,
-  // experimental, not supported long-term
-  describe: "Maximum allowed versions to select",
-  type: "number",
-  default: 2
-  // (when server-side limitation is lifted, we can update this
-  //  default or just remove the option entirely)
-}</code></pre>
-<p>The comment is the finding. The cap lives on the server and this flag is the client's mirror of it, so raising the number locally buys an error instead of a wider split. That is a real answer, arrived at by reading rather than by deploying, and it retires a question that had been open on the strength of a guess.</p>
-
-<h2>A flag that looks like the fix and is not one</h2>
-<p>This site has a documented failure where a <a class="term" data-t="gradual-deployments" href="https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/" title="Moving live traffic to a new version of a Worker a percentage at a time, so the old and new versions serve side by side." rel="external">gradual deployment</a> splits asset requests: a document served by one version asks for a <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-hashed</a> asset only the other version built, and gets a 404. So <code>--old-asset-ttl</code>, described as "expire old assets in given seconds rather than immediate deletion", reads like the exact repair.</p>
-<p>It is threaded into one place in the entire codebase, and that place is the sync routine for the legacy Workers Sites layer, the retired KV-namespace mechanism that predates the modern assets binding this site uses. The flag would apply to a system that is not running here.</p>
-<p>Fifteen minutes of reading, and the answer arrives before any config changes. Had it been adopted on the strength of its description, it would have shipped, changed nothing, and become the fix everyone believed was already in place.</p>
-
-<h2>Pick a situation, get the control</h2>
-<p>The shape of the doubt decides the experiment. Choose what you are looking at:</p>
-<div class="hf-demo">
-  <div class="hf-bar"><span class="hf-filters" id="hf-cases"></span></div>
-  <div class="hf-case" id="hf-case"></div>
-</div>
-
-<h2>The rule this leaves</h2>
-<p>On a closed schema, <b>"is this accepted" and "does this work" are two questions, and the first one is free.</b> Ask it first, always, because it costs an exit code and it eliminates the most common way an undocumented option wastes a week: being quietly dropped while everything around it reports success.</p>
-<p>Then be careful about what a success proves. A 200 from an endpoint that ignores unknown parameters is indistinguishable from a 200 from an endpoint that honoured yours. When you cannot tell those apart, the honest move is to label the result with what you asked for rather than with what you hope happened, and to write the unmeasured half down beside the measured one.</p>
-<p>And prefer reading the definition to running the experiment when the definition is in your <code>node_modules</code>. Two of the four cases here were settled by a source comment and a call site, in less time than a deploy takes, and neither answer could have been reached by watching the tool succeed.</p>
-
-<h2>What would change this</h2>
-<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
-    <section id="luq" aria-label="understanding check"></section>
-  </main>
-  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
-</div>
-
 <script>
-// /garage/hidden-flags — the inventory and the control picker.
+// /garage/hidden-flags: the inventory and the control picker.
 //
 // FLAGS is the full set of option definitions carrying `hidden: true` in the
 // wrangler 4.125.0 bundle, read back with each flag's own describe string. The
 // list is complete rather than curated: rows that matter here are marked, and
 // the rest stay so the count is honest.
+//
+// Each demo is built by a script straight after its own markup, so it exists
+// before anything below it is laid out. As one script at the end of the page it
+// ran after first paint and pushed the essay down: layout shift 0.091 in each
+// of 3 loads under 4x CPU throttle (2026-11-10).
 (function () {
   var FLAGS = [
     { f: "--experimental-new-config", a: "--x-new-config", g: "config", here: true,
@@ -209,66 +138,9 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
     { k: "types", label: "types" },
   ];
 
-  var CASES = [
-    {
-      k: "ignored",
-      label: "the option may be silently ignored",
-      title: "Run it three ways and compare the number",
-      body: "An engine that ignores an option produces output identical to one that never received it, and the output still works. So do not ask whether it succeeded. Ask whether the thing the option claims to change actually changed, against a case where it could not have.",
-      code: "compress(target)                 # no option\ncompress(target, opt: correct)   # the option, correct value\ncompress(target, opt: wrong)     # the option, useless value",
-      table: [
-        ["all three identical", "the option is being dropped"],
-        ["correct one smaller, wrong one matches the first", "the option is honoured"],
-        ["correct and wrong both differ from the first", "something reads the option and your model of it is off"],
-      ],
-      cost: "Cost: three local runs, no deploy. This is the control that separates node, workerd and bun on the same option.",
-    },
-    {
-      k: "closed",
-      label: "the schema may refuse unknown keys",
-      title: "Send a key you invented, next to a request that fails anyway",
-      body: "A closed schema validates the shape before it does any work, which makes it the cheapest oracle you will ever get. Pair the probe with a deliberately invalid input so nothing can execute even if the key is accepted.",
-      code: 'send({ url: "not-a-url", definitely_not_a_key_xyz: 1 })\nsend({ url: "not-a-url", theKeyYouAreUnsure: 1 })',
-      table: [
-        ["first names your bogus key, second reports only the url error", "the key is accepted, and the schema is closed"],
-        ["both report only the url error", "the schema is open, so acceptance proves nothing"],
-        ["both name the bogus key", "your unsure key is being rejected too"],
-      ],
-      cost: "Cost: two rejected requests. Nothing renders, nothing is billed, and it answers acceptance completely.",
-    },
-    {
-      k: "undocumented",
-      label: "the docs skip the failure mode",
-      title: "Read the exit code on a name that cannot exist",
-      body: "Argument parsers either validate names or ignore them. One invented flag tells you which, and it tells you before you have trusted a real one.",
-      code: "tool command --x-bogus-flag ; echo $?\ntool command --the-real-flag=false --dry-run ; echo $?",
-      table: [
-        ["1 then 0", "names are validated, so an accepted flag is a known flag"],
-        ["0 then 0", "unknown names are ignored, and acceptance means nothing at all"],
-        ["1 then 1", "the real flag is being rejected too, so check the spelling and the subcommand"],
-      ],
-      cost: "Cost: one exit code. Pair it with --dry-run so the second command performs no work.",
-    },
-    {
-      k: "routing",
-      label: "two paths both seem to work",
-      title: "Compare the errors, rather than the successes",
-      body: "When an old and a new URL spelling both respond, a success on either one proves nothing about which is live. The distinguishing signal lives in what each one says when it refuses, and an unauthenticated request is enough to get it.",
-      code: "curl -s https://api/OLD-SPELLING/action   # unauthenticated\ncurl -s https://api/NEW-SPELLING/action   # unauthenticated",
-      table: [
-        ["both report an auth error", "both spellings route, so pick the one the feature's own page documents"],
-        ["one reports could-not-route", "that spelling is dead and the choice is made for you"],
-        ["one reports auth and the other 404s", "same conclusion, through a different status"],
-      ],
-      cost: "Cost: two unauthenticated requests. No credential, so this one is safe to run against somebody else's API.",
-    },
-  ];
-
   var filters = document.getElementById("hf-filters");
   var table = document.getElementById("hf-table");
   var count = document.getElementById("hf-count");
-  var cases = document.getElementById("hf-cases");
-  var caseBox = document.getElementById("hf-case");
   var active = "all";
 
   function matches(row) {
@@ -337,6 +209,132 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
     });
   }
 
+  drawTable();
+})();
+</script>
+
+<h2>Two questions, and only one of them is free</h2>
+<p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
+<p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor? <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
+<p>The first question is usually free, and that is the part people skip. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
+<pre class="hf-code"><code>$ wrangler deploy --x-bogus-flag ; echo $?
+1
+$ wrangler deploy --x-provision=false --dry-run ; echo $?
+0</code></pre>
+<p>Two commands, no account touched, and the answer is decisive: wrangler validates flag names, so a flag it accepts is a flag it knows. Run that before trusting any option a help page omits.</p>
+<p>The second question costs a real run, and its answer is worth much less than it looks like when the failure mode is silence.</p>
+
+<h2>When silence is the failure mode</h2>
+<p>Four cases from this site, each of which cost time in proportion to how late the control was run.</p>
+
+<h3>A payload schema that refuses unknown keys</h3>
+<p>Cloudflare's <a class="term" data-t="browser-run" href="https://developers.cloudflare.com/browser-run/" title="Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs." rel="external">Browser Run</a> binding takes a JSON payload. A launch post described selecting a rendering engine with one extra key; the Quick Actions reference did not list it. Sending it answered:</p>
+<pre class="hf-code"><code>{"code":"unrecognized_keys","keys":["browser"]}</code></pre>
+<p>An invented engine name returned the byte-identical error, which is the useful half of the result. The schema is closed, so it refuses the option rather than failing on the value, and a closed schema is a gift: it answers "is this accepted" for free, every time, with no render performed and no browser minutes spent.</p>
+<p>The same feature then produced the opposite trap through the <a class="term" data-t="rest-api" href="https://en.wikipedia.org/wiki/REST" title="A common style of web API where each URL names a resource and standard HTTP methods such as GET and POST act on it." rel="external">REST</a> door, where the parameter is merely ignored. A 200 came back either way, so the code labelled the render with the engine it had asked for. On a page whose entire premise is showing what a machine actually saw, that label was a claim nobody had checked. It reads <code>kitesurf-requested</code> now.</p>
+
+<h3>A compression option three runtimes disagree about</h3>
+<p><a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">Dictionary compression</a> takes a <code>dictionary</code> option. <a class="term" data-t="nodejs" href="https://en.wikipedia.org/wiki/Node.js" title="A program that runs JavaScript outside the browser, widely used for servers and build tools." rel="external">Node 26</a> honours it. <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Workers</a> ignore it for <a class="term" data-t="zstd" href="https://en.wikipedia.org/wiki/Zstd" title="Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit." rel="external">zstd</a> and say nothing. <a class="term" data-t="bun" href="https://en.wikipedia.org/wiki/Bun_(software)" title="A JavaScript runtime that also bundles a package manager, bundler and test runner, built to work as a replacement for Node.js." rel="external">Bun</a> ignored it through 1.3.14 and fixed it in <a href="https://github.com/oven-sh/bun/pull/34427" rel="external">oven-sh/bun#34427</a>. Every one of those failures is silent, because a frame compressed <em>without</em> a dictionary still decodes perfectly <em>with</em> one. Nothing throws. The only symptom is a byte count that never got smaller.</p>
+<p>The control is four lines and it needs no deploy: compress one target three times, with no dictionary, with the right one, and with a deliberately wrong one. An engine that honours the option prints a smaller number for the right dictionary alone. An engine that ignores it prints the same number three times.</p>
+<div class="hf-scroll"><table class="hf-table hf-static">
+  <thead><tr><th scope="col">engine</th><th scope="col">no dictionary</th><th scope="col">right dictionary</th><th scope="col">verdict</th></tr></thead>
+  <tr><td>node 26</td><td>70 B</td><td>18 B</td><td class="hf-ok">honours it</td></tr>
+  <tr><td>workerd</td><td colspan="2">same number three times</td><td class="hf-no">ignores it</td></tr>
+  <tr><td>bun through 1.3.14</td><td colspan="2">same number three times</td><td class="hf-no">ignored it</td></tr>
+</table></div>
+<p>Sending the option and reading the exit code would have passed on all three.</p>
+
+<h3>A key that is accepted and still unmeasured</h3>
+<p>The Browser Run payload takes a <code>waitForTimeout</code>. Whether the binding accepts the key was answered for free, using the closed schema above: send it alongside a deliberately invalid URL, and a bogus key comes back as <code>unrecognized_keys</code> while an accepted one leaves only the URL error. Three keys passed that test individually and together.</p>
+<p>Whether the capture actually waits out the timeout is a different question, it needs a real render, and it is still open. Both halves are written down separately for that reason. An entry claiming the key works, on evidence that only shows it is accepted, is the exact error this page is about.</p>
+
+<h3>A path that routes either way</h3>
+<p>The engine selector above only functions on one of two URL spellings. Both route. Probed unauthenticated against a real account, each answers <code>10000 Authentication error</code> rather than <code>7003 Could not route to</code>. So the wrong path costs the feature, silently: no error, no retry, no log line. One reference page documents the selector on the newer spelling while older pages show the other, so reading either one alone hands you a path that looks right.</p>
+
+<h2>A flag that proves the limit is somewhere else</h2>
+<p>Among the nineteen is <code>--max-versions</code>, on the command that shifts production traffic between Worker versions. This site's release script walks a version to 10%, then 50%, then 100%, and it can only ever name two versions in a step, which shapes the whole procedure: a ramp starting from a three-way split has to drop one of them. The obvious hope is that a hidden flag raises the ceiling. The definition answers it without a single request:</p>
+<pre class="hf-code"><code>"max-versions": {
+  hidden: true,
+  // experimental, not supported long-term
+  describe: "Maximum allowed versions to select",
+  type: "number",
+  default: 2
+  // (when server-side limitation is lifted, we can update this
+  //  default or just remove the option entirely)
+}</code></pre>
+<p>The comment is the finding. The cap lives on the server and this flag is the client's mirror of it, so raising the number locally buys an error instead of a wider split. That is a real answer, arrived at by reading rather than by deploying, and it retires a question that had been open on the strength of a guess.</p>
+
+<h2>A flag that looks like the fix and is not one</h2>
+<p>This site has a documented failure where a <a class="term" data-t="gradual-deployments" href="https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/" title="Moving live traffic to a new version of a Worker a percentage at a time, so the old and new versions serve side by side." rel="external">gradual deployment</a> splits asset requests: a document served by one version asks for a <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-hashed</a> asset only the other version built, and gets a 404. So <code>--old-asset-ttl</code>, described as "expire old assets in given seconds rather than immediate deletion", reads like the exact repair.</p>
+<p>It is threaded into one place in the entire codebase, and that place is the sync routine for the legacy Workers Sites layer, the retired KV-namespace mechanism that predates the modern assets binding this site uses. The flag would apply to a system that is not running here.</p>
+<p>Fifteen minutes of reading, and the answer arrives before any config changes. Had it been adopted on the strength of its description, it would have shipped, changed nothing, and become the fix everyone believed was already in place.</p>
+
+<h2>Pick a situation, get the control</h2>
+<p>The shape of the doubt decides the experiment. Choose what you are looking at:</p>
+<div class="hf-demo">
+  <div class="hf-bar"><span class="hf-filters" id="hf-cases"></span></div>
+  <div class="hf-case" id="hf-case"></div>
+</div>
+<script>
+(function () {
+  var CASES = [
+    {
+      k: "ignored",
+      label: "the option may be silently ignored",
+      title: "Run it three ways and compare the number",
+      body: "An engine that ignores an option produces output identical to one that never received it, and the output still works. So do not ask whether it succeeded. Ask whether the thing the option claims to change actually changed, against a case where it could not have.",
+      code: "compress(target)                 # no option\ncompress(target, opt: correct)   # the option, correct value\ncompress(target, opt: wrong)     # the option, useless value",
+      table: [
+        ["all three identical", "the option is being dropped"],
+        ["correct one smaller, wrong one matches the first", "the option is honoured"],
+        ["correct and wrong both differ from the first", "something reads the option and your model of it is off"],
+      ],
+      cost: "Cost: three local runs, no deploy. This is the control that separates node, workerd and bun on the same option.",
+    },
+    {
+      k: "closed",
+      label: "the schema may refuse unknown keys",
+      title: "Send a key you invented, next to a request that fails anyway",
+      body: "A closed schema validates the shape before it does any work, which makes it the cheapest oracle you will ever get. Pair the probe with a deliberately invalid input so nothing can execute even if the key is accepted.",
+      code: 'send({ url: "not-a-url", definitely_not_a_key_xyz: 1 })\nsend({ url: "not-a-url", theKeyYouAreUnsure: 1 })',
+      table: [
+        ["first names your bogus key, second reports only the url error", "the key is accepted, and the schema is closed"],
+        ["both report only the url error", "the schema is open, so acceptance proves nothing"],
+        ["both name the bogus key", "your unsure key is being rejected too"],
+      ],
+      cost: "Cost: two rejected requests. Nothing renders, nothing is billed, and it answers acceptance completely.",
+    },
+    {
+      k: "undocumented",
+      label: "the docs skip the failure mode",
+      title: "Read the exit code on a name that cannot exist",
+      body: "Argument parsers either validate names or ignore them. One invented flag tells you which, and it tells you before you have trusted a real one.",
+      code: "tool command --x-bogus-flag ; echo $?\ntool command --the-real-flag=false --dry-run ; echo $?",
+      table: [
+        ["1 then 0", "names are validated, so an accepted flag is a known flag"],
+        ["0 then 0", "unknown names are ignored, and acceptance means nothing at all"],
+        ["1 then 1", "the real flag is being rejected too, so check the spelling and the subcommand"],
+      ],
+      cost: "Cost: one exit code. Pair it with --dry-run so the second command performs no work.",
+    },
+    {
+      k: "routing",
+      label: "two paths both seem to work",
+      title: "Compare the errors, rather than the successes",
+      body: "When an old and a new URL spelling both respond, a success on either one proves nothing about which is live. The distinguishing signal lives in what each one says when it refuses, and an unauthenticated request is enough to get it.",
+      code: "curl -s https://api/OLD-SPELLING/action   # unauthenticated\ncurl -s https://api/NEW-SPELLING/action   # unauthenticated",
+      table: [
+        ["both report an auth error", "both spellings route, so pick the one the feature's own page documents"],
+        ["one reports could-not-route", "that spelling is dead and the choice is made for you"],
+        ["one reports auth and the other 404s", "same conclusion, through a different status"],
+      ],
+      cost: "Cost: two unauthenticated requests. No credential, so this one is safe to run against somebody else's API.",
+    },
+  ];
+
+  var cases = document.getElementById("hf-cases");
+  var caseBox = document.getElementById("hf-case");
+
   function drawCase(c) {
     if (!caseBox) return;
     caseBox.textContent = "";
@@ -387,10 +385,21 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
     });
     drawCase(CASES[0]);
   }
-
-  drawTable();
 })();
 </script>
+
+<h2>The rule this leaves</h2>
+<p>On a closed schema, <b>"is this accepted" and "does this work" are two questions, and the first one is free.</b> Ask it first, always, because it costs an exit code and it eliminates the most common way an undocumented option wastes a week: being quietly dropped while everything around it reports success.</p>
+<p>Then be careful about what a success proves. A 200 from an endpoint that ignores unknown parameters is indistinguishable from a 200 from an endpoint that honoured yours. When you cannot tell those apart, the honest move is to label the result with what you asked for rather than with what you hope happened, and to write the unmeasured half down beside the measured one.</p>
+<p>And prefer reading the definition to running the experiment when the definition is in your <code>node_modules</code>. Two of the four cases here were settled by a source comment and a call site, in less time than a deploy takes, and neither answer could have been reached by watching the tool succeed.</p>
+
+<h2>What would change this</h2>
+<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
+    <section id="luq" aria-label="understanding check"></section>
+  </main>
+  <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
+</div>
+
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",

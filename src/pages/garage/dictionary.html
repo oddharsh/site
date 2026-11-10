@@ -140,7 +140,9 @@
   // encodedBodySize is the dictionary at work.
   var out = document.getElementById("dd-demo");
   if (!out || !window.performance || !performance.getEntriesByType) return;
-  var fmt = function(x){ return x.toLocaleString("en-US") + " B"; };
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  var fmt = function(x){ return String(x).replace(/\B(?=(\d{3})+$)/g, ",") + " B"; };
   var line = function(label, e){ return "<p>" + label + ": <span class=\"n\">" + fmt(e.encodedBodySize) + "</span> on the wire for " + fmt(e.decodedBodySize) + " of HTML</p>"; };
   function run(){
     var nav = performance.getEntriesByType("navigation")[0];

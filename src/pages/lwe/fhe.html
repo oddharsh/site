@@ -275,15 +275,18 @@
   var BIG = 1000;
   var a = 5, b = 8, ea = 0, eb = 0;
   var $ = function (id) { return document.getElementById(id); };
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  function commas(n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); }
   function noise() { return Math.floor(Math.random() * 41); } // 0..40, well under BIG/2
   function roll() { ea = noise(); eb = noise(); render(); }
   function render() {
     var ca = a * BIG + ea, cb = b * BIG + eb, cs = ca + cb;
     var dec = Math.round(cs / BIG), tot = ea + eb;
     $("add-a").textContent = a; $("add-b").textContent = b;
-    $("ct-a").textContent = ca.toLocaleString();
-    $("ct-b").textContent = cb.toLocaleString();
-    $("ct-sum").textContent = cs.toLocaleString();
+    $("ct-a").textContent = commas(ca);
+    $("ct-b").textContent = commas(cb);
+    $("ct-sum").textContent = commas(cs);
     $("dec-out").textContent = a + " + " + b + " = " + dec + (dec === a + b ? " ✓" : " ✗");
     $("dec-noise").textContent = "(combined noise " + tot + ", rounded away)";
   }

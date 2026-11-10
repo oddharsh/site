@@ -245,7 +245,7 @@ var DACAudio = (function(){
   var W=c.width, H=c.height, mid=H/2, amp=H*0.40, cycles=2, samples=48; hd(c, ctx);
   function draw(){
     var N=+bits.value, L=Math.pow(2,N), maxv=L/2-1;
-    lbl.textContent=N+'-bit · '+L.toLocaleString()+' levels';
+    lbl.textContent=N+'-bit · '+String(L).replace(/\B(?=(\d{3})+$)/g, ",")+' levels';
     ctx.clearRect(0,0,W,H);
     if(N<=5){ ctx.strokeStyle='#efe6d8'; ctx.lineWidth=1; for(var k=-maxv;k<=maxv;k++){ var yy=mid-(k/maxv)*amp; ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(W,yy); ctx.stroke(); } }
     ctx.strokeStyle='#cbb89e'; ctx.lineWidth=1.5; ctx.beginPath();
@@ -266,6 +266,9 @@ var DACAudio = (function(){
   var c=document.getElementById('nsCanvas'); if(!c) return;
   var ctx=c.getContext('2d'), btn=document.getElementById('nsToggle'), info=document.getElementById('nsInfo');
   var W=c.width, H=c.height, N=512, shape=true, BITS=3; hd(c, ctx);
+  // 2*PI*k*m/N only ever lands on N angles, so the transform reads them from a
+  // table: 262,144 sin and cos calls per redraw became 1,024 (2026-11-10).
+  var COS=new Array(N), SIN=new Array(N); for(var t=0;t<N;t++){ COS[t]=Math.cos(2*Math.PI*t/N); SIN[t]=Math.sin(2*Math.PI*t/N); }
   function clamp(v){ return v>1?1:(v<-1?-1:v); }
   function spectrum(){
     var maxv=Math.pow(2,BITS)/2-1, k0=6, y=new Array(N), e=0;
@@ -276,7 +279,7 @@ var DACAudio = (function(){
       y[n]=q;
     }
     var half=N/2, mag=new Array(half);
-    for(var k=0;k<half;k++){ var re=0,im=0; for(var m=0;m<N;m++){ var a=2*Math.PI*k*m/N; re+=y[m]*Math.cos(a); im-=y[m]*Math.sin(a); } mag[k]=Math.sqrt(re*re+im*im)/N; }
+    for(var k=0;k<half;k++){ var re=0,im=0; for(var m=0;m<N;m++){ var a=(k*m)%N; re+=y[m]*COS[a]; im-=y[m]*SIN[a]; } mag[k]=Math.sqrt(re*re+im*im)/N; }
     return mag;
   }
   function draw(){
@@ -459,9 +462,11 @@ var DACAudio = (function(){
     }
     return y;
   }
+  // the same table of N angles as Demo B's transform, for the same reason
+  var COS = new Array(N), SIN = new Array(N); for (var t = 0; t < N; t++){ COS[t] = Math.cos(2 * Math.PI * t / N); SIN[t] = Math.sin(2 * Math.PI * t / N); }
   function spectrum(y){
     var half = N / 2, mag = new Array(half);
-    for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = 2 * Math.PI * k * n / N; re += y[n] * Math.cos(a); im -= y[n] * Math.sin(a); } mag[k] = Math.sqrt(re * re + im * im) / N; }
+    for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = (k * n) % N; re += y[n] * COS[a]; im -= y[n] * SIN[a]; } mag[k] = Math.sqrt(re * re + im * im) / N; }
     return mag;
   }
   function drawSpec(ctx, mag, accent, dim){
