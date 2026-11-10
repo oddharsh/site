@@ -1,0 +1,31 @@
+{
+  "$comment": [
+    "Exceptions to tools/check-browser.ts, each with its reason. A page not named",
+    "here may shift 0.01 and call no Intl API before the reader acts. The check",
+    "reports an entry its page no longer needs, so this file can only shrink.",
+    "Three shift entries exist because CI's Worker has empty KV, R2 and D1: the",
+    "page is measured swapping its placeholder for a short fallback note, which",
+    "production, with its data, does not do (0 on all three, 2026-11-10)."
+  ],
+  "shift": {
+    "/access": {
+      "max": 0.03,
+      "why": "The console sizes its graph pane from measured layout once the status bar has its text. 0.021 on every load."
+    },
+    "/around": {
+      "max": 0.06,
+      "why": "Local fallback only: the snapshot placeholder is sized for the real table and the empty-KV note is 80px. 0.031 to 0.051 locally."
+    },
+    "/ledger": {
+      "max": 0.08,
+      "why": "Local fallback only: the invoice placeholder is sized for real rows and the empty meter prints one line. 0.065 locally."
+    },
+    "/lens/census": {
+      "max": 0.02,
+      "why": "Local fallback only: the census has no rows to draw, so the footer settles 0.011."
+    }
+  },
+  "intl": {
+    "/serendipity": "Event times print in the visitor's own time zone with its short name, which only Intl.DateTimeFormat knows."
+  }
+}

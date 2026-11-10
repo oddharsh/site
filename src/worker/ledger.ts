@@ -396,10 +396,10 @@ export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | 
   }
 
   return unsafeHtml(`
-      <table class="lg">
+      <div class="lg-scroll"><table class="lg">
         <thead><tr><th scope="col">crawler</th><th scope="col">operator</th><th scope="col" class="num">pages</th><th scope="col" class="num">rate</th><th scope="col" class="num">amount</th></tr></thead>
         <tbody>${tableRows}</tbody>
-      </table>
+      </table></div>
       <div class="lg-total"><span>Total due</span> <b>$${pending ? dots : totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:var(--text-micro); align-self:center;">(${pending ? dots : groupThousands(totalHits)} pages)</span></div>
       ${costLine}`);
 }
@@ -427,6 +427,10 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lg-billto { font-size:var(--text-xs); color:var(--grey-35); margin:0 0 10px; }
 .lg-billto b { color:oklch(28% 0.04 255); }
 
+/* The table scrolls in its own box: with real rows it ran 3px past a 390px
+   phone and 33px past a 360px one, and dragged the page (production,
+   2026-11-10; gotcha 97). */
+.lg-scroll { overflow-x:auto; }
 table.lg { width:100%; border-collapse:collapse; font-size:var(--text-xs); }
 table.lg th { text-align:left; font-size:var(--text-2xs); text-transform:uppercase; letter-spacing:.05em; color:var(--grey-48); font-weight:normal; border-bottom:1px solid var(--grey-70); padding:3px 6px 3px 0; }
 table.lg td { border-bottom:1px dashed var(--grey-88); padding:5px 6px 5px 0; vertical-align:top; }

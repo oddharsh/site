@@ -42,7 +42,7 @@
     "observe:check": "bun tools/observe-check.ts",
     "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
-    "phone:check": "node tools/check-phone-layout.ts",
+    "browser:check": "node tools/check-browser.ts",
     "colors:drift": "bun tools/color-drift.ts",
     "tools:check": "bun tools/check-tools.ts",
     "controls": "bun tools/controls.ts",

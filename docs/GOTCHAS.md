@@ -896,7 +896,9 @@ skips it.
     may not touch Intl. `toLocaleString()` on a number is the same call:
     eight essay pages grouped digits with it at load, 36 to 58 ms throttled
     on a landing view, and group integers with a regex now.
-    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
+    `bun run browser:check` counts every Intl call a page makes before the
+    reader acts and allows only the ones `config/browser-budget.json` names.
+    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`, `tools/check-browser.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers
     Issues hands an issue to its automation, the automation names a
@@ -977,6 +979,27 @@ skips it.
     /garage/blueprint (289px, 295px and 174px of code and table). No check
     saw it, because the window clips its scroller and the document itself
     never overflows. `prose.css` now scrolls every prose `<pre>` on its own.
-    `bun run phone:check` opens every manifest page in Chrome at 360 and
-    390px, and plants a 600px block first to prove it can fail.
-    Checked by: `tools/check-phone-layout.ts`.
+    A local check also has the wrong data: /around and /ledger passed with
+    empty tables and scrolled at 390px in production, 103px and 3px out, once
+    real rows widened them, so a data table scrolls in its own box.
+    `bun run browser:check` opens every manifest page in Chrome at 320, 360
+    and 390px, plants a 600px block first to prove it can fail, and takes
+    `--base https://aadhar.sh` to read the deployment.
+    Checked by: `tools/check-browser.ts`.
+
+98. **A script that builds what the reader is looking at moves the page
+    after it is painted.** A generated page's `pageJs` runs at the end of
+    the document, an island swaps its placeholder when a fetch lands, and a
+    page drawn from data sizes itself when the data arrives. Each one runs
+    after first paint on a slow device, and everything below it jumps. On
+    2026-11-10, under 4x CPU throttle: /garage/hidden-flags 0.091,
+    /garage/useragent 0.049, /coffee 0.05 and /garage/round-trip 0.086 (0.192
+    at 390px in production). None showed on a fast machine, where the script
+    wins the race with paint. The fixes are the same three every time: put
+    the script straight after the markup it fills, give a region filled
+    later a fixed size, or draw it on the server. `bun run browser:check`
+    reads cumulative layout shift on every page at 1280 and 390px under the
+    same throttle, and pushes a 300px block into /search first to prove it
+    can fail. `config/browser-budget.json` holds the exceptions with their
+    reasons.
+    Checked by: `tools/check-browser.ts`.
