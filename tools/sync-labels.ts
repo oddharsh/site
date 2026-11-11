@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // The write path for the label set declared in config/infra.json under
-// `repository.triage`.
+// `repository.triage`, plus the account's issue types and issue fields
+// (`issue_types`, `issue_fields`), which need the classic `user` scope.
 //
 // check-infra.ts answers "did it drift". This answers "put it back". Same split
 // as check-infra / apply-infra, and for the same reason: the check runs on every
@@ -102,32 +103,163 @@ async function liveLabels() {
 
 // ------------------------------------------------------------------ plan ----
 
-const live = new Map((await liveLabels()).map((l) => [l.name, l]));
-const plan: { verb: string; label: any; detail: string }[] = [];
+type Step = { verb: string; name: string; detail: string; apply?: () => Promise<unknown> };
+const plan: Step[] = [];
+const scopeNotes: string[] = [];
 
+const live = new Map((await liveLabels()).map((l) => [l.name, l]));
 for (const want of triage.labels) {
-  const have = live.get(want.name);
-  live.delete(want.name);
+  const { name, color, description } = want;
+  const have = live.get(name);
+  live.delete(name);
   if (!have) {
-    plan.push({ verb: "create", label: want, detail: `#${want.color}  ${want.description}` });
+    plan.push({
+      verb: "create",
+      name,
+      detail: `#${color}  ${description}`,
+      apply: () => gh(`/repos/${slug}/labels`, { method: "POST", body: JSON.stringify({ name, color, description }) }),
+    });
     continue;
   }
   const diffs: string[] = [];
-  if (have.color.toLowerCase() !== want.color.toLowerCase()) diffs.push(`color #${have.color} -> #${want.color}`);
-  if ((have.description ?? "") !== want.description) diffs.push(`description "${have.description ?? ""}" -> "${want.description}"`);
-  if (diffs.length) plan.push({ verb: "update", label: want, detail: diffs.join(", ") });
+  if (have.color.toLowerCase() !== color.toLowerCase()) diffs.push(`color #${have.color} -> #${color}`);
+  if ((have.description ?? "") !== description) diffs.push(`description "${have.description ?? ""}" -> "${description}"`);
+  if (diffs.length) {
+    plan.push({
+      verb: "update",
+      name,
+      detail: diffs.join(", "),
+      apply: () =>
+        gh(`/repos/${slug}/labels/${encodeURIComponent(name)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ new_name: name, color, description }),
+        }),
+    });
+  }
 }
 
 // Strays are reported whether or not --prune is set, because knowing they exist
 // is the useful half and deleting them is the rare half.
-const strays = [...live.values()];
-for (const stray of strays) {
+for (const stray of live.values()) {
   plan.push({
     verb: PRUNE ? "delete" : "stray",
-    label: stray,
+    name: stray.name,
     detail: PRUNE ? "removed from every issue and pull request carrying it" : "undeclared (pass --prune to delete)",
+    apply: PRUNE ? () => gh(`/repos/${slug}/labels/${encodeURIComponent(stray.name)}`, { method: "DELETE" }) : undefined,
   });
 }
+
+// Issue types and fields live on the ACCOUNT, at /user/..., so these writes
+// reach every repository oddharsh owns. Reading them needs `read:user` and
+// writing needs `user`, neither of which a default `gh auth login` grants, so a
+// 403 here is a note about the token rather than a failed sync of the labels.
+async function readAccount(path: string) {
+  try {
+    return await gh(path);
+  } catch (e) {
+    scopeNotes.push(`${path}: ${(e as Error).message.slice(0, 120)}`);
+    return null;
+  }
+}
+
+const liveTypes = triage.issue_types ? await readAccount("/user/issue-types") : null;
+if (liveTypes) {
+  const byName = new Map<string, any>(liveTypes.map((t) => [t.name, t]));
+  for (const want of triage.issue_types) {
+    const body = JSON.stringify({ name: want.name, description: want.description, color: want.color, is_enabled: true });
+    const have = byName.get(want.name);
+    byName.delete(want.name);
+    if (!have) {
+      plan.push({
+        verb: "create",
+        name: `type ${want.name}`,
+        detail: `${want.color}  ${want.description}`,
+        apply: () => gh("/user/issue-types", { method: "POST", body }),
+      });
+      continue;
+    }
+    const diffs: string[] = [];
+    if (have.color !== want.color) diffs.push(`color ${have.color} -> ${want.color}`);
+    if ((have.description ?? "") !== want.description) diffs.push(`description "${have.description ?? ""}" -> "${want.description}"`);
+    if (!have.is_enabled) diffs.push("disabled -> enabled");
+    if (diffs.length) {
+      plan.push({
+        verb: "update",
+        name: `type ${want.name}`,
+        detail: diffs.join(", "),
+        apply: () => gh(`/user/issue-types/${have.id}`, { method: "PUT", body }),
+      });
+    }
+  }
+  for (const stray of byName.values()) {
+    plan.push({
+      verb: PRUNE ? "delete" : "stray",
+      name: `type ${stray.name}`,
+      detail: PRUNE ? "permanently removed from the account" : "undeclared (pass --prune to delete)",
+      apply: PRUNE ? () => gh(`/user/issue-types/${stray.id}`, { method: "DELETE" }) : undefined,
+    });
+  }
+}
+
+const liveFields = triage.issue_fields ? await readAccount("/user/issue-fields") : null;
+if (liveFields) {
+  const byName = new Map<string, any>(liveFields.map((f) => [f.name, f]));
+  for (const want of triage.issue_fields) {
+    const have = byName.get(want.name);
+    byName.delete(want.name);
+    // Option ids carry over by name, so an update keeps the values already set
+    // on issues instead of replacing every option with a fresh one. An unset
+    // `id` or `options` is undefined, which JSON.stringify leaves out.
+    const options = want.options?.map((o, priority) => ({
+      id: have?.options?.find((h) => h.name === o.name)?.id,
+      name: o.name,
+      color: o.color,
+      priority,
+    }));
+    const fields = { name: want.name, description: want.description, visibility: "all", options };
+    if (!have) {
+      const body = JSON.stringify({ ...fields, data_type: want.data_type });
+      plan.push({
+        verb: "create",
+        name: `field ${want.name}`,
+        detail: `${want.data_type}  ${want.description}`,
+        apply: () => gh("/user/issue-fields", { method: "POST", body }),
+      });
+      continue;
+    }
+    if (have.data_type !== want.data_type) {
+      // PATCH cannot change a data type, and recreating the field deletes every
+      // value set on it, so that call stays with a person.
+      plan.push({ verb: "manual", name: `field ${want.name}`, detail: `is ${have.data_type}, declared ${want.data_type}; delete and recreate it by hand` });
+      continue;
+    }
+    const diffs: string[] = [];
+    if ((have.description ?? "") !== want.description) diffs.push(`description "${have.description ?? ""}" -> "${want.description}"`);
+    if (have.visibility !== "all") diffs.push(`visibility ${have.visibility} -> all`);
+    const haveOptions = (have.options ?? []).map((o) => `${o.name}:${o.color}`).join(",");
+    const wantOptions = (want.options ?? []).map((o) => `${o.name}:${o.color}`).join(",");
+    if (haveOptions !== wantOptions) diffs.push(`options [${haveOptions}] -> [${wantOptions}]`);
+    if (diffs.length) {
+      plan.push({
+        verb: "update",
+        name: `field ${want.name}`,
+        detail: diffs.join(", "),
+        apply: () => gh(`/user/issue-fields/${have.id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+      });
+    }
+  }
+  for (const stray of byName.values()) {
+    plan.push({
+      verb: PRUNE ? "delete" : "stray",
+      name: `field ${stray.name}`,
+      detail: PRUNE ? "removed, with its value on every issue" : "undeclared (pass --prune to delete)",
+      apply: PRUNE ? () => gh(`/user/issue-fields/${stray.id}`, { method: "DELETE" }) : undefined,
+    });
+  }
+}
+
+for (const note of scopeNotes) console.log(`unread ${note}`);
+if (scopeNotes.length) console.log("       issue types and fields need the `user` scope: gh auth refresh -h github.com -s user");
 
 if (!plan.length) {
   console.log(`${slug}: ${triage.labels.length} declared label(s) match, no strays.`);
@@ -135,10 +267,10 @@ if (!plan.length) {
 }
 
 for (const step of plan) {
-  console.log(`${step.verb.padEnd(6)} ${JSON.stringify(step.label.name).padEnd(22)} ${step.detail}`);
+  console.log(`${step.verb.padEnd(6)} ${JSON.stringify(step.name).padEnd(22)} ${step.detail}`);
 }
 
-const writes = plan.filter((s) => s.verb !== "stray");
+const writes = plan.filter((s) => s.apply);
 if (!CONFIRM) {
   console.log("");
   console.log(`${writes.length} change(s) pending. Re-run with --confirm to apply.`);
@@ -149,24 +281,14 @@ if (!CONFIRM) {
 
 let applied = 0;
 for (const step of writes) {
-  const { name, color, description } = step.label;
   try {
-    if (step.verb === "create") {
-      await gh(`/repos/${slug}/labels`, { method: "POST", body: JSON.stringify({ name, color, description }) });
-    } else if (step.verb === "update") {
-      await gh(`/repos/${slug}/labels/${encodeURIComponent(name)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ new_name: name, color, description }),
-      });
-    } else {
-      await gh(`/repos/${slug}/labels/${encodeURIComponent(name)}`, { method: "DELETE" });
-    }
+    await step.apply!();
     applied++;
   } catch (e) {
     // Keep going. A partial sync is recoverable by re-running; stopping on the
     // first failure leaves the rest of the set in an unknown state and the
     // operator with one error instead of the list.
-    console.error(`  ${step.verb} ${name} FAILED: ${(e as Error).message}`);
+    console.error(`  ${step.verb} ${step.name} FAILED: ${(e as Error).message}`);
   }
 }
 
