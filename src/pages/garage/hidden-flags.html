@@ -216,7 +216,7 @@
 <h2>Two questions, and only one of them is free</h2>
 <p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
 <p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor? <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
-<p>The first question is usually free, and that is the part people skip. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
+<p>The first question is usually free, and people skip it. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
 <pre class="hf-code"><code>$ wrangler deploy --x-bogus-flag ; echo $?
 1
 $ wrangler deploy --x-provision=false --dry-run ; echo $?
@@ -230,8 +230,8 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <h3>A payload schema that refuses unknown keys</h3>
 <p>Cloudflare's <a class="term" data-t="browser-run" href="https://developers.cloudflare.com/browser-run/" title="Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs." rel="external">Browser Run</a> binding takes a JSON payload. A launch post described selecting a rendering engine with one extra key; the Quick Actions reference did not list it. Sending it answered:</p>
 <pre class="hf-code"><code>{"code":"unrecognized_keys","keys":["browser"]}</code></pre>
-<p>An invented engine name returned the byte-identical error, which is the useful half of the result. The schema is closed, so it refuses the option rather than failing on the value, and a closed schema is a gift: it answers "is this accepted" for free, every time, with no render performed and no browser minutes spent.</p>
-<p>The same feature then produced the opposite trap through the <a class="term" data-t="rest-api" href="https://en.wikipedia.org/wiki/REST" title="A common style of web API where each URL names a resource and standard HTTP methods such as GET and POST act on it." rel="external">REST</a> door, where the parameter is merely ignored. A 200 came back either way, so the code labelled the render with the engine it had asked for. On a page whose entire premise is showing what a machine actually saw, that label was a claim nobody had checked. It reads <code>kitesurf-requested</code> now.</p>
+<p>An invented engine name returned the byte-identical error. The schema is closed, so it refuses the option rather than failing on the value, and a closed schema is a gift: it answers "is this accepted" for free, every time, with no render performed and no browser minutes spent.</p>
+<p>The same feature then produced the opposite trap through the <a class="term" data-t="rest-api" href="https://en.wikipedia.org/wiki/REST" title="A common style of web API where each URL names a resource and standard HTTP methods such as GET and POST act on it." rel="external">REST</a> door, where the parameter is merely ignored. A 200 came back either way, so the code labelled the render with the engine it had asked for. On a page whose premise is showing what a machine actually saw, that label was a claim the code never checked. It reads <code>kitesurf-requested</code> now.</p>
 
 <h3>A compression option three runtimes disagree about</h3>
 <p><a class="term" data-t="compression-dictionaries" href="https://www.rfc-editor.org/rfc/rfc9842.html" title="A scheme where the browser keeps an earlier copy of a file and the server sends only a compressed difference against it." rel="external">Dictionary compression</a> takes a <code>dictionary</code> option. <a class="term" data-t="nodejs" href="https://en.wikipedia.org/wiki/Node.js" title="A program that runs JavaScript outside the browser, widely used for servers and build tools." rel="external">Node 26</a> honours it. <a class="term" data-t="cloudflare-workers" href="https://developers.cloudflare.com/workers/" title="Code that runs on Cloudflare's servers around the world and answers each request directly, with no server of the site's own." rel="external">Workers</a> ignore it for <a class="term" data-t="zstd" href="https://en.wikipedia.org/wiki/Zstd" title="Zstandard, a compression algorithm from Meta built for very fast decompression. Browsers accept it as a way to shrink web pages in transit." rel="external">zstd</a> and say nothing. <a class="term" data-t="bun" href="https://en.wikipedia.org/wiki/Bun_(software)" title="A JavaScript runtime that also bundles a package manager, bundler and test runner, built to work as a replacement for Node.js." rel="external">Bun</a> ignored it through 1.3.14 and fixed it in <a href="https://github.com/oven-sh/bun/pull/34427" rel="external">oven-sh/bun#34427</a>. Every one of those failures is silent, because a frame compressed <em>without</em> a dictionary still decodes perfectly <em>with</em> one. Nothing throws. The only symptom is a byte count that never got smaller.</p>
@@ -394,7 +394,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 <p>And prefer reading the definition to running the experiment when the definition is in your <code>node_modules</code>. Two of the four cases here were settled by a source comment and a call site, in less time than a deploy takes, and neither answer could have been reached by watching the tool succeed.</p>
 
 <h2>What would change this</h2>
-<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
+<p>A tool that accepts unknown flags silently would break the free half, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
     <section id="luq" aria-label="understanding check"></section>
   </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
@@ -442,7 +442,7 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
       ]
     },
     {
-      "q": "The dictionary control runs three times: no option, the right value, a wrong value. Why does the wrong value earn its place?",
+      "q": "The dictionary control runs three times: no option, the right value, a wrong value. Why run the wrong value at all?",
       "options": [
         {
           "t": "It ties the smaller output to the value you passed rather than to some other cause.",

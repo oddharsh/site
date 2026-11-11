@@ -302,8 +302,8 @@ window.UA = (function () {
   }
 })();
 </script>
-<p>That row sends the pointer and signs nothing. It sets <code>Signature-Agent</code> to a directory that genuinely exists and omits <code>Signature</code> and <code>Signature-Input</code> entirely, so an origin actually verifying has everything it needs to reject the request. Read it against the plain <b>ua-survey (ours)</b> row in the matrix, which is the same user-agent carrying no header at all.</p>
-<p class="ua-note">Worth stating the limit of that probe. It shows whether an origin reacts to an unsigned Web Bot Auth attempt, and it cannot show whether an origin would honour a correctly signed one, because signing needs AadharshBot's private key and that key is a Worker secret this survey cannot reach. A run from inside the Worker would answer the second question and is the obvious next experiment.</p>
+<p>That row sends the pointer and signs nothing. It sets <code>Signature-Agent</code> to a real directory and omits <code>Signature</code> and <code>Signature-Input</code> entirely, so an origin actually verifying has everything it needs to reject the request. Read it against the plain <b>ua-survey (ours)</b> row in the matrix, which is the same user-agent carrying no header at all.</p>
+<p class="ua-note">That probe shows whether an origin reacts to an unsigned Web Bot Auth attempt, and it cannot show whether an origin would honour a correctly signed one, because signing needs AadharshBot's private key and that key is a Worker secret this survey cannot reach. A run from inside the Worker would answer the second question and is the obvious next experiment.</p>
 <p>One more data point arrived by accident while this page was being written. Cloudflare's own Radar bot directory answered 403 to the unverified fetcher used to read it, and served the same page to an ordinary browser seconds later. The registry of verified bots sits behind the wall that verification exists to open.</p>
 
 <h2>What this site serves</h2>

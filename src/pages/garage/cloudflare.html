@@ -53,13 +53,13 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
   <main id="main" class="content prose">
     <h1>Four free Cloudflare Workers features run live here</h1>
     <p class="lede">
-      The free Workers plan quietly bundles things that used to cost money or
+      The free Workers plan bundles things that used to cost money or
       a separate service. I wired four of them to live demos here
       (<b><a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Objects</a></b>, <b><a class="term" data-t="workers-ai" href="https://developers.cloudflare.com/workers-ai/" title="Cloudflare's service for running machine-learning models, such as language and vision models, on its own GPUs, called directly from a Worker." rel="external">Workers&nbsp;AI</a></b>, <b><a class="term" data-t="workers-logs" href="https://developers.cloudflare.com/workers/observability/logs/workers-logs/" title="Cloudflare's built-in log store for Workers. It collects each request's log lines so you can search and filter them in the dashboard." rel="external">Workers&nbsp;Logs</a></b>, and <b><a class="term" data-t="trace-span" href="https://opentelemetry.io/docs/concepts/signals/traces/" title="One timed step inside a traced request, with a name, a start time, a duration and attributes. Nested spans show where the time went." rel="external">custom trace spans</a></b>),
       behind a tiny worker (<code class="m">cf-garage</code>) routed at
       <code class="m">/garage/cf/*</code>. The buttons hit real endpoints; nothing is faked.
       A fifth, <b><a class="term" data-t="browser-run" href="https://developers.cloudflare.com/browser-run/" title="Cloudflare's service for controlling a headless browser from a Worker, to render pages, take screenshots or make PDFs." rel="external">Browser&nbsp;Rendering</a></b>, I bound and deployed, then parked on the free
-      tier&apos;s daily cap. <a href="#parked">Noted honestly below.</a>
+      tier&apos;s daily cap. <a href="#parked">The note below says why.</a>
     </p>
 
     <div class="cf-feat">
@@ -124,7 +124,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       request shows its own spans in the trace waterfall.</p>
 
     <div class="callout" id="parked">
-      <b>The fifth, parked honestly: Browser Run.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
+      <b>The fifth, parked: Browser Run.</b> <a class="term" data-t="headless-browser" href="https://en.wikipedia.org/wiki/Headless_browser" title="A web browser that runs with no window on screen, driven by code, so a program can load pages, run their scripts and capture the result." rel="external">Headless Chromium</a> in a Worker
       via <code class="m">env.BROWSER.quickAction("screenshot", options)</code>, the basis for
       on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding

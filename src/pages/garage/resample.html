@@ -59,7 +59,7 @@
 <p>Textures are where this lands hardest, because texture is exactly where neighbouring pixels differ most. A photograph reduced this way loses contrast in foliage, fabric, hair and grain, and gains it nowhere.</p>
 
 <h2>The resampler, with every operational concern taken back out</h2>
-<p>Here is the whole idea at an integer reduction factor. It is the load-bearing version, and the shipping one is a few hundred lines around this shape.</p>
+<p>Here is the resampler at an integer reduction factor. This version carries the meaning, and the shipping one is a few hundred lines around this shape.</p>
 <pre class="hl-code"><code>function reduce(src, w, factor) {
   const out = [], n = factor * factor;
   for (let y = 0; y &lt; w / factor; y++)
@@ -72,7 +72,7 @@
     }
   return out;
 }</code></pre>
-<p>Convert to light, average, convert back. Everything the real implementation adds is a separate concern wearing this function's clothes, and each one earns its place for a reason worth naming.</p>
+<p>Convert to light, average, convert back. Everything the real implementation adds is a separate concern wearing this function's clothes, and each one is below with the reason it's there.</p>
 <p><b>Arbitrary ratios need weights.</b> An integer factor lets every source sample count once. A 3.86 times reduction does not, so each output sample carries a list of taps and weights instead of a rectangle.</p>
 <p><b>The filter has to widen with the reduction.</b> On a downscale the filter must <a class="term" data-t="low-pass-filter" href="https://en.wikipedia.org/wiki/Low-pass_filter" title="A filter that keeps broad, slow changes and removes fine, rapid ones. Downscaling needs one so detail too small for the new size doesn't become artifacts." rel="external">low pass</a> at the <i>output</i> <a class="term" data-t="nyquist-frequency" href="https://en.wikipedia.org/wiki/Nyquist_frequency" title="The finest detail a sampling grid can record: half its sampling rate. In an image, a pattern that alternates every pixel." rel="external">Nyquist</a>, so its support in source pixels grows by the reduction factor. A kernel evaluated at fixed width is sampling rather than filtering, and it <a class="term" data-t="aliasing" href="https://en.wikipedia.org/wiki/Aliasing" title="False patterns, like jagged edges or shimmering moire, that appear when detail finer than the sampling grid gets sampled anyway." rel="external">aliases</a>. This is why naive <a class="term" data-t="lanczos-resampling" href="https://en.wikipedia.org/wiki/Lanczos_resampling" title="A resizing filter that weights nearby pixels with a windowed sinc curve. Lanczos3 reaches three pixels out on each side and keeps images sharp." rel="external">Lanczos3</a> downscales shimmer.</p>
 <p><b>Weights are renormalised per output sample.</b> At the frame edge the support window is clipped, and the weights that survive have to sum to one again or the border darkens into a vignette nobody can explain.</p>

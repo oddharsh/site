@@ -127,7 +127,7 @@
 
     <h2>2 · FastCDC, briefly</h2>
     <p class="note">
-      Here is the whole idea, with every operational concern taken back out:
+      Here is FastCDC with every operational concern taken back out:
     </p>
     <pre class="toy">function cut(bytes, avg) {
   var mask = avg - 1, hash = 0, cuts = [];
@@ -157,7 +157,7 @@
 
     <h2>3 · Big files</h2>
     <p class="note">
-      Content-addressing earns its keep on large blobs. Drop any file (it
+      Content-addressing pays off on large blobs. Drop any file (it
       never leaves your machine) and your browser FastCDC-chunks it locally
       (avg 8&nbsp;KB), then <a class="term" data-t="sha-256" href="https://en.wikipedia.org/wiki/SHA-2" title="A hash function that turns any input into a 256-bit fingerprint. Change one byte of the input and the fingerprint changes completely." rel="external">SHA-256</a>'s each chunk into a content ID. The blocks
       run proportional to size so you can see the variable-length cuts; the
