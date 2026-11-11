@@ -335,14 +335,14 @@
     <p class="note"><b>On a thumbnail that barely matters.</b> The JPG tile is the fallback most
       browsers never fetch, and it is small: a median 48.7&nbsp;KB, with the gate at a median
       19.3&nbsp;KB. A 10-packet initial <a class="term" data-t="congestion-window" href="https://en.wikipedia.org/wiki/TCP_congestion_control#Congestion_window" title="How much data a TCP sender may have in flight before it hears back. Connections usually start at 10 packets and grow as replies arrive." rel="external">congestion window</a> carries about 14&nbsp;KB, so 116 of the 255
-      reach their gate in the opening flight and the rest one round trip later. The scan search still earns its place
+      reach their gate in the opening flight and the rest one round trip later. The scan search is still worth running
       at this size, purely for the bytes it saves.</p>
 
     <p class="note">It matters at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
       the worker streams a median 21.6&nbsp;MB progressive JPEG from R2 (since October 2026 as its
       lossless JPEG XL copy, about 8% smaller), and that single file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
-      structurally cannot do this</b>. Its layered mode caps at four stages, paints early only in
+      can&apos;t do this</b>. Its layered mode caps at four stages, paints early only in
       Chromium, and is staged rather than incremental the way a JPEG scan script is. On the tiles it
       costs 6 to 10% more bytes (<a href="#layered-avif">measured below</a>), so nothing here emits
       it. So the format that wins every byte comparison on this page
@@ -406,7 +406,7 @@
       Re-encoding at 4:4:4 instead of 4:2:2 scores 88.28 against 88.15, so the chroma round-trip is
       not the limit and 4:2:2 keeps its ~13% byte saving for free. Flattening the reference to 8-bit
       first scores 88.08 against 88.15, so the 10-bit&rarr;8-bit step is not the limit either: JPEG is
-      8-bit, and a HIF&apos;s extra depth earns its keep in the edit.</p>
+      8-bit, and a HIF&apos;s extra depth pays off in the edit.</p>
     <p class="note">That generation also costs far less than it looks once an image is resized for
       anywhere else. Comparing a direct downscale of the HIF against a downscale of the archive JPEG,
       the same pair that reads 88.15 at full resolution reads <b>94.62 at 1080px</b>: averaging ~50
