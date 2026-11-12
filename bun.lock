@@ -5,7 +5,7 @@
     "": {
       "name": "aadhar-sh",
       "devDependencies": {
-        "@cloudflare/config": "0.31.1",
+        "@cloudflare/config": "0.32.0",
         "@oxlint/plugins": "1.93.0",
         "@types/bun": "1.4.4",
         "av2-tone": "github:oddharsh/av2-tone#462f9ca175a5e4f9c1640ed6d8a47266e2590418",
@@ -53,7 +53,7 @@
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@3cea40b",
   },
   "packages": {
-    "@cloudflare/config": ["@cloudflare/config@0.31.1", "", { "dependencies": { "zod": "4.6.6" } }, "sha512-6tuAEST/fKTLxUNZ+p6Jx0lHTInb8wG09LyUY2bY11N2YQgOaXZfYANp0IcOifLEmkW/zPDnVmWEY8fCYh8UNQ=="],
+    "@cloudflare/config": ["@cloudflare/config@0.32.0", "", { "dependencies": { "zod": "4.6.6" } }, "sha512-Q/Gpu+PkyRXXE5KVsPzyjKul4ZF/uLB+28OVMRNlaBT5WgD3gLWoBK+XyoPA1uqp9FQ7Y0sIewoy04UCXlNDgw=="],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@https://pkg.pr.new/cloudflare/workers-sdk/@cloudflare/kv-asset-handler@3cea40b", {}, "sha512-cp1W4tJZXH0yVtfl555oMd4xrYrqRVCpkkMg7tks/no4N4GdooboAucsb/9Wh81BKmHilI81izcDn0WzutQmcg=="],
 
