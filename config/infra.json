@@ -1227,7 +1227,7 @@
         "what every oddharsh repository offers, and editing it here edits theirs.",
         "",
         "The first three are GitHub's defaults, spelled as it ships them. `Watch`",
-        "is the one this repo adds: on 2026-11-11, 14 of the 19 issues ever",
+        "is the one this repo adds: on 2026-11-11, 17 of the 19 issues ever",
         "opened here were robot-filed trackers (timbrado canary legs, the",
         "node-support-window and test-order reports, the dependency digest).",
         "They close when an upstream release or a pin moves, which no other",
