@@ -236,7 +236,11 @@ if (liveFields) {
     const diffs: string[] = [];
     if ((have.description ?? "") !== want.description) diffs.push(`description "${have.description ?? ""}" -> "${want.description}"`);
     if (have.visibility !== "all") diffs.push(`visibility ${have.visibility} -> all`);
-    const haveOptions = (have.options ?? []).map((o) => `${o.name}:${o.color}`).join(",");
+    // The API lists options by name; `priority` is the order (seen 2026-11-11).
+    const haveOptions = (have.options ?? [])
+      .toSorted((a, b) => a.priority - b.priority)
+      .map((o) => `${o.name}:${o.color}`)
+      .join(",");
     const wantOptions = (want.options ?? []).map((o) => `${o.name}:${o.color}`).join(",");
     if (haveOptions !== wantOptions) diffs.push(`options [${haveOptions}] -> [${wantOptions}]`);
     if (diffs.length) {
