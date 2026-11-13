@@ -8658,16 +8658,27 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
 <script>
 // field Core Web Vitals, on this page only (src/worker/vitals.ts says why).
-// One beacon when the tab first hides, carrying what the browser measured so
-// far. CLS follows the standard definition: the worst session window of
-// shifts under 1 s apart, capped at 5 s. INP here is the slowest interaction,
-// which equals the standard p98 below 50 interactions. LCP subtracts
-// activationStart, since the shell's speculation rules prerender this page.
+// One report per view, carrying what the browser measured. CLS follows the
+// standard definition: the worst session window of shifts under 1 s apart,
+// capped at 5 s. INP here is the slowest interaction, which equals the
+// standard p98 below 50 interactions. LCP subtracts activationStart, since the
+// shell's speculation rules prerender this page, and skips a view that loaded
+// in a background tab: that page paints when the reader arrives, so its LCP
+// times the reader, and web-vitals and CrUX drop it too.
+//
+// Where fetchLater exists (Chromium only, 2026-11), the report is one deferred
+// request that every hide re-queues with the latest values, and the browser
+// sends it when the page goes away. A shift or a slower click after the reader
+// tabs back still counts. Elsewhere it is one sendBeacon on the first hide, as
+// before, and what happens after that hide is lost. Either way a view lands as
+// one row per metric, which is what the p75 query in docs/MAINTENANCE.md counts.
 (function () {
   var types = (window.PerformanceObserver && PerformanceObserver.supportedEntryTypes) || [];
   if (!navigator.sendBeacon || !types.length) return;
   var nav = performance.getEntriesByType("navigation")[0];
   var activation = (nav && nav.activationStart) || 0;
+  // a prerender is hidden on purpose until it activates; only a real background tab counts
+  var background = document.visibilityState === "hidden" && !document.prerendering;
   var v = { p: location.pathname };
   function watch(type, each, extra) {
     if (types.indexOf(type) === -1) return false;
@@ -8678,7 +8689,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       return true;
     } catch (e) { return false; }
   }
-  watch("largest-contentful-paint", function (e) { v.lcp = Math.max(0, e.startTime - activation); });
+  watch("largest-contentful-paint", function (e) { if (!background) v.lcp = Math.max(0, e.startTime - activation); });
   var win = 0, first = 0, last = 0;
   if (watch("layout-shift", function (e) {
     if (e.hadRecentInput) return;
@@ -8692,9 +8703,20 @@ navigation.addEventListener("navigate", (e) =&gt; {
   function interaction(e) { if (e.interactionId) v.inp = Math.max(v.inp || 0, e.duration); }
   watch("event", interaction, { durationThreshold: 40 });
   watch("first-input", interaction);
-  var sent = false;
+  var sent = false, later = null, abort = null;
   addEventListener("visibilitychange", function () {
-    if (sent || document.visibilityState !== "hidden") return;
+    if (document.visibilityState !== "hidden") return;
+    if (typeof fetchLater === "function" && !sent) {
+      // once the browser has sent it, a hide after a bfcache restore must not add a second row
+      if (later && later.activated) return;
+      if (abort) abort.abort();
+      abort = new AbortController();
+      try {
+        later = fetchLater("/ledger/vitals", { method: "POST", body: JSON.stringify(v), signal: abort.signal });
+        return;
+      } catch (e) {} // a refusal (quota, policy) leaves the beacon below to send this view
+    }
+    if (sent) return;
     sent = true;
     try { navigator.sendBeacon("/ledger/vitals", JSON.stringify(v)); } catch (e) {}
   });
