@@ -516,25 +516,28 @@
     );
   }
 
-  // The taskbar clock. Intl owns the formatting, and the formatter is built once
-  // on first use rather than per tick. en-US on purpose: XP's taskbar read
-  // "3:07 PM" and this is that clock, whatever the visitor's locale. ICU puts a
-  // narrow no-break space before the day period, so every whitespace becomes a
-  // plain space and the text stays byte-identical to what the hand-rolled
-  // version printed. Date rather than Temporal: they read the same wall clock,
-  // and Date is the primitive every engine agrees on (a workerd build once
-  // shipped a Temporal whose clock read epoch 0).
+  // The taskbar clock, formatted by hand: XP's taskbar read "3:07 PM" and this
+  // is that clock, whatever the visitor's locale. Intl.DateTimeFormat("en-US",
+  // { hour: "numeric", minute: "2-digit" }) printed the same text until
+  // 2026-11-10, and building it was the largest script cost on the first page
+  // of a visit: 8 to 17 ms in Chrome on a workstation, 30 to 53 ms under 4x
+  // CPU throttle (15 fresh loads across /about, /around and
+  // /garage/hidden-flags), because the first Intl object in a renderer process
+  // loads ICU data. Later pages in the same tab paid about 1 ms (gotcha 92 is
+  // the Worker's half). Date rather than Temporal: they read the same wall clock, and Date
+  // is the primitive every engine agrees on (a workerd build once shipped a
+  // Temporal whose clock read epoch 0).
   //
   // Scheduled for the next minute boundary instead of polled: a 15s interval let
   // the taskbar sit up to 15s behind the minute it was showing.
-  var clockFmt = null as Intl.DateTimeFormat | null,
-    clockTimer = 0;
+  var clockTimer = 0;
   function tickClock() {
     var c = D.getElementById("axp-clock");
     if (!c) return;
-    clockFmt = clockFmt || new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
-    var now = new Date();
-    c.textContent = clockFmt.format(now).replace(/\s/g, " ");
+    var now = new Date(),
+      h = now.getHours(),
+      m = now.getMinutes();
+    c.textContent = (h % 12 || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " AM" : " PM");
     clearTimeout(clockTimer);
     clockTimer = W.setTimeout(tickClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }

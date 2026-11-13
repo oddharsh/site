@@ -92,8 +92,8 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
     <h1>Bytes on the wire</h1>
     <p class="lede">
       This site was no-build on principle: every page inline, every byte committed
-      the way it ships. This is the story of the first build step that earned its
-      place anyway and the <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> rabbit hole that led there. It also covers the
+      the way it ships. This page covers the first build step it took on anyway,
+      and the <a class="term" data-t="brotli" href="https://en.wikipedia.org/wiki/Brotli" title="A compression algorithm from Google built for the web. It ships with a built-in dictionary of common web text, which helps on small files." rel="external">brotli</a> rabbit hole that led there. It also covers the
       <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> and
       <a href="https://github.com/parcel-bundler/lightningcss" rel="external">Lightning CSS</a>
       knobs that survived contact with the real site, and the cache layer that finally
@@ -189,7 +189,7 @@ code.m, .m { font-family: var(--font-mono); font-size: var(--text-mono); }
       <p>Two details I did not expect to enjoy this much. The build has
         <strong>tripwires</strong>: it fails the deploy if CSS emits a warning,
         loses a required route marker, or breaks the stylesheet's known-good rules, so
-        "the transform broke something silently" is structurally impossible. And
+        the transform can't break any of those three silently. And
         Cloudflare's asset storage is <a class="term" data-t="content-addressing" href="https://en.wikipedia.org/wiki/Content-addressable_storage" title="Naming each piece of data by a hash of its bytes, so the same content always gets the same name and any change gets a new one." rel="external">content-addressed</a>, so on the first minified
         deploy the six <code class="m">.src.js</code> twins uploaded as "already
         uploaded": their bytes were identical to the shells the previous deploy had
@@ -263,7 +263,7 @@ linear-gradient(180deg,#e8795f,#e45f40 30%,
 transition:filter 60ms ease-out}</pre></figure>
     </div>
 
-    <p>The gap is the whole story. JS shrinks 44% because a minifier can <em>rename</em>
+    <p>JS shrinks 44% because a minifier can <em>rename</em>
       things: every local variable collapses to one letter, information genuinely leaves
       the file. CSS shrinks 15% because nothing in it is renamable: selectors and
       properties are the page's public API, so all a CSS minifier can remove is
@@ -271,7 +271,7 @@ transition:filter 60ms ease-out}</pre></figure>
       <code class="m">0%</code> and <code class="m">100%</code> gradient stops). And
       whitespace is exactly the thing brotli already compresses to almost nothing.</p>
 
-    <p>So the real question is "does the WIRE get smaller after brotli?" This site's CSS lives in four habitats, and I measured all
+    <p>So what I needed to know was whether the WIRE gets smaller after brotli. This site's CSS lives in four habitats, and I measured all
       four:</p>
 
     <table class="cmp">
@@ -417,8 +417,7 @@ transition:filter 60ms ease-out}</pre></figure>
         (the fragment behind <a href="/ledger">/ledger</a>) twice each and prints the <code class="m">x-edge-cache</code> header from
         your nearest Cloudflare colo. A fresh colo shows <code class="m">miss</code>
         then <code class="m">hit</code>; a warm one may say
-        <code class="m">hit</code> twice. Your browser hitting production, nothing
-        mocked.</p>
+        <code class="m">hit</code> twice.</p>
       <button class="xp-button compact" id="probe-btn" type="button">probe the edge cache</button>
       <div id="probe-out"></div>
     </div>
@@ -443,7 +442,7 @@ transition:filter 60ms ease-out}</pre></figure>
       The shape lives in one module, <code class="m">lib/island.ts</code>. The placeholder
       comes from the same renderer as the fragment, so the swap moves nothing. The fragment
       is <a class="term" data-t="preload" href="https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload" title="A link hint that tells the browser to start downloading a file it will need soon, before it would otherwise discover it." rel="external">preloaded</a> from <code class="m">&lt;head&gt;</code> with
-      <code class="m">crossorigin</code>, which is load-bearing even same-origin: without it
+      <code class="m">crossorigin</code>, which is required even same-origin: without it
       the preload can't satisfy the script's fetch and the fragment downloads twice. The
       loader refuses any response missing an <code class="m">x-island</code> marker, since an
       edge 5xx is HTML too. A failed fetch leaves the placeholder and says so.

@@ -48,6 +48,10 @@ li { margin: 3px 0; }
 .float-stage { position: relative; border: 1px solid var(--slate-80); border-radius: 4px; background: var(--paper-cool); margin-top: 8px; overflow: hidden; padding: 0; }
 .float-box { position: absolute; top: 8px; left: 8px; z-index: 1; border-radius: 3px; color: #fff; font-size: 9px; line-height: 1.15; font-weight: bold; text-align: center; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: repeating-linear-gradient(45deg, oklch(70% 0.13 255) 0 8px, oklch(60% 0.15 258) 8px 16px); }
 .float-stage canvas { display: block; width: 100%; }
+/* the same float laid out by CSS, inside a drawable canvas (HTML-in-Canvas) */
+#float-hic { height: 156px; }
+.hic-flow { box-sizing: border-box; height: 156px; overflow: hidden; padding: 8px; font: 15px/20px var(--font-ui); color: var(--ink); }
+.hic-flow .float-box { position: static; float: left; margin: 0 10px 0 0; }
 /* i18n demo line rows */
 .i18n-out .ln { white-space: nowrap; overflow: hidden; font-size: 15px; line-height: 22px; }
 .i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: var(--danger-deep); border-radius: 2px; }
@@ -139,6 +143,44 @@ li { margin: 3px 0; }
       <div class="float-box" id="float-box">floated<br>object</div>
       <canvas id="float-canvas"></canvas>
     </div>
+    <p class="note" style="margin-top:12px">
+      Or skip the JS layout. <a href="https://github.com/WICG/html-in-canvas" rel="external">HTML-in-Canvas</a>
+      (Chrome 157 and later) lets the browser lay out a real CSS <code>float</code>,
+      then copies the painted result into a canvas with <code>ctx.drawElementImage()</code>.
+      The same paragraph and the same slider drive both:
+    </p>
+    <div class="float-stage">
+      <canvas id="float-hic" content="drawable"><div class="hic-flow" drawable><div class="float-box">floated<br>object</div>Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below: shaped wrapping with no DOM, recomputed live as you resize the float.</div></canvas>
+    </div>
+    <p class="note" id="float-hic-none" hidden>Your browser can&apos;t draw HTML into a canvas yet, so the second panel is hidden. Chrome 157 and later can.</p>
+    <p class="replaces">
+      The trade runs the other way from pretext. Every slider tick costs the
+      browser a layout pass, the cost section 1 is about. In return the canvas
+      gets the browser&apos;s whole CSS: every script, <code>font-feature-settings</code>,
+      hyphenation, and an accessibility tree for the text, none of which
+      pretext&apos;s subset covers. It redraws on the canvas&apos;s <code>paint</code>
+      event, which fires whenever the drawn element changes.
+    </p>
+    <script>
+    (function () {
+      var cv = document.getElementById("float-hic"), ctx = cv.getContext("2d");
+      if (!ctx || typeof ctx.drawElementImage !== "function") {
+        cv.parentElement.hidden = true; document.getElementById("float-hic-none").hidden = false; return;
+      }
+      var flow = cv.firstElementChild, box = flow.firstElementChild, slider = document.getElementById("fwidth");
+      cv.addEventListener("paint", function () {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // Resizing the bitmap clears it. drawElementImage scales the element
+        // from CSS pixels to the bitmap on its own, so there's no transform.
+        cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientHeight * dpr);
+        ctx.drawElementImage(flow, 0, 0);
+      });
+      function size() { box.style.width = box.style.height = slider.value + "px"; }
+      slider.addEventListener("input", size);
+      window.addEventListener("resize", function () { cv.requestPaint(); });
+      size();
+    })();
+    </script>
 
     <h2>4 · International text: why a toy isn&apos;t enough</h2>
     <p class="note">
@@ -166,10 +208,10 @@ li { margin: 3px 0; }
 
     <h2>6 · Where it&apos;d actually help aadhar.sh</h2>
     <ul>
-      <li><strong>Honestly: not much yet.</strong> The site&apos;s text is tiny:
+      <li><strong>Not much yet.</strong> The site&apos;s text is tiny:
         a dozen track rows, a 3&times;4 photo grid, one tooltip at a time.
         A handful of one-off measurements is exactly the case where the DOM is
-        fine. pretext earns its keep at <em>volume</em>, which this homepage
+        fine. pretext pays off at <em>volume</em>, which this homepage
         doesn&apos;t have.</li>
       <li><strong>The real candidate is serendipity.</strong> If the event /
         attendee lists ever get <em>virtualized</em> (only render what&apos;s
@@ -213,7 +255,7 @@ li { margin: 3px 0; }
     </ul>
 
     <div class="verdict">
-      <strong>Verdict:</strong> a genuinely clever inversion. Treat the
+      <strong>Verdict:</strong> a clever inversion. Treat the
       canvas as the measurement oracle and keep re-layout in pure arithmetic. But
       its win scales with how often you measure, and aadhar.sh measures almost
       nothing. Filed under <em>watching</em>: the moment a virtualized list shows

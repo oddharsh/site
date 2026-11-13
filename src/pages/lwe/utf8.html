@@ -104,13 +104,13 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
           <div class="bubble"><p>wait, UTF-32 is always 4 bytes? why not use that everywhere, it's simple.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:13</time></div>
-          <div class="bubble"><p>You <em>could</em>. UTF-32 is dead simple: one code point is exactly 4 bytes, so indexing is trivial. But it wastes space: plain English text becomes <b>4&times; bigger</b> (every <code>A</code> stored as <code>00 00 00 41</code>), and it breaks ASCII compatibility, so every old tool and file chokes on it. For something that's 99% of the internet's text, 4&times; is a lot of wasted bandwidth.</p></div></div></div>
+          <div class="bubble"><p>You <em>could</em>. UTF-32 is dead simple: one code point is exactly 4 bytes, so indexing is trivial. But it wastes space: plain English text becomes <b>4&times; bigger</b> (every <code>A</code> stored as <code>00 00 00 41</code>), and it breaks ASCII compatibility, so every old tool and file chokes on it. Every HTML tag, URL, and JSON key is ASCII, whatever language the page is in, so on the web 4&times; is a lot of wasted bandwidth.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:14</time></div>
           <div class="bubble"><p>so UTF-8 is the compromise?</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:14</time></div>
-          <div class="bubble"><p>Exactly. UTF-8 is <b>variable-width</b>: 1 byte for ASCII, 2 bytes for most Latin and accented letters, 3 for most <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a> like <code lang="zh">中</code>, 4 for emoji and rare scripts. Old English text stays byte-for-byte identical, so backwards compatibility comes free. It's also <b>self-synchronizing</b>: every byte announces whether it's a start byte or a continuation, so you can drop into the middle of a stream and still find the next character. That combination is why it ate the web. Look at how the bits actually pack:</p></div></div></div>
+          <div class="bubble"><p>Exactly. UTF-8 is <b>variable-width</b>: 1 byte for ASCII, 2 bytes for accented Latin letters like <code>é</code> and for Greek, Cyrillic, Hebrew, and Arabic, 3 for most <a class="term" data-t="cjk-characters" href="https://en.wikipedia.org/wiki/CJK_characters" title="Chinese, Japanese and Korean, grouped in computing because their writing systems share a large set of Chinese-derived characters." rel="external">CJK</a> like <code lang="zh">中</code>, 4 for emoji and rare scripts. Old English text stays byte-for-byte identical, so backwards compatibility comes free. It's also <b>self-synchronizing</b>: every byte announces whether it's a start byte or a continuation, so you can drop into the middle of a stream and still find the next character. That combination is why it ate the web. Look at how the bits actually pack:</p></div></div></div>
 
         <!-- DEMO 2 -->
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:14</time></div>
@@ -168,15 +168,18 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
         '<td class="cp">U+' + cp.toString(16).toUpperCase().padStart(4, "0") + '</td>' +
         '<td>' + (ascii !== null ? '<span class="by">' + ascii + '</span>' : '<span class="na">—</span>') + '</td>' +
         '<td class="by">' + u8hex + ' <span style="color:#66707d">(' + u8.length + ')</span></td>' +
-        '<td class="by">00 00 ' + hex((cp >> 8) & 255) + " " + hex(cp & 255) + ' <span style="color:#66707d">(4)</span></td>';
+        '<td class="by">00 ' + hex((cp >> 16) & 255) + " " + hex((cp >> 8) & 255) + " " + hex(cp & 255) + ' <span style="color:#66707d">(4)</span></td>';
       rows.appendChild(tr);
     });
     var tiles = [
       { b: "ASCII", n: asciiOk ? tA : "✗", u: asciiOk ? "bytes" : "can't encode", cls: asciiOk ? "" : "na" },
-      { b: "UTF-8", n: t8, u: "bytes", cls: "win" },
+      { b: "UTF-8", n: t8, u: "bytes", cls: "" },
       { b: "UTF-16", n: cps(s).reduce(function (a, c) { return a + (c.codePointAt(0) > 0xFFFF ? 4 : 2); }, 0), u: "bytes", cls: "" },
       { b: "UTF-32", n: t32, u: "bytes", cls: "" },
     ];
+    // the smallest encoding that can hold the text wins; ties share the tile
+    var best = Math.min.apply(null, tiles.filter(function (x) { return x.cls !== "na"; }).map(function (x) { return x.n; }));
+    tiles.forEach(function (x) { if (x.n === best) x.cls = "win"; });
     totals.innerHTML = tiles.map(function (x) {
       return '<div class="tcard ' + x.cls + '"><b>' + x.b + '</b><span class="n">' + x.n + '</span><span class="u">' + x.u + '</span></div>';
     }).join("");
@@ -189,7 +192,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
   // ── Demo 2: how the bits pack ───────────────────────────────────────────────
   var anatIn = document.getElementById("anat-input"), anatBytes = document.getElementById("anat-bytes"), anatRe = document.getElementById("anat-reassemble");
   // marker-bit count per leading byte by total length
-  var LEAD = { 1: 0, 2: 3, 3: 4, 4: 5 }; // bits of prefix on the lead byte (0…, 110…, 1110…, 11110…)
+  var LEAD = { 1: 1, 2: 3, 3: 4, 4: 5 }; // bits of prefix on the lead byte (0…, 110…, 1110…, 11110…)
   function renderAnat() {
     var c = cps(anatIn.value)[0]; if (!c) { anatBytes.innerHTML = ""; anatRe.innerHTML = ""; return; }
     var cp = c.codePointAt(0), u8 = U8.encode(c), n = u8.length;
@@ -220,7 +223,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "before you sign off: pop quiz. 5 questions, no stakes, and the two demos above hold every answer.",
+  "intro": "before you sign off: pop quiz. 7 questions, no stakes, and the two demos above hold every answer.",
   "questions": [
     {
       "q": "Pop quiz then. Unicode says 中 is U+4E2D. What does that tell you about the bytes on disk?",
@@ -228,7 +231,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
         {
           "t": "nothing yet, the encoding turns that number into bytes",
           "ok": true,
-          "why": "Right. A code point is just a number, and UTF-8, UTF-16, and UTF-32 each store that same number as different bytes. That split between numbering and storage is the whole reason encodings exist."
+          "why": "A code point is just a number, and UTF-8, UTF-16, and UTF-32 each store that same number as different bytes. That split between numbering and storage is the whole reason encodings exist."
         },
         {
           "t": "the file just contains 4E 2D, you write the number down",
@@ -245,12 +248,12 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       ]
     },
     {
-      "q": "You asked the right question earlier: why didn't everyone just use UTF-32? One character, four bytes, easy indexing. So what killed it?",
+      "q": "The chat asked it outright: why not use UTF-32 everywhere? One character, four bytes, easy indexing. So what sank it?",
       "options": [
         {
           "t": "english gets 4x bigger and ascii tools break",
           "ok": true,
-          "why": "Exactly. A stored as 00 00 00 41 quadruples most of the internet's text, and decades of ASCII software choke on all those zero bytes. Either cost alone would have sunk it."
+          "why": "A stored as 00 00 00 41 quadruples every English file, and decades of ASCII software choke on all those zero bytes. Push on it, though: for Chinese the blowup is smaller, 4 bytes against UTF-8's 3, so the size case bites hardest on English text."
         },
         {
           "t": "it can't fit emoji and the rarer scripts",
@@ -289,29 +292,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       ]
     },
     {
-      "q": "In the bit-packing demo, each byte of 中 opens with grey structure bits before the gold payload. What work are those grey prefixes doing?",
-      "options": [
-        {
-          "t": "they tag each byte as a start byte or a continuation",
-          "ok": true,
-          "why": "Right: 1110 says start of a 3-byte character, 10 says continuation. Drop into the middle of a stream and you can scan to the next start byte. That self-synchronizing property helped UTF-8 win."
-        },
-        {
-          "t": "they're error correction so flipped bits get fixed",
-          "why": "UTF-8 ships no checksums; a flipped bit simply corrupts that character. The prefixes only declare each byte's role, start of an N-byte sequence or continuation."
-        },
-        {
-          "t": "they say which language the character comes from",
-          "why": "Language never touches the byte stream; only the code point number does. The demo's reassembly line rebuilds U+4E2D purely from the gold payload bits read in order."
-        },
-        {
-          "t": "they're padding to round it up to whole bytes",
-          "why": "The demo labels them with real jobs: 3-byte start (1110) and continuation (10). Strip them and you could no longer tell where one character ends and the next begins."
-        }
-      ]
-    },
-    {
-      "q": "Last one, the flashcards trap. Someone asks how long the string 中 is. What's the honest answer?",
+      "q": "The flashcards trap. Someone asks how long the string 中 is. What's the honest answer?",
       "options": [
         {
           "t": "depends on the unit: 3 bytes, 1 code point, 1 glyph",
@@ -329,6 +310,72 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
         {
           "t": "unanswerable, encodings made length meaningless",
           "why": "Length is well-defined the moment you name the unit. The page's move is picking the right layer for the job, which is why four-corner indexes characters by shape instead of bytes."
+        }
+      ]
+    },
+    {
+      "q": "In the bit-packing demo, é carries 11 gold bits across 2 bytes. € is U+20AC, a 14-bit number. Before you type it in, predict how UTF-8 stores it.",
+      "options": [
+        {
+          "t": "3 bytes: byte 1 opens 1110, then two continuations open 10",
+          "ok": true,
+          "why": "Two bytes leave 11 payload bits after the 110 and 10 markers, and 14 bits won't fit, so UTF-8 steps up to three: 4 + 6 + 6 = 16 gold bits. Type € and the reassembly line rebuilds U+20AC. It's also why € costs as much as 中: the width follows the number, whatever the script."
+        },
+        {
+          "t": "2 bytes, since 14 bits fit easily inside two 8-bit bytes",
+          "why": "Two raw bytes hold 16 bits, but UTF-8 spends 5 of them on markers: 110 on the start, 10 on the continuation. That leaves the 11 gold bits é uses, and € needs 14."
+        },
+        {
+          "t": "2 bytes opening 110, same as é, since both are Latin-script",
+          "why": "The chat's tiers track the size of the code point, and most accented Latin letters happen to sit low enough for 2 bytes. € sits at U+20AC, past anything 11 gold bits can reach."
+        },
+        {
+          "t": "4 bytes opening 11110, since symbols get the emoji treatment",
+          "why": "Emoji land on 4 bytes because their code points sit past U+FFFF, like 😀 at U+1F600. € is far below that, and 3 bytes already give 16 gold bits."
+        }
+      ]
+    },
+    {
+      "q": "Someone starts reading a UTF-8 stream at a random byte and says they must rewind to the start of the file to find where characters begin. What's the flaw?",
+      "options": [
+        {
+          "t": "every continuation byte opens with 10, so skip to the next one that doesn't",
+          "ok": true,
+          "why": "That's self-synchronizing: every byte says whether it starts a character or continues one, so you lose at most the character you landed in. The prefixes in the second demo are the labels: 10 for a continuation, and 0, 110, 1110, or 11110 for a start."
+        },
+        {
+          "t": "none: with variable widths, only the file's first byte can set the layout",
+          "why": "The chat says the opposite: you can drop into the middle of a stream and still find the next character. Each byte carries its role in its own prefix, so nothing hangs on the file's first byte."
+        },
+        {
+          "t": "they can resync, but only in plain ASCII, where every byte starts a character",
+          "why": "Partly right: ASCII bytes do open with 0. Multi-byte characters label themselves too, though. In the second demo 中's bytes open 1110, 10, 10, so a reader skips the 10s and lands on the next start."
+        },
+        {
+          "t": "they only need the text's language, which gives each character's width",
+          "why": "Language never reaches the byte stream; the width comes from the lead byte's prefix. 中 and 四 both open 1110 because both need three bytes, and é opens 110."
+        }
+      ]
+    },
+    {
+      "q": "Last one. UTF-32's pitch is trivial indexing: code point n sits at byte 4n. Does that fix the flashcards length trap for good?",
+      "options": [
+        {
+          "t": "only the code point count, and a skin-toned emoji spans several",
+          "ok": true,
+          "why": "Fixed width buys a clean code point count, and for 中 that matches the glyph. Grapheme clusters can span several code points, though, like the accented letters and skin-toned emoji in the chat's tip, so what a reader sees still needs its own count. And you'd pay 4x on English to get there."
+        },
+        {
+          "t": "yes: every character is exactly 4 bytes, so all three counts agree",
+          "why": "Bytes and code points agree in UTF-32, by design. Grapheme clusters are the chat's third length, and the tip on that term says one can be stored as several code points."
+        },
+        {
+          "t": "yes for 中, which makes UTF-32 the safe pick for any CJK app",
+          "why": "True for 中 itself: 1 code point, 1 glyph. As a rule it fails twice. Clusters can still span several code points, and the chat's case against UTF-32 is the 4x size on English and the lost ASCII compatibility."
+        },
+        {
+          "t": "no, because 中 takes 3 bytes in UTF-32, same as in UTF-8",
+          "why": "The first demo prints 中 in UTF-32 as 00 00 4E 2D, four bytes. UTF-32 never varies its width; that's the whole pitch."
         }
       ]
     }

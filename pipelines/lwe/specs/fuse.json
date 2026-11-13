@@ -19,7 +19,7 @@
     "uncertainty": "Whether every affected handset is truly unrecoverable rests on community reports and paid unbrick services, with no vendor teardown behind them. Qualcomm publishes no detail on how many fuses the counter spends or how it encodes a version, so the demo models it as a unary ratchet."
   },
   "understanding": {
-    "intro": "Before you close the window: 5 questions, no grades. Both demos above still run if you want to check an answer against them.",
+    "intro": "Before you close the window: 7 questions, no grades. Both demos above still run if you want to check an answer against them.",
     "questions": [
       {
         "q": "A downgrade attack flashes last year's build and then exploits the bug it still carries. Why can secure boot's signature check do nothing about it?",
@@ -40,6 +40,28 @@
           {
             "t": "secure boot checks the kernel image but skips the bootloader stages that run before it",
             "why": "Scope is a different worry. Even a check covering every stage would pass a genuinely signed old image, because the question it asks has no version in it."
+          }
+        ]
+      },
+      {
+        "q": "Reload the page so the ratchet demo starts fresh at a floor of 3. Flash version 9, then drag down and flash version 7. What does the log say after the second flash?",
+        "options": [
+          {
+            "t": "boot rejected: version 7 is below the anti-rollback floor of 9",
+            "ok": true,
+            "why": "Flashing 9 blew six fuses and set the floor to 9 in one step, so 7 now sits under it. The bank records the highest version that ever booted. Flash 9 a second time and it boots without blowing anything, since a match clears the floor."
+          },
+          {
+            "t": "booted: the floor only rose one fuse, to 4, so version 7 clears it",
+            "why": "The demo's log after the first flash says 6 more fuses blown and the floor is now 9. The bank jumps straight to the version that booted, which is how it remembers how far the phone has come."
+          },
+          {
+            "t": "booted: 7 is above the factory floor of 3, and that's the floor that counts",
+            "why": "The factory's three fuses are where the floor starts, and every clean boot of a newer build raises it. If the factory floor were the one that counted, the bank would have nothing to record."
+          },
+          {
+            "t": "booted: two fuses come back and the floor settles down to 7",
+            "why": "Press put the fuses back and the demo says there is no such operation. The floor only climbs, which is the ratchet the page is about."
           }
         ]
       },
@@ -66,68 +88,94 @@
         ]
       },
       {
-        "q": "EDL mode talks straight to storage and has been the classic last-resort rescue. Why does it fail on a device whose fuse has blown?",
+        "q": "A Samsung phone on this year's build gets last year's build flashed onto it, and Samsung signed both. Going by the page, what does the Knox fuse do?",
         "options": [
           {
-            "t": "a storage write can't reach the fuses, and the signed Firehose loaders carry rollback versions too",
+            "t": "stays clear, since Knox only records a flash Samsung never signed",
             "ok": true,
-            "why": "Both doors are shut. EDL writes the wrong medium, since the fuses sit in processor silicon, and the Firehose loader it needs is OEM-signed and gated by an anti-rollback version of its own."
+            "why": "Knox records one event, an unsigned flash, and a genuinely signed old build isn't that event. That's the downgrade gap from the first demo again: a check that only asks who signed the image waves last year's build through. Stopping it takes a version floor, a different fuse doing a different job."
           },
           {
-            "t": "OnePlus pulled the downgrade packages from its servers, so there is no old image left to flash",
-            "why": "The removal happened and it is a supply problem. Hand the device a perfect copy of the old image and the PBL still rejects it on the version compare."
+            "t": "trips and stops the boot, since Knox is the fuse holding Samsung's floor",
+            "why": "That hands Knox the gate's job. The page calls Knox a witness that gates no boot at all; refusing a low version is what an anti-rollback floor does, and a floor reads versions where Knox reads signers."
           },
           {
-            "t": "EDL needs an unlocked bootloader to write storage, and the January update relocks it",
-            "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. The fuse stops it whatever the lock state."
+            "t": "trips and lets it boot, with Samsung Pay and Secure Folder off for good",
+            "why": "That's what Knox does after an unsigned flash. Last year's build carries Samsung's signature, so the one event Knox watches for never happens."
           },
           {
-            "t": "blowing a fuse switches off the USB stack, so the phone stops showing up as a 9008 device",
-            "why": "The reports describe the phone showing up as Qualcomm HS-USB QDLoader 9008, which is how people diagnosed it. It enumerates fine and refuses to boot."
+            "t": "resets, since a full reflash wipes whatever Knox had recorded",
+            "why": "The page says once Knox trips, Samsung Pay and Secure Folder stay off for the life of the device. A fuse has no reset, and here it had nothing to record anyway."
           }
         ]
       },
       {
-        "q": "Samsung's Knox bit and Qualcomm's anti-rollback fuses sit on the same silicon substrate. What separates them?",
+        "q": "EDL runs from the PBL ROM and can rewrite every byte of storage. Why does that still not get last year's build past a floor the fuses set above it?",
         "options": [
           {
-            "t": "Knox records an unsigned flash and lets it boot; anti-rollback refuses to boot below a version",
+            "t": "the floor lives in processor fuses, and a storage write never reaches them",
             "ok": true,
-            "why": "One fuse is a gate and one is a witness. Knox lets the phone boot and takes Samsung Pay and Secure Folder away for good; anti-rollback refuses the boot outright."
+            "why": "EDL writes the wrong medium. The PBL reads the floor out of Qfprom, which no storage write touches, and compares the old build's version against it. On top of that, the Firehose loaders EDL needs are OEM-signed and carry rollback versions of their own, which is why last year's unbrick tools fail too."
           },
           {
-            "t": "Knox can be reset by a Samsung service centre, while anti-rollback is permanent for the board's life",
-            "why": "Both are eFuses on the board, and the reporting is consistent on the remedy: a new motherboard. Neither one has a software reset."
+            "t": "EDL can only write user data, so the old firmware never reaches the phone",
+            "why": "The chat says EDL can write your storage directly, firmware included; that's why it was the classic rescue. Getting the old image onto the phone is the easy half. What does the PBL compare it against at the next power on?"
           },
           {
-            "t": "Knox is a software flag kept in the bootloader partition, while anti-rollback lives in hardware",
-            "why": "Knox trips an eFuse too, which is why a flashed device stays flagged after a full wipe and reflash."
+            "t": "the old build lands fine, then fails the signature check at the next boot",
+            "why": "Last year's build is vendor-signed, so it passes the signature check; that's the middle row of the first demo. What stops it is the version compare against the floor."
           },
           {
-            "t": "Knox blocks downgrades to older builds, and anti-rollback refuses unsigned firmware",
-            "why": "That swaps their jobs. Anti-rollback is the version floor; Knox is the record that something unsigned was flashed."
+            "t": "the bad update overwrote EDL in storage, so nothing is left to run it",
+            "why": "The chat puts EDL in the same PBL ROM as the first boot stage, burned into the processor. An update writes storage, and ROM is the part it can't touch."
+          },
+          {
+            "t": "Firehose loaders are OEM-signed, so the right loader could lower the fuses",
+            "why": "Half of that is on the page: Firehose loaders are OEM-signed and carry rollback versions. The other half fails, because a loader writes storage and the floor sits in fuses. No loader, signed or not, turns a one back into a zero."
           }
         ]
       },
       {
-        "q": "Android's docs ask for tamper-evident storage. Qualcomm shipped something irreversible. What does the stronger choice buy, and what does it cost?",
+        "q": "A forum reply: OnePlus says the next routine update restores downgrades, so the phones that bricked in January will boot their old build again once it lands. Where does that reasoning break?",
         "options": [
           {
-            "t": "it buys a floor even the vendor can't lower, and costs the owner any way back",
+            "t": "the update lifts a policy, and those phones are stopped by fuses already blown",
             "ok": true,
-            "why": "That is the trade in one line. Strength here means removing the appeal, and the appeal was the owner's too."
+            "why": "The pause is policy, so a later build can lift it. The January phones are stopped one layer down: the PBL compares against fuses that are already blown, before any software update gets a say. The promise can be sincere and still miss these phones, because it acts on the layer above the one that stops them."
           },
           {
-            "t": "nothing changes, evident and irreversible are two names for the same guarantee",
-            "why": "Evident means the device can detect a change and choose a response. Irreversible removes the choice from everyone, which is a strictly different and stronger claim."
+            "t": "nowhere, OnePlus holds the signing key and can sign the old build again",
+            "why": "The old build was signed all along. The first demo's right-hand verifier rejects signed v4 anyway, because the floor of 6 sits above it. A fresh signature changes nothing that check reads."
           },
           {
-            "t": "it buys speed, because reading a fuse at boot is cheaper than verifying signed storage",
-            "why": "A fuse read is cheap, and cost was never the argument. The property being bought is that no key holder can write a lower value."
+            "t": "OnePlus only promised a pause and never said downgrades would come back",
+            "why": "The chat quotes OnePlus saying it will be restoring the ability to downgrade in its next routine update. The promise is on the record; the question is which layer it acts on."
           },
           {
-            "t": "it buys protection against physical attackers at no cost to the owner",
-            "why": "The owner pays the whole cost, because the counter cannot tell an owner from an attacker. Both ask to run an older build, in the same words."
+            "t": "the update must lower the fuses through TrustZone, and that needs owner consent",
+            "why": "TrustZone is the path that blows fuses, and nothing in the instruction set turns a one back into a zero, whoever consents. The demo's put-the-fuses-back button says the same."
+          }
+        ]
+      },
+      {
+        "q": "Last one. Android's docs ask for tamper-evident storage, and Qualcomm shipped something irreversible. What does the stronger choice buy, and what does it cost?",
+        "options": [
+          {
+            "t": "a floor no key holder can lower, the vendor included, and the owner's way back",
+            "ok": true,
+            "why": "Evident lets whoever wrote the detection rule relax it later; a blown fuse leaves no author to appeal to. That strength is also why the January phones have no way back. The counter compares two numbers and can't see who's asking, so the owner's rollback and the attacker's look the same."
+          },
+          {
+            "t": "detection of any edit to the floor, at no cost until someone tampers with it",
+            "why": "That's what evident buys, and it's the weaker property. Detection leaves a choice about what to do next, and whoever holds the key can still write a lower number. Irreversible takes the choice away from everyone."
+          },
+          {
+            "t": "stronger security against attackers, paid for with some owner convenience",
+            "why": "True in a loose way, and it misses both specifics. What's bought is that no key holder, OnePlus included, can lower the floor. What's paid is the owner's whole way back, which the reports put at a new motherboard."
+          },
+          {
+            "t": "a floor attackers can't lower, while the owner still keeps a way back through EDL",
+            "why": "Two problems. The counter can't tell an owner from an attacker, so whatever stops one stops the other. And EDL is the rescue that already failed: a storage write doesn't reach the fuses."
           }
         ]
       }

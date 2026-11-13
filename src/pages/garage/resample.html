@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .hl-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;padding:12px;margin:10px 0;display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
@@ -59,7 +59,7 @@
 <p>Textures are where this lands hardest, because texture is exactly where neighbouring pixels differ most. A photograph reduced this way loses contrast in foliage, fabric, hair and grain, and gains it nowhere.</p>
 
 <h2>The resampler, with every operational concern taken back out</h2>
-<p>Here is the whole idea at an integer reduction factor. It is the load-bearing version, and the shipping one is a few hundred lines around this shape.</p>
+<p>Here is the resampler at an integer reduction factor. This version carries the meaning, and the shipping one is a few hundred lines around this shape.</p>
 <pre class="hl-code"><code>function reduce(src, w, factor) {
   const out = [], n = factor * factor;
   for (let y = 0; y &lt; w / factor; y++)
@@ -72,7 +72,7 @@
     }
   return out;
 }</code></pre>
-<p>Convert to light, average, convert back. Everything the real implementation adds is a separate concern wearing this function's clothes, and each one earns its place for a reason worth naming.</p>
+<p>Convert to light, average, convert back. Everything the real implementation adds is a separate concern wearing this function's clothes, and each one is below with the reason it's there.</p>
 <p><b>Arbitrary ratios need weights.</b> An integer factor lets every source sample count once. A 3.86 times reduction does not, so each output sample carries a list of taps and weights instead of a rectangle.</p>
 <p><b>The filter has to widen with the reduction.</b> On a downscale the filter must <a class="term" data-t="low-pass-filter" href="https://en.wikipedia.org/wiki/Low-pass_filter" title="A filter that keeps broad, slow changes and removes fine, rapid ones. Downscaling needs one so detail too small for the new size doesn't become artifacts." rel="external">low pass</a> at the <i>output</i> <a class="term" data-t="nyquist-frequency" href="https://en.wikipedia.org/wiki/Nyquist_frequency" title="The finest detail a sampling grid can record: half its sampling rate. In an image, a pattern that alternates every pixel." rel="external">Nyquist</a>, so its support in source pixels grows by the reduction factor. A kernel evaluated at fixed width is sampling rather than filtering, and it <a class="term" data-t="aliasing" href="https://en.wikipedia.org/wiki/Aliasing" title="False patterns, like jagged edges or shimmering moire, that appear when detail finer than the sampling grid gets sampled anyway." rel="external">aliases</a>. This is why naive <a class="term" data-t="lanczos-resampling" href="https://en.wikipedia.org/wiki/Lanczos_resampling" title="A resizing filter that weights nearby pixels with a windowed sinc curve. Lanczos3 reaches three pixels out on each side and keeps images sharp." rel="external">Lanczos3</a> downscales shimmer.</p>
 <p><b>Weights are renormalised per output sample.</b> At the frame edge the support window is clipped, and the weights that survive have to sum to one again or the border darkens into a vignette nobody can explain.</p>
@@ -97,7 +97,6 @@
 <p>The byte cost is real and it is the honest objection. If a wider corpus showed the 1.5% growing into double digits at some other reduction ratio or subject matter, the right answer would be to spend the difference on the quality knob instead and take a smaller correctness win. The measurement that would settle it is a matched bytes comparison across a few hundred frames from several cameras, and this site has 165 frames from two.</p>
 <p>The other open edge is the transfer curve itself. This pipeline assumes sRGB except where a file declares Gray Gamma 2.2, which covers its two cameras and would be wrong for anything shot in <a class="term" data-t="display-p3" href="https://en.wikipedia.org/wiki/DCI-P3" title="Apple's wide-gamut colour space, which holds more saturated colours than sRGB. iPhones and Macs capture and display in it." rel="external">Display P3</a> or a <a class="term" data-t="log-profile" href="https://en.wikipedia.org/wiki/Log_profile" title="A camera recording curve that stores light on a logarithmic scale to keep shadow and highlight detail. Footage looks flat until it is graded." rel="external">log profile</a>. Reading the curve from the <a class="term" data-t="icc-profile" href="https://en.wikipedia.org/wiki/ICC_profile" title="A block of data in an image file that describes its colour space, so software knows how to turn the stored numbers into real colours." rel="external">ICC profile</a> rather than from a filename pattern is the fix, and it is not written yet.</p>
     <section id="luq" aria-label="understanding check"></section>
-    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-26</span></div>
 </div>

@@ -604,7 +604,7 @@ footer .signature small { color: var(--ink-faint); }
     </p>
 
     ${mount}
-    <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
+    <p class="wy-fail">These values didn't load. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>
     <p class="lede">Seven things Cloudflare's edge knows about this connection that
@@ -741,7 +741,7 @@ footer .signature small { color: var(--ink-faint); }
     })
     .catch(function (e) {
       grid.querySelectorAll("[data-trace]").forEach(function (cell) { cell.textContent = "unavailable"; cell.className = "dim"; });
-      note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + "), so these seven fields are unknown rather than assumed.";
+      note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + ").";
     });
 })();
 </script>`)}${islandScript()}`,

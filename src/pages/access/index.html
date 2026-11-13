@@ -156,6 +156,11 @@ select{font:inherit;font-size:calc(var(--text-sm) * var(--sc));border:1px solid 
    a 41px strip before this line existed. */
 .mmc-head{flex:0 0 auto;background:var(--face-light);border-bottom:1px solid var(--shadow);overflow:hidden}
 .mmc-head svg{display:block;margin:0 auto}
+/* The header strip holds its drawn height while it is still empty. The script
+   at the end of the page fills it with an SVG 1002 by 26 scaled to the pane's
+   width, and when paint beat that script the graph below dropped 21px: layout
+   shift 0.021 in 4 of 9 loads under 4x CPU throttle (2026-11-10). */
+.mmc-head:empty{aspect-ratio:1002/26}
 .mmc-board{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 
 /* left pane: the tree, as a tree */
@@ -479,7 +484,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
 <!-- ══ /FLAVORTEXT: injection panel ══════════════════════════════════════ -->
 
 <h2>Device list, flat</h2>
-<p><small>The same devices, in the order the branches appear above. This table is the source the graph is built from: node prose, dates, dependencies, and bets all live here and nowhere else.</small></p>
+<p><small>The same devices, in the order the branches appear above.</small></p>
 <div class="tw-scroll">
 <table class="devs" id="devs">
   <caption>Every flavor of access on this board. State, blast radius, first broad availability, dependencies, what's in the way, and the bet.</caption>

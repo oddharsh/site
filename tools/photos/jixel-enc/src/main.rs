@@ -46,11 +46,12 @@ fn config(distance: f32) -> EncodeConfig {
 }
 
 fn encode_png(png: &[u8], distance: f32) -> Result<Vec<u8>, String> {
-    let mut decoder = png::Decoder::new(png);
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png));
     decoder.set_transformations(png::Transformations::IDENTITY);
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
     let icc = reader.info().icc_profile.as_ref().map(|c| c.to_vec());
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let exif = reader.info().exif_metadata.as_ref().map(|c| c.to_vec());
+    let mut buf = vec![0; reader.output_buffer_size().ok_or("PNG too large")?];
     let frame = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
     if frame.color_type != png::ColorType::Rgb {
         return Err(format!("{:?} PNG; only RGB is supported", frame.color_type));
@@ -62,11 +63,11 @@ fn encode_png(png: &[u8], distance: f32) -> Result<Vec<u8>, String> {
     if let Some(icc) = icc {
         cfg = cfg.with_icc_profile(icc);
     }
-    if let Some(tiff) = exif_chunk(png) {
-        if let Some(o) = tiff_orientation(tiff).and_then(Orientation::from_exif) {
+    if let Some(tiff) = exif {
+        if let Some(o) = tiff_orientation(&tiff).and_then(Orientation::from_exif) {
             cfg = cfg.with_orientation(o);
         }
-        cfg = cfg.with_exif(tiff.to_vec());
+        cfg = cfg.with_exif(tiff);
     }
     match frame.bit_depth {
         png::BitDepth::Sixteen => {
@@ -77,27 +78,6 @@ fn encode_png(png: &[u8], distance: f32) -> Result<Vec<u8>, String> {
         d => return Err(format!("{d:?}-bit PNG; only 8 and 16 are supported")),
     }
     .map_err(|e| format!("{e:?}"))
-}
-
-/// The payload of a PNG's eXIf chunk: raw TIFF bytes starting at the II/MM
-/// byte-order mark. png 0.17 only writes this chunk; its decoder never fills
-/// `Info::exif_metadata`, so the chunks are walked here (gotcha 95).
-fn exif_chunk(png: &[u8]) -> Option<&[u8]> {
-    let mut i = 8;
-    while i + 8 <= png.len() {
-        let len = u32::from_be_bytes(png[i..i + 4].try_into().ok()?) as usize;
-        let kind = &png[i + 4..i + 8];
-        let body = png.get(i + 8..i + 8 + len)?;
-        if kind == b"eXIf" {
-            return Some(body);
-        }
-        if kind == b"IDAT" || kind == b"IEND" {
-            // eXIf must precede IDAT (PNG 3rd edition), so stop at the pixels.
-            return None;
-        }
-        i += 12 + len;
-    }
-    None
 }
 
 /// Tag 0x0112 (Orientation) from IFD0 of a TIFF stream, either byte order.
@@ -176,10 +156,15 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_exif_chunk_png_0_17_will_not_decode() {
+    fn png_decodes_the_exif_chunk() {
+        // Gotcha 95: png 0.17 wrote eXIf but never decoded it.
+        let exif = |p: &[u8]| {
+            let r = png::Decoder::new(std::io::Cursor::new(p)).read_info().unwrap();
+            r.info().exif_metadata.as_ref().map(|c| c.to_vec())
+        };
         let t = tiff(true, 8);
-        assert_eq!(exif_chunk(&png16(16, 16, Some(&t))), Some(&t[..]));
-        assert_eq!(exif_chunk(&png16(16, 16, None)), None);
+        assert_eq!(exif(&png16(16, 16, Some(&t))), Some(t));
+        assert_eq!(exif(&png16(16, 16, None)), None);
     }
 
     #[test]

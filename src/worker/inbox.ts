@@ -101,7 +101,7 @@ export function renderInboxMail(read, origin) {
     state === "unbound"
       ? "The mention store (Cloudflare D1, aadhar-social) is not connected to this page yet."
       : state === "error"
-        ? "The mention store did not answer just now. This page stays read-only either way."
+        ? "The mention store did not answer just now."
         : "No mentions yet. Link to a page here from your own site and it will show up, once I have approved it.";
 
   return unsafeHtml(`<div class="oe-panes">
@@ -174,7 +174,7 @@ export function renderInboxPage() {
       <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
       keeps the working notes: who sends, who receives, and what breaks between them.</p>
     ${mount}
-    <p class="oe-fail">The request for the mail failed, so the inbox stays empty rather than guessed. <a href="${MAIL_URL}">${MAIL_URL}</a> has it as plain HTML.</p>
+    <p class="oe-fail">The mail didn't load. <a href="${MAIL_URL}">${MAIL_URL}</a> has it as plain HTML.</p>
 `,
     scripts: islandScript(),
   });

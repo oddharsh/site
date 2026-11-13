@@ -184,7 +184,7 @@
           <div class="demo" id="demo-spec">
             <div class="bar">Lean shared a demo: the invariant that proves nothing</div>
             <div class="pad">
-              <p class="lead">A withdraw function over <span class="mono">Nat</span>, the way every ERC-20 uses <span class="mono">uint256</span>. Both theorems below are <b>proven</b>. Drag the amount past the balance:</p>
+              <p class="lead">A withdraw function over <span class="mono">Nat</span>, the way every ERC-20 uses <span class="mono">uint256</span>. The left theorem is <b>proven</b>; Lean rejects the right one as stated. Drag the amount past the balance to see why:</p>
               <div class="dials">
                 <label class="dial">balance <input type="range" id="sp-bal" min="0" max="200" value="5"><b id="sp-bal-v">5</b></label>
                 <label class="dial">withdraw <input type="range" id="sp-amt" min="0" max="200" value="3"><b id="sp-amt-v">3</b></label>
@@ -250,7 +250,7 @@ where
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:02</time></div>
           <div class="bubble"><p>That's the working practice, and it does move a real bottleneck. Knowing what to prove was expensive because the only source of candidate properties was somebody who had already seen this class of bug. A model that has read a lot of code proposes hundreds of candidates for nothing, and I kill the false ones deterministically. The generator is allowed to be wrong as often as it likes. The checker is the half that has to be right.</p>
-          <p>What it does not touch is vacuity. A generated candidate can be <span class="mono">0 ≤ withdraw bal amt</span> exactly the way a human one can. The loop's reward signal is that the prover said yes, and proposing things nothing could violate maximizes it. So <span class="mono">preconditions_unreachable</span> stops being a curiosity and becomes the filter the loop needs. <b>A proposal that survives because it quantifies over nothing should score zero</b>, and a loop that scores it as a win will drift toward writing more of them.</p>
+          <p>What it does not touch is vacuity. A generated candidate can be <span class="mono">0 ≤ withdraw bal amt</span> exactly the way a human one can. The loop's reward signal is that the prover said yes, and proposing things nothing could violate maximizes it. So vacuity stops being a curiosity and becomes the filter the loop needs. <span class="mono">preconditions_unreachable</span> catches the half where the hypotheses contradict each other. A candidate like <span class="mono">0 ≤ withdraw bal amt</span> has no hypotheses to refute, and catching that half still takes someone asking what the statement rules out. <b>A proposal that survives because it says nothing should score zero</b>, and a loop that scores it as a win will drift toward writing more of them.</p>
           <p>The second-order effect is the bigger one. The assurance ladder was priced in human hours. Unit tests, then <a class="term" data-t="fuzzing" href="https://en.wikipedia.org/wiki/Fuzzing" title="Testing a program by feeding it huge numbers of random or mutated inputs and watching for crashes or broken rules." rel="external">fuzzing</a>, then an audit, then this: each rung cost more than the one below it. Most teams stopped at rung two because of what rung four cost. Agents cheapened every rung at the same time. Once a machine writes the tests, the fuzz harness and the audit notes, the distance between the cheap rungs and the expensive one closes. Then it gets harder to answer why you'd stop below the rung that quantifies.</p>
           <p>Treat all of that as a field report on how people are working. I have no measured number for what fraction of generated candidates survive contact with a prover, and you should ask for one before believing any vendor's version of this paragraph.</p></div></div></div>
 
@@ -519,10 +519,10 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     v2.className = "v " + (over ? "no" : "ok");
     v2.textContent = over
       ? "✗  " + res + " + " + a + " = " + (res + a) + ", not " + b
-      : "PROVEN ✓  " + res + " + " + a + " = " + b;
+      : "holds here ✓  " + res + " + " + a + " = " + b;
     w2.textContent = over
       ? "needs the precondition amt ≤ bal, which is the require() you forgot."
-      : "conservation holds: nothing entered or left the system.";
+      : "true for this input, but the theorem claims every input.";
 
     document.getElementById("sp-void").innerHTML = over
       ? "Paid out <b>" + a + "</b>, balance fell by only <b>" + b + "</b>. <b>" + (a - b) + " tokens minted from nothing</b>, and the left-hand invariant never blinked."
@@ -651,7 +651,9 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     if (swap) {
       h += "<div class=\"goal\">case minus\n⊢ eval env b - eval env a = eval env a - eval env b</div>";
       if (agree) h += "<span class=\"agree\">This expression happens to agree: " +
-        (hasMinus(src) ? "the minus is nested where the swap cancels out." : "it has no subtraction, and + and * commute.") +
+        (hasMinus(target) ? "its subtraction happens to give the same answer both ways round." :
+          hasMinus(src) ? "folding already turned its subtraction into a constant, so no sub reaches the swapped compiler." :
+          "it has no subtraction, and + and * commute.") +
         " The theorem still fails, because it quantifies over the ones that don't.</span>";
     }
     t.innerHTML = h;
@@ -682,7 +684,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   ];
   var MAX = 130430, pick = 2, mag = false;
 
-  function n(v) { return v.toLocaleString("en-US"); }
+  function n(v) { return String(v).replace(/\B(?=(\d{3})+$)/g, ","); }
 
   var pickbar = document.getElementById("su-pick");
   R.forEach(function (r, i) {
@@ -739,28 +741,6 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   "intro": "Before you go tell someone a thing is 'formally verified': pop quiz. 7 questions, no stakes. All three demos above count as open book.",
   "questions": [
     {
-      "q": "Start with the opening metaphor. A UV penetrant scan on a part versus a proof about a program. What is the actual difference?",
-      "options": [
-        {
-          "t": "the scan samples one part; the proof quantifies over every execution",
-          "ok": true,
-          "why": "Testing is existential, hunting for a witness that something breaks. Proof is universal, ruling out that any such witness exists. Both are still bounded by the class of defect you chose to look for, which is the half of the metaphor that survived."
-        },
-        {
-          "t": "the scan can miss defects, while a machine-checked proof cannot miss anything",
-          "why": "The proof misses everything you did not write into the property. The vacuous-spec demo is exactly that: a green, machine-checked theorem sitting next to 95 tokens minted from nothing, because nobody stated conservation."
-        },
-        {
-          "t": "the proof is faster and cheaper than physically scanning a part",
-          "why": "Cost runs the other way. seL4 needed roughly 20 lines of proof per line of C. What proof buys is coverage of an unbounded input space, and you pay for it in effort."
-        },
-        {
-          "t": "the scan tests the real object while the proof only tests a simulation of it",
-          "why": "Closer than the others, but it lands on the wrong word: a proof derives. The model-versus-reality gap it leaves behind is exactly what Paradigm's spec-hunt pays people to find."
-        }
-      ]
-    },
-    {
       "q": "In the first demo, set balance to 5 and withdraw to 100. The theorem 0 ≤ withdraw bal amt stays green. Why is that not reassuring?",
       "options": [
         {
@@ -783,68 +763,46 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       ]
     },
     {
-      "q": "Second demo. Turn on 'emit cheaper side first' and pick 3 * 4 + x. The output matches, yet compileSwap_correct reads unprovable. What is going on?",
+      "q": "Second demo. Pick (x + 2) - y and turn on 'emit cheaper side first', leaving folding off. What does the compiled side print?",
       "options": [
         {
-          "t": "the theorem ranges over every expression, and it fails on the minus case",
+          "t": "run = [0], marked WRONG: it computes 4 - 8, and Nat clamps that to 0",
           "ok": true,
-          "why": "This one agrees, but the theorem is about all of them. Swapping is genuinely correct for plus and times because they commute, and those cases close via Nat.add_comm and Nat.mul_comm. It dies on one constructor out of five, which is precisely the bug a test suite full of addition would ship."
+          "why": "The swap runs at every node. Inside, 2 + 6 is still 8. At the top, load y goes first, so sub computes 4 - 8, which clamps to 0 against eval's 4. That's the case minus goal from the chat with numbers in it. Switch to 3 * 4 + x and the output agrees again while compileSwap_correct stays unprovable, because the theorem ranges over every expression."
         },
         {
-          "t": "the proof is stale and needs rerunning against the swapped compiler",
-          "why": "There is nothing to refresh. Lean reports an unsolved goal with the false equation printed in it: eval env b - eval env a = eval env a - eval env b. No amount of rerunning makes subtraction commute."
+          "t": "run = [4], a match: only the inner plus gets swapped, and plus commutes",
+          "why": "Read the compiled listing: load y is now the first instruction. The swap reorders both children of every node, the top-level minus included, and plus commuting rescues only the inner one. Which constructor did the chat say the proof dies on?"
         },
         {
-          "t": "constant folding has to be enabled first for the swapped compiler to verify",
-          "why": "The two optimizations are independent, and folding cannot rescue the other. compileOpt_correct holds on its own by composing fold_preserves with compile_correct; the swap breaks semantic preservation whatever else is turned on."
+          "t": "run = [-4], marked WRONG: the swap turns 8 - 4 around into 4 - 8",
+          "why": "The reversal is right and the arithmetic isn't. The demo subtracts the way Lean's Nat does, clamping at 0, the same truncation that made withdraw 5 100 return 0. Nat has no -4 to print."
         },
         {
-          "t": "the stack machine cannot represent subtraction correctly",
-          "why": "It represents it fine, which the honest compiler demonstrates on every preset. The sub instruction pops in a fixed order, so reversing what got pushed reverses the operands. The bug lives in the compiler."
+          "t": "run = [0], marked WRONG, and the eval on the left drops to 0 as well",
+          "why": "The left pipe is eval, the source meaning, and no compiler switch touches it: it reads 4 whatever you toggle. That fixed reference is what makes the right side's 0 a bug."
         }
       ]
     },
     {
-      "q": "The Collatz proof of July 2026 passed two independent Lean kernels, and #print axioms reported no axioms. What does that tell you about the trust story?",
+      "q": "A PR adds twelve withdraw theorems, all green, and #print axioms lists only propext and Quot.sound for each. Spread across the files, one invariant assumes amt ≤ bal and another assumes bal < amt. The PR says withdraw is now verified. What's the flaw?",
       "options": [
         {
-          "t": "#print axioms cannot see a kernel that accepted a bad derivation; the defense is independent kernels",
+          "t": "no input meets both assumptions, so all twelve theorems are about the empty set",
           "ok": true,
-          "why": "#print axioms audits a valid derivation. It catches sorryAx and native_decide, both of which showed up plainly in the demo output, but a kernel bug produces a derivation that looks clean by construction, so the backstop is independent implementations an exploit must beat all at once."
+          "why": "Assumptions nobody can satisfy at once make every conclusion follow, which is how withdraw_pays_you and its twin went green with payouts of 1000000 and 42. The missing obligation is proving the assumptions satisfiable, and no tool asks for it. In a real codebase the two halves sit a dozen invariants apart, which is how this slips through review."
         },
         {
-          "t": "the axiom check was skipped, and running it would have flagged the proof of False",
-          "why": "It was run and it came back clean, reporting that the proof of False depended on no axioms at all. That is the whole reason the incident made news."
+          "t": "propext and Quot.sound are axioms, so a clean report would have listed none",
+          "why": "The page's own listing shows withdraw_pays_you depending on exactly propext and Quot.sound, and it's the vacuous one. Those two sit under most of Mathlib. The axiom report can't tell an empty theorem from a useful one."
         },
         {
-          "t": "proof assistants cannot be trusted at all, so a Lean certificate does not deliver much",
-          "why": "Too strong. Both bugs were found and patched, Lean's in under 24 hours, and a v4.32.2 release went out under 3 hours after the fix merged. The lesson is about where the trust sits."
+          "t": "omega is an automated tactic, so a person still has to re-check its proofs",
+          "why": "The tactic is the part you don't have to trust. omega emits a term, the way induction emitted a call to Nat.recAux, and the kernel type-checks that term, so a buggy tactic costs you nothing. The trouble is the statement omega was handed."
         },
         {
-          "t": "the bug was in the specification, the same failure mode as the vacuous withdraw theorem",
-          "why": "Different layer. The vacuous theorem was correctly checked and said nothing useful; here the checker itself accepted an invalid derivation. Those are two separate rows in the trust story, and the page keeps them apart on purpose."
-        }
-      ]
-    },
-    {
-      "q": "openai/ten-proofs ships 548,205 lines of Lean with zero sorry, and 1,765 lines of Comparator challenge statements. Which number should a mathematician spend their week on?",
-      "options": [
-        {
-          "t": "the 1,765, since the statements are the only claim about what got proved",
-          "ok": true,
-          "why": "That is the trade verification makes. The proof is the kernel's problem: the 548,205 lines are settled by a machine that does not get tired, and what is left is a surface small enough to read properly. On the non-sofic result the whole readable surface is 39 lines, and 35 of them define what the word Sofic means."
-        },
-        {
-          "t": "the 548,205, because a proof that large has to be audited before anyone can rely on it",
-          "why": "Auditing it by hand would defeat the point and is not humanly possible at 21 MB. The kernel already checked every step, and #print axioms already confirmed which axioms it leaned on. Re-reading the proof buys you nothing the machine did not already give you."
-        },
-        {
-          "t": "neither, since zero sorry plus a whitelisted axiom set already settles correctness",
-          "why": "Those two facts settle that the proof matches the statement. They say nothing about whether the statement is the theorem anyone cared about, which is the gap the withdraw demo opened three demos ago and this repo inherits at research scale."
-        },
-        {
-          "t": "the 1,765, but only to confirm the theorem statements themselves are correctly transcribed",
-          "why": "Half the job. Across the twelve files those 38 theorems rest on 195 definitions and 25 structures the challenge files declare themselves, so a transcription check that stops at the theorem line skips the part where the meaning actually lives."
+          "t": "nothing: a theorem the kernel accepts on standard axioms is a sound theorem",
+          "why": "Sound, yes: all twelve are true. So were withdraw_pays_you and withdraw_pays_you_differently, and they disagreed about the payout. True statements about inputs nobody can supply verify nothing about withdraw."
         }
       ]
     },
@@ -871,12 +829,56 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       ]
     },
     {
+      "q": "The Collatz proof of July 2026 passed two independent Lean kernels, and #print axioms reported no axioms. What does that tell you about the trust story?",
+      "options": [
+        {
+          "t": "#print axioms cannot see a kernel that accepted a bad derivation; the defense is independent kernels",
+          "ok": true,
+          "why": "#print axioms audits a valid derivation. It catches sorryAx and native_decide, both of which show up plainly in the page's #print axioms listing, but a kernel bug produces a derivation that looks clean by construction, so the backstop is independent implementations an exploit must beat all at once."
+        },
+        {
+          "t": "the axiom check was skipped, and running it would have flagged the proof of False",
+          "why": "It was run and it came back clean, reporting that the proof of False depended on no axioms at all. That is the whole reason the incident made news."
+        },
+        {
+          "t": "proof assistants cannot be trusted at all, so a Lean certificate does not deliver much",
+          "why": "Too strong. Both bugs were found and patched, Lean's in under 24 hours, and a v4.32.2 release went out under 3 hours after the fix merged. The lesson is about where the trust sits."
+        },
+        {
+          "t": "the bug was in the specification, the same failure mode as the vacuous withdraw theorem",
+          "why": "Different layer. The vacuous theorem was correctly checked and said nothing useful; here the checker itself accepted an invalid derivation. Those are two separate rows in the trust story, and the page keeps them apart on purpose."
+        }
+      ]
+    },
+    {
+      "q": "openai/ten-proofs ships 548,205 lines of Lean with zero sorry, and 1,765 lines of Comparator challenge statements. Which number should a mathematician spend their week on?",
+      "options": [
+        {
+          "t": "the 1,765, since those statements are the only claim about what got proved",
+          "ok": true,
+          "why": "That is the trade verification makes. The proof is the kernel's problem: the 548,205 lines are settled by a machine that does not get tired, and what is left is a surface small enough to read properly. On the non-sofic result the whole readable surface is 39 lines, and 35 of them define what the word Sofic means."
+        },
+        {
+          "t": "the 548,205, because a proof that large has to be audited before anyone can rely on it",
+          "why": "Auditing it by hand would defeat the point and is not humanly possible at 20 megabytes. The kernel already checked every step, and #print axioms already confirmed which axioms it leaned on. Re-reading the proof buys you nothing the machine did not already give you."
+        },
+        {
+          "t": "neither, since zero sorry plus a whitelisted axiom set already settles correctness",
+          "why": "Those two facts settle that the proof matches the statement. They say nothing about whether the statement is the theorem anyone cared about, which is the gap the withdraw demo opened at the top of the page and this repo inherits at research scale."
+        },
+        {
+          "t": "the 1,765, but only to confirm the theorem statements themselves are correctly transcribed",
+          "why": "Half the job. Across the twelve files those 38 theorems rest on 195 definitions and 25 structures the challenge files declare themselves, so a transcription check that stops at the theorem line skips the part where the meaning actually lives."
+        }
+      ]
+    },
+    {
       "q": "A model generates a thousand candidate invariants and the prover certifies 80 of them. What does the number 80 fail to tell you?",
       "options": [
         {
           "t": "how many of the 80 are vacuous, since a candidate nothing can violate is the easiest to get certified",
           "ok": true,
-          "why": "The loop's reward is that the prover said yes, and 0 ≤ withdraw bal amt collects that reward for free. Satisfiability of the preconditions is a separate obligation, and the loop needs it as a scoring filter."
+          "why": "The loop's reward is the prover saying yes, and two kinds of candidate collect it for free: a conclusion nothing can violate, like 0 ≤ withdraw bal amt, and assumptions nothing can satisfy, like amt ≤ bal with bal < amt. A satisfiability check like preconditions_unreachable filters the second. The first has no assumptions to refute, which is why the page's honest answer on spotting it is that mostly you don't."
         },
         {
           "t": "nothing important, since a certified invariant is proven, and proven is the strongest word there is",
@@ -884,7 +886,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
         },
         {
           "t": "whether the prover itself was sound, which is the only real risk in a loop like this",
-          "why": "Kernel soundness is a real risk and this page spends a section on it. It is also the rarer failure. The common one is a stack of well-formed statements about the empty set, and producing those needs no kernel bug at all."
+          "why": "Kernel soundness is a real risk, and the Collatz section is about it. Calling it the only one misses the failure that needs no bug: a perfectly sound prover certifies every vacuous candidate it's handed."
         },
         {
           "t": "how long the run took, since cost is the thing that decided the technique was worth using",

@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .pqc-tiers{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:var(--text-sm)}
@@ -108,13 +108,13 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Stateful hash-based signatures (LMS, XMSS) fix the size problem and introduce a worse one. Reusing a one-time index is total key compromise, and a <a class="term" data-t="worker-isolate" href="https://developers.cloudflare.com/workers/reference/how-workers-works/" title="A lightweight sandbox inside one runtime process where a Cloudflare Worker's code runs, walled off from other code and reused across requests." rel="external">Worker isolate</a> is close to the worst place to keep a monotonic counter. I would need a Durable Object doing nothing but handing out indices, and a single replay would end the key. ML-DSA-44 is the only candidate that survives contact with the constraints.</p>
 
 <h2>Shipping it without a codepoint</h2>
-<p>Here is the part that made this cheap. The <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA HTTP Signature Algorithms registry</a> has exactly six entries, and every one of them is classical. Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in your directory. An ML-DSA-only signature would be a header nobody on the internet checks.</p>
+<p>The <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA HTTP Signature Algorithms registry</a> has exactly six entries, and every one of them is classical. Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in your directory. An ML-DSA-only signature would be a header nobody on the internet checks.</p>
 <p>But <code>Signature-Input</code> and <code>Signature</code> are structured-fields <em>Dictionaries</em>. A second label appends rather than replaces, so both signatures ride the same request over the same covered components:</p>
 <pre><code>Signature-Input: sig1=("@authority" "signature-agent");created=1785186311;
                    keyid="091z_BcIsuIgfzzKCKOie6JcSkz7UhVlbiakxjV5E8o";alg="ed25519";tag="web-bot-auth",
                  sig2=("@authority" "signature-agent");created=1785186311;
                    keyid="rn-mldsa-2026-07-27";alg="ml-dsa-44";tag="web-bot-auth"</code></pre>
-<p>A verifier that only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise. Nothing breaks, and the cost of ignoring <code>sig2</code> is zero. That property is what makes it defensible to ship an algorithm the registry has not blessed. The token <code>ml-dsa-44</code> is this site's spelling, chosen to match the registry's existing convention so it slots in if a real registration lands, and <a href="/bot">/bot</a> says plainly that you should verify <code>sig1</code> and ignore <code>sig2</code>.</p>
+<p>A verifier that only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise. Nothing breaks, and the cost of ignoring <code>sig2</code> is zero. That property is what makes it defensible to ship an algorithm the registry has not blessed. The token <code>ml-dsa-44</code> is this site's spelling, chosen to match the registry's existing convention so it slots in if a real registration lands, and <a href="/bot">/bot</a> says that you should verify <code>sig1</code> and ignore <code>sig2</code>.</p>
 <p>The public key is published under the same JWKS as an <code>AKP</code> key per <a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>, which standardised ML-DSA for JOSE and COSE in May 2026. So the key format is a real standard even though the wire token is not:</p>
 <div class="pqc-live" id="pqc-live">
   <div class="pqc-live-head">Live, from this site's key directory</div>
@@ -184,7 +184,6 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>The flag carries its own risk, since Cloudflare gates it "while the specification is still moving." If the API breaks, this site loses the second label and nothing else: any ML-DSA failure drops <code>sig2</code>, logs once, and <code>sig1</code> ships alone.</p>
 <p>In July this page priced three costs: CPU, bundle size, and header bytes. Two belonged to the runtime, and the runtime has now paid them. The 3,228 bytes belong to FIPS 204, so they're the only number left to decide on. That's the rule I'd hand anyone timing a post-quantum migration: decide on the sizes, because the speeds come down on someone else's schedule.</p>
     <section id="luq" aria-label="understanding check"></section>
-    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-27</span></div>
 </div>
@@ -213,11 +212,15 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
   var list = host.querySelector(".pqc-bars"), read = host.querySelector(".pqc-read");
   var metric = "bytes";
 
+  // Grouped by hand: the first Intl call in a renderer process loads ICU data,
+  // about 10 ms of the first page of a visit (gotcha 92). Integers only.
+  function commas(n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); }
+
   function fmt(v) {
-    if (metric === "bytes") return v.toLocaleString("en-US") + " B";
+    if (metric === "bytes") return commas(v) + " B";
     // a native ML-DSA result can land well under 0.01ms, where two decimals
     // would round a real measurement down to "0.00".
-    var s = v < 1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
+    var s = v < 1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : commas(Math.round(v));
     return s + " ms";
   }
   // bytes read honestly on a linear scale; sign times span microseconds to
@@ -286,7 +289,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
             render();
             show('<span class="pqc-native-note"><b>' + (ms < 0.1 ? ms.toPrecision(2) : ms.toFixed(2)) +
                  "ms</b> per signature natively, versus 8.58ms in JavaScript: about <b>" +
-                 Math.round(8.58 / ms) + "x</b>. Same " + sigs[0].byteLength.toLocaleString("en-US") +
+                 Math.round(8.58 / ms) + "x</b>. Same " + commas(sigs[0].byteLength) +
                  " bytes on the wire, because that part is FIPS 204 and no implementation gets to improve it.</span>");
           });
         }).catch(function () { show('<span class="pqc-native-note">The native run failed partway.</span>'); });
@@ -315,10 +318,10 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
     var raw = atob(akp.pub.replace(/-/g, "+").replace(/_/g, "/"));
     live.innerHTML =
       "<b>" + akp.kid + "</b> &middot; kty " + akp.kty + " &middot; alg " + akp.alg +
-      " &middot; <b>" + raw.length.toLocaleString("en-US") + " bytes</b> of public key" +
+      " &middot; <b>" + commas(raw.length) + " bytes</b> of public key" +
       (ed ? "<br><b>" + ed.kid + "</b> &middot; kty " + ed.crv + " &middot; <b>32 bytes</b>, and the one your verifier should use" : "") +
       "<br>" + akp.pub.slice(0, 96) + "&hellip; <span style='font-family:var(--font-ui)'>(" +
-      akp.pub.length.toLocaleString("en-US") + " base64url chars)</span>";
+      commas(akp.pub.length) + " base64url chars)</span>";
   }).catch(function () {
     live.textContent = "Could not read the key directory from here.";
   });

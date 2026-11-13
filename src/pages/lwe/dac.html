@@ -125,7 +125,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>I get the theory, but I still can't reconcile what people MEAN by the multibit sound versus delta-sigma. can you make that difference concrete?</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:30</time></div>
-        <div class="bubble"><p>The honest place it lives is low-level linearity: the soft tail of a note, where only the bottom bits are working. Multibit rounds to its nearest exact level, which down there bends the wave into harmonic distortion. Delta-sigma keeps the level honest on average and trades that for a shaped noise floor. Same quiet tone, two different imperfections. Here they are side by side, as spectra you can also play.</p></div></div></div>
+        <div class="bubble"><p>The honest place it lives is low-level linearity: the soft tail of a note, where the wave spans only a few levels. On a ladder those levels straddle midscale, where the biggest bit hands off to all the small ones (code 31 to 32 on the 6-bit ladder above), so a quiet tone keeps crossing the hardest step to match. Multibit rounds to its nearest exact level, which down there bends the wave into harmonic distortion. Delta-sigma keeps the level honest on average and trades that for a shaped noise floor. Same quiet tone, two different imperfections. Here they are side by side, as spectra you can also play.</p></div></div></div>
 
       <div class="demo" id="demo-music">
         <div class="bar">the contested ground · low-level linearity</div>
@@ -143,10 +143,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="pad"><p class="lead">Quantization noise is audible when the bit depth is low. Click to hear a 440 Hz tone quantized to each depth (about a second each, through your speakers).</p><div class="dac-row" id="hearBtns"><button class="xp-button compact" data-bits="2">2-bit</button><button class="xp-button compact" data-bits="4">4-bit</button><button class="xp-button compact" data-bits="6">6-bit</button><button class="xp-button compact" data-bits="16">16-bit</button></div><p class="dac-cap">Same tone, fewer levels. At 2-bit the error is loud hash; by 16-bit it's gone. Delta-sigma keeps the bits low and moves that hash above 20 kHz instead.</p></div>
       </div>
 
-      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:29</time></div>
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:31</time></div>
         <div class="bubble"><p>yeah, I can hear the hash at 2-bit, and it's gone by 16. and delta-sigma just shoves that hash above 20k instead of spending money to delete it.</p></div></div></div>
 
-      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:29</time></div>
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:31</time></div>
         <div class="bubble"><p>Right. Multibit pays in hardware to make every level physically exact. Delta-sigma pays in cleverness to make the errors inaudible. Both arrive at clean sound; they just disagree about where to put the hard part, and the filter is where a lot of the audible character is decided.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:32</time></div>
@@ -169,7 +169,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>so the 2nd harmonic IS the octave, that's why it reads as musical, and hard clipping just collapses into a square, all odd harmonics. the asymmetry is the whole tell.</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:33</time></div>
-        <div class="bubble"><p>That is the tell, and it is the same axis the DAC argument rides. A little 2nd harmonic is what some people are chasing when a multibit ladder or a tube stage "sounds warm," even as the meter reports higher THD. A square wave is just the far end of that dial: every bit of headroom spent, nothing left but the odd harmonics.</p></div></div></div>
+        <div class="bubble"><p>That is the tell, and it is where the DAC argument gets awkward. A tube's warmth is a lopsided curve and a little 2nd harmonic. The multibit demo above rounds the same way on both sides of zero, so every harmonic it makes is odd, the same family a hard clip makes. A real ladder's mismatched resistors break that symmetry and can add even harmonics, so any 2nd harmonic behind multibit warmth comes from the ladder's imperfections. A square wave is just the far end of that dial: every bit of headroom spent, nothing left but the odd harmonics.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:34</time></div>
         <div class="bubble"><p>clearest version of this I've read. thanks.</p><p>&rarr; <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened (Jason Stoddard)</a> &middot; <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">the head-fi thread</a> &middot; <a href="https://en.wikipedia.org/wiki/Delta-sigma_modulation" rel="external">delta-sigma on Wikipedia</a> &middot; <a href="/lwe">back to Learning With Errors</a></p></div></div></div>
@@ -245,7 +245,7 @@ var DACAudio = (function(){
   var W=c.width, H=c.height, mid=H/2, amp=H*0.40, cycles=2, samples=48; hd(c, ctx);
   function draw(){
     var N=+bits.value, L=Math.pow(2,N), maxv=L/2-1;
-    lbl.textContent=N+'-bit · '+L.toLocaleString()+' levels';
+    lbl.textContent=N+'-bit · '+String(L).replace(/\B(?=(\d{3})+$)/g, ",")+' levels';
     ctx.clearRect(0,0,W,H);
     if(N<=5){ ctx.strokeStyle='#efe6d8'; ctx.lineWidth=1; for(var k=-maxv;k<=maxv;k++){ var yy=mid-(k/maxv)*amp; ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(W,yy); ctx.stroke(); } }
     ctx.strokeStyle='#cbb89e'; ctx.lineWidth=1.5; ctx.beginPath();
@@ -266,6 +266,9 @@ var DACAudio = (function(){
   var c=document.getElementById('nsCanvas'); if(!c) return;
   var ctx=c.getContext('2d'), btn=document.getElementById('nsToggle'), info=document.getElementById('nsInfo');
   var W=c.width, H=c.height, N=512, shape=true, BITS=3; hd(c, ctx);
+  // 2*PI*k*m/N only ever lands on N angles, so the transform reads them from a
+  // table: 262,144 sin and cos calls per redraw became 1,024 (2026-11-10).
+  var COS=new Array(N), SIN=new Array(N); for(var t=0;t<N;t++){ COS[t]=Math.cos(2*Math.PI*t/N); SIN[t]=Math.sin(2*Math.PI*t/N); }
   function clamp(v){ return v>1?1:(v<-1?-1:v); }
   function spectrum(){
     var maxv=Math.pow(2,BITS)/2-1, k0=6, y=new Array(N), e=0;
@@ -276,7 +279,7 @@ var DACAudio = (function(){
       y[n]=q;
     }
     var half=N/2, mag=new Array(half);
-    for(var k=0;k<half;k++){ var re=0,im=0; for(var m=0;m<N;m++){ var a=2*Math.PI*k*m/N; re+=y[m]*Math.cos(a); im-=y[m]*Math.sin(a); } mag[k]=Math.sqrt(re*re+im*im)/N; }
+    for(var k=0;k<half;k++){ var re=0,im=0; for(var m=0;m<N;m++){ var a=(k*m)%N; re+=y[m]*COS[a]; im-=y[m]*SIN[a]; } mag[k]=Math.sqrt(re*re+im*im)/N; }
     return mag;
   }
   function draw(){
@@ -435,7 +438,7 @@ var DACAudio = (function(){
 
 // ── Demo: the contested ground — low-level linearity, multibit vs delta-sigma ──
 // Where the "musicality" argument actually lives: a QUIET tone (the soft tail of a
-// note), where only the lowest bits are working. Multibit rounds to its nearest
+// note), where the wave spans only a few levels. Multibit rounds to its nearest
 // exact level, which at low level bends the wave into harmonic DISTORTION. Delta-
 // sigma keeps the average level honest but rides a shaped NOISE floor. Same tone,
 // two flavors of imperfection, shown as spectra and playable. Crank the bits toward
@@ -459,9 +462,11 @@ var DACAudio = (function(){
     }
     return y;
   }
+  // the same table of N angles as Demo B's transform, for the same reason
+  var COS = new Array(N), SIN = new Array(N); for (var t = 0; t < N; t++){ COS[t] = Math.cos(2 * Math.PI * t / N); SIN[t] = Math.sin(2 * Math.PI * t / N); }
   function spectrum(y){
     var half = N / 2, mag = new Array(half);
-    for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = 2 * Math.PI * k * n / N; re += y[n] * Math.cos(a); im -= y[n] * Math.sin(a); } mag[k] = Math.sqrt(re * re + im * im) / N; }
+    for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = (k * n) % N; re += y[n] * COS[a]; im -= y[n] * SIN[a]; } mag[k] = Math.sqrt(re * re + im * im) / N; }
     return mag;
   }
   function drawSpec(ctx, mag, accent, dim){
@@ -592,7 +597,7 @@ var DACAudio = (function(){
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you go pick a side in a DAC forum thread: pop quiz. Five questions, all from the chat above, no stakes.",
+  "intro": "Before you go pick a side in a DAC forum thread: pop quiz. Seven questions, all from the chat above, no stakes.",
   "questions": [
     {
       "q": "Start with the ladder. A 20-bit R-2R DAC wants resistors matched to about 1 part per million. Why does the bar sit that high?",
@@ -600,7 +605,7 @@ var DACAudio = (function(){
         {
           "t": "the MSB carries half the output, so its error alone has to stay smaller than the smallest step",
           "ok": true,
-          "why": "Right. Each rung halves the next bit's share, so the big bits carry nearly everything. Let the MSB drift past one step's worth and a code can run backward, the red non-monotonic glitch the tolerance slider produces in the ladder demo."
+          "why": "Each rung halves the next bit's share, so the big bits carry nearly everything. Let the MSB drift past one step's worth and a code can run backward, the red non-monotonic glitch the tolerance slider produces in the ladder demo."
         },
         {
           "t": "each of the 20 bits needs its own distinct resistor value, and that many values are hard to make",
@@ -617,73 +622,77 @@ var DACAudio = (function(){
       ]
     },
     {
-      "q": "The noise shaping demo runs the same 3-bit quantizer whether shaping is ON or OFF. What does the feedback loop actually change?",
+      "q": "In the ladder demo, leave the bits alone and drag resistor tolerance to its 10% max. Where on the transfer curve does a red backward step show up?",
       "options": [
         {
-          "t": "where the error sits: the same total hash, tilted up above the audible band",
+          "t": "once, dead center, where code 31 rolls over to code 32",
           "ok": true,
-          "why": "That's the whole move. The loop high-passes the quantization error, so the floor tilts away from the shaded audible band and piles up in the ultrasonics, where a cheap analog filter wipes it."
+          "why": "At 31 to 32 every lower bit switches off as the MSB switches on, so the MSB's error meets all five other errors at once. With this demo's fixed error directions it's the only step that reverses, and it first turns red at 5.5%. That midpoint is the step the 1-part-per-million figure guards."
         },
         {
-          "t": "how much error exists: the loop cancels most of the quantization noise outright",
-          "why": "Toggle the demo and look at the right side of the DFT: the floor rises there when shaping is ON. The total error stays roughly the same size and simply relocates above the band. Deletion happens later, at the analog filter."
+          "t": "at nearly every step, since each part is off by up to 10%",
+          "why": "Watch the curve as you drag: every other segment stays unmarked at 10%. A step reverses only when its carry's error outgrows one smallest step, and only the MSB's carry has that much error to spend here."
         },
         {
-          "t": "the effective bit depth: feedback makes the 3 coarse bits behave like 16 real ones",
-          "why": "Inside the audible band the floor does drop that far, but the mechanism is relocation, and the faint high hiss in the demo's play mode is the receipt. The quantizer stays coarse the whole time; nothing gained bits."
+          "t": "near the bottom, where the smallest steps are the easiest to overturn",
+          "why": "The bottom steps flip only b0 and b1, whose errors are 10% of a tiny weight. Error scales with a bit's share, so the small bits have nothing big enough to reverse a step at this tolerance; the red lands where the MSB takes over."
         },
         {
-          "t": "the tone itself: shaping boosts the signal so it stands clear of the noise floor",
-          "why": "The tone's spike sits at the same height in both modes; only the noise floor moves. The signal path is untouched. The feedback loop filters the error alone, which is what makes the trick so cheap."
+          "t": "across the top half, wherever the MSB is on",
+          "why": "Every code from 32 up carries the same MSB error, which shifts that half of the curve as one block. A shift bends the line without reversing it. A reversal needs a carry, where the MSB trades places with all the lower bits."
+        },
+        {
+          "t": "somewhere up in the big bits, since they hold most of the error",
+          "why": "Right neighborhood, no address. The demo draws exactly one red segment at 10%, between two specific codes. Find the carry where the MSB trades places with every lower bit and you've found it."
         }
       ]
     },
     {
-      "q": "In the filter demo, dragging sharpness up steepens the frequency wall on the right. What happens on the left, and why is it unavoidable?",
+      "q": "Someone toggles noise shaping ON, watches the shaded band's floor drop, and says the feedback loop deletes quantization error. What does the demo say back?",
       "options": [
         {
-          "t": "the impulse rings longer, since a sharper wall in frequency costs length in time",
+          "t": "it moves error out of the band and piles even more above it",
           "ok": true,
-          "why": "That's the Fourier tradeoff the whole section rides on. A perfect brick wall at 20 kHz is a sinc that ripples forever in time, and NOS, oversampling, and Moffat's closed-form filter are each a different answer to it."
+          "why": "The loop high-passes the error, so the floor tilts down inside the shaded band and climbs on the right, in the ultrasonics. The total grows, since the loop piles up more above the band than it clears inside it. Shaping still wins because the analog filter after it wipes everything up there."
         },
         {
-          "t": "nothing changes, a well-designed filter can be sharp in frequency and clean in time",
-          "why": "The two graphs are two views of one object, so tightening the right one lengthens the left one, every time. It's a mathematical constraint, the reason the demo's lead says you cannot tighten both at once."
+          "t": "they're right: the loop cancels most of the quantization noise",
+          "why": "Look right of the shaded band with shaping ON: the floor rises there. The loop deletes nothing, and the faint high hiss in play mode is the error it moved. Deletion happens later, at the analog filter."
         },
         {
-          "t": "the ringing would vanish with better hardware, it comes from cheap filter parts",
-          "why": "The demo is pure math, no hardware anywhere, and it rings anyway. Ringing is the price of the steep wall itself; better parts buy fidelity to a chosen curve and leave the tradeoff standing."
+          "t": "the loop makes the 3 coarse bits behave like 16 real ones",
+          "why": "The quantizer rounds to the same coarse 3-bit levels in both modes, as the info line says, so no bits were gained. More bits would mean finer levels. The loop only decides where the error lands, and it lands right of the shaded band."
         },
         {
-          "t": "the click gets quieter, because a longer filter absorbs more of the click's energy",
-          "why": "The click keeps its energy and gets smeared across time instead. Hit play while dragging: each click holds its level but rings longer as the wall sharpens, because the left graph is literally what one click sounds like."
+          "t": "the loop boosts the tone so it stands clear of the floor",
+          "why": "The tone's spike sits at the same height in both modes; only the floor moves. The feedback loop filters the error alone, which is what makes the trick so cheap."
         }
       ]
     },
     {
-      "q": "The contested ground demo feeds one quiet tone to both architectures. What two different imperfections do the spectra show?",
+      "q": "A reviewer writes: this DAC has the steepest filter wall I've ever measured, so its clicks and transients must be the cleanest too. What does the filter demo say back?",
       "options": [
         {
-          "t": "multibit sprouts harmonic spikes, delta-sigma keeps one clean spike over a raised floor",
+          "t": "the steepest wall rings the longest, so its clicks smear the most",
           "ok": true,
-          "why": "That's the honest core of the debate. Rounding to exact levels bends a quiet wave into harmonic distortion; shaping trades that for a noise floor. Slide to 16-bit and both sink below hearing, which is why the argument never settles."
+          "why": "The two graphs are one filter seen two ways, so a sharper wall on the right buys a longer ring on the left, and in play mode each click rings longer as you drag. That's also why a NOS DAC skips the filter and takes the images instead: no setting buys both."
         },
         {
-          "t": "multibit shows the raised noise floor, and delta-sigma is the one sprouting harmonic spikes",
-          "why": "Swapped. Rounding to the nearest exact level is what manufactures harmonics, and that's the multibit panel; the shaped floor is delta-sigma's trade. The captions under the two canvases in the demo name each one."
+          "t": "the reviewer's right: a steep wall cuts images, which cleans it all",
+          "why": "Drag sharpness up with play on: the wall steepens and every click rings longer. A steep wall does cut the images just above the band, and the left graph is the price. The reviewer's claim about clicks lives on that graph."
         },
         {
-          "t": "multibit stays clean down there because its levels are physically exact by construction",
-          "why": "Exact levels are the problem in the soft tail: a quiet wave spans only a few of them, so rounding bends its shape into harmonics. Exactness pays off at full scale and costs you in the quiet passages, which is where the demo lives."
+          "t": "ringing comes from cheap parts, so a steep digital wall skips it",
+          "why": "The demo is pure math, no hardware anywhere, and it rings anyway. Ringing is what a steep wall looks like in time; better parts can only follow the chosen curve more faithfully."
         },
         {
-          "t": "both show the same imperfection, and the audible gap comes entirely from the filters",
-          "why": "The filter carries real audible character, the chat grants that, but this demo isolates a mechanical difference underneath: harmonics on one side, noise on the other. Same tone, two flavors of imperfection, pick yours."
+          "t": "a steep wall soaks up each click's energy, and quiet reads as clean",
+          "why": "Each click keeps its level in play mode and rings longer as the wall sharpens. The left graph is what one click sounds like, so a sharper filter spreads the click across more time instead of muting it."
         }
       ]
     },
     {
-      "q": "Last one, on warmth. Why does the tube curve read as full while the hard clip reads as buzz, when both are just distortion?",
+      "q": "On warmth: why does the tube curve read as full while the hard clip reads as buzz, when both are just distortion?",
       "options": [
         {
           "t": "the tube's lopsided curve favors the 2nd harmonic, the symmetric clip cancels evens and stacks odds",
@@ -701,6 +710,58 @@ var DACAudio = (function(){
         {
           "t": "odd harmonics are the consonant ones, since the 3rd harmonic sits closest to the original note",
           "why": "Consonance tracks intervals, and the 2nd harmonic lands exactly one octave up, the friendliest interval available. The odd stack is what builds a square wave. Flip the demo to hard clip and listen to where that dial ends."
+        }
+      ]
+    },
+    {
+      "q": "The chat says real multibit DACs usually dither. Picture dither added before the rounding on the contested-ground demo's multibit side. What would that panel turn into?",
+      "options": [
+        {
+          "t": "its harmonic spikes melt into a steady noise floor of its own",
+          "ok": true,
+          "why": "Dither breaks the rounding's pattern, and a pattern is what made the spikes at the tone's multiples, so the distortion spreads into hiss. That narrows the gap without closing it: delta-sigma's loop tilts its floor up out of the band, and plain dither has no loop to do that."
+        },
+        {
+          "t": "taller spikes, since dither piles extra noise onto the rounding",
+          "why": "The spikes come from the rounding's pattern, a quiet wave hitting the same few levels the same way every cycle. Dither scrambles which level each sample lands on, so the pattern goes, and the spikes go with it."
+        },
+        {
+          "t": "one clean spike with no floor at all, like the 16-bit setting",
+          "why": "Dither is noise by design, so a floor is the price it charges. Shrinking both the spikes and the floor takes more bits, which is what pushing the slider toward 16 does."
+        },
+        {
+          "t": "the same spikes, since dither only helps a 1-bit delta-sigma stream",
+          "why": "The 14:31 message says multibit DACs use dither themselves, to trade their distortion for a noise floor. It works on any rounding, and the multibit panel's rounding is where the spikes come from."
+        },
+        {
+          "t": "a noisier panel, since dither is noise added before rounding",
+          "why": "Noisier, yes, and that's half of it. The other half is the reason anyone dithers: the harmonic spikes melt away, because the rounding stops repeating the same pattern every cycle."
+        }
+      ]
+    },
+    {
+      "q": "Last one, tying two demos together. Delta-sigma runs its switch at 64 to 256 times the audio rate. Why does that same speed also spare it the filter demo's ringing?",
+      "options": [
+        {
+          "t": "the junk lands far up, so a gentle filter that barely rings can catch it",
+          "ok": true,
+          "why": "Speed opens a wide gap between the band you hear and the shaped noise and images. A filter with room to roll off slowly is the gentle end of the filter demo, a short impulse that barely rings. Squeeze that gap and you're back to a steep wall and its long ring."
+        },
+        {
+          "t": "the speed moves the noise up out of the band you can actually hear",
+          "why": "That's the noise-shaping half, and it stops short of the ringing. The filter demo supplies the rest: what lets the wall be gentle is the gap between 20 kHz and the junk, and a gentle wall is a short impulse."
+        },
+        {
+          "t": "a 1-bit stream has no staircase, so there's nothing left to smooth",
+          "why": "The 14:26 message has both architectures needing a reconstruction filter, the staircase and the 1-bit stream alike. The speed changes how gentle that filter can be, and the filter is still there."
+        },
+        {
+          "t": "the feedback loop cancels ringing the same way it cancels the error",
+          "why": "The loop cancels nothing; it moves quantization error up the spectrum. Ringing belongs to the filter's own shape, and the loop never touches it."
+        },
+        {
+          "t": "its noise sits just above the band, so it needs the steepest wall",
+          "why": "The noise demo's floor keeps climbing far past the shaded band, and the chat says a cheap analog filter wipes it. At 64x and up, that junk sits far enough away for a gentle wall to catch it."
         }
       ]
     }

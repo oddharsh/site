@@ -22,12 +22,13 @@
 <link rel="stylesheet" href="/prose.css">
 <style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
 .content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
-.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}.garage-meta{font-size:var(--text-micro);color:var(--ink-dim);border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
 @media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
 
 .oct-table{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:var(--text-sm)}
 .oct-table th{text-align:left;background:var(--surface-desktop);border:1px solid #c3ced0;padding:4px 7px;font-family:var(--font-caption)}
 .oct-table td{border:1px solid var(--slate-90);padding:4px 7px;vertical-align:top}
+@media(max-width:340px){.oct-table th,.oct-table td{padding-inline:5px}}
 .oct-table td:not(:first-child){text-align:right;font-family:var(--font-mono)}
 .oct-table tr.mine td{background:#fffbe8}
 .oct-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
@@ -54,7 +55,7 @@
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
 <h1>Octane, priced against no framework</h1>
-<p class="garage-intro">A benchmark told me Nextane ships 60.9% less client JavaScript than <a class="term" data-t="nextjs" href="https://en.wikipedia.org/wiki/Next.js" title="A web framework built on React, with server rendering and routing built in." rel="external">Next.js</a> 16. That is a real number, honestly measured, and I checked it against the deployed demo. What the table cannot tell you is where zero sits, because every row in it is a framework. This site makes a useful zero: it ships no framework at all, so putting it on the same axis turns a ranking into a distance.</p>
+<p class="garage-intro">A benchmark told me Nextane ships 60.9% less client JavaScript than <a class="term" data-t="nextjs" href="https://en.wikipedia.org/wiki/Next.js" title="A web framework built on React, with server rendering and routing built in." rel="external">Next.js</a> 16. That is a real number, and I checked it against the deployed demo. What the table cannot tell you is where zero sits, because every row in it is a framework. This site makes a useful zero: it ships no framework at all, so putting it on the same axis turns a ranking into a distance.</p>
 
 <h2>The benchmark, and what it leaves out</h2>
 <p><a href="https://github.com/southpolesteve/nextane" target="_blank" rel="noopener">Nextane</a> rebuilds the Next.js Pages Router on <a href="https://github.com/octanejs/octane" target="_blank" rel="noopener">Octane</a>, a compiled <a class="term" data-t="react" href="https://en.wikipedia.org/wiki/React_(software)" title="A JavaScript library from Meta for building user interfaces out of reusable components." rel="external">React</a> replacement descended from Inferno that drops the <a class="term" data-t="virtual-dom" href="https://en.wikipedia.org/wiki/Virtual_DOM" title="An in-memory copy of the page's structure that a framework compares against, to work out the smallest set of real changes to make." rel="external">virtual DOM</a> and has its compiler infer <a class="term" data-t="reactive-programming" href="https://en.wikipedia.org/wiki/Reactive_programming" title="A programming style where values that depend on other values update automatically whenever those change." rel="external">reactivity</a> instead of asking you for <a class="term" data-t="dependency-array" href="https://react.dev/reference/react/useEffect" title="The list of values a React hook watches; the hook runs again only when one of them changes." rel="external">dependency arrays</a>. Its README publishes this, measured on one small <a class="term" data-t="hydration" href="https://en.wikipedia.org/wiki/Hydration_(web_development)" title="Making server-rendered HTML interactive by running a framework's JavaScript over it in the browser to attach state and event handlers." rel="external">hydrated</a> <code>getServerSideProps</code> page:</p>
@@ -77,8 +78,8 @@
   <tr><td>router-bwM-JHXE.js</td><td>125,152</td><td>40,048</td><td>35,159</td></tr>
   <tr class="mine"><td><strong>JavaScript total</strong></td><td><strong>133,345</strong></td><td><strong>43,384</strong></td><td><strong>38,133</strong></td></tr>
 </table>
-<p>43,384 bytes gzip against a claimed 43.0 KiB. The benchmark holds, which is worth saying plainly, because a page that only re-measures claims it can knock down is not measuring.</p>
-<p>One thing to notice before moving on. The document is 2,652 bytes and the JavaScript is 133,345. The page's actual content is 2% of what the page costs.</p>
+<p>43,384 bytes gzip against a claimed 43.0 KiB. The benchmark holds. I say so because a page that only re-measures claims it can knock down isn't measuring.</p>
+<p>The document is 2,652 bytes and the JavaScript is 133,345, so the page's actual content is 2% of what the page costs.</p>
 
 <h2>Where the baseline lands</h2>
 <p>Predict before you reveal. The three framework rows are drawn below. This site's homepage and its heaviest page are hidden. Guess where they fall relative to the 43.0 KiB row that won the benchmark.</p>
@@ -108,7 +109,7 @@
 
 <h2>What the comparison actually measures</h2>
 <p>Here is where I argue against my own table. A framework competes with the version of your application you would otherwise hand-write and then maintain for years, which is a different opponent from a hand-written document. Octane's 43 KiB buys a component model, hydration, Suspense, and a compiler that tracks what your code reads so you stop maintaining dependency arrays. This site buys none of that because it needs none of it. It serves documents, and its interactivity is a desktop shell bolted on top of them.</p>
-<p>So the honest reading is narrower than "frameworks are heavy." A framework's floor is set by its runtime, and this site's floor is set by how much behaviour it actually has. Those are different quantities. A benchmark containing only frameworks quietly makes them look like one quantity, and that is the thing the extra rows are for.</p>
+<p>So the honest reading is narrower than "frameworks are heavy." A framework's floor is set by its runtime, and this site's floor is set by how much behaviour it actually has. Those are different quantities. A benchmark containing only frameworks makes them look like one quantity, and the extra rows are there to break that.</p>
 
 <h2>Where Octane would win here</h2>
 <p><code>nav.js</code> is the one module on this site with enough state to make the question live. It handles window dragging and resizing, taskbar state, a command palette filtering 158 photos alongside every page and six profiles, and icon positions that deliberately reset each visit. All of it is <a class="term" data-t="imperative-programming" href="https://en.wikipedia.org/wiki/Imperative_programming" title="Writing code as step-by-step commands that change state directly, such as create this element, then move it." rel="external">imperative</a> DOM code, and all of it is 14.9 KiB.</p>
@@ -120,7 +121,6 @@
 <p>I think that is fair, and it is why the middle sections exist rather than just the chart. What the extra rows buy is a scale to read Octane against. A reader who has only ever seen framework-versus-framework tables can rank three options and still have no idea whether the winner is close to the metal or a long way from it. Now there is a distance on the axis, and 43.0 KiB reads as a genuine achievement against React and a large number against nothing at all. Both readings survive, and holding them together is the point.</p>
 <p class="oct-falsify">What would change my mind: a tuned, non-alpha Octane build landing anywhere near <code>nav.js</code>'s 14.9 KiB. That would mean the runtime cost measured here is a property of an early build rather than of the architecture, and the crossover argument above would collapse with it. The beta is where that shows up.</p>
     <section id="luq" aria-label="understanding check"></section>
-    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
   </main>
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
 </div>

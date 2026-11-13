@@ -152,7 +152,7 @@ jobs:
             gh issue comment "$number" --body "$body"
           else
             gh issue create --assignee oddharsh \
-              --label "type: test" --label "area: tools" \
+              --label "type: test" --label "area: tools" --type Watch \
               --title "$title" --body "$body"
           fi
 

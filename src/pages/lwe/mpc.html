@@ -93,7 +93,7 @@
           <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:06</time></div>
-          <div class="bubble"><p>wait, there's a whole spectrum: BGW needs 2/3 honest, but SPDZ survives on even <em>one</em> honest node as long as the bad ones don't collude? let me see that.</p></div></div></div>
+          <div class="bubble"><p>wait, there's a whole spectrum: BGW needs 2/3 honest, but SPDZ survives on even <em>one</em> honest node? let me see that.</p></div></div></div>
 
         <!-- DEMO: honest majority / SPDZ / traitor tracing -->
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:06</time></div>
@@ -103,11 +103,11 @@
               <p class="lead">7 nodes share one secret. <b>Click a node</b> to flip it honest&nbsp;⋔&nbsp;↔&nbsp;traitor&nbsp;☠. Watch when each trust model still holds:</p>
               <div class="nodes" id="mpc-nodes"></div>
               <div class="verdict">
-                <div class="vcard"><b>BGW &middot; honest majority</b><span class="v" id="v-bgw">—</span><span class="rule">needs &gt; 2/3 honest (≥ 5 of 7)</span></div>
-                <div class="vcard"><b>SPDZ &middot; dishonest majority</b><span class="v" id="v-spdz">—</span><span class="rule">needs ≥ 1 honest &amp; no collusion</span></div>
+                <div class="vcard"><b>BGW &middot; honest majority</b><span class="v" id="v-bgw">—</span><span class="rule">needs &gt; 2/3 honest (≥ 5 of 7) against active traitors</span></div>
+                <div class="vcard"><b>SPDZ &middot; dishonest majority</b><span class="v" id="v-spdz">—</span><span class="rule">needs ≥ 1 honest, even if every traitor colludes</span></div>
               </div>
               <div class="mode-row">
-                <label><input type="checkbox" id="mpc-collude"> the traitors are <b>colluding</b> 🤝</label><span id="mpc-collude-hint" style="font-size:7.5pt;color:#9a6a16"></span>
+                <span>🤝 Both cards assume the traitors collude: a threshold counts how many parties one adversary controls, and every traitor works for it.</span>
               </div>
               <div class="ops">
                 <button class="xp-button compact" id="mpc-trace">🔍 trace the leak</button>
@@ -157,15 +157,12 @@
     verdict();
   }
   function verdict() {
-    var h = honest.filter(Boolean).length, t = N - h, collude = document.getElementById("mpc-collude").checked;
+    var h = honest.filter(Boolean).length, t = N - h;
     var bgw = h >= 5; // > 2/3 of 7
-    var spdz = h >= 1 && !(collude && t >= 2);
+    var spdz = h >= 1;
     set("v-bgw", bgw, h + " honest, " + t + " traitor" + (t === 1 ? "" : "s"));
-    set("v-spdz", spdz, collude && t >= 2 ? "traitors colluding → broken" : (h >= 1 ? "≥1 honest holds" : "0 honest"));
-    // collusion only matters with ≥2 traitors; tracing needs ≥1 — gate the controls
-    // so they don't look like no-ops on an all-honest grid.
-    document.getElementById("mpc-collude").disabled = t < 2;
-    document.getElementById("mpc-collude-hint").textContent = t < 2 ? "← flip ≥2 nodes to traitors first" : "";
+    set("v-spdz", spdz, h >= 1 ? "≥1 honest holds" : "0 honest");
+    // tracing needs ≥1 traitor; gate the button so it doesn't look like a no-op on an all-honest grid.
     document.getElementById("mpc-trace").disabled = t < 1;
   }
   function set(id, ok, why) {
@@ -178,10 +175,8 @@
     var i = +n.dataset.i; honest[i] = !honest[i]; traced = -1; draw();
     document.getElementById("mpc-trace-out").innerHTML = "Each share is watermarked. When a key leaks, the watermark says <b>who</b> leaked it: that's traitor tracing. Make a node a traitor, then hit trace.";
   });
-  document.getElementById("mpc-collude").addEventListener("change", verdict);
   document.getElementById("mpc-reset").addEventListener("click", function () {
-    for (var i = 0; i < N; i++) honest[i] = true; traced = -1;
-    document.getElementById("mpc-collude").checked = false; draw();
+    for (var i = 0; i < N; i++) honest[i] = true; traced = -1; draw();
   });
   document.getElementById("mpc-trace").addEventListener("click", function () {
     var traitors = []; for (var i = 0; i < N; i++) if (!honest[i]) traitors.push(i);
@@ -198,7 +193,7 @@
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you close this window and go trust a network of strangers with a secret: pop quiz. 4 questions, no stakes. The node demo above counts as an open book.",
+  "intro": "Before you close this window and go trust a network of strangers with a secret: pop quiz. 6 questions, no stakes. The node demo above counts as an open book.",
   "questions": [
     {
       "q": "Start where the chat started. One secret gets partitioned across a bunch of nodes that compute on it together, BitTorrent style. What is that actually buying you?",
@@ -223,16 +218,16 @@
       ]
     },
     {
-      "q": "Demo time. Flip 4 of the 7 nodes to traitors and leave the colluding box unchecked. What do the two verdict cards show?",
+      "q": "Demo time. Flip 4 of the 7 nodes to traitors. What do the two verdict cards show?",
       "options": [
         {
           "t": "BGW breaks at 3 of 7 honest, SPDZ still holds",
           "ok": true,
-          "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node plus no collusion. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
+          "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
         },
         {
           "t": "both break, a dishonest majority sinks everything",
-          "why": "A dishonest majority sinks BGW alone. SPDZ was built for exactly that regime; its card stays secure until the last honest node flips, or until you tick the colluding box with 2 or more traitors."
+          "why": "A dishonest majority sinks BGW alone. SPDZ was built for exactly that regime, so its card stays secure until the last honest node flips."
         },
         {
           "t": "both hold, the split secret protects them equally",
@@ -263,6 +258,50 @@
         {
           "t": "it cleared the other six nodes, since only one watermark matched",
           "why": "Tracing speaks only about the share that leaked. The remaining nodes could be traitors who simply haven't leaked yet, and the demo will happily show several red nodes while tracing just one of them."
+        }
+      ]
+    },
+    {
+      "q": "Back to the demo with a fresh grid. Flip exactly 3 nodes to traitors. That still leaves an honest majority, 4 of 7. What does the BGW card say?",
+      "options": [
+        {
+          "t": "BROKEN, since 4 honest of 7 misses BGW's two-thirds bar",
+          "ok": true,
+          "why": "More than half honest is the bar from Goldreich et al.'s result; BGW asks for more than two-thirds, which on 7 nodes means 5. So the card reads BROKEN with 4 honest and 3 traitors, while the SPDZ card still holds. Flip one node back and BGW recovers at 5 honest."
+        },
+        {
+          "t": "secure, since an honest majority is all that BGW needs",
+          "why": "An honest majority, more than half, is the bar from Goldreich et al.'s 1987 result. BGW's own bar sits higher, more than two-thirds honest, and the card's rule line spells it out: at least 5 of 7."
+        },
+        {
+          "t": "BROKEN, since any traitor at all is enough to sink BGW",
+          "why": "Flip just 1 or 2 nodes and the card stays secure, since 5 or 6 honest of 7 clears two-thirds. BGW tolerates a minority of traitors by design; it breaks here because 3 traitors is one more than 7 nodes can absorb."
+        },
+        {
+          "t": "it depends on whether the traitors happen to be colluding",
+          "why": "BGW's verdict counts honest nodes and nothing else. Its rule line asks for at least 5 of 7, and a threshold already assumes the traitors work together, so coordination never moves the card."
+        }
+      ]
+    },
+    {
+      "q": "A team plans to grow from a two-party setup to 40 nodes run by independent operators around the world. Their pitch: stronger trust and faster results, since the work splits BitTorrent style. Which part of the pitch fails?",
+      "options": [
+        {
+          "t": "the speed, since tens of spread-out nodes add latency",
+          "ok": true,
+          "why": "Independent operators really do buy stronger trust, since breaking it takes more parties colluding. The 21:09 message names the bill: tens of distributed nodes pay greater communication overhead than a two-party network. The BitTorrent line describes how the work is split, and it makes no promise about speed."
+        },
+        {
+          "t": "the trust, since every new node is another possible traitor",
+          "why": "Each new independent node is one more party an attacker has to corrupt or collude with to cross the threshold. The essay treats that half of the pitch as the payoff; the cost lands on the other half."
+        },
+        {
+          "t": "neither, more nodes come out ahead on every axis",
+          "why": "The 21:05 message lists efficiency, trust assumptions and coordination complexity as MPC's standing trade-offs. Adding nodes helps the trust side and charges you on the other two, as the 21:09 message says about latency."
+        },
+        {
+          "t": "the speed, since MPC is just slow in general",
+          "why": "Slow compared to what, and why? The cost the page names is specific: communication overhead that grows as you go from two parties to tens of distributed nodes. A two-party network pays less of it, so the node count is the lever."
         }
       ]
     },

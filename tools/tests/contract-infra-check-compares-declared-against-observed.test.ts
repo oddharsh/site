@@ -22,6 +22,7 @@ import {
   compareEdgeCheck,
   compareKvNamespaces,
   compareLabels,
+  compareIssueTypes,
   compareR2Buckets,
   compareReleaseDeclaration,
   compareRepository,
@@ -105,6 +106,7 @@ function matchingRepository() {
       details: Object.fromEntries(repo.rulesets.map((r) => [r.name, ok(rulesetDetail(r))])),
     }),
     labels: ok(liveLabels()),
+    issueTypes: ok(repo.triage.issue_types.map((t) => ({ ...t, is_enabled: true }))),
     codeScanning: ok({ state: repo.code_scanning.default_setup_state }),
     actions: ok({
       live: { enabled: true, allowed_actions: repo.actions_permissions.allowed_actions, sha_pinning_required: repo.actions_permissions.sha_pinning_required },
@@ -209,6 +211,19 @@ test("visibility private fails FIRST, and nothing under it is compared", () => {
   assert.equal(findings.length, 1);
   assert.equal(findings[0].level, "fail");
   assert.match(findings[0].message, new RegExp(`^${slug} is "private" but infra\\.json declares "public"`));
+});
+
+test("a disabled issue type fails by name; a stray type and an unread list are advisories", () => {
+  const live = repo.triage.issue_types.map((t) => ({ ...t, is_enabled: true }));
+  assert.deepEqual(fails(compareIssueTypes(repo, ok(live))), []);
+  live[3] = { ...live[3], is_enabled: false };
+  live.push({ name: "Epic", color: "gray", description: "", is_enabled: true });
+  const findings = compareIssueTypes(repo, ok(live));
+  assert.deepEqual(fails(findings), ['oddharsh/site has no enabled issue type "Watch". Run `bun run labels:sync -- --confirm` with the `user` scope']);
+  assert.deepEqual(warns(findings), ["the account carries 1 undeclared issue type(s): Epic"]);
+  assert.deepEqual(warns(compareIssueTypes(repo, { ok: false, error: "GitHub API returned HTTP 404" })), [
+    "issue types could not be read: GitHub API returned HTTP 404. The endpoint needs a token: GITHUB_TOKEN=$(gh auth token) bun run infra:check",
+  ]);
 });
 
 test("a missing label fails by name; a stray label is an advisory", () => {
@@ -803,6 +818,8 @@ test("GitHub port: the Administration-gated endpoints answering 401 and 403 are 
     if (detail) return json(rulesetDetail(repo.rulesets[Number(detail[1]) - 1]));
     if (path === `/repos/${slug}/labels`) return json(liveLabels());
     if (path.endsWith("/code-scanning/default-setup")) return json({ message: "Forbidden" }, 403);
+    // What the live endpoint answered with no credential on 2026-11-11.
+    if (path === `/repos/${slug}/issue-types`) return json({ message: "Not Found" }, 404);
     return json({ message: "Requires authentication" }, 401);
   };
   const observed = await readRepository(githubReader(undefined, fetchImpl), repo, { total: 0, without: [] });
@@ -810,10 +827,11 @@ test("GitHub port: the Administration-gated endpoints answering 401 and 403 are 
   assert.deepEqual(fails(findings), []);
   assert.equal(passes(findings).length, 2, "rulesets and labels are public reads and still pass");
   const notes = warns(findings);
-  assert.equal(notes.length, 3);
-  assert.ok(notes[0].startsWith("CodeQL default setup: not verifiable here"));
-  assert.ok(notes[1].startsWith("Actions permissions: not verifiable here"));
-  assert.ok(notes[2].startsWith("secret scanning: not verifiable here"));
+  assert.equal(notes.length, 4);
+  assert.ok(notes[0].startsWith("issue types could not be read: GitHub API returned HTTP 404"));
+  assert.ok(notes[1].startsWith("CodeQL default setup: not verifiable here"));
+  assert.ok(notes[2].startsWith("Actions permissions: not verifiable here"));
+  assert.ok(notes[3].startsWith("secret scanning: not verifiable here"));
   assert.ok(notes.every((m) => m.includes("GITHUB_TOKEN=$(gh auth token) bun run infra:check")));
 });
 

@@ -64,24 +64,50 @@
         ]
       },
       {
-        "q": "In the stripes demo, switching from 4:4:4 to 4:2:0 drops the stored samples to half. What did you actually see change on the canvas?",
+        "q": "A friend reads that jpegli works in the XYB color space and concludes its files need an XYB-aware decoder, so old browsers can't open them. Where does that reasoning break?",
         "options": [
           {
-            "t": "the black-and-white lines held, the red-green ones dissolved",
+            "t": "xyb only steers where the encoder spends bits; the file is plain jpeg",
             "ok": true,
-            "why": "That is chroma subsampling in one picture: luma keeps full resolution and carries the sharpness, while the two chroma planes drop to one sample per 2x2 block. Your eye resolves brightness far better than color, so photos barely show it."
+            "why": "The eye model decides where the rounding lands, and what gets written is the 1992 bitstream, which is why the 23:02 message has a browser from 1995 decoding it. The same goes for zenjpeg's trellis and scan search: all of it happens at encode time, and the decoder never knows."
           },
           {
-            "t": "the whole test card went softer, both bands about equally",
-            "why": "Only the color band pays. Flip the demo again: the luma stripes hold razor sharp at every mode, because subsampling shrinks the two chroma planes and leaves luma at full resolution."
+            "t": "nowhere: that decoder gap is why the site swapped jpegli for zenjpeg",
+            "why": "The 23:07 message gives the real reason: zenjpeg lands a few percent under jpegli at matched quality. If jpegli's files needed a special decoder, the site's universal fallback could never have been jpegli for a long stretch, and it was."
           },
           {
-            "t": "the red and green washed out toward gray but kept their crisp edges",
-            "why": "The 2x2 averaging blends neighboring red and green stripes into mud, so the color detail loses exactly its edges; edges survive only in the untouched luma plane. Toggle 4:2:0 and study the bottom band."
+            "t": "each jpegli file tucks in a plain mozjpeg copy for decoders without xyb",
+            "why": "The encoder grid measures jpegli's file under mozjpeg's at the same q72. A file carrying a whole mozjpeg copy would have to come out bigger than mozjpeg's alone, so that copy can't be in there."
           },
           {
-            "t": "the whole picture dimmed a little, since half the samples are gone",
-            "why": "Brightness survives untouched because every discarded sample is chroma. The 4:2:0 file keeps full luma plus quarter-resolution color, which is why the info line reads 50% of raw samples with zero visible dimming."
+            "t": "xyb is an av1 trick, so only the avif files on this site ever use it",
+            "why": "The 23:07 message puts XYB inside jpegli itself. AV1's borrowed tricks, per the first answer, are larger blocks and sharper prediction. XYB is jpegli's eye model, and it never leaves the encoder."
+          }
+        ]
+      },
+      {
+        "q": "The chat only walks the stripes demo through 4:2:0. Switch it to 4:2:2, which keeps twice the color samples 4:2:0 does. What happens to the red-green band?",
+        "options": [
+          {
+            "t": "it dissolves into exactly the same mud it shows at 4:2:0",
+            "ok": true,
+            "why": "The stripes are one pixel wide and alternate left to right, so any color block two pixels wide averages a red with a green. 4:2:2 halves color across, and that alone does it; 4:2:0's extra halving top to bottom finds rows that repeat and has nothing left to blur. Turn the stripes sideways and the two would split: 4:2:2 would keep them sharp."
+          },
+          {
+            "t": "it lands halfway, softer than 4:4:4 and crisper than 4:2:0",
+            "why": "That's the gradient the sample counts suggest, and the canvas refuses it: flip between 4:2:2 and 4:2:0 and the band doesn't change. What sets the damage is the direction the color gets halved in, and these stripes alternate across."
+          },
+          {
+            "t": "it stays sharp, since 4:2:2 halves color only top to bottom",
+            "why": "The direction's backwards. The 23:05 message has 4:2:2 halving chroma horizontally, and these stripes alternate horizontally, so every two-pixel block mixes a red with a green. Halving top to bottom is the extra step 4:2:0 adds."
+          },
+          {
+            "t": "both bands go a little soft, since a third of the samples left",
+            "why": "The info line does read 67% of the raw samples, and every sample that went was chroma. The black-and-white band holds razor sharp at every mode because subsampling never touches luma."
+          },
+          {
+            "t": "it blurs somewhat, the way any subsampling softens color",
+            "why": "Somewhat is what's missing. Flip the select and the band goes all the way to the mud 4:2:0 makes. How much blurs depends on which way the color is halved, and 4:2:2 halves it across the stripes."
           }
         ]
       },
@@ -108,68 +134,50 @@
         ]
       },
       {
-        "q": "A baseline and a progressive version of one photo decode to identical pixels. What changes between them?",
+        "q": "Picture a grayscale progressive JPEG: one brightness channel, no color planes, scans in whatever order a search picked. By Chrome's rule from the demo, when can it first paint?",
         "options": [
           {
-            "t": "the order the coefficients arrive in, which sets what a cut-off file shows",
+            "t": "from the first scan's opening bytes, since that scan starts the only channel",
             "ok": true,
-            "why": "Right. jpegtran made the demo's three files from one another without decoding anything, and the finished files are pixel-identical. Scan order decides what a partial file can show: the whole picture coarsely, or the top rows sharply."
+            "why": "Chrome waits for every channel to start, and the demo pins that gate to the first data byte of the scan that brings the last one in. With one channel, the first scan is that scan. The 85% wait on the shipped color file came from its order putting Cr last, and a file with no color planes has no way to do that."
           },
           {
-            "t": "the early passes use a coarser quantization table that the later passes overwrite",
-            "why": "Nothing is quantized twice. The early scans carry some of the same rounded numbers, or their top bits, and later scans complete them in place."
+            "t": "around 85% in, like the color file, since a size search still picks the order",
+            "why": "The 85% came from that order sending both color planes last, so Chrome sat waiting for Cr to start. Take the color planes away and there's nothing left to wait for: the first scan already starts the only channel."
           },
           {
-            "t": "progressive coding packs the coefficients tighter, so the file comes out smaller",
-            "why": "On this photo libjpeg's standard script is 1.7% larger than baseline. Only zenjpeg's searched order came out smaller, because the search scored bytes."
+            "t": "only once the last scan lands, since progressive files paint a single time",
+            "why": "The libjpeg pane paints from its first few percent, so a progressive file can paint early in Chrome. The late paint belonged to one order on one color file, the one that put Cr last."
           },
           {
-            "t": "the file embeds a low-resolution preview copy for the browser to show first",
-            "why": "There is no second copy. The first scan is every block's DC, which is the picture at 1/8 scale by construction; later scans add detail to the same grid."
+            "t": "after the whole DC scan has landed, once every block's average is in",
+            "why": "The demo's caption puts the gate at the first data byte of the gating scan, exact to the byte. Chrome starts painting as that scan begins to arrive, so it has no reason to wait for the scan to finish."
           }
         ]
       },
       {
-        "q": "In Chrome the shipped zenjpeg file stays blank until about 85% has arrived, while the libjpeg order paints almost at once. Why?",
+        "q": "Last one. The red-window night frame needs 35% more bytes at 4:2:0 to match 4:4:4, against a median 2.2% at the 600px tier, and the camera only kept 4:2:2 color. Why does this frame pay so much?",
         "options": [
           {
-            "t": "its scan order puts both color planes last, and chrome waits for every channel to start",
+            "t": "the downscale gave each pixel its own color, and red parks the detail in color",
             "ok": true,
-            "why": "That is the gate: Chrome paints nothing until every channel has started, and the demo measures it to the byte at the first data byte of the Cr scan. zenjpeg's search picked the order for size, and on this photo size put color last."
+            "why": "Both halves are needed. Past 2x every tile pixel has color measured for it alone, so 4:2:0 has something real to throw away, and with red at only 0.299 of the brightness in BT.601, a red scene keeps its fine detail in exactly those color planes. Drop the red and you're back near the 2.2% median."
           },
           {
-            "t": "zenjpeg writes a single-scan baseline file, so there is no coarse pass to paint early",
-            "why": "It is progressive, seven scans, and the table reads them straight out of its headers. The problem is their order."
+            "t": "red light puts the fine detail in the color planes, the part 4:2:0 cuts",
+            "why": "That's the red half, and it explains the size of the bill. It leaves the camera's 4:2:2 standing, though: at 1x the reduction demo shows 4:4:4 storing copies. The 8.6x shrink is what gave each tile pixel its own color for 4:2:0 to throw away."
           },
           {
-            "t": "chrome won't decode a progressive jpeg until the end-of-image marker arrives",
-            "why": "Every cut-off file in the demo gets an end marker appended, and the libjpeg order paints from its first few hundred bytes. What differs is which channels have started."
+            "t": "red carries most of the brightness, so 4:2:0 blurs the luma along with it",
+            "why": "BT.601 gives red only 0.299 of the brightness, so a red scene carries little of its detail in luma. The detail sits in the color planes instead, which is exactly what 4:2:0 shrinks, and luma stays at full resolution throughout."
           },
           {
-            "t": "the zenjpeg file is the largest of the three, so its first scan takes longer to land",
-            "why": "It is the smallest of the three, 16,234 bytes against 16,324 for baseline. The delay comes from order, and a smaller file in a worse order still paints later."
-          }
-        ]
-      },
-      {
-        "q": "Last one. jpegli writes the same JPEG bitstream as mozjpeg, at the same quality knob, and lands well under it in the encoder grid. What is its actual edge?",
-        "options": [
-          {
-            "t": "it models the eye: xyb color, per-block quantization, smarter rounding",
-            "ok": true,
-            "why": "That is the psychovisual win: jpegli spends bits where your eye looks and starves detail you would never see, all while staying a standard JPEG a 1995 decoder reads. Roughly 25% over the old mozjpeg."
+            "t": "red is the hardest color for av1, so a red photo costs more at any setting",
+            "why": "The 35% is a gap between two chroma settings on the same frame. A codec that simply found red expensive would pay at both and the gap would stay small. It opens because red keeps its detail in the color planes, and only 4:2:0 cuts those."
           },
           {
-            "t": "it sneaks avif-style prediction tricks inside the jpeg container",
-            "why": "The bitstream stays plain 1992 JPEG, which is the whole point of the fallback: ancient decoders read it. Larger blocks and sharper prediction are AVIF's tricks, and they require an AV1 decoder."
-          },
-          {
-            "t": "it quietly drops to 4:2:0 chroma while mozjpeg keeps full color",
-            "why": "The encoder grid pinned all four to the same settings; subsampling is a separate knob with its own two demos. jpegli's gain comes from where it rounds, per block, tuned to perception."
-          },
-          {
-            "t": "it runs a lower quality setting internally, trading sharpness for bytes",
-            "why": "The grid held all four encoders to the same q72 and jpegli still beat both mozjpeg and the system baseline at like quality. It aims its bits more accurately, so the same picture costs fewer bytes."
+            "t": "this frame came off the camera at 4:4:4, so it had more color to lose",
+            "why": "Every color original here is 4:2:2, the premise of the question and of the garage page. The extra color comes from the downscale, where each tile pixel averages a patch of the frame holding several color samples."
           }
         ]
       }
@@ -226,7 +234,7 @@
     {
       "who": "bot",
       "time": "23:05",
-      "html": "<p>A color image carries one luma plane (brightness) plus two chroma planes (color). Drop to grayscale and you delete both chroma planes, roughly two-thirds of the color information, so the file falls hard. The garage study has the side-by-side counts.</p>"
+      "html": "<p>A color image carries one luma plane (brightness) plus two chroma planes (color). Drop to grayscale and you delete both chroma planes: two of every three samples at full color resolution, one in three at the web's usual 4:2:0. The garage study has the side-by-side counts.</p>"
     },
     {
       "who": "you",

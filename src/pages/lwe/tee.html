@@ -115,13 +115,16 @@
 
         <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>21:27</time></div>
           <div class="bubble"><span class="tagai">AI &middot; expanding the essay</span>
-          <p>the essay names the symptoms (heat, cache, power); here's the loose <b>taxonomy</b> of side-channels:</p>
+          <p>the essay names the symptoms (heat, cache, power); here's the loose <b>taxonomy</b> of side-channels, plus two cousins that skip the physics:</p>
           <p>• <b>Timing</b>: secret-dependent branches take measurably different times.<br>
-          • <b>Cache</b>: what got cached vs evicted reveals which memory the secret touched (this family powers Spectre/Meltdown-style attacks and the Aepicleak-era tricks).<br>
+          • <b>Cache</b>: what got cached vs evicted reveals which memory the secret touched (this family powers Spectre/Meltdown-style attacks).<br>
           • <b>Power</b>: the current draw traces the exact operations (classic on smartcards and SIMs).<br>
           • <b>EM / thermal</b>: radiated emissions and heat leak the same thing, contactlessly.<br>
-          • <b>Fault injection</b>: glitch the voltage, clock, or memory (Rowhammer, AMD SEV's BadRAM) to make the chip mis-compute and spill secrets.</p>
-          <p>all of them read the <em>physics around</em> the computation and leave the math intact. that's why a sealed chip stays so hard to fully trust.</p></div></div></div>
+          • <b>Fault injection</b>: glitch the voltage, clock, or memory (Plundervolt on SGX, Rowhammer) to make the chip mis-compute and spill secrets.</p>
+          <p>the cousins:<br>
+          • <b>Architectural bugs</b>: the chip just hands back data it shouldn't. Aepicleak read stale enclave data straight out of Intel's APIC registers, no measurement needed.<br>
+          • <b>Memory aliasing</b>: BadRAM reprogrammed a DIMM's SPD chip to report phantom capacity, so two addresses land on one cell and the host can read and replay AMD SEV-SNP memory.</p>
+          <p>side-channels read the <em>physics around</em> the computation; the cousins break the hardware's own rules. either way the math stays intact, and that's why a sealed chip stays so hard to fully trust.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:28</time></div>
           <div class="bubble"><p>These attacks collectively speak to how complex TEEs are, as well as how difficult it can be to use TEEs as the sole layer of security for a network. Given the limited capacity to update a TEE's hardware and firmware, as well as its unique and immutable root of trust, fully trusting a closed source TEE implies trusting the TEE's firmware maintainers as well as manufacturers, who feasibly could have a log matching TEEs to their unique roots of trust. Further, fully trusting a network of closed source TEEs in operation implies fully trusting that the TEE isn't compromised and is operated by a non-malicious actor. As such, <b>the value for malicious actors to exploit a TEE must be lower than the cost to perform said exploit</b> at each of these layers.</p>
@@ -170,27 +173,27 @@
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Wait, one thing before you close the window: pop quiz, 4 questions, no stakes. The demo's enclave held its PIN for about 4 seconds; let's see how long you hold the ideas.",
+  "intro": "Wait, one thing before you close the window: pop quiz, 6 questions, no stakes. The demo's enclave held its PIN for about 4 seconds; let's see how long you hold the ideas.",
   "questions": [
     {
-      "q": "Start at the base layer. What is the 'root of trust' a TEE builds everything on?",
+      "q": "Start at the base layer. Two phones come off the same line, and an attacker extracts phone A's root of trust. What does that hand them?",
       "options": [
         {
-          "t": "a fixed secret, unique to each chip, that the enclave encrypts data under",
+          "t": "phone A's secrets for good, while phone B's stay fully sealed",
           "ok": true,
-          "why": "Right. Static but unique is the exact phrase: the secret never changes, no two chips share it, and it is the base the enclave encrypts biometrics and card data under."
+          "why": "The root of trust is static but unique: each chip has its own, so A's says nothing about B's, and it can never change, so A stays exposed for the rest of its life. That's also why the Secret Network story is worse: there, one secret sat on every node."
         },
         {
-          "t": "a master password the owner picks the first time they boot the device",
-          "why": "That would make it human-chosen and changeable. Scroll back to the 21:22 message: the root of trust is a property of the physical chip itself, in place before you ever touch the device."
+          "t": "both phones, since chips off one line share a root of trust",
+          "why": "The 21:22 message calls the root of trust static but unique, so no two chips share one. A shared secret is exactly what made Secret Network's consensus seed so dangerous, and a per-chip root of trust avoids it."
         },
         {
-          "t": "a certificate the manufacturer rotates with every firmware update it ships",
-          "why": "Rotation is exactly what it lacks. The 21:28 message calls the root of trust unique and immutable, and that immutability is why a leaked one is so hard to recover from."
+          "t": "phone A for now, until a firmware update rotates its root",
+          "why": "Rotation is exactly what it lacks. The 21:28 message calls the root of trust unique and immutable, and a TEE's limited capacity to update is why a leaked one stays leaked."
         },
         {
-          "t": "the OS deciding which apps are allowed to touch the enclave's memory",
-          "why": "The OS sits outside the trust boundary. A TEE is a secure section of the physical chip, built to keep its secrets even from the operating system running above it."
+          "t": "nothing, the enclave re-encrypts under a fresh secret once read",
+          "why": "The base secret is static: it never changes, so reading it once is enough. Everything the enclave encrypts rests on it, which is why extracting it is the whole game."
         }
       ]
     },
@@ -200,7 +203,7 @@
         {
           "t": "every SGX node held the same consensus seed, a network-wide key",
           "ok": true,
-          "why": "Right, and that is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
+          "why": "That is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
         },
         {
           "t": "the seed crossed the network in plaintext, so sniffing traffic exposed it",
@@ -222,7 +225,7 @@
         {
           "t": "they read physical side effects of the chip running and infer the secret",
           "ok": true,
-          "why": "Exactly. Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
+          "why": "Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
         },
         {
           "t": "each finds a different flaw in the encryption algorithm and quietly decrypts the memory",
@@ -239,7 +242,29 @@
       ]
     },
     {
-      "q": "Last one, the essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
+      "q": "Demo time, in an order the chat never ran. Run one probe, hit re-seal, then try a probe you haven't used yet. What happens?",
+      "options": [
+        {
+          "t": "the same PIN, 4827, falls out again with no key involved",
+          "ok": true,
+          "why": "Re-seal only puts the cipher back over the memory, and the cipher was never what leaked. Every probe reads side effects of the enclave running, so the next one recovers the same secret the same way. A real fix would have to change how the chip runs, which is the part a TEE can barely update."
+        },
+        {
+          "t": "nothing leaks, since re-sealing rotated the secret away",
+          "why": "Re-seal resets the screen to ciphertext, and the PIN behind it stays 4827. The leak comes from running the code, so a fresh seal over the same running code leaks the moment it's probed again."
+        },
+        {
+          "t": "a different PIN, since each probe reads a different signal",
+          "why": "Each probe reads its own signal, timing or cache or power or heat, and they all point at the same secret. The demo's trace changes with the probe; the PIN at the bottom never does."
+        },
+        {
+          "t": "the PIN again, but scrambled, since the seal shuffled memory",
+          "why": "The seal changes how memory reads, and the probes never read memory. They read timing, cache, power and heat while the enclave runs, so they recover 4827 in the clear, same as before."
+        }
+      ]
+    },
+    {
+      "q": "The essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
       "options": [
         {
           "t": "the maker, the firmware maintainers, and a bet the exploit costs more than the prize",
@@ -257,6 +282,28 @@
         {
           "t": "the vendor's patch pipeline, since a firmware update can retire any known exploit",
           "why": "Patching has hard limits here. The essay points at the limited capacity to update a TEE's hardware and firmware, and the root of trust itself is immutable, so some breaks never heal."
+        }
+      ]
+    },
+    {
+      "q": "Last one. A team says: breaking an enclave takes a research team and exotic tricks, so our network can run on TEEs alone, whatever it ends up protecting. Where's the hole?",
+      "options": [
+        {
+          "t": "the bigger the prize, the more an exploit is worth paying for",
+          "ok": true,
+          "why": "The essay's rule is that exploiting a TEE must be worth less than it costs, at every layer. A network-wide secret like Secret Network's consensus seed grows in value as the network does, so a hard attack eventually pays, and a researcher-grade exploit only sets its price."
+        },
+        {
+          "t": "none, an attack that hard to pull off is safe at any stake",
+          "why": "Hard sets a cost, and the essay's test weighs that cost against the value of what's inside. Secret Network's seed decrypted the whole network, and researchers still built the attack from a previously disclosed exploit."
+        },
+        {
+          "t": "the math, since TEEs run weaker encryption than MPC does",
+          "why": "Nothing on this page breaks the encryption. Aepicleak pulled the seed out of memory and the demo's probes read side effects while the cipher held, so the weak spot is the hardware and the people behind it."
+        },
+        {
+          "t": "they're trusting Intel, and Intel chips have had bugs",
+          "why": "Partly: the manufacturer sits in the trust stack, and the 21:24 message says SGX isn't alone, since AMD's SEV and Apple's enclaves were broken too. Swapping vendors keeps the core problem, a single layer whose value to attack keeps rising."
         }
       ]
     }

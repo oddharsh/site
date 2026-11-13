@@ -61,7 +61,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-motion">
         <div class="bar">watch the diaphragm move &middot; drag the frequency</div>
-        <div class="pad"><p class="lead">Top: a dynamic cone driven at one point (the voice coil, the dark bar at the center). Bottom: a planar membrane driven evenly across its area (the row of bars). Drag the frequency: the cone's rim lags its center and the surface breaks up, while the planar sheet stays flat.</p><div class="drv-row"><label>frequency <input type="range" id="drvFreq" min="1" max="9" value="2" step="0.1"> <span id="drvFreqL" class="mono">low (lag 2.0 rad at the rim)</span></label></div><canvas id="drvCanvas" width="560" height="240"></canvas></div>
+        <div class="pad"><p class="lead">Top: a dynamic cone driven at one point (the voice coil, the dark bar at the center). Bottom: a planar membrane driven evenly across its area (the row of bars). Drag the frequency: the cone's rim lags its center and the surface breaks up, while the planar sheet stays flat.</p><div class="drv-row"><label>frequency <input type="range" id="drvFreq" min="0" max="9" value="0.3" step="0.1"> <span id="drvFreqL" class="mono">low (lag 0.3 rad at the rim)</span></label></div><canvas id="drvCanvas" width="560" height="240"></canvas></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:43</time></div>
@@ -132,7 +132,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   }
   function draw() {
     var f = +fr.value;
-    if (frL) frL.textContent = (f < 2.5 ? 'low' : f < 5 ? 'mid' : 'high') + ' (lag ' + (f).toFixed(1) + ' rad at the rim)';
+    if (frL) frL.textContent = (f < 1 ? 'low' : f < 4 ? 'mid' : 'high') + ' (lag ' + (f).toFixed(1) + ' rad at the rim)';
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#66707d'; ctx.font = '10px monospace';
     ctx.fillText('dynamic cone (driven at the coil)', 18, 14);
@@ -149,30 +149,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you go, a quick check that the mechanism stuck. 4 questions, no stakes. Pick the reply you would actually send.",
+  "intro": "Before you go, a quick check that the mechanism stuck. 6 questions, no stakes. Pick the reply you would actually send.",
   "questions": [
-    {
-      "q": "Start at the top. A dynamic driver and a planar driver both turn current into force on a diaphragm. What is the actual difference between them?",
-      "options": [
-        {
-          "t": "where the force lands. a dynamic pushes at the coil, a planar pushes across the whole film",
-          "ok": true,
-          "why": "Right. The dynamic glues a voice coil to the cone and pushes there; the planar etches the conductor across the film so the force lands evenly over the whole surface. Everything else on this page follows from that."
-        },
-        {
-          "t": "the magnets. planars use big magnet arrays and dynamics use an electromagnet coil instead",
-          "why": "Both use both. The dynamic coil sits in a magnet gap, and the planar film hangs between magnet arrays. Scroll back to the first reply: the split is where the force lands, and the rest is downstream of that."
-        },
-        {
-          "t": "the shapes. a cone focuses the sound outward and a flat film spreads it out evenly",
-          "why": "The shape is a side effect. The cone needs its shape to stay stiff under a point push, and the film can be flat because the push is spread out. Point drive versus distributed drive is the load-bearing difference."
-        },
-        {
-          "t": "the stiffness. the planar film is more rigid than a paper cone, so it tracks the signal more accurately",
-          "why": "Backwards. The planar film is famously thin and floppy, and it gets away with that because it is driven everywhere at once, so it never needs to be stiff enough to resist a point load."
-        }
-      ]
-    },
     {
       "q": "You dragged the frequency slider in the demo. What happens to the dynamic cone as the frequency climbs?",
       "options": [
@@ -191,7 +169,29 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "it was breaking up at low frequency too, you just couldn't see it yet",
-          "why": "At low frequency the wavelength inside the cone is long compared to the cone itself, so the whole thing moves as one piston either way. Breakup is specifically a high-frequency problem."
+          "why": "The lag grows with frequency: drag the slider left and the rim creeps back toward the center, drag it right and it falls further behind. The chat says it plainly: at low frequencies the cone moves as one piston either way, and the split shows up high."
+        }
+      ]
+    },
+    {
+      "q": "A prototype glues a voice coil to the center of a flat film instead of a cone. How does it behave up in the treble?",
+      "options": [
+        {
+          "t": "like a dynamic: the push starts at one spot, so the film breaks up",
+          "ok": true,
+          "why": "Where the force lands is the whole split, and here it lands at one point, so the motion still has to travel outward and the rim falls behind. A thin film makes it worse: the planar gets away with floppy film only because it never takes a point load."
+        },
+        {
+          "t": "like a planar, because a flat film is what keeps the surface in step",
+          "why": "Flat is a side effect of the planar's drive. The cone keeps its shape to stay stiff under a point push; take the shape away, keep the point push, and the bending wave has even less to stop it."
+        },
+        {
+          "t": "like a planar, as long as the film hangs between two magnet arrays",
+          "why": "Magnets sit in both designs: the dynamic's coil parks in a magnet gap too. What makes a planar is a conductor etched across the whole film, so the force lands everywhere at once."
+        },
+        {
+          "t": "better than either, since a thin film is lighter than any cone",
+          "why": "Light helps only when the push is spread out. The chat says the film can be thin because it never has to resist a point load, and this design hands it exactly that load."
         }
       ]
     },
@@ -201,7 +201,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "it radiates sound that wasn't in the signal: treble resonances and distortion",
           "ok": true,
-          "why": "Exactly. Regions moving out of step each radiate on their own, and the sum contains output the recording never asked for. That is why breakup lands as resonance peaks and extra distortion up high."
+          "why": "Regions moving out of step each radiate on their own, and the sum contains output the recording never asked for. That is why breakup lands as resonance peaks and extra distortion up high, and why it stays a treble problem: down low the cone still moves as one piston."
         },
         {
           "t": "nothing much, the little ripples average out by the time the sound reaches your ear",
@@ -213,12 +213,12 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "the volume just drops, since the out-of-step parts cancel each other out",
-          "why": "Some cancellation happens, but the audible signature is added coloration: resonance peaks and distortion in the treble. The extra output is the problem, because it was never in the signal."
+          "why": "Watch the top panel: the out-of-step regions keep moving air on their own. The chat names the audible result as added coloration, resonance peaks and distortion in the treble, and that extra output is the problem because it was never in the signal."
         }
       ]
     },
     {
-      "q": "Last one. If spreading the drive keeps the treble cleaner, why is nearly every headphone in the world still dynamic?",
+      "q": "If spreading the drive keeps the treble cleaner, why are most headphones in the world still dynamic?",
       "options": [
         {
           "t": "planars pay in weight, size, and amp power, and dynamics do easy bass cheaply off a phone",
@@ -231,11 +231,55 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "planars can't really do deep bass, so dynamics stick around to cover the low end",
-          "why": "The page says deep bass is simple for dynamics, which is a weaker claim than bass being impossible for planars. The planar penalty is weight, size, and efficiency; the low octaves are still reachable."
+          "why": "The page says deep bass is simple for dynamics, which is a weaker claim than bass being impossible for planars. The planar penalty the chat names is weight, size, and efficiency."
         },
         {
           "t": "planars do always sound better, dynamics just win because they're the cheap option",
           "why": "The closing exchange cuts against that: the mechanism only sets tendencies. A well-engineered dynamic can beat a sloppy planar, because tuning and build decide the final result."
+        }
+      ]
+    },
+    {
+      "q": "Someone says breakup just means the rim lags, so a rim a full cycle behind would act like a piston again. Set the slider to 6.3. What does the top panel show?",
+      "options": [
+        {
+          "t": "rim and center in step, with the points halfway out moving against them",
+          "ok": true,
+          "why": "At 6.3 rad the rim is one full cycle behind, so it lines up with the center again. Every point in between has its own lag, though, and halfway out it is about half a cycle, moving opposite. Breakup is the whole surface falling out of step; the rim is only where the lag peaks."
+        },
+        {
+          "t": "a flat piston again, now that the rim is back in step with the center",
+          "why": "Look between the center and the rim: those points lag by about half a cycle, so they move opposite. A piston needs every point in step, and only the planar panel manages that."
+        },
+        {
+          "t": "the rim moving opposite the center, the worst lag the slider has",
+          "why": "Rim against center happens near 3.1, half a cycle. By 6.3 the rim has lapped a full cycle and moves with the center again; the opposition has moved inward, to the points halfway out."
+        },
+        {
+          "t": "both panels rippling, since 6.3 is past where the film can keep up",
+          "why": "The planar panel gives every point the same phase at any slider setting. The slider only feeds the cone's lag, because only the cone has a push that has to travel."
+        }
+      ]
+    },
+    {
+      "q": "Last one. Why can a planar film be too floppy to work as a cone, and what does the planar pay for that?",
+      "options": [
+        {
+          "t": "it's pushed everywhere at once, which takes heavy magnets on both sides",
+          "ok": true,
+          "why": "Distributed drive means no bending wave has to cross the film, so it never needs stiffness. The bill is the magnet arrays that drive it everywhere: weight, size, and amp hunger. Push on it: that same bill is why a phone runs a dynamic so easily."
+        },
+        {
+          "t": "it's pushed everywhere at once, and it pays for that in treble distortion",
+          "why": "First half right, second half backwards. Pushing everywhere at once is what keeps treble distortion low; the price shows up as heavy magnet arrays and hunger for amp power."
+        },
+        {
+          "t": "its magnets hold it taut like a drum skin, so it pays nothing at all",
+          "why": "The chat gives the film no help from tension; it can be thin because the push is spread over its area. And the magnets cost plenty: they're the heavy part."
+        },
+        {
+          "t": "its flex adds airy treble, and it pays for that with muddier bass",
+          "why": "Flex is the cone's failure mode: out-of-step regions radiate sound that was never in the signal. The planar film stays flat in the demo at every frequency, so it has no flex to color anything."
         }
       ]
     }

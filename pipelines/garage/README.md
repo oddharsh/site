@@ -108,6 +108,17 @@ rather than the page: `bun run pages:check` fails when a published page differs
 from its spec by one byte, so a hand edit cannot be lost to the next
 regeneration.
 
+`pageJs` runs at the end of the document, after the first paint on a long page.
+A script that BUILDS visible structure (a table, a filter bar, a picker) belongs
+in `bodyHtml` as a `<script>` straight after the markup it fills, so the demo
+exists before anything below it is laid out. `/garage/hidden-flags` built both
+of its demos from `pageJs` and pushed the essay down after paint: layout shift
+0.091 in each of 3 loads under 4x CPU throttle, 0 once the two scripts moved
+(2026-11-10). Keep `pageJs` for behavior that changes nothing a reader can see
+until they act. Two such scripts that share data pass it on `window`
+(`/garage/useragent` uses `window.UA`): the build scopes each inline script, so
+a top-level `var` in one is not defined in the next.
+
 The shared contract also checks the LRS and voice rules: active sentences,
 concrete claims, no em dashes, no canned AI language, and no `not X, Y` move.
 It validates the page before writing HTML, so the generated document and the
