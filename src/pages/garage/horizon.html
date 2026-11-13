@@ -1240,9 +1240,10 @@ window.__horizonCaps = (function () {
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
     </p>
     <p class="note">
-      <strong>Safari refreshed 2026-11-11</strong> from the Safari&nbsp;27.3 release notes and
-      Technology&nbsp;Preview&nbsp;250 to&nbsp;256, which moved 18 badges; Chrome and Firefox
-      rows still read as of the sweep below.
+      <strong>Safari status refreshed 2026-11-13:</strong> Safari&nbsp;27.3 is in beta.
+      Its <a href="https://developer.apple.com/documentation/safari-release-notes/safari-27_3-release-notes" rel="external">release notes</a> and
+      Technology&nbsp;Preview&nbsp;250 to&nbsp;256 inform the Safari badges. Chrome and Firefox
+      rows mostly read as of the sweep below.
       <strong>Last swept 2026-10-30</strong>, against Chrome&nbsp;156 (157 stable on 2026-11-03, 158 in beta), Safari&nbsp;27.2
       plus <a class="term" data-t="safari-technology-preview" href="https://developer.apple.com/safari/technology-preview/" title="Apple's early-release Safari for developers, updated every few weeks with web features that haven't reached regular Safari yet." rel="external">Technology&nbsp;Preview</a>, and Firefox&nbsp;159 (160 in beta), with every
       card&apos;s badge checked against MDN browser-compat-data&nbsp;8.1.7. The sweeps before
@@ -1593,14 +1594,13 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
-        <span class="stat cross">Chrome 151 &middot; FF 153 &middot; Safari 27.3</span>
+        <span class="stat cross">Chrome 151 &middot; FF 153 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         A third popover <em>type</em>, sitting between <code>auto</code> and
         <code>manual</code>, purpose-built for tooltips. WebKit had said nothing
         about it for two years; Technology&nbsp;Preview&nbsp;249 added it, Safari&nbsp;27
-        shipped without it, and <strong>Safari&nbsp;27.3</strong> finally carried it to
-        stable, so all three engines now ship the current behaviour. The other two versions
+        shipped without it, and <strong>Safari&nbsp;27.3 beta</strong> adds the current behaviour. The other two versions
         moved as well: Chrome&nbsp;133 and Firefox&nbsp;149 implemented an older draft,
         and the current behaviour arrived in Chrome&nbsp;151 and Firefox&nbsp;153. A <code>hint</code>
         popover is light-dismissed (click outside, <kbd>Esc</kbd>) <strong>and</strong>
@@ -1843,7 +1843,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" id="corner-shape" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
-        <span class="stat cross">Chrome 139 &middot; Safari 27.3 &middot; FF Nightly</span>
+        <span class="stat trial">Chrome 139 &middot; Safari 27.3 beta &middot; FF Nightly</span>
       </h2>
       <p class="note">
         A second axis for <code>border-radius</code>. The radius sets <em>where</em>
@@ -1869,17 +1869,15 @@ pointerout   -&gt; hidePopover()
         <div class="body">A window frame with <code>scoop</code> top corners: one declaration, no SVG mask, no <code>clip-path</code> polygon.</div>
       </div>
       <p class="replaces">
-        On the site: this natively replaces the <code>clip-path:
-        polygon()</code> hack on the title-bar icon, and any time I&apos;d reach
-        for an SVG mask to cut a corner. A real squircle on the <code>.window</code>
+        On the site: a shaped window or photo frame could use this instead of an
+        SVG mask to cut a corner. The title-bar icons use polygons for their
+        triangular shapes, which corner shaping alone does not replace. A squircle on the <code>.window</code>
         and photo-frame corners reads more 2006-Aqua than the flat
         <code>border-radius</code> arc does, and it stays a live border (shadow,
         outline, focus ring all follow the new shape) instead of a clip that eats
-        the box-shadow. <strong>Two engines since Safari&nbsp;27.3</strong>, which shipped
-        what Technology&nbsp;Preview&nbsp;251 added; Firefox&nbsp;158 keeps it in Nightly behind
-        <code>layout.css.corner-shape.enabled</code>. That clears this page&apos;s two-engine
-        bar for the homepage, as decoration over the plain radius. Chrome&nbsp;157 (stable 2026-11-03)
-        adds the <code>corner</code> shorthands, which set a radius and a shape in one
+        the box-shadow. Safari&nbsp;27.3 is in beta; Firefox&nbsp;158 keeps it in Nightly behind
+        <code>layout.css.corner-shape.enabled</code>. Chrome plans the <code>corner</code>
+        shorthands for version&nbsp;160; they set a radius and a shape in one
         declaration (<code>corner-top-left</code>, edge forms like <code>corner-top</code>,
         logical ones like <code>corner-block-start</code>). It
         needs a plain <code>border-radius</code> fallback (which every box above
@@ -2053,30 +2051,23 @@ pointerout   -&gt; hidePopover()
       })();
       </script>
 
-<pre>// today on the site: cold-KV tracklist fallback builds ~50 rows
-// in one go, blocking input on a slow phone.
-for (const t of tracks) renderTrackRow(t);   // one long task
-
-// with scheduler.yield(), guarded so it ships everywhere:
+<pre>// For a measured long loop, yield between batches:
 const yieldNow = (window.scheduler &amp;&amp; scheduler.yield)
   ? () =&gt; scheduler.yield()
   : () =&gt; new Promise(r =&gt; setTimeout(r, 0));  // fallback
 
 let i = 0;
-for (const t of tracks) {
-  renderTrackRow(t);
-  if (++i % 8 === 0) await yieldNow();   // breathe every 8 rows,
-}                                        // resume at front of queue</pre>
+for (const item of items) {
+  processItem(item);
+  if (++i % 8 === 0) await yieldNow();   // breathe every 8 items
+}</pre>
 
       <p class="replaces">
-        On the site: the offender is the client-side Spotify tracklist fallback
-        (the cold-KV path that renders full-fidelity rows: artist links,
-        cover art, tooltip wiring). Today that&apos;s one synchronous burst.
-        <code>scheduler.yield()</code> would let it chunk while keeping taps and
-        scroll alive, without the back-of-queue penalty of a
-        <code>setTimeout(0)</code> shim. It graduates to the homepage trivially
-        because it&apos;s a guarded enhancement (<code>typeof</code> check,
-        same-shape fallback), so Safari and Firefox just take the plain loop.
+        On the site: the Worker renders the Spotify rows; the browser inserts the
+        returned HTML as an island. The old claim that a client loop builds those
+        rows was wrong. Measure a real long task before splitting work with
+        <code>scheduler.yield()</code>: yielding changes when results appear, and
+        the fallback above resumes through the ordinary timer queue.
       </p>
       <p class="unsupported">
         Your browser doesn&apos;t expose <code>scheduler.yield()</code>,
@@ -2183,7 +2174,7 @@ ctx.drawElementImage(el, 0, 0);            // el is a drawable child of canvas
     </section>
 
     <section class="demo" id="canvas-text-metrics">
-      <h2><span>Enhanced Canvas TextMetrics <span class="mono">/ hit testing and selection</span></span><span class="stat trial">Chrome 159 planned</span></h2>
+      <h2><span>Enhanced Canvas TextMetrics <span class="mono">/ hit testing and selection</span></span><span class="stat trial">Chrome 160 planned</span></h2>
       <p class="note">Canvas can measure text today. The <a href="https://chromestatus.com/feature/5075532483657728" rel="external">extended metrics</a> add character hit testing, selection rectangles and glyph clusters. Click the line to ask the browser which text offset sits there.</p>
       <canvas id="metrics-canvas" width="500" height="60" style="max-width:100%;border:1px solid var(--frame)" aria-label="Canvas text reading My Documents. Click to inspect the text offset."></canvas>
       <p class="note" id="metrics-output" aria-live="polite">Checking for enhanced text metrics.</p>
@@ -2206,14 +2197,14 @@ ctx.drawElementImage(el, 0, 0);            // el is a drawable child of canvas
     </section>
 
     <section class="demo" id="offline-audio-chunks">
-      <h2><span>Offline audio <span class="mono">/ incremental rendering</span></span><span class="stat trial">Chrome 158 beta</span></h2>
+      <h2><span>Offline audio <span class="mono">/ incremental rendering</span></span><span class="stat chrome">Chrome 158</span></h2>
       <p class="note"><a href="https://chromestatus.com/feature/5109900936085504" rel="external">Incremental rendering</a> delivers an offline audio graph in chunks instead of allocating the whole output buffer up front. That matters when a long render would otherwise hold all its samples in memory.</p>
       <p class="replaces">On the site: the <a href="/lwe/dac">DAC explainer</a> makes short audio examples, so it has no demonstrated memory problem to solve. Longer exports would be a better test. This card is a roadmap entry; there is no live probe here yet.</p>
     </section>
 
     <section class="demo" id="text-overflow-string">
-      <h2><span>text-overflow <span class="mono">/ custom marker</span></span><span class="stat cross">Firefox 9 &middot; Chrome 157 &middot; Safari 27.3</span></h2>
-      <p class="note">A <a href="https://chromestatus.com/feature/6294595288825856" rel="external">string value</a> lets a clipped line end with a chosen marker instead of the standard ellipsis. The full text remains in the document. This card first read it as Chrome-only, but MDN&apos;s compat data has Firefox shipping it since version&nbsp;9, so Chrome&nbsp;157 made it two stable engines on 2026-11-03 and Safari&nbsp;27.3 made it three.</p>
+      <h2><span>text-overflow <span class="mono">/ custom marker</span></span><span class="stat cross">Firefox 9 &middot; Chrome 157 &middot; Safari 27.3 beta</span></h2>
+      <p class="note">A <a href="https://chromestatus.com/feature/6294595288825856" rel="external">string value</a> lets a clipped line end with a chosen marker instead of the standard ellipsis. The full text remains in the document. This card first read it as Chrome-only, but MDN&apos;s compat data has Firefox shipping it since version&nbsp;9, so Chrome&nbsp;157 made it two stable engines on 2026-11-03 and Safari&nbsp;27.3 beta adds it.</p>
       <p style="width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-overflow:' [more]'">My Documents and other very long folder names</p>
       <p class="replaces">On the site: taskbar labels already use an ellipsis. A custom marker is a matter of taste, and unsupported browsers keep the ellipsis above.</p>
     </section>
@@ -2693,7 +2684,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         register it in <code>CSS.highlights</code>, and style via
         <code>::highlight(name)</code>. Chrome&nbsp;158 adds <code>::highlight(*)</code>,
         which matches every named highlight at zero specificity, so a base style can sit
-        under the per-name ones. Safari&nbsp;27.3 ships the same catch-all, plus
+        under the per-name ones. Safari&nbsp;27.3 beta includes the same catch-all, plus
         <code>CSS.highlights.highlightsFromPoint()</code>, which says which highlights sit
         under a pointer. That&apos;s the piece a hover tooltip on a marked range needs. The two phrases below are lit without touching
         the markup:
@@ -3005,7 +2996,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="close-watcher">
       <h2>
         <span>CloseWatcher API</span>
-        <span class="stat cross">Chrome 126 &middot; FF 149 &middot; Safari 27.3</span>
+        <span class="stat cross">Chrome 126 &middot; FF 149 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         One abstraction for &quot;close requests&quot;: <kbd>Esc</kbd> on desktop
@@ -3017,7 +3008,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         This card read &quot;Chrome&nbsp;120 &middot; Safari&nbsp;26&quot; until the
         08-10 sweep and both numbers were wrong. Chrome shipped it in&nbsp;126,
         Safari hadn&apos;t shipped it in any release (Technology
-        Preview&nbsp;249 answered first, and Safari&nbsp;27.3 carried it to stable along with
+        Preview&nbsp;249 answered first, and Safari&nbsp;27.3 beta adds it along with
         the <code>closedby</code> attribute on <code>&lt;dialog&gt;</code>), and the engine the old
         line omitted entirely, <strong>Firefox&nbsp;149</strong>, is the one that
         actually made this two-engine. A status line assembled once and never
@@ -3056,7 +3047,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="css-if" data-cap="css-if">
       <h2>
         <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
-        <span class="stat cross">sibling-index() cross &middot; if() Chrome + Safari 27.3</span>
+        <span class="stat cross">sibling-index() cross &middot; if() Chrome + Safari 27.3 beta</span>
       </h2>
       <p class="note">
         Two bleeding-edge CSS primitives: <code>if()</code> for inline conditionals
@@ -3066,8 +3057,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         The two are drifting apart in status: <code>sibling-index()</code> has quietly finished
         (Chrome&nbsp;138, Safari&nbsp;26.2, Firefox&nbsp;154 unflagged, after a spell behind
         <code>layout.css.tree-counting-functions.enabled</code> in&nbsp;153), while
-        <code>if()</code> reached a second engine in Safari&nbsp;27.3 and still waits on Firefox.
-        Safari&nbsp;27.3 also lets container queries test <code>sibling-index()</code>. Two features this
+        <code>if()</code> is in Safari&nbsp;27.3 beta and still waits on Firefox.
+        Safari&nbsp;27.3 beta also lets container queries test <code>sibling-index()</code>. Two features this
         far apart under one heading is how a status line goes stale with nobody editing it,
         so read the chip as the sibling functions and the <code>if()</code> half as the
         frontier. Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
@@ -3149,7 +3140,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo shipped" id="temporal" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
-        <span class="stat cross">ES2027 &middot; Chrome 144 &middot; FF 139 &middot; Safari 27.3</span>
+        <span class="stat cross">ES2027 &middot; Chrome 144 &middot; FF 139 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
@@ -3162,7 +3153,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         shipped it in spring&nbsp;2026 and Safari&nbsp;27 beta does <em>not</em> include it.
         That changed in the direction you want on 2026-07-30: <strong>Technology
         Preview&nbsp;249</strong> added <code>Temporal</code>, unflagged, and
-        <strong>Safari&nbsp;27.3</strong> shipped it, so every engine now has it in stable. Live output from
+        <strong>Safari&nbsp;27.3 beta</strong> adds it; stable Safari still waits. Live output from
         <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
       </p>
       <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
@@ -3401,7 +3392,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>CSS.supports("width: random(1px, 2px)")</code> probe reads false in
         Chromium&nbsp;153 and true in Chrome Beta&nbsp;156. Chrome&nbsp;156 reached stable on
         2026-10-20 as forecast, so it is two engines now, and MDN&apos;s compat data
-        records 156. Safari&nbsp;27.3 filled in the rest of the draft: the
+        records 156. Safari&nbsp;27.3 beta filled in the rest of the draft: the
         <code>random-item()</code> picker, <code>random()</code> inside custom properties,
         and the <code>property-scoped</code> and <code>property-index-scoped</code> caching keywords.
       </p>
@@ -3526,7 +3517,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <code>:heading</code> matches any of <code>h1</code> through <code>h6</code>, and
         <code>:heading(2, 3)</code> matches the levels you name. Selectors&nbsp;5. Safari&nbsp;27
         ships <code>:heading</code> (stable since 2026-09-14) but not yet <code>:heading()</code>; it sits behind <code>layout.css.heading-selector.enabled</code>
-        in Firefox, absent in Chrome. Safari&nbsp;27.3 adds the HTML half, the
+        in Firefox, absent in Chrome. Safari&nbsp;27.3 beta adds the HTML half, the
         <code>headingoffset</code> and <code>headingreset</code> attributes, which shift the
         level a heading reports inside a container, so an embedded <code>h1</code> can count
         as a level&nbsp;3.
@@ -3707,7 +3698,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="import-text">
       <h2>
         <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
-        <span class="stat cross">TC39 stage 3 &middot; Chrome 155 &middot; FF 153 &middot; Safari 27.3</span>
+        <span class="stat cross">TC39 stage 3 &middot; Chrome 155 &middot; FF 153 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         Import attributes gave JSON modules a safe syntax
@@ -3717,7 +3708,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         answers with something else fails the import instead of executing it. That
         assertion is the entire security argument for import attributes, and it is why
         this is a language feature rather than a bundler trick. Firefox&nbsp;153 shipped
-        it unflagged, Chrome&nbsp;155 followed, and Safari&nbsp;27.3 made it three. (This card
+        it unflagged, Chrome&nbsp;155 followed, and Safari&nbsp;27.3 beta adds it. (This card
         said Firefox kept it behind a pref until the 2026-10-08 sweep read MDN&apos;s
         compat data and the 153 release notes.)
       </p>
@@ -3797,7 +3788,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </h2>
       <p class="note">
         A <code>path()</code> you can write with percentages and any length unit, so the clip
-        scales with the box instead of being frozen at one pixel size. Safari&nbsp;27.3 also takes
+        scales with the box instead of being frozen at one pixel size. Safari&nbsp;27.3 beta also takes
         <code>shape()</code> and <code>path()</code> in <code>shape-outside</code>, so text can wrap
         the same outline the clip draws. The pennant below is a
         single <code>clip-path: shape(&hellip;)</code>: resize the window and it stays sharp.
@@ -3835,13 +3826,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="css-function" data-cap="css-function">
       <h2>
         <span>@function <span class="mono">custom CSS functions</span></span>
-        <span class="stat cross">Chrome 139 &middot; Safari 27.3 &middot; FF no</span>
+        <span class="stat cross">Chrome 139 &middot; Safari 27.3 beta &middot; FF no</span>
       </h2>
       <p class="note">
         Reusable, parameterised CSS logic, like Sass mixins but native and live:
         <code>@function --bevel(--l) { result: oklch(from var(--c) calc(l - var(--l)) c h) }</code>.
         Chrome&nbsp;139 shipped it, Technology&nbsp;Preview&nbsp;249 put it in WebKit, and
-        <strong>Safari&nbsp;27.3</strong> shipped it to stable, so it is two engines now.
+        <strong>Safari&nbsp;27.3 beta</strong> adds it.
         Gecko has neither.
       </p>
       <p class="replaces">
@@ -3947,7 +3938,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         nobody has asked for yet. The cost is that such a page can&apos;t read
         <code>document.prerendering</code>, never gets a <code>prerenderingchange</code> event, and
         can&apos;t be promoted to a full prerender later.
-        <strong>Chrome&nbsp;158</strong> (stable 2026-11-17) also prerenders cross-origin
+        <strong>Chrome&nbsp;159</strong> plans to prerender cross-origin
         iframes inside a prerendered page, when the top-level response opts in with
         <code>Supports-Loading-Mode: prerender-cross-origin-frames</code>.
       </p>
@@ -4404,7 +4395,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         does no filtering; the sanitizing one is the new part. Firefox&nbsp;159 now
         drops unwanted nodes during the parse, where it used to build the whole tree and
         prune it after; the output matches, except adjacent text lands in one text node.
-        Firefox&nbsp;158 and Chrome&nbsp;157 add a <code>javascriptURLs</code> config
+        Firefox&nbsp;158 and planned Chrome&nbsp;159 add a <code>javascriptURLs</code> config
         option, so a page can let <code>javascript:</code> links through on purpose. Type a hostile
         string and watch both paths:
       </p>
@@ -4435,7 +4426,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="media-pseudo">
       <h2>
         <span>Media element pseudo-classes <span class="mono">:playing &middot; :paused &middot; :buffering</span></span>
-        <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 158 beta</span>
+        <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 158</span>
       </h2>
       <p class="note">
         <code>:playing</code>, <code>:paused</code>, <code>:seeking</code>,
@@ -4449,8 +4440,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the older feature on this page by some margin: Safari has had it since
         March&nbsp;2022. This card said Chrome&nbsp;152; chromestatus now names
         Chrome&nbsp;158, and Chromium&nbsp;152 does not parse <code>:playing</code>
-        (measured 2026-10-08). On 2026-10-30 chromestatus still names 158, now in beta
-        and due on stable 2026-11-17, so this one held.
+        (measured 2026-10-08). Chrome Status now lists it enabled in Chrome&nbsp;158.
       </p>
       <p class="replaces">
         On the site: nothing here plays media, so this is a card about the sweep
@@ -4619,7 +4609,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         browser canary measured the flip three weeks earlier, on 2026-09-17: this card&apos;s own
         <code>CSS.supports("margin-trim", "block")</code> probe reads false in
         Chromium&nbsp;153 and Edge&nbsp;153 and true in Chrome Beta&nbsp;155 and Edge
-        Dev&nbsp;155. Firefox has a positive position and no milestone. Safari&nbsp;27.3
+        Dev&nbsp;155. Firefox has a positive position and no milestone. Safari&nbsp;27.3 beta
         narrowed its own version to match a CSSWG resolution: <code>margin-trim</code> no
         longer applies to grid containers (Technology&nbsp;Preview&nbsp;251 also dropped flex), only
         block and multi-column ones.
@@ -4775,7 +4765,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="supports-at-rule" data-cap="supports-at-rule">
       <h2>
         <span>@supports at-rule() <span class="mono">+ named-feature()</span></span>
-        <span class="stat cross">Chrome 148 &middot; FF 157 &middot; Safari 27.3</span>
+        <span class="stat cross">Chrome 148 &middot; FF 157 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         <code>@supports</code> has always been able to test a property/value
@@ -4800,9 +4790,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
         probe exists. The reasoning: a chip reading &quot;no&quot; is
         more honest than a probe that pretends to know. <code>at-rule()</code>
         would convert some of that class of question into a real answer. Firefox&nbsp;157
-        shipped <code>at-rule()</code> on 2026-09-29 and Safari&nbsp;27.3 shipped both
-        halves, so <code>at-rule()</code> is in all three engines and
-        <code>named-feature()</code> in two (Chrome&nbsp;150, Safari&nbsp;27.3). The
+        shipped <code>at-rule()</code> on 2026-09-29 and Safari&nbsp;27.3 beta adds both
+        halves. The stable releases include <code>at-rule()</code> in Chrome and Firefox,
+        and <code>named-feature()</code> in Chrome. The
         honest-false convention stays until a probe can actually replace each one.
       </p>
       <p class="unsupported">No <code>at-rule()</code> in this browser&apos;s <code>@supports</code>, which the probe above reports directly.</p>
@@ -5286,7 +5276,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="attr-type">
       <h2>
         <span>attr() <span class="mono">with type() outside content</span></span>
-        <span class="stat cross">Chrome 133 &middot; FF 155 &middot; Safari 27.3</span>
+        <span class="stat cross">Chrome 133 &middot; FF 155 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         <code>attr()</code> has existed since CSS&nbsp;2 and has been useless since
@@ -5309,8 +5299,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the server can emit and the browser can lay out with no script at all, which is
         worth more here than it sounds: those bars are the one thing on the page that
         currently needs JS to have a shape. Firefox&nbsp;155 made it two engines and
-        Safari&nbsp;27.3 made it three, so the JS dance is now only a fallback for
-        older browsers.
+        Safari&nbsp;27.3 beta adds it too; stable Safari still needs the JS fallback.
       </p>
       <p class="unsupported">No typed <code>attr()</code> here, so the bars fall back to their 8px default height.</p>
     </section>
@@ -5319,14 +5308,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="text-decoration-inset">
       <h2>
         <span>text-decoration-inset</span>
-        <span class="stat cross">Firefox 146 &middot; Chrome 157 &middot; Safari 27.3</span>
+        <span class="stat cross">Firefox 146 &middot; Chrome 157 &middot; Safari 27.3 beta</span>
       </h2>
       <p class="note">
         Shortens an underline in from both ends, so a rule can stop before the
         descenders and the padding rather than running the full width of the text run.
         Worth a card mostly for the shape of its adoption: <strong>Gecko shipped it
         first</strong>, Chrome&nbsp;157 shipped it on 2026-11-03 (MDN&apos;s compat data
-        records 157), and Safari&nbsp;27.3 finished the set, with percentage insets from
+        records 157), and Safari&nbsp;27.3 beta adds it, with percentage insets from
         Technology&nbsp;Preview&nbsp;252. Several cards here are WebKit-first, since
         Apple ships plenty nobody else has yet. This card used to call itself the only
         <em>Gecko</em>-first one, and a re-read found three more: multi-colour
@@ -5716,7 +5705,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="inherit-fn" data-cap="inherit-fn">
       <h2>
         <span>CSS inherit() <span class="mono">/ inherit(--x)</span></span>
-        <span class="stat trial">Safari 27.3 &middot; Chrome flag &middot; FF no</span>
+        <span class="stat trial">Safari 27.3 beta &middot; Chrome flag &middot; FF no</span>
       </h2>
       <p class="note">
         <code>inherit(--x)</code> reads the parent element&apos;s computed value of a
@@ -5727,9 +5716,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         Chromium filed its intent to prototype on 2025-10-14. It sits behind Chrome&apos;s
         Experimental Web Platform features flag (Chromium&apos;s runtime flag reads
         <code>experimental</code>), for custom properties only, and chromestatus names
-        no milestone. Firefox has an open bug (1703986). Safari went from no public work
-        to stable in one jump: Technology&nbsp;Preview&nbsp;251 added it and
-        <strong>Safari&nbsp;27.3</strong> shipped it, so WebKit is first here.
+        no milestone. Firefox has an open bug (1703986). Technology&nbsp;Preview&nbsp;251 added it and
+        <strong>Safari&nbsp;27.3 beta</strong> includes it.
         The <a href="https://github.com/web-platform-tests/interop/issues/1453" rel="external">Interop&nbsp;2027 proposal</a>
         points at the WPT <code>inherit-function</code> tests. One trap, measured on
         2026-10-08: without the flag, Chrome&nbsp;155 and Canary&nbsp;157 mis-parse
@@ -5748,14 +5736,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
         through plain <code>ul</code> margins (15px a level) that already add up
         without any function.
       </p>
-      <p class="unsupported">No <code>inherit()</code> here (expected outside Safari&nbsp;27.3 and Chrome with the experimental flag), so the three boxes sit flush left.</p>
+      <p class="unsupported">No <code>inherit()</code> here (expected outside Safari&nbsp;27.3 beta and Chrome with the experimental flag), so the three boxes sit flush left.</p>
     </section>
 
     <!-- ───────────────────── ident() ───────────────────── -->
     <section class="demo" id="ident-fn" data-cap="ident-fn">
       <h2>
         <span>CSS ident() <span class="mono">/ ident(&quot;item-&quot; 1)</span></span>
-        <span class="stat trial">Safari 27.3 &middot; Chromium test flag &middot; FF no</span>
+        <span class="stat trial">Safari 27.3 beta &middot; Chromium test flag &middot; FF no</span>
       </h2>
       <p class="note">
         Builds an identifier out of strings, integers and other idents, so
@@ -5768,7 +5756,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         Web Platform features switch. No Chrome channel exposes it to a visitor.
         chromestatus names no milestone. Firefox has an open bug (1942078). Safari
         overtook both: Technology&nbsp;Preview&nbsp;251 added it and
-        <strong>Safari&nbsp;27.3</strong> shipped it. The
+        <strong>Safari&nbsp;27.3 beta</strong> includes it. The
         <a href="https://github.com/web-platform-tests/interop/issues/1452" rel="external">Interop&nbsp;2027 proposal</a>
         cites the WPT <code>ident-function</code> tests.
       </p>
@@ -5781,7 +5769,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         the site turned view transitions off on 2026-07-30, because prerendered
         navigations made the animation pure latency.
       </p>
-      <p class="unsupported">No <code>ident()</code> in this browser, which is every shipping browser except Safari&nbsp;27.3 and later.</p>
+      <p class="unsupported">No <code>ident()</code> in this browser, including stable browsers as of 2026-11-13.</p>
     </section>
 
     <!-- ───────────────────── baseline-source ───────────────────── -->
@@ -6088,7 +6076,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="object-view-box" data-cap="object-view-box">
       <h2>
         <span>object-view-box <span class="mono">/ crop a replaced element</span></span>
-        <span class="stat cross">Chrome 104 &middot; Safari 27.3 &middot; FF no</span>
+        <span class="stat cross">Chrome 104 &middot; Safari 27.3 beta &middot; FF no</span>
       </h2>
       <p class="note">
         Crops and zooms an <code>img</code>, <code>video</code> or <code>canvas</code> to an
@@ -6097,8 +6085,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         takes a wrapper with <code>overflow: hidden</code> around a scaled, offset
         image, or a second cropped file. Chrome shipped it in 104 in 2022. Safari
         Technology Preview&nbsp;251 added it on 2026-08-26, Safari&nbsp;27 shipped
-        without it, and <strong>Safari&nbsp;27.3</strong> carried it to stable, so it is two
-        engines after four years of one. Technology&nbsp;Preview&nbsp;256 extends it to SVG
+        without it, and <strong>Safari&nbsp;27.3 beta</strong> adds it after four years of Chrome support. Technology&nbsp;Preview&nbsp;256 extends it to SVG
         documents in <code>&lt;embed&gt;</code> and <code>&lt;object&gt;</code>. Firefox has nothing in BCD. The
         <a href="https://github.com/web-platform-tests/interop/issues/1385" rel="external">Interop&nbsp;2027 proposal</a>
         reuses last year&apos;s, which wasn&apos;t picked. The same SVG twice; the second sets
@@ -6115,7 +6102,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         detail of a photo from the file the grid already loaded. Two engines now, but
         Firefox would show the whole frame, so the baked crops stay.
       </p>
-      <p class="unsupported">No <code>object-view-box</code> here (expected outside Chrome and Safari&nbsp;27.3), so the second image shows the whole square.</p>
+      <p class="unsupported">No <code>object-view-box</code> here (expected outside Chrome and Safari&nbsp;27.3 beta), so the second image shows the whole square.</p>
     </section>
 
     <!-- ───────────────────── line-clamp ───────────────────── -->
@@ -6134,7 +6121,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         in no stable browser: Chrome and Firefox keep it behind flags, and Safari
         Technology Preview carries it, with clamp fixes in releases 251 and 252, and
         release&nbsp;256 (2026-11-05) adds <code>continue: collapse</code>, which the
-        <code>line-clamp</code> shorthand now sets. Safari&nbsp;27.3 also dropped the
+        <code>line-clamp</code> shorthand now sets. Safari&nbsp;27.3 beta also dropped the
         non-standard percentage value from <code>-webkit-line-clamp</code>.
         Safari&nbsp;18.2 exposed it by accident and 18.4 pulled it. The
         <a href="https://github.com/web-platform-tests/interop/issues/1379" rel="external">Interop&nbsp;2027 proposal</a>
@@ -6159,7 +6146,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" id="justify-self-block">
       <h2>
         <span>justify-self in block layout <span class="mono">/ justify-items too</span></span>
-        <span class="stat cross">Chrome 130 &middot; Safari 27.3 &middot; FF no</span>
+        <span class="stat cross">Chrome 130 &middot; Safari 27.3 beta &middot; FF no</span>
       </h2>
       <p class="note">
         <code>justify-self</code> and <code>justify-items</code> have long worked on grid
@@ -6167,9 +6154,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         ordinary block-level boxes, so <code>justify-self: center</code> centers a
         fixed-width block in its container, the job <code>margin-inline: auto</code>
         does today. Chrome&nbsp;130 shipped it in 2024. Safari Technology
-        Preview&nbsp;249 added it on 2026-07-29, and Safari&nbsp;27.3 lists
-        <code>justify-self</code> on block-level boxes among its new features, so it is
-        two engines now. Firefox has an open bug (1930584). The
+        Preview&nbsp;249 added it on 2026-07-29, and Safari&nbsp;27.3 beta lists
+        <code>justify-self</code> on block-level boxes among its beta features. Firefox has an open bug (1930584). The
         <a href="https://github.com/web-platform-tests/interop/issues/1360" rel="external">Interop&nbsp;2027 proposal</a>
         carries over last year&apos;s, which drew 25 votes. The page has no honest
         probe: <code>justify-self: center</code> parses in every engine because grid
@@ -7669,7 +7655,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
         Direct access to the browser&apos;s media codecs, one frame or chunk at a time.
         The video half ships in Chrome&nbsp;94, Firefox&nbsp;130 and Safari&nbsp;16.4; Safari
         added the audio half in&nbsp;26. <code>ImageDecoder</code> trails: Chrome&nbsp;94,
-        Firefox&nbsp;133, and Safari&nbsp;27.3, so it is in all three now. The
+        Firefox&nbsp;133, and Safari&nbsp;27.3 beta. The
         <a href="https://github.com/web-platform-tests/interop/issues/1378" rel="external">Interop&nbsp;2027 proposal</a>
         reports crashes and memory leaks on mobile WebKit. Safari&nbsp;26.4 and 27
         each fixed a <code>VideoDecoder</code> bug that emitted frames out of order.
