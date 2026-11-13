@@ -92,8 +92,8 @@ export async function scanDocument(source: string, label: string): Promise<ScanR
       element(el) {
         const tag = el.tagName.toLowerCase();
         // Attributes are PARSED rather than regexed off the raw tag, because
-        // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"`
-        // as demo TEXT. To a parser that is an attribute VALUE and can never be
+        // an XSS demo carries `value="&lt;img src=x onerror=alert(1)&gt;"` as
+        // demo TEXT (garage/horizon.html did until 2026-11-12). To a parser that is an attribute VALUE and can never be
         // read as a handler; to a naive /\son\w+=/ it is one, and it sends you
         // refactoring a string literal.
         for (const [name] of el.attributes) {

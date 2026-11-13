@@ -4410,7 +4410,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <p>
         <input class="xp-input san-in" id="san-in" type="text" aria-label="markup to parse"
-               value="&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;bold&lt;/b&gt;&lt;script&gt;bad()&lt;/script&gt;">
+               value="&lt;a href=&quot;javascript:alert(1)&quot;&gt;click me&lt;/a&gt;&lt;b&gt;bold&lt;/b&gt;&lt;script&gt;bad()&lt;/script&gt;">
         <button class="xp-button" id="san-go">Parse both ways</button>
       </p>
       <div class="san-grid">
@@ -4962,8 +4962,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
           // changes. What it removes is a real defect. run() fires on load, so
           // setHTMLUnsafe() parsed the default payload into a live detached node,
           // `src=x` 404'd, and onerror ran alert(1) on EVERY visit to this page.
-          // It also cost the hashed CSP a violation a hash cannot cover, since
-          // hashes never apply to event handlers.
+          // The inert document does NOT stop the CSP report: Chrome 157 logs a
+          // blocked script-src-attr for every on* attribute it parses, in any
+          // document, setHTML() included (measured 2026-11-12). So the default
+          // payload carries no on* attribute, and a page load logs nothing.
           var inert = document.implementation.createHTMLDocument("");
           var run = function () {
             var src = document.getElementById("san-in").value;
