@@ -94,8 +94,12 @@ test("only the pages VITALS_PATHS names ship the beacon", async () => {
 // and fetchLater where a case says the browser has it.
 function horizonVitals(o: { fetchLater?: "works" | "throws"; startHidden?: boolean; prerendering?: boolean; activationStart?: number }) {
   const html = readFileSync(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
-  const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((s) => s.includes('"/ledger/vitals"'));
-  assert.ok(script, "horizon.html no longer has an inline script posting to /ledger/vitals");
+  // our own page, so slice around the endpoint rather than parse the document
+  const at = html.indexOf('"/ledger/vitals"');
+  const open = html.lastIndexOf("<script>", at);
+  const close = html.indexOf("</script>", at);
+  assert.ok(at > 0 && open > 0 && close > at, "horizon.html no longer has an inline script posting to /ledger/vitals");
+  const script = html.slice(open + "<script>".length, close);
 
   const document = { visibilityState: o.startHidden ? "hidden" : "visible", prerendering: !!o.prerendering };
   const onVisibility: (() => void)[] = [];
