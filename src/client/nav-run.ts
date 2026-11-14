@@ -99,6 +99,7 @@ export function createRun(options) {
     { label: "garage · av2", path: "/garage/av2", hint: "AV2 stills vs shipped AVIF, and the picture fallback trap" },
     { label: "garage · round-trip", path: "/garage/round-trip", hint: "a parser for the twins, and the five bugs it found" },
     { label: "garage · ranges", path: "/garage/ranges", hint: "origin range requests, chunk sizes, and the photo route's R2 ranges" },
+    { label: "garage · controls", path: "/garage/controls", hint: "controls: plant each check's defect, and the ledger of what went blind" },
     // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
     // user has these). kind "raycast" → location.href to the protocol URL: the OS
