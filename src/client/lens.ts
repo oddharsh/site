@@ -3738,9 +3738,8 @@
   var lensGroup = document.querySelector(".lx-lenses");
   if (lensGroup) lensGroup.addEventListener("keydown", arrowKeys(".lx-tab"));
 
-  // "state of the machine web" dialog: close button, backdrop light-dismiss, and
-  // every [data-sow-open] trigger (the rail's "?" and the footer link). The
-  // backdrop listener is the fallback for browsers without dialog closedby="any".
+  // "state of the machine web" dialog: close button and every [data-sow-open]
+  // trigger (the rail's "?" and the footer link).
   var sowDialog = document.getElementById("lx-sow-dialog") as HTMLDialogElement;
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
@@ -3748,9 +3747,6 @@
       sowClose.addEventListener("click", () => {
         sowDialog.close();
       });
-    sowDialog.addEventListener("click", (e) => {
-      if (e.target === sowDialog) sowDialog.close();
-    });
   }
   [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
     b.addEventListener("click", openStateWeb);
@@ -3767,8 +3763,26 @@
       abtClose.addEventListener("click", () => {
         abtDialog.close();
       });
-    abtDialog.addEventListener("click", (e) => {
-      if (e.target === abtDialog) abtDialog.close();
+  }
+
+  // Light dismiss for both dialogs where closedby="any" is missing (Safari, per
+  // Modern Web Guidance's dialog guide, 2026-11-14). It runs only there: an
+  // unguarded click listener closed the dialog in Chrome when a text selection
+  // dragged out onto the backdrop, because that click lands on the <dialog>.
+  // Press and release must both fall outside the box for the same reason.
+  if (!("closedBy" in HTMLDialogElement.prototype)) {
+    var outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      var r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    [].forEach.call(document.querySelectorAll('dialog[closedby="any"]'), (d: HTMLDialogElement) => {
+      var pressedOutside = false;
+      d.addEventListener("pointerdown", (e) => {
+        pressedOutside = outside(e, d);
+      });
+      d.addEventListener("pointerup", (e) => {
+        if (pressedOutside && outside(e, d)) d.close();
+      });
     });
   }
   [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
