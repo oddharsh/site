@@ -2549,10 +2549,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt var(--font-caption); text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
       .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
       .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background var(--xp-transition-move), transform var(--xp-transition-move); }
-      .cc-slide::scroll-marker:hover { transform: scale(1.25); }
+      @media (hover: hover) and (pointer: fine) {.cc-slide::scroll-marker:hover { transform: scale(1.25); }}
       .cc-slide::scroll-marker:target-current { background: oklch(50% 0.22 263); border-color: oklch(38% 0.18 263); }
       .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid var(--frame); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold var(--text-h2) var(--font-ui); color: oklch(40% 0.09 250); }
-      .cc-rail::scroll-button(left):hover, .cc-rail::scroll-button(right):hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
+      @media (hover: hover) and (pointer: fine) {.cc-rail::scroll-button(left):hover, .cc-rail::scroll-button(right):hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }}
       .cc-rail::scroll-button(left):disabled, .cc-rail::scroll-button(right):disabled { opacity: .35; cursor: default; box-shadow: none; }
       .cc-rail::scroll-button(left) { content: "\2039 prev"; }
       .cc-rail::scroll-button(right) { content: "next \203A"; }
@@ -2573,7 +2573,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .dgroup { margin: 8px 0 0; border: 1px solid var(--slate-80); border-radius: 4px; overflow: hidden; }
       .dgroup details + details { border-top: 1px solid oklch(86% 0.02 250); }
       .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold var(--text-sm) var(--font-ui); color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
-      .dgroup summary:hover { color: oklch(45% 0.16 30); }
+      @media (hover: hover) and (pointer: fine) {.dgroup summary:hover { color: oklch(45% 0.16 30); }}
       .dgroup details p { margin: 0; padding: 8px 10px; font-size: var(--text-sm); color: var(--grey-28); background: oklch(99% 0.006 250); }
       kbd { font: var(--text-micro) var(--font-mono); background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>

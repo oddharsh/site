@@ -239,7 +239,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-list{overflow-y:auto;max-height:308px}
 .sr-mon{position:sticky;top:0;background:var(--mist-96);color:#5a6b85;font-size:var(--text-2xs);font-weight:bold;padding:3px 10px;border-bottom:1px solid var(--slate-92);text-transform:uppercase;letter-spacing:.04em}
 .sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:var(--text-micro);color:var(--slate-38);cursor:pointer;border-bottom:1px solid var(--row-alt)}
-.sr-pt:hover{background:var(--row-alt)}
+@media (hover: hover) and (pointer: fine) {.sr-pt:hover{background:var(--row-alt)}}
 .sr-pt[aria-current=true]{background:#dceafe;box-shadow:inset 2px 0 0 #2f6fd0}
 .sr-pt .rv{font-family:var(--font-mono);font-size:var(--text-3xs);color:#7a4eb0;flex:0 0 auto}
 .sr-pt .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -254,7 +254,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-changes li{font-size:var(--text-xs);color:var(--slate-38);padding:3px 0;border-bottom:1px solid var(--mist-96)}
 .sr-changes .rv{font-family:var(--font-mono);font-size:var(--text-3xs);color:#7a4eb0;margin-right:6px}
 .sr-btn{margin-top:11px;font:inherit;font-size:var(--text-xs);padding:4px 14px;cursor:pointer;border:1px solid #7c93b8;border-radius:3px;background:linear-gradient(180deg,#fdfefe,var(--slate-92));box-shadow:inset 0 1px 0 #fff}
-.sr-btn:hover{background:linear-gradient(180deg,#fff,#e8f0fb)}
+@media (hover: hover) and (pointer: fine) {.sr-btn:hover{background:linear-gradient(180deg,#fff,#e8f0fb)}}
 .sr-note{margin-top:8px;font-size:var(--text-micro);color:var(--slate-55);background:#fffbe6;border:1px solid #f0e3a8;border-radius:3px;padding:6px 9px;line-height:1.5}
 .sr-scrub{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
 .sr-scrub input[type=range]{flex:1;min-width:0;accent-color:#2f6fd0}

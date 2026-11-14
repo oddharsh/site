@@ -26,7 +26,7 @@
 .enc-in { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .enc-in input { font-family: var(--font-mono); font-size: var(--text-lg); padding: 4px 8px; width: 170px; border: 1px solid var(--slate-63); box-shadow: inset 1px 1px 0 var(--slate-84); }
 .enc-in .preset { font-family: var(--font-ui); font-size: var(--text-h2); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border: 1px solid var(--slate-63); }
-.enc-in .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,var(--amber-96)); }
+@media (hover: hover) and (pointer: fine) {.enc-in .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,var(--amber-96)); }}
 table.enc { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 table.enc th { text-align: left; color: var(--slate-55); font-weight: bold; font-size: var(--text-2xs); border-bottom: 1px solid #e0cf9e; padding: 3px 5px; }
 table.enc td { padding: 3px 5px; border-bottom: 1px solid var(--face); vertical-align: top; }

@@ -69,7 +69,7 @@ b{color:var(--ink)}
 .tile{position:relative;background:#000;padding:4px;cursor:pointer;transition:var(--xp-transition);border-radius:2px}
 .tile img{display:block;width:100%;height:auto}
 .tile .tag{position:absolute;left:6px;top:6px;font-family:var(--font-mono);font-size:var(--text-2xs);background:rgba(0,0,0,.55);color:#fff;padding:1px 5px;border-radius:2px}
-.tile:hover{border-color:var(--navy2)}
+@media (hover: hover) and (pointer: fine) {.tile:hover{border-color:var(--navy2)}}
 .tile.pick{border-color:var(--navy)}
 .tile.s2win{border-color:var(--s2);box-shadow:0 0 0 2px var(--s2),var(--bevel-sunken)}
 .tile.btwin{border-color:var(--bt);box-shadow:0 0 0 2px var(--bt),var(--bevel-sunken)}
@@ -117,7 +117,7 @@ a{color:var(--link)}
 .uq{margin:9px 0 2px}
 .uq .uq-q{font-size:var(--text-ui);color:var(--ink);font-weight:700;margin:0 0 6px}
 .uq-opt{display:block;width:100%;text-align:left;font-family:var(--font-ui);font-size:var(--text-sm);color:var(--ink);background:var(--grad-button);border:1px solid var(--darkshadow);box-shadow:var(--bevel-raised);padding:5px 10px;margin:0 0 4px;cursor:pointer;border-radius:2px;transition:var(--xp-transition)}
-.uq-opt:hover:not([disabled]){background:var(--grad-btn-hover);border-color:var(--navy2)}
+@media (hover: hover) and (pointer: fine) {.uq-opt:hover:not([disabled]){background:var(--grad-btn-hover);border-color:var(--navy2)}}
 .uq-opt[disabled]{cursor:default}
 .uq-opt.correct{border-color:var(--go);box-shadow:0 0 0 1px var(--go),var(--bevel-raised);background:var(--green-97);font-weight:700}
 .uq-opt.wrong{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger),var(--bevel-raised);background:#fbeeeb}
