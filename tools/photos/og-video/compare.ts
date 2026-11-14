@@ -28,8 +28,8 @@ const prev = existsSync(jsonPath) ? Object.fromEntries(JSON.parse(readFileSync(j
 // compiled helpers. The 2026-10-31 photo runs put fast-ssim2 within 0.002 of
 // libjxl on 1080px downscales and up to 0.32 on native-resolution crops; a UI
 // capture is neither, so the first rerun is its own measurement. photo-metrics
-// also ignores PNG colour chunks (iCCP, gAMA, sRGB), which libjxl honours, and
-// decode.swift writes these frames through ImageIO, which can tag them.
+// refuses a PNG colour chunk libjxl would honour (gotcha 101); decode.swift's
+// ImageIO frames carry a bare sRGB chunk, which it reads as libjxl does.
 function score(dir, decoded, picks) {
   let s = 0;
   for (const i of picks) {
