@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/speculation: Guessing the next click</title>
+<meta name="description" content="Five ways to start a page before the click, run over the same 65 cursor paths: how much head start each buys, and what each wrong guess costs.">
+<link rel="canonical" href="https://aadhar.sh/garage/speculation">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/speculation: Guessing the next click">
+<meta property="og:description" content="Five ways to start a page before the click, run over the same 65 cursor paths: how much head start each buys, and what each wrong guess costs.">
+<meta property="og:url" content="https://aadhar.sh/garage/speculation">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-speculation.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/speculation interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-speculation.jpg">
+<link rel="stylesheet" href="/prose.css">
+<style>.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid var(--amber-49-b)}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--amber-74);text-shadow:none}
+.content p{margin:0 0 12px}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:var(--text-lede);color:var(--ink-soft);max-width:70ch}
+@media(max-width:620px){.window{--axp-gutter:12px}.content{padding:14px 12px 6px}}
+
+.sp-scroll{overflow-x:auto;margin:10px 0 12px}
+.sp-table{border-collapse:collapse;font-size:var(--text-micro);width:100%;min-width:520px;background:var(--surface-window)}
+.sp-table th{text-align:left;background:var(--surface-desktop);border:1px solid var(--slate-84);padding:4px 7px;font-family:var(--font-caption);color:var(--slate-38)}
+.sp-table td{border:1px solid var(--slate-90);padding:4px 7px;vertical-align:top;line-height:1.45}
+.sp-table tbody tr:nth-child(odd) td{background:var(--paper-cool)}
+.sp-n{text-align:right;font-family:var(--font-mono);white-space:nowrap}
+.sp-note{font-size:var(--text-xs);color:var(--ink-soft)}
+.sp-code{background:var(--row-alt);border:1px solid var(--slate-84);border-left:3px solid var(--luna-44);padding:8px 10px;margin:0 0 12px;overflow-x:auto;font-size:var(--text-xs);line-height:1.5}
+.sp-code code{white-space:pre;font-family:var(--font-mono)}
+.sp-demo{border:1px solid var(--slate-73);background:var(--row-alt);margin:14px 0 16px;box-shadow:var(--bevel-sunken)}
+.sp-pad{position:relative;height:240px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;place-items:center;background:var(--surface-field);border-bottom:1px solid var(--slate-84);overflow:hidden;touch-action:manipulation}
+.sp-link{font:inherit;font-size:var(--text-sm);padding:6px 14px;border:1px solid var(--slate-73);background:var(--grad-button);border-radius:var(--radius-control);color:var(--link);cursor:pointer;text-decoration:underline}
+.sp-at0{justify-self:start;margin-left:12%}.sp-at2{align-self:end;margin-bottom:18%}.sp-at3{align-self:start;margin-top:14%}.sp-at5{justify-self:end;margin-right:12%}
+.sp-link.sp-guessed{outline:2px dotted var(--luna-44);outline-offset:2px}
+.sp-dot{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:var(--danger);opacity:.7;pointer-events:none}
+.sp-out{padding:8px 10px;font-size:var(--text-xs)}
+.sp-hint{margin:0;color:var(--ink-soft)}
+.sp-row{display:grid;grid-template-columns:9.5em 1fr 4.5em;gap:8px;align-items:center;margin:3px 0}
+.sp-bar{height:10px;background:var(--luna-44);min-width:1px}
+.sp-bar.sp-html{background:var(--go)}
+.sp-ms{text-align:right;font-family:var(--font-mono)}
+@media (max-width:480px){.sp-pad{height:200px}.sp-row{grid-template-columns:7em 1fr 4em}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <!-- axp:window --><div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
+    <span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/garage/speculation</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div><!-- /axp:window -->
+  <main id="main" class="content prose">
+<h1>Guessing the next click</h1>
+<p class="garage-intro"><a href="https://foresightjs.com/" rel="external">ForesightJS</a> predicts which link a visitor is about to click from the path of the cursor, and <a href="https://tanstack.com/router/latest/docs/framework/react/guide/preloading" rel="external">TanStack Router</a> gives it something cheap to do with the guess. This site already guesses: one <a href="https://developer.chrome.com/docs/web-platform/prerender-pages" rel="external">Speculation Rules</a> entry prerenders a page once the pointer rests on its link. This page runs five strategies over the same 65 cursor paths to find out whether guessing earlier helps, and what each wrong guess costs. The predictor here is 965 bytes of plain JavaScript; the library ships about 32 KB.</p>
+
+<h2>What the site does today</h2>
+<p>The shell sends one rule in a <code>Speculation-Rules</code> header: prerender any same-origin link at eagerness <code>moderate</code>, minus six paths that can't produce a reusable document. Chrome starts a moderate prerender once the pointer has rested on a link for 200 ms, or at pointerdown if that comes first. In the 30 days to 2026-11-13 the speculation ledger counted 363 speculated documents and 123 activations, so about 1 prerender in 3 got used.</p>
+
+<h2>Five strategies</h2>
+<div class="sp-scroll"><table class="sp-table"><thead><tr><th>arm</th><th>what triggers it</th><th>what it fetches</th></tr></thead><tbody><tr><td>moderate (today)</td><td>pointer rests 200 ms, or pointerdown</td><td>the page</td></tr><tr><td>predictor</td><td>the cursor's path, projected 120 ms ahead, lands on the link</td><td>the page</td></tr><tr><td>prefetch tier</td><td>predictor fires; moderate still prerenders later</td><td>HTML early, the page at moderate</td></tr><tr><td>50 ms hover</td><td>pointer rests 50 ms, or pointerdown</td><td>the page</td></tr><tr><td>combo</td><td>predictor fetches HTML; a 50 ms hover prerenders</td><td>HTML early, the page at 50 ms</td></tr></tbody></table></div>
+<p>The four new arms share one trick. A script tags the chosen link with an attribute, and a second rule at eagerness <code>immediate</code> matches the tag:</p>
+<pre class="sp-code"><code>{ "prerender": [{
+    "where": { "and": [ &lt;the shell rule's where&gt;, { "selector_matches": "[data-intent]" } ] },
+    "eagerness": "immediate" }] }</code></pre>
+<p>Chrome then does the rest: it fetches, merges the speculation with the moderate one for the same URL, and drops it when the tag comes off. Each arm keeps at most 2 tags, the same cap Chrome puts on moderate. The 50 ms hover is the whole of this:</p>
+<pre class="sp-code"><code>let timer = 0, over = null;
+addEventListener("pointerover", (e) =&gt; {
+  const a = e.target.closest?.("a[href]");
+  if (a === over) return;
+  clearTimeout(timer);
+  over = a;
+  if (a) timer = setTimeout(() =&gt; mark(a), 50); // sets data-intent
+});</code></pre>
+<p>The predictor follows ForesightJS: 8 points of history, a straight line projected 120 ms ahead, and a hit test along it. ForesightJS clips that line against every registered element's rectangle, which means tracking each rectangle with observers. <code>elementFromPoint</code> asks the browser to hit-test instead, so nothing needs tracking:</p>
+<pre class="sp-code"><code>// keep the last 8 pointer positions; velocity from the oldest to the newest
+const [x0, y0, t0] = pts[0], [x1, y1, t1] = pts[pts.length - 1];
+const vx = (x1 - x0) / (t1 - t0), vy = (y1 - y0) / (t1 - t0);
+// walk the line to where the cursor will be in 120 ms, nearest point first
+for (const f of [0, 1 / 3, 2 / 3, 1]) {
+  const a = document.elementFromPoint(x1 + vx * 120 * f, y1 + vy * 120 * f)?.closest("a[href]");
+  if (a) return mark(a); // sets data-foresight; an immediate rule matches it
+}</code></pre>
+
+<h2>Try it</h2>
+<p>Move the cursor to one of the links below and click it. The dot marks where the predictor thinks the cursor will be in 120 ms. Nothing is fetched: the demo times each strategy's trigger against your click and draws the head start each would have had.</p>
+<div class="sp-demo">
+  <div class="sp-pad" id="sp-pad">
+    <button type="button" class="sp-link sp-at0" data-sp="/about">/about</button>
+    <button type="button" class="sp-link sp-at1" data-sp="/writing">/writing</button>
+    <button type="button" class="sp-link sp-at2" data-sp="/garage">/garage</button>
+    <button type="button" class="sp-link sp-at3" data-sp="/lwe">/lwe</button>
+    <button type="button" class="sp-link sp-at4" data-sp="/reading">/reading</button>
+    <button type="button" class="sp-link sp-at5" data-sp="/coffee">/coffee</button>
+    <span class="sp-dot" id="sp-dot" hidden></span>
+  </div>
+  <div class="sp-out" id="sp-out"><p class="sp-hint" id="sp-hint">Waiting for a click. On a touch screen the only signal is the tap itself, so every strategy ties.</p></div>
+</div>
+
+<h2>Results</h2>
+<p>Each trial loads the page in Chrome 157, picks a link with a seeded random number generator, and moves the cursor there along a minimum-jerk path with a slight bow and 1 px of jitter, timed by Fitts's law. The cursor rests 80 to 250 ms, then clicks. Every arm replays identical paths, so each comparison is paired: 40 trials on <code>/</code> and 25 on <code>/garage</code>. Chrome's <code>Preload</code> protocol events timestamp when each speculation starts.</p>
+<div class="sp-scroll"><table class="sp-table"><thead><tr><th>arm</th><th>HTML head start, ms</th><th>render head start, ms</th><th>wasted prerenders per click</th><th>wasted prefetches per click</th></tr></thead><tbody><tr><td>moderate (today)</td><td class="sp-n">87 / 105</td><td class="sp-n">87 / 104</td><td class="sp-n">0.05 / 0.04</td><td class="sp-n">0 / 0</td></tr><tr><td>predictor</td><td class="sp-n">352 / 380</td><td class="sp-n">352 / 380</td><td class="sp-n">0.53 / 0.84</td><td class="sp-n">0 / 0</td></tr><tr><td>prefetch tier</td><td class="sp-n">378 / 396</td><td class="sp-n">99 / 96</td><td class="sp-n">0.03 / 0.00</td><td class="sp-n">0.47 / 0.76</td></tr><tr><td>50 ms hover</td><td class="sp-n">271 / 271</td><td class="sp-n">271 / 271</td><td class="sp-n">0.10 / 0.20</td><td class="sp-n">0 / 0</td></tr><tr><td>combo</td><td class="sp-n">360 / 390</td><td class="sp-n">263 / 278</td><td class="sp-n">0.13 / 0.32</td><td class="sp-n">0.42 / 0.52</td></tr></tbody></table></div>
+<p class="sp-note">Medians, <code>/</code> then <code>/garage</code>. No arm missed the clicked link in any trial. The predictor and prefetch-tier rows come from a first run, the others from a second on the same paths; moderate's medians moved 2 to 13 ms between the runs and the 50 ms hover's 5 to 6 ms, which sets the noise floor for every row.</p>
+<p>Moderate's head start comes out about one click long because the cursor rarely rests 200 ms before a click, so pointerdown fires it. The 50 ms hover catches the slowdown at the end of the reach instead, and gains about 150 ms for 0.1 to 0.2 extra prerenders per click. The predictor gains about 230 ms more, and pays with roughly one wasted prerender for every two clicks. The prefetch tier splits the difference: the HTML leaves about 245 ms early while rendering waits for moderate, so its head start depends on what the page is waiting for. The combo stacks the two halves, and each keeps its own timing.</p>
+
+<h2>What a wrong guess costs</h2>
+<div class="sp-scroll"><table class="sp-table"><thead><tr><th>page</th><th>HTML, KiB</th><th>whole page, KiB</th></tr></thead><tbody><tr><td><code>/</code></td><td class="sp-n">11.0</td><td class="sp-n">219.1</td></tr><tr><td><code>/about</code></td><td class="sp-n">1.6</td><td class="sp-n">34.6</td></tr><tr><td><code>/writing</code></td><td class="sp-n">3.8</td><td class="sp-n">40.3</td></tr><tr><td><code>/garage</code></td><td class="sp-n">19.4</td><td class="sp-n">112.8</td></tr><tr><td><code>/lwe</code></td><td class="sp-n">2.6</td><td class="sp-n">37.1</td></tr><tr><td><code>/reading</code></td><td class="sp-n">1.5</td><td class="sp-n">55.1</td></tr><tr><td><code>/coffee</code></td><td class="sp-n">3.5</td><td class="sp-n">38.0</td></tr><tr><td><code>/serendipity</code></td><td class="sp-n">3.2</td><td class="sp-n">46.0</td></tr><tr><td><code>/around</code></td><td class="sp-n">1.9</td><td class="sp-n">37.4</td></tr><tr><td><code>/dotfiles</code></td><td class="sp-n">8.5</td><td class="sp-n">42.7</td></tr></tbody></table></div>
+<p>A wasted prefetch costs the HTML, a median of about 3 KiB on these pages. A wasted prerender costs the whole page plus its render. The page totals come from an empty cache, so they overstate a prerender's bytes, since <code>nav.js</code> and <code>luna.css</code> are usually cached already, and they leave out render CPU. Even so, a wrong prerender runs about 10 times the price of a wrong prefetch.</p>
+
+<h2>The debugger switches prerender off</h2>
+<p>Chrome 157 refuses to prerender while any DevTools Protocol session is attached to the page, Playwright's included, and says so with <code>PrerenderingDisabledByDevTools</code>. The speculation falls back to a prefetch, and the page's timing entry reads <code>deliveryType: "navigational-prefetch"</code> with <code>activationStart</code> 0, exactly like an ordinary prefetch. The results above therefore time when each speculation starts. A separate run checked readiness: schedule the prerender from page JavaScript, detach, let the page navigate on its own, then reattach to read the timing entry. A prerendered page reports <code>"navigational-prefetch"</code> too, so only a nonzero <code>activationStart</code> tells the two apart.</p>
+
+<h2>What TanStack contributes</h2>
+<p>TanStack Router preloads a route's code and loader data after 50 ms of hover (<code>defaultPreloadDelay</code>) and treats the result as fresh for 30 s (<code>preloadStaleTime</code>). A wrong guess there costs one JSON request, which is why pairing it with an eager predictor works. A wrong prerender costs a page. The prefetch tier and the combo carry the idea down to the platform: spend a few KiB on a weak signal, and save the render for a strong one. The 30 s window isn't copied here yet; removing a tag after 30 s would copy it.</p>
+
+<h2>What production still has to say</h2>
+<p>Lab paths are smoother than hands, and every lab trial ends in a click, which is why moderate wastes almost nothing here and leaves 2 prerenders in 3 unused in the ledger. The lab also can't say whether today's prerenders finish before the click. <a href="https://github.com/oddharsh/site/pull/1671" rel="external">PR 1671</a> makes <code>nav.js</code> report how far each prerender got at activation: <code>complete</code>, <code>interactive</code>, <code>early</code> or <code>prefetch</code>. If most read <code>complete</code>, moderate already starts in time and every arm here only adds waste. A real share of <code>early</code> or <code>interactive</code> points at the 50 ms hover first, since it buys about 150 ms with the fewest extra prerenders.</p>
+    <section id="luq" aria-label="understanding check"></section>
+  </main>
+  <div class="xp-statusbar"><span>garage</span><span>watching</span><span>2026-11-14</span></div>
+</div>
+
+<script>
+(function () {
+  // The demo times each strategy's trigger against the visitor's click and
+  // fetches nothing. The predictor here is the same arithmetic the lab arm ran.
+  var pad = document.getElementById("sp-pad"), dot = document.getElementById("sp-dot"), out = document.getElementById("sp-out");
+  if (!pad || !dot || !out) return;
+  var HISTORY = 8, AHEAD = 120, pts = [], raf = 0, guessed = {}, entered = {}, down = 0;
+  var now = function () { return performance.now(); };
+  function predict() {
+    raf = 0;
+    var a = pts[0], b = pts[pts.length - 1], dt = b[2] - a[2];
+    var vx = dt > 0 ? (b[0] - a[0]) / dt : 0, vy = dt > 0 ? (b[1] - a[1]) / dt : 0;
+    var box = pad.getBoundingClientRect();
+    dot.hidden = false;
+    dot.style.transform = "translate(" + (b[0] + vx * AHEAD - box.left) + "px," + (b[1] + vy * AHEAD - box.top) + "px)";
+    var steps = [0, 1 / 3, 2 / 3, 1];
+    for (var i = 0; i < steps.length; i++) {
+      var el = document.elementFromPoint(b[0] + vx * AHEAD * steps[i], b[1] + vy * AHEAD * steps[i]);
+      var link = el && el.closest("[data-sp]");
+      if (link) {
+        var k = link.getAttribute("data-sp");
+        if (!(k in guessed)) { guessed[k] = now(); link.classList.add("sp-guessed"); }
+        return;
+      }
+    }
+  }
+  pad.addEventListener("pointermove", function (e) {
+    if (e.pointerType !== "mouse") return;
+    pts.push([e.clientX, e.clientY, e.timeStamp]);
+    if (pts.length > HISTORY) pts.shift();
+    if (!raf) raf = requestAnimationFrame(predict);
+  });
+  pad.addEventListener("pointerleave", function () { dot.hidden = true; pts = []; });
+  pad.addEventListener("pointerover", function (e) {
+    var link = e.target.closest && e.target.closest("[data-sp]");
+    if (link) entered[link.getAttribute("data-sp")] = now();
+  });
+  pad.addEventListener("pointerdown", function () { down = now(); });
+  function row(label, ms, cls) {
+    var w = Math.max(0, Math.min(100, (ms / 600) * 100));
+    return '<div class="sp-row"><span>' + label + '</span><span class="sp-bar' + (cls || "") + '" style="width:' + w + '%"></span><span class="sp-ms">' + Math.round(ms) + " ms</span></div>";
+  }
+  pad.addEventListener("click", function (e) {
+    var link = e.target.closest && e.target.closest("[data-sp]");
+    if (!link) return;
+    var k = link.getAttribute("data-sp"), click = now(), pd = down || click, enter = entered[k] == null ? pd : entered[k];
+    var hovered = pd - enter;
+    var moderate = hovered >= 200 ? enter + 200 : pd;
+    var hover50 = hovered >= 50 ? enter + 50 : pd;
+    var predictor = k in guessed ? Math.min(guessed[k], pd) : pd;
+    out.innerHTML = "<p class=\"sp-hint\">Head start before your click on <code>" + k + "</code>, after resting " + Math.round(Math.max(0, hovered)) + " ms on it:</p>" +
+      row("moderate (today)", click - moderate) + row("predictor", click - predictor) + row("50 ms hover", click - hover50) +
+      row("combo, HTML", click - Math.min(predictor, hover50), " sp-html") + row("combo, render", click - hover50);
+    guessed = {}; entered = {}; down = 0;
+    var tagged = pad.querySelectorAll(".sp-guessed");
+    for (var j = 0; j < tagged.length; j++) tagged[j].classList.remove("sp-guessed");
+  });
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Five questions on where the head start comes from, and one on the trap in measuring it.",
+  "questions": [
+    {
+      "q": "Why does moderate's head start come out at about one click's length?",
+      "options": [
+        {
+          "t": "The cursor rarely rests 200 ms before a click, so pointerdown fires it.",
+          "ok": true,
+          "why": "Right. People slow down onto a link and click, so the 200 ms hover rarely completes and moderate starts at pointerdown, about 70 to 100 ms before the click."
+        },
+        {
+          "t": "Chrome holds every moderate prerender until the main thread has gone idle.",
+          "why": "Moderate has no idle gate. Its two triggers are a 200 ms hover and pointerdown, and the lab saw the second one."
+        },
+        {
+          "t": "A moderate prerender waits for the current page's images to finish.",
+          "why": "Speculation doesn't wait on the current page's images. The trigger is pointer behavior on the link itself."
+        }
+      ]
+    },
+    {
+      "q": "In the prefetch-tier arm the HTML leaves 378 ms early but rendering starts 99 ms early. Why the gap?",
+      "options": [
+        {
+          "t": "Chrome throttles any prerender that starts from an already existing prefetch.",
+          "why": "Chrome reuses the prefetched HTML when the prerender starts. The prerender's start time is set by its own trigger."
+        },
+        {
+          "t": "The predictor's rule only fetches HTML, and the render waits for moderate.",
+          "ok": true,
+          "why": "Right. Two rules at two strengths: the weak signal pays for a download and the strong one for the render."
+        },
+        {
+          "t": "Parsing the prefetched HTML took the remaining 279 ms on this machine.",
+          "why": "Both numbers are trigger times measured from Chrome's Preload events. Parsing time doesn't enter either one."
+        }
+      ]
+    },
+    {
+      "q": "Why does an eager predictor suit TanStack Router better than it suits a prerender?",
+      "options": [
+        {
+          "t": "TanStack cancels a wrong preload before any of its bytes leave the browser.",
+          "why": "A TanStack preload runs the route's loader, which makes real requests. It just keeps them small."
+        },
+        {
+          "t": "TanStack only preloads routes that the visitor has opened before.",
+          "why": "TanStack's intent strategy fires on hover after 50 ms, whether or not the route was visited."
+        },
+        {
+          "t": "A wrong preload costs a JSON request, and a wrong prerender a whole page.",
+          "ok": true,
+          "why": "Right. The predictor makes the same mistakes in both setups. What differs is the price of each one."
+        }
+      ]
+    },
+    {
+      "q": "A lab run shows every speculated page delivered as a prefetch, never a prerender. What do you suspect first?",
+      "options": [
+        {
+          "t": "A DevTools Protocol session on the page, which turns prerender off.",
+          "ok": true,
+          "why": "Right. Chrome 157 reports PrerenderingDisabledByDevTools and falls back to the prefetch, so the timing entry looks like an ordinary one."
+        },
+        {
+          "t": "The pages arrived without a Cache-Control header the browser could use.",
+          "why": "Speculation doesn't need a cache header to prerender a same-origin page. The fallback here comes from the browser's own policy."
+        },
+        {
+          "t": "The rule's eagerness is set to moderate where it should read eager.",
+          "why": "Eagerness changes when a speculation starts. It doesn't turn a prerender into a prefetch."
+        }
+      ]
+    },
+    {
+      "q": "Which production result would make every new arm here a loss?",
+      "options": [
+        {
+          "t": "Most activations read early, with nav.js still unparsed at the click.",
+          "why": "That result says prerenders start too late, which is the case an earlier trigger helps."
+        },
+        {
+          "t": "The ledger's activation rate climbs from about 34% to 50% on its own.",
+          "why": "A higher rate means the current guesses get used more often. It says nothing about whether they finish in time."
+        },
+        {
+          "t": "Nearly every activation reads complete under today's moderate rule.",
+          "ok": true,
+          "why": "Right. If prerenders already finish before the click, starting earlier only adds wasted speculations."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>
