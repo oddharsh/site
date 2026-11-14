@@ -1,5 +1,5 @@
 ---
-title: "There and back"
+title: "Every Markdown twin converts back to its page byte for byte"
 description: "Rebuild a page here from its Markdown twin and convert it back, and find out what the page you are reading was made from."
 path: "/garage/round-trip"
 section: "garage"
@@ -7,7 +7,7 @@ kind: "content"
 source: "https://aadhar.sh/garage/round-trip"
 ---
 
-# There and back
+# Every Markdown twin converts back to its page byte for byte
 
 Every page on this site has a [Markdown][markdown] twin for agents, listed in [llms.txt](https://aadhar.sh/llms.txt), and the build writes most of them by pressing the HTML down with `html-to-md.ts`. This page runs the other direction. It takes a twin, rebuilds HTML from it with a 250-line parser, and shows what came home. On 2026-10-13 I ran 59 twins through the trip, and it found five bugs in the converter that writes them, all fixed in [#1309](https://github.com/oddharsh/site/pull/1309).
 

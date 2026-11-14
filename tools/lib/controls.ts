@@ -224,6 +224,32 @@ export const CONTROLS: Control[] = [
     expect: /contains em dashes/,
   },
   {
+    id: "garage-title-goes-back-to-a-fragment",
+    plants: "a Garage title in site-manifest.json goes back to a comma fragment",
+    mutations: [
+      {
+        file: "config/site-manifest.json",
+        find: `"title": "Cloudflare's cache fetches only the chunks a range read touches",`,
+        replace: `"title": "Ranges, chunk by chunk",`,
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /\/garage\/ranges: the title has a comma: Ranges, chunk by chunk/,
+  },
+  {
+    id: "garage-h1-drifts-from-its-title",
+    plants: "a hand-written Garage page's h1 says something other than its manifest title",
+    mutations: [
+      {
+        file: "src/pages/garage/wire.html",
+        find: "<h1>Brotli at q11 earned the site its first build step</h1>",
+        replace: "<h1>Bytes on the wire</h1>",
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /\/garage\/wire: the h1 says "Bytes on the wire" where site-manifest\.json says/,
+  },
+  {
     id: "new-type-error",
     plants: "a fresh type error in a Worker module, past the ratcheted baseline",
     mutations: [{ file: "src/worker/lib/control-probe.ts", create: "export const probe: number = 'not a number';\n" }],

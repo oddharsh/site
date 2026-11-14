@@ -43,29 +43,40 @@ const BLOCKS = ".window > .content > *:not(.msgr), .window > .content > .msgr > 
 /** The page with the pause before its first block past FOLD_AFTER_CHARS, or unchanged. */
 export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } = {}): string {
   if (html.includes(LINK)) return html; // already paused: the twin writer re-dresses pages
+  // Whitespace collapses across text chunks, because a run split at a tag is
+  // one space on screen. Collapsing each chunk alone counted it twice, which
+  // let /garage/compression pause 2,983 visible characters in (2026-11-09).
   let text = 0,
+    space = true,
     hidden = 0,
     folds = 0;
   const at: { chars: number; afterFold: boolean }[] = [];
   new HTMLRewriter()
     .on(".window > .content", {
       text(t) {
-        text += t.text.replace(/\s+/g, " ").length;
+        if (hidden) return;
+        let s = t.text.replace(/\s+/g, " ");
+        if (space && s.startsWith(" ")) s = s.slice(1);
+        if (s) space = s.endsWith(" ");
+        text += s.length;
       },
     })
     .on(".window > .content script, .window > .content style, .window > .content template", {
-      text(t) {
-        hidden += t.text.replace(/\s+/g, " ").length;
+      element(e) {
+        hidden++;
+        e.onEndTag(() => {
+          hidden--;
+        });
       },
     })
     .on(BLOCKS, {
       element(e) {
-        at.push({ chars: text - hidden, afterFold: folds > 0 });
+        at.push({ chars: text, afterFold: folds > 0 });
         if (e.tagName === "section" && e.getAttribute("class") === "fold") folds++;
       },
     })
     .transform(html);
-  const total = text - hidden;
+  const total = text;
   const pick = at.findIndex((b) => b.chars >= FOLD_AFTER_CHARS && total - b.chars >= PAUSE_MIN_REST && (!afterFirstFold || b.afterFold));
   if (pick < 0) return html;
   let i = -1;

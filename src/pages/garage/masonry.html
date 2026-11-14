@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/masonry</title>
+<title>aadhar.sh/garage/masonry: CSS Grid Lanes lays out a ragged-height contact sheet</title>
 <meta name="description" content="Prototype: a ragged-height contact-sheet photo grid with CSS Grid Lanes (display: grid-lanes), falling back to the fixed-square grid the homepage ships today.">
 <link rel="canonical" href="https://aadhar.sh/garage/masonry">
 
@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='3'%20fill='%23ffffff'%20stroke='%230831d9'%20stroke-width='2'/%3E%3Crect%20x='5'%20y='5'%20width='9'%20height='12'%20fill='%23166aee'/%3E%3Crect%20x='17'%20y='5'%20width='10'%20height='7'%20fill='%23ff9500'/%3E%3Crect%20x='17'%20y='15'%20width='10'%20height='12'%20fill='%23166aee'/%3E%3Crect%20x='5'%20y='20'%20width='9'%20height='7'%20fill='%23ff9500'/%3E%3C/svg%3E">
 
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/masonry">
+<meta property="og:title" content="aadhar.sh/garage/masonry: CSS Grid Lanes lays out a ragged-height contact sheet">
 <meta property="og:description" content="A Grid Lanes (display: grid-lanes) contact sheet, with a fixed-square fallback.">
 <meta property="og:url" content="https://aadhar.sh/garage/masonry">
 <meta name="twitter:card" content="summary_large_image">
@@ -89,7 +89,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-    <h1>A masonry contact sheet</h1>
+    <h1>CSS Grid Lanes lays out a ragged-height contact sheet</h1>
     <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a>-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no <a class="term" data-t="media-queries" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries" title="CSS rules that apply only when the screen matches a condition, such as a width range, so a page can rearrange itself." rel="external">media queries</a> fire.</p>
 
     <div class="bar">

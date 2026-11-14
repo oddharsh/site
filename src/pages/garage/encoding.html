@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/thumbnail encoding study</title>
+<title>aadhar.sh/garage/encoding: One photo runs through every thumbnail encoding choice</title>
 <meta name="description" content="One photo through AVIF, WebP and JPEG (zenc, the encoder this site ships), with real byte counts, quality scores and the tradeoffs the site makes.">
 <link rel="canonical" href="https://aadhar.sh/garage/encoding">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/thumbnail encoding study">
+<meta property="og:title" content="aadhar.sh/garage/encoding: One photo runs through every thumbnail encoding choice">
 <meta property="og:description" content="The same photo run through AVIF, WebP, and JPEG (zenjpeg/zenc, the shipped encoder that replaced jpegli), with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.">
 <meta property="og:url" content="https://aadhar.sh/garage/encoding">
 <meta name="twitter:card" content="summary_large_image">
@@ -111,7 +111,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-    <h1>Thumbnail encoding study <span class="badge shipped">shipped</span></h1>
+    <h1>One photo runs through every thumbnail encoding choice <span class="badge shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail ends a chain of choices: <em>format,
       quality, <a class="term" data-t="chroma-subsampling" href="https://en.wikipedia.org/wiki/Chroma_subsampling" title="Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter." rel="external">chroma subsampling</a>, resolution</em>. Here I run one photo through all
