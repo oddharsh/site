@@ -170,9 +170,11 @@ for (const f of [0, 1 / 3, 2 / 3, 1]) {
     if (text != null) node.textContent = text;
     return node;
   }
-  function row(label, ms, cls) {
+  // Bars scale to the click's largest head start, so a long rest still shows
+  // the gaps between strategies; the ms column carries the absolute numbers.
+  function row(label, ms, scale, cls) {
     var bar = el("span", "sp-bar" + (cls || ""));
-    bar.style.width = Math.max(0, Math.min(100, (ms / 600) * 100)) + "%";
+    bar.style.width = Math.max(0, Math.min(100, (ms / scale) * 100)) + "%";
     var r = el("div", "sp-row");
     r.append(el("span", "", label), bar, el("span", "sp-ms", Math.round(ms) + " ms"));
     return r;
@@ -187,9 +189,11 @@ for (const f of [0, 1 / 3, 2 / 3, 1]) {
     var predictor = k in guessed ? Math.min(guessed[k], pd) : pd;
     var head = el("p", "sp-hint", "Head start before your click on ");
     head.append(el("code", "", k), ", after resting " + Math.round(Math.max(0, hovered)) + " ms on it:");
+    var leads = [click - moderate, click - predictor, click - hover50, click - Math.min(predictor, hover50), click - hover50];
+    var scale = Math.max.apply(null, leads.concat(1));
     out.replaceChildren(head,
-      row("moderate (today)", click - moderate), row("predictor", click - predictor), row("50 ms hover", click - hover50),
-      row("combo, HTML", click - Math.min(predictor, hover50), " sp-html"), row("combo, render", click - hover50));
+      row("moderate (today)", leads[0], scale), row("predictor", leads[1], scale), row("50 ms hover", leads[2], scale),
+      row("combo, HTML", leads[3], scale, " sp-html"), row("combo, render", leads[4], scale));
     guessed = {}; entered = {}; down = 0;
     var tagged = pad.querySelectorAll(".sp-guessed");
     for (var j = 0; j < tagged.length; j++) tagged[j].classList.remove("sp-guessed");
