@@ -199,6 +199,25 @@ jobs:
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
         background: true
 
+      # photo-metrics scores every photo tool, and its tests pin which PNG
+      # colour chunks it refuses and which it reads as sRGB, djxl's among them
+      # (gotcha 101). Keyed like timbrado's engine: rustc and the lock decide
+      # the dependencies, and cargo's fingerprint rebuilds the crate itself.
+      - name: Key photo-metrics' build cache
+        id: metrics
+        run: echo "key=photo-metrics-${RUNNER_OS}-$( { rustc -V; cat tools/photos/photo-metrics/Cargo.lock; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore photo-metrics' build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/photos/photo-metrics/target
+          key: ${{ steps.metrics.outputs.key }}
+
+      - name: Test the photo scorer
+        id: metrics-test
+        run: cargo test --locked --quiet --manifest-path tools/photos/photo-metrics/Cargo.toml
+        background: true
+
       # perf-budget owns the build and the Worker dry-run; the route oracle
       # below loads that exact bundle. It stays in the foreground: the
       # manifest is cut from what it leaves, and every step after it reads

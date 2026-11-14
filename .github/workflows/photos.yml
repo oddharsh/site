@@ -95,13 +95,10 @@ jobs:
           cargo test --locked --manifest-path tools/photos/jixel-enc/Cargo.toml
           cargo clippy --locked --manifest-path tools/photos/jixel-enc/Cargo.toml --all-targets -- -D warnings
 
-      # photo-metrics scores every photo tool. Its tests pin which PNG colour
-      # chunks it refuses and which it reads as sRGB, djxl's among them
-      # (gotcha 101).
-      - name: Test the photo scorer
-        run: |
-          cargo test --locked --manifest-path tools/photos/photo-metrics/Cargo.toml
-          cargo clippy --locked --manifest-path tools/photos/photo-metrics/Cargo.toml --all-targets -- -D warnings
+      # photo-metrics' tests run in validate (gotcha 101); clippy stays here
+      # with the other photo crates'.
+      - name: Lint the photo scorer
+        run: cargo clippy --locked --manifest-path tools/photos/photo-metrics/Cargo.toml --all-targets -- -D warnings
 
       - name: Set up bun
         uses: ./.github/actions/setup-bun

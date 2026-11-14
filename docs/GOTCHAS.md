@@ -1033,5 +1033,5 @@ skips it.
     libjxl's ssimulacra2 by 4.15 to 6.08. So the rule is: refuse iCCP and
     cICP always, gAMA and cHRM only without sRGB. The crate's cargo tests
     `scores_srgb_tags_exactly_as_untagged` and
-    `refuses_a_colour_chunk_libjxl_would_honour` run in `photos.yml`.
+    `refuses_a_colour_chunk_libjxl_would_honour` run in `validate`.
     Checked by: `tools/photos/photo-metrics/src/main.rs`.
