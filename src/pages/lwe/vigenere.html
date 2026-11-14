@@ -31,7 +31,7 @@
 .field input.grow, .field textarea.grow { flex: 1; min-width: 120px; }
 .field textarea { width: 100%; min-height: 3em; resize: vertical; field-sizing: content; }
 .preset { font-family: var(--font-ui); font-size: var(--text-micro); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border: 1px solid var(--slate-63); }
-.preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,#f6efdc); }
+@media (hover: hover) and (pointer: fine) {.preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,#f6efdc); }}
 /* workbench alignment */
 .wb-out { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5; margin-top: 9px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: auto; white-space: pre; padding: 8px 10px; background: #1a2030; border-radius: 4px; }
 /* A ciphertext run is four times the width of this box, and the macOS overlay scrollbar is
@@ -51,7 +51,7 @@
 .cr-stage .cr-params { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; flex: 1; min-width: 0; }
 .cr-stage .cr-ctl { margin-left: auto; display: flex; gap: 2px; }
 .cr-stage .cr-ctl button { font-size: var(--text-xs); width: 20px; height: 20px; line-height: 1; cursor: pointer; border: 1px solid var(--slate-63); background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border-radius: 2px; padding: 0; }
-.cr-stage .cr-ctl button:hover { border-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {.cr-stage .cr-ctl button:hover { border-color: var(--accent); }}
 /* stats demo */
 .st-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
 .st-card { border: 1px solid #ddca97; border-radius: 4px; padding: 7px 9px; background: #fffdf6; font-size: var(--text-micro); }
