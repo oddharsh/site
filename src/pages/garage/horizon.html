@@ -51,6 +51,10 @@ pre {
 .chip.yes::before { content: "\2713 "; }
 .chip.no  { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
 .chip.no::before  { content: "\2717 "; }
+a.chip { text-decoration: none; }
+a.chip:hover { text-decoration: underline; }
+a.chip.yes:hover { background: oklch(93% 0.07 142); }
+a.chip.no:hover { background: var(--grey-88); }
 
 /* ── per-feature card ────────────────────────────────────────────────── */
 .demo {
@@ -1354,7 +1358,7 @@ window.__horizonCaps = (function () {
     <hr>
 
     <!-- ───────────────────── text-box-trim ───────────────────── -->
-    <section class="demo shipped" data-cap="text-box-trim">
+    <section class="demo shipped" id="text-box-trim" data-cap="text-box-trim">
       <h2>
         <span>text-box-trim <span class="mono">/ text-box-edge</span></span>
         <span class="stat cross">Chrome · Safari · Firefox</span>
@@ -1386,7 +1390,7 @@ window.__horizonCaps = (function () {
     </section>
 
     <!-- ───────────────────── contrast-color() ───────────────────── -->
-    <section class="demo shipped" data-cap="contrast-color">
+    <section class="demo shipped" id="contrast-color" data-cap="contrast-color">
       <h2>
         <span>contrast-color()</span>
         <span class="stat cross">Chrome 147 &middot; Safari &middot; Firefox</span>
@@ -1543,7 +1547,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="scroll-driven">
+    <section class="demo" id="scroll-driven" data-cap="scroll-driven">
       <h2>
         <span>scroll-driven animations <span class="mono">animation-timeline: scroll() / view()</span></span>
         <span class="stat cross">Chrome 115 &middot; Safari 26 &middot; FF 159</span>
@@ -1591,7 +1595,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="popover-hint">
+    <section class="demo" id="popover-hint" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
         <span class="stat cross">Chrome 151 &middot; FF 153 &middot; Safari 27.3 beta</span>
@@ -1648,7 +1652,7 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="field-sizing">
+    <section class="demo" id="field-sizing" data-cap="field-sizing">
       <h2>
         <span>field-sizing <span class="mono">: content</span></span>
         <span class="stat cross">Chrome 123 &middot; Safari 26.2 &middot; FF 152</span>
@@ -2083,7 +2087,7 @@ for (const item of items) {
       <code>chrome://flags#enable-experimental-web-platform-features</code>.
     </p>
 
-    <section class="demo" data-cap="html-in-canvas">
+    <section class="demo" id="html-in-canvas" data-cap="html-in-canvas">
       <h2>
         <span>HTML-in-Canvas <span class="mono">/ ctx.drawElementImage()</span></span>
         <span class="stat chrome">Chrome 157 &middot; WICG</span>
@@ -2383,7 +2387,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       </p>
     </section>
 
-    <section class="demo" data-cap="hdr-agtm">
+    <section class="demo" id="hdr-agtm" data-cap="hdr-agtm">
       <h2>
         <span>HDR adaptive tone-mapping <span class="mono">/ AGTM &middot; #hdr-agtm</span></span>
         <span class="stat chrome">Chrome flag · not shipped</span>
@@ -2462,7 +2466,7 @@ ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
       </p>
     </section>
 
-    <section class="demo" data-cap="route-matching">
+    <section class="demo" id="route-matching" data-cap="route-matching">
       <h2>
         <span>Declarative routing <span class="mono">/ route-matching</span></span>
         <span class="stat trial">Chrome flag · building blocks cross-browser</span>
@@ -2609,7 +2613,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="invoker-commands">
+    <section class="demo" id="invoker-commands" data-cap="invoker-commands">
       <h2>
         <span>Invoker Commands <span class="mono">command / commandfor</span></span>
         <span class="stat cross">Chrome 135 &middot; Safari 26.2 &middot; FF 144</span>
@@ -2641,7 +2645,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="css-scope">
+    <section class="demo" id="css-scope" data-cap="css-scope">
       <h2>
         <span><code>@scope</code> <span class="mono">scoped styles + donut</span></span>
         <span class="stat cross">Chrome 118 &middot; Safari 17.4 &middot; FF 146</span>
@@ -2673,7 +2677,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="custom-highlight">
+    <section class="demo" id="custom-highlight" data-cap="custom-highlight">
       <h2>
         <span>Custom Highlight API <span class="mono">CSS.highlights &middot; ::highlight()</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
@@ -2701,7 +2705,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo shipped" data-cap="hidden-until-found">
+    <section class="demo shipped" id="hidden-until-found" data-cap="hidden-until-found">
       <h2>
         <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
         <span class="stat cross">Chrome 102 &middot; Safari 26 &middot; FF 148</span>
@@ -2729,7 +2733,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo shipped" data-cap="details-name">
+    <section class="demo shipped" id="details-name" data-cap="details-name">
       <h2>
         <span>Grouped <code>&lt;details&gt;</code> <span class="mono">name=</span></span>
         <span class="stat cross">Chrome 120 &middot; Safari 17.2 &middot; FF 130</span>
@@ -2848,7 +2852,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </style>
 
     <!-- ───────────────────── relative color syntax ───────────────────── -->
-    <section class="demo shipped" data-cap="relative-color">
+    <section class="demo shipped" id="relative-color" data-cap="relative-color">
       <h2>
         <span>relative color syntax <span class="mono">oklch(from &hellip;)</span></span>
         <span class="stat cross">Chrome 119 &middot; Safari 16.4 &middot; FF 128</span>
@@ -2876,7 +2880,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── @property ───────────────────── -->
-    <section class="demo shipped" data-cap="at-property">
+    <section class="demo shipped" id="at-property" data-cap="at-property">
       <h2>
         <span>@property <span class="mono">/ registered custom props</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
@@ -2919,7 +2923,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── light-dark() ───────────────────── -->
-    <section class="demo" data-cap="light-dark">
+    <section class="demo" id="light-dark" data-cap="light-dark">
       <h2>
         <span>light-dark()</span>
         <span class="stat cross">Chrome 123 &middot; Safari 17.5 &middot; FF 120</span>
@@ -2945,7 +2949,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── declarative shadow DOM ───────────────────── -->
-    <section class="demo" data-cap="dsd">
+    <section class="demo" id="dsd" data-cap="dsd">
       <h2>
         <span>declarative shadow DOM <span class="mono">&lt;template shadowrootmode&gt;</span></span>
         <span class="stat cross">Chrome &middot; Safari 16.4 &middot; FF 123</span>
@@ -2972,7 +2976,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── <model> ───────────────────── -->
-    <section class="demo" data-cap="model">
+    <section class="demo" id="model" data-cap="model">
       <h2>
         <span>&lt;model&gt; element</span>
         <span class="stat trial">Safari 27 &middot; Apple-led</span>
@@ -2993,7 +2997,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── CloseWatcher ───────────────────── -->
-    <section class="demo" data-cap="close-watcher">
+    <section class="demo" id="close-watcher" data-cap="close-watcher">
       <h2>
         <span>CloseWatcher API</span>
         <span class="stat cross">Chrome 126 &middot; FF 149 &middot; Safari 27.3 beta</span>
@@ -3024,7 +3028,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── <input switch> ───────────────────── -->
-    <section class="demo" data-cap="switch-control">
+    <section class="demo" id="switch-control" data-cap="switch-control">
       <h2>
         <span>HTML switch control <span class="mono">&lt;input type=checkbox switch&gt;</span></span>
         <span class="stat trial">Safari 17.4 &middot; Apple-led</span>
@@ -3115,7 +3119,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Document Picture-in-Picture ───────────────────── -->
-    <section class="demo" data-cap="doc-pip">
+    <section class="demo" id="doc-pip" data-cap="doc-pip">
       <h2>
         <span>Document Picture-in-Picture</span>
         <span class="stat cross">Chrome 116 &middot; FF 151 desktop &middot; Safari no</span>
@@ -3356,7 +3360,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── text-fit ───────────────────── -->
-    <section class="demo" data-cap="text-fit">
+    <section class="demo" id="text-fit" data-cap="text-fit">
       <h2>
         <span>text-fit <span class="mono">CSS property</span></span>
         <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
@@ -3411,7 +3415,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
          ═════════════════════════════════════════════════════════════════ -->
 
     <!-- ───────────────────── img sizes=auto ───────────────────── -->
-    <section class="demo" data-cap="sizes-auto">
+    <section class="demo" id="sizes-auto" data-cap="sizes-auto">
       <h2>
         <span>sizes=&quot;auto&quot; <span class="mono">on lazy images</span></span>
         <span class="stat cross">Chrome 126 &middot; FF 150 &middot; Safari 27</span>
@@ -3534,7 +3538,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── width: stretch ───────────────────── -->
-    <section class="demo" data-cap="stretch-sizing">
+    <section class="demo" id="stretch-sizing" data-cap="stretch-sizing">
       <h2>
         <span>width: stretch <span class="mono">sizing keyword</span></span>
         <span class="stat cross">Chrome 138 &middot; Safari 27 &middot; FF alias only</span>
@@ -3564,7 +3568,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── ::-webkit-scrollbar in Firefox ───────────────────── -->
-    <section class="demo" data-cap="wk-scrollbar">
+    <section class="demo" id="wk-scrollbar" data-cap="wk-scrollbar">
       <h2>
         <span>::-webkit-scrollbar <span class="mono">the compat surrender</span></span>
         <span class="stat trial">Chromium &middot; Safari &middot; FF 155 site list</span>
@@ -3635,7 +3639,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── scoped custom element registries ───────────────────── -->
-    <section class="demo" data-cap="scoped-registries">
+    <section class="demo" id="scoped-registries" data-cap="scoped-registries">
       <h2>
         <span>Scoped custom element registries</span>
         <span class="stat cross">Chrome 146 &middot; Safari 26 &middot; FF 159</span>
@@ -3666,7 +3670,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Wasm JSPI ───────────────────── -->
-    <section class="demo" data-cap="wasm-jspi">
+    <section class="demo" id="wasm-jspi" data-cap="wasm-jspi">
       <h2>
         <span>WebAssembly JSPI <span class="mono">JS Promise Integration</span></span>
         <span class="stat cross">Chrome 137 &middot; FF 153 &middot; Safari 27</span>
@@ -3695,7 +3699,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── text module imports ───────────────────── -->
-    <section class="demo" data-cap="import-text">
+    <section class="demo" id="import-text" data-cap="import-text">
       <h2>
         <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
         <span class="stat cross">TC39 stage 3 &middot; Chrome 155 &middot; FF 153 &middot; Safari 27.3 beta</span>
@@ -3752,7 +3756,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── cross-document view transitions ───────────────────── -->
-    <section class="demo" data-cap="cross-doc-vt">
+    <section class="demo" id="cross-doc-vt" data-cap="cross-doc-vt">
       <h2>
         <span>Cross-document transitions <span class="mono">@view-transition</span></span>
         <span class="stat cross">Chrome 126 &middot; Safari 18.2 &middot; FF building</span>
@@ -3781,7 +3785,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── shape() ───────────────────── -->
-    <section class="demo" data-cap="css-shape">
+    <section class="demo" id="css-shape" data-cap="css-shape">
       <h2>
         <span>shape() <span class="mono">responsive clip-path</span></span>
         <span class="stat cross">Chrome 135 &middot; Safari 18.4 &middot; Firefox 148</span>
@@ -3802,7 +3806,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── text-wrap: pretty ───────────────────── -->
-    <section class="demo" data-cap="text-wrap-pretty">
+    <section class="demo" id="text-wrap-pretty" data-cap="text-wrap-pretty">
       <h2>
         <span>text-wrap <span class="mono">: pretty</span></span>
         <span class="stat cross">Chrome 117 &middot; Safari 26 &middot; FF no</span>
@@ -3848,7 +3852,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <p class="lede" style="margin-top:4px">Networking: the transport + delivery layer, the part of the platform a static site usually never touches.</p>
 
     <!-- ───────────────────── WebTransport ───────────────────── -->
-    <section class="demo" data-cap="webtransport">
+    <section class="demo" id="webtransport" data-cap="webtransport">
       <h2>
         <span>WebTransport <span class="mono">HTTP/3 + QUIC</span></span>
         <span class="stat cross">Baseline 2026 &middot; Chrome &middot; Firefox &middot; Safari 26.4</span>
@@ -3868,7 +3872,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Service Worker static routing ───────────────────── -->
-    <section class="demo" data-cap="sw-static-routing">
+    <section class="demo" id="sw-static-routing" data-cap="sw-static-routing">
       <h2>
         <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
         <span class="stat cross">Chrome 123 &middot; Safari 27 &middot; Gecko positive</span>
@@ -3964,7 +3968,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Compression Dictionary Transport ───────────────────── -->
-    <section class="demo" data-cap="compression-dict">
+    <section class="demo" id="compression-dict" data-cap="compression-dict">
       <h2>
         <span>Compression dictionaries <span class="mono">dcb / dcz</span></span>
         <span class="stat cross">Chrome 130 &middot; Firefox 153 &middot; transport-level</span>
@@ -3995,7 +3999,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── stale-while-revalidate ───────────────────── -->
-    <section class="demo" data-cap="stale-revalidate">
+    <section class="demo" id="stale-revalidate" data-cap="stale-revalidate">
       <h2>
         <span>stale-while-revalidate <span class="mono">async at the edge</span></span>
         <span class="stat cross">RFC&nbsp;5861 &middot; Cloudflare async 2026</span>
@@ -4028,7 +4032,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <p class="lede" style="margin-top:4px">And two from the far edge: one perfectly on-brand, one just because.</p>
 
     <!-- ───────────────────── Local Font Access ───────────────────── -->
-    <section class="demo" data-cap="local-fonts">
+    <section class="demo" id="local-fonts" data-cap="local-fonts">
       <h2>
         <span>Local Font Access <span class="mono">queryLocalFonts()</span></span>
         <span class="stat contested">Chrome desktop &middot; Safari &amp; Firefox oppose</span>
@@ -4050,7 +4054,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── WebGPU ───────────────────── -->
-    <section class="demo" data-cap="webgpu">
+    <section class="demo" id="webgpu" data-cap="webgpu">
       <h2>
         <span>WebGPU <span class="mono">navigator.gpu</span></span>
         <span class="stat cross">Chrome &middot; Safari 26 &middot; Firefox 141</span>
@@ -4069,7 +4073,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── post-quantum WebCrypto ───────────────────── -->
-    <section class="demo" data-cap="pq-webcrypto">
+    <section class="demo" id="pq-webcrypto" data-cap="pq-webcrypto">
       <h2>
         <span>Post-quantum WebCrypto <span class="mono">ML-KEM &middot; ML-DSA &middot; X-Wing</span></span>
         <span class="stat chrome">Chrome 155 &middot; FF Nightly &middot; Safari no</span>
@@ -4106,7 +4110,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── navigator.cpuPerformance ───────────────────── -->
-    <section class="demo" data-cap="cpu-performance">
+    <section class="demo" id="cpu-performance" data-cap="cpu-performance">
       <h2>
         <span>navigator.cpuPerformance <span class="mono">device tier</span></span>
         <span class="stat chrome">Chrome 152 &middot; Safari/FF no</span>
@@ -4185,7 +4189,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── Container Timing ───────────────────── -->
-    <section class="demo" data-cap="container-timing">
+    <section class="demo" id="container-timing" data-cap="container-timing">
       <h2>
         <span>Container Timing <span class="mono">containertiming attribute</span></span>
         <span class="stat trial">Chrome flag &middot; FF 156 flag &middot; WICG</span>
@@ -4423,7 +4427,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── media element pseudo-classes ───────────────────── -->
-    <section class="demo" data-cap="media-pseudo">
+    <section class="demo" id="media-pseudo" data-cap="media-pseudo">
       <h2>
         <span>Media element pseudo-classes <span class="mono">:playing &middot; :paused &middot; :buffering</span></span>
         <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 158</span>
@@ -4455,7 +4459,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── the TC39 trio ───────────────────── -->
-    <section class="demo" data-cap="tc39-trio">
+    <section class="demo" id="tc39-trio" data-cap="tc39-trio">
       <h2>
         <span>Three TC39 methods that finished <span class="mono">sumPrecise &middot; getOrInsert &middot; Iterator.concat</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
@@ -4487,7 +4491,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── image-rendering: crisp-edges ───────────────────── -->
-    <section class="demo" data-cap="crisp-edges">
+    <section class="demo" id="crisp-edges" data-cap="crisp-edges">
       <h2>
         <span>image-rendering: crisp-edges</span>
         <span class="stat cross">Safari 7 &middot; FF 65 &middot; Chrome 148</span>
@@ -4521,7 +4525,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── text-decoration-skip-ink: all ───────────────────── -->
-    <section class="demo" data-cap="skip-ink-all">
+    <section class="demo" id="skip-ink-all" data-cap="skip-ink-all">
       <h2>
         <span>text-decoration-skip-ink: all</span>
         <span class="stat cross">Safari 15.4 &middot; FF 75 &middot; Chrome 148</span>
@@ -4560,7 +4564,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── focus({ focusVisible }) ───────────────────── -->
-    <section class="demo" data-cap="focus-visible-opt">
+    <section class="demo" id="focus-visible-opt" data-cap="focus-visible-opt">
       <h2>
         <span>focus({ focusVisible })</span>
         <span class="stat cross">Safari 18.4 &middot; FF 104 &middot; Chrome 145</span>
@@ -4635,7 +4639,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <!-- ─────────── the site-relevant half: measurement, probes, chrome ─────────── -->
 
     <!-- ───────────────────── speculation rules: the measurement half ───────────────────── -->
-    <section class="demo" data-cap="spec-measure">
+    <section class="demo" id="spec-measure" data-cap="spec-measure">
       <h2>
         <span>Speculation Rules, the measurement half <span class="mono">getSpeculations() &middot; on-prefetch-activation</span></span>
         <span class="stat chrome">Chrome only &middot; several still proposals</span>
@@ -4670,7 +4674,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── the QUERY method ───────────────────── -->
-    <section class="demo" data-cap="http-query">
+    <section class="demo" id="http-query" data-cap="http-query">
       <h2>
         <span>The QUERY method <span class="mono">RFC 10008</span></span>
         <span class="stat trial">Published Jun 2026 &middot; every engine sends it &middot; no cache stores it</span>
@@ -4799,7 +4803,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── window-drag ───────────────────── -->
-    <section class="demo" data-cap="window-drag">
+    <section class="demo" id="window-drag" data-cap="window-drag">
       <h2>
         <span>window-drag</span>
         <span class="stat trial">Chrome 152 &middot; FF positive &middot; Safari no</span>
@@ -4831,7 +4835,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── paintTime / presentationTime ───────────────────── -->
-    <section class="demo" data-cap="paint-time">
+    <section class="demo" id="paint-time" data-cap="paint-time">
       <h2>
         <span>paintTime / presentationTime <span class="mono">on paint, LCP + LoAF entries</span></span>
         <span class="stat cross">Chrome 145 &middot; FF 140 &middot; Safari 26.2 LCP only</span>
@@ -4869,7 +4873,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── soft navigations + InteractionContentfulPaint ───────────────────── -->
-    <section class="demo" data-cap="soft-nav">
+    <section class="demo" id="soft-nav" data-cap="soft-nav">
       <h2>
         <span>Soft navigations <span class="mono">+ interaction-contentful-paint</span></span>
         <span class="stat chrome">Chrome 151 &middot; Safari/FF no</span>
@@ -4905,7 +4909,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── resource timing contentType + declarative PO ───────────────────── -->
-    <section class="demo" data-cap="content-type-rt">
+    <section class="demo" id="content-type-rt" data-cap="content-type-rt">
       <h2>
         <span>contentType in Resource Timing <span class="mono">+ Declarative PerformanceObserver</span></span>
         <span class="stat cross">Chrome 148 &middot; FF 129 &middot; Safari positive</span>
@@ -5169,7 +5173,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── caret-shape ───────────────────── -->
-    <section class="demo" data-cap="caret-shape">
+    <section class="demo" id="caret-shape" data-cap="caret-shape">
       <h2>
         <span>caret-shape <span class="mono">block &middot; underscore &middot; bar</span></span>
         <span class="stat chrome">Chrome 144 &middot; Safari/FF no</span>
@@ -5195,7 +5199,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── ::search-text ───────────────────── -->
-    <section class="demo" data-cap="search-text">
+    <section class="demo" id="search-text" data-cap="search-text">
       <h2>
         <span>::search-text <span class="mono">styling find-in-page</span></span>
         <span class="stat chrome">Chrome 144 &middot; Safari/FF no</span>
@@ -5240,7 +5244,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── revert-rule ───────────────────── -->
-    <section class="demo" data-cap="revert-rule">
+    <section class="demo" id="revert-rule" data-cap="revert-rule">
       <h2>
         <span>revert-rule <span class="mono">the fourth global keyword</span></span>
         <span class="stat cross">Chrome 148 &middot; Safari 27 &middot; FF 150</span>
@@ -5276,7 +5280,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── attr() type() ───────────────────── -->
-    <section class="demo" data-cap="attr-type">
+    <section class="demo" id="attr-type" data-cap="attr-type">
       <h2>
         <span>attr() <span class="mono">with type() outside content</span></span>
         <span class="stat cross">Chrome 133 &middot; FF 155 &middot; Safari 27.3 beta</span>
@@ -5308,7 +5312,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── text-decoration-inset ───────────────────── -->
-    <section class="demo" data-cap="text-decoration-inset">
+    <section class="demo" id="text-decoration-inset" data-cap="text-decoration-inset">
       <h2>
         <span>text-decoration-inset</span>
         <span class="stat cross">Firefox 146 &middot; Chrome 157 &middot; Safari 27.3 beta</span>
@@ -5411,7 +5415,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── XSLT removal ───────────────────── -->
-    <section class="demo" data-cap="xslt">
+    <section class="demo" id="xslt" data-cap="xslt">
       <h2>
         <span>XSLT <span class="mono">being removed from the platform</span></span>
         <span class="stat contested">Chrome 158 turns it off &middot; all three engines agree</span>
@@ -5457,7 +5461,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
          ═════════════════════════════════════════════════════════════════ -->
 
     <!-- ───────────────────── alpha() ───────────────────── -->
-    <section class="demo" data-cap="alpha-function">
+    <section class="demo" id="alpha-function" data-cap="alpha-function">
       <h2>
         <span>CSS <span class="mono">alpha()</span></span>
         <span class="stat cross">Chrome 152 &middot; Safari 27 &middot; FF 155</span>
@@ -5490,7 +5494,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── color-mix() with 3+ colours ───────────────────── -->
-    <section class="demo" data-cap="color-mix-variadic">
+    <section class="demo" id="color-mix-variadic" data-cap="color-mix-variadic">
       <h2>
         <span><span class="mono">color-mix()</span> with any number of colours</span>
         <span class="stat cross">FF 150 &middot; Safari 27 &middot; Chrome no</span>
@@ -5515,7 +5519,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── font-width ───────────────────── -->
-    <section class="demo" data-cap="font-width">
+    <section class="demo" id="font-width" data-cap="font-width">
       <h2>
         <span><span class="mono">font-width</span> <span class="mono">/ the property font-stretch became</span></span>
         <span class="stat cross">Safari 18.4 &middot; FF 155 &middot; Chrome no</span>
@@ -5540,7 +5544,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── scroll anchoring ───────────────────── -->
-    <section class="demo" data-cap="overflow-anchor">
+    <section class="demo" id="overflow-anchor" data-cap="overflow-anchor">
       <h2>
         <span>Scroll anchoring <span class="mono">overflow-anchor</span></span>
         <span class="stat cross">Chrome 56 &middot; FF 66 &middot; Safari 27</span>
@@ -5566,7 +5570,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── typed arithmetic ───────────────────── -->
-    <section class="demo" data-cap="typed-arithmetic">
+    <section class="demo" id="typed-arithmetic" data-cap="typed-arithmetic">
       <h2>
         <span>Typed arithmetic <span class="mono">calc(100vw / 1px)</span></span>
         <span class="stat cross">Chrome 140 &middot; Safari 26 &middot; FF 158</span>
@@ -5592,7 +5596,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── import() retry ───────────────────── -->
-    <section class="demo" data-cap="import-retry">
+    <section class="demo" id="import-retry" data-cap="import-retry">
       <h2>
         <span>Retrying a failed <span class="mono">import()</span></span>
         <span class="stat cross">FF 155 &middot; Chrome 156 &middot; Safari TP</span>
@@ -5619,7 +5623,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     </section>
 
     <!-- ───────────────────── :navigation-source ───────────────────── -->
-    <section class="demo" data-cap="navigation-source">
+    <section class="demo" id="navigation-source" data-cap="navigation-source">
       <h2>
         <span><span class="mono">:navigation-source</span></span>
         <span class="stat chrome">Chrome 156 &middot; Safari/FF no</span>
@@ -8604,13 +8608,51 @@ navigation.addEventListener("navigate", (e) =&gt; {
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
 
-  // chip strip
+  // chip strip: each chip links to its card, and its title (which nav.js draws
+  // as a Luna infotip) is the opening of that card's .note, minus the WebKit
+  // position badge some notes start with. A sentence ends at punctuation
+  // followed by anything but a lowercase letter, so "e.g. sticky" holds
+  // together; sentences accrue until 60 characters, because a few cards open on
+  // a teaser ("A second axis for border-radius.") that says little alone.
   var strip = document.getElementById("caps");
+  var SENTENCE = /^.+?[.!?](?=\s+[^a-z]|$)/;
+  var tipFor = function (card) {
+    var note = card.querySelector(".note");
+    if (!note) return "";
+    note = note.cloneNode(true);
+    note.querySelectorAll(".wk").forEach(function (b) { b.remove(); });
+    var rest = note.textContent.replace(/\s+/g, " ").trim();
+    var tip = "";
+    while (rest && tip.length < 60) {
+      var s = rest.match(SENTENCE);
+      var piece = s ? s[0] : rest;
+      tip = tip ? tip + " " + piece : piece;
+      rest = rest.slice(piece.length).trim();
+    }
+    return tip;
+  };
   Object.keys(label).forEach(function (k) {
-    var c = document.createElement("span");
+    var card = document.querySelector('.demo[data-cap="' + k + '"]');
+    var c = document.createElement("a");
     c.className = "chip " + (state[k] ? "yes" : "no");
     c.textContent = label[k];
+    c.href = "#" + card.id;
+    var tip = tipFor(card);
+    if (tip) c.title = tip;
     strip.appendChild(c);
+  });
+  // The fragment jump lands on a card whose neighbours are still
+  // content-visibility placeholders (360px). They render on the next frame at
+  // their real heights, and a skipped subtree can't be a scroll anchor, so the
+  // target slid up to 150px off the top (measured 2026-11-11, Chrome, #temporal).
+  // Scrolling again once two frames have rendered lands it flush.
+  strip.addEventListener("click", function (e) {
+    var a = e.target.closest("a.chip");
+    var t = a && document.getElementById(a.hash.slice(1));
+    if (!t) return;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { t.scrollIntoView(); });
+    });
   });
 
   // flag unsupported cards so their fallback note shows
