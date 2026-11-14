@@ -147,7 +147,7 @@
 </div>
 <p id="rg-live-off" class="rg-box rg-pad">The live probe needs JavaScript and this site's photo list.</p>
 <p>No hop carries <code>cf-cache-status</code>, which means none of them touched a cache: each one ran the Worker and read R2. The race puts the two paths side by side: a full request, cut off once its headers arrive, against a 1 KiB range of the same file. On 2026-10-24 from New York, 5 rounds each, the full request's headers took a median 27 ms, all from Workers Cache, and the range's took 69 ms.</p>
-<p>One trap cost me a wrong draft of this section. The photo route stamps <code>x-photo-cache: hit</code> or <code>miss</code> on what it returns, and Workers Cache stores that response whole, header included. A repeat request then gets <code>x-photo-cache: miss</code> out of a cache hit with an <code>age</code> of nine minutes. Four of 13 originals I sampled answered that way on every request. Read <code>cf-cache-status</code> and <code>age</code> first.</p>
+<p>One trap cost me a wrong draft of this section. The photo route stamped <code>x-photo-cache: hit</code> or <code>miss</code> on what it returned, and Workers Cache stored that response whole, header included. A repeat request then got <code>x-photo-cache: miss</code> out of a cache hit with an <code>age</code> of nine minutes. Four of 13 originals I sampled answered that way on every request. The route now sets the header only where Workers Cache won't store it, such as a request with a query string, so a clean URL carries none. Read <code>cf-cache-status</code> and <code>age</code> first.</p>
 
 <h2>What would close the gap</h2>
 <ul>
