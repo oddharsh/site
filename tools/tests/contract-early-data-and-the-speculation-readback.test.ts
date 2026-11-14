@@ -79,13 +79,39 @@ test("speculation readback: rows fold per path and the rate orders them", async 
     "sorted by speculations, descending",
   );
   const garage = rows.find((r) => r.path === "/garage");
-  assert.deepEqual(garage, { path: "/garage", prefetch: 10, prerender: 40, activated: 25, speculated: 50, rate: 0.5 });
+  assert.deepEqual(garage, {
+    path: "/garage",
+    prefetch: 10,
+    prerender: 40,
+    activated: 25,
+    speculated: 50,
+    rate: 0.5,
+    reached: { complete: 0, interactive: 0, early: 0, prefetch: 0, unrecorded: 0 },
+  });
   assert.equal(rows.find((r) => r.path === "/lwe")?.rate, 0.02);
   assert.equal(rows.find((r) => r.path === "/orphan")?.rate, null, "no denominator, no rate");
   assert.equal(
     rows.some((r) => r.path === "/ghost"),
     false,
   );
+});
+
+// reached splits only the client beacon's activations, by the state nav.ts
+// sent; rows written before it existed carry no state and read unrecorded.
+test("speculation readback: reached splits client activations by how far the prerender got", async () => {
+  const { summarizeSpeculation } = await import("../../src/worker/speculation.ts");
+  const [row] = summarizeSpeculation([
+    { kind: "prerender", path: "/about", n: 20 },
+    { kind: "activated-client", path: "/about", state: "complete", n: 6 },
+    { kind: "activated-client", path: "/about", state: "interactive", n: 2 },
+    { kind: "activated-client", path: "/about", state: "early", n: 3 },
+    { kind: "activated-client", path: "/about", state: "prefetch", n: 1 },
+    { kind: "activated-client", path: "/about", state: "", n: 4 },
+    { kind: "activated-client", path: "/about", state: "banana", n: 5 },
+    { kind: "activated", path: "/about", state: "", n: 7 }, // the header beacon never splits
+  ]);
+  assert.deepEqual(row.reached, { complete: 6, interactive: 2, early: 3, prefetch: 1, unrecorded: 9 });
+  assert.equal(row.activated, 21, "the client total still wins the max over the header's 7");
 });
 
 test("speculation readback: the route is wired, allowlisted, and refuses writes", async () => {
