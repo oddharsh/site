@@ -70,6 +70,22 @@ if (!activations) {
   console.log("No promotion or exclusion follows from this window; re-run once activations appear.");
   process.exit(0);
 }
+// How far each client-counted speculation got before the click. "early" and
+// "interactive" are the clicks an earlier start (a trajectory predictor, say)
+// could have helped; a window that is nearly all "complete" says moderate
+// already starts in time, and starting sooner would only add misses.
+const reached = all.reduce(
+  (t, r) => {
+    for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] += r.reached?.[k] ?? 0;
+    return t;
+  },
+  { complete: 0, interactive: 0, early: 0, prefetch: 0, unrecorded: 0 },
+);
+console.log(
+  `\nreached before the click (client beacon): ${Object.entries(reached)
+    .map(([k, n]) => `${k} ${n}`)
+    .join(", ")}`,
+);
 const hot = rows.filter((r) => r.rate !== null && r.rate >= 0.5);
 const cold = rows.filter((r) => r.rate !== null && r.rate <= 0.05 && r.speculated >= MIN * 3);
 console.log(`\ncandidates to promote (rate >= 50%): ${hot.length ? hot.map((r) => r.path).join(", ") : "none"}`);
