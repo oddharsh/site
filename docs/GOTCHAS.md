@@ -677,10 +677,15 @@ skips it.
     answered 307 while `cloudflare.config.ts` said 301, and `/coffee/` and
     `/serendipity/` skipped the redirect entirely, since their modules served
     their own root as a second 200. The route oracle had accepted
-    `[301, 307, 308]` for `/garage/`, so it could not tell. A path that must
-    redirect permanently needs an exact route to `routeDropSlash` in
-    `src/worker/index.ts`, and its row in the route oracle (`bun run
-    routes:check`) pins `status: 301` and the `location`.
+    `[301, 307, 308]` for `/garage/`, so it could not tell. Since 2026-11-14
+    one `run_worker_first` row, `/*/` (`SLASHED_TWINS` in
+    `src/worker/routes.ts`), sends every slashed path to the Worker, and
+    `src/worker/dispatch.ts` `route()` 301s a slashed GET or HEAD before the
+    prefix walk when its twin is a sitemap page or a Worker route; any other
+    slashed miss still gets one 404. A new exact route ending in `/` answers ahead of that rule,
+    so it must redirect on its own (`/images/` does). The route oracle
+    (`bun run routes:check`) pins `status: 301` and the `location` for a
+    Worker-rendered page, a static section page and a module root.
     Checked by: `tools/verify-routes.ts`.
 
 79. **A walk that names a tree which still exists passes on zero files.**

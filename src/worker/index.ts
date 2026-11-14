@@ -249,10 +249,6 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/garage/dyno": routeDyno,
   [DYNO_PULLS_URL]: handleDynoPulls,
   "/garage/dyno.json": handleDynoJson,
-  "/garage/": routeDropSlash,
-  "/lwe/": routeDropSlash,
-  "/coffee/": routeDropSlash,
-  "/serendipity/": routeDropSlash,
   // /perf shipped as the original name and lived for about an hour. The 301s are
   // not for humans: `agents: true` puts a surface in the MCP resources projection,
   // and _headers caches the well-known cards for 30 days, so an agent can hold the
@@ -262,7 +258,6 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/perf.json": (_request, _env, _ctx, url) => Response.redirect(url.origin + "/garage/dyno.json", 301),
 
   "/lens": routeLens,
-  "/lens/": routeDropSlash,
   "/lens/fetch": handleLensFetch,
   "/lens/shot": handleLensShot,
   "/lens/browser": handleLensBrowser,
@@ -337,7 +332,6 @@ const EXACT_HANDLERS: Record<ExactPath, RouteHandler> = {
   "/ledger/vitals": handleVitals,
 
   "/writing": routeWritingIndex,
-  "/writing/": routeDropSlash,
 
   // webmention: the open web's way to say "I linked to you." The endpoint takes
   // the POST; the approve/decline pair are HMAC-signed host actions (same
@@ -663,15 +657,6 @@ function routeAgentCard(request: SiteRequest, env: Env) {
 
 function routePhotosRedirect(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + "/photos", 301);
-}
-
-// canonical URLs carry no trailing slash (sitemap + rel=canonical + llms.txt all
-// say so). A worker route's own slashed twin 301s to the slashless form rather
-// than serving a duplicate 200. The asset layer's drop-trailing-slash agrees on
-// the direction but redirects with a 307, so a worker-first section root
-// (/garage/, /lwe/) is routed here to get the permanent status.
-function routeDropSlash(_request, _env, _ctx, url) {
-  return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
 // /terminal retired 2026-09-16 (the comment on its EXACT_HANDLERS rows says

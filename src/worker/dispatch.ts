@@ -25,7 +25,7 @@ import { CANONICAL_HOST, isCanonicalHost } from "./lib/const.ts";
 import { apiPreflight, withApiContract } from "./lib/api-contract.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
 import { mcpEraOf } from "./lib/mcp-protocol.ts";
-import { countMiss, recoverNotFound } from "./lib/not-found.ts";
+import { canonicalPage, countMiss, recoverNotFound, sitemapPaths } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
@@ -121,10 +121,9 @@ export function createDispatch(handlers: DispatchHandlers) {
     exactRoutes.set(path, SELF_FETCH_PATHS.has(path) ? withSelfFetchHandler(handle) : handle);
   }
   // one page per album (albums.ts), generated at deploy like /photos, with the
-  // dynamic handler as the 404 fallback and the slashed twin 301ing to it
+  // dynamic handler as the 404 fallback
   for (const album of Object.values(ALBUMS)) {
     exactRoutes.set(albumPath(album), (request, env, ctx, url) => handlers.album(album, request, env, ctx, url));
-    exactRoutes.set(`${albumPath(album)}/`, (_request, _env, _ctx, url) => Response.redirect(url.origin + albumPath(album), 301));
   }
   // Walked in routes.ts's order, which is load-bearing (its PREFIX_ROUTES header).
   const prefixRoutes = PREFIX_ROUTES.map((r) => ({ label: r.label, match: r.match, handle: need(handlers.prefix[r.label], r.label) }));
@@ -320,6 +319,23 @@ export function createDispatch(handlers: DispatchHandlers) {
     // shows a self-scan's inner work as inner work.
     const exact = exactRoutes.get(url.pathname);
     if (exact) return dispatchTraced(url.pathname, "exact", exact, request, env, ctx, url);
+
+    // Canonical URLs carry no trailing slash, so a slashed GET 301s to its twin
+    // with the query kept (routes.ts SLASHED_TWINS claims every such path).
+    // After the exact table, so /images/ keeps its own redirect; before the
+    // prefix walk, which would hand /garage/horizon/ to the asset layer's 307
+    // and /coffee/ to cal's root as a second 200. The twin must be real: a
+    // sitemap page (canonicalPage also fixes case, so /Reading/ lands on
+    // /reading in one hop) or a path a Worker route answers. Anything else,
+    // /wp-admin/ say, falls through to one 404 and the miss recovery below
+    // rather than a 301 to a second 404. Other methods fall through too: a
+    // 301 lets a client turn a POST into a GET.
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname.length > 1 && url.pathname.endsWith("/")) {
+      const bare = url.pathname.replace(/\/+$/, "") || "/";
+      const twin = canonicalPage(url.pathname, await sitemapPaths(env)) ?? (exactRoutes.has(bare) || prefixRoutes.some((r) => r.match(bare)) ? bare : null);
+      if (twin)
+        return dispatchTraced("/<path>/", "slash", (_request, _env, _ctx, u) => Response.redirect(u.origin + twin + u.search, 301), request, env, ctx, url);
+    }
 
     for (const r of prefixRoutes) {
       if (r.match(url.pathname)) return dispatchTraced(r.label, "prefix", r.handle, request, env, ctx, url);
