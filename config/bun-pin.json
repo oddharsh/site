@@ -10,5 +10,5 @@
     "Do not add packageManager to package.json: Workers Builds cannot resolve",
     "dated canaries there. Both build paths use this file and the shared installer."
   ],
-  "bun": "1.4.4-canary.20261112.1+ccb3611"
+  "bun": "1.4.4-canary.20261113.1+d0f4fdd"
 }
