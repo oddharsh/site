@@ -7,9 +7,9 @@
 // without a token. Here, the two checks that decide whether a release is
 // healthy are reachable from a test.
 
-// Every probe reads this one route because it is the only one that reports WHICH
-// version answered. Both site versions read the same D1 changelog, so
-// `/updates.json` structurally cannot tell two of them apart.
+// Every probe reads this one route because it reports WHICH version answered
+// on every request and names the commit. `/updates.json` names its version but no
+// commit.
 export const SAMPLE_URL = "https://aadhar.sh/whoareyou.json";
 export const SAMPLES = 40;
 // Per-request ceiling, and the ONLY thing standing between a stalled socket and

@@ -250,7 +250,7 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
   // the outside: `no-store` below means every poll re-runs the worker and reports
   // the version that actually handled it. That is why the canary sampler in
   // tools/deploy-promote.ts reads THIS route rather than /updates.json, which
-  // reports the D1 changelog both versions share and so cannot tell them apart.
+  // names its version too but carries no commit.
   //
   // Omitted entirely when unbound (local dev, the contract tests) rather than
   // filled with a placeholder, same nullable discipline as the photo pipeline.

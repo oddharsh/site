@@ -34,17 +34,15 @@ export async function readCheckpoints(env) {
 }
 
 export async function renderWindowsUpdate(cp) {
-  // The recent entries ARE the changelog. The newest is the newest LOGGED release,
-  // the running build only when the release that serves carried an entry;
-  // /whoareyou.json reports the serving version itself.
+  // The recent entries ARE the changelog, and the newest is the newest LOGGED
+  // release, not what serves: on 2026-10-17 it said v195 (2026-09-12) while
+  // production ran commit 2d0efdb2. This page is baked at build step 1f and the
+  // serving version exists only per request, so the header names the release by
+  // its date and points at /whoareyou, which reads the version binding.
   const state = cp.state;
   const pts = cp.points.slice(-18).reverse(); // newest first
-  let build = "aadhar.sh",
-    log = [];
-  if (pts.length) {
-    build = pts[0].version;
-    log = pts.map((p) => [p.slug, p.title]);
-  }
+  const newest = pts[0] ?? null;
+  const log = pts.map((p) => [p.slug, p.title]);
   const rows = log.length
     ? log.map(([tag, desc]) => `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
     : `<li><span class="wu-desc">${esc(
@@ -78,7 +76,7 @@ export async function renderWindowsUpdate(cp) {
     <h1>Windows Update</h1>
     <div class="wu-ok">
       <span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span>
-      <div><b>aadhar.sh is up to date.</b><div class="sub">running build <span class="mono">${esc(build)}</span>. updates install themselves at deploy time, so you never click "restart now."</div></div>
+      <div><b>aadhar.sh is up to date.</b><div class="sub">${newest ? `newest logged release <span class="mono">${esc(newest.version)}</span>, ${esc(newest.ymd)}. ` : ""}the version serving this page is on <a href="/whoareyou">/whoareyou</a>. updates install themselves at deploy time, so you never click "restart now."</div></div>
     </div>
     <h2>Recently installed</h2>
     <ul class="wu-list">
@@ -97,22 +95,21 @@ export async function renderWindowsUpdate(cp) {
   });
 }
 
-// brief JSON for the Windows Update tray balloon: running build + recent changelog,
-// read from the same checkpoints projection as /updates and /restore.
+// Brief JSON for the Windows Update tray balloon, read from the same checkpoints
+// projection as /updates and /restore. `serving` is the Worker version that
+// rendered it (CF_VERSION_METADATA, null when unbound, as /whoareyou.json does);
+// `release` is the newest logged entry. They were one field, `build`, that held
+// the release and read as the serving version. The edge cache key folds in the
+// version (lib/cache.ts edgeKey), so a cached copy still names the version that
+// rendered it.
 export async function handleUpdatesJson(request, env, ctx) {
-  return cachedRender(request, env, ctx, "/updates.json", () => readCheckpoints(env).then(renderUpdatesJson));
+  return cachedRender(request, env, ctx, "/updates.json", () => readCheckpoints(env).then((cp) => renderUpdatesJson(cp, env?.CF_VERSION_METADATA?.id ?? null)));
 }
 
-export async function renderUpdatesJson(cp) {
+export async function renderUpdatesJson(cp, serving) {
   const pts = cp.points.slice(-8).reverse(); // newest first
-  let build = "aadhar.sh",
-    items = [];
-  if (pts.length) {
-    build = pts[0].version;
-    items = pts.map((p) => ({ slug: p.slug, title: p.title }));
-  }
   return jsonResponse(
-    { build, items },
+    { serving, release: pts[0]?.version ?? null, items: pts.map((p) => ({ slug: p.slug, title: p.title })) },
     200,
     {
       "cache-control": "public, max-age=0, s-maxage=300",
@@ -136,13 +133,14 @@ export async function renderSystemRestore(cp) {
   const points = cp.points;
   const state = cp.state;
   // "You are here" tracks the newest checkpoint, so it can't go stale on deploy
-  // the way a hardcoded constant did.
+  // the way a hardcoded constant did. It is the newest LOGGED point, not what
+  // serves (see renderWindowsUpdate), so the bar says so.
   const newest = points.length ? points[points.length - 1] : null;
   const live = newest ? { version: newest.version, title: newest.title, ymd: newest.ymd } : { version: "aadhar.sh", title: "live build", ymd: "" };
 
   const liveBar =
     `<div class="sr-now"><span class="pin"></span><div><b>You are here.</b>` +
-    `<div class="sub">current system: <span class="mono">${esc(live.version)}</span>` +
+    `<div class="sub">newest restore point: <span class="mono">${esc(live.version)}</span>` +
     ` &middot; ${esc(live.title)} &middot; shipped ${esc(live.ymd)}</div></div></div>`;
 
   let main;
