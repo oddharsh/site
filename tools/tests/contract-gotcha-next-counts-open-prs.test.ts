@@ -16,6 +16,20 @@ test("gotcha:next: reads each entry's number and title", () => {
   ]);
 });
 
+// Gotchas 95 to 99 wrap their bold titles, and a one-line pattern stopped
+// main's top at 94 on 2026-11-14, handing out 96 while 99 existed.
+test("gotcha:next: reads a title that wraps across lines", () => {
+  const text = doc(
+    "94. **djxl can't see progressive DC.** body",
+    "95. **A HIF archive's orientation and container both come from the eXIf",
+    "    chunk in sips's PNG.** `jixel-enc` writes the chunk",
+  );
+  assert.deepEqual(entries(text), [
+    [94, "djxl can't see progressive DC."],
+    [95, "A HIF archive's orientation and container both come from the eXIf chunk in sips's PNG."],
+  ]);
+});
+
 test("gotcha:next: two PRs with different entries on one number collide", () => {
   const held = holdings(88, [
     { number: 1486, entries: [[89, "Local dev serves gzip."]] },
