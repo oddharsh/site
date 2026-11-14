@@ -12,9 +12,13 @@ import { execFileSync } from "node:child_process";
 
 const git = (args: string[]) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 
-/** Every entry in a GOTCHAS.md as [number, title], in file order. */
+/**
+ * Every entry in a GOTCHAS.md as [number, title], in file order. A bold title
+ * can wrap across lines (95 to 99 do), so the title spans newlines and its
+ * whitespace collapses to the one-line form `holdings` compares.
+ */
 export function entries(text: string): [number, string][] {
-  return [...text.matchAll(/^(\d+)\. \*\*(.+?)\*\*/gm)].map((m) => [Number(m[1]), m[2]]);
+  return [...text.matchAll(/^(\d+)\. \*\*([\s\S]+?)\*\*/gm)].map((m) => [Number(m[1]), m[2].replace(/\s+/g, " ")]);
 }
 
 /**
