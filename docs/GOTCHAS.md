@@ -1003,3 +1003,19 @@ skips it.
     can fail. `config/browser-budget.json` holds the exceptions with their
     reasons.
     Checked by: `tools/check-browser.ts`.
+
+99. **An inline event handler in markup parsed on load logs a CSP error on
+    every visit, wherever it is parsed.** Chrome 157 reports a
+    `script-src-attr` violation the moment a parser sets an `on*` attribute,
+    before anything could run it: in a live element, an inert
+    `createHTMLDocument("")`, a `<template>`, `DOMParser`, `setHTML()` and
+    `Document.parseHTML()` each reported one, and the same markup without the
+    handler reported none (2026-11-13). /garage/horizon's Sanitizer demo
+    parsed its default `<img src=x onerror=alert(1)>` on load, so every visit
+    logged 2 violations; moving the parse into an inert document had stopped
+    the `alert(1)` but not the errors. A hash in `script-src` can't cover
+    them, since hashes never apply to handlers. A demo that parses hostile
+    markup waits for the reader's click. `bun run browser:check` reads every
+    `securitypolicyviolation` while each page loads, and parses an inline
+    `onclick` into /search first to prove it can fail.
+    Checked by: `tools/check-browser.ts`.
