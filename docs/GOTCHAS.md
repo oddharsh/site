@@ -1024,3 +1024,18 @@ skips it.
     `securitypolicyviolation` while each page loads, and parses an inline
     `onclick` into /search first to prove it can fail.
     Checked by: `tools/check-browser.ts`.
+
+100. **A header the Worker stamps per request freezes inside Workers Cache.**
+    Workers Cache answers a cacheable GET before the Worker runs, and it
+    stores the route's whole response, headers included. So a marker like
+    `x-photo-cache: miss` describes the one request that filled the front
+    tier and repeats on every HIT until eviction. On 2026-10-24, 4 of 13
+    sampled `/images/full/` originals answered `miss` out of
+    `cf-cache-status: HIT` at age 500+ s, and /garage/ranges shipped a wrong
+    draft that read it. `cf-cache-status` doesn't separate the tiers either:
+    a `caches.default` hit inside the Worker also reports `HIT` with an `age`
+    (2026-11-14). The photo route now stamps its marker only when
+    `shouldUseWorkersCache` refuses the request, so audit the inner tier with
+    a query string (`?probe=1`), which skips the front tier and keeps the same
+    Cache API key.
+    Checked by: `tools/tests/contract-photo-jxl-originals.test.ts`.
