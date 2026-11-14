@@ -78,6 +78,10 @@ export type ServedTreePlan = {
   directories: Map<string, string[]>;
   // Derived source paths that EXIST on this machine and were left out.
   skipped: string[];
+  // Declaration files (`*.d.ts`), left out of every root. They exist for the
+  // type checker (config/tsconfig.browser.json, tsconfig.sw.json) and nothing
+  // loads them, so staging one only puts dead bytes at a public URL.
+  declarations: string[];
 };
 
 // One owner per served path. Thrown once, by the planner, naming every
@@ -107,6 +111,7 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
   const files = new Map<string, string>();
   const directories = new Map<string, string[]>();
   const skipped: string[] = [];
+  const declarations: string[] = [];
   const claims = new Map<string, string[]>();
   const contest = (path: string, prior: string, root: string) => {
     const seen = claims.get(path) ?? [];
@@ -124,6 +129,10 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
       const child = root === "src/client" && authored.endsWith(".ts") && !authored.endsWith(".d.ts") ? authored.replace(/\.ts$/, ".js") : authored;
       if (derived.has(source)) {
         skipped.push(source);
+        continue;
+      }
+      if (entry.isFile() && entry.name.endsWith(".d.ts")) {
+        declarations.push(source);
         continue;
       }
       const priorFile = files.get(child);
@@ -157,7 +166,7 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
 
   for (const owners of claims.values()) owners.sort((a, b) => roots.indexOf(a) - roots.indexOf(b));
   if (claims.size) throw new ServedTreeCollision(claims);
-  return { roots, files, directories, skipped };
+  return { roots, files, directories, skipped, declarations };
 }
 
 type AdapterOptions = { cwd?: string };
@@ -235,8 +244,8 @@ export async function copyServedTree(
 //     because a symlink can only point at one of them
 //
 // One more case makes a real directory: a single-owner directory that holds a
-// skipped (derived) path. A whole-directory symlink would expose the leftover:
-// public/images has one owner, so a symlinked public/images would serve a
+// skipped (derived) path or a declaration file. A whole-directory symlink
+// would expose the leftover: public/images has one owner, so a symlinked public/images would serve a
 // leftover public/images/meta in dev. On a checkout with no leftovers every
 // single-owner directory is still one link.
 //
@@ -267,7 +276,7 @@ export async function linkServedTree(plan: ServedTreePlan, dest: string, options
     } else await symlink(relative(dirname(at), resolve(cwd, source)), at);
     links++;
   };
-  const hidesSkipped = (source: string) => plan.skipped.some((path) => path.startsWith(`${source}/`));
+  const hidesSkipped = (source: string) => [...plan.skipped, ...plan.declarations].some((path) => path.startsWith(`${source}/`));
 
   const place = async (dir: string): Promise<void> => {
     const providers = plan.directories.get(dir) ?? [];
