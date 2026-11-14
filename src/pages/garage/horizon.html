@@ -4414,8 +4414,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         <button class="xp-button" id="san-go">Parse both ways</button>
       </p>
       <div class="san-grid">
-        <div><p class="tb-cap"><code>setHTMLUnsafe()</code></p><pre class="san-out" id="san-unsafe"></pre></div>
-        <div><p class="tb-cap"><code>setHTML()</code></p><pre class="san-out" id="san-safe"></pre></div>
+        <div><p class="tb-cap"><code>setHTMLUnsafe()</code></p><pre class="san-out" id="san-unsafe">(press Parse both ways)</pre></div>
+        <div><p class="tb-cap"><code>setHTML()</code></p><pre class="san-out" id="san-safe">(press Parse both ways)</pre></div>
       </div>
       <p class="replaces">
         On the site: the honest answer is that this site has almost no
@@ -4958,12 +4958,16 @@ navigation.addEventListener("navigate", (e) =&gt; {
           var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
           // Parse into an INERT document, which has no browsing context: images
           // never fetch and event-handler attributes never fire. Both panes report
-          // the markup that survived, as text, so nothing about the comparison
-          // changes. What it removes is a real defect. run() fires on load, so
-          // setHTMLUnsafe() parsed the default payload into a live detached node,
-          // `src=x` 404'd, and onerror ran alert(1) on EVERY visit to this page.
-          // It also cost the hashed CSP a violation a hash cannot cover, since
-          // hashes never apply to event handlers.
+          // the markup that survived, as text. A live detached node used to take
+          // the default payload, so `src=x` 404'd and onerror ran alert(1).
+          //
+          // The parse waits for the click. Chrome 157 reports a script-src-attr
+          // violation the moment a parser sets an inline handler, wherever the
+          // parse happens: this inert document, a <template>, setHTML() and
+          // Document.parseHTML() each reported one, and the same markup without
+          // onerror reported none (measured 2026-11-13). Parsing on load logged 2
+          // CSP errors on every visit; a click logs them because the reader asked.
+          // browser:check's csp reading fails if a load parses one again.
           var inert = document.implementation.createHTMLDocument("");
           var run = function () {
             var src = document.getElementById("san-in").value;
@@ -4982,7 +4986,6 @@ navigation.addEventListener("navigate", (e) =&gt; {
                 : "no setHTML() here, so this pane just escaped the input:\n" + esc(src);
           };
           sanGo.addEventListener("click", run);
-          run();
         }
 
         // ── the TC39 trio ──
