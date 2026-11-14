@@ -316,3 +316,87 @@ test("every Lens page tool marks its output untrusted", () => {
   assert.ok(count >= 6, `expected at least 6 page tools, found ${count}`);
   assert.equal((body.match(/untrustedContentHint: true/g) || []).length, count);
 });
+
+// Chrome's WebMCP tool guidance suggests a budget per field: 30 characters for
+// a tool name, 500 for its description, 150 for each parameter description
+// (https://developer.chrome.com/docs/ai/webmcp/secure-tools, read 2026-11-03).
+// A description past it still registers, so nothing fails loudly; the agent
+// just reads a longer prompt. The description that counts is the one the
+// browser receives, ours plus the safety line webmcp.ts appends, so this
+// measures registeredDescription(), the function registerTool() builds it with,
+// for every /mcp tool (each page registers them all) and every Lens page tool.
+const BUDGET = { name: 30, description: 500, parameter: 150 };
+
+type Registered = { name: string; description: string; inputSchema?: { properties?: Record<string, { description?: string }> } };
+
+async function lensPageTools() {
+  // lens-webmcp.ts publishes its handoff on window at module load.
+  const had = Object.prototype.hasOwnProperty.call(globalThis, "window");
+  const previous = (globalThis as any).window;
+  (globalThis as any).window = {};
+  try {
+    const lens = await import(new URL("../../src/client/lens-webmcp.ts", import.meta.url).href);
+    // /lens renders one tab per LENS_TAB_LABELS key, and lens_show lists them
+    // all in its description, so the full set is the longest it gets.
+    const src = readFileSync("./src/worker/lens.ts", "utf8");
+    const start = src.indexOf("const LENS_TAB_LABELS = {");
+    const body = src.slice(start, src.indexOf("\n};", start));
+    const tabs = [...body.matchAll(/^  ([a-z]+): "/gm)].map((m) => m[1]);
+    assert.ok(tabs.length >= 10, `expected at least 10 Lens tabs in LENS_TAB_LABELS, found ${tabs.length}`);
+    return lens.pageTools(tabs);
+  } finally {
+    if (had) (globalThis as any).window = previous;
+    else delete (globalThis as any).window;
+  }
+}
+
+function overBudget(tools: Registered[]): string[] {
+  const over: string[] = [];
+  for (const tool of tools) {
+    if (tool.name.length > BUDGET.name) over.push(`${tool.name}: name is ${tool.name.length} characters, budget ${BUDGET.name}`);
+    if (tool.description.length > BUDGET.description)
+      over.push(`${tool.name}: description is ${tool.description.length} characters, budget ${BUDGET.description}`);
+    for (const [param, schema] of Object.entries(tool.inputSchema?.properties ?? {})) {
+      const length = schema.description?.length ?? 0;
+      if (length > BUDGET.parameter) over.push(`${tool.name}.${param}: description is ${length} characters, budget ${BUDGET.parameter}`);
+    }
+  }
+  return over;
+}
+
+test("every WebMCP tool fits Chrome's character budgets as registered", async () => {
+  // The instance the hints test above loaded with its stand-in. Bun keys the
+  // module cache by path under --no-isolate, so a second file importing
+  // webmcp.ts would decide which stand-in that test sees; keeping every import
+  // in this file, after it, keeps that deterministic.
+  const { registeredDescription } = await import(new URL("../../src/client/webmcp.ts?hints", import.meta.url).href);
+  const server = SITE_MCP_TOOLS.map((tool) => ({
+    name: tool.name,
+    // The same shape registerSiteTools() builds from a tools/list answer.
+    description: registeredDescription({ description: tool.description, annotations: tool.annotations || {} }),
+    inputSchema: tool.inputSchema,
+  }));
+  const page = (await lensPageTools()).map((def) => ({ ...def, description: registeredDescription(def) }));
+  // FLOORS, so a list that comes back empty can't pass by measuring nothing.
+  assert.ok(server.length >= 20, `expected at least 20 /mcp tools, measured ${server.length}`);
+  assert.ok(page.length >= 6, `expected at least 6 Lens page tools, measured ${page.length}`);
+  const measured = [...server, ...page];
+  // Every measured description carries the appended safety line, so the
+  // number below is the one the browser saw and not the bare source string.
+  assert.deepEqual(
+    measured.filter((t) => !/ \[safety: [^\]]+\]$/.test(t.description)).map((t) => t.name),
+    [],
+  );
+  assert.deepEqual(overBudget(measured), []);
+});
+
+test("the budget check reports a description one character over", () => {
+  const description = "x".repeat(BUDGET.description + 1);
+  const parameter = "y".repeat(BUDGET.parameter + 1);
+  assert.deepEqual(overBudget([{ name: "fits", description: "short", inputSchema: { properties: { q: { description: "short" } } } }]), []);
+  assert.deepEqual(overBudget([{ name: "n".repeat(31), description, inputSchema: { properties: { q: { description: parameter } } } }]), [
+    `${"n".repeat(31)}: name is 31 characters, budget 30`,
+    `${"n".repeat(31)}: description is 501 characters, budget 500`,
+    `${"n".repeat(31)}.q: description is 151 characters, budget 150`,
+  ]);
+});
