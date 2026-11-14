@@ -31,7 +31,6 @@
     "src/worker/rn.ts": 14,
     "src/worker/run.ts": 1,
     "src/worker/terminal.ts": 43,
-    "src/worker/updates.ts": 1,
     "src/worker/writing.ts": 2,
     "tools/apply-infra.ts": 4,
     "tools/build.ts": 24,
