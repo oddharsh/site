@@ -1,0 +1,32 @@
+[package]
+name = "zensim-score"
+version = "0.1.0"
+edition = "2024"
+description = "Scores image pairs with zensim 0.2.7 and zensim 0.3.0 profile A side by side, for zensim-probe.ts. Measurement only: nothing in the photo pipeline or the build runs it."
+license = "AGPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "zensim-score"
+path = "src/main.rs"
+
+[dependencies]
+# Two zensim generations under one roof, renamed so both link. `z02` is the
+# last crates.io release (0.2.7, linear preview-v0.2 profile). `z03` is the
+# unreleased 0.3.0 at a full rev, whose only profile is A (`zensim-a`, the
+# rev7_mix_h128 bake of 2026-11-03); a bake can change scores under the same
+# profile name, so a rev is the only identity a score has. On 2026-10-28 the
+# old imazen/zensim, where profile B lived, was renamed imazen/zensimx (the
+# 2026-10 numbers were taken at its 96c3c9b), and a new imazen/zensim restarted
+# the crate from 0.2.7. approx_* still feed the bake's output to the 0.2-era
+# power laws on A; zensim-probe.ts says what that costs. NO dependabot lane on
+# purpose: moving either pin changes every number the probe compares, so a
+# move is a rerun.
+z02 = { package = "zensim", version = "=0.2.7" }
+z03 = { package = "zensim", git = "https://github.com/imazen/zensim.git", rev = "6060039d8c0ace71d47c722ea76233bb2d745a22" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "pnm"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"
