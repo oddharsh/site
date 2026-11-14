@@ -73,6 +73,7 @@ jobs:
           workspaces: |
             tools/photos/zenc -> target
             tools/photos/jixel-enc -> target
+            tools/photos/photo-metrics -> target
           # The action also keys by job, platform, compiler, flags and Cargo
           # manifests/locks. Include the runner image and native library ABI.
           key: ${{ steps.native.outputs.cache-key }}
@@ -93,6 +94,14 @@ jobs:
         run: |
           cargo test --locked --manifest-path tools/photos/jixel-enc/Cargo.toml
           cargo clippy --locked --manifest-path tools/photos/jixel-enc/Cargo.toml --all-targets -- -D warnings
+
+      # photo-metrics scores every photo tool. Its tests pin which PNG colour
+      # chunks it refuses and which it reads as sRGB, djxl's among them
+      # (gotcha 101).
+      - name: Test the photo scorer
+        run: |
+          cargo test --locked --manifest-path tools/photos/photo-metrics/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/photo-metrics/Cargo.toml --all-targets -- -D warnings
 
       - name: Set up bun
         uses: ./.github/actions/setup-bun
