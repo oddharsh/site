@@ -281,7 +281,7 @@ const MCP_TOOL_DEFINITIONS = [
         doors: {
           type: "boolean",
           description:
-            "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called.",
+            "also READ behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list on their MCP server (listed, never called)",
         },
       },
       required: ["url"],
