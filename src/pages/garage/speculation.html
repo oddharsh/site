@@ -164,9 +164,18 @@ for (const f of [0, 1 / 3, 2 / 3, 1]) {
     if (link) entered[link.getAttribute("data-sp")] = now();
   });
   pad.addEventListener("pointerdown", function () { down = now(); });
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
   function row(label, ms, cls) {
-    var w = Math.max(0, Math.min(100, (ms / 600) * 100));
-    return '<div class="sp-row"><span>' + label + '</span><span class="sp-bar' + (cls || "") + '" style="width:' + w + '%"></span><span class="sp-ms">' + Math.round(ms) + " ms</span></div>";
+    var bar = el("span", "sp-bar" + (cls || ""));
+    bar.style.width = Math.max(0, Math.min(100, (ms / 600) * 100)) + "%";
+    var r = el("div", "sp-row");
+    r.append(el("span", "", label), bar, el("span", "sp-ms", Math.round(ms) + " ms"));
+    return r;
   }
   pad.addEventListener("click", function (e) {
     var link = e.target.closest && e.target.closest("[data-sp]");
@@ -176,9 +185,11 @@ for (const f of [0, 1 / 3, 2 / 3, 1]) {
     var moderate = hovered >= 200 ? enter + 200 : pd;
     var hover50 = hovered >= 50 ? enter + 50 : pd;
     var predictor = k in guessed ? Math.min(guessed[k], pd) : pd;
-    out.innerHTML = "<p class=\"sp-hint\">Head start before your click on <code>" + k + "</code>, after resting " + Math.round(Math.max(0, hovered)) + " ms on it:</p>" +
-      row("moderate (today)", click - moderate) + row("predictor", click - predictor) + row("50 ms hover", click - hover50) +
-      row("combo, HTML", click - Math.min(predictor, hover50), " sp-html") + row("combo, render", click - hover50);
+    var head = el("p", "sp-hint", "Head start before your click on ");
+    head.append(el("code", "", k), ", after resting " + Math.round(Math.max(0, hovered)) + " ms on it:");
+    out.replaceChildren(head,
+      row("moderate (today)", click - moderate), row("predictor", click - predictor), row("50 ms hover", click - hover50),
+      row("combo, HTML", click - Math.min(predictor, hover50), " sp-html"), row("combo, render", click - hover50));
     guessed = {}; entered = {}; down = 0;
     var tagged = pad.querySelectorAll(".sp-guessed");
     for (var j = 0; j < tagged.length; j++) tagged[j].classList.remove("sp-guessed");
