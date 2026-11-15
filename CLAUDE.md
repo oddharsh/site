@@ -75,8 +75,8 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   format, typecheck, lint, `pages:check` and `derive:check` pass, about 7 s. A test that reads source text must
   tolerate the formatter rewrapping it.
 - `validate` is the one required check: lint, format, typecheck, build under the perf
-  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
-  cal's tests.
+  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite,
+  cal's tests and photo-metrics' cargo tests.
 - Measure before you claim, and run the control that would show your
   instrument can fail. Most gotchas are an instrument that couldn't. When
   the instrument is a check, write the control into `tools/lib/controls.ts`

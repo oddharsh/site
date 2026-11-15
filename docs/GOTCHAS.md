@@ -1039,3 +1039,19 @@ skips it.
     a query string (`?probe=1`), which skips the front tier and keeps the same
     Cache API key.
     Checked by: `tools/tests/contract-photo-jxl-originals.test.ts`.
+
+101. **Every PNG djxl writes carries gAMA and cHRM, so a scorer that refuses
+    those chunks refuses all of hif-archive.ts.** photo-metrics decodes
+    every PNG as plain sRGB, while libjxl's `ssimulacra2` and
+    `butteraugli_main` honour the file's colour chunks, so photo-metrics
+    refuses the ones that would split them. The obvious list (iCCP, cICP,
+    gAMA, cHRM) is wrong: djxl 0.13.0 tags every decode with sRGB (intent
+    1), gAMA 45455 and cHRM, and sips and ImageIO write a bare sRGB. libjxl
+    lets sRGB outrank gAMA and cHRM whatever their values. On 2026-11-14,
+    same pixels with only the tag spliced in, sRGB alone or beside any
+    gAMA and cHRM scored exactly as untagged, and gAMA alone moved
+    libjxl's ssimulacra2 by 4.15 to 6.08. So the rule is: refuse iCCP and
+    cICP always, gAMA and cHRM only without sRGB. The crate's cargo tests
+    `scores_srgb_tags_exactly_as_untagged` and
+    `refuses_a_colour_chunk_libjxl_would_honour` run in `validate`.
+    Checked by: `tools/photos/photo-metrics/src/main.rs`.
