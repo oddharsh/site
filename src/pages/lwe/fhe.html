@@ -131,9 +131,9 @@
             <div class="pad">
               <p class="lead">Pick two numbers. We <b>encrypt</b> each as a big noisy value, hand <b>only the ciphertexts</b> to a server, let it <b>add them</b>, and decrypt the result. The server never sees your numbers. <span class="mono" style="font-size:8pt;color:#966715">(toy LWE: c = m&times;1000 + small noise; rounding recovers m)</span></p>
               <div class="he-row"><span class="lbl">your secrets</span>
-                <span><span class="kbd-step"><button data-add-a="-1">&minus;</button><span class="v" id="add-a">5</span><button data-add-a="1">+</button></span>
+                <span><span class="kbd-step"><button data-add-a="-1" aria-label="decrease the first secret">&minus;</button><span class="v" id="add-a">5</span><button data-add-a="1" aria-label="increase the first secret">+</button></span>
                 &nbsp;and&nbsp;
-                <span class="kbd-step"><button data-add-b="-1">&minus;</button><span class="v" id="add-b">8</span><button data-add-b="1">+</button></span>
+                <span class="kbd-step"><button data-add-b="-1" aria-label="decrease the second secret">&minus;</button><span class="v" id="add-b">8</span><button data-add-b="1" aria-label="increase the second secret">+</button></span>
                 <button class="xp-button compact" id="add-reroll" style="margin-left:8px">re-roll noise</button></span>
               </div>
               <div class="he-row"><span class="lbl">Enc(a)</span><span class="he-ct" id="ct-a">—</span></div>
@@ -187,7 +187,7 @@
             <div class="pad">
               <p class="lead">Your <b>secret</b> rides in the HIGH bits; <b>noise</b> fills the LOW bits, with a gap between them. Every op grows the noise: <b>add</b> nudges it, <b>multiply</b> blows it up. Once the noise climbs past the gap, <b>decoding rounds to the WRONG number</b> and corrupts the plaintext. <span class="mono" style="font-size:8pt;color:#966715">(toy: ciphertext = m&times;256 + noise; decode = round(&divide;256))</span></p>
               <div class="dc-pick">secret <b>m</b> =
-                <span class="kbd-step"><button id="dc-mdn">&minus;</button><span class="v" id="dc-m">9</span><button id="dc-mup">+</button></span>
+                <span class="kbd-step"><button id="dc-mdn" aria-label="decrease m">&minus;</button><span class="v" id="dc-m">9</span><button id="dc-mup" aria-label="increase m">+</button></span>
                 <span class="mono" style="font-size:8pt;color:#66707d">&nbsp;encode → ciphertext below</span>
               </div>
               <div class="dc-line">ciphertext <span class="mono" id="dc-ct">2307</span> = <span class="hi" id="dc-hi">9&times;256</span> &nbsp;+&nbsp; <span class="lo" id="dc-lo">noise 3</span></div>
