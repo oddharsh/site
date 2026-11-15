@@ -131,8 +131,9 @@ const nodeId = base32(pub);   // this string is the address</pre>
   var copy = document.getElementById("copy");
   if (copy) copy.addEventListener("click", function () {
     var t = document.getElementById("b32").textContent;
-    if (navigator.clipboard) navigator.clipboard.writeText(t);
-    copy.textContent = "copied"; setTimeout(function () { copy.textContent = "copy NodeId"; }, 1200);
+    var say = function (msg) { copy.textContent = msg; setTimeout(function () { copy.textContent = "copy NodeId"; }, 1200); };
+    if (!navigator.clipboard) return say("copy failed");
+    navigator.clipboard.writeText(t).then(function () { say("copied"); }, function () { say("copy failed"); });
   });
 })();
 </script>

@@ -871,6 +871,9 @@ type PlannedField = {
             },
             () => {
               btn.textContent = "Copy failed";
+              setTimeout(() => {
+                btn.textContent = "Copy curl";
+              }, 1200);
             },
           );
         });

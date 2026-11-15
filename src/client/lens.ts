@@ -1900,19 +1900,16 @@
   }
 
   function copyText(text, button) {
-    var done = () => {
+    var say = (msg) => {
       if (!button) return;
       var old = button.textContent;
-      button.textContent = "Copied";
+      button.textContent = msg;
       setTimeout(() => {
         button.textContent = old;
       }, 1400);
     };
-    if (navigator.clipboard && navigator.clipboard.writeText)
-      navigator.clipboard
-        .writeText(text)
-        .then(done)
-        .catch(() => {});
+    var done = () => say("Copied");
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => say("Copy failed"));
     else {
       var ta = document.createElement("textarea");
       ta.value = text;
