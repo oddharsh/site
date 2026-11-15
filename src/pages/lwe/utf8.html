@@ -26,7 +26,7 @@
 .enc-in { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .enc-in input { font-family: var(--font-mono); font-size: var(--text-lg); padding: 4px 8px; width: 170px; border: 1px solid var(--slate-63); box-shadow: inset 1px 1px 0 var(--slate-84); }
 .enc-in .preset { font-family: var(--font-ui); font-size: var(--text-h2); padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,var(--surface-desktop)); border: 1px solid var(--slate-63); }
-.enc-in .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,var(--amber-96)); }
+@media (hover: hover) and (pointer: fine) {.enc-in .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,var(--amber-96)); }}
 table.enc { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 table.enc th { text-align: left; color: var(--slate-55); font-weight: bold; font-size: var(--text-2xs); border-bottom: 1px solid #e0cf9e; padding: 3px 5px; }
 table.enc td { padding: 3px 5px; border-bottom: 1px solid var(--face); vertical-align: top; }
@@ -223,7 +223,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "before you sign off: pop quiz. 5 questions, no stakes, and the two demos above hold every answer.",
+  "intro": "before you sign off: pop quiz. 7 questions, no stakes, and the two demos above hold every answer.",
   "questions": [
     {
       "q": "Pop quiz then. Unicode says 中 is U+4E2D. What does that tell you about the bytes on disk?",
@@ -231,7 +231,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
         {
           "t": "nothing yet, the encoding turns that number into bytes",
           "ok": true,
-          "why": "Right. A code point is just a number, and UTF-8, UTF-16, and UTF-32 each store that same number as different bytes. That split between numbering and storage is the whole reason encodings exist."
+          "why": "A code point is just a number, and UTF-8, UTF-16, and UTF-32 each store that same number as different bytes. That split between numbering and storage is the whole reason encodings exist."
         },
         {
           "t": "the file just contains 4E 2D, you write the number down",
@@ -248,12 +248,12 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       ]
     },
     {
-      "q": "You asked the right question earlier: why didn't everyone just use UTF-32? One character, four bytes, easy indexing. So what killed it?",
+      "q": "The chat asked it outright: why not use UTF-32 everywhere? One character, four bytes, easy indexing. So what sank it?",
       "options": [
         {
           "t": "english gets 4x bigger and ascii tools break",
           "ok": true,
-          "why": "Exactly. A stored as 00 00 00 41 quadruples most of the internet's text, and decades of ASCII software choke on all those zero bytes. Either cost alone would have sunk it."
+          "why": "A stored as 00 00 00 41 quadruples every English file, and decades of ASCII software choke on all those zero bytes. Push on it, though: for Chinese the blowup is smaller, 4 bytes against UTF-8's 3, so the size case bites hardest on English text."
         },
         {
           "t": "it can't fit emoji and the rarer scripts",
@@ -292,29 +292,7 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
       ]
     },
     {
-      "q": "In the bit-packing demo, each byte of 中 opens with grey structure bits before the gold payload. What work are those grey prefixes doing?",
-      "options": [
-        {
-          "t": "they tag each byte as a start byte or a continuation",
-          "ok": true,
-          "why": "Right: 1110 says start of a 3-byte character, 10 says continuation. Drop into the middle of a stream and you can scan to the next start byte. That self-synchronizing property helped UTF-8 win."
-        },
-        {
-          "t": "they're error correction so flipped bits get fixed",
-          "why": "UTF-8 ships no checksums; a flipped bit simply corrupts that character. The prefixes only declare each byte's role, start of an N-byte sequence or continuation."
-        },
-        {
-          "t": "they say which language the character comes from",
-          "why": "Language never touches the byte stream; only the code point number does. The demo's reassembly line rebuilds U+4E2D purely from the gold payload bits read in order."
-        },
-        {
-          "t": "they're padding to round it up to whole bytes",
-          "why": "The demo labels them with real jobs: 3-byte start (1110) and continuation (10). Strip them and you could no longer tell where one character ends and the next begins."
-        }
-      ]
-    },
-    {
-      "q": "Last one, the flashcards trap. Someone asks how long the string 中 is. What's the honest answer?",
+      "q": "The flashcards trap. Someone asks how long the string 中 is. What's the honest answer?",
       "options": [
         {
           "t": "depends on the unit: 3 bytes, 1 code point, 1 glyph",
@@ -334,6 +312,72 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
           "why": "Length is well-defined the moment you name the unit. The page's move is picking the right layer for the job, which is why four-corner indexes characters by shape instead of bytes."
         }
       ]
+    },
+    {
+      "q": "In the bit-packing demo, é carries 11 gold bits across 2 bytes. € is U+20AC, a 14-bit number. Before you type it in, predict how UTF-8 stores it.",
+      "options": [
+        {
+          "t": "3 bytes: byte 1 opens 1110, then two continuations open 10",
+          "ok": true,
+          "why": "Two bytes leave 11 payload bits after the 110 and 10 markers, and 14 bits won't fit, so UTF-8 steps up to three: 4 + 6 + 6 = 16 gold bits. Type € and the reassembly line rebuilds U+20AC. It's also why € costs as much as 中: the width follows the number, whatever the script."
+        },
+        {
+          "t": "2 bytes, since 14 bits fit easily inside two 8-bit bytes",
+          "why": "Two raw bytes hold 16 bits, but UTF-8 spends 5 of them on markers: 110 on the start, 10 on the continuation. That leaves the 11 gold bits é uses, and € needs 14."
+        },
+        {
+          "t": "2 bytes opening 110, same as é, since both are Latin-script",
+          "why": "The chat's tiers track the size of the code point, and most accented Latin letters happen to sit low enough for 2 bytes. € sits at U+20AC, past anything 11 gold bits can reach."
+        },
+        {
+          "t": "4 bytes opening 11110, since symbols get the emoji treatment",
+          "why": "Emoji land on 4 bytes because their code points sit past U+FFFF, like 😀 at U+1F600. € is far below that, and 3 bytes already give 16 gold bits."
+        }
+      ]
+    },
+    {
+      "q": "Someone starts reading a UTF-8 stream at a random byte and says they must rewind to the start of the file to find where characters begin. What's the flaw?",
+      "options": [
+        {
+          "t": "every continuation byte opens with 10, so skip to the next one that doesn't",
+          "ok": true,
+          "why": "That's self-synchronizing: every byte says whether it starts a character or continues one, so you lose at most the character you landed in. The prefixes in the second demo are the labels: 10 for a continuation, and 0, 110, 1110, or 11110 for a start."
+        },
+        {
+          "t": "none: with variable widths, only the file's first byte can set the layout",
+          "why": "The chat says the opposite: you can drop into the middle of a stream and still find the next character. Each byte carries its role in its own prefix, so nothing hangs on the file's first byte."
+        },
+        {
+          "t": "they can resync, but only in plain ASCII, where every byte starts a character",
+          "why": "Partly right: ASCII bytes do open with 0. Multi-byte characters label themselves too, though. In the second demo 中's bytes open 1110, 10, 10, so a reader skips the 10s and lands on the next start."
+        },
+        {
+          "t": "they only need the text's language, which gives each character's width",
+          "why": "Language never reaches the byte stream; the width comes from the lead byte's prefix. 中 and 四 both open 1110 because both need three bytes, and é opens 110."
+        }
+      ]
+    },
+    {
+      "q": "Last one. UTF-32's pitch is trivial indexing: code point n sits at byte 4n. Does that fix the flashcards length trap for good?",
+      "options": [
+        {
+          "t": "only the code point count, and a skin-toned emoji spans several",
+          "ok": true,
+          "why": "Fixed width buys a clean code point count, and for 中 that matches the glyph. Grapheme clusters can span several code points, though, like the accented letters and skin-toned emoji in the chat's tip, so what a reader sees still needs its own count. And you'd pay 4x on English to get there."
+        },
+        {
+          "t": "yes: every character is exactly 4 bytes, so all three counts agree",
+          "why": "Bytes and code points agree in UTF-32, by design. Grapheme clusters are the chat's third length, and the tip on that term says one can be stored as several code points."
+        },
+        {
+          "t": "yes for 中, which makes UTF-32 the safe pick for any CJK app",
+          "why": "True for 中 itself: 1 code point, 1 glyph. As a rule it fails twice. Clusters can still span several code points, and the chat's case against UTF-32 is the 4x size on English and the lost ASCII compatibility."
+        },
+        {
+          "t": "no, because 中 takes 3 bytes in UTF-32, same as in UTF-8",
+          "why": "The first demo prints 中 in UTF-32 as 00 00 4E 2D, four bytes. UTF-32 never varies its width; that's the whole pitch."
+        }
+      ]
     }
   ]
 }
@@ -341,6 +385,6 @@ table.enc .by { font-family: var(--font-mono); color: #1a7d4a; } table.enc .na {
 <script src="/quiz.js" defer></script>
 <script src="/lwe/ask.js" defer></script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="31"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

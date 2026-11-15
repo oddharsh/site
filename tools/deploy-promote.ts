@@ -21,8 +21,8 @@
 //
 // WHAT IT ACTUALLY CHECKS BETWEEN STEPS. It polls /whoareyou.json, which reports
 // the serving version per request (src/worker/whoareyou.ts explains why that
-// route and not /updates.json: both versions read the same D1 changelog, so
-// the changelog cannot tell them apart). TWO PROBES run per step and they
+// route and not /updates.json: that one names its version but no
+// commit). TWO PROBES run per step and they
 // answer different questions, which is why neither replaces the other:
 //
 //   1. THE PINNED PROBE (probePinned). 12 requests carrying

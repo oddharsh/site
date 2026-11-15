@@ -448,6 +448,9 @@ export async function readRepository(gh: GithubGet, repo, workflowBlocks: Reposi
       return live;
     });
   }
+  if (repo.triage?.issue_types) {
+    observed.issueTypes = await attempt(() => gh(`/repos/${slug}/issue-types`));
+  }
   if (repo.code_scanning) {
     observed.codeScanning = await attempt(() => gh(`/repos/${slug}/code-scanning/default-setup`));
   }

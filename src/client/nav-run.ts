@@ -30,7 +30,7 @@ export function createRun(options) {
 
   var PAGES: RunItem[] = [
     { label: "Home", path: "/", hint: "aadhar.sh" },
-    { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view — the archive the old /images/ listing became" },
+    { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view" },
     { label: "whoareyou", path: "/whoareyou", hint: "system properties · what one request reveals · for agents + the curious" },
     { label: "security center", path: "/security", hint: "the site's security posture, XP-style: firewall, updates, threat protection" },
     { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
@@ -99,6 +99,7 @@ export function createRun(options) {
     { label: "garage · av2", path: "/garage/av2", hint: "AV2 stills vs shipped AVIF, and the picture fallback trap" },
     { label: "garage · round-trip", path: "/garage/round-trip", hint: "a parser for the twins, and the five bugs it found" },
     { label: "garage · ranges", path: "/garage/ranges", hint: "origin range requests, chunk sizes, and the photo route's R2 ranges" },
+    { label: "garage · speculation", path: "/garage/speculation", hint: "cursor prediction, hover delays, and prefetch versus prerender" },
     { label: "garage · controls", path: "/garage/controls", hint: "controls: plant each check's defect, and the ledger of what went blind" },
     // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast

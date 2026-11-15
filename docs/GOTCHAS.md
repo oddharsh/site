@@ -677,10 +677,15 @@ skips it.
     answered 307 while `cloudflare.config.ts` said 301, and `/coffee/` and
     `/serendipity/` skipped the redirect entirely, since their modules served
     their own root as a second 200. The route oracle had accepted
-    `[301, 307, 308]` for `/garage/`, so it could not tell. A path that must
-    redirect permanently needs an exact route to `routeDropSlash` in
-    `src/worker/index.ts`, and its row in the route oracle (`bun run
-    routes:check`) pins `status: 301` and the `location`.
+    `[301, 307, 308]` for `/garage/`, so it could not tell. Since 2026-11-14
+    one `run_worker_first` row, `/*/` (`SLASHED_TWINS` in
+    `src/worker/routes.ts`), sends every slashed path to the Worker, and
+    `src/worker/dispatch.ts` `route()` 301s a slashed GET or HEAD before the
+    prefix walk when its twin is a sitemap page or a Worker route; any other
+    slashed miss still gets one 404. A new exact route ending in `/` answers ahead of that rule,
+    so it must redirect on its own (`/images/` does). The route oracle
+    (`bun run routes:check`) pins `status: 301` and the `location` for a
+    Worker-rendered page, a static section page and a module root.
     Checked by: `tools/verify-routes.ts`.
 
 79. **A walk that names a tree which still exists passes on zero files.**
@@ -886,8 +891,19 @@ skips it.
     first use, startup's median fell to 37.8 ms (15 interleaved runs each,
     2026-11-03). `wrangler check startup` read 37.3 ms in CI the same day.
     Build them on first use, `x ??= new Intl.…()`, the way `tui.ts`,
-    `reading.ts` and `serendipity.ts` already did.
-    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`.
+    `reading.ts` and `serendipity.ts` already did. A browser pays the same
+    way, once per renderer process: the taskbar clock's `Intl.DateTimeFormat`
+    in `nav.ts` cost the first page of a visit 8 to 17 ms in Chrome and 30 to
+    53 ms under 4x CPU throttle (later pages in the tab, about 1 ms), and
+    /restore's `toLocaleDateString`, which builds a formatter per call,
+    ran 131 times before first paint (60 to 76 ms throttled; 40 once it ran
+    per month, 2026-11-10). The clock is formatted by hand now and `nav.ts`
+    may not touch Intl. `toLocaleString()` on a number is the same call:
+    eight essay pages grouped digits with it at load, 36 to 58 ms throttled
+    on a landing view, and group integers with a regex now.
+    `bun run browser:check` counts every Intl call a page makes before the
+    reader acts and allows only the ones `config/browser-budget.json` names.
+    Checked by: `tools/tests/contract-no-intl-object-at-module-scope.test.ts`, `tools/check-browser.ts`.
 
 93. **An Issues automation can exist and still send nowhere.** Workers
     Issues hands an issue to its automation, the automation names a
@@ -926,16 +942,18 @@ skips it.
     fails if the setting is dropped.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 
-95. **png 0.17 never decodes a PNG's eXIf chunk.** Its encoder writes
-    `Info::exif_metadata`, but its decoder leaves the field empty, so a
-    Rust encoder reading sips's PNG of a HIF sees no orientation and no
-    EXIF. The archive then decodes sideways, and exif-sooc refuses the
-    bare codestream it gets ("has no box to hold metadata"). `jixel-enc`
-    walks the chunks itself and passes the TIFF bytes to jixel's
-    `with_exif`, which also makes the output a container. On XT500132
-    (2026-10-17) the oriented encode then differs from the scored one by 7
-    to 15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
-    `finds_the_exif_chunk_png_0_17_will_not_decode` and
+95. **A HIF archive's orientation and container both come from the eXIf
+    chunk in sips's PNG.** `jixel-enc` writes the chunk's orientation into
+    the codestream and passes the chunk to jixel's `with_exif`, whose
+    `Exif` box makes the output a container. Lose the chunk and the
+    archive decodes sideways, and exif-sooc refuses the bare codestream
+    ("has no box to hold metadata"). png 0.17 wrote eXIf but never decoded
+    it, so `jixel-enc` walked the chunks by hand until png 0.18 filled
+    `Info::exif_metadata`. On XT509488 (Rotate 270 CW, 2026-11-10) both
+    reads gave a byte-identical 3,369,960-byte archive. On XT500132
+    (2026-10-17) the oriented encode differs from the scored one by 7 to
+    15 bytes, under hif-archive.ts's 256-byte check. Its cargo tests
+    `png_decodes_the_exif_chunk` and
     `exif_makes_a_container_with_a_raw_exif_box` run in `photos.yml`.
     Checked by: `tools/photos/jixel-enc/src/main.rs`.
 
@@ -953,3 +971,71 @@ skips it.
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
     Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+
+97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
+    whole window sideways on a phone.** An `<input>` keeps its 20-character
+    intrinsic width as a flex item unless it has `min-width: 0`, a `<pre>`
+    is as wide as its longest line unless it scrolls itself, and a
+    `nowrap` table cell holds its column open. The window's scroller
+    (`main.content`) then grows past its box, the page drags left and right,
+    and whatever is past the edge sits off screen. On 2026-11-10 six pages
+    did at 360px: /search and /run (the submit button 52px and 39px out),
+    /lens (the view switcher, 9px), and /garage/pqc, /garage/compression and
+    /garage/blueprint (289px, 295px and 174px of code and table). No check
+    saw it, because the window clips its scroller and the document itself
+    never overflows. `prose.css` now scrolls every prose `<pre>` on its own.
+    A local check also has the wrong data: /around and /ledger passed with
+    empty tables and scrolled at 390px in production, 103px and 3px out, once
+    real rows widened them, so a data table scrolls in its own box.
+    `bun run browser:check` opens every manifest page in Chrome at 320, 360
+    and 390px, plants a 600px block first to prove it can fail, and takes
+    `--base https://aadhar.sh` to read the deployment.
+    Checked by: `tools/check-browser.ts`.
+
+98. **A script that builds what the reader is looking at moves the page
+    after it is painted.** A generated page's `pageJs` runs at the end of
+    the document, an island swaps its placeholder when a fetch lands, and a
+    page drawn from data sizes itself when the data arrives. Each one runs
+    after first paint on a slow device, and everything below it jumps. On
+    2026-11-10, under 4x CPU throttle: /garage/hidden-flags 0.091,
+    /garage/useragent 0.049, /coffee 0.05 and /garage/round-trip 0.086 (0.192
+    at 390px in production). None showed on a fast machine, where the script
+    wins the race with paint. The fixes are the same three every time: put
+    the script straight after the markup it fills, give a region filled
+    later a fixed size, or draw it on the server. `bun run browser:check`
+    reads cumulative layout shift on every page at 1280 and 390px under the
+    same throttle, and pushes a 300px block into /search first to prove it
+    can fail. `config/browser-budget.json` holds the exceptions with their
+    reasons.
+    Checked by: `tools/check-browser.ts`.
+
+99. **An inline event handler in markup parsed on load logs a CSP error on
+    every visit, wherever it is parsed.** Chrome 157 reports a
+    `script-src-attr` violation the moment a parser sets an `on*` attribute,
+    before anything could run it: in a live element, an inert
+    `createHTMLDocument("")`, a `<template>`, `DOMParser`, `setHTML()` and
+    `Document.parseHTML()` each reported one, and the same markup without the
+    handler reported none (2026-11-13). /garage/horizon's Sanitizer demo
+    parsed its default `<img src=x onerror=alert(1)>` on load, so every visit
+    logged 2 violations; moving the parse into an inert document had stopped
+    the `alert(1)` but not the errors. A hash in `script-src` can't cover
+    them, since hashes never apply to handlers. A demo that parses hostile
+    markup waits for the reader's click. `bun run browser:check` reads every
+    `securitypolicyviolation` while each page loads, and parses an inline
+    `onclick` into /search first to prove it can fail.
+    Checked by: `tools/check-browser.ts`.
+
+100. **A header the Worker stamps per request freezes inside Workers Cache.**
+    Workers Cache answers a cacheable GET before the Worker runs, and it
+    stores the route's whole response, headers included. So a marker like
+    `x-photo-cache: miss` describes the one request that filled the front
+    tier and repeats on every HIT until eviction. On 2026-10-24, 4 of 13
+    sampled `/images/full/` originals answered `miss` out of
+    `cf-cache-status: HIT` at age 500+ s, and /garage/ranges shipped a wrong
+    draft that read it. `cf-cache-status` doesn't separate the tiers either:
+    a `caches.default` hit inside the Worker also reports `HIT` with an `age`
+    (2026-11-14). The photo route now stamps its marker only when
+    `shouldUseWorkersCache` refuses the request, so audit the inner tier with
+    a query string (`?probe=1`), which skips the front tier and keeps the same
+    Cache API key.
+    Checked by: `tools/tests/contract-photo-jxl-originals.test.ts`.

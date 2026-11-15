@@ -164,6 +164,18 @@ a:hover { color: var(--link-hover); }
   border-bottom: 1px dotted oklch(80% 0.03 240);
 }
 .xp-day-label:first-child { margin-top: 0; }
+/* The slot list is a list box: a fixed height with its own scrollbar, about
+   three days tall so a fourth peeks in and says there is more. The page bakes
+   a 5-day placeholder and the live list differs (8 days and 52 slots on
+   2026-11-10), so a list that grew with its content pushed the form down
+   after paint: layout shift 0.047 to 0.05 in 6 loads under 4x CPU throttle. */
+#coffee-slots {
+  height: 264px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--luna-field-border, #7f9db9);
+  background: var(--luna-field-bg, #fff);
+}
 .slots {
   list-style: none;
   padding: 0;
@@ -241,6 +253,7 @@ button.xp-button:active {
 /* No scripts, no swap: hide the placeholder and keep only the noscript note. */
 @media (scripting: none) {
   #coffee-slots[data-island] > :not(noscript) { display: none; }
+  #coffee-slots[data-island] { height: auto; }
 }
 .slot-btn:has(input:checked) {
   background: linear-gradient(to bottom, var(--blue-95), var(--blue-65));
@@ -610,7 +623,7 @@ export function bookingPage(env, opts: { slots?: { start: number; end: number }[
 
     <div class="xp-group">
       <span class="legend">Available slots</span>
-      <p class="xp-meta">times shown in ${esc((env.HOST_TIMEZONE || "UTC").replace(/_/g, " "))}.</p>
+      <p class="xp-meta">times shown in ${esc((env.HOST_TIMEZONE || "UTC").replace(/_/g, " "))}. scroll the list for later days.</p>
       ${slotMarkup}
     </div>
 

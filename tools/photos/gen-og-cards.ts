@@ -116,6 +116,7 @@ const HERO = {
   "garage-ig-prep": { span: ['h2:has-text("What the chroma choice costs")', "#ig-chroma"], hero: [".ig-conf"] },
   "garage-resample": { hero: ["#hl-demo"] },
   "garage-round-trip": { hero: ["#rt-demo"] },
+  "garage-speculation": { hero: [".sp-demo"] },
   // The scrub preset fills the strip, so the card shows chunks cached and the
   // origin-bytes tally instead of an empty grid.
   "garage-ranges": { hero: ["#rg-sim"], preset: '[data-read="scrub"]' },

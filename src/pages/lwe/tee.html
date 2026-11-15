@@ -173,27 +173,27 @@
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Wait, one thing before you close the window: pop quiz, 4 questions, no stakes. The demo's enclave held its PIN for about 4 seconds; let's see how long you hold the ideas.",
+  "intro": "Wait, one thing before you close the window: pop quiz, 6 questions, no stakes. The demo's enclave held its PIN for about 4 seconds; let's see how long you hold the ideas.",
   "questions": [
     {
-      "q": "Start at the base layer. What is the 'root of trust' a TEE builds everything on?",
+      "q": "Start at the base layer. Two phones come off the same line, and an attacker extracts phone A's root of trust. What does that hand them?",
       "options": [
         {
-          "t": "a fixed secret, unique to each chip, that the enclave encrypts data under",
+          "t": "phone A's secrets for good, while phone B's stay fully sealed",
           "ok": true,
-          "why": "Right. Static but unique is the exact phrase: the secret never changes, no two chips share it, and it is the base the enclave encrypts biometrics and card data under."
+          "why": "The root of trust is static but unique: each chip has its own, so A's says nothing about B's, and it can never change, so A stays exposed for the rest of its life. That's also why the Secret Network story is worse: there, one secret sat on every node."
         },
         {
-          "t": "a master password the owner picks the first time they boot the device",
-          "why": "That would make it human-chosen and changeable. Scroll back to the 21:22 message: the root of trust is a property of the physical chip itself, in place before you ever touch the device."
+          "t": "both phones, since chips off one line share a root of trust",
+          "why": "The 21:22 message calls the root of trust static but unique, so no two chips share one. A shared secret is exactly what made Secret Network's consensus seed so dangerous, and a per-chip root of trust avoids it."
         },
         {
-          "t": "a certificate the manufacturer rotates with every firmware update it ships",
-          "why": "Rotation is exactly what it lacks. The 21:28 message calls the root of trust unique and immutable, and that immutability is why a leaked one is so hard to recover from."
+          "t": "phone A for now, until a firmware update rotates its root",
+          "why": "Rotation is exactly what it lacks. The 21:28 message calls the root of trust unique and immutable, and a TEE's limited capacity to update is why a leaked one stays leaked."
         },
         {
-          "t": "the OS deciding which apps are allowed to touch the enclave's memory",
-          "why": "The OS sits outside the trust boundary. A TEE is a secure section of the physical chip, built to keep its secrets even from the operating system running above it."
+          "t": "nothing, the enclave re-encrypts under a fresh secret once read",
+          "why": "The base secret is static: it never changes, so reading it once is enough. Everything the enclave encrypts rests on it, which is why extracting it is the whole game."
         }
       ]
     },
@@ -203,7 +203,7 @@
         {
           "t": "every SGX node held the same consensus seed, a network-wide key",
           "ok": true,
-          "why": "Right, and that is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
+          "why": "That is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
         },
         {
           "t": "the seed crossed the network in plaintext, so sniffing traffic exposed it",
@@ -225,7 +225,7 @@
         {
           "t": "they read physical side effects of the chip running and infer the secret",
           "ok": true,
-          "why": "Exactly. Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
+          "why": "Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
         },
         {
           "t": "each finds a different flaw in the encryption algorithm and quietly decrypts the memory",
@@ -242,7 +242,29 @@
       ]
     },
     {
-      "q": "Last one, the essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
+      "q": "Demo time, in an order the chat never ran. Run one probe, hit re-seal, then try a probe you haven't used yet. What happens?",
+      "options": [
+        {
+          "t": "the same PIN, 4827, falls out again with no key involved",
+          "ok": true,
+          "why": "Re-seal only puts the cipher back over the memory, and the cipher was never what leaked. Every probe reads side effects of the enclave running, so the next one recovers the same secret the same way. A real fix would have to change how the chip runs, which is the part a TEE can barely update."
+        },
+        {
+          "t": "nothing leaks, since re-sealing rotated the secret away",
+          "why": "Re-seal resets the screen to ciphertext, and the PIN behind it stays 4827. The leak comes from running the code, so a fresh seal over the same running code leaks the moment it's probed again."
+        },
+        {
+          "t": "a different PIN, since each probe reads a different signal",
+          "why": "Each probe reads its own signal, timing or cache or power or heat, and they all point at the same secret. The demo's trace changes with the probe; the PIN at the bottom never does."
+        },
+        {
+          "t": "the PIN again, but scrambled, since the seal shuffled memory",
+          "why": "The seal changes how memory reads, and the probes never read memory. They read timing, cache, power and heat while the enclave runs, so they recover 4827 in the clear, same as before."
+        }
+      ]
+    },
+    {
+      "q": "The essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
       "options": [
         {
           "t": "the maker, the firmware maintainers, and a bet the exploit costs more than the prize",
@@ -262,6 +284,28 @@
           "why": "Patching has hard limits here. The essay points at the limited capacity to update a TEE's hardware and firmware, and the root of trust itself is immutable, so some breaks never heal."
         }
       ]
+    },
+    {
+      "q": "Last one. A team says: breaking an enclave takes a research team and exotic tricks, so our network can run on TEEs alone, whatever it ends up protecting. Where's the hole?",
+      "options": [
+        {
+          "t": "the bigger the prize, the more an exploit is worth paying for",
+          "ok": true,
+          "why": "The essay's rule is that exploiting a TEE must be worth less than it costs, at every layer. A network-wide secret like Secret Network's consensus seed grows in value as the network does, so a hard attack eventually pays, and a researcher-grade exploit only sets its price."
+        },
+        {
+          "t": "none, an attack that hard to pull off is safe at any stake",
+          "why": "Hard sets a cost, and the essay's test weighs that cost against the value of what's inside. Secret Network's seed decrypted the whole network, and researchers still built the attack from a previously disclosed exploit."
+        },
+        {
+          "t": "the math, since TEEs run weaker encryption than MPC does",
+          "why": "Nothing on this page breaks the encryption. Aepicleak pulled the seed out of memory and the demo's probes read side effects while the cipher held, so the weak spot is the hardware and the people behind it."
+        },
+        {
+          "t": "they're trusting Intel, and Intel chips have had bugs",
+          "why": "Partly: the manufacturer sits in the trust stack, and the 21:24 message says SGX isn't alone, since AMD's SEV and Apple's enclaves were broken too. Swapping vendors keeps the core problem, a single layer whose value to attack keeps rising."
+        }
+      ]
     }
   ]
 }
@@ -269,6 +313,6 @@
 <script src="/quiz.js" defer></script>
 <script src="/lwe/ask.js" defer></script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="31"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

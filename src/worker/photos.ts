@@ -2,7 +2,7 @@
 // /images/full, the curated and album pools, /photos and the album pages,
 // /photos/query.json, and the image manifest and sitemap.
 
-import { cachedRender } from "./lib/cache.ts";
+import { cachedRender, shouldUseWorkersCache } from "./lib/cache.ts";
 import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
@@ -12,6 +12,7 @@ import { errorResp, esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms } from "./lib/text.ts";
 import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { CACHEABLE_PATHS } from "./routes.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
@@ -113,9 +114,17 @@ export async function servePhotoFromR2(request, env, ctx) {
   // because an original is never overwritten in place (a new upload is a new
   // filename), NOT because the URL is content-addressed. Range and conditional requests
   // bypass the cache because they need R2's range/onlyIf handling and must not
-  // populate a full-body entry. x-photo-cache: hit|miss proved this layer works
-  // and keeps proving it on every request.
+  // populate a full-body entry.
+  //
+  // x-photo-cache: hit|miss reports this tier, and only on a response Workers
+  // Cache won't keep (gotcha 100). Workers Cache sits in front of the Worker and
+  // stores this route's whole response, so a header stamped on a clean-URL GET
+  // repeats on every front-tier HIT until eviction: on 2026-10-24, 4 of 13
+  // sampled originals answered `miss` from a HIT with age 500+ s. Audit this
+  // tier with a query string (`?probe=1`), which skips Workers Cache and maps to
+  // the same caches.default key below.
   const cacheable = request.method === "GET" && !range && !ifNoneMatch;
+  const marksTier = cacheable && !shouldUseWorkersCache(request, CACHEABLE_PATHS, url);
   const cache = caches.default;
   // Version-scoped Cache API key. The public URL stays clean (/images/full/<stem>),
   // but the caches.default entry is stored under ?av=ARCHIVE_VERSION. Cloudflare's
@@ -128,7 +137,7 @@ export async function servePhotoFromR2(request, env, ctx) {
     const hit = await cache.match(cacheKey);
     if (hit) {
       const r = new Response(hit.body, hit);
-      r.headers.set("x-photo-cache", "hit");
+      if (marksTier) r.headers.set("x-photo-cache", "hit");
       return r;
     }
   }
@@ -185,9 +194,10 @@ export async function servePhotoFromR2(request, env, ctx) {
   const resp = new Response(obj.body, { status: 200, headers });
   if (cacheable && ctx) {
     // store a clean clone (no x-photo-cache marker) for future hits, then mark
-    // THIS response a miss. resp.clone() tees the R2 stream to both consumers.
+    // this response a miss where the mark can't go stale. resp.clone() tees the
+    // R2 stream to both consumers.
     ctx.waitUntil(cache.put(cacheKey, resp.clone()));
-    resp.headers.set("x-photo-cache", "miss");
+    if (marksTier) resp.headers.set("x-photo-cache", "miss");
   }
   return resp;
 }

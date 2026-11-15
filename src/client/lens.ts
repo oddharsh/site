@@ -1441,7 +1441,7 @@
     out += section(
       "Boundaries",
       { text: "explicit", kind: "warn" },
-      "These limits keep the reconstruction honest.",
+      "",
       '<ul class="lx-why"><li>Lens fetched as ' +
         esc(data.fetchedBy || "an identified bot") +
         "; no other bot identity was tested.</li>" +
@@ -2049,7 +2049,7 @@
       '<div><div class="lx-readiness-kicker">Composite agent access</div><div class="lx-readiness-level"><b>' +
       (complete ? "Three independent views agree to make this number." : "Waiting for all three independent views.") +
       "</b></div>" +
-      '<div class="lx-cap">Equal thirds. If one source fails, the aggregate stays unfinished instead of moving the goalposts.</div></div></div>';
+      '<div class="lx-cap">Equal thirds. If one source fails, the score stays unfinished.</div></div></div>';
     return hero + sources + formula;
   }
 
@@ -2367,17 +2367,12 @@
     return (
       score +
       needReadiness(r.need) +
-      section(
-        "Local standards mirror",
-        null,
-        "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.",
-        localMirror,
-      ) +
+      section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes.", localMirror) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +
       section(
         "Bot views",
         { text: bots.length + " sampled" },
-        "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all. Robots policy and enforcement stay deliberately separate.",
+        "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all.",
         botHtml,
       ) +
       section(
@@ -2884,7 +2879,7 @@
       out += section(
         "Raw HTML source",
         { text: bytes(a.rawBytes) },
-        "The literal markup. View Source, basically.",
+        "",
         pre(a.rawHtml + (a.rawBytes > a.rawHtml.length ? "\n\n[... truncated, " + bytes(a.rawBytes) + " total]" : "")),
       );
     }

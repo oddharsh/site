@@ -28,22 +28,39 @@
   // shapes. A prerendered document becoming the page fires prerenderingchange,
   // so that case is registered here, before anything that waits on paint,
   // since a prerender is not painted until activated. And a navigation served
-  // from a prefetch says so in its timing entry: in a headful Chrome run on
-  // 2026-09-29 the shell's moderate PRERENDER rule was satisfied as a prefetch
-  // (deliveryType "navigational-prefetch", activationStart 0), which the
-  // prerender event alone would never have seen.
-  var activated = () => {
+  // from a prefetch says so in its timing entry (deliveryType
+  // "navigational-prefetch", activationStart 0), which the prerender event
+  // alone would never see. A 2026-09-29 run read the shell's PRERENDER rule as
+  // satisfied by a prefetch; Chrome 157 answers PrerenderingDisabledByDevTools
+  // whenever a CDP session is attached to the page, which probably explains it.
+  //
+  // `s` says how far the speculation got before the click, which decides
+  // whether starting it earlier could help. nav.js is deferred, so on a
+  // prerender it runs once parsing ends, and activation reads readyState
+  // "complete" (load fired) or "interactive" (subresources still loading). A
+  // click that beat nav.js finds prerendering already false; a nonzero
+  // activationStart is then the only sign, and it is checked before
+  // deliveryType because a prerendered page reports "navigational-prefetch"
+  // too. Measured 2026-11-13 in Chrome 157 with nav.js held 500 ms: 100 and
+  // 300 ms of lead read "early", 700 and 2000 ms read "complete".
+  var activated = (state: string) => {
     try {
-      fetch("/ledger/prefetch?via=client&p=" + encodeURIComponent(location.pathname), { method: "HEAD", keepalive: true, credentials: "omit" }).catch(() => {});
+      fetch("/ledger/prefetch?via=client&s=" + state + "&p=" + encodeURIComponent(location.pathname), {
+        method: "HEAD",
+        keepalive: true,
+        credentials: "omit",
+      }).catch(() => {});
     } catch {
       /* a metric must never break a page */
     }
   };
   if ((D as Document & { prerendering?: boolean }).prerendering) {
-    D.addEventListener("prerenderingchange", activated, { once: true });
+    D.addEventListener("prerenderingchange", () => activated(D.readyState), { once: true });
   } else {
-    var navEntry = performance.getEntriesByType("navigation")[0] as (PerformanceNavigationTiming & { deliveryType?: string }) | undefined;
-    if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated();
+    var navEntry = performance.getEntriesByType("navigation")[0] as
+      (PerformanceNavigationTiming & { deliveryType?: string; activationStart?: number }) | undefined;
+    if (navEntry && navEntry.activationStart) activated("early");
+    else if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated("prefetch");
   }
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
@@ -516,25 +533,28 @@
     );
   }
 
-  // The taskbar clock. Intl owns the formatting, and the formatter is built once
-  // on first use rather than per tick. en-US on purpose: XP's taskbar read
-  // "3:07 PM" and this is that clock, whatever the visitor's locale. ICU puts a
-  // narrow no-break space before the day period, so every whitespace becomes a
-  // plain space and the text stays byte-identical to what the hand-rolled
-  // version printed. Date rather than Temporal: they read the same wall clock,
-  // and Date is the primitive every engine agrees on (a workerd build once
-  // shipped a Temporal whose clock read epoch 0).
+  // The taskbar clock, formatted by hand: XP's taskbar read "3:07 PM" and this
+  // is that clock, whatever the visitor's locale. Intl.DateTimeFormat("en-US",
+  // { hour: "numeric", minute: "2-digit" }) printed the same text until
+  // 2026-11-10, and building it was the largest script cost on the first page
+  // of a visit: 8 to 17 ms in Chrome on a workstation, 30 to 53 ms under 4x
+  // CPU throttle (15 fresh loads across /about, /around and
+  // /garage/hidden-flags), because the first Intl object in a renderer process
+  // loads ICU data. Later pages in the same tab paid about 1 ms (gotcha 92 is
+  // the Worker's half). Date rather than Temporal: they read the same wall clock, and Date
+  // is the primitive every engine agrees on (a workerd build once shipped a
+  // Temporal whose clock read epoch 0).
   //
   // Scheduled for the next minute boundary instead of polled: a 15s interval let
   // the taskbar sit up to 15s behind the minute it was showing.
-  var clockFmt = null as Intl.DateTimeFormat | null,
-    clockTimer = 0;
+  var clockTimer = 0;
   function tickClock() {
     var c = D.getElementById("axp-clock");
     if (!c) return;
-    clockFmt = clockFmt || new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
-    var now = new Date();
-    c.textContent = clockFmt.format(now).replace(/\s/g, " ");
+    var now = new Date(),
+      h = now.getHours(),
+      m = now.getMinutes();
+    c.textContent = (h % 12 || 12) + ":" + (m < 10 ? "0" : "") + m + (h < 12 ? " AM" : " PM");
     clearTimeout(clockTimer);
     clockTimer = W.setTimeout(tickClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }

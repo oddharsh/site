@@ -1079,6 +1079,7 @@ export type WorkflowBlocks = { total: number; without: string[] };
 export type RepositoryObservation = {
   core: Read<RulesetsObservation>;
   labels?: Read<any[]>;
+  issueTypes?: Read<any[]>;
   codeScanning?: Read<any>;
   actions?: Read<{ live: any; workflow: any }>;
   workflowBlocks: WorkflowBlocks;
@@ -1281,6 +1282,46 @@ export function compareLabels(repo, labels: Read<any[]> | undefined, opts: Repos
   out.pass(
     `${slug}'s ${triage.labels.length} declared label(s) match on name, colour and description${strays.length ? `, with ${strays.length} stray` : ""}${opts.authenticated ? "" : " (unauthenticated read)"}`,
   );
+  return out.list;
+}
+
+// Issue types are ACCOUNT state that the repository mirrors, so this reads
+// /repos/:slug/issue-types, which a repo-scoped token can see, rather than
+// /user/issue-types, which needs `read:user`. That endpoint 404s without a
+// credential (checked 2026-11-11), so an unread list is an advisory.
+//
+// A missing or disabled type FAILS, because a workflow passing it to
+// `gh issue create --type` cannot apply it. A stray type warns: it is
+// another repository's business as much as this one's.
+export function compareIssueTypes(repo, types: Read<any[]> | undefined): Finding[] {
+  const declared = repo.triage?.issue_types;
+  if (!declared) return [];
+  const out = collector();
+  const slug = `${repo.owner}/${repo.name}`;
+  if (!types || !types.ok) {
+    out.warn(
+      `issue types could not be read: ${types ? types.error : UNOBSERVED}. The endpoint needs a token: GITHUB_TOKEN=$(gh auth token) bun run infra:check`,
+    );
+    return out.list;
+  }
+  const byName = new Map<string, any>(types.value.map((t) => [t.name, t]));
+  for (const want of declared) {
+    const got = byName.get(want.name);
+    byName.delete(want.name);
+    if (!got || !got.is_enabled) {
+      out.fail(`${slug} has no enabled issue type ${JSON.stringify(want.name)}. Run \`bun run labels:sync -- --confirm\` with the \`user\` scope`);
+      continue;
+    }
+    if (got.color !== want.color || (got.description ?? "") !== want.description) {
+      out.fail(
+        `issue type ${JSON.stringify(want.name)} is ${got.color} ${JSON.stringify(got.description ?? "")}, declared ${want.color} ${JSON.stringify(want.description)} (\`bun run labels:sync -- --confirm\`)`,
+      );
+    }
+  }
+  const strays = [...byName.keys()];
+  if (strays.length) out.warn(`the account carries ${strays.length} undeclared issue type(s): ${strays.join(", ")}`);
+  if (out.failed()) return out.list;
+  out.pass(`${slug}'s ${declared.length} declared issue type(s) match${strays.length ? `, with ${strays.length} stray` : ""}`);
   return out.list;
 }
 
@@ -1538,6 +1579,7 @@ export function compareRepository(repo, observed: RepositoryObservation, opts: R
   return [
     ...findings,
     ...compareLabels(repo, observed.labels, opts),
+    ...compareIssueTypes(repo, observed.issueTypes),
     ...compareCodeScanning(repo, observed.codeScanning),
     ...compareActionsPermissions(repo, observed.actions, observed.workflowBlocks),
     ...compareSecretScanning(repo, observed.core.value.meta),

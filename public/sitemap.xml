@@ -293,6 +293,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/garage/speculation</loc>
+    <lastmod>2026-11-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage/ranges</loc>
     <lastmod>2026-10-24</lastmod>
     <changefreq>monthly</changefreq>
@@ -384,19 +390,19 @@
   </url>
   <url>
     <loc>https://aadhar.sh/resume.pdf</loc>
-    <lastmod>2026-07-06</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://aadhar.sh/resume.md</loc>
-    <lastmod>2026-07-06</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://aadhar.sh/resume.json</loc>
-    <lastmod>2026-07-06</lastmod>
+    <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

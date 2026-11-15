@@ -250,7 +250,7 @@ export function buildWhoareyouGroups(data, ua, rdap, version, build = BUILD_INFO
   // the outside: `no-store` below means every poll re-runs the worker and reports
   // the version that actually handled it. That is why the canary sampler in
   // tools/deploy-promote.ts reads THIS route rather than /updates.json, which
-  // reports the D1 changelog both versions share and so cannot tell them apart.
+  // names its version too but carries no commit.
   //
   // Omitted entirely when unbound (local dev, the contract tests) rather than
   // filled with a placeholder, same nullable discipline as the photo pipeline.
@@ -604,7 +604,7 @@ footer .signature small { color: var(--ink-faint); }
     </p>
 
     ${mount}
-    <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
+    <p class="wy-fail">These values didn't load. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>
     <p class="lede">Seven things Cloudflare's edge knows about this connection that
@@ -741,7 +741,7 @@ footer .signature small { color: var(--ink-faint); }
     })
     .catch(function (e) {
       grid.querySelectorAll("[data-trace]").forEach(function (cell) { cell.textContent = "unavailable"; cell.className = "dim"; });
-      note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + "), so these seven fields are unknown rather than assumed.";
+      note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + ").";
     });
 })();
 </script>`)}${islandScript()}`,

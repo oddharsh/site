@@ -561,12 +561,12 @@ export function renderAroundSnapshot(read) {
       <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
       <strong>Refreshed:</strong> once a day by cron (your visit triggers nothing)
     </div>
-    <table class="scout">
+    <div class="scout-scroll"><table class="scout">
       <thead>
         <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th aria-label="Link">↗</th></tr>
       </thead>
       <tbody>${rows}</tbody>
-    </table>`);
+    </table></div>`);
 }
 
 // The owner's force-refresh, which lives on the island now because the page is
@@ -620,6 +620,10 @@ export function renderAroundPage() {
   h1 { font-size: 18pt; }
   .lede { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-body); }
   .lede code { font-family: var(--font-mono); background: oklch(96.72% 0 0); border: 1px solid var(--grey-88); padding: 0 3px; font-size: var(--text-ui); }
+  /* The table scrolls in its own box. With real rows it is 461px wide, and in
+     the window's scroller that dragged the whole page sideways at 390px
+     (production, 2026-11-10; gotcha 97). */
+  .scout-scroll { overflow-x: auto; }
   table.scout {
     width: 100%; border-collapse: collapse; margin: 8px 0 12px;
     border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
@@ -676,7 +680,7 @@ export function renderAroundPage() {
       (<a href="/garage/pqc">why</a>).
     </p>
     ${mount}
-    <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
+    <p class="ar-fail">The snapshot didn't load. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:var(--text-xs)">
       Also available as JSON: <a href="/around/json">/around/json</a> &middot;

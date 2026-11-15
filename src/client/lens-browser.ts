@@ -206,7 +206,7 @@
         ? "The injected script never ran. This page's <b>Content-Security-Policy</b> refuses inline script, so Lens could not interact with it &mdash; which is itself something a machine learns about this page."
         : "The injected script did not run, and the HTTP response carried no policy that explains it. Lens does not know why.";
     } else if (it.note === "forged-receipt") {
-      head = "This page returned a <b>forged result marker</b> for a script Lens did not run. Lens discarded it. That is worth knowing on its own.";
+      head = "This page returned a <b>forged result marker</b> for a script Lens did not run. Lens discarded it.";
     } else if (it.note === "threw") {
       head = "The script ran and threw inside this page, so Lens is not claiming it changed anything.";
     } else if (!it.acted) {
@@ -307,7 +307,7 @@
     out += section(
       "What a render would add",
       { text: "not run", kind: "warn" },
-      "Rendered HTML after the page's JavaScript, a screenshot, the browser's own Markdown, and its accessibility tree. The gap between that and the HTTP response is this pane's whole point, and measuring it needs the render.",
+      "Rendered HTML after the page's JavaScript, a screenshot, the browser's own Markdown, and its accessibility tree.",
       "",
     );
     out += section(
@@ -368,13 +368,13 @@
     out += section(
       "Rendered HTML",
       { text: bytes((snapshot.content || "").length) },
-      "The DOM returned after Browser Run executed the page. This is source evidence, shown escaped.",
+      "The DOM returned after Browser Run executed the page.",
       pre(snapshot.content || "(no content)"),
     );
     out += section(
       "Rendered Markdown",
       { text: bytes((snapshot.markdown || "").length) },
-      "The browser's clean text representation, separate from Lens's dependency-free HTTP reconstruction.",
+      "The browser's clean text representation.",
       pre(snapshot.markdown || "(no Markdown)"),
     );
     if (tree)

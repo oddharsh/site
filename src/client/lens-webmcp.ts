@@ -45,6 +45,13 @@ export async function boot(load) {
   // copying LENS_TAB_LABELS into a third client module.
   const tabs = [...document.querySelectorAll(".lx-tab")].map((tab) => tab.getAttribute("data-lens")).filter((tab) => tab);
 
+  // Sequential, because each registration reads the shared catalog to check
+  // the name is free and a parallel burst races itself for it.
+  for (const def of pageTools(tabs)) await wm.registerTool(def);
+}
+
+/** The page tools for the lens tabs this document exposes. Pure, so a test can measure them. */
+export function pageTools(tabs) {
   // Every handler answers with wmScreen(), which carries the scanned site's
   // final URL and Content-Type, so even lens_read_screen returns text a third
   // party chose. Hence untrustedContentHint on all six.
@@ -83,7 +90,7 @@ export async function boot(load) {
     {
       name: "lens_run_tab",
       description:
-        "Pay for one of the opt-in machine tabs and wait for it: reader (a third-party extractor's guess at the article), wire (every request the page makes, through a real browser), tools (the MCP catalog the origin advertises), nlweb (ask the origin's own /ask endpoint a question), markdown (replay the Accept header each named agent client sends, and report which representation each one gets). Each one is a fresh fetch of somebody else's site from this visitor's budget, which is why none of them run on their own. Needs a scan on screen first.",
+        "Pay for one opt-in machine tab and wait for it: reader (a third-party extractor's article guess), wire (every request the page makes, in a real browser), tools (the origin's MCP catalog), nlweb (send `query` to the origin's /ask), markdown (what each agent client's Accept header gets). Each is a fresh fetch from this visitor's budget. Needs a scan on screen.",
       inputSchema: {
         type: "object",
         properties: {
@@ -124,8 +131,5 @@ export async function boot(load) {
       execute: proxy("lens_delta"),
     },
   ];
-
-  // Sequential, because each registration reads the shared catalog to check
-  // the name is free and a parallel burst races itself for it.
-  for (const def of defs) await wm.registerTool(def);
+  return defs;
 }

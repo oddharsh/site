@@ -190,6 +190,34 @@ test("a derived path is left out of BOTH adapters, even inside a single-owner di
   }
 });
 
+test("a declaration file is left out of BOTH adapters, even inside a single-owner directory", async () => {
+  const cwd = await fixture({
+    "client/model-context.d.ts": "declare const x: 1;",
+    "client/vendor/lib.js": "lib",
+    "client/vendor/lib.d.ts": "export {};",
+  });
+  try {
+    const plan = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED });
+    assert.deepEqual(plan.declarations.sort(), ["client/model-context.d.ts", "client/vendor/lib.d.ts"]);
+    await copyServedTree(plan, "out", { cwd });
+    await linkServedTree(plan, "farm", { cwd });
+    for (const tree of ["out", "farm"]) {
+      const served = await servedBytes(path.join(cwd, tree));
+      assert.deepEqual(
+        Object.keys(served).filter((file) => file === "nav.js" || file.startsWith("model-context") || file.startsWith("vendor/")),
+        ["nav.js", "vendor/lib.js"],
+        `${tree}: the scripts are served and their declarations are not`,
+      );
+    }
+    // vendor/ has one owner, and a link to the whole directory would carry
+    // lib.d.ts with it.
+    assert.equal(await isLink(path.join(cwd, "farm/vendor")), false);
+    assert.equal(await isLink(path.join(cwd, "farm/vendor/lib.js")), true);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("a root that does not exist is refused by name rather than planned around", async () => {
   const cwd = await fixture();
   try {
