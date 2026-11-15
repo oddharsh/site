@@ -3443,7 +3443,13 @@
       ? '<div class="lx-tags">' +
         feeds
           .map((f) => {
-            return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>";
+            var label = esc(f.type || "feed") + " &middot; " + esc(f.href);
+            // f.href is the scanned page's own <link href>, and esc() keeps a
+            // javascript: or data: URL intact, so only http(s) becomes a link
+            // (the same guard as the TDM policy link above).
+            return /^https?:\/\//i.test(f.href)
+              ? '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + label + "</a>"
+              : '<span class="lx-tag">' + label + "</span>";
           })
           .join("") +
         "</div>"
