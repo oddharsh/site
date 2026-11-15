@@ -14,9 +14,11 @@
 name: "CodeQL"
 
 on:
+  # No pull_request trigger since 2026-11-14. CodeQL is not a required check,
+  # so a PR scan could warn but never block, and from 2026-11-07 to 11-14 its
+  # 136 PR runs (about 270 runner-minutes) found nothing. A finding now surfaces
+  # on the push to main that follows the merge.
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
   schedule:
     # Weekly, matching what default setup ran. Offset off the hour because
@@ -36,9 +38,8 @@ permissions:
   actions: read
 
 concurrency:
-  # Keyed by PR for a pull_request, and by EVENT PLUS SHA for everything else.
-  # `github.event.pull_request.number` is null on both a push to main and the
-  # Wednesday schedule, so `github.ref` put the two into one
+  # Keyed by EVENT PLUS SHA. Keying on `github.ref` put a push to main and the
+  # Wednesday schedule into one
   # `codeql-refs/heads/main` group with cancellation on. Any merge landing in
   # the schedule's window killed the weekly scan, and the next one is seven days
   # out. That scan is the only thing that re-reads UNCHANGED code against
@@ -54,7 +55,7 @@ concurrency:
   # 2026-08-26 scheduled run finished 4m09s before the next merge fired. That
   # run started at 19:24 UTC against a cron of 17:28, so the window it has to
   # survive is not predictable from the schedule.
-  group: codeql-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+  group: codeql-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
