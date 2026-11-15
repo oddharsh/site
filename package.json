@@ -117,7 +117,7 @@
     "workerd"
   ],
   "catalog": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@79b890a"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@4335eac"
   },
   "$comment": "Toolchain ownership and validation commands: docs/TOOLING.md. Shared dependency pins: catalog below; runtime pins: config/bun-pin.json and .node-version."
 }
