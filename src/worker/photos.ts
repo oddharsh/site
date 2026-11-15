@@ -922,8 +922,6 @@ const VIEW_CSS = `/*min*/
   .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-button); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }
   .ph-list th button:hover { border-bottom-color: var(--amber-70); }
   .ph-list th button:focus-visible { outline: 1px dotted var(--ink); outline-offset: -3px; }
-  .ph-list th[aria-sort="ascending"] button::after { content: " ▴"; }
-  .ph-list th[aria-sort="descending"] button::after { content: " ▾"; }
   .ph-list th.num, .ph-list td.num { text-align: right; }
   .ph-list td { padding: 2px 6px; color: var(--ink); }
   .ph-list td.sorted { background: var(--row-alt); }

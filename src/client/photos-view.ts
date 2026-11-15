@@ -141,7 +141,12 @@
     });
     var head = COLUMNS.map((c, i) => {
       var sort = i === sortBy ? ' aria-sort="' + (sortDir > 0 ? "ascending" : "descending") + '"' : "";
-      return "<th" + (c.num ? ' class="num"' : "") + sort + '><button type="button" data-col="' + i + '">' + c.label + "</button></th>";
+      // The arrow is decoration: aria-sort already says the direction, and as
+      // text in the button it read as "Name up-pointing small triangle".
+      // CSS content alt text ("▴" / "") would hide it too, but isn't Baseline
+      // widely available, and an engine without it drops the arrow entirely.
+      var arrow = i === sortBy ? '<span aria-hidden="true">' + (sortDir > 0 ? " ▴" : " ▾") + "</span>" : "";
+      return "<th" + (c.num ? ' class="num"' : "") + sort + '><button type="button" data-col="' + i + '">' + c.label + arrow + "</button></th>";
     }).join("");
     var body = rows
       .map(
