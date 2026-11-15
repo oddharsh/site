@@ -1174,6 +1174,8 @@ footer .signature small { color: var(--ink-faint); }
 <!-- the counter's ONLY scripted tick: fires once per real visit, deferred to
      prerenderingchange when the load was speculative so a hover-prerender that
      never activates counts zero and an activated one counts exactly once.
+     the listener goes on document: the event fires there and doesn't bubble,
+     so a bare addEventListener (window) never heard it.
      bfcache restores re-run nothing, so back/forward stays tick-free.
      script-off visitors tick via the <noscript> pixel instead. one request does
      both jobs: the worker finishes the Durable Object tick under waitUntil and
@@ -1187,7 +1189,7 @@ footer .signature small { color: var(--ink-faint); }
       if(el&&j&&typeof j.n==="number")el.textContent=String(j.n).padStart(6,"0");
     }).catch(function(){});
   };
-  document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()
+  document.prerendering?document.addEventListener("prerenderingchange",t,{once:true}):t()
 })();</script>
 
     <!--
