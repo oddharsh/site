@@ -1144,6 +1144,23 @@
       }
     },
     {
+      "path": "/garage/speculation",
+      "title": "Guessing the next click",
+      "section": "garage",
+      "kind": "content",
+      "description": "Five ways to start a page before the click, run over the same 65 cursor paths: how much head start each buys, and what each wrong guess costs.",
+      "hint": "cursor prediction, hover delays, and prefetch versus prerender",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",

@@ -115,7 +115,7 @@ jobs:
           fi
 
           gh issue create --assignee oddharsh \
-            --label "type: chore" --label "area: infra" \
+            --label "type: chore" --label "area: infra" --type Watch \
             --title "$title" --body "$(cat <<BODY
           \`\`\`
           $(cat window.txt)

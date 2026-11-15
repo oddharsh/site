@@ -28,22 +28,39 @@
   // shapes. A prerendered document becoming the page fires prerenderingchange,
   // so that case is registered here, before anything that waits on paint,
   // since a prerender is not painted until activated. And a navigation served
-  // from a prefetch says so in its timing entry: in a headful Chrome run on
-  // 2026-09-29 the shell's moderate PRERENDER rule was satisfied as a prefetch
-  // (deliveryType "navigational-prefetch", activationStart 0), which the
-  // prerender event alone would never have seen.
-  var activated = () => {
+  // from a prefetch says so in its timing entry (deliveryType
+  // "navigational-prefetch", activationStart 0), which the prerender event
+  // alone would never see. A 2026-09-29 run read the shell's PRERENDER rule as
+  // satisfied by a prefetch; Chrome 157 answers PrerenderingDisabledByDevTools
+  // whenever a CDP session is attached to the page, which probably explains it.
+  //
+  // `s` says how far the speculation got before the click, which decides
+  // whether starting it earlier could help. nav.js is deferred, so on a
+  // prerender it runs once parsing ends, and activation reads readyState
+  // "complete" (load fired) or "interactive" (subresources still loading). A
+  // click that beat nav.js finds prerendering already false; a nonzero
+  // activationStart is then the only sign, and it is checked before
+  // deliveryType because a prerendered page reports "navigational-prefetch"
+  // too. Measured 2026-11-13 in Chrome 157 with nav.js held 500 ms: 100 and
+  // 300 ms of lead read "early", 700 and 2000 ms read "complete".
+  var activated = (state: string) => {
     try {
-      fetch("/ledger/prefetch?via=client&p=" + encodeURIComponent(location.pathname), { method: "HEAD", keepalive: true, credentials: "omit" }).catch(() => {});
+      fetch("/ledger/prefetch?via=client&s=" + state + "&p=" + encodeURIComponent(location.pathname), {
+        method: "HEAD",
+        keepalive: true,
+        credentials: "omit",
+      }).catch(() => {});
     } catch {
       /* a metric must never break a page */
     }
   };
   if ((D as Document & { prerendering?: boolean }).prerendering) {
-    D.addEventListener("prerenderingchange", activated, { once: true });
+    D.addEventListener("prerenderingchange", () => activated(D.readyState), { once: true });
   } else {
-    var navEntry = performance.getEntriesByType("navigation")[0] as (PerformanceNavigationTiming & { deliveryType?: string }) | undefined;
-    if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated();
+    var navEntry = performance.getEntriesByType("navigation")[0] as
+      (PerformanceNavigationTiming & { deliveryType?: string; activationStart?: number }) | undefined;
+    if (navEntry && navEntry.activationStart) activated("early");
+    else if (navEntry && navEntry.deliveryType === "navigational-prefetch") activated("prefetch");
   }
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so

@@ -134,7 +134,7 @@
     {
       "name": "photo_query",
       "title": "Photo Query",
-      "description": "Query the published photo archive by caption, camera, lens, film simulation, film-recipe setting, or date range. `q` is free text scored per term across the caption, the EXIF and an offline term expansion, so \"classic chrome bridge\" matches the film simulation AND the subject; the named parameters stay exact filters. Results are ranked and carry `score` and `matched` (which fields answered). `ranking.mode` says whether every term was covered (all-terms), only some (partial), or none (no-match), and `ranking.dropped` / `ranking.common` name terms ignored as stopwords or as too widespread to tell photos apart. Each result carries a `recipe` card naming the in-camera settings the shot was made with, so a look can be read back and re-shot. GPS and unlisted EXIF fields are never returned.",
+      "description": "Search the photo archive. `q` is free text scored per term across caption, EXIF and an offline term expansion, so \"classic chrome bridge\" matches film and subject; camera, lens, film, recipe and from/to are exact filters. Results carry `score`, `matched` (fields that answered) and a `recipe` card of in-camera settings. `ranking.mode` is all-terms, partial or no-match; `ranking.dropped` and `ranking.common` name ignored terms. GPS and unlisted EXIF are never returned.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -980,7 +980,7 @@
           },
           "doors": {
             "type": "boolean",
-            "description": "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called."
+            "description": "also READ behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list on their MCP server (listed, never called)"
           }
         },
         "required": [

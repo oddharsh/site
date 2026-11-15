@@ -1215,6 +1215,60 @@
         "mean to, and a deletion strips the label from every issue and pull",
         "request that carried it, historically and with no undo."
       ],
+      "issue_types": [
+        { "name": "Task", "color": "yellow", "description": "A specific piece of work" },
+        { "name": "Bug", "color": "red", "description": "An unexpected problem or behavior" },
+        { "name": "Feature", "color": "blue", "description": "A request, idea, or new functionality" },
+        { "name": "Watch", "color": "purple", "description": "A tracker a robot keeps open until something outside the repo moves" }
+      ],
+      "$issue_types": [
+        "ACCOUNT-WIDE, unlike the labels above. GitHub defines issue types on the",
+        "oddharsh account (GA for personal accounts 2026-11-11), so this list is",
+        "what every oddharsh repository offers, and editing it here edits theirs.",
+        "",
+        "The first three are GitHub's defaults, spelled as it ships them. `Watch`",
+        "is the one this repo adds: on 2026-11-11, 17 of the 19 issues ever",
+        "opened here were robot-filed trackers (timbrado canary legs, the",
+        "node-support-window and test-order reports, the dependency digest).",
+        "They close when an upstream release or a pin moves, which no other",
+        "type says.",
+        "",
+        "Colours are GitHub's named palette (gray, blue, green, yellow, orange,",
+        "red, pink, purple), not hex. A workflow's `gh issue create --type`",
+        "must name a type declared here, since gh cannot apply one the account",
+        "lacks, so check-infra scans for it the same way it scans `--label`.",
+        "",
+        "Writes need the classic `user` scope, which the default gh login lacks:",
+        "`gh auth refresh -h github.com -s user`, then",
+        "`bun run labels:sync -- --confirm`."
+      ],
+      "issue_fields": [
+        {
+          "name": "Priority",
+          "data_type": "single_select",
+          "description": "How soon this needs attention",
+          "options": [
+            { "name": "Urgent", "color": "red" },
+            { "name": "High", "color": "orange" },
+            { "name": "Medium", "color": "yellow" },
+            { "name": "Low", "color": "gray" }
+          ]
+        },
+        { "name": "Upstream", "data_type": "text", "description": "URL of the upstream issue, PR or release this waits on" }
+      ],
+      "$issue_fields": [
+        "Account-wide too. Turning fields on creates Priority, Effort, Start date",
+        "and Target date; this keeps Priority as shipped and drops the other",
+        "three, since one owner with no sprints has nothing to put in them.",
+        "`Upstream` holds the link a Watch issue waits on, the same fact",
+        "tools/lib/upstream-watches.ts records for the pins.",
+        "",
+        "Every field is `all` visibility because the repo is public. Pinning a",
+        "field to a type has no REST endpoint, so that half lives in account",
+        "settings (Planning > Issue fields) and nothing here checks it.",
+        "`labels:sync -- --confirm --prune` deletes an undeclared field, and a",
+        "deletion takes its value off every issue that carried it."
+      ],
       "assignee": "oddharsh",
       "self_labelling_workflows": 6,
       "$self_labelling_workflows": [

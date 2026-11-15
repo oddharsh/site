@@ -237,7 +237,7 @@ const ROUTES = [
   // and the fragment always carries a day. /coffee/pick is the no-script page
   // with the same list inline.
   { path: "/coffee", status: 200, ct: "text/html", marker: "data-island=/coffee/slots.html", fullPage: true },
-  { path: "/coffee/", status: 301, location: "/coffee" }, // routeDropSlash, not cal's root as a duplicate 200
+  { path: "/coffee/", status: 301, location: "/coffee" }, // the slashed-path rule beats cal's root as a duplicate 200
   { path: "/coffee/slots.html", status: 200, ct: "text/html", marker: "xp-day-label", fragment: true },
   { path: "/coffee/pick", status: 200, ct: "text/html", marker: 'id="bookform"' },
   { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
@@ -263,7 +263,7 @@ const ROUTES = [
   { path: "/perf.json", status: 301 },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
-  { path: "/lens/", status: 301, location: "/lens" }, // slashless canonical: routeDropSlash 301s to /lens
+  { path: "/lens/", status: 301, location: "/lens" }, // slashless canonical: the slashed-path rule 301s to /lens
   { path: "/lens-boot.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
   { path: "/lens-webmcp.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
@@ -381,7 +381,7 @@ const ROUTES = [
   // carries no serendipity schema, so the pool read fails and the fragment
   // answers 503 without the island marker, which is the loader's failure arm.
   { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
-  { path: "/serendipity/", status: 301, location: "/serendipity" }, // routeDropSlash, not a duplicate 200
+  { path: "/serendipity/", status: 301, location: "/serendipity" }, // the slashed-path rule, not a duplicate 200
   { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
   // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
   { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
@@ -506,7 +506,7 @@ const ROUTES = [
   { path: "/ledger/rum.js", status: 404 },
   { path: "/ledger/rum", status: 404 },
   { path: "/writing", status: 200, ct: "text/html" },
-  { path: "/writing/", status: 301, location: "/writing" }, // routeDropSlash 301s to /writing
+  { path: "/writing/", status: 301, location: "/writing" }, // the slashed-path rule 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json", encoding: "br" },
@@ -525,6 +525,11 @@ const ROUTES = [
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
   { path: "/about", status: 200, ct: "text/html", marker: "Archetype" },
+  // an exact-row page: its slashed twin reaches the Worker only through
+  // SLASHED_TWINS's /*/ row, and the asset layer answered it with a 307 before
+  { path: "/about/", status: 301, location: "/about" },
+  // a slashed miss gets one 404, not a 301 to a second one
+  { path: "/no-such-page/", status: 404 },
   { path: "/contact", status: 200, ct: "text/html", marker: "coffee@aadhar.sh" },
   { path: "/privacy", status: 200, ct: "text/html", marker: "serendipity-uid" },
   { path: "/developers", status: 200, ct: "text/html", marker: "/openapi.json" },
@@ -604,8 +609,9 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
-  // routeDropSlash; the asset layer's drop-trailing-slash would 307 (gotcha 78)
+  // dispatch.ts's slashed-path rule; the asset layer's drop-trailing-slash would 307 (gotcha 78)
   { path: "/garage/", status: 301, location: "/garage" },
+  { path: "/garage/horizon/", status: 301, location: "/garage/horizon" }, // a static page under a prefix route
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
@@ -613,7 +619,8 @@ const ROUTES = [
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" }, // the JPEG cell /lwe/encoding actually loads
   { path: "/lwe", status: 200, ct: "text/html" },
-  { path: "/lwe/", status: 301, location: "/lwe" }, // routeDropSlash, as /garage/
+  { path: "/lwe/", status: 301, location: "/lwe" }, // as /garage/
+  { path: "/lwe/fhe/", status: 301, location: "/lwe/fhe" },
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
   { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
   { path: "/pixel-peeper/manifest.json", status: 200, ct: "application/json" },

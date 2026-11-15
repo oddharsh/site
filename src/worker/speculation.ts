@@ -131,8 +131,12 @@ export function handlePrefetchActivation(request, env) {
       const p = params.get("p") || "(unknown)";
       // nav.js's prerenderingchange listener says so; see THE CLIENT HALF above
       const kind = params.get("via") === "client" ? "activated-client" : "activated";
+      // blob4 is how far the speculation got before the click (nav.ts sends
+      // it); anything else, the header beacon included, records as "".
+      const s = params.get("s") || "";
+      const reached = (REACHED as readonly string[]).includes(s) ? s : "";
       env.SPECULATION.writeDataPoint({
-        blobs: [kind, p.slice(0, 96), versionBlob(env)],
+        blobs: [kind, p.slice(0, 96), versionBlob(env), reached],
         doubles: [1],
         indexes: [kind],
       });
@@ -167,6 +171,14 @@ import { jsonResponse, methodGuard } from "./lib/http.ts";
 export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
 
+// How far a client-counted activation's speculation got before the click.
+// "complete" and "interactive" are the prerender's readyState at activation;
+// "early" means the click beat the prerender's deferred nav.js; "prefetch" is
+// a prefetch-served navigation, whose timing nav.ts does not read. Only
+// "early" and "interactive" leave room for an earlier start to help.
+export const REACHED = ["complete", "interactive", "early", "prefetch"] as const;
+export type Reached = Record<(typeof REACHED)[number] | "unrecorded", number>;
+
 export type SpeculationRow = {
   path: string;
   prefetch: number;
@@ -174,7 +186,10 @@ export type SpeculationRow = {
   activated: number;
   speculated: number;
   rate: number | null;
+  reached: Reached;
 };
+
+const noneReached = (): Reached => ({ complete: 0, interactive: 0, early: 0, prefetch: 0, unrecorded: 0 });
 
 const HEADER = "activated",
   CLIENT = "activated-client";
@@ -190,10 +205,14 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
     const path = text(r.path, "(unknown)");
     const n = Math.round(Number(r.n) || 0);
     if (n <= 0) continue;
-    const row = byPath.getOrInsertComputed(path, () => ({ path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null }));
+    const row = byPath.getOrInsertComputed(path, () => ({ path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null, reached: noneReached() }));
     if (kind === HEADER || kind === CLIENT) {
       const src = sources.getOrInsertComputed(path, () => ({ header: 0, client: 0 }));
       src[kind === HEADER ? "header" : "client"] += n;
+      if (kind === CLIENT) {
+        const state = text(r.state, "");
+        row.reached[(REACHED as readonly string[]).includes(state) ? (state as keyof Reached) : "unrecorded"] += n;
+      }
     } else row[kind] += n;
   }
   const out = [...byPath.values()];
@@ -215,9 +234,9 @@ export async function handleSpeculationJson(request, env) {
     env,
     SPECULATION_DATASET,
     (from, sum) =>
-      `SELECT blob1 AS kind, blob2 AS path, ${sum("double1")} AS n ` +
+      `SELECT blob1 AS kind, blob2 AS path, blob4 AS state, ${sum("double1")} AS n ` +
       `FROM ${from} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
-      `GROUP BY kind, path`,
+      `GROUP BY kind, path, state`,
   );
   if (!read.ok) {
     const { status, error, code } = analyticsReadError(read.reason);
@@ -231,7 +250,7 @@ export async function handleSpeculationJson(request, env) {
       binding_fallback: read.binding_fallback,
       window_days: SPECULATION_WINDOW_DAYS,
       dataset: SPECULATION_DATASET,
-      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate",
+      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate; reached splits client activations by how far the speculation got before the click (recorded since 2026-11-13, earlier ones read unrecorded)",
       rows,
     },
     200,

@@ -2181,8 +2181,11 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 A gap means no datapoint was recorded; it does not identify which stage failed.
 
 ### Read the field vitals
-Real visitors to `/garage/horizon` post LCP, CLS and INP once, when the tab
-first hides ([`src/worker/vitals.ts`](../src/worker/vitals.ts)). Each metric is
+Real visitors to `/garage/horizon` post LCP, CLS and INP once per view
+([`src/worker/vitals.ts`](../src/worker/vitals.ts)): Chromium through
+`fetchLater` when the page goes away, everything else through `sendBeacon`
+when the tab first hides. A view that loaded in a background tab has no LCP
+row. Each metric is
 its own row in `aadhar_vitals`: `blob1` is the metric, `blob2` the path, `blob3`
 the Worker version, `double1` the value (milliseconds for LCP and INP, unitless
 for CLS). A view with no interaction has no INP row. The p75 per metric over

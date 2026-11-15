@@ -269,20 +269,33 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
 //  - a throwing execute rejects the caller with a generic message, so a tool that
 //    wants to explain itself has to return isError instead of throwing.
 
-export async function registerTool(def: {
+type ToolDef = {
   name: string;
   description: string;
   inputSchema?: unknown;
   annotations?: Record<string, unknown>;
   writes?: boolean;
   execute: (args: any) => unknown;
-}): Promise<"registered" | "taken" | "unsupported" | "failed"> {
-  if (!MC) return "unsupported";
+};
+
+function claims(def: Pick<ToolDef, "annotations" | "writes">) {
   const annotations = def.annotations || { readOnlyHint: true };
   // Default to the server reading: a /mcp tool that is not read-only is one that
   // persists something. A page tool that only drives the UI passes writes:false
   // explicitly and keeps its honest readOnlyHint:false.
   const writes = def.writes === undefined ? annotations.readOnlyHint === false : def.writes === true;
+  return { annotations, writes };
+}
+
+/** The description the browser receives: the tool's own plus its safety line. */
+export function registeredDescription(def: Pick<ToolDef, "description" | "annotations" | "writes">): string {
+  const { annotations, writes } = claims(def);
+  return def.description + safetyNote(annotations, writes);
+}
+
+export async function registerTool(def: ToolDef): Promise<"registered" | "taken" | "unsupported" | "failed"> {
+  if (!MC) return "unsupported";
+  const { annotations, writes } = claims(def);
 
   let schema = def.inputSchema;
   /* oxlint-disable-next-line anti-slop/no-runtime-typeof -- this IS the I/O
@@ -300,7 +313,7 @@ export async function registerTool(def: {
 
   const tool: Record<string, unknown> = {
     name: def.name,
-    description: def.description + safetyNote(annotations, writes),
+    description: registeredDescription(def),
     // A UI-only page tool is honestly not read-only, yet repainting the Lens
     // window is not a consequence worth a prompt, so `consequentialHint`
     // follows `writes` rather than `readOnlyHint`.

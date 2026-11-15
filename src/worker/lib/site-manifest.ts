@@ -397,6 +397,12 @@ export const AGENT_SURFACES = [
     "description": "Cloudflare's cache now pulls big files from the origin one chunk at a time. Simulate the chunk arithmetic and ten viewers sharing one fetch, then walk a live photo original 32 bytes at a time to see why this site can't use it."
   },
   {
+    "path": "/garage/speculation",
+    "title": "Guessing the next click",
+    "mimeType": "text/html",
+    "description": "Five ways to start a page before the click, run over the same 65 cursor paths: how much head start each buys, and what each wrong guess costs."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -503,6 +509,7 @@ export const WEBMENTION_PATHS = [
   "/garage/av2",
   "/garage/round-trip",
   "/garage/ranges",
+  "/garage/speculation",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

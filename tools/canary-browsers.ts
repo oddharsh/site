@@ -120,8 +120,10 @@ export function familyOf(name: string): Snapshot["family"] {
 /** The `data-cap` of every card the page marks as shipped on the site. */
 export function shippedCaps(html: string): string[] {
   const caps: string[] = [];
-  for (const m of html.matchAll(/<section class="([^"]*)" data-cap="([^"]+)"/g)) {
-    if (m[1].split(/\s+/).includes("shipped")) caps.push(m[2]);
+  for (const [tag] of html.matchAll(/<section\b[^>]*>/g)) {
+    const cls = tag.match(/ class="([^"]*)"/)?.[1] ?? "";
+    const cap = tag.match(/ data-cap="([^"]+)"/)?.[1];
+    if (cap && cls.split(/\s+/).includes("shipped")) caps.push(cap);
   }
   return caps;
 }

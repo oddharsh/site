@@ -91,7 +91,7 @@
     "webmention:eval": "bun tools/webmention-sort-eval.ts"
   },
   "devDependencies": {
-    "@cloudflare/config": "0.31.0",
+    "@cloudflare/config": "0.32.0",
     "@oxlint/plugins": "1.93.0",
     "@types/bun": "1.4.4",
     "av2-tone": "github:oddharsh/av2-tone#462f9ca175a5e4f9c1640ed6d8a47266e2590418",
@@ -117,7 +117,7 @@
     "workerd"
   ],
   "catalog": {
-    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@c47cca7"
+    "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@79b890a"
   },
   "$comment": "Toolchain ownership and validation commands: docs/TOOLING.md. Shared dependency pins: catalog below; runtime pins: config/bun-pin.json and .node-version."
 }

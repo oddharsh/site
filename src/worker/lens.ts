@@ -1157,7 +1157,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    number was already a pixel off WCAG 2.5.8's 24px floor and these were four
    under it. Rounding up to 24 is closer to Luna than what was here. */
 .lx-chip { font-size:var(--text-xs); padding:4px 9px; color:var(--ink); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
-.lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
+@media (hover: hover) and (pointer: fine) {.lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }}
 .lx-chip:active { border-color:var(--ink-quiet) #fff #fff var(--ink-quiet); }
 /* the interaction chip row, sunk so it reads as a control strip rather than
    another finding in the report it sits above. */
@@ -1264,7 +1264,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-browser-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 210); background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(94% 0.025 210)); color:oklch(31% 0.04 220); font-size:var(--text-xs); line-height:1.45; }
 .lx-browser-intro b { color:oklch(34% 0.11 220); }
 .lx-browser-run { margin-top:7px; border:1px solid oklch(52% 0.08 220); border-radius:3px; padding:3px 8px; background:linear-gradient(180deg,#fff,oklch(89% 0.025 210)); color:oklch(30% 0.08 220); font:var(--text-micro) var(--font-ui); cursor:pointer; }
-.lx-browser-run:hover { background:oklch(91% 0.05 210); }
+@media (hover: hover) and (pointer: fine) {.lx-browser-run:hover { background:oklch(91% 0.05 210); }}
 /* Reader lens. Reuses .lx-browser-run for the opt-in button (same affordance,
    same cost shape: one click spends a real fetch), so this adds only the intro
    block and the credit line. The credit is deliberately quieter than the data. */
@@ -1307,7 +1307,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-tools-list { border:1px solid var(--slate-80); }
 .lx-tool + .lx-tool { border-top:1px solid oklch(88% 0.015 260); }
 .lx-tool-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; width:100%; padding:5px 7px; border:0; background:var(--paper-cool); font:var(--text-sm) var(--font-mono); text-align:left; cursor:pointer; }
-.lx-tool-head:hover { background:oklch(95% 0.02 262); }
+@media (hover: hover) and (pointer: fine) {.lx-tool-head:hover { background:oklch(95% 0.02 262); }}
 .lx-tool.is-open > .lx-tool-head { background:oklch(93% 0.035 262); }
 .lx-tool-name { font-weight:bold; color:oklch(30% 0.09 262); }
 .lx-tool-body { padding:8px 9px 10px; background:oklch(99.5% 0.002 260); }
@@ -1394,7 +1394,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-tf-group .lx-tf:last-child { margin-bottom:0; }
 .lx-tf-const { font:var(--text-mono) var(--font-mono); color:oklch(45% 0.02 260); }
 .lx-tf-add, .lx-tf-kill, .lx-tool-copy { font:var(--text-2xs) var(--font-ui); padding:2px 9px; cursor:pointer; border:1px solid oklch(64% 0.03 255); border-radius:3px; background:linear-gradient(180deg,oklch(100% 0 0),var(--mist-92)); color:oklch(20% 0.01 260); }
-.lx-tf-add:hover, .lx-tf-kill:hover, .lx-tool-copy:hover { border-color:oklch(70% 0.13 65); }
+@media (hover: hover) and (pointer: fine) {.lx-tf-add:hover, .lx-tf-kill:hover, .lx-tool-copy:hover { border-color:oklch(70% 0.13 65); }}
 .lx-tf-kill { flex:none; min-width:22px; padding:1px 6px; }
 .lx-wire-split { margin:6px 0 8px; }
 .lx-wire-bar { display:flex; height:18px; border:1px solid oklch(62% 0.02 250); background:var(--grey-94); overflow:hidden; }
@@ -1512,7 +1512,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    Measured on the live page: all 14 row heights are identical before and after.
    Also lands them on the same 23-24px as .lx-go, .lx-seg and .lx-chip. */
 .lx-copy-fix, .lx-copy-all { box-sizing:border-box; min-height:24px; border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:var(--text-2xs) var(--font-ui); cursor:pointer; white-space:nowrap; }
-.lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
+@media (hover: hover) and (pointer: fine) {.lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }}
 .lx-copy-all { margin:0 0 7px; font-weight:bold; }
 .lx-next-actions { display:grid; gap:4px; margin:0 0 9px; }
 .lx-next-actions div { display:grid; grid-template-columns:145px 1fr; gap:8px; padding:4px 6px; background:oklch(98% 0.01 250); border-left:3px solid oklch(60% 0.15 50); font-size:var(--text-micro); }
@@ -1551,7 +1551,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    as the affordance. */
 .lx-verdict-score { float:left; margin:1px 11px 2px 0; padding:0; border:0; background:none; cursor:pointer; font:bold 21pt var(--font-caption); line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
 .lx-verdict-score span { font:normal var(--text-xs) var(--font-ui); color:oklch(53% 0 0); }
-.lx-verdict-score:hover span { text-decoration:underline; color:var(--link); }
+@media (hover: hover) and (pointer: fine) {.lx-verdict-score:hover span { text-decoration:underline; color:var(--link); }}
 .lx-verdict-score:focus-visible { outline:1px dotted var(--link); outline-offset:2px; }
 .lx-verdict::after { content:""; display:block; clear:both; }
 
@@ -1589,7 +1589,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-cf-card h4 { margin:0 0 3px; font-family:var(--font-caption); font-size:var(--text-xs); color:oklch(32% 0.07 255); }
 .lx-cf-card p { margin:0 0 6px; color:var(--grey-48); font-size:var(--text-micro); line-height:1.35; }
 .lx-cf-toggle { display:inline-flex; align-items:center; gap:5px; border:1px solid oklch(65% 0.03 250); border-radius:3px; padding:2px 6px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.06 255); font-family:var(--font-mono); font-size:var(--text-2xs); cursor:pointer; }
-.lx-cf-toggle:hover { border-color:oklch(48% 0.12 250); }
+@media (hover: hover) and (pointer: fine) {.lx-cf-toggle:hover { border-color:oklch(48% 0.12 250); }}
 .lx-cf-toggle[aria-pressed="true"] { color:#fff; border-color:oklch(43% 0.12 150); background:linear-gradient(180deg,oklch(59% 0.13 150),oklch(45% 0.15 150)); }
 .lx-cf-dot { width:7px; height:7px; display:inline-block; border-radius:50%; background:var(--grey-60); }
 .lx-cf-toggle[aria-pressed="true"] .lx-cf-dot { background:oklch(88% 0.15 105); }
@@ -1654,7 +1654,8 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    nearer the real thing than the 20 it replaces; .lx-sow-tb sheds 2px of
    padding so the caption bar grows 2px rather than 4. */
 .lx-sow-x { margin-left:auto; width:24px; height:24px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid var(--red-59); border-radius:3px; background-color:var(--red-65); background-image:linear-gradient(180deg,var(--red-70),var(--red-65) 55%,var(--red-50)); }
-.lx-sow-x:hover, .lx-sow-x:focus-visible { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }
+.lx-sow-x:focus-visible { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }
+@media (hover: hover) and (pointer: fine) {.lx-sow-x:hover { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }}
 .lx-sow-x::before, .lx-sow-x::after { content:''; position:absolute; left:50%; top:50%; width:11px; height:2px; margin:-1px 0 0 -5.5px; background:#fff; }
 .lx-sow-x::before { transform:rotate(45deg); } .lx-sow-x::after { transform:rotate(-45deg); }
 .lx-sow-inner { padding:11px 13px 13px; overflow:auto; }

@@ -306,7 +306,7 @@ export function start(o: {
     } else if (kind === "updates") {
       const latest = (upd && upd.items && upd.items[0]) || null;
       rows = [
-        ["Build", upd && upd.build],
+        ["Serving", upd && upd.serving && upd.serving.slice(0, 8)],
         ["Latest", latest && latest.slug],
       ];
     }

@@ -26,7 +26,7 @@
     ".lwe-q{flex:1;min-width:0;border:1px solid #7d8aa3;background:#fff;box-shadow:inset 1px 1px 0 #c3cbdb;padding:4px 7px;font-family:var(--font-ui);font-size:9.5pt}" +
     ".lwe-q:disabled{background:#f1f1f1;color:#66707d}" +
     ".lwe-btn{font-family:var(--font-ui);font-size:9.5pt;padding:3px 11px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff 0%,#e9edf5 100%);border:1px solid #7d8aa3;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b9c2d4;white-space:nowrap}" +
-    ".lwe-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}" +
+    "@media (hover: hover) and (pointer: fine) {.lwe-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}}" +
     ".lwe-btn:active{box-shadow:inset 1px 1px 0 #b9c2d4,inset -1px -1px 0 #fff}" +
     ".lwe-btn:disabled{color:#aab;background:linear-gradient(to bottom,#f3f3f3,#e6e6e6);border-color:#bbb;cursor:not-allowed}" +
     ".lwe-btn.go{font-weight:bold;background:linear-gradient(to bottom,#eaf6ec,#cdeccf);border-color:#4a9a52}" +
@@ -38,7 +38,7 @@
     ".lwe-dlg-tt{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,#5a8fe6 0%,#1f5fd0 18%,#1655c4 86%,#3a78e0 100%)}" +
     ".lwe-dlg-tt .ico{flex:0 0 auto}.lwe-dlg-tt .t{flex:1;min-width:0}" +
     ".lwe-dlg-x{width:21px;height:21px;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);color:#fff;font-weight:bold;font-size:11px;cursor:pointer;line-height:1}" +
-    ".lwe-dlg-x:hover{background:linear-gradient(180deg,#ff8b7d,#d34936)}" +
+    "@media (hover: hover) and (pointer: fine) {.lwe-dlg-x:hover{background:linear-gradient(180deg,#ff8b7d,#d34936)}}" +
     ".lwe-dlg-bd{padding:11px 12px 13px}" +
     ".lwe-dlg-lead{font-size:9pt;color:#3a4255;margin:0 0 9px}.lwe-dlg-lead b{color:#15243f}" +
     ".lwe-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}" +

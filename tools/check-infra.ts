@@ -392,6 +392,18 @@ async function checkTriageDeclaration(repo) {
   // that touch no label at all. Backslash continuations are folded first
   // because every one of these invocations is wrapped across lines, and each
   // passes `--label` before the multi-line `--body` that ends the logical line.
+  // Issue types are account state with GitHub's named palette rather than hex,
+  // and a `gh issue create --type` naming one that is missing cannot apply it.
+  const COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "pink", "purple"];
+  const types = new Set<string>();
+  for (const type of triage.issue_types ?? []) {
+    const at = `infra.json issue type ${JSON.stringify(type.name)}`;
+    if (types.has(type.name)) fail(`${at} is declared twice`);
+    types.add(type.name);
+    if (!COLORS.includes(type.color)) fail(`${at} has colour ${JSON.stringify(type.color)}, which is not one of GitHub's ${COLORS.join(", ")}`);
+    if (!type.description) fail(`${at} has no description`);
+  }
+
   const dir = join(ROOT, ".github/workflows");
   let inline = 0;
   for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yml"))) {
@@ -407,6 +419,14 @@ async function checkTriageDeclaration(repo) {
       if (!names.has(name)) {
         fail(
           `.github/workflows/${file} passes \`--label ${JSON.stringify(name)}\`, which infra.json does not declare. \`gh pr create --label\` fails on an unknown label, so this stops that workflow rather than mislabelling it`,
+        );
+      }
+    }
+    for (const m of text.matchAll(/--type\s+(?:"([^"]+)"|'([^']+)'|(\S+))/g)) {
+      const name = m[1] ?? m[2] ?? m[3];
+      if (!types.has(name)) {
+        fail(
+          `.github/workflows/${file} passes \`--type ${JSON.stringify(name)}\`, which infra.json does not declare. \`gh issue create --type\` cannot apply a type the account lacks, so the report lands untyped or not at all`,
         );
       }
     }

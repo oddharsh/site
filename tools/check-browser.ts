@@ -6,7 +6,7 @@
 //   bun run browser:check -- --base https://aadhar.sh   # sweep a deployment, with its real data
 //   bun run browser:check -- --only /coffee,/lens       # some pages
 //
-// Four readings per manifest surface, in Chrome:
+// Five readings per manifest surface, in Chrome:
 //
 //   scroll  the window's scroller and the document are no wider than their box
 //           at 320, 360 and 390px (gotcha 97). A page that is, drags sideways.
@@ -17,6 +17,10 @@
 //           in a renderer process loads ICU data, 8 to 17 ms of a landing view
 //           and 30 to 53 ms throttled (gotcha 92).
 //   error   no uncaught exception while the page loads.
+//   csp     no Content-Security-Policy violation while the page loads. Chrome
+//           reports one whenever a parser sets an inline event handler, even in
+//           an inert document, so a demo that parses onerror= on load logs an
+//           error on every visit (gotcha 99).
 //
 // Each was found by hand on 2026-11-10, a page at a time: six pages scrolling
 // sideways, four shifting, nine paying for Intl. This is that crawl, kept, so
@@ -34,7 +38,7 @@
 //
 // THE CONTROLS RUN EVERY TIME, before the sweep, on /search: a 600px block for
 // scroll, a 300px block pushed in above the content for shift, a number
-// formatted for intl, a thrown error for error. A reading that misses its
+// formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { readFileSync } from "node:fs";
@@ -65,13 +69,18 @@ const only = values.only?.split(",");
 const paths = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
 
 declare global {
-  var __seen: { shift: number; moved: string[]; intl: string[] };
+  var __seen: { shift: number; moved: string[]; intl: string[]; csp: string[] };
 }
 
 /** Installed before any page script: counts layout shift and every Intl call. */
 function instrument() {
-  const seen: typeof globalThis.__seen = { shift: 0, moved: [], intl: [] };
+  const seen: typeof globalThis.__seen = { shift: 0, moved: [], intl: [], csp: [] };
   globalThis.__seen = seen;
+  document.addEventListener(
+    "securitypolicyviolation",
+    (e) => seen.csp.push(`${e.violatedDirective} at ${e.sourceFile.split("/").pop() || "(inline)"}:${e.lineNumber}:${e.columnNumber}`),
+    true,
+  );
   const name = (node: Node | null) =>
     node instanceof Element ? node.tagName.toLowerCase() + (node.id ? `#${node.id}` : "") + (node.classList.length ? `.${node.classList[0]}` : "") : "?";
   new PerformanceObserver((list) => {
@@ -128,7 +137,7 @@ const overflows = (page: Page) =>
     return found;
   });
 
-type Reading = { status: number; shift: number; moved: string[]; intl: string[]; errors: string[]; scroll: Record<number, string[]> };
+type Reading = { status: number; shift: number; moved: string[]; intl: string[]; csp: string[]; errors: string[]; scroll: Record<number, string[]> };
 
 /** One throttled load. `plant` runs in the page once it has loaded, before the settle. */
 async function load(ctx: BrowserContext, url: string, widths: number[], plant?: () => void): Promise<Reading> {
@@ -161,7 +170,9 @@ async function confirmed(ctx: BrowserContext, url: string, widths: number[], max
   const first = await load(ctx, url, widths);
   if (first.shift <= max) return first;
   const second = await load(ctx, url, widths);
-  return second.shift < first.shift ? { ...second, errors: [...first.errors, ...second.errors], intl: [...first.intl, ...second.intl] } : first;
+  return second.shift < first.shift
+    ? { ...second, errors: [...first.errors, ...second.errors], intl: [...first.intl, ...second.intl], csp: [...first.csp, ...second.csp] }
+    : first;
 }
 
 const desktop = (browser: Browser) => browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" });
@@ -173,7 +184,8 @@ async function controls(browser: Browser, base: string) {
   const blind: string[] = [];
   const url = `${base}/search`;
   const clean = await load(wide, url, []);
-  if (clean.shift > SHIFT_MAX || clean.intl.length || clean.errors.length) blind.push(`the control page /search is not clean itself: ${JSON.stringify(clean)}`);
+  if (clean.shift > SHIFT_MAX || clean.intl.length || clean.csp.length || clean.errors.length)
+    blind.push(`the control page /search is not clean itself: ${JSON.stringify(clean)}`);
   const shifted = await load(wide, url, [], () => {
     setTimeout(() => document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<div style="height:300px"></div>'), 300);
   });
@@ -188,6 +200,8 @@ async function controls(browser: Browser, base: string) {
     }, 0);
   });
   if (!thrown.errors.some((e) => e.includes("planted"))) blind.push("error: an exception thrown on /search went unreported");
+  const handler = await load(wide, url, [], () => document.querySelector("main")?.insertAdjacentHTML("beforeend", '<b onclick="void 0"></b>'));
+  if (!handler.csp.some((v) => v.startsWith("script-src-attr"))) blind.push("csp: an inline onclick parsed into /search went unreported");
   const widened = await load(narrow, url, WIDTHS, () => {
     document.querySelector("main")?.insertAdjacentHTML("beforeend", '<div id="planted" style="width:600px;height:1px"></div>');
   });
@@ -220,6 +234,7 @@ async function sweep(browser: Browser, base: string) {
       const calls = [...new Set([...d.intl, ...p.intl])];
       if (calls.length && !budget.intl[path]) fail("intl", `${calls.join(", ")} before the reader acts`);
       for (const error of new Set([...d.errors, ...p.errors])) fail("error", error);
+      for (const violation of new Set([...d.csp, ...p.csp])) fail("csp", violation);
       for (const width of WIDTHS) for (const line of p.scroll[width] ?? []) fail("scroll", `${width}px: ${line}`);
       // A budget the page no longer needs. Only a local sweep says so: a
       // deployment's data can make a page quieter than the fallback state.

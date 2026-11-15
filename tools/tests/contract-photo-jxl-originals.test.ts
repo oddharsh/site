@@ -133,3 +133,36 @@ test("a matching If-None-Match answers 304 from the body-less object R2 returns"
   assert.equal(stale.res.headers.get("content-length"), "3");
   assert.equal((await serve("X2.jxl", {}, { "if-none-match": '"e"' })).res.status, 404);
 });
+
+test("x-photo-cache marks the inner tier only where Workers Cache won't store the mark (gotcha 100)", async () => {
+  // Workers Cache stores this route's whole response for a clean-URL GET, so a
+  // mark stamped there repeats on every front-tier HIT: production answered
+  // `x-photo-cache: miss` from cf-cache-status HIT at age 500+ s (2026-10-24).
+  const g = globalThis as any;
+  const had = g.caches;
+  const stored = new Map<string, Response>();
+  g.caches = {
+    default: {
+      match: async (req: Request) => stored.get(req.url)?.clone(),
+      put: async (req: Request, res: Response) => void stored.set(req.url, res),
+    },
+  };
+  const r2 = { get: async () => object("jxl") };
+  try {
+    for (const [path, miss, hit] of [
+      ["X1.jxl", null, null],
+      ["X2.jxl?probe=1", "miss", "hit"],
+    ] as const) {
+      const first = await serve(path, r2);
+      assert.equal(first.res.headers.get("x-photo-cache"), miss, `${path} first read`);
+      assert.deepEqual(first.asked, [["get", path.replace(/\?.*/, "")]], `${path} first read goes to R2`);
+      const again = await serve(path, r2);
+      assert.equal(again.res.headers.get("x-photo-cache"), hit, `${path} repeat read`);
+      assert.deepEqual(again.asked, [], `${path} repeat read is a caches.default hit`);
+      assert.equal(await again.res.text(), "jxl");
+    }
+  } finally {
+    g.caches = had;
+    if (had === undefined) delete g.caches;
+  }
+});

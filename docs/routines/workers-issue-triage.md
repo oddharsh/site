@@ -82,6 +82,7 @@ Open one issue in `oddharsh/site`:
 
 - **Title:** `workers-issue: ` followed by the error in under 70 characters.
 - **Label:** `workers-issue`.
+- **Type:** `Bug`.
 - **Body**, in this order: the marker line from step 1 as the first line; a
   two-or-three sentence summary of what failed and where; the redacted error
   and the relevant stack frames in a code block; your findings from step 3

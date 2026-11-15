@@ -107,15 +107,6 @@ export const EXACT_ROUTES = [
   { path: "/garage/dyno", claim: ["/garage/*"] },
   { path: DYNO_PULLS_URL, claim: ["/garage/*"] },
   { path: "/garage/dyno.json", claim: ["/garage/*"] },
-  // The slashed section and module roots, 301 to the slashless canonical. Exact
-  // routes beat the prefix routes below, which would otherwise answer these:
-  // /garage/ and /lwe/ got the asset layer's drop-trailing-slash, which
-  // redirects with a 307 (measured 2026-10-17), and /coffee/ and /serendipity/
-  // got their module's own root as a duplicate 200.
-  { path: "/garage/", claim: ["/garage/*"] },
-  { path: "/lwe/", claim: ["/lwe/*"] },
-  { path: "/coffee/", claim: ["/coffee/*"] },
-  { path: "/serendipity/", claim: ["/serendipity/*"] },
   { path: "/perf", claim: ["/perf*"] },
   { path: "/perf.json", claim: ["/perf*"] },
 
@@ -126,7 +117,6 @@ export const EXACT_ROUTES = [
   // its own row, and /lens/read belongs to the lens-reader Worker through a
   // ZONE ROUTE, which is matched before this allowlist is consulted.
   { path: "/lens", claim: ["/lens"], cacheable: true, selfFetch: true },
-  { path: "/lens/", claim: ["/lens/*"] },
   { path: "/lens/fetch", claim: ["/lens/*"], selfFetch: true },
   { path: "/lens/shot", claim: ["/lens/*"], selfFetch: true },
   { path: "/lens/browser", claim: ["/lens/*"], selfFetch: true },
@@ -183,7 +173,6 @@ export const EXACT_ROUTES = [
   { path: "/ledger/vitals", claim: ["/ledger/*"] },
 
   { path: "/writing", cacheable: true },
-  { path: "/writing/", claim: ["/writing/*"] },
 
   // HMAC-signed host actions, the same construction as cal's booking approvals
   { path: "/webmention" },
@@ -255,9 +244,9 @@ export const EXACT_ROUTES = [
 
 export type ExactPath = (typeof EXACT_ROUTES)[number]["path"];
 
-// One generated page per album (albums.ts) plus its slashed twin. A root path
-// has no wildcard to inherit, so each album costs two rows: fold before adding.
-export const ALBUM_ROUTES: readonly ExactRoute[] = Object.values(ALBUMS).flatMap((album) => [{ path: albumPath(album) }, { path: `${albumPath(album)}/` }]);
+// One generated page per album (albums.ts). Its slashed twin is SLASHED_TWINS's
+// to answer, so each album costs one row.
+export const ALBUM_ROUTES: readonly ExactRoute[] = Object.values(ALBUMS).map((album) => ({ path: albumPath(album) }));
 
 // ── prefix routes ────────────────────────────────────────────────────────────
 // ORDERED: the dispatcher takes the first match, after the exact routes. Three
@@ -437,6 +426,16 @@ export type PrefixLabel = (typeof PREFIX_ROUTES)[number]["label"];
 // claims so a file that ever lands at /book cannot answer cal's host first.
 export const CAL_HOST = { host: "cal.aadhar.sh", claim: ["/slots", "/book", "/approve", "/decline"] } as const;
 
+// Every slashed path but "/" 301s to its slashless canonical (dispatch.ts
+// route(), between the exact table and the prefix walk). The asset layer's
+// drop-trailing-slash agrees on the direction but answers 307 (gotcha 78), and
+// a page the Worker renders at an exact row (/about, /privacy) never sent its
+// slashed twin here at all, so the asset layer answered for 9 of 76 page
+// surfaces (measured 2026-11-14). One row brings every slashed path in; `*`
+// spans slashes and "/" is not matched. It costs an invocation only for a
+// URL no page links to.
+export const SLASHED_TWINS = { claim: "/*/" } as const;
+
 // ── derived ──────────────────────────────────────────────────────────────────
 const unique = (xs: Iterable<string>): string[] => [...new Set(xs)];
 const claimsOf = (r: ExactRoute) => r.claim ?? [r.path];
@@ -449,6 +448,7 @@ export const RUN_WORKER_FIRST: readonly string[] = unique([
   ...[...EXACT_ROUTES, ...ALBUM_ROUTES].flatMap(claimsOf),
   ...PREFIX_ROUTES.flatMap((r) => r.claim),
   ...CAL_HOST.claim,
+  SLASHED_TWINS.claim,
 ]);
 
 /** Exact paths Workers Cache may answer (dispatch.ts isEdgeCacheable). */

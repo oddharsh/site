@@ -39,6 +39,13 @@ test("workers-issue: the label the routine applies is declared, and the runbook 
   assert.ok(label, "an undeclared label is minted silently by the first issue that uses it");
   assert.equal(label.applied_by, "routine");
   assert.ok(label.why.includes(PROMPT));
+  const prompt = await readFile(new URL(PROMPT, ROOT), "utf8");
+  const type = /\*\*Type:\*\* `([^`]+)`/.exec(prompt)?.[1];
+  assert.equal(type, "Bug");
+  assert.ok(
+    infra.repository.triage.issue_types.some((t) => t.name === type),
+    "the routine names a type the account must carry",
+  );
 
   const claude = await readFile(new URL("CLAUDE.md", ROOT), "utf8");
   assert.ok(claude.includes(PROMPT), "CLAUDE.md's setup runbook must name the committed prompt");

@@ -86,6 +86,19 @@ test("the activation beacon answers 204 and records which page paid off", async 
   assert.equal(points.length, 1);
   assert.equal(points[0].blobs[0], "activated");
   assert.equal(points[0].blobs[1], "/garage/horizon");
+  assert.equal(points[0].blobs[3], "", "the header beacon says nothing about timing");
+
+  // nav.ts's beacon names how far the prerender got; only the known states land
+  for (const [s, reached] of [
+    ["early", "early"],
+    ["complete", "complete"],
+    ["loading", ""],
+    ["<script>", ""],
+  ]) {
+    const { env: e, points: pts } = speculationEnv();
+    handlePrefetchActivation(new Request(`https://aadhar.sh/ledger/prefetch?via=client&s=${encodeURIComponent(s)}&p=%2Fabout`, { method: "HEAD" }), e);
+    assert.deepEqual(pts[0].blobs.slice(0, 2).concat(pts[0].blobs[3]), ["activated-client", "/about", reached], `s=${s}`);
+  }
 
   // anything that isn't a read is refused, and says so properly
   const bad = handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
@@ -854,16 +867,19 @@ test("the readback takes the larger activation source per path and never sums th
   assert.equal(rows.find((r) => r.path === "/lwe")?.activated, 4);
 });
 
-test("nav.js beacons both shapes of a paid-off speculation, before anything waits on paint", () => {
+test("nav.js beacons every shape of a paid-off speculation, before anything waits on paint", () => {
   const nav = readFileSync(new URL("../../src/client/nav.ts", import.meta.url), "utf8");
-  const head = nav.indexOf("var activated = () =>");
+  const head = nav.indexOf("var activated = (state: string) =>");
   assert.ok(head > 0, "nav.js must define the activation beacon");
-  const block = nav.slice(head, head + 900);
-  assert.match(block, /\/ledger\/prefetch\?via=client&p=" \+ encodeURIComponent\(location\.pathname\)/);
+  const block = nav.slice(head, head + 1100);
+  assert.match(block, /\/ledger\/prefetch\?via=client&s=" \+ state \+ "&p=" \+ encodeURIComponent\(location\.pathname\)/);
   assert.match(block, /method: "HEAD"/, "the endpoint answers GET and HEAD only");
-  // a prerender activates later, so it waits for the event, once
-  assert.match(block, /\.prerendering\) \{\s*D\.addEventListener\("prerenderingchange", activated, \{ once: true \}\)/);
-  // a navigation served from a prefetch says so in its timing entry, and only that one beacons at load
-  assert.match(block, /deliveryType === "navigational-prefetch"\) activated\(\)/);
+  // a prerender activates later, so it waits for the event, once, and says how far it loaded
+  assert.match(block, /\.prerendering\) \{\s*D\.addEventListener\("prerenderingchange", \(\) => activated\(D\.readyState\), \{ once: true \}\)/);
+  // a click that beat the deferred nav.js shows only in activationStart, and is checked first
+  assert.match(
+    block,
+    /navEntry\.activationStart\) activated\("early"\);\s*else if \(navEntry && navEntry\.deliveryType === "navigational-prefetch"\) activated\("prefetch"\)/,
+  );
   assert.ok(head < nav.indexOf("bootAfterStaticPaint"), "registered before the paint-gated boot, since a prerender is not painted until activated");
 });
