@@ -883,7 +883,8 @@ const VIEW_CSS = `/*min*/
   .window:has(>.axp-tasks):has(>.ph-menubar) > .content,
   .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-resize { grid-row: 4; }
   #ph-view { border: 0; background: none; font: inherit; color: var(--ink); padding: 1px 7px; cursor: default; }
-  #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 0; }
+  /* the transparent outline shows only in High Contrast, which strips the selection background */
+  #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 1px solid transparent; outline-offset: -1px; }
   .ph-drop { position: fixed; inset: auto; margin: 0; padding: 2px; min-width: 140px; background: var(--face-light); border: 1px solid var(--darkshadow); box-shadow: var(--shadow-tip); font: 11px/1.5 var(--font-ui); }
   .ph-drop button { display: flex; align-items: center; width: 100%; padding: 2px 20px 2px 0; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: default; }
   .ph-drop button::before { content: ""; flex: 0 0 20px; text-align: center; font-size: 7px; }
