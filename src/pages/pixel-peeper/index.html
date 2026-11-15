@@ -1064,7 +1064,8 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   const blob=()=>png().then(c=>new Promise(res=>c.toBlob(res,"image/png")));
 
   document.getElementById("copytext").onclick=ev=>{
-    navigator.clipboard&&navigator.clipboard.writeText(txt);flash(ev.target,"Copied ✓");};
+    const b=ev.target;if(!navigator.clipboard){flash(b,"Copy failed");return;}
+    navigator.clipboard.writeText(txt).then(()=>flash(b,"Copied ✓"),()=>flash(b,"Copy failed"));};
 
   const ci=document.getElementById("copyimg");
   // ClipboardItem takes the PROMISE, not the blob — Safari requires the item to
