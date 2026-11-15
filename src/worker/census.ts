@@ -463,44 +463,55 @@ function sparkline(series) {
 
 const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", unknown: "off" };
 
+// The roster-shaped table both the placeholder and the empty state draw, so the
+// swap between them can't change the page's height (island rule 1).
+function rosterShell(meta, site, cell) {
+  const rows = CENSUS_ROSTER.map(
+    (r) =>
+      '<tr aria-hidden="true"><td class="cx-site">' +
+      site(r) +
+      "</td><td>" +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-spark">' +
+      cell +
+      '</td><td class="cx-surfs">' +
+      cell +
+      "</td></tr>",
+  ).join("");
+  return (
+    '<div class="cx-meta">' +
+    meta +
+    "</div>" +
+    '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
+    "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
+    "</tr></thead><tbody>" +
+    rows +
+    "</tbody></table></div>"
+  );
+}
+
 // The shared exhibit renderer: the full per-site trend table. Used by the
 // standalone /lens/census page.
 export function censusExhibitHtml(grouped) {
   // The placeholder model: one unnamed row per roster host, since the roster is
   // what a sweep reports on. Nothing in it is a claim about any site.
-  if (isPending(grouped)) {
-    const cell = "…";
-    const rows = CENSUS_ROSTER.map(
-      () =>
-        '<tr aria-hidden="true"><td class="cx-site">' +
-        cell +
-        "</td><td>" +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-spark">' +
-        cell +
-        '</td><td class="cx-surfs">' +
-        cell +
-        "</td></tr>",
-    ).join("");
-    return (
-      '<div class="cx-meta">' +
-      cell +
-      "</div>" +
-      '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
-      "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
-      "</tr></thead><tbody>" +
-      rows +
-      "</tbody></table></div>"
-    );
-  }
+  if (isPending(grouped)) return rosterShell("…", () => "…", "…");
+  // No rows yet keeps the placeholder's shape: the same 16 rows, named but
+  // blank. A short note here moved the footer on the island swap, and when that
+  // landed in the frame the taskbar pins nudged, Chrome scored the pair 0.022
+  // (4 of 6 loads at 1280px, 2026-11-15), over browser:check's 0.02.
   if (!grouped || !grouped.hosts.length) {
-    return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run.</div>';
+    return rosterShell(
+      '<span class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run.</span>',
+      (site) => esc(site.label),
+      "—",
+    );
   }
   const rows = grouped.hosts
     .map((h) => {
@@ -607,7 +618,6 @@ export const CENSUS_CSS = `/*min*/
 .cx-none { color:var(--ink-faint); font-size:var(--text-2xs); }
 .cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid var(--slate-88); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
 .cx-foot a { color:var(--link); }
-.cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
 
 // GET /lens/census?refresh=<CENSUS_KEY>: the owner-only view that triggers a
