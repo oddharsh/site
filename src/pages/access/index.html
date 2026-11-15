@@ -1527,13 +1527,31 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     tab(0);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
   }
+  // The tab pattern: one Tab stop for the strip (roving tabindex), arrows and
+  // Home/End to move along it, and a panel that takes focus itself when it
+  // holds nothing focusable, so Tab from the strip lands on the text.
+  // focusgroup would do the roving natively but isn't Baseline (2026-11-15).
   function tab(i){
     TABS.forEach(function(t, j){
-      document.getElementById(t[0]).setAttribute("aria-selected", j === i ? "true" : "false");
-      document.getElementById(t[1]).hidden = j !== i;
+      var b = document.getElementById(t[0]), pane = document.getElementById(t[1]);
+      b.setAttribute("aria-selected", j === i ? "true" : "false");
+      b.tabIndex = j === i ? 0 : -1;
+      pane.hidden = j !== i;
+      if (j === i && !pane.querySelector("a[href],button,input")) pane.tabIndex = 0;
+      else pane.removeAttribute("tabindex");
     });
   }
   TABS.forEach(function(t, i){ document.getElementById(t[0]).addEventListener("click", function(){ tab(i); }); });
+  document.querySelector("#props .tabs").addEventListener("keydown", function(e){
+    var i = TABS.findIndex(function(t){ return t[0] === document.activeElement.id; });
+    if (i < 0) return;
+    var n = TABS.length, k = e.key;
+    var next = k === "ArrowRight" ? (i + 1) % n : k === "ArrowLeft" ? (i - 1 + n) % n : k === "Home" ? 0 : k === "End" ? n - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    tab(next);
+    document.getElementById(TABS[next][0]).focus();
+  });
   document.getElementById("props-x").addEventListener("click", function(){ dlg.close(); });
   document.getElementById("props-ok").addEventListener("click", function(){ dlg.close(); });
 
