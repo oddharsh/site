@@ -309,6 +309,11 @@ export function createRun(options) {
   }
 
   function onKey(e) {
+    // While an IME composes (Japanese, Chinese, Korean), Enter confirms the
+    // candidate, the arrows walk the candidate list and Escape cancels it, so
+    // none of them is meant for the palette. Safari reports isComposing false on
+    // the confirming Enter (WebKit bug 165004) but still sends keyCode 229.
+    if (e.isComposing || (e.key === "Enter" && e.keyCode === 229)) return;
     if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
     else if (e.key === "Enter") { e.preventDefault(); go(results[sel] || results[0]); }

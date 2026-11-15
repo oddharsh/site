@@ -130,7 +130,7 @@
 
   // ── ask ──────────────────────────────────────────────────────────────────
   go.addEventListener("click", doAsk);
-  q.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.isComposing) doAsk(); });
+  q.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) doAsk(); });
   function doAsk() {
     var question = q.value.trim(); if (question.length < 3) return;
     if (!askToken || Date.now() > askExp) { q.disabled = true; go.disabled = true; setBar("verify again to keep asking", "no"); loadChallenge(); return; }
