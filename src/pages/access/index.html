@@ -339,13 +339,13 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     <span aria-hidden="true">File</span><span aria-hidden="true">Action</span><button type="button" id="m-view" aria-haspopup="true" aria-expanded="false" aria-controls="view-menu">View</button><span aria-hidden="true">Help</span>
   </div>
   <div class="menu-pop" id="view-menu" role="menu" hidden>
-    <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
+    <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false" tabindex="-1"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
     <!-- MMC keeps the console tree under View, and here it buys the board 234px
          it has nowhere else to get. At 1280, which is what a shared browser
          window usually is, that is the difference between a node label rendering
          at 9.9px and at 11.7px. Shown by default, because a reader who is not
          presenting wants the tree. -->
-    <button type="button" role="menuitemcheckbox" id="m-tree" aria-checked="true"><span class="tick" aria-hidden="true">✓</span>Console tree</button>
+    <button type="button" role="menuitemcheckbox" id="m-tree" aria-checked="true" tabindex="-1"><span class="tick" aria-hidden="true">✓</span>Console tree</button>
   </div>
   <div class="mmc-bar">
     <!-- The three toolbar captions are decorative: each group and the select
@@ -1694,16 +1694,36 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     } else if (open) viewMenu.showPopover({ source: viewBtn });
     else if (menuOpen()) viewMenu.hidePopover();
   }
+  // The menu keyboard model photos-view.js and notepad.js follow: a keyboard
+  // open (Enter/Space, or ArrowDown/ArrowUp on View) lands on an item, the
+  // arrows and Home/End move inside, and Escape or Tab hands focus back to View.
+  var menuItems = [hiddenItem, document.getElementById("m-tree")];
   viewBtn.addEventListener("click", function(ev){
     ev.stopPropagation();
     var wasOpen = pressedOpen || menuOpen();
     pressedOpen = false;
     openMenu(!wasOpen);
+    if (!wasOpen && ev.detail === 0) menuItems[0].focus();
+  });
+  viewBtn.addEventListener("keydown", function(ev){
+    if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+    ev.preventDefault();
+    if (!menuOpen()) openMenu(true);
+    menuItems[ev.key === "ArrowUp" ? menuItems.length - 1 : 0].focus();
   });
   viewMenu.addEventListener("keydown", function(ev){
-    if (ev.key !== "Escape") return;
+    var k = ev.key, at = menuItems.indexOf(document.activeElement), n = menuItems.length, to = -1;
+    if (k === "Escape" || k === "Tab") {
+      // Tab is not prevented: focus returns to View first, then Tab moves on from there.
+      if (k === "Escape") ev.preventDefault();
+      openMenu(false, true);
+      return;
+    }
+    if (k === "ArrowDown" || k === "ArrowUp") to = (at + (k === "ArrowDown" ? 1 : -1) + n) % n;
+    else if (k === "Home" || k === "End") to = k === "Home" ? 0 : n - 1;
+    if (to < 0) return;
     ev.preventDefault();
-    openMenu(false, true);
+    menuItems[to].focus();
   });
   var treeItem = document.getElementById("m-tree");
   function setTree(on){
