@@ -6463,13 +6463,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <dialog class="ib-dlg" id="ib-pe-dlg">Click anywhere: inside this box or on the dimmed backdrop.</dialog>
       <div class="ib-out" id="ib-pe-out">The readout names the clicked pseudo-element.</div>
       <p class="replaces">
-        On the site: the Run dialog in <code>nav-run.js</code> light-dismisses on a
-        backdrop click by checking <code>e.target === run</code>. Its comment reasons that
-        a click landing on the dialog element itself can only be its backdrop-covered
-        margin.
-        <code>pseudoTarget?.type === &quot;::backdrop&quot;</code> says the same thing
-        directly. The heuristic works in every engine today, so it stays until a second
-        engine ships.
+        On the site: the Run dialog in <code>nav-run.js</code> used to light-dismiss by
+        checking <code>e.target === run</code>, on the theory that a click on the dialog
+        element itself had to be its backdrop. It wasn't: the dialog's own padding and
+        the gaps between its children are the target too, and so is a text drag that
+        ends outside. The dialog now sets <code>closedby="any"</code> and keeps a pointer
+        test where that attribute is missing.
+        <code>pseudoTarget?.type === &quot;::backdrop&quot;</code> would answer the
+        question directly, once a second engine ships it.
       </p>
       <p class="unsupported">No <code>CSSPseudoElement</code> here; the dialog still closes, and the readout shows <code>pseudoTarget</code> as undefined.</p>
     </section>
