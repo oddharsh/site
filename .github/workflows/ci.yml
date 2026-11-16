@@ -377,14 +377,15 @@ jobs:
   # release. One job per viewport: the two load each page apart, so splitting
   # halves the sweep and a failure names phone or desktop.
   browser-check:
-    name: browser check (${{ matrix.viewport }})
-    runs-on: ubuntu-latest
+    name: browser check (${{ matrix.viewport }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
         viewport: [phone, desktop]
+        runner: [ubuntu-latest, blacksmith-4vcpu-ubuntu-2404]
     steps:
       # Depth 2: a pull request checks out its merge commit, whose first
       # parent is the base tip, so `HEAD^1` diffs exactly what the PR changes.
@@ -404,6 +405,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Name the CPU
+        run: nproc && grep -m1 "model name" /proc/cpuinfo && google-chrome --version
 
       # A pull request reads the pages its diff reaches and 1 in 5 of the
       # rest; a push to main, the commit that ships, reads every page.

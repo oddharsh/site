@@ -279,6 +279,7 @@ async function sweep(browser: Browser, base: string) {
       const every = (pick: (r: Reading) => string[]) => [...new Set(readings.flatMap(({ r }) => pick(r)))];
       for (const status of new Set(readings.map(({ r }) => r.status))) if (status < 200 || status > 299) fail("status", `answered ${status}`);
       for (const { at, r } of readings) {
+        console.log(`READ ${path} ${at} ${r.shift.toFixed(4)}`);
         if (r.shift > max) fail("shift", `${r.shift.toFixed(3)} at ${at}, over ${max}: ${[...new Set(r.moved)].slice(0, 4).join(", ") || "no source named"}`);
       }
       const calls = every((r) => r.intl);
