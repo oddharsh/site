@@ -53,11 +53,14 @@ async function fixture(extra: Record<string, any> = {}) {
   return cwd;
 }
 
-// Every file reachable under `dir`, following symlinks, as served path -> bytes.
+// Every file reachable under `dir`, following symlinks, as served path -> bytes,
+// keyed in path order. readdir returns whatever order the filesystem keeps, and
+// a Mac and the Linux runner disagree: unsorted, validate failed on 2026-11-15
+// with ["vendor/lib.js", "nav.js"] where the test wanted the reverse.
 async function servedBytes(dir) {
   const out: Record<string, any> = {};
   const walk = async (rel) => {
-    for (const name of await readdir(path.join(dir, rel))) {
+    for (const name of (await readdir(path.join(dir, rel))).sort()) {
       const child = rel ? `${rel}/${name}` : name;
       if ((await stat(path.join(dir, child))).isDirectory()) await walk(child);
       else out[child] = await readFile(path.join(dir, child), "utf8");
