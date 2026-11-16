@@ -1055,3 +1055,15 @@ skips it.
     `scores_srgb_tags_exactly_as_untagged` and
     `refuses_a_colour_chunk_libjxl_would_honour` run in `validate`.
     Checked by: `tools/photos/photo-metrics/src/main.rs`.
+
+102. **Under Playwright's `isMobile`, Chrome marks every layout shift
+    `hadRecentInput`, so a reading that skips those reads 0 on a phone.**
+    browser:check skipped input-driven shifts the way CLS does, and its
+    phone load used `isMobile: true`. On 2026-11-16 a 300px block pushed in
+    above /search's content read 0.0696 with `hadRecentInput: true` at
+    390px, and 0.025 with it false at 1280px; `hasTouch` alone left it
+    false. The shift plant only ran at 1280px, so the 390px reading had read
+    0 on every page since 2026-11-10 and nothing said so. The harness sends
+    no input, so it counts every shift, and the controls plant a shift in
+    each viewport the run reads.
+    Checked by: the `shift` plant in `tools/check-browser.ts`'s `controls()`.

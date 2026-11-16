@@ -374,12 +374,17 @@ jobs:
   # launch fails by name. Its own runner because it builds and boots its own
   # Worker, about two minutes on top of the install, and continue-on-error
   # because a page that shifts is a finding to fix, never a reason to hold up a
-  # release.
+  # release. One job per viewport: the two load each page apart, so splitting
+  # halves the sweep and a failure names phone or desktop.
   browser-check:
-    name: browser check
+    name: browser check (${{ matrix.viewport }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [phone, desktop]
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -396,7 +401,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Read every page in a browser
-        run: bun run browser:check
+        run: bun run browser:check -- --viewport ${{ matrix.viewport }}
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
