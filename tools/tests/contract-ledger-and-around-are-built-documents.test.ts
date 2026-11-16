@@ -134,9 +134,9 @@ test("/around/snapshot.html refuses a wrong bust secret and serves the cached re
     });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
-    // No snapshot in KV: the pending panel, cached briefly, never a table.
+    // No snapshot in KV: the placeholder rows and "none yet", cached briefly.
     assert.equal(res.headers.get("cache-control"), "public, max-age=60");
-    assert.match(await res.text(), /class="pending"/);
+    assert.match(await res.text(), /<strong>Last crawl:<\/strong> none yet, check back tomorrow/);
   });
 });
 
