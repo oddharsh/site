@@ -1064,6 +1064,6 @@ skips it.
     390px, and 0.025 with it false at 1280px; `hasTouch` alone left it
     false. The shift plant only ran at 1280px, so the 390px reading had read
     0 on every page since 2026-11-10 and nothing said so. The harness sends
-    no input, so it counts every shift, and the controls plant a shift in
+    no input, so it counts every shift, and `controls()` plants a shift in
     each viewport the run reads.
-    Checked by: the `shift` plant in `tools/check-browser.ts`'s `controls()`.
+    Checked by: `tools/check-browser.ts`.
