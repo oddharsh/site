@@ -8,7 +8,7 @@
   // by tools/vendor-pretext.ts and vendored same-origin so /garage/pretext can
   // load it under `script-src 'self'`. Linting either one reports on somebody
   // else's minifier.
-  "ignorePatterns": ["src/dict/a-dict/**", "src/client/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
+  "ignorePatterns": ["src/dict/a-dict/**", "src/client/garage/pretext.lib.js", ".build/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
   // four that were on implicitly. Measured 2026-08-15: with `"plugins":
@@ -24,11 +24,6 @@
   // `correctness` category this config enables. So each one is listed
   // explicitly under `rules`, and adding the plugin costs no unnamed sweep.
   "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest", "import"],
-
-  // Three vendored anti-slop rules. Exclude that upstream source from this
-  // lint policy; the tools typecheck still covers it. Adoption and re-sync
-  // boundaries are documented in docs/DEPENDENCIES.md.
-  "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 
   "categories": { "correctness": "error" },
 
@@ -117,40 +112,66 @@
     // the same place. Off rather than autofixed, for the same reason as above.
     "unicorn/no-new-array": "off",
 
-    // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
-    // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
-    // query reads as "scored and found wanting" when nothing was scored, and the
-    // photo pipeline, the span attributes and the /lens payloads all omit rather
-    // than fabricate. What the rule objects to is spelling it as a spread, which
-    // hides the omission inside an expression. Building the object and adding the
-    // key under an `if` says the same thing where a reader can see it.
+    // Three rules from dmmulroy/anti-slop, written as selectors so Bun runs
+    // them natively. They were vendored JavaScript rules until 2026-11-17; on
+    // that tree the selectors reported the same 23 findings by file, line and
+    // rule. With no JavaScript rule left, Bun starts no JS engines, and
+    // `bun lint --type-aware` went from a 351 ms median to 295 ms (10 runs
+    // each, 340-373 against 286-312). A rule that needs scope or comments
+    // can't be a selector, and any one JavaScript rule brings the engines back.
     //
-    // 12 sites, none of them in a content-hashed client asset, so this costs no
-    // page rebuild and no dictionary roll (gotcha 35).
-    "anti-slop/no-conditional-empty-object-spread": "error",
+    // An override REPLACES this whole list, so the overrides that exempt
+    // `typeof` restate the other two selectors. A suppression names
+    // `no-restricted-syntax`, so it silences all three on its lines.
+    // tools/tests/contract-lint-selectors.test.ts lints a planted file at an
+    // ordinary path and at an exempt one.
+    "no-restricted-syntax": [
+      "error",
 
-    // Bans the term outright and takes no options, which is why the rename
-    // rather than a config was the work. The three lens counters are
-    // `documentTally` / `plainTally` now, the two probe classifiers are
-    // `lensSitemapVerdict` / `lensJsonVerdict`, and the /lens/browser payload
-    // key is `tally`. Every one of those names says what the value IS, where
-    // "shape" only said that it had structure.
-    //
-    // `anatomy` was the obvious target and is WRONG: it is already a lens tab
-    // name and already a payload key, so the rename would have collided with
-    // live vocabulary rather than replaced dead vocabulary.
-    "anti-slop/no-shape-in-symbol-names": "error",
+      // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
+      // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
+      // query reads as "scored and found wanting" when nothing was scored, and the
+      // photo pipeline, the span attributes and the /lens payloads all omit rather
+      // than fabricate. What the rule objects to is spelling it as a spread, which
+      // hides the omission inside an expression. Building the object and adding the
+      // key under an `if` says the same thing where a reader can see it.
+      //
+      // 12 sites, none of them in a content-hashed client asset, so this costs no
+      // page rebuild and no dictionary roll (gotcha 35).
+      {
+        "selector": "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))",
+        "message": "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present."
+      },
 
-    // Wants input parsed where it ENTERS, then branched on a trusted value,
-    // rather than `typeof`-checked at each use. The argument is right and this
-    // Worker had the failure it describes: the same "is this really a string?"
-    // was asked in a dozen places and answered slightly differently in each.
-    //
-    // src/worker/lib/parse.ts owns the Worker's boundary primitives. The
-    // browser modules keep local coercions within their existing load paths.
-    //
-    // Boundary parsers and tests have explicit exemptions below.
-    "anti-slop/no-runtime-typeof": "error",
+      // Bans the term outright and takes no options, which is why the rename
+      // rather than a config was the work. The three lens counters are
+      // `documentTally` / `plainTally` now, the two probe classifiers are
+      // `lensSitemapVerdict` / `lensJsonVerdict`, and the /lens/browser payload
+      // key is `tally`. Every one of those names says what the value IS, where
+      // "shape" only said that it had structure.
+      //
+      // `anatomy` was the obvious target and is WRONG: it is already a lens tab
+      // name and already a payload key, so the rename would have collided with
+      // live vocabulary rather than replaced dead vocabulary.
+      {
+        "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]",
+        "message": "Rename this symbol for its domain role; `shape` describes structure rather than ownership."
+      },
+
+      // Wants input parsed where it ENTERS, then branched on a trusted value,
+      // rather than `typeof`-checked at each use. The argument is right and this
+      // Worker had the failure it describes: the same "is this really a string?"
+      // was asked in a dozen places and answered slightly differently in each.
+      //
+      // src/worker/lib/parse.ts owns the Worker's boundary primitives. The
+      // browser modules keep local coercions within their existing load paths.
+      //
+      // Boundary parsers and tests have explicit exemptions below.
+      {
+        "selector": "UnaryExpression[operator='typeof']",
+        "message": "A `typeof` check narrows a representation without establishing its contract. Parse input at its I/O boundary, then branch on the domain value."
+      }
+    ],
 
     // The complement of no-floating-promises, which the note at the end of the
     // type-aware block above keeps ON for one reason: this runtime cancels "a
@@ -235,31 +256,49 @@
   //
   "overrides": [
     {
+      // Where `typeof` is the point, in three kinds of file. This list is the
+      // base `no-restricted-syntax` list minus its `typeof` entry, because an
+      // override replaces the whole list; keep the two copies equal.
+      //
       // The parse layer itself. A hand-rolled parser is MADE of `typeof`, so
       // the only thing this rule can buy is that the checks live in one named
       // place instead of at every call site. Turning it off here is what makes
       // turning it on everywhere else mean something; the file's own header
       // says the same thing from the other side.
-      "files": ["src/worker/lib/parse.ts"],
-      "rules": { "anti-slop/no-runtime-typeof": "off" }
-    },
-    {
-      // The AUTHORING contract, which is the same argument one layer out: these
-      // two files are the boundary parser for page content, and `requireText`
-      // is literally "parse it where it enters, then branch on a value you can
-      // trust". A validator is made of `typeof`; the rule cannot be satisfied
-      // inside the thing it is asking you to build.
-      "files": ["pipelines/content/page-contract.ts", "pipelines/garage/generate.ts"],
-      "rules": { "anti-slop/no-runtime-typeof": "off" }
-    },
-    {
+      //
+      // The AUTHORING contract, which is the same argument one layer out:
+      // page-contract.ts and garage/generate.ts are the boundary parser for
+      // page content, and `requireText` is literally "parse it where it
+      // enters, then branch on a value you can trust". A validator is made of
+      // `typeof`; the rule cannot be satisfied inside the thing it is asking
+      // you to build.
+      //
       // A test that asserts `typeof x === "boolean"` is CHECKING the contract,
       // which is the rule's goal rather than a violation of it. Rewriting these
       // through the parse layer would assert that the parse layer works, not
       // that the surface under test returns the right type. Same scoping as the
       // no-floating-promises entry below, and for a related reason.
-      "files": ["**/test/**", "**/*.test.*", "tools/tests/contract-shared.ts"],
-      "rules": { "anti-slop/no-runtime-typeof": "off" }
+      "files": [
+        "src/worker/lib/parse.ts",
+        "pipelines/content/page-contract.ts",
+        "pipelines/garage/generate.ts",
+        "**/test/**",
+        "**/*.test.*",
+        "tools/tests/contract-shared.ts"
+      ],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))",
+            "message": "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present."
+          },
+          {
+            "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]",
+            "message": "Rename this symbol for its domain role; `shape` describes structure rather than ownership."
+          }
+        ]
+      }
     },
     {
       // The test runner owns top-level test registrations; they are not

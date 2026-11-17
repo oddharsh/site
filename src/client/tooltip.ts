@@ -12,7 +12,7 @@ import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 // The local parse layer. Client scripts here have no shared module graph, so
 // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
 // coercions is the same trade these files already make for esc().
-/* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+/* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
    of typeof; keeping the checks here rather than at each use is the point. */
 function asNumber(v) {
   return typeof v === "number" && isFinite(v) ? v : null;
@@ -20,7 +20,7 @@ function asNumber(v) {
 function asRecord(v) {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
 }
-/* oxlint-enable anti-slop/no-runtime-typeof */
+/* oxlint-enable no-restricted-syntax */
 
 export function start(initial) {
   const tip = document.getElementById("xp-tooltip");
@@ -73,7 +73,7 @@ export function start(initial) {
     if (isInstant) {
       try {
         // Bare global, only typeof can ask.
-        // oxlint-disable-next-line anti-slop/no-runtime-typeof
+        // oxlint-disable-next-line no-restricted-syntax
         if (typeof Temporal !== "undefined") {
           const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
           return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
@@ -85,7 +85,7 @@ export function start(initial) {
     }
     try {
       // Bare global, only typeof can ask.
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // oxlint-disable-next-line no-restricted-syntax
       if (typeof Temporal !== "undefined") {
         const t = Temporal.PlainDateTime.from(s);
         return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
@@ -289,7 +289,7 @@ export function start(initial) {
     };
     const idle = () => {
       // Capability probe on the browser, not a wire value: nothing to parse.
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // oxlint-disable-next-line no-restricted-syntax
       if (typeof window.requestIdleCallback === "function") {
         window.requestIdleCallback(run, { timeout: 2000 });
       } else {

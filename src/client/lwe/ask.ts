@@ -123,7 +123,7 @@
           }).catch(function () { setDlg("network hiccup, try again", "no"); });
       };
   // Capability probe: <dialog> support, not a value off the wire.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
       if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
     }).catch(function () { setBar("couldn't load the challenge", "no"); });
   }

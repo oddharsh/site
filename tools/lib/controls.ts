@@ -587,4 +587,26 @@ export const CONTROLS: Control[] = [
     run: BUILD,
     expect: /critical-css: the \/luna\.css subset is not an ordered subset of it/,
   },
+  {
+    id: "lint-selector-stops-matching",
+    plants: "the no-runtime-typeof selector in .oxlintrc.json matches `void` instead, so typeof checks lint clean",
+    mutations: [
+      { file: ".oxlintrc.json", find: `"selector": "UnaryExpression[operator='typeof']"`, replace: `"selector": "UnaryExpression[operator='void']"` },
+    ],
+    run: contract("contract-lint-selectors"),
+    expect: /an anti-slop selector stopped matching at an ordinary path/,
+  },
+  {
+    id: "lint-typeof-override-drops-a-selector",
+    plants: "the typeof exemption's copy of the shape selector drifts from the base list, so exempt files may use the name",
+    mutations: [
+      {
+        file: ".oxlintrc.json",
+        find: `            "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]",`,
+        replace: `            "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shapeless/i]",`,
+      },
+    ],
+    run: contract("contract-lint-selectors"),
+    expect: /the typeof override no longer restates the other two selectors/,
+  },
 ];

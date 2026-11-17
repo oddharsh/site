@@ -159,7 +159,6 @@ ignorePatterns = [
   "**/*.json",
   "pipelines/*/specs/**",
   "**/pretext.lib.*",
-  "tools/oxlint/anti-slop/**",
   "src/worker/lib/desktop.*",
   "src/worker/lib/site-manifest.*",
   "src/client/nav-run.ts",

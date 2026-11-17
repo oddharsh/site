@@ -7,7 +7,8 @@
 // question ("is this actually a string?") was asked in a dozen places and
 // answered slightly differently in each.
 //
-// The rule that forced this is anti-slop/no-runtime-typeof, and its argument is
+// The rule that forced this is anti-slop's no-runtime-typeof (a
+// `no-restricted-syntax` selector in .oxlintrc.json), and its argument is
 // the right one: parse input where it enters, then branch on a value you can
 // trust. This repo declares ZERO runtime dependencies and watches the Worker
 // bundle's size (tools/perf-budget.ts), so a schema library was not the way to

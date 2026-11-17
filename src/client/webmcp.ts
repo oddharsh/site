@@ -298,7 +298,7 @@ export async function registerTool(def: ToolDef): Promise<"registered" | "taken"
   const { annotations, writes } = claims(def);
 
   let schema = def.inputSchema;
-  /* oxlint-disable-next-line anti-slop/no-runtime-typeof -- this IS the I/O
+  /* oxlint-disable-next-line no-restricted-syntax -- this IS the I/O
      boundary. inputSchema arrives as an object from /mcp and as a JSON string
      from getTools(), and telling those apart is the whole job of this branch. */
   if (typeof schema === "string") {

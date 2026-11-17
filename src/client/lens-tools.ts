@@ -50,7 +50,7 @@ type PlannedField = {
   // header gives (no module graph on /lens), and the same constraint applies
   // here: it cannot import _worker.js/lib/parse.js. Every value below arrives
   // from a stranger's MCP server, so it is parsed once, by name, at the top.
-  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+  /* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
      of typeof; keeping those checks in these three lines is the whole point. */
   function asText(v) {
     return typeof v === "string" && v !== "" ? v : null;
@@ -61,7 +61,7 @@ type PlannedField = {
   function asRecord(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
   }
-  /* oxlint-enable anti-slop/no-runtime-typeof */
+  /* oxlint-enable no-restricted-syntax */
 
   function esc(s) {
     return String(s == null ? "" : s)

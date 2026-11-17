@@ -473,17 +473,12 @@ does not make a failed write safe to ignore.
   rules, since a new rule in an enabled category fails CI on unchanged code.
   Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
   measurement that decided it. `bun lint --doctor` says which rules run
-  natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.93.0 is the adapter the three rules vendored from
-  anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
-  `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
-  the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
-  with oxlint gone it moves on its own, and a bump PR should run `bun run lint`
-  and confirm `--doctor` still counts 3 JavaScript rules. It carries no
-  transitive dependencies. Since the rules themselves
-  are vendored rather than depended on, an anti-slop release is NOT a Dependabot
-  event here; re-syncing is a deliberate copy, and the section at the end of this
-  file says which three files it covers.
+  natively and which run in JavaScript (117 and 3 on 2026-10-15; 118 and 0
+  since 2026-11-17).
+- **@oxlint/plugins left on 2026-11-17.** It was the adapter three vendored
+  anti-slop rules imported, and Bun ran them as JavaScript. They are
+  `no-restricted-syntax` selectors now; the section at the end of this file
+  has the measurement.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
   `tools/check-page-contracts.ts` parsed the garage scaffold's inline CSS with
@@ -819,11 +814,10 @@ the reason, rather than written here with the caret quietly dropped.
 
 <a id="evaluated-and-declined-dmmulroyanti-slop"></a>
 
-## Vendored rules: dmmulroy/anti-slop
+## Rules from dmmulroy/anti-slop
 
 The repository adopts three [anti-slop](https://github.com/dmmulroy/anti-slop)
-rules through `tools/oxlint/anti-slop/index.ts` and enables them in
-`.oxlintrc.json`:
+rules as `no-restricted-syntax` selectors in `.oxlintrc.json`:
 
 | rule | purpose |
 |---|---|
@@ -831,10 +825,19 @@ rules through `tools/oxlint/anti-slop/index.ts` and enables them in
 | `no-shape-in-symbol-names` | Require a name for the domain value rather than a generic structure label. |
 | `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
-The three rule files and their MIT license are vendored; `@oxlint/plugins`
-provides the adapter Bun's linter loads them through. Re-sync the upstream rule
-files deliberately, review their behavior against this tree, and keep local
-policy in the wrapper and `.oxlintrc.json`.
+Until 2026-11-17 the three upstream rule files were vendored under
+`tools/oxlint/anti-slop/` and loaded through `@oxlint/plugins`, so Bun ran
+them in JavaScript. Each one only matches syntax, so a selector says the same
+thing and runs natively. On that day's tree, with inline suppressions off,
+both versions reported the same 23 findings by file, line and rule, and a
+planted file drew the same 13. `bun lint --type-aware` fell from a 351 ms
+median to 295 ms over 10 runs each, because no JavaScript rule means no JS
+engine starts. Three things were given up: upstream's `allowInTypeGuards`
+option (never enabled here), a re-sync by plain copy (a new upstream rule is a
+selector rewrite, or a JavaScript rule that brings the engines back), and
+per-rule suppressions (a `no-restricted-syntax` suppression covers all three
+on its lines). `tools/tests/contract-lint-selectors.test.ts` holds the
+selectors and the exemption override.
 
 The original 2026-08-15 evaluation rejected these rules and found several
 others inapplicable because the source was JavaScript. Adoption and the
