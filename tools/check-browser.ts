@@ -14,7 +14,8 @@
 //           at 320, 360 and 390px (gotcha 97). A page that is, drags sideways.
 //   shift   content does not move after it is painted: cumulative layout shift
 //           at 1280px and at 390px, under 4x CPU throttle so a script that
-//           runs after first paint is caught doing it (gotcha 98).
+//           runs after first paint is caught doing it (gotcha 98), and so is
+//           a content-visibility placeholder drawn at its stand-in size (gotcha 103).
 //   intl    nothing calls Intl before the reader acts. The first Intl object
 //           in a renderer process loads ICU data, 8 to 17 ms of a landing view
 //           and 30 to 53 ms throttled (gotcha 92).
