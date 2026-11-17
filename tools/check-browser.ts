@@ -7,6 +7,7 @@
 //   bun run browser:check -- --only /coffee,/lens       # some pages
 //   bun run browser:check -- --viewport phone           # one viewport (CI runs each as its own job)
 //   bun run browser:check -- --changed origin/main --sample 5   # pages the diff reaches, and 1 in 5 of the rest
+//                                                  # (built and served beside origin/main when the map can't place a file)
 //
 // Five readings per manifest surface, in Chrome:
 //
@@ -45,11 +46,13 @@
 // plant exits 2 ("blind") and nothing is reported as passing.
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
-import { reach } from "./lib/browser-pages.ts";
+import { reach, rereadsEverything, type Reach } from "./lib/browser-pages.ts";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 
@@ -105,10 +108,20 @@ function changedPages(ref: string): string[] {
   if (!Number.isInteger(n) || n < 0) throw new Error(`--sample takes a whole number, got ${values.sample}`);
   const changed = [...git("diff", "--name-only", ref), ...git("ls-files", "--others", "--exclude-standard")];
   const sources = new Map(git("ls-files", "--cached", "--others", "--exclude-standard", "src").map((f) => [f, readFileSync(root + f, "utf8")]));
-  const reached = reach(changed, sources);
+  let reached = reach(changed, sources);
   if ("all" in reached) {
-    console.log(`browser:check: every page, since ${reached.all}`);
-    return every;
+    // The map gave up, so ask what the Worker serves differently. That can't see
+    // a change to the check itself, which moves the reading without moving a byte.
+    const instrument = rereadsEverything(changed);
+    const start = performance.now();
+    const served = instrument === undefined ? servedChange(ref) : { all: instrument };
+    const took = `${((performance.now() - start) / 1000).toFixed(0)} s`;
+    if ("all" in served) {
+      console.log(`browser:check: every page, since ${reached.all} and ${served.all}`);
+      return every;
+    }
+    console.log(`browser:check: ${reached.all}; ${served.pages.length} page(s) serve different bytes than ${ref} (diffed in ${took})`);
+    reached = served;
   }
   const turn = n && parseInt(git("rev-parse", "HEAD")[0]!.slice(0, 8), 16) % n;
   const others = n ? every.filter((p) => !reached.pages.includes(p)).filter((_, i) => i % n === turn) : [];
@@ -116,6 +129,36 @@ function changedPages(ref: string): string[] {
     `browser:check: ${changed.length} changed file(s) reach ${reached.pages.join(", ") || "no page"}; sampling ${others.length} more${n ? ` (slice ${turn + 1} of ${n})` : ""}`,
   );
   return [...every.filter((p) => reached.pages.includes(p)), ...others];
+}
+
+/**
+ * The pages whose served bytes differ between `ref` and this checkout
+ * (tools/served-pages.ts in each), or why that can't be told. `ref` is built in
+ * a throwaway worktree with its own lockfile, so a dependency bump is compared
+ * as it would ship; the Bun binary is the one thing both sides share.
+ */
+function servedChange(ref: string): Reach {
+  const dir = mkdtempSync(join(tmpdir(), "served-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
+  try {
+    git("worktree", "add", "--detach", dir, ref);
+    cpSync(`${root}tools/served-pages.ts`, `${dir}/tools/served-pages.ts`);
+    execFileSync("bun", ["install", "--frozen-lockfile"], { cwd: dir, stdio: "ignore" });
+    const playwright = (at: string) => JSON.parse(readFileSync(`${at}/node_modules/playwright-core/package.json`, "utf8")).version;
+    if (playwright(dir) !== playwright(root)) return { all: `playwright-core moved from ${playwright(dir)} to ${playwright(root)}` };
+    const hash = (cwd: string): Record<string, string> => {
+      execFileSync("node", ["tools/served-pages.ts", `${dir}.json`, ...every], { cwd, stdio: "ignore" });
+      return JSON.parse(readFileSync(`${dir}.json`, "utf8"));
+    };
+    const [before, after] = [hash(dir), hash(root)];
+    return { pages: every.filter((p) => before[p] !== after[p]) };
+  } catch (e) {
+    return { all: `the served diff failed (${e instanceof Error ? e.message.split("\n")[0] : e})` };
+  } finally {
+    if (existsSync(`${dir}/.git`)) git("worktree", "remove", "--force", dir);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(`${dir}.json`, { force: true });
+  }
 }
 
 declare global {

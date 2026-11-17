@@ -25,6 +25,30 @@ const INERT = [
 
 export type Reach = { all: string } | { pages: string[] };
 
+/**
+ * Why a change needs every page read even when no served byte moved, or
+ * undefined. The served diff (tools/served-pages.ts) compares what the Worker
+ * sends; a change to how browser:check reads a page moves the reading and
+ * leaves every byte alone. playwright-core's version is compared separately,
+ * from each side's node_modules.
+ */
+export function rereadsEverything(changed: string[]): string | undefined {
+  const file = changed.find((f) => INSTRUMENT.some((re) => re.test(f)));
+  return file && `${file} changes how pages are read`;
+}
+
+const INSTRUMENT = [
+  // The readings, their budgets, and which Chrome takes them.
+  /^tools\/check-browser\.ts$/,
+  /^config\/browser-budget\.json$/,
+  /^tools\/lib\/browser-[^/]+\.ts$/,
+  // Both checkouts build with the job's one Bun, so a pin bump serves no
+  // different byte under the diff even when it would in production.
+  /^config\/bun-pin\.json$/,
+  // The flags the check runs with.
+  /^\.github\/workflows\/ci\.yml$/,
+];
+
 /** /lwe/dac for src/pages/lwe/dac.html, /lwe for src/pages/lwe/index.html. */
 export function pageOf(file: string): string {
   const path = file.replace(/^src\/pages/, "").replace(/(\/index)?\.html$/, "");

@@ -1,6 +1,6 @@
 // ── browser:check --changed reads the pages a diff reaches, or all of them ───
 import { assert, test } from "./contract-shared.ts";
-import { pageOf, reach } from "../lib/browser-pages.ts";
+import { pageOf, reach, rereadsEverything } from "../lib/browser-pages.ts";
 
 const sources = new Map([
   ["src/pages/lwe/dac.html", '<link href="/luna.css"><script src="/lwe/ask.js"></script><script src="/nav.js"></script>'],
@@ -37,4 +37,11 @@ test("browser:check: what it can't place reaches every page", () => {
 test("browser:check: docs, tests and other workflows reach no page", () => {
   assert.deepEqual(reach(["docs/GOTCHAS.md", "tools/tests/x.test.ts", ".github/workflows/photos.yml", "README.md"], sources), { pages: [] });
   assert.deepEqual(reach(["docs/GOTCHAS.md", "src/pages/lwe/knots.html"], sources), { pages: ["/lwe/knots"] });
+});
+
+test("browser:check: a change to the check itself rereads every page, whatever the served diff says", () => {
+  assert.equal(rereadsEverything(["src/worker/home.ts", "config/browser-budget.json"]), "config/browser-budget.json changes how pages are read");
+  assert.equal(rereadsEverything(["config/bun-pin.json"]), "config/bun-pin.json changes how pages are read");
+  assert.equal(rereadsEverything(["tools/lib/browser-channel.ts"]), "tools/lib/browser-channel.ts changes how pages are read");
+  assert.equal(rereadsEverything(["src/worker/home.ts", "src/dict/p-dict/about.dict", "bun.lock", "tools/served-pages.ts"]), undefined);
 });
