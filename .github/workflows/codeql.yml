@@ -103,3 +103,9 @@ jobs:
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: "/language:${{ matrix.language }}"
+          # The database upload feeds GitHub's variant analysis, which nothing
+          # here uses. It zipped and uploaded the javascript database on every
+          # push: 37 s of that job's 150 s analyze step (run 44145367917,
+          # 2026-11-17; 1.4 s for actions). The SARIF upload, which files the
+          # alerts, is a separate step and unaffected.
+          upload-database: false
