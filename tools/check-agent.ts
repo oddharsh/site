@@ -265,11 +265,9 @@ async function main() {
     rows.push({ route, checks, kitesurf: k, control: c, notes, bad, legible, twin: twinOk, declared });
 
     if (!WANT_JSON) {
-      const status = [checks.agentScripts, checks.agentMedia].map((x) => x.status[0].toUpperCase()).join("");
       console.log(
         `${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} scripts:${checks.agentScripts.status.padEnd(7)} media:${checks.agentMedia.status.padEnd(7)} legible:${legible === null ? "?" : legible + "%"}${twinOk ? "" : "  no-twin"}`,
       );
-      void status;
       for (const n of notes) console.log(`        ${n}`);
       if (k.brokenSrc?.length) console.log(`        first broken: ${k.brokenSrc.join(", ")}`);
       for (const e of k.errors || []) console.log(`        ${e}`);

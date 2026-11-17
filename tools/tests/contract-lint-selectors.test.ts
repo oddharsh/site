@@ -1,5 +1,5 @@
 // The three anti-slop rules are `no-restricted-syntax` selectors in
-// .oxlintrc.json (docs/DEPENDENCIES.md, "Rules from dmmulroy/anti-slop"). An
+// bunfig.toml's [lint] (docs/DEPENDENCIES.md, "Rules from dmmulroy/anti-slop"). An
 // override replaces the whole selector list, so the typeof exemption restates
 // the other two. These tests lint one planted file through the repo's config
 // at an ordinary path and at an exempt one, so a selector that stops matching
@@ -30,10 +30,12 @@ function restrictedLines(path: string): number[] {
     timeout: 60_000,
   });
   assert.equal(out.error, undefined, `bun lint did not run: ${out.error}`);
-  const report: { diagnostics: { code: string; labels: { span: { line: number } }[] }[] } = JSON.parse(out.stdout);
-  return report.diagnostics
-    .filter((d) => d.code === "eslint(no-restricted-syntax)")
-    .map((d) => d.labels[0].span.line)
+  // With the rules in bunfig.toml, `-f json` is ESLint's report: one entry per file.
+  const report: { messages: { ruleId: string | null; line: number }[] }[] = JSON.parse(out.stdout);
+  return report
+    .flatMap((file) => file.messages)
+    .filter((m) => m.ruleId === "no-restricted-syntax")
+    .map((m) => m.line)
     .sort((x, y) => x - y);
 }
 

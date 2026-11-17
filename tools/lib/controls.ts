@@ -589,10 +589,8 @@ export const CONTROLS: Control[] = [
   },
   {
     id: "lint-selector-stops-matching",
-    plants: "the no-runtime-typeof selector in .oxlintrc.json matches `void` instead, so typeof checks lint clean",
-    mutations: [
-      { file: ".oxlintrc.json", find: `"selector": "UnaryExpression[operator='typeof']"`, replace: `"selector": "UnaryExpression[operator='void']"` },
-    ],
+    plants: "the no-runtime-typeof selector in bunfig.toml matches `void` instead, so typeof checks lint clean",
+    mutations: [{ file: "bunfig.toml", find: `selector = "UnaryExpression[operator='typeof']"`, replace: `selector = "UnaryExpression[operator='void']"` }],
     run: contract("contract-lint-selectors"),
     expect: /an anti-slop selector stopped matching at an ordinary path/,
   },
@@ -601,12 +599,32 @@ export const CONTROLS: Control[] = [
     plants: "the typeof exemption's copy of the shape selector drifts from the base list, so exempt files may use the name",
     mutations: [
       {
-        file: ".oxlintrc.json",
-        find: `            "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]",`,
-        replace: `            "selector": ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shapeless/i]",`,
+        // The override's copy is the shape selector that closes its list; the base list's is followed by the typeof one.
+        file: "bunfig.toml",
+        find: '[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n]',
+        replace: '[name=/shapeless/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n]',
       },
     ],
     run: contract("contract-lint-selectors"),
     expect: /the typeof override no longer restates the other two selectors/,
+  },
+  {
+    id: "lint-reads-an-eslint-config",
+    plants: 'an eslint.config.js beside bunfig.toml, which flavor = "eslint" lets apply on top of [lint]',
+    gotcha: 104,
+    mutations: [{ file: "eslint.config.js", create: "export default [];\n" }],
+    run: ["bun", "tools/check-bun-lint.ts"],
+    expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 2: error: Key "rules"/,
+  },
+  {
+    id: "lint-flavor-key-dropped",
+    plants: 'bunfig.toml loses flavor = "eslint" while an .oxlintrc.json sits above it, as the main checkout\'s does',
+    gotcha: 104,
+    mutations: [
+      { file: "bunfig.toml", find: '\nflavor = "eslint"\n', replace: "\n" },
+      { file: ".oxlintrc.json", create: "{}\n" },
+    ],
+    run: ["bun", "tools/check-bun-lint.ts"],
+    expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
   },
 ];

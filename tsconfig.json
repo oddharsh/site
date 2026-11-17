@@ -13,7 +13,7 @@
   // program with no includes, in which every Workers global was an error type
   // that acts as `any`. Measured 2026-09-02: 0 type-aware findings without this
   // file, 17 with it, on an unchanged tree. So the lint had been partially
-  // blind since it landed, and the counts .oxlintrc.json records beside each
+  // blind since it landed, and the counts bunfig.toml's [lint] records beside each
   // disabled rule were taken under that blindness.
   //
   // `files: []` so this program holds nothing itself; `references` is how

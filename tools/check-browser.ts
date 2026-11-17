@@ -242,7 +242,9 @@ async function controls(browser: Browser, base: string) {
     if (shifted.shift <= SHIFT_MAX) blind.push(`shift: a 300px block pushed in above /search's content read ${shifted.shift} at ${at}`);
     const formatted = await load(ctx, url, [], () => void (1234).toLocaleString());
     if (!formatted.intl.includes("toLocaleString")) blind.push(`intl: a number formatted on /search went uncounted at ${at}`);
-    const built = await load(ctx, url, [], () => void new Intl.DateTimeFormat("en-US"));
+    const built = await load(ctx, url, [], () => {
+      new Intl.DateTimeFormat("en-US");
+    });
     if (!built.intl.includes("Intl.DateTimeFormat")) blind.push(`intl: an Intl.DateTimeFormat built on /search went uncounted at ${at}`);
     const thrown = await load(ctx, url, [], () => {
       setTimeout(() => {

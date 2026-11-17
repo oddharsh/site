@@ -44,7 +44,13 @@ function fakeDb(rows) {
   return {
     writes,
     ddl: () => ddl,
-    raw: { prepare: () => ({ run: async () => void ddl++ }) },
+    raw: {
+      prepare: () => ({
+        run: async () => {
+          ddl++;
+        },
+      }),
+    },
     stmt: (sql, ...args: any[]) => ({ sql, args }),
     async batch(stmts) {
       writes.push(...stmts.map((s) => s.args));

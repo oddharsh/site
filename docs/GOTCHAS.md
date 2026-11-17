@@ -1080,3 +1080,21 @@ skips it.
     7,138px of messages, read first paint 252 vs 256 ms and style plus
     layout 216.6 vs 215.4 ms with and without, 10 loads each.
     Checked by: `tools/check-browser.ts`.
+
+104. **`bun lint` reads an oxlint or ESLint config from any directory above
+    the repo, and one there rules bunfig.toml's `[lint]`.** The search runs
+    to the filesystem root, past `.git`, on purpose (oven-sh/bun#49225). A
+    worktree under `.claude/worktrees/` sits inside the main checkout, which
+    has an `.oxlintrc.json` whenever its branch predates 2026-11-17. On that
+    day, with the rules moved into `[lint]`, every nested worktree's lint
+    refused to run: oxlint's schema rejected `[lint]`'s Bun-only options and
+    the error named the main checkout's file (oven-sh/bun#49224). An empty
+    `.oxlintrc.json` or `eslint.config.js` in the repo doesn't stop the
+    search, and `configLookup = false` lints 0 files and exits 0. `flavor =
+    "eslint"` under `[lint]` ignores oxlint configs and kept the same 28
+    findings; an `eslint.config.js` above still applies. The lint script
+    runs `tools/check-bun-lint.ts` first, which fails unless `bun lint
+    --doctor` reads bunfig.toml alone; the controls
+    `lint-reads-an-eslint-config` and `lint-flavor-key-dropped` plant both
+    defects.
+    Checked by: `tools/check-bun-lint.ts`.

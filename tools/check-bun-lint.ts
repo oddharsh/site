@@ -43,8 +43,28 @@ export function bunLintProblem(executable = process.execPath): string | null {
   }
 }
 
+/**
+ * Ask `bun lint --doctor` which config files it read from `cwd`; null means
+ * bunfig.toml alone. Bun looks for an oxlint or ESLint config in every
+ * directory above the one it runs in, past the repository root, and applies
+ * what it finds beside bunfig.toml's [lint] (gotcha 104). `flavor = "eslint"`
+ * there ignores an .oxlintrc.json, which the main checkout above every
+ * .claude/worktrees/ worktree has whenever its branch predates 2026-11-17, and
+ * an eslint.config.js still applies. A config that applies can also make the
+ * probe fail before it prints a "Using" line, so that failure is quoted. The
+ * probe costs one spawn, 10 to 20 ms on 2026-11-17.
+ */
+export function lintConfigProblem(cwd = process.cwd(), executable = process.execPath): string | null {
+  const result = spawnSync(executable, ["lint", "--no-script", "--doctor"], { cwd, encoding: "utf8", timeout: 30_000 });
+  const lines = `${result.stdout ?? ""}${result.stderr ?? ""}`.split("\n");
+  const others = lines.filter((line) => line.startsWith("Using ") && !line.startsWith("Using bunfig.toml "));
+  if (result.status === 0 && others.length === 0 && lines.some((line) => line.startsWith("Using bunfig.toml "))) return null;
+  const said = others.length > 0 ? others.join("; ") : `\`bun lint --doctor\` exited ${result.status}: ${lines.find((line) => line.trim()) ?? "no output"}`;
+  return `bun lint should read bunfig.toml's [lint] alone (gotcha 104), and ${said}`;
+}
+
 if (import.meta.main) {
-  const problem = bunLintProblem();
+  const problem = bunLintProblem() ?? lintConfigProblem();
   if (problem) {
     console.error(`check-bun-lint: ${problem}`);
     process.exitCode = 1;
