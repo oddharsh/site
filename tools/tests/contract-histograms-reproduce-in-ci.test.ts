@@ -21,11 +21,15 @@ test("histograms: a declaration without zenc's sources has a CI job reproducing 
   const dropped = TOOL_INPUTS.filter((p) => !d.inputs.paths.includes(p));
   if (!dropped.length) return; // back on the digest: covered the old way, nothing to require
 
-  // photos.yml since 2026-09-28, which runs only when photo code or tiers
-  // move. That is exactly when this output can change.
+  // photos.yml since 2026-09-28, which runs only when photo code, tiers, the
+  // compiler pin or Cargo's config move. That is exactly when this output can
+  // change: the Rust 1.100 bump (#1703) touched only rust-toolchain.toml, and
+  // photos.yml never ran on it.
   const job = await readFile(new URL(".github/workflows/photos.yml", ROOT), "utf8");
   assert.match(job, /name: native photo validation/, "could not find the native photo validation job in photos.yml");
   assert.match(job, /- "tools\/photos\/\*\*"/, "photos.yml must run when zenc or its lockfile moves");
+  assert.match(job, /- "rust-toolchain\.toml"/, "photos.yml must run when the Rust compiler pin moves");
+  assert.match(job, /- "\.cargo\/\*\*"/, "photos.yml must run when Cargo's config moves");
   assert.match(job, /run: bun run histograms:check/, `${dropped.join(", ")} left the digest but native photo validation no longer reproduces the histograms`);
   assert.match(job, /uses: \.\/\.github\/actions\/setup-bun/, "the native job runs a bun script without setting up bun");
 

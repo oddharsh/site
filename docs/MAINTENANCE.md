@@ -200,7 +200,7 @@ rotation and treat all previously emailed links as compromised.
    route oracle, the bun contract suite, and Cal's tests. Cal and Serendipity
    ship inside the site Worker. [Photos](../.github/workflows/photos.yml) runs
    zenc's tests and the histogram reproduction only on PRs that touch photo
-   code or tiers. `infra:check`, `checkpoints:check`, the osv scan and the
+   code, tiers, `rust-toolchain.toml` or `.cargo/`. `infra:check`, `checkpoints:check`, the osv scan and the
    auxiliary Worker dry-runs are workstation commands now.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
