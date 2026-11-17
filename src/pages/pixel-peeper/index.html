@@ -696,8 +696,8 @@ function screenIntro(){
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
      <span class="row"><button class="xp-button compact${showdownFirst?"":" default"}" id="go">Start the exam ▸</button>
      <button class="xp-button compact${showdownFirst?" default":""}" id="showdown"${state.noJxl?" disabled":""}>${VS()} ▸</button></span></div>`;
-  document.getElementById("go").onclick=()=>{buildRun();screenTrial();};
-  document.getElementById("showdown").onclick=()=>{buildRun("showdown");screenTrial();};
+  document.getElementById("go").onclick=()=>{if(!DATA)return;buildRun();screenTrial();};
+  document.getElementById("showdown").onclick=()=>{if(!DATA)return;buildRun("showdown");screenTrial();};
 }
 const pips=()=>state.trials.map((_,i)=>`<span class="dot ${i<state.i?'done':i===state.i?'on':''}"></span>`).join("");
 
@@ -1334,6 +1334,12 @@ function wireDiff(gl,tiles,trial,order,pos){
 }
 
 let DATA=null;
+// The intro is drawn now, before the manifest lands, as most visitors get it:
+// JPEG XL decodes and the manifest carries AV2. Drawn only once the manifest
+// had landed, its two boxes came in under a painted heading and pushed the
+// status bar 487px down, layout shift 0.029 at 390px (gotcha 98, 2026-11-16).
+// boot() draws it again from what the browser and manifest say.
+state.av2=true; screenIntro();
 fetch('/pixel-peeper/crowd.json').then(r=>r.ok?r.json():null).then(c=>{if(c&&!state.crowd)state.crowd=c;}).catch(()=>{});
 Promise.all([fetch('/pixel-peeper/manifest.json').then(r=>r.json()),CAN_JXL]).then(([d,jxl])=>{
   // Without JPEG XL a format call loses that tile and stays a call between

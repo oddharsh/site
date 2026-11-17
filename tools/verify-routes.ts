@@ -537,7 +537,7 @@ const ROUTES = [
   { path: "/privacy.md", status: 200, ct: "text/markdown", marker: "# Privacy" },
   // A local KV has no snapshot, so the island is the not-built-yet panel.
   { path: "/around", status: 200, ct: "text/html", marker: "data-island=/around/snapshot.html", fullPage: true },
-  { path: "/around/snapshot.html", status: 200, ct: "text/html", marker: "snapshot isn", fragment: true },
+  { path: "/around/snapshot.html", status: 200, ct: "text/html", marker: "Last crawl:</strong> none yet", fragment: true },
   { path: "/around", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "neighbourhood" },
   // serves the KV snapshot the daily cron writes; a local KV has none, and the
   // route says so ("no snapshot yet; the daily crawl hasn't run") with a 503.
