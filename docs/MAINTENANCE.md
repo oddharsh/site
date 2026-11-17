@@ -306,6 +306,10 @@ and `repository.code_scanning` in `config/infra.json`. Change both together.
 The check requires the declared languages, pinned actions, and CodeQL's default
 query suite and threat model. Rust and Python currently serve build tooling;
 revisit the scan coverage if either language starts serving requests.
+A push that changes only paths CodeQL never reads (lockfiles, the Bun pin,
+Markdown, photo tiers, `src/dict`) skips the scan. Before adding a path to
+that `paths-ignore` list, check it against the extraction log of a recent
+run; `contract-codeql-skips-only-what-it-never-reads` holds the list to it.
 
 Default CodeQL setup must remain off alongside the committed workflow. That API
 check needs a workstation credential with repository Administration access;
