@@ -6,6 +6,7 @@
 //   bun run browser:check -- --base https://aadhar.sh   # sweep a deployment, with its real data
 //   bun run browser:check -- --only /coffee,/lens       # some pages
 //   bun run browser:check -- --viewport phone           # one viewport (CI runs each as its own job)
+//   bun run browser:check -- --changed origin/main --sample 5   # pages the diff reaches, and 1 in 5 of the rest
 //
 // Five readings per manifest surface, in Chrome:
 //
@@ -43,15 +44,19 @@
 // formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
+import { reach } from "./lib/browser-pages.ts";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const { values } = parseArgs({ options: { base: { type: "string" }, only: { type: "string" }, viewport: { type: "string" } } });
+const { values } = parseArgs({
+  options: { base: { type: "string" }, only: { type: "string" }, viewport: { type: "string" }, changed: { type: "string" }, sample: { type: "string" } },
+});
 
 /** Phone widths, widest first: the page loads once at 390 and is narrowed. */
 const WIDTHS = [390, 360, 320];
@@ -85,7 +90,33 @@ type Budget = { shift: Record<string, { max: number; why: string }>; intl: Recor
 const budget: Budget = JSON.parse(readFileSync(`${root}config/browser-budget.json`, "utf8"));
 const manifest: { surfaces: { path: string }[] } = JSON.parse(readFileSync(`${root}config/site-manifest.json`, "utf8"));
 const only = values.only?.split(",");
-const paths = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
+const every = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
+const paths = values.changed === undefined ? every : changedPages(values.changed);
+
+/**
+ * The pages a diff against `ref` reaches (lib/browser-pages.ts), and with
+ * `--sample n` one in n of the rest, so a reach the map can't see is still
+ * read every few PRs. The slice turns with HEAD, which in a PR's CI is the
+ * merge commit and moves on every push. A push to main reads every page.
+ */
+function changedPages(ref: string): string[] {
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  const n = values.sample === undefined ? 0 : Number(values.sample);
+  if (!Number.isInteger(n) || n < 0) throw new Error(`--sample takes a whole number, got ${values.sample}`);
+  const changed = [...git("diff", "--name-only", ref), ...git("ls-files", "--others", "--exclude-standard")];
+  const sources = new Map(git("ls-files", "--cached", "--others", "--exclude-standard", "src").map((f) => [f, readFileSync(root + f, "utf8")]));
+  const reached = reach(changed, sources);
+  if ("all" in reached) {
+    console.log(`browser:check: every page, since ${reached.all}`);
+    return every;
+  }
+  const turn = n && parseInt(git("rev-parse", "HEAD")[0]!.slice(0, 8), 16) % n;
+  const others = n ? every.filter((p) => !reached.pages.includes(p)).filter((_, i) => i % n === turn) : [];
+  console.log(
+    `browser:check: ${changed.length} changed file(s) reach ${reached.pages.join(", ") || "no page"}; sampling ${others.length} more${n ? ` (slice ${turn + 1} of ${n})` : ""}`,
+  );
+  return [...every.filter((p) => reached.pages.includes(p)), ...others];
+}
 
 declare global {
   var __seen: { shift: number; moved: string[]; intl: string[]; csp: string[] };
