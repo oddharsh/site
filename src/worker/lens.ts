@@ -3316,7 +3316,7 @@ export async function originDiscovery(
   // `caches` is a bare global that may be undeclared; referencing it to hand it
   // to a parser would throw ReferenceError, so typeof is the only operator that
   // can ask. The one class lib/parse.ts cannot cover.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const { scope, cacheable } = discoveryScope(origin, env);
   const key = discoveryKey(origin, scope);

@@ -110,6 +110,8 @@ test("tui emit() is plain text, always", () => {
     tui.rule(tui.COLS, "section"),
     ...tui.wrap("some prose", tui.COLS).map((r) => [tui.s(r)]),
   ]);
+  // The ESC byte is what this asserts is absent, so the pattern has to hold it.
+  // oxlint-disable-next-line no-control-regex
   assert.doesNotMatch(painted, /\[/, "no ANSI escape may reach the output");
   assert.match(painted, /plain/);
   assert.match(painted, /styled/, "dropping the escapes must not drop the text");

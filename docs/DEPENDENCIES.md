@@ -458,8 +458,8 @@ does not make a failed write safe to ignore.
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
 - **The linter is Bun's, as of 2026-10-15.** `bun run lint`, a required step
-  in `validate`, runs `bun lint --type-aware`, which reads `.oxlintrc.json` as
-  it stands and runs the type-aware rules against the same programs Bun's
+  in `validate`, runs `bun lint --type-aware`, which read `.oxlintrc.json` as
+  it stood and runs the type-aware rules against the same programs Bun's
   checker uses. Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 left with it, and
   56 lockfile lines with them. Measured on an unchanged tree the day it moved,
   identical by file, line and rule: the same 4 findings without types (0.35 s
@@ -471,19 +471,26 @@ does not make a failed write safe to ignore.
   `anti-slop(no-runtime-typeof)`, one from each kind of rule. The linter now moves with the
   Bun pin, so a pin bump PR's review should read Bun's lint changes for NEW
   rules, since a new rule in an enabled category fails CI on unchanged code.
-  Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
-  measurement that decided it. `bun lint --doctor` says which rules run
-  natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.93.0 is the adapter the three rules vendored from
-  anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
-  `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
-  the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
-  with oxlint gone it moves on its own, and a bump PR should run `bun run lint`
-  and confirm `--doctor` still counts 3 JavaScript rules. It carries no
-  transitive dependencies. Since the rules themselves
-  are vendored rather than depended on, an anti-slop release is NOT a Dependabot
-  event here; re-syncing is a deliberate copy, and the section at the end of this
-  file says which three files it covers.
+  Every rule this repo turns off is turned off in bunfig.toml's `[lint]` beside
+  the measurement that decided it. `bun lint --doctor` says which rules run
+  natively and which run in JavaScript (117 and 3 on 2026-10-15; 118 and 0
+  since 2026-11-17).
+- **The lint config moved into bunfig.toml's `[lint]` on 2026-11-17**, and
+  `.oxlintrc.json` left. Every file's effective rules were diffed against the
+  oxlint config with its overrides resolved (691 files), and the tree's
+  findings matched by file, line and rule. In this format Bun layers its own
+  defaults on top, 44 rules and 31,686 findings that day, so `[lint]` turns
+  each one off by name, pins 6 rules' options back to what oxlint ran, and
+  names the 17 vitest correctness rules a category no longer brings in. Three
+  behaviors have no switch and are stricter here (the `[lint]` comment above
+  its option pins lists them); they found 7 sites, fixed or suppressed with a
+  reason. The 3 JavaScript files under `tools/fixtures/` no longer get the
+  typescript-eslint rules. `flavor = "eslint"` keeps an ancestor
+  `.oxlintrc.json` from taking over (gotcha 104).
+- **@oxlint/plugins left on 2026-11-17.** It was the adapter three vendored
+  anti-slop rules imported, and Bun ran them as JavaScript. They are
+  `no-restricted-syntax` selectors now; the section at the end of this file
+  has the measurement.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
   `tools/check-page-contracts.ts` parsed the garage scaffold's inline CSS with
@@ -819,11 +826,10 @@ the reason, rather than written here with the caret quietly dropped.
 
 <a id="evaluated-and-declined-dmmulroyanti-slop"></a>
 
-## Vendored rules: dmmulroy/anti-slop
+## Rules from dmmulroy/anti-slop
 
 The repository adopts three [anti-slop](https://github.com/dmmulroy/anti-slop)
-rules through `tools/oxlint/anti-slop/index.ts` and enables them in
-`.oxlintrc.json`:
+rules as `no-restricted-syntax` selectors in bunfig.toml's `[lint]`:
 
 | rule | purpose |
 |---|---|
@@ -831,10 +837,19 @@ rules through `tools/oxlint/anti-slop/index.ts` and enables them in
 | `no-shape-in-symbol-names` | Require a name for the domain value rather than a generic structure label. |
 | `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
-The three rule files and their MIT license are vendored; `@oxlint/plugins`
-provides the adapter Bun's linter loads them through. Re-sync the upstream rule
-files deliberately, review their behavior against this tree, and keep local
-policy in the wrapper and `.oxlintrc.json`.
+Until 2026-11-17 the three upstream rule files were vendored under
+`tools/oxlint/anti-slop/` and loaded through `@oxlint/plugins`, so Bun ran
+them in JavaScript. Each one only matches syntax, so a selector says the same
+thing and runs natively. On that day's tree, with inline suppressions off,
+both versions reported the same 23 findings by file, line and rule, and a
+planted file drew the same 13. `bun lint --type-aware` fell from a 351 ms
+median to 295 ms over 10 runs each, because no JavaScript rule means no JS
+engine starts. Three things were given up: upstream's `allowInTypeGuards`
+option (never enabled here), a re-sync by plain copy (a new upstream rule is a
+selector rewrite, or a JavaScript rule that brings the engines back), and
+per-rule suppressions (a `no-restricted-syntax` suppression covers all three
+on its lines). `tools/tests/contract-lint-selectors.test.ts` holds the
+selectors and the exemption override.
 
 The original 2026-08-15 evaluation rejected these rules and found several
 others inapplicable because the source was JavaScript. Adoption and the
@@ -846,9 +861,8 @@ The linter's built-in `vitest` plugin supplies `vitest/no-restricted-vi-methods`
 match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 `cloudflare:workers` virtual module, and other uses require review of the seam.
 
-The plugin array in `.oxlintrc.json` preserves the default plugins because an
-explicit array replaces them. Its comments record the planted control that
-caught a rule disappearing when only `vitest` was listed.
+`[lint]` names no plugins: Bun's built-in ones need no loading, and a
+`plugins` list there loads ESLint plugin packages, which run in JavaScript.
 
 ## Vendored bundle: @chenglou/pretext
 

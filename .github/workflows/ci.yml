@@ -253,7 +253,7 @@ jobs:
         wait: types
 
       # Read-only checks: nothing below writes what they read. The linter ignores
-      # .build/** (.oxlintrc.json), and typecheck writes only under --update.
+      # .build/** (bunfig.toml's [lint]), and typecheck writes only under --update.
       - name: Lint
         id: lint
         run: bun run lint

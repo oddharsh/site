@@ -145,7 +145,7 @@ async function refreshBusy(env, ctx) {
     const write = Promise.resolve(env.BOOKINGS.put(BUSY_KEY, JSON.stringify(snap))).catch(() => {});
     // cal MUST stay independently testable, so keep the narrow capability check
     // local instead of importing the site Worker's context helpers.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    // oxlint-disable-next-line no-restricted-syntax
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
     else await write;
   }

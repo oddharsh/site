@@ -12,7 +12,7 @@
   // The local parse layer. Client scripts here have no shared module graph, so
   // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
   // coercions is the same trade these files already make for esc().
-  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+  /* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
      of typeof; keeping the checks here rather than at each use is the point. */
   function asRecord(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
@@ -20,7 +20,7 @@
   function asText(v) {
     return typeof v === "string" && v !== "" ? v : null;
   }
-  /* oxlint-enable anti-slop/no-runtime-typeof */
+  /* oxlint-enable no-restricted-syntax */
   var form = document.getElementById("lx-form");
   if (!form) return; // not the /lens page
 
@@ -2420,7 +2420,7 @@
     LENS_FN.markdown = lensMarkdownTab;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
     // Capability probe on a caller-supplied callback, not a parsed value.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    // oxlint-disable-next-line no-restricted-syntax
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
     var body = view === "machine" ? lensFocus() + fn() : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its

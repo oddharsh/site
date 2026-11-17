@@ -459,7 +459,7 @@ export async function warmArtCache(payload, request, env, ctx) {
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
   // class lib/parse.ts cannot cover.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
   if (!ctx || typeof caches === "undefined") return none;
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
