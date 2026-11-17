@@ -568,6 +568,19 @@ export const CONTROLS: Control[] = [
     expect: /a push to main must find no map and run the whole suite/,
   },
   {
+    id: "codeql-skips-a-push-to-tools",
+    plants: "CodeQL's push trigger ignores tools/**, so a change to analyzed code ships unscanned",
+    mutations: [
+      {
+        file: ".github/workflows/codeql.yml",
+        find: '      - "public/og/**"\n',
+        replace: '      - "public/og/**"\n      - "tools/**"\n',
+      },
+    ],
+    run: contract("contract-codeql-skips-only-what-it-never-reads"),
+    expect: /tools\/\*\* would skip a push that changes code CodeQL analyzes/,
+  },
+  {
     id: "critical-css-drops-script-built-rules",
     plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
     mutations: [
