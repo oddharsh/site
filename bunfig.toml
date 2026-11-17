@@ -204,8 +204,9 @@ reportUnusedDisableDirectives = "error"
 # (oven-sh/bun#49225). The name reads like a format, but the key only picks
 # which kind of config file Bun looks for: the rules, options and output stay
 # this section's, the same 28 findings by file, line and rule with the key and
-# without it (2026-11-17). Its one other value, "oxlint", drops this section
-# ("No config file found. Using oxlint's defaults."). It doesn't stop an
+# without it (2026-11-17). Its one other value, "oxlint", runs this section the
+# way an .oxlintrc.json beside it would, under oxlint's schema and report format,
+# so the Bun-only options below fail there too. It doesn't stop an
 # eslint.config.js above, so tools/check-bun-lint.ts fails a run that reads any
 # config but this file.
 flavor = "eslint"
