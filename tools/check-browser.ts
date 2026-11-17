@@ -5,6 +5,8 @@
 //   bun run browser:check                          # build, boot the Worker in-process, sweep
 //   bun run browser:check -- --base https://aadhar.sh   # sweep a deployment, with its real data
 //   bun run browser:check -- --only /coffee,/lens       # some pages
+//   bun run browser:check -- --viewport phone           # one viewport (CI runs each as its own job)
+//   bun run browser:check -- --changed origin/main --sample 5   # pages the diff reaches, and 1 in 5 of the rest
 //
 // Five readings per manifest surface, in Chrome:
 //
@@ -12,7 +14,8 @@
 //           at 320, 360 and 390px (gotcha 97). A page that is, drags sideways.
 //   shift   content does not move after it is painted: cumulative layout shift
 //           at 1280px and at 390px, under 4x CPU throttle so a script that
-//           runs after first paint is caught doing it (gotcha 98).
+//           runs after first paint is caught doing it (gotcha 98), and so is
+//           a content-visibility placeholder drawn at its stand-in size (gotcha 103).
 //   intl    nothing calls Intl before the reader acts. The first Intl object
 //           in a renderer process loads ICU data, 8 to 17 ms of a landing view
 //           and 30 to 53 ms throttled (gotcha 92).
@@ -41,18 +44,39 @@
 // formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
+import { reach } from "./lib/browser-pages.ts";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const { values } = parseArgs({ options: { base: { type: "string" }, only: { type: "string" } } });
+const { values } = parseArgs({
+  options: { base: { type: "string" }, only: { type: "string" }, viewport: { type: "string" }, changed: { type: "string" }, sample: { type: "string" } },
+});
 
 /** Phone widths, widest first: the page loads once at 390 and is narrowed. */
 const WIDTHS = [390, 360, 320];
+/**
+ * Each viewport loads every page once, in its own context: the width its shift
+ * is read at, and the widths its scroll reading narrows through. The two share
+ * nothing, so CI runs each as its own job and a failure names its viewport.
+ */
+const VIEWPORTS = {
+  desktop: { at: "1280px", widths: [], open: (b: Browser) => b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" }) },
+  phone: {
+    at: `${WIDTHS[0]}px`,
+    widths: WIDTHS,
+    open: (b: Browser) => b.newContext({ viewport: { width: WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" }),
+  },
+} satisfies Record<string, { at: string; widths: number[]; open: (b: Browser) => Promise<BrowserContext> }>;
+type Viewport = keyof typeof VIEWPORTS;
+const NAMES = Object.keys(VIEWPORTS) as Viewport[];
+const viewports: Viewport[] = values.viewport === undefined ? NAMES : NAMES.filter((v) => v === values.viewport);
+if (!viewports.length) throw new Error(`--viewport takes ${NAMES.join(" or ")}, got ${values.viewport}`);
 /** A layout shift under this is a sub-pixel settle, not content moving. */
 const SHIFT_MAX = 0.01;
 /** Long enough for an island's fetch and swap to land under throttle. */
@@ -66,7 +90,33 @@ type Budget = { shift: Record<string, { max: number; why: string }>; intl: Recor
 const budget: Budget = JSON.parse(readFileSync(`${root}config/browser-budget.json`, "utf8"));
 const manifest: { surfaces: { path: string }[] } = JSON.parse(readFileSync(`${root}config/site-manifest.json`, "utf8"));
 const only = values.only?.split(",");
-const paths = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
+const every = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
+const paths = values.changed === undefined ? every : changedPages(values.changed);
+
+/**
+ * The pages a diff against `ref` reaches (lib/browser-pages.ts), and with
+ * `--sample n` one in n of the rest, so a reach the map can't see is still
+ * read every few PRs. The slice turns with HEAD, which in a PR's CI is the
+ * merge commit and moves on every push. A push to main reads every page.
+ */
+function changedPages(ref: string): string[] {
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  const n = values.sample === undefined ? 0 : Number(values.sample);
+  if (!Number.isInteger(n) || n < 0) throw new Error(`--sample takes a whole number, got ${values.sample}`);
+  const changed = [...git("diff", "--name-only", ref), ...git("ls-files", "--others", "--exclude-standard")];
+  const sources = new Map(git("ls-files", "--cached", "--others", "--exclude-standard", "src").map((f) => [f, readFileSync(root + f, "utf8")]));
+  const reached = reach(changed, sources);
+  if ("all" in reached) {
+    console.log(`browser:check: every page, since ${reached.all}`);
+    return every;
+  }
+  const turn = n && parseInt(git("rev-parse", "HEAD")[0]!.slice(0, 8), 16) % n;
+  const others = n ? every.filter((p) => !reached.pages.includes(p)).filter((_, i) => i % n === turn) : [];
+  console.log(
+    `browser:check: ${changed.length} changed file(s) reach ${reached.pages.join(", ") || "no page"}; sampling ${others.length} more${n ? ` (slice ${turn + 1} of ${n})` : ""}`,
+  );
+  return [...every.filter((p) => reached.pages.includes(p)), ...others];
+}
 
 declare global {
   var __seen: { shift: number; moved: string[]; intl: string[]; csp: string[] };
@@ -85,7 +135,8 @@ function instrument() {
     node instanceof Element ? node.tagName.toLowerCase() + (node.id ? `#${node.id}` : "") + (node.classList.length ? `.${node.classList[0]}` : "") : "?";
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean; sources: { node: Node | null }[] })[]) {
-      if (entry.hadRecentInput) continue;
+      // No hadRecentInput skip: this harness sends no input, and under
+      // isMobile Chrome flags every shift as following input (gotcha 102).
       seen.shift += entry.value;
       if (entry.value > 0.005) seen.moved.push(...entry.sources.slice(0, 2).map((s) => name(s.node)));
     }
@@ -175,67 +226,67 @@ async function confirmed(ctx: BrowserContext, url: string, widths: number[], max
     : first;
 }
 
-const desktop = (browser: Browser) => browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" });
-const phone = (browser: Browser) =>
-  browser.newContext({ viewport: { width: WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
-
+/** Every viewport this run reads gets its plants, so no reading is trusted that a plant didn't prove. */
 async function controls(browser: Browser, base: string) {
-  const [wide, narrow] = [await desktop(browser), await phone(browser)];
   const blind: string[] = [];
   const url = `${base}/search`;
-  const clean = await load(wide, url, []);
-  if (clean.shift > SHIFT_MAX || clean.intl.length || clean.csp.length || clean.errors.length)
-    blind.push(`the control page /search is not clean itself: ${JSON.stringify(clean)}`);
-  const shifted = await load(wide, url, [], () => {
-    setTimeout(() => document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<div style="height:300px"></div>'), 300);
-  });
-  if (shifted.shift <= SHIFT_MAX) blind.push(`shift: a 300px block pushed in above /search's content read ${shifted.shift}`);
-  const formatted = await load(wide, url, [], () => void (1234).toLocaleString());
-  if (!formatted.intl.includes("toLocaleString")) blind.push("intl: a number formatted on /search went uncounted");
-  const built = await load(wide, url, [], () => void new Intl.DateTimeFormat("en-US"));
-  if (!built.intl.includes("Intl.DateTimeFormat")) blind.push("intl: an Intl.DateTimeFormat built on /search went uncounted");
-  const thrown = await load(wide, url, [], () => {
-    setTimeout(() => {
-      throw new Error("planted");
-    }, 0);
-  });
-  if (!thrown.errors.some((e) => e.includes("planted"))) blind.push("error: an exception thrown on /search went unreported");
-  const handler = await load(wide, url, [], () => document.querySelector("main")?.insertAdjacentHTML("beforeend", '<b onclick="void 0"></b>'));
-  if (!handler.csp.some((v) => v.startsWith("script-src-attr"))) blind.push("csp: an inline onclick parsed into /search went unreported");
-  const widened = await load(narrow, url, WIDTHS, () => {
-    document.querySelector("main")?.insertAdjacentHTML("beforeend", '<div id="planted" style="width:600px;height:1px"></div>');
-  });
-  for (const width of WIDTHS) {
-    if (!widened.scroll[width]?.some((line) => line.includes("div#planted")))
-      blind.push(`scroll: a 600px block planted in /search went unreported at ${width}px`);
+  for (const v of viewports) {
+    const { at, widths, open } = VIEWPORTS[v];
+    const ctx = await open(browser);
+    const clean = await load(ctx, url, []);
+    if (clean.shift > SHIFT_MAX || clean.intl.length || clean.csp.length || clean.errors.length)
+      blind.push(`the control page /search is not clean itself at ${at}: ${JSON.stringify(clean)}`);
+    const shifted = await load(ctx, url, [], () => {
+      setTimeout(() => document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<div style="height:300px"></div>'), 300);
+    });
+    if (shifted.shift <= SHIFT_MAX) blind.push(`shift: a 300px block pushed in above /search's content read ${shifted.shift} at ${at}`);
+    const formatted = await load(ctx, url, [], () => void (1234).toLocaleString());
+    if (!formatted.intl.includes("toLocaleString")) blind.push(`intl: a number formatted on /search went uncounted at ${at}`);
+    const built = await load(ctx, url, [], () => void new Intl.DateTimeFormat("en-US"));
+    if (!built.intl.includes("Intl.DateTimeFormat")) blind.push(`intl: an Intl.DateTimeFormat built on /search went uncounted at ${at}`);
+    const thrown = await load(ctx, url, [], () => {
+      setTimeout(() => {
+        throw new Error("planted");
+      }, 0);
+    });
+    if (!thrown.errors.some((e) => e.includes("planted"))) blind.push(`error: an exception thrown on /search went unreported at ${at}`);
+    const handler = await load(ctx, url, [], () => document.querySelector("main")?.insertAdjacentHTML("beforeend", '<b onclick="void 0"></b>'));
+    if (!handler.csp.some((s) => s.startsWith("script-src-attr"))) blind.push(`csp: an inline onclick parsed into /search went unreported at ${at}`);
+    if (widths.length) {
+      const widened = await load(ctx, url, widths, () => {
+        document.querySelector("main")?.insertAdjacentHTML("beforeend", '<div id="planted" style="width:600px;height:1px"></div>');
+      });
+      for (const width of widths) {
+        if (!widened.scroll[width]?.some((line) => line.includes("div#planted")))
+          blind.push(`scroll: a 600px block planted in /search went unreported at ${width}px`);
+      }
+    }
+    await ctx.close();
   }
-  await Promise.all([wide.close(), narrow.close()]);
   return blind;
 }
 
 async function sweep(browser: Browser, base: string) {
-  const [wide, narrow] = [await desktop(browser), await phone(browser)];
+  const legs = await Promise.all(viewports.map(async (v) => ({ ...VIEWPORTS[v], ctx: await VIEWPORTS[v].open(browser) })));
   const failures: string[] = [];
   const stale: string[] = [];
   const queue = [...paths];
   const worker = async () => {
     for (let path = queue.shift(); path !== undefined; path = queue.shift()) {
       const max = budget.shift[path]?.max ?? SHIFT_MAX;
-      const [d, p] = [await confirmed(wide, base + path, [], max), await confirmed(narrow, base + path, WIDTHS, max)];
+      const readings: { at: string; r: Reading }[] = [];
+      for (const leg of legs) readings.push({ at: leg.at, r: await confirmed(leg.ctx, base + path, leg.widths, max) });
       const fail = (kind: string, detail: string) => failures.push(`FAIL  ${kind.padEnd(6)} ${path}  ${detail}`);
-      if (d.status < 200 || d.status > 299) fail("status", `answered ${d.status}`);
-      for (const [where, r] of [
-        ["1280px", d],
-        [`${WIDTHS[0]}px`, p],
-      ] as const) {
-        if (r.shift > max)
-          fail("shift", `${r.shift.toFixed(3)} at ${where}, over ${max}: ${[...new Set(r.moved)].slice(0, 4).join(", ") || "no source named"}`);
+      const every = (pick: (r: Reading) => string[]) => [...new Set(readings.flatMap(({ r }) => pick(r)))];
+      for (const status of new Set(readings.map(({ r }) => r.status))) if (status < 200 || status > 299) fail("status", `answered ${status}`);
+      for (const { at, r } of readings) {
+        if (r.shift > max) fail("shift", `${r.shift.toFixed(3)} at ${at}, over ${max}: ${[...new Set(r.moved)].slice(0, 4).join(", ") || "no source named"}`);
       }
-      const calls = [...new Set([...d.intl, ...p.intl])];
+      const calls = every((r) => r.intl);
       if (calls.length && !budget.intl[path]) fail("intl", `${calls.join(", ")} before the reader acts`);
-      for (const error of new Set([...d.errors, ...p.errors])) fail("error", error);
-      for (const violation of new Set([...d.csp, ...p.csp])) fail("csp", violation);
-      for (const width of WIDTHS) for (const line of p.scroll[width] ?? []) fail("scroll", `${width}px: ${line}`);
+      for (const error of every((r) => r.errors)) fail("error", error);
+      for (const violation of every((r) => r.csp)) fail("csp", violation);
+      for (const { r } of readings) for (const [width, lines] of Object.entries(r.scroll)) for (const line of lines) fail("scroll", `${width}px: ${line}`);
       // A budget the page no longer needs. Only a local sweep says so: a
       // deployment's data can make a page quieter than the fallback state.
       // Stale means under HALF the limit, so a page that sits on the line
@@ -243,16 +294,21 @@ async function sweep(browser: Browser, base: string) {
       // and stale. The first CI run read /access 0.000 where 4 of 9 loads
       // here read 0.021, and called its budget stale: a page whose shift
       // depends on the machine gets fixed, never budgeted.
-      if (!values.base) {
+      //
+      // A budget covers every viewport, so only a run that read them all can
+      // call one unneeded: the desktop job alone would retire a budget the
+      // phone load still spends. CI's split jobs never judge; a local
+      // `bun run browser:check` does.
+      if (!values.base && viewports.length === NAMES.length) {
         const allowed = budget.shift[path];
-        if (allowed && Math.max(d.shift, p.shift) <= SHIFT_MAX / 2)
-          stale.push(`${path} holds a shift budget of ${allowed.max} and read ${Math.max(d.shift, p.shift).toFixed(3)}`);
+        const worst = Math.max(...readings.map(({ r }) => r.shift));
+        if (allowed && worst <= SHIFT_MAX / 2) stale.push(`${path} holds a shift budget of ${allowed.max} and read ${worst.toFixed(3)}`);
         if (budget.intl[path] && !calls.length) stale.push(`${path} holds an intl exception and called none`);
       }
     }
   };
   await Promise.all(Array.from({ length: PARALLEL }, worker));
-  await Promise.all([wide.close(), narrow.close()]);
+  await Promise.all(legs.map((leg) => leg.ctx.close()));
   return { failures: failures.sort(), stale: stale.sort() };
 }
 
@@ -268,7 +324,7 @@ async function run(base: string) {
     for (const line of failures) console.log(line);
     for (const line of stale) console.log(`STALE ${line}: drop it from config/browser-budget.json`);
     console.log(
-      `browser:check: ${paths.length} pages against ${values.base ?? "the local build"}, ${failures.length} failure(s), ${stale.length} stale budget(s); every planted control was caught.`,
+      `browser:check: ${paths.length} pages at ${viewports.join(" and ")} against ${values.base ?? "the local build"}, ${failures.length} failure(s), ${stale.length} stale budget(s); every planted control was caught.`,
     );
     return failures.length || stale.length ? 1 : 0;
   } finally {

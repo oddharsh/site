@@ -2,14 +2,16 @@ name: Photos
 
 # The native half of what CI used to run on every PR: zenc's tests and clippy,
 # then a byte-for-byte reproduction of the committed histograms. It only has
-# something to say when the encoder, its lockfile, or the published tiers move,
-# so it runs only then. Not a required check; a red run here is still a real
-# finding about bytes that ship.
+# something to say when the encoder, its lockfile, its compiler and Cargo
+# config, or the published tiers move, so it runs only then. Not a required
+# check; a red run here is still a real finding about bytes that ship.
 
 on:
   pull_request:
     paths:
       - "tools/photos/**"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - "public/i/**"
       - "public/images/**"
       - ".github/workflows/photos.yml"

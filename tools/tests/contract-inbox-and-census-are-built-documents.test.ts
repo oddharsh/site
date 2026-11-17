@@ -73,7 +73,11 @@ test("the two islands carry the marker and their cache policies", async () => {
   const census = await handleCensusTable(new Request("https://aadhar.sh" + TABLE_URL), NO_BINDINGS);
   assert.equal(census.headers.get(ISLAND_MARKER), "1");
   assert.equal(census.headers.get("cache-control"), "public, max-age=300, s-maxage=900");
-  assert.match(await census.text(), /cx-empty/, "no store is the empty panel, never a table");
+  const empty = await census.text();
+  assert.match(empty, /cx-empty/, "no store prints the empty note");
+  // The swap from placeholder to empty note must not move the footer: same
+  // roster rows, named and blank (browser:check read 0.022 when it did).
+  assert.equal(count(empty, /<tr aria-hidden="true">/g), CENSUS_ROSTER.length);
   const hostile = renderInboxMail(
     { state: "ok", value: [{ kind: "reply", author: "<script>x</script>", source: "https://e.example/", target: "https://aadhar.sh/", approved_at: 0 }] },
     "https://aadhar.sh",

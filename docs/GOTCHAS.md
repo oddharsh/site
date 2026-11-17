@@ -1055,3 +1055,28 @@ skips it.
     `scores_srgb_tags_exactly_as_untagged` and
     `refuses_a_colour_chunk_libjxl_would_honour` run in `validate`.
     Checked by: `tools/photos/photo-metrics/src/main.rs`.
+
+102. **Under Playwright's `isMobile`, Chrome marks every layout shift
+    `hadRecentInput`, so a reading that skips those reads 0 on a phone.**
+    browser:check skipped input-driven shifts the way CLS does, and its
+    phone load used `isMobile: true`. On 2026-11-16 a 300px block pushed in
+    above /search's content read 0.0696 with `hadRecentInput: true` at
+    390px, and 0.025 with it false at 1280px; `hasTouch` alone left it
+    false. The shift plant only ran at 1280px, so the 390px reading had read
+    0 on every page since 2026-11-10 and nothing said so. The harness sends
+    no input, so it counts every shift, and `controls()` plants a shift in
+    each viewport the run reads.
+    Checked by: `tools/check-browser.ts`.
+
+103. **`content-visibility: auto` paints its placeholder size first, and
+    its paint containment hides what overflows.** `.msg` in
+    `src/styles/lwe-base.css` carried it with `contain-intrinsic-size: auto
+    90px`. On 2026-11-16, under 4x CPU throttle at 390px, Chrome's first
+    frame drew every message at 90px, messages in view included, and the
+    next laid out their real heights: /lwe/knots read 0.050, /lwe/smoothing
+    0.064. With it removed, /lwe/vigenere scrolled sideways at 320 to 390px,
+    because the containment had been clipping a 40-letter `<code>` key out
+    of sight rather than wrapping it. It bought nothing measurable: /lwe/dac,
+    7,138px of messages, read first paint 252 vs 256 ms and style plus
+    layout 216.6 vs 215.4 ms with and without, 10 loads each.
+    Checked by: `tools/check-browser.ts`.

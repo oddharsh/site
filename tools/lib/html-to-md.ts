@@ -907,7 +907,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
           const chips: string[] = [];
           const collect = (x) => {
             if (isText(x)) return;
-            if (hasClass(x, "chip")) chips.push(textOf(x).trim());
+            if (hasClass(x, "chip")) chips.push(escapeMd(textOf(x).trim()));
             else (x.children || []).forEach(collect);
           };
           collect(n);
