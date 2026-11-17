@@ -1,4 +1,5 @@
 // ── around.ts ────────────────────────────────────────────────────────────────
+import { PENDING } from "../../src/worker/lib/island.ts";
 import { NEIGHBORS, assert, diffAroundRows, persistAroundHistory, renderAroundPage, renderAroundSnapshot, test } from "./contract-shared.ts";
 
 // Every degradation in the neighbourhood crawler is designed to be QUIET: a
@@ -120,16 +121,17 @@ test("each row's ↗ link names where it goes", () => {
   assert.match(html, /<th aria-label="Link">↗<\/th>/);
 });
 
-test("around renders an honest empty panel rather than a fabricated table", async () => {
+test("around with no snapshot keeps the placeholder's unnamed rows and says none yet", async () => {
   // The failure-honesty rule src/worker/around.ts states at renderAroundSnapshot: no
-  // snapshot means a visibly pending panel, never invented rows. Only ever seen
-  // before the first cron run, which is exactly when nobody is looking. The
-  // panel is the island's body now; the shell around it is noindex either way.
+  // snapshot never invents a row. It keeps the placeholder's rows, so the swap
+  // moves nothing below it (gotcha 98), and only the crawl line changes.
   const empty = renderAroundSnapshot(null).html;
-  assert.match(empty, /class="pending"/, "no snapshot is a pending panel");
-  assert.doesNotMatch(empty, /<table/, "and never a table");
-  for (const n of NEIGHBORS.slice(0, 3)) {
-    assert.ok(!empty.includes(`>${n.name}<`), `${n.name} must not appear as a row when there is no data`);
+  const placeholder = renderAroundSnapshot(PENDING).html;
+  assert.match(empty, /<strong>Last crawl:<\/strong> none yet, check back tomorrow &middot;/);
+  assert.match(placeholder, /<strong>Last crawl:<\/strong> … &middot;/);
+  assert.equal(empty.replace("none yet, check back tomorrow", "…"), placeholder, "everything but the crawl line is the placeholder");
+  for (const n of NEIGHBORS) {
+    assert.ok(!empty.includes(n.name), `${n.name} must not appear when there is no data`);
   }
   const shell = await renderAroundPage().text();
   assert.match(shell, /<meta name="robots" content="noindex">/, "the page is not indexable");

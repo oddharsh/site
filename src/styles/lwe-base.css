@@ -16,7 +16,7 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
 .msgr-head .pets { font-size: var(--text-2xs); color: var(--slate-55); text-align: right; line-height: 1.35; }
 .disclosure { font-size: var(--text-micro); color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
 .log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
-.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; }
 /* A grid item's automatic minimum size is its min-content width, and a `white-space: pre`
  * code block's min-content width is its longest line. Without this the message column
  * widens past the 640px window, `.window { overflow: hidden }` clips the excess, and the
@@ -36,6 +36,8 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
 .msg .bubble p { margin: 0 0 7px; }
 .msg .bubble p:last-child { margin-bottom: 0; }
 .msg .bubble em { font-style: italic; }
+/* /lwe/vigenere's 40-letter key is one unbreakable word, 73px past the window at 320px. */
+.msg .bubble p code { overflow-wrap: anywhere; }
 .msg a { color: #1a4fc4; }
 .demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
 .demo .lead { font-size: var(--text-xs); color: var(--slate-45); margin: 0 0 10px; }

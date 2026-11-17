@@ -306,9 +306,14 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
   /* Stacked, so the split's height is now shared rather than spent on one pane,
      and the tree gives most of it back to the board. Fill scales the graph down
      to whatever width is left, which is what finally retires the horizontal
-     scroll a phone used to get from a 1002px board in a 360px canvas. */
-  .mmc-split{flex-direction:column;height:clamp(380px,calc(100vh - 250px),760px)}
-  .mmc-tree{flex:0 0 auto;max-height:132px;border-right:0;border-bottom:1px solid var(--shadow)}
+     scroll a phone used to get from a 1002px board in a 360px canvas. The
+     tree holds its 132px before the script fills it (1,308px of rows), or the
+     board below dropped 121px after first paint, layout shift 0.106 at 390px
+     (gotcha 98, 2026-11-16). The split's clamp tracks what fitSplit() measures,
+     since first paint lands before that script runs: 300, 343, 518 and 732px
+     at 390x844, 430x932, 768x1024 and 820x1180 (it read 594px at 390x844). */
+  .mmc-split{flex-direction:column;height:clamp(300px,calc(100vh - 700px + 26vw),760px)}
+  .mmc-tree{flex:0 0 auto;height:132px;border-right:0;border-bottom:1px solid var(--shadow)}
 }
 </style>
 <link rel="stylesheet" href="/luna.css">
