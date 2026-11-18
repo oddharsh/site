@@ -182,7 +182,7 @@ export function renderInboxPage() {
 
 function pathOf(target, origin) {
   try {
-    return new URL(target).pathname.replace(/\/+$/, "") || "/";
+    return new URL(target).pathname.replace(/(?<!\/)\/+$/, "") || "/";
   } catch {
     return String(target).replace(origin, "") || "/";
   }

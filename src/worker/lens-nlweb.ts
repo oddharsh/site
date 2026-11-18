@@ -71,7 +71,7 @@ const LENS_NLWEB = defineLens({
           origin,
           host,
           query,
-          endpoint: origin.replace(/\/+$/, "") + "/ask",
+          endpoint: origin.replace(/(?<!\/)\/+$/, "") + "/ask",
           unreadable: !!probe.unreadable,
           gated: !!probe.gated,
           error: probe.detail || "the /ask door did not answer",

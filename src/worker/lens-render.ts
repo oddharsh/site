@@ -76,6 +76,7 @@
 // measuring itself and black out the feature it was checking.
 
 import { isCallable } from "./lib/parse.ts";
+import { stripTags } from "./lib/text.ts";
 
 // Per-isolate memo, not persisted, because it is a fact about an API during a
 // beta. TRI-STATE (the annotation keeps tsc from inferring `null`): null is "not
@@ -168,10 +169,12 @@ export function kitesurfPayload(payload) {
 // SAME function, so a systematic undercount cancels and only the difference is
 // ever claimed.
 const stripped = (html) =>
-  String(html || "")
-    .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]+>/g, " ")
+  stripTags(
+    String(html || "")
+      .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " "),
+    " ",
+  )
     .replace(/&(?:nbsp|#160);/gi, " ")
     .replace(/\s+/g, " ")
     .trim();

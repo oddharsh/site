@@ -6,6 +6,7 @@ import { lensFetch } from "./lens.ts";
 import { extractTitle } from "./lib/http.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/public-fetch.ts";
 import { mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
+import { stripTags } from "./lib/text.ts";
 
 const BODY_CAP = 1024 * 1024;
 const PROFILES = {
@@ -68,10 +69,7 @@ function profileNames(value) {
 }
 
 function wordCount(text) {
-  const plain = text
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  const plain = stripTags(text.replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " "), " ")
     .replace(/&(?:nbsp|amp|lt|gt|quot);/gi, " ")
     .replace(/\s+/g, " ")
     .trim();

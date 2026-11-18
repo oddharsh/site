@@ -225,9 +225,9 @@ export function markdownAlternate(linkHeader, html) {
   const fromHeader = String(linkHeader || "")
     .split(/,(?=\s*<)/)
     .map((part) => {
-      const url = part.match(/<([^>]*)>/);
+      const url = part.match(/^[^<]*<([^>]*)>/);
       if (!url) return null;
-      if (!/rel\s*=\s*"?[^";]*\balternate\b/i.test(part)) return null;
+      if (!/rel\s*=(?:\s*")?[^";]*\balternate\b/i.test(part)) return null;
       if (!/type\s*=\s*"?text\/(x-)?markdown/i.test(part)) return null;
       return url[1];
     })
@@ -236,7 +236,7 @@ export function markdownAlternate(linkHeader, html) {
 
   const tag = String(html || "").match(/<link\b[^>]*>/gi) || [];
   for (const t of tag) {
-    if (!/rel\s*=\s*["']?[^"';>]*\balternate\b/i.test(t)) continue;
+    if (!/rel\s*=(?:\s*["'])?[^"';>]*\balternate\b/i.test(t)) continue;
     if (!/type\s*=\s*["']?text\/(x-)?markdown/i.test(t)) continue;
     const href = t.match(/href\s*=\s*["']([^"']+)["']/i) || t.match(/href\s*=\s*([^\s>]+)/i);
     if (href) return { href: href[1], where: "<link> element" };

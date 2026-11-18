@@ -1218,7 +1218,7 @@ async function fetchEventDescription(eventId, auth) {
   let txt = data.description_md || data.description || e.description_md || e.description || "";
   if (!txt && data.description_mirror) txt = pmToText(data.description_mirror);
   txt = String(txt || "")
-    .replace(/[ \t]+\n/g, "\n")
+    .replace(/(?<![ \t])[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return txt || null;
@@ -1271,7 +1271,7 @@ async function fetchEventByLink(input) {
   if (!desc && data.description_mirror) desc = pmToText(data.description_mirror);
   desc =
     String(desc || "")
-      .replace(/[ \t]+\n/g, "\n")
+      .replace(/(?<![ \t])[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim() || null;
   const hosts = (data.hosts || []).map((h) => parseGuest(h.api_id, h)).filter((g) => g.id);
@@ -3821,7 +3821,7 @@ export async function handleMcp(request, env, d) {
 }
 
 export async function handleSerendipity(request, env, ctx, url = new URL(request.url)) {
-  let path = url.pathname.replace(/\/+$/, "") || PREFIX;
+  let path = url.pathname.replace(/(?<!\/)\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent
   let uid = readUid(request),

@@ -331,7 +331,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // rather than a 301 to a second 404. Other methods fall through too: a
     // 301 lets a client turn a POST into a GET.
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname.length > 1 && url.pathname.endsWith("/")) {
-      const bare = url.pathname.replace(/\/+$/, "") || "/";
+      const bare = url.pathname.replace(/(?<!\/)\/+$/, "") || "/";
       const twin = canonicalPage(url.pathname, await sitemapPaths(env)) ?? (exactRoutes.has(bare) || prefixRoutes.some((r) => r.match(bare)) ? bare : null);
       if (twin)
         return dispatchTraced("/<path>/", "slash", (_request, _env, _ctx, u) => Response.redirect(u.origin + twin + u.search, 301), request, env, ctx, url);

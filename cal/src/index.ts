@@ -213,7 +213,7 @@ async function route_book(req, env, ctx) {
   if (!Number.isFinite(start)) errors.start = "pick one of the open slots above.";
   if (!name) errors.name = "add the name that should go on the invite.";
   if (!email) errors.email = "add an email, so the invite has somewhere to land.";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "that email doesn't look right. it needs a name, an @ and a domain.";
+  else if (!/^[^\s@]+@[^\s@](?=[^\s@]*\.[^\s@])[^\s@]*$/.test(email)) errors.email = "that email doesn't look right. it needs a name, an @ and a domain.";
   if (!topic) errors.topic = "add a sentence or two. this is what i read before saying yes.";
   if (Object.keys(errors).length) {
     return refuse(400, errors, (await listOpenSlots(env, ctx, null, { allowStale: true })).slots);
