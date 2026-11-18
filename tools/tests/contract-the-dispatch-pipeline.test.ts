@@ -7,7 +7,7 @@
 // were pinned by `indexOf` offsets and regexes over index.ts's source text,
 // because index.ts imports `cloudflare:workers` and cannot load here (gotcha 16).
 import { assert, context, handleSiteMcp, test } from "./contract-shared.ts";
-import { createDispatch, isEdgeCacheable } from "../../src/worker/dispatch.ts";
+import { createDispatch, isEdgeCacheable, type DispatchHandlers, type RouteHandler } from "../../src/worker/dispatch.ts";
 import { ALBUMS, albumPath } from "../../src/worker/albums.ts";
 import { CACHEABLE_PATHS, EXACT_PATHS, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "../../src/worker/routes.ts";
 import { _resetSitemap } from "../../src/worker/lib/not-found.ts";
@@ -17,16 +17,18 @@ const edgeCacheableAt = (request: Request) => isEdgeCacheable(request, new URL(r
 
 const html = (body) => new Response(`<!doctype html><title>${body}</title>`, { headers: { "content-type": "text/html; charset=utf-8" } });
 
-// Typed `any`: the fakes stand in for Records over every route id.
-
-function fakeHandlers(record: (call: any) => void = () => {}): any {
-  const fake = (id) => (request, env) => {
-    record({ id, env, request });
-    return html(id);
-  };
+function fakeHandlers(record: (call: any) => void = () => {}): DispatchHandlers {
+  const fake =
+    (id: string): RouteHandler =>
+    (request, env) => {
+      record({ id, env, request });
+      return html(id);
+    };
   return {
-    exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake(r.path)])),
-    prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake(r.label)])),
+    // SAFETY: one entry per route in routes.ts, so every id is covered;
+    // Object.fromEntries can't carry the id union through to its keys.
+    exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake(r.path)])) as DispatchHandlers["exact"],
+    prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake(r.label)])) as DispatchHandlers["prefix"],
     album: (album, request, env) => {
       record({ id: `album:${album.slug}`, env, request });
       return html(album.slug);
@@ -226,8 +228,10 @@ test("a route with no handler fails at isolate init rather than serving static",
   const { exact, prefix, ...rest } = fakeHandlers();
   assert.doesNotThrow(() => createDispatch({ ...rest, exact, prefix }), "the control: a complete table builds");
   const { "/hit": _hit, ...withoutHit } = exact;
+  // @ts-expect-error a table missing /hit, planted: the types forbid it, and this checks the runtime does too
   assert.throws(() => createDispatch({ ...rest, prefix, exact: withoutHit }), /no handler for \/hit/);
   const { "/a/<asset>": _shell, ...withoutShell } = prefix;
+  // @ts-expect-error a table missing /a/<asset>, planted for the same reason
   assert.throws(() => createDispatch({ ...rest, exact, prefix: withoutShell }), /no handler for \/a\/<asset>/);
 });
 

@@ -285,8 +285,8 @@ correctness = "error"
 # rule brings the engines back.
 #
 # An override REPLACES this whole list, so the override that exempts `typeof`
-# restates the other two selectors. A suppression names `no-restricted-syntax`,
-# so it silences all three on its lines. tools/tests/contract-lint-selectors.test.ts
+# restates the other three selectors. A suppression names `no-restricted-syntax`,
+# so it silences all four on its lines. tools/tests/contract-lint-selectors.test.ts
 # lints a planted file at an ordinary path and at an exempt one.
 #
 # The empty-object spread. The absent-rather-than-zero discipline that
@@ -315,9 +315,20 @@ correctness = "error"
 # src/worker/lib/parse.ts owns the Worker's boundary primitives. The browser
 # modules keep local coercions within their existing load paths. Boundary
 # parsers and tests have an exemption below.
+#
+# The `any` return. The fourth selector is the narrow half of
+# interfere-inc/landmines' no-explicit-return-types, which bans every return
+# annotation. That rule's target is the annotation that lies, and `any` is the
+# lie a selector can see: it erases whatever the body returns, so callers read
+# fields nobody checked. A wider-than-inferred annotation needs the checker, and
+# no lint rule here has one. The 2026-11-18 tree had 23; deleting 21 of them
+# outright surfaced 100 type errors, among them GitHub search items read unparsed
+# and an MCP probe read for `count` before `ok`. A parameter's `any` doesn't count: it's the caller's
+# input, not this function's promise.
 "no-restricted-syntax" = [
   "error",
   { selector = "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))", message = "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present." },
+  { selector = ":function > TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },
   { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },
   { selector = "UnaryExpression[operator='typeof']", message = "A `typeof` check narrows a representation without establishing its contract. Parse input at its I/O boundary, then branch on the domain value." },
 ]
@@ -485,6 +496,7 @@ files = [
 "no-restricted-syntax" = [
   "error",
   { selector = "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))", message = "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present." },
+  { selector = ":function > TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },
   { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },
 ]
 

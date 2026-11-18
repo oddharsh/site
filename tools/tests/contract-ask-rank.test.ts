@@ -6,6 +6,7 @@
 // can fail lands on the lexical ranking with `_meta.ranking` naming why.
 import { assert, test } from "./contract-shared.ts";
 import { _resetSearchIndex } from "../../src/worker/search.ts";
+import { asRecord } from "../../src/worker/lib/parse.ts";
 import { ASK_BUDGET, ASK_FLOOR, ASK_MODEL, MAX_OPTIONS, buildAskRequest } from "../../src/worker/ask-rank.ts";
 
 // "crawled" is not "crawler": the lexical pass finds /writing/bots-log and
@@ -23,7 +24,7 @@ const RECORDS = [
 ];
 const QUERY = "which bots crawled the site recently";
 
-function env(extra: Record<string, any> = {}): any {
+function env(extra: Record<string, any> = {}) {
   _resetSearchIndex();
   return { ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: RECORDS })) }, ...extra };
 }
@@ -147,6 +148,6 @@ test("the ask MCP tool and /ask carry the same Clef ranking", async () => {
   const req = new Request("https://aadhar.sh/mcp");
   const viaTool = await callDataTool("ask", { query: QUERY }, req, env({ AI: ai(probs) }), undefined);
   const viaRoute = await (await handleAsk(new Request(`https://aadhar.sh/ask?query=${encodeURIComponent(QUERY)}&streaming=0`), env({ AI: ai(probs) }))).json();
-  assert.equal(viaTool._meta.ranking, "clef");
+  assert.equal(asRecord(viaTool._meta)?.ranking, "clef");
   assert.deepEqual(viaTool.results, viaRoute.results);
 });

@@ -20,6 +20,7 @@ import {
   sharedStorable,
   variesOnAccept,
   varyEveryVariant,
+  type ProbeRow,
 } from "../../src/worker/lens-markdown.ts";
 import { wantsMarkdown } from "../../src/worker/lib/http.ts";
 
@@ -317,9 +318,9 @@ test("a shared cache may store what no-store and private do not forbid", () => {
 // One row per probe, in the [id, result] shape the handler passes. JSDoc is
 // live in a .mjs file, and without it an array literal types as any[], not a tuple.
 
-const raw = (id, result): [string, any] => [id, result];
+const raw = (id, result): ProbeRow => [id, result];
 
-const row = (id, contentType, vary, cacheControl = "public, s-maxage=86400"): [string, any] => [id, { ok: true, status: 200, contentType, vary, cacheControl }];
+const row = (id, contentType, vary, cacheControl = "public, s-maxage=86400"): ProbeRow => [id, { ok: true, status: 200, contentType, vary, cacheControl }];
 
 test("Vary is read off EVERY variant, not only the Markdown one", () => {
   // The shape this site served on 2026-09-22: Markdown names Accept, the

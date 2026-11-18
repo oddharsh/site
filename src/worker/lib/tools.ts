@@ -36,7 +36,7 @@ export function toolError(message) {
 // The MCP encoder over a lens outcome (lens-pipeline.ts). The lens tools run the
 // same spec as their HTTP twins, so validation, the budget and the refusal
 // wording are one implementation whichever door an agent knocks on.
-function lensToolResult<V>(o: LensOutcome<V>, map: (value: V) => Record<string, any> = (v) => v as Record<string, any>): Record<string, any> {
+function lensToolResult<V>(o: LensOutcome<V>, map: (value: V) => Record<string, any> = (v) => v as Record<string, any>): Record<string, unknown> {
   if (o.kind === "ok") return map(o.value);
   return toolError(o.kind === "failed" ? (asText(o.payload.error) ?? "The lens failed.") : o.error);
 }
@@ -196,7 +196,7 @@ export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 // shape, and the sentinel fields (_error among them) ride alongside. Inference
 // picks one arm of that union and every caller reading another arm's field looks
 // like a typo.
-export async function callDataTool(name, args, request, env, ctx): Promise<Record<string, any>> {
+export async function callDataTool(name, args, request, env, ctx): Promise<Record<string, unknown>> {
   args = asRecord(args) || {};
   if (name === "ask") {
     // Validated through the ROUTE's parser, with a synthetic URL standing in for

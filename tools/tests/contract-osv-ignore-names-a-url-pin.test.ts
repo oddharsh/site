@@ -23,7 +23,7 @@ const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
  *
  *
  * */
-function tables(config: Record<string, import("../lib/toml.ts").TomlValue>, key: string): Record<string, any>[] {
+function tables(config: Record<string, import("../lib/toml.ts").TomlValue>, key: string) {
   const value = config[key];
   return Array.isArray(value) ? (value as Record<string, any>[]) : [];
 }

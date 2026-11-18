@@ -3290,7 +3290,7 @@ function discoveryBoard(sides: readonly string[]) {
     publish(key: string, result: any) {
       runs.get(key)?.resolve(result);
     },
-    shared(key: string): Promise<any> {
+    shared(key: string) {
       return runs.get(key)?.promise || Promise.resolve(null);
     },
   };

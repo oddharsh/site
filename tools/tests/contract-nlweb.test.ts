@@ -204,7 +204,7 @@ test("the ask MCP tool and /ask are the same answer", async () => {
   assert.deepEqual(viaTool.results, viaRoute.results);
   // The tool inherits the route's refusals rather than re-implementing them.
   const refused = await callDataTool("ask", { query: NLWEB_HIT, mode: "generate" }, req, nlwebEnv(), undefined);
-  assert.match(refused._error, /generative model/i);
+  assert.match(String(refused._error), /generative model/i);
 });
 
 // The lens half. foreignNlwebAsk reaches a foreign origin, which no test can do
@@ -526,7 +526,7 @@ test("a refusal that carries a reason reports the reason, not its status code", 
     }),
   );
   assert.equal(refused.ok, false);
-  assert.match(refused.detail, /-32020: the request headers and body disagree/);
+  assert.match(String(refused.detail), /-32020: the request headers and body disagree/);
   assert.ok(!refused.unreadable, "a server that answered is not an unread door");
 
   // Not every refusal is JSON-RPC shaped. mcp.stripe.com answers a 400 carrying
@@ -596,8 +596,8 @@ test("a foreign catalogue is read from the stream with a ceiling, and the ceilin
   });
   assert.equal(huge.ok, false);
   assert.equal(huge.unreadable, true, "our own ceiling was reported as the server's failure");
-  assert.match(huge.detail, /256 KB/);
-  assert.ok(!/JSON/.test(huge.detail), "a truncated read must not read out as a malformed answer");
+  assert.match(String(huge.detail), /256 KB/);
+  assert.ok(!/JSON/.test(String(huge.detail)), "a truncated read must not read out as a malformed answer");
 });
 
 test("a redirect off a vetted origin is validated per hop, not followed blindly", async () => {
@@ -642,7 +642,7 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   // Ours, not theirs: we declined to look, which is not the same as finding
   // nothing there.
   assert.equal(blocked.out.unreadable, true);
-  assert.match(blocked.out.detail, /redirect/);
+  assert.match(String(blocked.out.detail), /redirect/);
 
   // And a redirect to another PUBLIC host is still followed, so this is a guard
   // rather than a blanket refusal to move.
@@ -680,7 +680,7 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
   assert.equal(empty.ok, false);
   assert.equal(empty.gated, true);
   assert.equal(empty.unreadable, true, "a door we were not let through is not a door that is shut");
-  assert.match(empty.detail, /needs OAuth \(HTTP 401\)/);
+  assert.match(String(empty.detail), /needs OAuth \(HTTP 401\)/);
 
   // The OAuth challenge BODY, which is not JSON-RPC and never was.
   const challenge = await foreignMcpTools(
@@ -691,12 +691,12 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
     }),
   );
   assert.equal(challenge.gated, true);
-  assert.ok(!/undefined/.test(challenge.detail), "the reader printed its own undefined into the frame");
+  assert.ok(!/undefined/.test(String(challenge.detail)), "the reader printed its own undefined into the frame");
 
   // No challenge header, and a 403: say what is true rather than naming a
   // scheme the server never claimed. mcp.hf.co answers exactly this.
   const bare = await foreignMcpTools("https://aadhar.sh", answer("", { status: 403 }));
-  assert.match(bare.detail, /needs credentials \(HTTP 403\)/);
+  assert.match(String(bare.detail), /needs credentials \(HTTP 403\)/);
 
   // The renderer reads .error off a JSON-RPC error, and plenty of things that
   // answer an MCP endpoint speak their own dialect instead.
@@ -778,5 +778,5 @@ test("the version header goes only to a server that asked for one", async () => 
   });
   assert.equal(calls, 2, "one retry, not a loop");
   assert.equal(stubborn.ok, false);
-  assert.match(stubborn.detail, /-32020/);
+  assert.match(String(stubborn.detail), /-32020/);
 });

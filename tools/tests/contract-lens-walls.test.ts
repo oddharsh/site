@@ -15,6 +15,7 @@ import {
   classifyWalls,
   wallCandidates,
   wallDedupeKey,
+  type View,
 } from "../../src/worker/lens-walls.ts";
 import { lensFieldEvidence } from "../../src/worker/lens.ts";
 
@@ -30,10 +31,17 @@ const WALL = "<!doctype html><title>Access to this page has been denied</title><
 
 // Ten identities shaped like LENS_BOT_VIEWS: two controls, eight crawlers.
 
-function scan(sampleFor: (key: string, i: number) => string = () => PAGE, status: number = 200): any[] {
+function scan(sampleFor: (key: string, i: number) => string = () => PAGE, status: number = 200) {
   const keys = ["Chrome", "curl", "Googlebot", "GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "PerplexityBot", "ChatGPT-User", "Claude-User"];
   return keys.map((key, i) => {
-    const v = { key, role: i < 2 ? "control" : "train", status, contentType: "text/html", blocked: false, challenge: false };
+    const v: View & { key: string; role: string; contentType: string } = {
+      key,
+      role: i < 2 ? "control" : "train",
+      status,
+      contentType: "text/html",
+      blocked: false,
+      challenge: false,
+    };
     v[VIEW_SAMPLE] = sampleFor(key, i);
     return v;
   });
@@ -121,7 +129,7 @@ test("a failed or unreadable answer is never evidence that there was no wall", a
     },
   };
   assert.deepEqual(await classifyWalls(views, { AI: capacity }), { asked: 10, distinct: 1, flagged: 0, outcome: "ai 3040" });
-  assert.ok(views.every((v) => v.wall.p === null && v.wall.error === "ai 3040" && !v.challenge));
+  assert.ok(views.every((v) => v.wall?.p === null && v.wall.error === "ai 3040" && !v.challenge));
 
   const odd = scan();
   const unparseable = {
@@ -130,7 +138,7 @@ test("a failed or unreadable answer is never evidence that there was no wall", a
     },
   };
   await classifyWalls(odd, { AI: unparseable });
-  assert.ok(odd.every((v) => v.wall.p === null && v.wall.error === "unparseable" && !v.challenge));
+  assert.ok(odd.every((v) => v.wall?.p === null && v.wall.error === "unparseable" && !v.challenge));
   assert.ok(CLEF_DEADLINE_MS >= 1000 && CLEF_DEADLINE_MS <= 4500, "under the bot views' own 4.5 s timeout");
 });
 

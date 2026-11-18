@@ -70,7 +70,14 @@ export function wallDedupeKey(sample: string): string {
     .trim();
 }
 
-type View = { status?: number | null; blocked?: boolean; challenge?: boolean; error?: string; wall?: unknown; [VIEW_SAMPLE]?: string };
+export type View = {
+  status?: number | null;
+  blocked?: boolean;
+  challenge?: boolean;
+  error?: string;
+  wall?: { p: number | null; model: string; error?: string };
+  [VIEW_SAMPLE]?: string;
+};
 
 export function wallCandidates<V extends View>(views: readonly V[]): V[] {
   return views.filter((v) => {

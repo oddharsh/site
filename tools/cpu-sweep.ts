@@ -233,7 +233,7 @@ if (values.one) {
   };
   // Anything else reads as empty: a callable stub whose calls resolve to null,
   // and whose D1-shaped results are empty.
-  const stub = (): any =>
+  const stub = () =>
     new Proxy(function () {}, {
       get: (_, k) => (k === "then" ? undefined : stub()),
       apply: () => Object.assign(Promise.resolve(null), { all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }),

@@ -1,7 +1,7 @@
-// The three anti-slop rules are `no-restricted-syntax` selectors in
-// bunfig.toml's [lint] (docs/DEPENDENCIES.md, "Rules from dmmulroy/anti-slop"). An
-// override replaces the whole selector list, so the typeof exemption restates
-// the other two. These tests lint one planted file through the repo's config
+// The three anti-slop rules and the `any`-return rule are `no-restricted-syntax`
+// selectors in bunfig.toml's [lint] (docs/DEPENDENCIES.md, "Rules from
+// dmmulroy/anti-slop"). An override replaces the whole selector list, so the
+// typeof exemption restates the other three. These tests lint one planted file through the repo's config
 // at an ordinary path and at an exempt one, so a selector that stops matching
 // or an override copy that drifts fails here rather than reading as a clean tree.
 import { ROOT, assert, test } from "./contract-shared.ts";
@@ -18,6 +18,8 @@ const PLANTED = [
   "export const a = { ...(Math.random() > 0.5 ? { x: 1 } : {}) };",
   "export const t = typeof a;",
   "export const b = { ...(Math.random() > 0.5 ? { x: 1 } : { y: 2 }) };",
+  "export function c(): Promise<any> { return Promise.resolve(1); }",
+  "export const d = (x: any): number => Number(x);",
   "",
 ].join("\n");
 
@@ -40,11 +42,11 @@ function restrictedLines(path: string): number[] {
 }
 
 test("the anti-slop selectors fire at an ordinary path", () => {
-  assert.deepEqual(restrictedLines("src/worker/lint-selector-probe.ts"), [1, 2, 3], "an anti-slop selector stopped matching at an ordinary path");
+  assert.deepEqual(restrictedLines("src/worker/lint-selector-probe.ts"), [1, 2, 3, 5], "an anti-slop selector stopped matching at an ordinary path");
 });
 
-test("the typeof exemption keeps the other two selectors", () => {
-  const drift = "the typeof override no longer restates the other two selectors";
-  assert.deepEqual(restrictedLines("src/worker/lib/parse.ts"), [1, 2], drift);
-  assert.deepEqual(restrictedLines("tools/tests/lint-selector-probe.test.ts"), [1, 2], drift);
+test("the typeof exemption keeps the other three selectors", () => {
+  const drift = "the typeof override no longer restates the other three selectors";
+  assert.deepEqual(restrictedLines("src/worker/lib/parse.ts"), [1, 2, 5], drift);
+  assert.deepEqual(restrictedLines("tools/tests/lint-selector-probe.test.ts"), [1, 2, 5], drift);
 });

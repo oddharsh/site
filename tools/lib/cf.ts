@@ -33,7 +33,7 @@ export function cfCommand(args: string[] = []): [cmd: string, argv: string[]] {
 
 /** Run cf and return its parsed JSON, unwrapped from an API envelope if one
  *  comes back. Throws with cf's own stderr, never a spawn dump. */
-export async function cf(args: string[], { maxBuffer = 64 * 1024 * 1024 } = {}): Promise<any> {
+export async function cf(args: string[], { maxBuffer = 64 * 1024 * 1024 } = {}) {
   const [cmd, argv] = cfCommand(args);
   let stdout: string;
   try {
@@ -61,7 +61,7 @@ export async function cf(args: string[], { maxBuffer = 64 * 1024 * 1024 } = {}):
 
 /** Rows from one D1 statement, by database id. The API answers one result
  *  object per statement, the same shape `wrangler d1 execute --json` printed. */
-export async function d1Rows(databaseId: string, sql: string): Promise<any[]> {
+export async function d1Rows(databaseId: string, sql: string) {
   const out = await cf(["d1", "query", databaseId, "--sql", sql]);
   const first = Array.isArray(out) ? out[0] : out;
   if (!first || !Array.isArray(first.results)) throw new Error(`cf d1 query returned no results array for: ${sql.slice(0, 60)}`);
