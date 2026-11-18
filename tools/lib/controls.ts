@@ -679,6 +679,20 @@ export const CONTROLS: Control[] = [
     expect: /a colocated test would be served/,
   },
   {
+    id: "lint-test-fetch-selector-stops-matching",
+    plants: "the hand-assigned fetch selector looks for a misspelled property, so a test that replaces globalThis.fetch lints clean",
+    mutations: [{ file: "bunfig.toml", find: "MemberExpression.left[property.name='fetch']", replace: "MemberExpression.left[property.name='fetchx']" }],
+    run: contract("contract-lint-selectors"),
+    expect: /the hand-assigned fetch selector stopped matching in a test file/,
+  },
+  {
+    id: "route-fetch-miss-goes-unrecorded",
+    plants: "routeFetch throws on a miss without recording it, so a probe that swallows the throw passes",
+    mutations: [{ file: "tools/lib/fetch-routes.ts", find: "      escaped.push(request.url);\n", replace: "" }],
+    run: contract("contract-the-network-tripwire"),
+    expect: /the miss was thrown but never recorded/,
+  },
+  {
     id: "lint-reads-an-eslint-config",
     plants: 'an eslint.config.js beside bunfig.toml, which flavor = "eslint" lets apply on top of [lint]',
     gotcha: 104,

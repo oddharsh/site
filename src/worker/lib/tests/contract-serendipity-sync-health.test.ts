@@ -7,8 +7,9 @@
 // of the fix: a record in `settings` on every path (the throw included), a
 // `serendipity.sync` span whose unknowns stay off rather than reading 0, and a
 // dashboard line that goes stale after two missed ticks.
-import { configText, assert, test, testGlobals } from "../../../../tools/tests/contract-shared.ts";
+import { configText, assert, test } from "../../../../tools/tests/contract-shared.ts";
 import { parseJsonc } from "../../../../tools/lib/jsonc.ts";
+import { routeFetch } from "../../../../tools/lib/fetch-routes.ts";
 import { cronJob } from "../cron.ts";
 import { installTracing } from "../trace.ts";
 import {
@@ -86,13 +87,8 @@ function recordingTracer() {
 }
 
 async function withLuma(respond, work) {
-  const realFetch = globalThis.fetch;
-  try {
-    testGlobals.fetch = async (url) => respond(String(url));
-    return await work();
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+  using _fetch = routeFetch({ "https://api2.luma.com/": (request) => respond(request.url) });
+  return await work();
 }
 
 const feed = (entries) => () => new Response(JSON.stringify({ entries, has_more: false }), { headers: { "content-type": "application/json" } });

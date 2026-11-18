@@ -18,6 +18,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "../../../tools/lib/jsonc.ts";
 import { underNode } from "../../../tools/lib/harness-dispatch.ts";
@@ -351,23 +352,17 @@ test("a /lens scan's primary fetch carries sig2; its discovery probes and robots
     pq = await pqKey();
   const env = { RN_SIGNING_KEY_JWK: JSON.stringify(ed.priv), RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify(pq.priv) };
   const seen: any[] = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = Object.assign(
-    async (input, init) => {
-      const url = typeof input === "string" ? input : input.url;
-      const headers = new Headers(init?.headers ?? (typeof input === "string" ? undefined : input.headers));
-      seen.push({ path: new URL(url).pathname, labels: headers.get("signature-input") ? labels(headers) : [] });
-      return new Response(new URL(url).pathname === "/robots.txt" ? "" : "{}", { status: new URL(url).pathname === "/robots.txt" ? 404 : 200 });
-    },
-    { preconnect: realFetch.preconnect },
-  );
-  try {
+  const target = (request: Request) => {
+    const path = new URL(request.url).pathname;
+    seen.push({ path, labels: request.headers.get("signature-input") ? labels(request.headers) : [] });
+    return new Response(path === "/robots.txt" ? "" : "{}", { status: path === "/robots.txt" ? 404 : 200 });
+  };
+  {
+    using _fetch = routeFetch({ "https://scan-target.example/": target, "https://probe-target.example/": target, "https://mcp-target.example/": target });
     // A fresh origin per call, so the robots read is a real miss each time.
     await lensFetch("https://scan-target.example/", { ...env });
     await lensProbe("https://probe-target.example/llms.txt", { ...env });
     await lensProbeMcp("https://mcp-target.example", { ...env });
-  } finally {
-    globalThis.fetch = realFetch;
   }
   const by = (path) => seen.filter((s) => s.path === path).map((s) => s.labels);
   assert.deepEqual(by("/"), [["sig1", "sig2"]], "the page being scanned is the crawler's identity, so it carries both");

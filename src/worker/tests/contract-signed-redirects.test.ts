@@ -1,4 +1,5 @@
-import { assert, test, testGlobals } from "../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { signedFetch, withBotPolicyCache } from "../lib/botauth.ts";
 import { lensFetch, lensFetchAsBot } from "../lens.ts";
 import { probeRevalidation } from "../cache-lint.ts";
@@ -20,12 +21,11 @@ async function keyPair() {
 }
 
 async function withFetch(respond, run, robots = (_record) => new Response(null, { status: 404 })) {
-  const original = globalThis.fetch;
   const seen: any[] = [];
-  testGlobals.fetch = async (input, init: Record<string, any> = {}) => {
-    let url = String(input);
+  const network = async (request: Request, init: Record<string, any> = {}) => {
+    let url = request.url;
     for (let hop = 0; hop <= 20; hop++) {
-      const record = { url, ...init, headers: new Headers(init.headers) };
+      const record = { url, ...init, headers: new Headers(request.headers) };
       seen.push(record);
       const response = new URL(url).pathname === "/robots.txt" ? robots(record) : respond(record);
       const location = response.headers.get("location");
@@ -39,11 +39,8 @@ async function withFetch(respond, run, robots = (_record) => new Response(null, 
     }
     throw new TypeError("too many redirects");
   };
-  try {
-    return await run(seen);
-  } finally {
-    testGlobals.fetch = original;
-  }
+  using _fetch = routeFetch({ [origin + "/"]: network, "https://other.example/": network, [spotify + "/"]: network });
+  return await run(seen);
 }
 
 // The same fixture by INJECTION: env.OUTBOUND_TRANSPORT is the network adapter

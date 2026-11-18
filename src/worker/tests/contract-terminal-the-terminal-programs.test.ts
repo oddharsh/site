@@ -12,10 +12,10 @@ import {
   terminalGet,
   terminalReq,
   test,
-  testGlobals,
   tokenizeKeys,
 } from "../../../tools/tests/contract-shared.ts";
 import { _resetPhotoCaches } from "../photos.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
@@ -209,9 +209,9 @@ test("every frame tool the MCP server lists is one the server can actually call"
   //
   // `lens` is inside the stub for symmetry alone. It fails at signing before it
   // reaches a fetch, measured at 0 escapes with the stub and without it.
-  const realFetch = globalThis.fetch;
-  try {
-    testGlobals.fetch = async () => new Response("not found", { status: 404 });
+  {
+    const notFound = () => new Response("not found", { status: 404 });
+    using _fetch = routeFetch({ "https://aadhar.sh/": notFound, "https://cloudflare-dns.com/dns-query": notFound });
     for (const name of FRAME_TOOLS) {
       const args = name === "lens" ? { url: "https://example.com" } : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] } : {};
       const res = await handleSiteMcp(
@@ -236,8 +236,6 @@ test("every frame tool the MCP server lists is one the server can actually call"
       );
       assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
     }
-  } finally {
-    testGlobals.fetch = realFetch;
   }
 });
 

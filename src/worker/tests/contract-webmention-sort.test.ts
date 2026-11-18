@@ -3,8 +3,9 @@
 // person, a list or spam. These pin what that promises: the sort labels the
 // email and decides nothing, every failure still sends the email and says it
 // was not sorted, and Workers AI is spent only when an email will go out.
-import { assert, test, testGlobals, deferredContext, fakeD1, handleWebmention, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
+import { assert, test, deferredContext, fakeD1, handleWebmention, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
 import { SORT_CRITERIA, SORT_LABELS, SORT_MODEL, buildSortRequest, sortLine, sortMention, sortSubjectTag } from "../webmention-sort.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 const TARGET = "https://aadhar.sh/writing/in-flux";
 const SOURCE = "https://best-slots-review.click/top-10";
@@ -24,24 +25,18 @@ function ai(probs, calls: any[] = []) {
 
 /** Runs one webmention end to end and returns the email Resend was asked to send, or null. */
 async function send(env) {
-  const realFetch = globalThis.fetch;
   const mails: any[] = [];
-  testGlobals.fetch = async (input, init) => {
-    const url = String(input?.url ?? input);
-    if (url.startsWith("https://api.resend.com/")) {
-      mails.push(JSON.parse(init.body));
+  using _fetch = routeFetch({
+    "https://api.resend.com/": async (request) => {
+      mails.push(await request.json());
       return Response.json({ id: "m1" });
-    }
-    return new Response(PAGE, { headers: { "content-type": "text/html" } });
-  };
-  try {
-    const ctx = deferredContext();
-    const res = await handleWebmention(wmPost(SOURCE, TARGET), env, ctx);
-    assert.equal(res.status, 202);
-    await ctx.settle();
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+    },
+    [SOURCE]: () => new Response(PAGE, { headers: { "content-type": "text/html" } }),
+  });
+  const ctx = deferredContext();
+  const res = await handleWebmention(wmPost(SOURCE, TARGET), env, ctx);
+  assert.equal(res.status, 202);
+  await ctx.settle();
   assert.ok(mails.length <= 1, "one mention sends at most one email");
   return mails[0] ?? null;
 }

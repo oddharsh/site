@@ -1,5 +1,6 @@
 // ── lens cost: origin-level discovery is cached ──────────────────────────
 import { testGlobals, assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 // The fan-out reaches the real internet, and both tests below were latent
 // flakes because of it. The probes that go through lensProbe need the
@@ -40,9 +41,8 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
   const { originDiscovery } = await import("../lens.ts");
   const store = new Map();
   const realCaches = globalThis.caches;
-  const realFetch = globalThis.fetch;
   dohCalls = 0;
-  testGlobals.fetch = countedDoh;
+  using _fetch = routeFetch({ "https://cloudflare-dns.com/dns-query?": countedDoh });
   testGlobals.caches = {
     default: {
       async match(req) {
@@ -82,7 +82,6 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     assert.equal(forced.cached, false);
     assert.ok(dohCalls > warm, "`fresh` returned the cached body rather than bypassing the cache");
   } finally {
-    testGlobals.fetch = realFetch;
     if (realCaches === undefined) delete globalThis.caches;
     else testGlobals.caches = realCaches;
   }
@@ -93,15 +92,13 @@ test("discovery still works with no cache at all", async () => {
   // previous behaviour (a live fan-out every time) rather than throw.
   const { originDiscovery } = await import("../lens.ts");
   const realCaches = globalThis.caches;
-  const realFetch = globalThis.fetch;
-  testGlobals.fetch = doh;
+  using _fetch = routeFetch({ "https://cloudflare-dns.com/dns-query?": doh });
   delete globalThis.caches;
   try {
     const out = await originDiscovery("https://example.com", "example.com", {});
     assert.equal(out.cached, false);
     assert.ok("robots" in out && "llms" in out && "mcp" in out);
   } finally {
-    testGlobals.fetch = realFetch;
     if (realCaches !== undefined) testGlobals.caches = realCaches;
   }
 });

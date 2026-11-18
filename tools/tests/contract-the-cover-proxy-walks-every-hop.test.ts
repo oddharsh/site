@@ -10,6 +10,7 @@
 import { createHmac } from "node:crypto";
 import { assert, context, test, testGlobals } from "./contract-shared.ts";
 import { handleSerendipity } from "../../serendipity/serendipity.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 const SECRET = "cover-secret-for-the-contract-suite";
 const RAW = "https://images.lumacdn.com/event-covers/hop.jpg";
@@ -17,19 +18,17 @@ const SIG = createHmac("sha256", SECRET).update(RAW).digest("base64url");
 
 async function cover(routes) {
   const requested: any[] = [];
-  const realFetch = testGlobals.fetch,
-    hadCaches = "caches" in globalThis,
+  const hadCaches = "caches" in globalThis,
     realCaches = testGlobals.caches;
-  const respond = async (url, init: Record<string, any> = {}) => {
-    requested.push(url);
-    const route = routes[url];
-    if (!route) throw new Error(`unexpected fetch ${url}`);
-    if (route.location && init.redirect !== "manual") return respond(new URL(route.location, url).toString(), init);
+  const respond = async (request: Request) => {
+    requested.push(request.url);
+    const route = routes[request.url];
+    if (route.location && request.redirect !== "manual") return fetch(new URL(route.location, request.url), { redirect: request.redirect });
     return route.location
       ? new Response(null, { status: 302, headers: { location: route.location } })
       : new Response("png", { status: 200, headers: { "content-type": "image/png" } });
   };
-  testGlobals.fetch = (input, init) => respond(String(input instanceof Request ? input.url : input), init);
+  using _fetch = routeFetch(Object.fromEntries(Object.keys(routes).map((url) => [url, respond])));
   testGlobals.caches = { default: { match: async () => undefined, put: async () => {} } };
   try {
     const res = await handleSerendipity(
@@ -39,7 +38,6 @@ async function cover(routes) {
     );
     return { res, requested };
   } finally {
-    testGlobals.fetch = realFetch;
     if (hadCaches) testGlobals.caches = realCaches;
     else delete testGlobals.caches;
   }

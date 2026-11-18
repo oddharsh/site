@@ -1,5 +1,6 @@
 // ── the SSR deadline ────────────────────────────────────────────────
-import { testGlobals, assert, deadline, gatherWhoareyou, test } from "./contract-shared.ts";
+import { assert, deadline, gatherWhoareyou, test } from "./contract-shared.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 // deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
 // homepage TTFB. Two properties are load-bearing: a fast read never marks
@@ -59,31 +60,28 @@ test("deadline distinguishes fallback values for slow vs missing", async () => {
 });
 
 test("whoareyou lets cold RDAP finish off the critical path", async () => {
-  const originalFetch = globalThis.fetch;
   let release;
-  testGlobals.fetch = () =>
-    new Promise((resolve) => {
-      release = resolve;
-    });
+  using _fetch = routeFetch({
+    "https://rdap.arin.net/registry/ip/203.0.113.7": () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
   const background: any[] = [];
   const started = Date.now();
-  try {
-    const result = await gatherWhoareyou(new Request("https://aadhar.sh/whoareyou", { headers: { "cf-connecting-ip": "203.0.113.7" } }), {
-      waitUntil(promise) {
-        background.push(promise);
-      },
-    });
-    assert.equal(result.rdap, null, "a cold enrichment should not delay the page");
-    assert.ok(Date.now() - started < 1000, "the optional lookup must leave well before its 2s network abort");
-    assert.equal(background.length, 1, "the same lookup should keep running to warm Cloudflare's edge cache");
+  const result = await gatherWhoareyou(new Request("https://aadhar.sh/whoareyou", { headers: { "cf-connecting-ip": "203.0.113.7" } }), {
+    waitUntil(promise) {
+      background.push(promise);
+    },
+  });
+  assert.equal(result.rdap, null, "a cold enrichment should not delay the page");
+  assert.ok(Date.now() - started < 1000, "the optional lookup must leave well before its 2s network abort");
+  assert.equal(background.length, 1, "the same lookup should keep running to warm Cloudflare's edge cache");
 
-    release(
-      new Response(JSON.stringify({ name: "TEST-NET-3" }), {
-        headers: { "content-type": "application/rdap+json" },
-      }),
-    );
-    await background[0];
-  } finally {
-    testGlobals.fetch = originalFetch;
-  }
+  release(
+    new Response(JSON.stringify({ name: "TEST-NET-3" }), {
+      headers: { "content-type": "application/rdap+json" },
+    }),
+  );
+  await background[0];
 });

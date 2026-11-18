@@ -1,4 +1,5 @@
-import { assert, fakeImages, representationD1, test, testGlobals } from "../../../tools/tests/contract-shared.ts";
+import { assert, fakeImages, representationD1, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { imageInspect } from "../image-tools.ts";
 import { captureRepresentation } from "../representation.ts";
 import { discoverEndpoint } from "../webmention-send.ts";
@@ -10,10 +11,9 @@ const redirectStatuses = [301, 302, 303, 307, 308];
 // Model automatic following as well as manual reads. A post-fetch refusal
 // must fail the no-request assertion even when it hides the fetched body.
 async function withResponses(respond, run) {
-  const original = globalThis.fetch;
   const seen: any[] = [];
-  testGlobals.fetch = async (input, init: Record<string, any> = {}) => {
-    let url = String(input);
+  const network = async (request: Request, init: Record<string, any> = {}) => {
+    let url = request.url;
     for (let hop = 0; hop <= 20; hop++) {
       seen.push({ url, init });
       const response = respond(url, init);
@@ -28,11 +28,8 @@ async function withResponses(respond, run) {
     }
     throw new TypeError("too many redirects");
   };
-  try {
-    return await run(seen);
-  } finally {
-    testGlobals.fetch = original;
-  }
+  using _fetch = routeFetch({ "https://example.com/": network });
+  return await run(seen);
 }
 
 const blockedTargets = [

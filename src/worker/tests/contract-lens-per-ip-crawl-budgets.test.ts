@@ -1,5 +1,6 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
-import { configText, context, testGlobals, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { configText, context, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 // These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.
 // The route they guard is the one that fetches third parties and spends Browser
@@ -427,9 +428,8 @@ test("documentTally counts substance, not framework payload", async () => {
 });
 
 test("the kitesurf selector is tried, and a rejection is remembered rather than reported", async () => {
-  const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } = await import("../lens-render.ts");
+  const { restUrl, runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } = await import("../lens-render.ts");
   const env = { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" };
-  const realFetch = globalThis.fetch;
   const calls: any[] = [];
 
   try {
@@ -438,10 +438,12 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
     // surface as "the scanned site is broken", which is what hard-coding the
     // parameter would have produced on every single render.
     _resetKitesurfProbe();
-    testGlobals.fetch = async (url) => {
-      calls.push(String(url));
-      return new Response("{}", { status: String(url).includes("browser=kitesurf") ? 400 : 200 });
-    };
+    using _fetch = routeFetch({
+      [restUrl("acct", "snapshot")]: (request) => {
+        calls.push(request.url);
+        return new Response("{}", { status: request.url.includes("browser=kitesurf") ? 400 : 200 });
+      },
+    });
     const first = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
     assert.equal(calls.length, 2, "tried the selector, then retried without it");
     assert.ok(calls[0].includes("browser=kitesurf"));
@@ -456,7 +458,6 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
     assert.equal(calls.length, 1, "the known-dead selector is not retried");
     assert.equal(second.engine, "chromium-rest", "REST still serves, just without the dead selector");
   } finally {
-    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });
@@ -478,25 +479,24 @@ test("the selector rides the browser-run path, which is the only one it works on
 
   // And the shipped caller must use that builder rather than its own literal,
   // which is the drift this exists to prevent.
-  const realFetch = globalThis.fetch;
   const calls: any[] = [];
   try {
     _resetKitesurfProbe();
-    testGlobals.fetch = async (u) => {
-      calls.push(String(u));
-      return new Response("{}", { status: 200 });
-    };
+    using _fetch = routeFetch({
+      [restUrl("acct", "snapshot")]: (request) => {
+        calls.push(request.url);
+        return new Response("{}", { status: 200 });
+      },
+    });
     await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.ok(calls[0].includes("/browser-run/snapshot?browser=kitesurf"), calls[0]);
   } finally {
-    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });
 
 test("a 200 is not evidence that kitesurf rendered, and is not reported as if it were", async () => {
-  const { runBrowserAction, _resetKitesurfProbe } = await import("../lens-render.ts");
-  const realFetch = globalThis.fetch;
+  const { restUrl, runBrowserAction, _resetKitesurfProbe } = await import("../lens-render.ts");
 
   try {
     _resetKitesurfProbe();
@@ -505,23 +505,23 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     // The old code read that as confirmation and labelled the render `kitesurf`,
     // so a Chromium render was reported as Kitesurf on the one page whose entire
     // premise is showing what a machine actually saw.
-    testGlobals.fetch = async () =>
-      new Response(JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    using _fetch = routeFetch({
+      [restUrl("acct", "snapshot")]: () =>
+        new Response(JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    });
     const run = await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
     assert.notEqual(run.engine, "kitesurf", "only a control that sees an invented engine name rejected can promote this label");
   } finally {
-    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });
 
 test("the binding is the kitesurf door, and its label is a bare kitesurf", async () => {
   const { runBrowserAction } = await import("../lens-render.ts");
-  const realFetch = globalThis.fetch;
   const sent: any[] = [];
   const goto = { waitUntil: "networkidle2", timeout: 18000 };
   const payload = { url: "https://example.com", viewport: { width: 1280, height: 800, deviceScaleFactor: 1 }, gotoOptions: goto };
@@ -535,27 +535,21 @@ test("the binding is the kitesurf door, and its label is a bare kitesurf", async
       },
     },
   };
-  try {
-    // Measured 2026-09-28: the binding validates `browser` as an enum whose only
-    // member is "kitesurf", and rejects an invented engine name. So a 200 from
-    // this door IS Kitesurf, which the REST door has never been able to say.
-    testGlobals.fetch = async () => {
-      throw new Error("REST must not be called while the binding exists");
-    };
-    const run = await runBrowserAction("snapshot", payload, env);
-    assert.ok(run);
-    assert.equal(run.engine, "kitesurf");
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].body.browser, "kitesurf");
-    // Kitesurf answers 501 "Unsupported options: viewport.deviceScaleFactor",
-    // and 1 is Chromium's default, so the key is dropped rather than paid for.
-    assert.deepEqual(sent[0].body.viewport, { width: 1280, height: 800 });
-    assert.equal(sent[0].body.gotoOptions, goto, "nested config keeps its identity");
-    assert.equal(payload.viewport.deviceScaleFactor, 1, "the caller's payload is not mutated");
-    assert.ok(!("browser" in payload));
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+  // Measured 2026-09-28: the binding validates `browser` as an enum whose only
+  // member is "kitesurf", and rejects an invented engine name. So a 200 from
+  // this door IS Kitesurf, which the REST door has never been able to say.
+  using _fetch = routeFetch({});
+  const run = await runBrowserAction("snapshot", payload, env);
+  assert.ok(run);
+  assert.equal(run.engine, "kitesurf");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].body.browser, "kitesurf");
+  // Kitesurf answers 501 "Unsupported options: viewport.deviceScaleFactor",
+  // and 1 is Chromium's default, so the key is dropped rather than paid for.
+  assert.deepEqual(sent[0].body.viewport, { width: 1280, height: 800 });
+  assert.equal(sent[0].body.gotoOptions, goto, "nested config keeps its identity");
+  assert.equal(payload.viewport.deviceScaleFactor, 1, "the caller's payload is not mutated");
+  assert.ok(!("browser" in payload));
 });
 
 test("a refused request shape falls back to chromium once, and a spent budget does not", async () => {

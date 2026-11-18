@@ -1,5 +1,6 @@
 // ── webmention (outbound) ───────────────────────────────────────────────────
 import { PROFILES, SELF_LINK_HOSTS, assert, citationsIn, cronSendWebmentions, test } from "./contract-shared.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 test("outbound citations exclude the shell, self-links, and non-public URLs", () => {
   const origin = "https://aadhar.sh";
@@ -134,26 +135,18 @@ function outboundHarness({ selfFetch = true, assets = false }: Record<string, an
   };
   if (selfFetch) Object.assign(env, { SELF_FETCH: async (req: Request) => page(new URL(req.url).pathname) });
 
-  const realFetch = globalThis.fetch;
-  // annotated because `typeof fetch` carries Bun's `preconnect` and a bare arrow
-  // does not; the stub is a stand-in for the call, not for the whole interface.
-  const stub = (async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
-    if (url === CITED) {
-      return new Response(`<html><head><link rel="webmention" href="${ENDPOINT}"></head></html>`, { headers: { "content-type": "text/html" } });
-    }
-    if (url === ENDPOINT) {
-      posted.push(String(init?.body || ""));
+  const fetchRoutes = routeFetch({
+    [CITED]: () => new Response(`<html><head><link rel="webmention" href="${ENDPOINT}"></head></html>`, { headers: { "content-type": "text/html" } }),
+    [ENDPOINT]: async (request) => {
+      posted.push(await request.text());
       return new Response("", { status: 202 });
-    }
-    throw new Error(`unexpected outbound fetch to ${url}`);
-  }) as unknown as typeof fetch;
-  globalThis.fetch = stub;
+    },
+  });
   return {
     env,
     posted,
     restore: () => {
-      globalThis.fetch = realFetch;
+      fetchRoutes[Symbol.dispose]();
     },
   };
 }

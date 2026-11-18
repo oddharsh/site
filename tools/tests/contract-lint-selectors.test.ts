@@ -23,6 +23,9 @@ const PLANTED = [
   'test("t", async () => { await new Promise((r) => setTimeout(r, 1)); });',
   'test("u", () => {}, { timeout: 5 });',
   "export const wait = async () => { await Bun.sleep(1); };",
+  'globalThis.fetch = async () => new Response("x");',
+  "testGlobals.fetch = realFetch;",
+  'env.ASSETS.fetch = async () => new Response("x");',
   "",
 ].join("\n");
 
@@ -50,14 +53,26 @@ test("the anti-slop selectors fire at an ordinary path", () => {
 
 test("the typeof exemption keeps the other three selectors", () => {
   const drift = "the typeof override no longer restates the other three selectors";
-  assert.deepEqual(restrictedLines("src/worker/lib/parse.ts"), [1, 2, 5, 7, 8], drift);
-  assert.deepEqual(restrictedLines("tools/tests/lint-selector-probe.test.ts"), [1, 2, 5, 7, 8], drift);
+  assert.deepEqual(restrictedLines("src/worker/lib/parse.ts"), [1, 2, 5, 7, 8, 10, 11], drift);
+  assert.deepEqual(restrictedLines("tools/tests/lint-selector-probe.test.ts"), [1, 2, 5, 7, 8, 10, 11], drift);
 });
 
 // Lines 7 and 8 plant a sleep and a raised timeout inside test() calls; line 9
 // sleeps in a module-level helper, which the sleep selector leaves alone.
 test("the sleep and timeout selectors fire in a test file and nowhere else", () => {
-  const late = (lines: number[]) => lines.filter((line) => line >= 7);
+  const late = (lines: number[]) => lines.filter((line) => line >= 7 && line <= 9);
   assert.deepEqual(late(restrictedLines("tools/tests/lint-selector-probe.test.ts")), [7, 8], "a sleep or timeout selector stopped matching in a test file");
   assert.deepEqual(late(restrictedLines("src/worker/lint-selector-probe.ts")), [], "a test-only selector reached ordinary source");
+});
+
+// Lines 10 and 11 replace the global fetch, directly and through an alias;
+// line 12 replaces a binding's fetch, which is a member chain and stays legal.
+test("the hand-assigned fetch selector fires in a test file and nowhere else", () => {
+  const fetchLines = (lines: number[]) => lines.filter((line) => line >= 10);
+  assert.deepEqual(
+    fetchLines(restrictedLines("tools/tests/lint-selector-probe.test.ts")),
+    [10, 11],
+    "the hand-assigned fetch selector stopped matching in a test file",
+  );
+  assert.deepEqual(fetchLines(restrictedLines("src/worker/lint-selector-probe.ts")), [], "the hand-assigned fetch selector reached ordinary source");
 });

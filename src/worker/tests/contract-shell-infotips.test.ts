@@ -34,6 +34,7 @@ import {
 } from "../../../tools/tests/contract-shared.ts";
 import { SPECULATION } from "../../../tools/photos/shell-data.ts";
 import { CLIENT_ASSETS, hashOrder, minifiedScripts } from "../../../tools/lib/client-assets.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { existsSync, readFileSync } from "node:fs";
 
 // ── shell infotips ──────────────────────────────────────────────────────────
@@ -339,14 +340,13 @@ test("the excerpt survives a page full of inline SVG chrome", async () => {
     <svg aria-hidden="true"><path d="${path}"></path></svg>
     <p>The teardown at <a href="${target}" class="Link--primary">this note</a> is the useful part.</p>
     </body></html>`;
-  const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () => new Response(page, { headers: { "content-type": "text/html" } });
-  try {
+  {
+    using _fetch = routeFetch({
+      "https://gist.example/x": () => new Response(page, { headers: { "content-type": "text/html" } }),
+    });
     const ctx = deferredContext();
     await handleWebmention(wmPost("https://gist.example/x", target), wmEnv(db), ctx);
     await ctx.settle();
-  } finally {
-    testGlobals.fetch = realFetch;
   }
   const row = db.rows[0];
   assert.ok(row, "the mention verified and stored");
@@ -361,15 +361,12 @@ test("an accepted webmention answers 202 without a Location header", async () =>
   // test #1 fails an endpoint that sends one anyway. Easy to reintroduce by
   // "helpfully" pointing at /inbox, so pin it.
   const db = fakeD1();
-  const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () => new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } });
-  try {
-    const res = await handleWebmention(wmPost("https://mari.example/post", "https://aadhar.sh/writing/in-flux"), wmEnv(db), deferredContext());
-    assert.equal(res.status, 202);
-    assert.equal(res.headers.get("location"), null, "202 must not carry a Location header");
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+  using _fetch = routeFetch({
+    "https://mari.example/post": () => new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } }),
+  });
+  const res = await handleWebmention(wmPost("https://mari.example/post", "https://aadhar.sh/writing/in-flux"), wmEnv(db), deferredContext());
+  assert.equal(res.status, 202);
+  assert.equal(res.headers.get("location"), null, "202 must not carry a Location header");
 });
 
 test("endpoint discovery survives the webmention.rocks decoys", () => {
@@ -519,53 +516,38 @@ async function readMcpResource(uri, env, origin = "https://aadhar.sh") {
 
 test("MCP reads the listed music URI through its existing Markdown representation", async () => {
   const { handleRn, handleRnMarkdown } = await import("../rn.ts");
-  const realFetch = globalThis.fetch;
-  let wireReads = 0;
-  testGlobals.fetch = async () => {
-    wireReads++;
-    throw new Error("unexpected wire request");
-  };
-  try {
-    for (const RN_KV of [undefined, kvForTracks()]) {
-      const env = { RN_KV, RN_BUST_SECRET: "must-not-bust" };
-      const seen: any[] = [];
-      const ctx = context();
-      const uri = "https://aadhar.sh/rn?bust=must-not-bust#tracks";
-      const result = await readMcpResource(uri, {
-        ...env,
-        SELF_FETCH: (request) => {
-          seen.push([request.url, request.headers.get("accept")]);
-          return handleRn(request, env, ctx);
-        },
-      });
-      assert.ok(result.result, "a listed music read must not follow the browser redirect");
-      const content = result.result.contents[0];
-      assert.equal(content.uri, uri, "the stable resource URI is preserved");
-      assert.equal(content.mimeType, "text/markdown");
-      const twin = await handleRnMarkdown(new Request("https://aadhar.sh/rn.md"), env, ctx);
-      assert.equal(content.text, await twin.text(), "MCP uses the same live renderer as the existing twin");
-      assert.deepEqual(seen, [["https://aadhar.sh/rn", "text/markdown"]]);
-      assert.match(content.text, RN_KV ? /## 1 track/ : /Could not load the track list/);
-      assert.match(content.text, /https:\/\/aadhar\.sh\/rn\/tracks/);
-      const browser = await handleRn(new Request("https://aadhar.sh/rn", { headers: { accept: "text/html" } }), env, ctx);
-      assert.equal(browser.status, 302, "the browser contract remains a Spotify redirect");
-      const location = browser.headers.get("location");
-      assert.ok(location);
-      assert.equal(new URL(location).hostname, "open.spotify.com");
-    }
-    assert.equal(wireReads, 0);
-  } finally {
-    testGlobals.fetch = realFetch;
+  using _fetch = routeFetch({});
+  for (const RN_KV of [undefined, kvForTracks()]) {
+    const env = { RN_KV, RN_BUST_SECRET: "must-not-bust" };
+    const seen: any[] = [];
+    const ctx = context();
+    const uri = "https://aadhar.sh/rn?bust=must-not-bust#tracks";
+    const result = await readMcpResource(uri, {
+      ...env,
+      SELF_FETCH: (request) => {
+        seen.push([request.url, request.headers.get("accept")]);
+        return handleRn(request, env, ctx);
+      },
+    });
+    assert.ok(result.result, "a listed music read must not follow the browser redirect");
+    const content = result.result.contents[0];
+    assert.equal(content.uri, uri, "the stable resource URI is preserved");
+    assert.equal(content.mimeType, "text/markdown");
+    const twin = await handleRnMarkdown(new Request("https://aadhar.sh/rn.md"), env, ctx);
+    assert.equal(content.text, await twin.text(), "MCP uses the same live renderer as the existing twin");
+    assert.deepEqual(seen, [["https://aadhar.sh/rn", "text/markdown"]]);
+    assert.match(content.text, RN_KV ? /## 1 track/ : /Could not load the track list/);
+    assert.match(content.text, /https:\/\/aadhar\.sh\/rn\/tracks/);
+    const browser = await handleRn(new Request("https://aadhar.sh/rn", { headers: { accept: "text/html" } }), env, ctx);
+    assert.equal(browser.status, 302, "the browser contract remains a Spotify redirect");
+    const location = browser.headers.get("location");
+    assert.ok(location);
+    assert.equal(new URL(location).hostname, "open.spotify.com");
   }
 });
 
 test("site MCP resources/read dispatches only listed local pages with public headers", async () => {
-  const realFetch = globalThis.fetch;
-  let wireReads = 0;
-  testGlobals.fetch = async () => {
-    wireReads++;
-    return new Response("upstream failure", { status: 522 });
-  };
+  using _fetch = routeFetch({});
   const seen: any[] = [];
   const env = {
     SELF_FETCH: async (request) => {
@@ -573,106 +555,90 @@ test("site MCP resources/read dispatches only listed local pages with public hea
       return new Response("<!doctype html><title>local ✓</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
     },
   };
-  try {
-    for (const origin of ["https://aadhar.sh", "https://preview.aadhar-sh.workers.dev"]) {
-      const uri = origin + "/whoareyou?url=https://evil.example&admin=1#fragment";
-      const content = (await readMcpResource(uri, env, origin)).result.contents[0];
-      assert.deepEqual(content, { uri, mimeType: "text/html", text: "<!doctype html><title>local ✓</title>" });
-      const request = seen.at(-1);
-      assert.equal(request.url, origin + "/whoareyou", "queries and fragments never select extra work");
-      assert.equal(request.method, "GET");
-      assert.equal(request.redirect, "manual");
-      assert.equal(request.headers.get("accept"), "text/html");
-      assert.match(request.headers.get("user-agent"), /^AadharshBot\//);
-      assert.equal(request.headers.get("cookie"), null);
-      assert.equal(request.headers.get("authorization"), null);
-    }
-    for (const uri of ["https://aadhar.sh/etc/passwd", "https://evil.example/whoareyou", "https://aadhar.sh/mcp", "not a URL", null, ["https://aadhar.sh/"]]) {
-      assert.equal((await readMcpResource(uri, env)).error.code, -32602);
-    }
-    for (const SELF_FETCH of [undefined, null]) {
-      assert.equal((await readMcpResource("https://aadhar.sh/", { SELF_FETCH })).error.code, -32602);
-    }
-    assert.equal(seen.length, 2, "invalid inputs and disarmed dispatch never read a page");
-    assert.equal(wireReads, 0, "no same-host network request or fallback");
-  } finally {
-    testGlobals.fetch = realFetch;
+  for (const origin of ["https://aadhar.sh", "https://preview.aadhar-sh.workers.dev"]) {
+    const uri = origin + "/whoareyou?url=https://evil.example&admin=1#fragment";
+    const content = (await readMcpResource(uri, env, origin)).result.contents[0];
+    assert.deepEqual(content, { uri, mimeType: "text/html", text: "<!doctype html><title>local ✓</title>" });
+    const request = seen.at(-1);
+    assert.equal(request.url, origin + "/whoareyou", "queries and fragments never select extra work");
+    assert.equal(request.method, "GET");
+    assert.equal(request.redirect, "manual");
+    assert.equal(request.headers.get("accept"), "text/html");
+    assert.match(request.headers.get("user-agent"), /^AadharshBot\//);
+    assert.equal(request.headers.get("cookie"), null);
+    assert.equal(request.headers.get("authorization"), null);
   }
+  for (const uri of ["https://aadhar.sh/etc/passwd", "https://evil.example/whoareyou", "https://aadhar.sh/mcp", "not a URL", null, ["https://aadhar.sh/"]]) {
+    assert.equal((await readMcpResource(uri, env)).error.code, -32602);
+  }
+  for (const SELF_FETCH of [undefined, null]) {
+    assert.equal((await readMcpResource("https://aadhar.sh/", { SELF_FETCH })).error.code, -32602);
+  }
+  assert.equal(seen.length, 2, "invalid inputs and disarmed dispatch never read a page");
 });
 
 test("site MCP resources/read refuses failed and redirected pages and cancels their bodies", async () => {
-  const realFetch = globalThis.fetch;
-  try {
-    for (const status of [301, 302, 307, 308, 404, 500, 522]) {
-      let cancelled = false;
-      const fetch = async () =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode("not a resource"));
-              controller.close();
-            },
-            cancel() {
-              cancelled = true;
-            },
-          }),
-          { status, headers: { location: "https://evil.example/", "content-type": "text/html" } },
-        );
-      testGlobals.fetch = fetch;
-      const out = await readMcpResource("https://aadhar.sh/whoareyou", { SELF_FETCH: fetch });
-      assert.equal(out.error?.code, -32602, `HTTP ${status} must not become a complete resource`);
-      assert.equal(out.result, undefined);
-      assert.ok(cancelled, `HTTP ${status} body must be discarded`);
-    }
-    const out = await readMcpResource("https://aadhar.sh/", {
-      SELF_FETCH: () => {
-        throw new Error("broken dispatcher");
-      },
-    });
-    assert.equal(out.error.code, -32602);
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
-});
-
-test("site MCP resources/read returns whole bounded UTF-8 pages and cancels overflow", async () => {
-  const realFetch = globalThis.fetch;
-  const cap = 512 * 1024;
-  try {
-    // The 256 KB Horizon page already exceeded the old 200,000-character slice.
-    for (const text of ["", "a".repeat(cap), "é".repeat(cap / 2)]) {
-      const fetch = async () => new Response(text, { headers: { "content-type": "text/html" } });
-      testGlobals.fetch = fetch;
-      assert.equal((await readMcpResource("https://aadhar.sh/garage/horizon", { SELF_FETCH: fetch })).result.contents[0].text, text);
-    }
-    let pulls = 0,
-      cancelled = false;
+  using _fetch = routeFetch({});
+  for (const status of [301, 302, 307, 308, 404, 500, 522]) {
+    let cancelled = false;
     const fetch = async () =>
       new Response(
         new ReadableStream({
-          pull(controller) {
-            pulls++;
-            if (pulls > 32) controller.close();
-            else controller.enqueue(new Uint8Array(64 * 1024).fill(65));
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("not a resource"));
+            controller.close();
           },
           cancel() {
             cancelled = true;
           },
         }),
+        { status, headers: { location: "https://evil.example/", "content-type": "text/html" } },
       );
-    testGlobals.fetch = fetch;
-    const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch });
-    assert.equal(out.error?.code, -32602, "a prefix is not a complete resource");
-    assert.ok(cancelled, "overflow cancels the producer");
-    assert.ok(pulls < 16, `bounded reader must not drain the whole body: ${pulls} pulls`);
-  } finally {
-    testGlobals.fetch = realFetch;
+    const out = await readMcpResource("https://aadhar.sh/whoareyou", { SELF_FETCH: fetch });
+    assert.equal(out.error?.code, -32602, `HTTP ${status} must not become a complete resource`);
+    assert.equal(out.result, undefined);
+    assert.ok(cancelled, `HTTP ${status} body must be discarded`);
   }
+  const out = await readMcpResource("https://aadhar.sh/", {
+    SELF_FETCH: () => {
+      throw new Error("broken dispatcher");
+    },
+  });
+  assert.equal(out.error.code, -32602);
+});
+
+test("site MCP resources/read returns whole bounded UTF-8 pages and cancels overflow", async () => {
+  using _fetch = routeFetch({});
+  const cap = 512 * 1024;
+  // The 256 KB Horizon page already exceeded the old 200,000-character slice.
+  for (const text of ["", "a".repeat(cap), "é".repeat(cap / 2)]) {
+    const fetch = async () => new Response(text, { headers: { "content-type": "text/html" } });
+    assert.equal((await readMcpResource("https://aadhar.sh/garage/horizon", { SELF_FETCH: fetch })).result.contents[0].text, text);
+  }
+  let pulls = 0,
+    cancelled = false;
+  const fetch = async () =>
+    new Response(
+      new ReadableStream({
+        pull(controller) {
+          pulls++;
+          if (pulls > 32) controller.close();
+          else controller.enqueue(new Uint8Array(64 * 1024).fill(65));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+    );
+  const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch });
+  assert.equal(out.error?.code, -32602, "a prefix is not a complete resource");
+  assert.ok(cancelled, "overflow cancels the producer");
+  assert.ok(pulls < 16, `bounded reader must not drain the whole body: ${pulls} pulls`);
 });
 
 test("site MCP resources/read deadlines cover stalled dispatch and body reads", async () => {
-  const realFetch = globalThis.fetch,
-    realTimer = globalThis.setTimeout;
+  using _fetch = routeFetch({});
+  const realTimer = globalThis.setTimeout;
   const budgets: any[] = [];
   // Advance only this endpoint's eight-second budget; use real stream and timer
   // scheduling for the cancellation and late-response races.
@@ -704,7 +670,6 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
               deliver = resolve;
             });
       };
-      testGlobals.fetch = fetch;
       let watchdog;
       const out = await Promise.race([
         readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch }),
@@ -722,7 +687,6 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
     }
     assert.deepEqual(budgets, [8000, 8000]);
   } finally {
-    testGlobals.fetch = realFetch;
     testGlobals.setTimeout = realTimer;
   }
 });
