@@ -116,7 +116,7 @@ export function askRelevance(raw, termCount) {
 /**
  * Read the NLWeb parameter set out of whichever dialect arrived.
  */
-export function parseAskRequest(url, body): { ok: true; params: any } | { ok: false; status: number; error: any } {
+export function parseAskRequest(url, body) {
   const q = url.searchParams;
   const flat = asRecord(body) || {};
   let structured = false;
@@ -153,7 +153,7 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
 
   const text = String(query ?? "").trim();
   if (!text) {
-    return { ok: false, status: 400, error: { error: "query is required", parameter: "query", endpoint: "/ask" } };
+    return { ok: false as const, status: 400, error: { error: "query is required", parameter: "query", endpoint: "/ask" } };
   }
 
   const siteToken = String(site ?? "")
@@ -161,7 +161,11 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
     .toLowerCase()
     .replace(/\/+$/, "");
   if (!SITE_TOKENS.has(siteToken)) {
-    return { ok: false, status: 400, error: { error: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] } };
+    return {
+      ok: false as const,
+      status: 400,
+      error: { error: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] },
+    };
   }
 
   const modeToken =
@@ -171,7 +175,7 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
   if (!NLWEB_MODES.supported.includes(modeToken)) {
     const known = NLWEB_MODES.known.includes(modeToken);
     return {
-      ok: false,
+      ok: false as const,
       status: known ? 501 : 400,
       error: {
         error: known
@@ -204,7 +208,7 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(MAX_RESULTS, Math.trunc(limitRaw)) : DEFAULT_RESULTS;
 
   return {
-    ok: true,
+    ok: true as const,
     params: {
       query: text,
       searched,

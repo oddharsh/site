@@ -33,7 +33,7 @@ const SITEMAP = `<?xml version="1.0"?><urlset>
  *
  *
  * */
-function env(extra: Record<string, any> = {}, files: Record<string, Response> = {}): any {
+function env(files: Record<string, Response> = {}) {
   _resetSitemap();
   _resetPhotoCaches();
   const served = {
@@ -49,7 +49,6 @@ function env(extra: Record<string, any> = {}, files: Record<string, Response> = 
         return r ? r.clone() : new Response("", { status: 404 });
       },
     },
-    ...extra,
   };
 }
 
@@ -94,7 +93,7 @@ test("a superseded /i/ photo tile answers with the same tier's current hash", as
 });
 
 test("share cards, terminal tools and MCP card probes go where the thing actually is", async () => {
-  const withCard = env({}, { "/og/garage-pqc.jpg": new Response("jpg") });
+  const withCard = env({ "/og/garage-pqc.jpg": new Response("jpg") });
   assert.equal((await recover("/og/garage-pqc.png", withCard)).response.headers.get("location"), "https://aadhar.sh/og/garage-pqc.jpg");
   assert.equal((await recover("/og/nope.png", withCard)).response.status, 404, "only a card that exists as .jpg is redirected");
 
@@ -238,7 +237,7 @@ test("a probe gets the pointers and nothing else; a handler's own 404 keeps its 
 
 test("the counter records caller class, bucket and outcome for every miss", async () => {
   const points: any[] = [];
-  const e = env({ MISS_LEDGER: { writeDataPoint: (p) => points.push(p) } });
+  const e = { ...env(), MISS_LEDGER: { writeDataPoint: (p) => points.push(p) } };
   const req = get("/garage/resampe", { headers: { "user-agent": "Mozilla/5.0 (compatible; ClaudeBot/1.0)" } });
   const miss = await recoverNotFound(req, e, empty404());
   countMiss(e, req, "/garage/resampe", miss);

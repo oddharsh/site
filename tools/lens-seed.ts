@@ -101,8 +101,9 @@ function axTree(nodes) {
     } else if (!root) root = n;
   }
   let budget = AX_NODE_MAX;
-  const convert = (node): { role: any; name?: any; children?: any[] } => {
-    const children: any[] = [];
+  type AxTree = { role: unknown; name?: unknown; children?: AxTree[] };
+  const convert = (node): AxTree => {
+    const children: AxTree[] = [];
     for (const child of kids.get(node.nodeId) || []) {
       if (budget <= 0) break;
       const built = child.ignored ? null : convert(child);
@@ -110,7 +111,7 @@ function axTree(nodes) {
       else for (const hoisted of convert(child).children || []) children.push(hoisted);
     }
     budget--;
-    const out: { role: any; name?: any; children?: any[] } = { role: node.role?.value ?? "unknown" };
+    const out: AxTree = { role: node.role?.value ?? "unknown" };
     const name = node.name?.value;
     if (name) out.name = name;
     if (children.length) out.children = children;

@@ -285,7 +285,7 @@ export type CompanySource = typeof EXA_ONLY;
  *  absent. That one error reruns the read without it, which is what the roster
  *  showed before; any other error throws. Nested calls each own one table, so
  *  either can be missing without hiding the other. */
-async function withTable<S>(table: string, present: S, absent: S, read: (s: S) => Promise<any>): Promise<any> {
+async function withTable<S>(table: string, present: S, absent: S, read: (s: S) => Promise<any>) {
   try {
     return await read(present);
   } catch (err) {
@@ -2062,7 +2062,7 @@ async function handleBioPass(request, env, d, run: (d, env, limit: number) => Pr
 // join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
 // whole cost and stays untouched, and a database where event_tags does not exist
 // yet degrades to "no tags" here instead of failing every read of the pool.
-async function queryEventTags(d): Promise<Map<string, any>> {
+async function queryEventTags(d) {
   try {
     const rows = await d.prepare(`SELECT event_id, topic, topic_confidence, format, format_confidence FROM event_tags`).all();
     return new Map(rows.map((r) => [r.event_id, r]));

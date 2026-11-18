@@ -8,13 +8,14 @@ import worker from "../src/index.ts";
 
 const context = () => ({ waitUntil() {}, tracing: null });
 
-// `Response.json()` resolves to `unknown`, which is the honest type for a body
-// nobody has validated and is also unindexable, so `(await res.json()).parked`
-// does not compile. Asserting the shape here would be asserting the thing under
-// test, so this narrows rather than describes: the assertions below are what say
-// what the payload contains.
-
-const readJson = (response: Response): Promise<any> => response.json();
+// `Response.json()` resolves to `unknown`, which can't be indexed. This checks
+// only that the body is a JSON object; the assertions below say what it holds.
+const readJson = async (response: Response) => {
+  const body = await response.json();
+  assert.ok(body !== null && typeof body === "object" && !Array.isArray(body), "the body should be a JSON object");
+  // SAFETY: the assert above proved a non-array object, and its values stay unknown.
+  return body as Record<string, unknown>;
+};
 
 test("a parked screenshot request never starts a browser", async () => {
   let called = false;
@@ -144,8 +145,8 @@ test("a spent Browser Run budget is reported as OUR limit, not an upstream fault
 
   assert.equal(response.status, 429, "a 502 here sends the reader to debug a page that is fine");
   assert.equal(payload.budget, true);
-  assert.match(payload.error, /rate-limited/);
-  assert.match(payload.error, /10 min\/day/, "the message should quote the ceiling that was actually hit");
+  assert.match(String(payload.error), /rate-limited/);
+  assert.match(String(payload.error), /10 min\/day/, "the message should quote the ceiling that was actually hit");
 });
 
 test("any other Browser Run failure names its status and stays a 502", async () => {

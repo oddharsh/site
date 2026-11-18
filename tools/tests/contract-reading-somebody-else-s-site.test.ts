@@ -100,7 +100,7 @@ test("the catalogue reader selects a complete response to its own request", asyn
       assert.deepEqual(out.tools, [{ name: "real", description: "" }]);
     }
   const progress = 'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}}\n\n';
-  assert.equal((await read(progress + "data: " + JSON.stringify(reply) + "\n\n")).tools[0].name, "real");
+  assert.equal((await read(progress + "data: " + JSON.stringify(reply) + "\n\n")).tools?.[0]?.name, "real");
   assert.equal(
     (await read("\uFEFF\uFEFFdata: " + JSON.stringify(reply) + "\n\n")).ok,
     false,

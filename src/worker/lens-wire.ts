@@ -287,7 +287,7 @@ function cdpClient(ws) {
   // alternatives are hand-written types for each one (fiction that rots the
   // first time Chrome revises a domain) or an open record at the boundary. The
   // callers below read one or two fields each and guard for absence.
-  const send = (method: string, params?: unknown, sessionId?: string): Promise<Record<string, any>> =>
+  const send = (method: string, params?: unknown, sessionId?: string) =>
     new Promise<Record<string, any>>((resolve, reject) => {
       if (closed) return reject(closed);
       const id = nextId++;

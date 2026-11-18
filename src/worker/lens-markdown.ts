@@ -185,7 +185,7 @@ export function sharedStorable(cacheControl) {
 // Only 2xx responses count, since those are the representations a cache keeps,
 // and only ones a shared cache may store, since a no-store copy with a bare Vary
 // is never anybody else's answer. One representation in total owes Vary nothing.
-type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
+export type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
 export function varyEveryVariant(rows: ProbeRow[]): Check {
   const variants = rows.filter(([, r]) => r?.ok && (r.status ?? 0) >= 200 && (r.status ?? 0) < 300);
   const types = new Set<string>(variants.map(([, r]) => mediaType(r.contentType)));

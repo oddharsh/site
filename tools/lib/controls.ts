@@ -619,7 +619,22 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: contract("contract-lint-selectors"),
-    expect: /the typeof override no longer restates the other two selectors/,
+    expect: /the typeof override no longer restates the other three selectors/,
+  },
+  {
+    id: "lint-any-return-selector-stops-matching",
+    plants: "the any-return selector looks for `never` instead, so a return annotation holding `any` lints clean",
+    mutations: [
+      {
+        // The base list's copy is the one followed by the typeof selector two lines down.
+        file: "bunfig.toml",
+        find: 'TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },\n  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n  { selector = "UnaryExpression',
+        replace:
+          'TSTypeAnnotation:has(TSNeverKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },\n  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n  { selector = "UnaryExpression',
+      },
+    ],
+    run: contract("contract-lint-selectors"),
+    expect: /an anti-slop selector stopped matching at an ordinary path/,
   },
   {
     id: "lint-reads-an-eslint-config",

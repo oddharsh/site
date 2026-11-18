@@ -851,6 +851,16 @@ per-rule suppressions (a `no-restricted-syntax` suppression covers all three
 on its lines). `tools/tests/contract-lint-selectors.test.ts` holds the
 selectors and the exemption override.
 
+A fourth selector in the same list comes from a different set:
+[interfere-inc/landmines](https://github.com/interfere-inc/landmines)'
+`no-explicit-return-types`, narrowed. Upstream bans every return annotation
+on an implementation. This repo bans only an annotation that contains `any`,
+because that's the part of the lie a selector can see. Catching an annotation
+wider than what the body returns would need the type checker, and lint rules
+here have none. Its rationale and the 2026-11-18 counts are in bunfig.toml's
+comment above the list. The other nine landmines rules were measured against
+the tree that day; adopting any of them is its own change.
+
 The original 2026-08-15 evaluation rejected these rules and found several
 others inapplicable because the source was JavaScript. Adoption and the
 TypeScript migration superseded that conclusion. The unvendored rules are
