@@ -1,6 +1,7 @@
 // ── the network tripwire ─────────────────────────────────────────────────
 import { assert, readFileSync, test } from "./contract-shared.ts";
 import { escaped } from "../lib/no-network.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 // `tools/lib/no-network.ts` is preloaded by both test scripts and fails the
 // run if anything reaches the network. These are the assertions that keep it
@@ -66,4 +67,41 @@ test("the tripwire offers no way to turn itself off", async () => {
   // It must fail the PROCESS, since the harness will happily report a green
   // suite over a swallowed refusal.
   assert.match(src, /process\.exitCode = 1/, "the tripwire must fail the run, not just print");
+});
+
+test("routeFetch answers by the longest matching prefix", async () => {
+  using _fetch = routeFetch({
+    "https://a.example/": () => new Response("host"),
+    "https://a.example/api/": async (request) => new Response(`api ${request.method} ${await request.text()}`),
+  });
+  assert.equal(await (await fetch("https://a.example/api/x", { method: "POST", body: "hi" })).text(), "api POST hi");
+  assert.equal(await (await fetch(new Request("https://a.example/page"))).text(), "host");
+});
+
+test("a routeFetch miss is RECORDED like a refusal, so swallowing it can't pass", async () => {
+  // Same property as the first test, for the doubles: a probe that catches
+  // the miss must still fail the run at exit.
+  const before = escaped.length;
+  try {
+    using _fetch = routeFetch({ "https://a.example/": () => new Response("host") });
+    let threw = false;
+    try {
+      await fetch("https://b.example/unplanned");
+    } catch {
+      threw = true;
+    }
+    assert.ok(threw, "a URL no route matches was answered");
+    assert.deepEqual(escaped.slice(before), ["https://b.example/unplanned"], "the miss was thrown but never recorded");
+  } finally {
+    escaped.length = before;
+  }
+});
+
+test("routeFetch puts the tripwire back when its block exits", () => {
+  const tripwire = globalThis.fetch;
+  {
+    using _fetch = routeFetch({});
+    assert.notEqual(globalThis.fetch, tripwire, "routeFetch never installed its table");
+  }
+  assert.equal(globalThis.fetch, tripwire, "the route table outlived its block and disarmed the tripwire");
 });

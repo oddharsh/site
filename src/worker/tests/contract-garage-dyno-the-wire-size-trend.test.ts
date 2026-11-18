@@ -1,5 +1,6 @@
 // ── /garage/dyno, the wire-size trend ───────────────────────────────────────
 import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 // The page is a pure function of its rows, which is what lets it be asserted
 // here rather than only looked at.
@@ -115,28 +116,20 @@ test("/garage/dyno/pulls.html is an island the browser may cache for five minute
   const { ISLAND_MARKER } = await import("../lib/island.ts");
   // No RN_KV: swrKV falls through to the fetch, and a stubbed fetch that fails
   // leaves the seeded history, which is what an unreadable branch renders.
-  const realFetch = globalThis.fetch;
-  // Object.assign keeps the stub the shape of `typeof fetch`, which carries a
-  // `preconnect` member under bun's types.
-  globalThis.fetch = Object.assign(
-    async () => {
+  using _fetch = routeFetch({
+    "https://raw.githubusercontent.com/oddharsh/site/perf-history/history.jsonl": () => {
       throw new Error("offline");
     },
-    { preconnect: realFetch.preconnect },
-  );
-  try {
-    const res = await handleDynoPulls(new Request("https://aadhar.sh/garage/dyno/pulls.html"), {}, { waitUntil() {} });
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get(ISLAND_MARKER), "1");
-    assert.equal(res.headers.get("cache-control"), "public, max-age=300, s-maxage=300");
-    assert.equal(res.headers.get("x-robots-tag"), "noindex");
-    const body = await res.text();
-    assert.match(body, /<svg class="chart"/);
-    assert.match(body, /by hand/);
-    assert.doesNotMatch(body, /<html|<head/i, "a fragment, never a document");
-  } finally {
-    globalThis.fetch = realFetch;
-  }
+  });
+  const res = await handleDynoPulls(new Request("https://aadhar.sh/garage/dyno/pulls.html"), {}, { waitUntil() {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get(ISLAND_MARKER), "1");
+  assert.equal(res.headers.get("cache-control"), "public, max-age=300, s-maxage=300");
+  assert.equal(res.headers.get("x-robots-tag"), "noindex");
+  const body = await res.text();
+  assert.match(body, /<svg class="chart"/);
+  assert.match(body, /by hand/);
+  assert.doesNotMatch(body, /<html|<head/i, "a fragment, never a document");
 });
 
 test("a live dyno read with no dates renders its numbers, not the placeholder", async () => {

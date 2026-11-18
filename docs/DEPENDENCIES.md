@@ -861,8 +861,11 @@ here have none. Its rationale and the 2026-11-18 counts are in bunfig.toml's
 comment above the list. Two more, `no-fixed-sleep` and `no-flake-masking`,
 are selectors in the override that covers test files, extended to Bun's
 `retry`, `repeats` and `setDefaultTimeout`; their comment sits above that
-override. The other seven landmines rules were measured against the tree that
-day; adopting any of them is its own change.
+override. `strict-msw` is a third selector there, ported without MSW: it
+flags a test that assigns `fetch` on the global and points at
+`tools/lib/fetch-routes.ts`, whose header says why MSW stayed out. The other
+six landmines rules were measured against the tree that day; adopting any of
+them is its own change.
 
 The original 2026-08-15 evaluation rejected these rules and found several
 others inapplicable because the source was JavaScript. Adoption and the

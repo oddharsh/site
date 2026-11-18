@@ -17,6 +17,7 @@ import {
   test,
 } from "../../../../tools/tests/contract-shared.ts";
 import { createBudget } from "../budget.ts";
+import { routeFetch } from "../../../../tools/lib/fetch-routes.ts";
 
 // ── the Luma session jar ────────────────────────────────────────────
 // Two failure modes these guard. (1) A whole-domain browser export drags in
@@ -138,45 +139,39 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
     { entries: [{ api_id: "g3", user: {} }], has_more: false, next_cursor: null },
   ];
   const seenCursors: any[] = [];
-  const real = globalThis.fetch;
-  globalThis.fetch = (async (url: string) => {
-    const cursor = new URL(url).searchParams.get("pagination_cursor");
-    seenCursors.push(cursor);
-    const idx = cursor === null ? 0 : Number(String(cursor).slice(1));
-    return { ok: true, json: async () => pages[idx] };
-  }) as any;
-  try {
-    const budget = createBudget(2);
-    const first = await fetchEventGuests("evt-x", null, "cookie=1", { budget });
-    assert.equal(first.done, false, "a walk that ran out of budget has not finished");
-    assert.equal(first.cursor, "c2", "an unfinished walk must return where to resume");
-    assert.equal(first.guests.length, 2);
-    assert.equal(budget.spent, 2, "it spends exactly the budget it was given");
-    assert.equal(budget.left, 0);
+  using _fetch = routeFetch({
+    "https://api2.luma.com/event/get-guest-list": (request) => {
+      const cursor = new URL(request.url).searchParams.get("pagination_cursor");
+      seenCursors.push(cursor);
+      const idx = cursor === null ? 0 : Number(String(cursor).slice(1));
+      return Response.json(pages[idx]);
+    },
+  });
+  const budget = createBudget(2);
+  const first = await fetchEventGuests("evt-x", null, "cookie=1", { budget });
+  assert.equal(first.done, false, "a walk that ran out of budget has not finished");
+  assert.equal(first.cursor, "c2", "an unfinished walk must return where to resume");
+  assert.equal(first.guests.length, 2);
+  assert.equal(budget.spent, 2, "it spends exactly the budget it was given");
+  assert.equal(budget.left, 0);
 
-    // the resumed pass picks up at the cursor rather than re-buying page one
-    const rest = await fetchEventGuests("evt-x", null, "cookie=1", {
-      budget: createBudget(10),
-      cursor: first.cursor,
-    });
-    assert.equal(rest.done, true);
-    assert.equal(rest.guests.length, 1, "resuming returns the tail, never the whole roster");
-    assert.deepEqual(seenCursors, [null, "c1", "c2"], "no page is fetched twice across the two passes");
-  } finally {
-    globalThis.fetch = real;
-  }
+  // the resumed pass picks up at the cursor rather than re-buying page one
+  const rest = await fetchEventGuests("evt-x", null, "cookie=1", {
+    budget: createBudget(10),
+    cursor: first.cursor,
+  });
+  assert.equal(rest.done, true);
+  assert.equal(rest.guests.length, 1, "resuming returns the tail, never the whole roster");
+  assert.deepEqual(seenCursors, [null, "c1", "c2"], "no page is fetched twice across the two passes");
 });
 
 test("an unbudgeted roster walk still finishes, so the manual path is unchanged", async () => {
-  const real = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ entries: [{ api_id: "g1", user: {} }], has_more: false, next_cursor: null }) }) as any;
-  try {
-    const out = await fetchEventGuests("evt-x", null, "cookie=1");
-    assert.equal(out.done, true);
-    assert.equal(out.guests.length, 1);
-  } finally {
-    globalThis.fetch = real;
-  }
+  using _fetch = routeFetch({
+    "https://api2.luma.com/event/get-guest-list": () => Response.json({ entries: [{ api_id: "g1", user: {} }], has_more: false, next_cursor: null }),
+  });
+  const out = await fetchEventGuests("evt-x", null, "cookie=1");
+  assert.equal(out.done, true);
+  assert.equal(out.guests.length, 1);
 });
 
 test("a roster is only pruned by a pass that saw all of it in one invocation", () => {

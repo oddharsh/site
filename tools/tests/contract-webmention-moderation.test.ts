@@ -14,11 +14,11 @@ import {
   handleWebmentionDecision,
   sign,
   test,
-  testGlobals,
   WM_SECRET,
   wmEnv,
   wmPost,
 } from "./contract-shared.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 const TARGET = "https://aadhar.sh/writing/in-flux";
 const SOURCE = "https://spam.example/links";
@@ -31,22 +31,17 @@ function mailEnv() {
 
 /** Sends one webmention end to end; returns how many host emails it caused. */
 async function send(env, page = PAGE): Promise<number> {
-  const realFetch = globalThis.fetch;
   let mails = 0;
-  testGlobals.fetch = async (input) => {
-    if (String(input?.url ?? input).startsWith("https://api.resend.com/")) {
+  using _fetch = routeFetch({
+    "https://api.resend.com/": () => {
       mails++;
       return Response.json({ id: "m1" });
-    }
-    return new Response(page, { headers: { "content-type": "text/html" } });
-  };
-  try {
-    const ctx = deferredContext();
-    assert.equal((await handleWebmention(wmPost(SOURCE, TARGET), env, ctx)).status, 202);
-    await ctx.settle();
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+    },
+    [SOURCE]: () => new Response(page, { headers: { "content-type": "text/html" } }),
+  });
+  const ctx = deferredContext();
+  assert.equal((await handleWebmention(wmPost(SOURCE, TARGET), env, ctx)).status, 202);
+  await ctx.settle();
   return mails;
 }
 

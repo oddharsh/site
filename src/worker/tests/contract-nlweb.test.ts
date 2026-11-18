@@ -1,5 +1,6 @@
 // ── NLWeb ───────────────────────────────────────────────────────────────────
-import { testGlobals, assert, readFile, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, readFile, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { _resetSearchIndex } from "../search.ts";
 
 // The endpoint half. These drive the real handler; where a specific record
@@ -617,20 +618,16 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   const env = { RN_SIGNING_KEY_JWK: JSON.stringify({ ...(await crypto.subtle.exportKey("jwk", pair.privateKey)), kid: "test" }) };
 
-  const realFetch = globalThis.fetch;
   const run = async (location, second) => {
     const hops: any[] = [];
-    testGlobals.fetch = async (url) => {
+    const hop = (request: Request) => {
       // The content redirect probe runs only after its origin allows crawling.
-      if (new URL(String(url)).pathname === "/robots.txt") return new Response(null, { status: 404 });
-      hops.push(String(url));
+      if (new URL(request.url).pathname === "/robots.txt") return new Response(null, { status: 404 });
+      hops.push(request.url);
       return hops.length === 1 ? new Response(null, { status: 302, headers: { location } }) : second();
     };
-    try {
-      return { out: await foreignMcpTools("https://example.com", env), hops };
-    } finally {
-      testGlobals.fetch = realFetch;
-    }
+    using _fetch = routeFetch({ "https://example.com/": hop, "https://elsewhere.example/": hop });
+    return { out: await foreignMcpTools("https://example.com", env), hops };
   };
 
   const blocked = await run(

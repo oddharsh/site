@@ -6,12 +6,13 @@
 // microformats-parser read those; the regex read nothing and reported the
 // hostname. These fixtures pin what lib/mf2.ts reads and what parseSource makes
 // of it, with a plain-text author kept as the control.
-import { assert, deferredContext, fakeD1, handleWebmention, test, testGlobals, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
+import { assert, deferredContext, fakeD1, handleWebmention, test, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
 import { parseSource } from "../webmention.ts";
 import { parseMf2 } from "../lib/mf2.ts";
 import { renderInboxMail } from "../inbox.ts";
 import { renderWritingPost } from "../writing.ts";
 import { readFileSync } from "node:fs";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 const TARGET = "https://aadhar.sh/garage/chunks";
 
@@ -64,14 +65,11 @@ test("the note's author is what gets stored, where the hostname used to be", asy
   // author_url "https://notes.example". A mirror host stands in for aadhar.sh,
   // which refuses a mention from itself.
   const db = fakeD1();
-  const real = globalThis.fetch;
-  testGlobals.fetch = async () => new Response(NOTE(), { headers: { "content-type": "text/html" } });
-  try {
+  {
+    using _fetch = routeFetch({ "https://notes.example/writing/in-flux": () => new Response(NOTE(), { headers: { "content-type": "text/html" } }) });
     const ctx = deferredContext();
     await handleWebmention(wmPost("https://notes.example/writing/in-flux", TARGET), wmEnv(db), ctx);
     await ctx.settle();
-  } finally {
-    testGlobals.fetch = real;
   }
   const row = db.rows[0] as { author: string; author_url: string; title: string };
   assert.equal(row.author, "Aadharsh Pannirselvam");

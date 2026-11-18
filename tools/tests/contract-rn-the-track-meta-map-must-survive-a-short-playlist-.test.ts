@@ -34,6 +34,7 @@ import {
   test,
   warmArtCache,
 } from "./contract-shared.ts";
+import { routeFetch } from "../lib/fetch-routes.ts";
 
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Regression, 2026-08-15. The prune deleted any entry missing from
@@ -544,7 +545,6 @@ test("the art warm is capped, so one long playlist cannot drain the subrequest b
 // artWarmList alone could never have seen it.
 test("the art warm attempts every URL even when one is already cached", async () => {
   const store = new Map();
-  const realFetch = globalThis.fetch;
   const hadCaches = "caches" in globalThis;
   testGlobals.caches = {
     default: {
@@ -557,7 +557,9 @@ test("the art warm attempts every URL even when one is already cached", async ()
       },
     },
   };
-  testGlobals.fetch = async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+  using _fetch = routeFetch({
+    "https://i.scdn.co/image/": () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } }),
+  });
 
   try {
     const payload = {
@@ -582,7 +584,6 @@ test("the art warm attempts every URL even when one is already cached", async ()
     assert.equal(res.failed, 0);
     for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
   } finally {
-    testGlobals.fetch = realFetch;
     if (!hadCaches) delete globalThis.caches;
   }
 });
@@ -593,7 +594,6 @@ test("the art warm attempts every URL even when one is already cached", async ()
 // done. A CDG trace threw "Too many subrequests" under a span reading warmed 40.
 test("the art warm counts a failed or untransformed cover as such, never as warmed", async () => {
   const store = new Map();
-  const realFetch = globalThis.fetch;
   const hadCaches = "caches" in globalThis;
   testGlobals.caches = {
     default: {
@@ -610,11 +610,13 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
   // which is the Images fallback. Cover 3 throws on every fetch, as a spent
   // subrequest budget does.
   const ok = () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
-  testGlobals.fetch = async (url, init) => {
-    if (String(url).includes(artHash(3))) throw new Error("Too many subrequests by single Worker invocation.");
-    if (String(url).includes(artHash(2)) && init?.cf?.image) return new Response("9422", { status: 403 });
-    return ok();
-  };
+  using _fetch = routeFetch({
+    [`https://i.scdn.co/image/${artHash(3)}`]: () => {
+      throw new Error("Too many subrequests by single Worker invocation.");
+    },
+    [`https://i.scdn.co/image/${artHash(2)}`]: (_request, init) => (init?.cf?.image ? new Response("9422", { status: 403 }) : ok()),
+    "https://i.scdn.co/image/": ok,
+  });
 
   try {
     const payload = { tracks: [1, 2, 3].map((n) => ({ image_url: `https://i.scdn.co/image/${artHash(n)}`, artists: [] })) };
@@ -625,7 +627,6 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
     assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1, skipped: 0, spent: 9 });
     assert.equal(store.size, 1, "only the transformed cover may reach the cache");
   } finally {
-    testGlobals.fetch = realFetch;
     if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
   }
 });
@@ -661,10 +662,9 @@ function cappedArtPlatform(cached: string[] = []) {
 }
 
 async function warmOnPlatform(platform, payload) {
-  const realFetch = globalThis.fetch;
   const hadCaches = "caches" in globalThis;
   testGlobals.caches = platform.caches;
-  testGlobals.fetch = platform.fetch;
+  using _fetch = routeFetch({ "https://i.scdn.co/image/": platform.fetch });
   try {
     const waits: any[] = [];
     const res = await warmArtCache(payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
@@ -673,7 +673,6 @@ async function warmOnPlatform(platform, payload) {
     const settled = await Promise.allSettled(waits);
     return { res, rejected: settled.filter((s) => s.status === "rejected").length };
   } finally {
-    testGlobals.fetch = realFetch;
     if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
   }
 }
@@ -849,45 +848,42 @@ test("Lens caches only the completed Cloudflare score response, never progress o
     frame({ ...reply, id: "another-scan", result: { content: [{ type: "text", text: "Level 2/5 — Other" }] } });
   const compact =
     'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"message":"Level 1/5 — Working"}}\n\n' + "data: " + JSON.stringify(reply) + "\n\n";
-  const realFetch = globalThis.fetch;
-  try {
-    for (const body of [
-      noise + frame(reply),
-      JSON.stringify(reply),
-      compact,
-      noise,
-      noise + frame(reply).trimEnd(),
-      frame({ ...reply, result: { ...result, isError: true } }),
-      frame({ jsonrpc: "2.0", id, error: { message: "Level 5/5 — Failed" } }),
-    ]) {
-      const writes: any[] = [];
-      testGlobals.fetch = async (_url, init) => {
-        assert.equal(JSON.parse(init.body).id, id);
+  for (const body of [
+    noise + frame(reply),
+    JSON.stringify(reply),
+    compact,
+    noise,
+    noise + frame(reply).trimEnd(),
+    frame({ ...reply, result: { ...result, isError: true } }),
+    frame({ jsonrpc: "2.0", id, error: { message: "Level 5/5 — Failed" } }),
+  ]) {
+    const writes: any[] = [];
+    using _fetch = routeFetch({
+      "https://isitagentready.com/mcp": async (request) => {
+        assert.equal((await request.json()).id, id);
         return new Response(body.replace(/\n/g, "\r\n"), { headers: { "content-type": body.startsWith("{") ? "application/json" : "text/event-stream" } });
-      };
-      const response = await handleLensFetch(
-        new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https://example.com"),
-        {
-          RN_KV: {
-            get: async () => null,
-            put: async (_key, value) => {
-              writes.push(JSON.parse(value));
-            },
+      },
+    });
+    const response = await handleLensFetch(
+      new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https://example.com"),
+      {
+        RN_KV: {
+          get: async () => null,
+          put: async (_key, value) => {
+            writes.push(JSON.parse(value));
           },
         },
-        context(),
-      );
-      const payload = await response.json();
-      const available = body === noise + frame(reply) || body === JSON.stringify(reply) || body === compact;
-      assert.equal(payload.available, available);
-      assert.equal(writes.length, available ? 1 : 0);
-      if (available) {
-        assert.equal(payload.level, 4);
-        assert.equal(writes[0].score, 80);
-      }
+      },
+      context(),
+    );
+    const payload = await response.json();
+    const available = body === noise + frame(reply) || body === JSON.stringify(reply) || body === compact;
+    assert.equal(payload.available, available);
+    assert.equal(writes.length, available ? 1 : 0);
+    if (available) {
+      assert.equal(payload.level, 4);
+      assert.equal(writes[0].score, 80);
     }
-  } finally {
-    testGlobals.fetch = realFetch;
   }
 });
 
@@ -942,12 +938,11 @@ test("Lens refuses to read crawler refusals as policy when no control got in", (
 });
 
 test("Lens proxies Cloudflare's public scanner but stores only the normalized score", async () => {
-  const realFetch = globalThis.fetch;
   const writes: any[] = [];
   let upstream: any = null;
-  try {
-    testGlobals.fetch = async (url, init) => {
-      upstream = { url: String(url), body: JSON.parse(init.body) };
+  using _fetch = routeFetch({
+    "https://isitagentready.com/mcp": async (request) => {
+      upstream = { url: request.url, body: await request.json() };
       return new Response(
         "data: " +
           JSON.stringify({
@@ -958,31 +953,29 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
           "\n\n",
         { status: 200, headers: { "content-type": "text/event-stream" } },
       );
-    };
-    const response = await handleLensFetch(
-      new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https%3A%2F%2Fexample.com"),
-      { RN_KV: { get: async () => null, put: async (key, value, options) => writes.push({ key, value, options }) } },
-      context(),
-    );
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.score, 100);
-    assert.equal(payload.level, 5);
-    assert.equal(upstream.url, "https://isitagentready.com/mcp");
-    assert.equal(upstream.body.params.arguments.url, "https://example.com/");
-    assert.equal(writes.length, 1);
-    assert.deepEqual(JSON.parse(writes[0].value), {
-      available: true,
-      level: 5,
-      score: 100,
-      levelName: "Agent-Native",
-      source: "Cloudflare Agent Readiness",
-      sourceUrl: "https://isitagentready.com/",
-    });
-    assert.doesNotMatch(writes[0].value, /private report details/);
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+    },
+  });
+  const response = await handleLensFetch(
+    new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https%3A%2F%2Fexample.com"),
+    { RN_KV: { get: async () => null, put: async (key, value, options) => writes.push({ key, value, options }) } },
+    context(),
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.score, 100);
+  assert.equal(payload.level, 5);
+  assert.equal(upstream.url, "https://isitagentready.com/mcp");
+  assert.equal(upstream.body.params.arguments.url, "https://example.com/");
+  assert.equal(writes.length, 1);
+  assert.deepEqual(JSON.parse(writes[0].value), {
+    available: true,
+    level: 5,
+    score: 100,
+    levelName: "Agent-Native",
+    source: "Cloudflare Agent Readiness",
+    sourceUrl: "https://isitagentready.com/",
+  });
+  assert.doesNotMatch(writes[0].value, /private report details/);
 });
 
 test("the WebMCP detector sees a CDN bridge, not just hand-written call sites", () => {

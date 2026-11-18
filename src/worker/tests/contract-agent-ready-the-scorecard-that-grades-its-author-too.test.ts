@@ -1,5 +1,6 @@
 // ── /agent-ready — the scorecard that grades its author too ──────────────
-import { assert, context, handleTool, terminalGet, terminalReq, test, testGlobals } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, handleTool, terminalGet, terminalReq, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 test("the lift table is internally consistent and names its baseline", async () => {
   // The bill is hand-maintained with a checked date, the same contract lens's
@@ -73,45 +74,39 @@ test("the scorecard grades other origins, and only bills its own", async () => {
   // signed, the AadharshBot key is a secret, and secrets are unavailable under
   // node, so every foreign HTTP door already failed before it reached a fetch.
   // That half was never testing the network to begin with.
-  const realFetch = globalThis.fetch;
   const seen: any[] = [];
-  try {
-    // llms.txt answers and nothing else does, so the frame has to render an
-    // open door beside four shut ones. A stub that answered everything the same
-    // way would let a scorecard that ignores its input pass.
-    testGlobals.fetch = async (input) => {
-      const url = String(typeof input === "string" ? input : (input?.url ?? input));
-      seen.push(url);
-      if (new URL(url).pathname === "/llms.txt") {
-        return new Response("# a readable map\n", { status: 200, headers: { "content-type": "text/plain" } });
-      }
-      return new Response("not found", { status: 404 });
-    };
+  // llms.txt answers and nothing else does, so the frame has to render an
+  // open door beside four shut ones. A stub that answered everything the same
+  // way would let a scorecard that ignores its input pass.
+  const door = async (request: Request) => {
+    seen.push(request.url);
+    if (new URL(request.url).pathname === "/llms.txt") {
+      return new Response("# a readable map\n", { status: 200, headers: { "content-type": "text/plain" } });
+    }
+    return new Response("not found", { status: 404 });
+  };
+  using _fetch = routeFetch({ "https://cloudflare-dns.com/dns-query?": door });
+  // A self-probe uses the dispatcher. The network stub alone used to work
+  // because the asset fixture threw on Request and Lens fell through to fetch.
+  const self = await (await handleTool(terminalReq("/agent-ready?plain=1"), { SELF_FETCH: door }, context())).text();
+  assert.match(self, /what this cost to build/);
+  assert.match(self, /aadhar\.sh/);
+  // The scan read what it was served rather than defaulting: one door open,
+  // and a 404 reported as SHUT rather than as unreadable, which is the
+  // distinction the whole surface exists to keep.
+  assert.match(self, /open\s+llms\.txt/, "the open door the stub served is not rendered as open");
+  assert.match(self, /shut\s+agent card/, "a 404 is a shut door, never an unreadable one");
 
-    // A self-probe uses the dispatcher. The network stub alone used to work
-    // because the asset fixture threw on Request and Lens fell through to fetch.
-    const self = await (await handleTool(terminalReq("/agent-ready?plain=1"), { SELF_FETCH: testGlobals.fetch }, context())).text();
-    assert.match(self, /what this cost to build/);
-    assert.match(self, /aadhar\.sh/);
-    // The scan read what it was served rather than defaulting: one door open,
-    // and a 404 reported as SHUT rather than as unreadable, which is the
-    // distinction the whole surface exists to keep.
-    assert.match(self, /open\s+llms\.txt/, "the open door the stub served is not rendered as open");
-    assert.match(self, /shut\s+agent card/, "a 404 is a shut door, never an unreadable one");
+  const foreign = await (await terminalGet("/agent-ready?plain=1&url=https%3A%2F%2Fexample.com")).text();
+  assert.ok(!/what this cost to build/.test(foreign), "the bill must not appear for a foreign origin");
+  assert.match(foreign, /doors a machine can walk through/);
 
-    const foreign = await (await terminalGet("/agent-ready?plain=1&url=https%3A%2F%2Fexample.com")).text();
-    assert.ok(!/what this cost to build/.test(foreign), "the bill must not appear for a foreign origin");
-    assert.match(foreign, /doors a machine can walk through/);
-
-    // A refused target must be refused BEFORE anything leaves, which no
-    // assertion covered while the suite was making real requests anyway.
-    // 169.254.169.254 is the cloud metadata address, so a probe that escaped
-    // here would be the SSRF this guard exists to stop.
-    const before = seen.length;
-    const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
-    assert.match(refused, /refused/);
-    assert.equal(seen.length, before, "a refused target must not reach a fetch at all");
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+  // A refused target must be refused BEFORE anything leaves, which no
+  // assertion covered while the suite was making real requests anyway.
+  // 169.254.169.254 is the cloud metadata address, so a probe that escaped
+  // here would be the SSRF this guard exists to stop.
+  const before = seen.length;
+  const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
+  assert.match(refused, /refused/);
+  assert.equal(seen.length, before, "a refused target must not reach a fetch at all");
 });

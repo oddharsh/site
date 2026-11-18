@@ -12,6 +12,7 @@
 // behaviour the swap had to keep. cal/test/sign.test.ts carries the fourth.
 import { createHash, createHmac } from "node:crypto";
 import { assert, context, test, testGlobals } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { serveStaticPage } from "../lib/assets.ts";
 import { imageInspect } from "../image-tools.ts";
 import { svcbHasEch } from "../lens.ts";
@@ -100,7 +101,6 @@ test("image_data decodes to the same bytes however its base64 is wrapped", async
 });
 
 test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", async () => {
-  const realFetch = globalThis.fetch;
   const payment = { x402Version: 1, scheme: "exact", network: "base", payload: { memo: "caf\u00e9" } };
   const env = {
     X402_PAY_TO: `0x${"12".repeat(20)}`,
@@ -114,11 +114,12 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
   } as any;
   const pay = async (settled) => {
     const posts: any[] = [];
-    testGlobals.fetch = async (input, init) => {
-      const url = String(input?.url ?? input);
-      posts.push({ url, body: JSON.parse(init.body) });
-      return Response.json(url.endsWith("/verify") ? { isValid: true } : settled);
-    };
+    using _fetch = routeFetch({
+      "https://facilitator.test/": async (request) => {
+        posts.push({ url: request.url, body: await request.json() });
+        return Response.json(request.url.endsWith("/verify") ? { isValid: true } : settled);
+      },
+    });
     const res = await handleLlmsFull(
       new Request("https://aadhar.sh/llms-full.txt", {
         headers: { "x-payment": Buffer.from(JSON.stringify(payment), "utf8").toString("base64") },
@@ -128,26 +129,22 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
     );
     return { res, posts };
   };
-  try {
-    const receipt = { success: true, transaction: `0x${"ab".repeat(32)}`, network: "base", note: "settled \u2713 \u201cthanks\u201d" };
-    const { res, posts } = await pay(receipt);
-    assert.equal(res.status, 200);
-    assert.equal(await res.text(), "the full corpus");
-    // atob handed JSON.parse Latin-1, so the facilitator was sent "cafÃ©"
-    assert.deepEqual(
-      posts.map((p) => p.body.paymentPayload),
-      [payment, payment],
-    );
-    // btoa threw on the check mark and the curly quotes, after /settle had moved the money
-    assert.equal(Buffer.from(res.headers.get("x-payment-response") ?? "", "base64").toString("utf8"), JSON.stringify(receipt));
+  const receipt = { success: true, transaction: `0x${"ab".repeat(32)}`, network: "base", note: "settled \u2713 \u201cthanks\u201d" };
+  const { res, posts } = await pay(receipt);
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "the full corpus");
+  // atob handed JSON.parse Latin-1, so the facilitator was sent "cafÃ©"
+  assert.deepEqual(
+    posts.map((p) => p.body.paymentPayload),
+    [payment, payment],
+  );
+  // btoa threw on the check mark and the curly quotes, after /settle had moved the money
+  assert.equal(Buffer.from(res.headers.get("x-payment-response") ?? "", "base64").toString("utf8"), JSON.stringify(receipt));
 
-    // an ASCII receipt, which is every receipt that worked before, keeps btoa's exact bytes
-    const ascii = { success: true, transaction: `0x${"cd".repeat(32)}`, network: "base" };
-    const plain = await pay(ascii);
-    assert.equal(plain.res.headers.get("x-payment-response"), btoa(JSON.stringify(ascii)));
-  } finally {
-    testGlobals.fetch = realFetch;
-  }
+  // an ASCII receipt, which is every receipt that worked before, keeps btoa's exact bytes
+  const ascii = { success: true, transaction: `0x${"cd".repeat(32)}`, network: "base" };
+  const plain = await pay(ascii);
+  assert.equal(plain.res.headers.get("x-payment-response"), btoa(JSON.stringify(ascii)));
 });
 
 test("the cover proxy refuses a signature re-spelled in the standard alphabet", async () => {

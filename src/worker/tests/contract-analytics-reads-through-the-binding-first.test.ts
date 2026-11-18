@@ -7,6 +7,7 @@
 
 import { assert, test } from "../../../tools/tests/contract-shared.ts";
 import { analyticsSql as read } from "../ledger.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 /** A partial Env is the point: each test hands the reader only the doors it means to open. */
 const analyticsSql = (env: any, dataset: string, build: any) => read(env, dataset, build);
@@ -15,16 +16,13 @@ const QUERY = (from, sum) => `SELECT blob1 AS bot, ${sum("double1")} AS hits FRO
 
 async function withFetch(answer, body) {
   const calls: any[] = [];
-  const real = globalThis.fetch;
-  globalThis.fetch = (async (url: any, init: any) => {
-    calls.push({ url: String(url), body: init?.body });
-    return answer();
-  }) as any;
-  try {
-    return { result: await body(), calls };
-  } finally {
-    globalThis.fetch = real;
-  }
+  using _fetch = routeFetch({
+    "https://api.cloudflare.com/client/v4/accounts/a/analytics_engine/sql": async (request) => {
+      calls.push({ url: request.url, body: await request.text() });
+      return answer();
+    },
+  });
+  return { result: await body(), calls };
 }
 
 const binding = (impl) => {

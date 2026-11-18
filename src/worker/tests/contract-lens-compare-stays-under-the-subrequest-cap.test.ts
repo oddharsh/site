@@ -15,6 +15,7 @@
 // it is charged as a subrequest like every other binding call.
 import { assert, test, testGlobals } from "../../../tools/tests/contract-shared.ts";
 import { SUBREQUEST_CAP_FREE } from "../lib/budget.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 
 const CAP_ERROR = "Too many subrequests by single Worker";
 
@@ -91,14 +92,12 @@ function harness({ enforce = false, store = new Map() }: Record<string, any> = {
 }
 
 async function withHarness(h, run) {
-  const realFetch = globalThis.fetch;
   const realCaches = globalThis.caches;
-  testGlobals.fetch = h.fetch;
+  using _fetch = routeFetch({ "https://cloudflare-dns.com/dns-query?": h.fetch, [LEFT]: h.fetch, [RIGHT]: h.fetch });
   testGlobals.caches = h.caches;
   try {
     return await run();
   } finally {
-    testGlobals.fetch = realFetch;
     if (realCaches === undefined) delete testGlobals.caches;
     else testGlobals.caches = realCaches;
   }

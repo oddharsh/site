@@ -9,7 +9,7 @@
 // worth reintroducing on the host.
 import { describe, it, expect, mock, afterEach, setSystemTime } from "bun:test";
 import { fetchBusySWR, generateSlots, CAL_FRESH_MS, TZ_HELPERS_FOR_TEST } from "../src/availability.ts";
-import { stubFetch } from "./harness.ts";
+import { routeFetch } from "../../tools/lib/fetch-routes.ts";
 
 const TZ = "America/New_York";
 const baseEnv = {
@@ -50,8 +50,8 @@ const localParts = (ms) => {
   };
 };
 
-let restoreFetch = () => {};
-afterEach(() => restoreFetch());
+let fetchRoutes: ReturnType<typeof routeFetch> | undefined;
+afterEach(() => fetchRoutes?.[Symbol.dispose]());
 
 describe("fetchBusySWR — stale GET behavior", () => {
   it("serves a stale snapshot immediately and refreshes in the background when allowed", async () => {
@@ -64,8 +64,10 @@ describe("fetchBusySWR — stale GET behavior", () => {
       ICAL_URL: "https://calendar.test/availability.ics",
     };
     const ctx = { waitUntil: mock((task) => undefined) };
-    restoreFetch = stubFetch(async () => {
-      throw new Error("calendar unavailable");
+    fetchRoutes = routeFetch({
+      [env.ICAL_URL]: () => {
+        throw new Error("calendar unavailable");
+      },
     });
 
     const result = await fetchBusySWR(env, ctx, { allowStale: true });
@@ -85,13 +87,13 @@ describe("fetchBusySWR — stale GET behavior", () => {
       },
       ICAL_URL: "https://calendar.test/availability.ics",
     };
-    restoreFetch = stubFetch(
-      async () =>
+    fetchRoutes = routeFetch({
+      [env.ICAL_URL]: () =>
         new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
           status: 200,
           headers: { "content-type": "text/calendar" },
         }),
-    );
+    });
 
     const result = await fetchBusySWR(env, null);
 
@@ -112,7 +114,7 @@ describe("fetchBusySWR — stale GET behavior", () => {
       ICAL_URL: "https://calendar.test/availability.ics",
     };
     const ctx = { waitUntil: mock((task) => undefined) };
-    restoreFetch = stubFetch(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", { status: 200 }));
+    fetchRoutes = routeFetch({ [env.ICAL_URL]: () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", { status: 200 }) });
 
     const result = await fetchBusySWR(env, ctx);
 
