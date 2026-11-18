@@ -429,7 +429,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
   // `_headers` blocks: a line starting with `/`, then its indented header lines.
   const rules = [...raw.matchAll(/^(\/\S*)\n((?:[ \t]+\S.*\n)+)/gm)].map(([, pattern, body]) => ({
     pattern,
-    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*(.+?)\s*$/im) || [])[1] || null,
+    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*([^ \t\n\r\u2028\u2029](?:.*\S)?)\s*$/im) || [])[1] || null,
     // Matching rules ACCUMULATE and duplicate headers are comma-joined with no
     // most-specific-wins, so `*` has to be modelled as a real glob, not a prefix test.
     matches: (path) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*")}$`).test(path),
@@ -468,7 +468,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
 
 test("the offscreen Horizon iframe does not start ticking during initial load", async () => {
   const horizon = await readFile(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
-  const iframe = horizon.match(/<iframe\s+[^>]*id="mb-frame"[^>]*>/)?.[0];
+  const iframe = horizon.match(/<iframe\s[^>]*id="mb-frame"[^>]*>/)?.[0];
   assert.ok(iframe, "the state-preserving move demo must keep its uptime iframe");
   assert.match(iframe, /\sloading="lazy"(?:\s|>)/, "the deep-page iframe runs a perpetual timer and must wait until it nears the viewport");
 });

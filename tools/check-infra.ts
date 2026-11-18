@@ -482,7 +482,7 @@ async function checkTriageDeclaration(repo) {
   let dbLabels = 0;
   for (let i = 0; i < dbLines.length; i++) {
     if (/^\s*-\s*package-ecosystem:/.test(dbLines[i])) ecosystems++;
-    const head = /^(\s*)labels:\s*(.*)$/.exec(dbLines[i]);
+    const head = /^(\s*)labels:\s*(\S.*|)$/.exec(dbLines[i]);
     if (!head) continue;
 
     const listed: { name: string; line: number }[] = [];
@@ -497,7 +497,7 @@ async function checkTriageDeclaration(repo) {
     } else {
       for (let j = i + 1; j < dbLines.length; j++) {
         if (/^\s*(#|$)/.test(dbLines[j])) continue;
-        const item = /^(\s*)-\s*(.+)$/.exec(dbLines[j]);
+        const item = /^(\s*)-\s*(\S.*|[^\S\n\r\u2028\u2029])$/.exec(dbLines[j]);
         if (!item || item[1].length <= head[1].length) break;
         listed.push({ name: scalar(item[2]), line: j + 1 });
       }

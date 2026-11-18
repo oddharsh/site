@@ -16,7 +16,7 @@
 /** font-size and the font shorthand. Custom properties are not declarations. Stops at `;`, a brace, or a tag. */
 const DECL = /(?<![\w-])(font-size|font-family|font)\s*:\s*([^;{}<>`\n]+)/g;
 /** A size token in a value: `9pt`, `8.5pt/1.3`. Group 1 is the number, group 2 the unit. */
-const SIZE = /(?<![\w.#-])(\d*\.?\d+)(pt|px|em|rem|%)(?:\s*\/\s*[\d.]+[a-z%]*)?(?![\w-])/;
+const SIZE = /(?<![\w.#-])(\d+(?:\.\d+)?|\.\d+)(pt|px|em|rem|%)(?:\s*\/\s*[\d.]+[a-z%]*)?(?![\w-])/;
 /** Display type starts above the largest heading token. */
 export const DISPLAY_PT = 14;
 

@@ -113,7 +113,7 @@ function bodyMembers(body) {
 async function members() {
   const src = stripComments(readFileSync(ENV_TS, "utf8"));
   const byInterface = new Map();
-  const re = /\binterface\s+([A-Za-z0-9_$]+)[^{]*\{/g;
+  const re = /\binterface\s+([A-Za-z0-9_$]+)(?:[^{A-Za-z0-9_$][^{]*)?\{/g;
   for (let m; (m = re.exec(src));) {
     const open = m.index + m[0].length;
     let depth = 1,

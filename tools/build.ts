@@ -1252,7 +1252,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
     out += token;
     cursor = gt + 1;
 
-    const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
+    const match = token.match(/^<\s*(?:(\/)\s*)?([A-Za-z][^\s/>]*)/);
     if (!match || match[1] || !RAW_HTML_TAGS.has(match[2].toLowerCase())) continue;
 
     const tag = match[2].toLowerCase();

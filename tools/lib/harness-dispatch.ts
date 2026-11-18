@@ -86,7 +86,7 @@ export function underNode(file: string, name: string, body: Body): Body {
       // node's TAP diff prints a Buffer one byte per line, so a failed deepEqual
       // on encodeBody's 17,600-byte page put its message 467 KB above the tail
       // and the tail alone said nothing. Lift each failure's first error line.
-      const reasons = [...out.matchAll(/^\s+error: (?:\|-\n\s+)?(.+)$/gm)].map((m) => `  ${m[1]}\n`).join("");
+      const reasons = [...out.matchAll(/^\s+error: (?:\|-\n\s+(\S.*|[^\S\n\r\u2028\u2029])|(.+))$/gm)].map((m) => `  ${m[1] ?? m[2]}\n`).join("");
       throw new Error(
         `under node, "${name}" did not pass exactly once ` +
           `(status ${run.status}${run.error ? `, ${run.error.message}` : ""}):\n${reasons}${out.slice(-6000)}`,

@@ -20,7 +20,7 @@ import { cssSources } from "../lib/token-literals.ts";
 /** A motion declaration: transition, animation, or their -duration / -delay longhands. Custom properties are not. */
 const DECL = /(?<![\w-])(transition|animation)(-duration|-delay)?\s*:\s*([^;{}]+)/g;
 /** A non-zero time literal. `0s` is no motion at all, so it is never a finding. */
-const TIME = /(?<![\w.#-])(?!0+(?:\.0+)?m?s\b)(\d*\.?\d+)(ms|s)\b/g;
+const TIME = /(?<![\w.#-])(?!0+(?:\.0+)?m?s\b)(\d+(?:\.\d+)?|\.\d+)(ms|s)\b/g;
 
 /** Every hand-written duration in `css` that no exemption covers. */
 export function literalDurations(css) {

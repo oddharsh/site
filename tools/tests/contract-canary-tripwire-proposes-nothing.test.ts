@@ -44,7 +44,7 @@ test("no canary leg can write the pin, and none knows the bumper's write flag", 
   for (const file of LEGS) {
     const code = strip(await readFile(new URL(file, ROOT), "utf8"));
     assert.doesNotMatch(code, /writePin|--write/, `${file} reaches for the pin writer`);
-    assert.doesNotMatch(code, /package\.json"\)\s*,\s*[^)]*\)\s*;?\s*$/m, `${file} looks like it writes package.json`);
+    assert.doesNotMatch(code, /package\.json"\)\s*,[^)]*\)\s*(?:;\s*)?$/m, `${file} looks like it writes package.json`);
     // The bun pin lives in config/bun-pin.json now, so a write is any writer
     // naming either file, whatever the call looks like.
     assert.doesNotMatch(code, PIN_WRITE, `${file} looks like it writes the pin`);
