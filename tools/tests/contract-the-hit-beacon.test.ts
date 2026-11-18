@@ -12,9 +12,14 @@ function slowCounter() {
   const gate = new Promise((r) => {
     release = r;
   });
+  let reached;
+  const entered = new Promise((r) => {
+    reached = r;
+  });
   const seen: any[] = [];
   return {
     release,
+    entered,
     seen,
     env: {
       COUNTER: {
@@ -22,6 +27,7 @@ function slowCounter() {
         get: () => ({
           async fetch(u) {
             seen.push(new URL(u).search);
+            reached();
             await gate;
             return Response.json({ n: 41 });
           },
@@ -73,14 +79,17 @@ test("the /hit beacon still ticks when there is no ctx to defer onto", async () 
 });
 
 test("the /hit odometer waits for the number it renders", async () => {
-  const { env, release } = slowCounter();
+  const { env, release, entered } = slowCounter();
   const ctx = { waitUntil: () => {} };
   let settled = false;
   const pending = handleHit(new Request("https://aadhar.sh/hit"), env, ctx).then((r) => {
     settled = true;
     return r;
   });
-  await new Promise((r) => setTimeout(r, 20));
+  // Once the DO is reached, setImmediate runs after every pending microtask, so a
+  // handler that answered without awaiting it would have settled by then.
+  await entered;
+  await new Promise((r) => setImmediate(r));
   assert.equal(settled, false, "the SVG shape must not answer before the DO does");
   release();
   const res = await pending;

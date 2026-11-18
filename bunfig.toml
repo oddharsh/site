@@ -483,6 +483,19 @@ correctness = "error"
 # parse layer would assert that the parse layer works, not that the surface under
 # test returns the right type. Same scoping as the no-floating-promises override
 # below, and for a related reason.
+#
+# The same list carries four selectors only tests need, from interfere-inc/
+# landmines' no-fixed-sleep and no-flake-masking. Each matches only inside a
+# test() or hook call, so the parser files above can't trip them. The first is
+# an awaited sleep (setTimeout in a Promise, Bun.sleep, scheduler.wait) whose
+# nearest function is the test or hook, as upstream scopes it: a fake that
+# sleeps to hold a request open, or a helper polling a condition, stays legal.
+# The other three are a timeout, retry or repeats option, a bare-number third
+# argument, and setDefaultTimeout. On the 2026-11-18 tree they found 4 sleeps
+# and 10 timeouts, the same sites upstream's rules did. Three sleeps now await
+# their event; the SSR deadline's waits on a real timer's expiry order and says
+# so. Nine timeouts were slack (cpu-sweep's whole file runs in 5.5 s) or one
+# test doing five tests' work; the canary's covers a cold cargo build.
 [[lint.overrides]]
 files = [
   "src/worker/lib/parse.ts",
@@ -495,6 +508,10 @@ files = [
 [lint.overrides.rules]
 "no-restricted-syntax" = [
   "error",
+  { selector = "CallExpression:matches([callee.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/], [callee.object.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/]) > :function AwaitExpression:not(CallExpression:matches([callee.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/], [callee.object.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/]) > :function :function AwaitExpression) > :matches(NewExpression[callee.name='Promise']:has(CallExpression[callee.name='setTimeout']), CallExpression:matches([callee.object.name='Bun'][callee.property.name='sleep'], [callee.object.name='scheduler'][callee.property.name='wait'], [callee.name='setTimeout']))", message = "This test sleeps for a fixed time, which guesses how long the work takes and fails under CPU load. Await the operation, or a promise its handler resolves." },
+  { selector = "CallExpression:matches([callee.name=/^(test|it|describe)$/], [callee.object.name=/^(test|it|describe)$/]) > ObjectExpression > Property[key.name=/^(timeout|retry|repeats)$/]", message = "A raised timeout or a retry hides a slow or flaky test. Wait on the event the test depends on, or split the work so each test fits the suite's clock." },
+  { selector = "CallExpression:matches([callee.name=/^(test|it)$/], [callee.object.name=/^(test|it)$/]) > :not(:function, ObjectExpression):nth-child(3)", message = "A raised timeout hides a slow test. Wait on the event the test depends on, or split the work so each test fits the suite's clock." },
+  { selector = "CallExpression[callee.name='setDefaultTimeout']", message = "A raised default timeout hides slow tests. Wait on the events they depend on, or split the work so each test fits the suite's clock." },
   { selector = "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))", message = "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present." },
   { selector = ":function > TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },
   { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },

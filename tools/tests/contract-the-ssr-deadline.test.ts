@@ -12,8 +12,11 @@ test("deadline lets a fast read through unmarked", async () => {
     marked = true;
   });
   assert.equal(v, "fast");
-  // give the (cleared) timer a chance to prove it was cleared
-  await new Promise((r) => setTimeout(r, 80));
+  // The deadline's 50 ms timer is real, so the wait is on its expiry. Timers fire
+  // in expiry order, and this one is set after it with the same 50 ms, so the
+  // deadline's would have fired first had settling not cleared it.
+  // oxlint-disable-next-line no-restricted-syntax
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(marked, false, "a settled read must never be marked deadlined");
 });
 
