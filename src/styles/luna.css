@@ -380,6 +380,13 @@
    layout cost. The homepage also sets it inline, since luna lands after its
    first paint. */
 html{text-wrap:pretty}
+/* Luna has one theme, and it's light. Without a declared color scheme, Chrome's
+   forced dark ("darken websites" on Android) repaints every window charcoal
+   with purple links; `only` is the keyword that opts out of that, measured
+   2026-11-18 on /writing with --blink-settings=forceDarkModeEnabled=true.
+   Inherited, so a demo that sets its own scheme on an element (horizon's
+   light-dark panels) keeps it. */
+html{color-scheme:only light}
 /* Touch. iOS draws a grey rounded flash over whatever a finger taps, which
    reads as a modern overlay on a square XP bevel, so it's off and each control's
    own :active state is the pressed feedback. Below 16px, iOS zooms the page when
