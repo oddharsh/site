@@ -255,7 +255,6 @@ test("a recipe run caches beside the plain snapshot, never on top of it", async 
   const env = { ...recipeEnv("<html></html>"), RN_KV: kv };
   await handleLensBrowser(browserReq(""), env, context());
   await handleLensBrowser(browserReq("&do=expand"), env, context());
-  await new Promise((r) => setTimeout(r, 0));
   assert.equal(writes.length, 2);
   assert.match(writes[0][0], /^lens:browser:[0-9a-f]{64}$/, "the plain key shape is load-bearing");
   assert.equal(writes[1][0], writes[0][0] + ":expand", "a recipe appends, so the plain entry survives as the before");

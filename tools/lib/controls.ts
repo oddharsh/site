@@ -637,6 +637,20 @@ export const CONTROLS: Control[] = [
     expect: /an anti-slop selector stopped matching at an ordinary path/,
   },
   {
+    id: "lint-test-sleep-selector-stops-matching",
+    plants: "the sleep selector looks for a Promis constructor, so an awaited setTimeout in a test lints clean",
+    mutations: [{ file: "bunfig.toml", find: "> :matches(NewExpression[callee.name='Promise']", replace: "> :matches(NewExpression[callee.name='Promis']" }],
+    run: contract("contract-lint-selectors"),
+    expect: /a sleep or timeout selector stopped matching in a test file/,
+  },
+  {
+    id: "lint-test-timeout-selector-stops-matching",
+    plants: "the timeout selector looks for a misspelled key, so a test's raised timeout lints clean",
+    mutations: [{ file: "bunfig.toml", find: "Property[key.name=/^(timeout|retry|repeats)$/]", replace: "Property[key.name=/^(timeoutx|retry|repeats)$/]" }],
+    run: contract("contract-lint-selectors"),
+    expect: /a sleep or timeout selector stopped matching in a test file/,
+  },
+  {
     id: "lint-reads-an-eslint-config",
     plants: 'an eslint.config.js beside bunfig.toml, which flavor = "eslint" lets apply on top of [lint]',
     gotcha: 104,

@@ -277,10 +277,20 @@ test("bounded response reads cancel stalled producers and never report aborted p
     const controller = new AbortController();
     const reason = new Error("read budget exhausted");
     let cancelled;
+    let drained;
+    const stalled = new Promise((resolve) => {
+      drained = resolve;
+    });
     const response = new Response(
       new ReadableStream({
         start(stream) {
           stream.enqueue(new TextEncoder().encode("partial"));
+        },
+        // Pulled once the reader has taken "partial" and waits for more; it never
+        // answers, so the read stalls until the abort cancels it.
+        pull() {
+          drained();
+          return new Promise(() => {});
         },
         cancel(error) {
           cancelled = error;
@@ -290,7 +300,7 @@ test("bounded response reads cancel stalled producers and never report aborted p
     if (alreadyAborted) controller.abort(reason);
     const read = readResponseCapped(response, 100, controller.signal);
     if (!alreadyAborted) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await stalled;
       controller.abort(reason);
     }
     await assert.rejects(read, (error) => error === reason);
