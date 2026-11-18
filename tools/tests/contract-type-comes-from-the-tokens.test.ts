@@ -39,8 +39,7 @@ test("the homepage defines every token it reads, at the token files' value", () 
   // First definition wins, so a @media (--p3) override never stands in for the base value.
   const decls = (css) => {
     const out = new Map();
-    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g))
-      if (!out.has(m[1])) out.set(m[1], m[2].replace(/\s+/g, ""));
+    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[a-z0-9-]+)\s*:([^;]+);/g)) if (!out.has(m[1])) out.set(m[1], m[2].replace(/\s+/g, ""));
     return out;
   };
   const tokens = new Map(["colors", "bevels", "typography"].flatMap((f) => [...decls(read(`design/tokens/${f}.css`))]));

@@ -278,7 +278,7 @@ test("tree tier: a declared deploy command that lost a provisioning pin fails, f
 // deploy command those Workers' builds run. Nothing read any of them until the
 // deploy-direct-loses-provision-pin control dropped --x-provision=false from
 // deploy:direct and the whole suite stayed green.
-const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s+(?:[^&|;]*?\s)?(?:deploy|versions\s+upload)\b/;
+const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s(?:[^&|;]*\s)?(?:deploy|versions\s+upload)\b/;
 test("tree tier: every committed command that publishes a Worker pins provisioning off", () => {
   const commands: [string, string][] = [];
   const manifests = repoFiles(["package.json", "*/package.json"]);

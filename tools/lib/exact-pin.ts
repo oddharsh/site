@@ -7,4 +7,4 @@
 // ITS OWN FILE because it imports nothing. dependency-snapshot.yml runs with a
 // write token and no node_modules; reaching this through dependency-docs.ts
 // pulled smol-toml, which bun then auto-installed from the registry.
-export const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
+export const EXACT_PIN = /^\d+\.\d+\.\d+(?:[a-zA-Z_.-][\w.-]*)?$/;

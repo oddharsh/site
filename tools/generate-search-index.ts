@@ -175,7 +175,7 @@ function stripMarkup(value) {
 function titleFor(text, path) {
   const htmlTitle = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
   const heading = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
-  const headingMd = text.match(/^#\s+(.+)$/m)?.[1];
+  const headingMd = text.match(/^#\s+(\S.*|[^\S\n\r\u2028\u2029])$/m)?.[1];
   return stripMarkup(htmlTitle || heading || headingMd || path.split("/").pop() || "aadhar.sh").slice(0, 140);
 }
 

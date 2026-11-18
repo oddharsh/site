@@ -78,7 +78,7 @@ export function companyMatches(label: CompanyLabel, predicted: string | null): b
 // a binding call.
 const NAME = String.raw`([A-Za-z0-9$][\w.$&'-]*(?:[ \t]+[A-Z0-9][\w.&'-]*)*)`;
 const MARKERS = [
-  new RegExp(String.raw`^\s*[Bb]uilding[ \t]+@?[ \t]*` + NAME),
+  new RegExp(String.raw`^\s*[Bb]uilding[ \t]+(?:@[ \t]*)?` + NAME),
   new RegExp(String.raw`@[ \t]*` + NAME),
   new RegExp(String.raw`\bat[ \t]+` + NAME),
   new RegExp(String.raw`\b(?:of|for)[ \t]+` + NAME),

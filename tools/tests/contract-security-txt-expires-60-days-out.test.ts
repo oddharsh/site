@@ -19,7 +19,7 @@ const LEAD_DAYS = 60;
 function fields(text) {
   const out = new Map();
   for (const line of text.split("\n")) {
-    const m = /^([A-Za-z-]+):\s*(.+?)\s*$/.exec(line);
+    const m = /^([A-Za-z-]+):\s*(\S(?:.*\S)?)\s*$/.exec(line);
     if (!m || line.startsWith("#")) continue;
     const key = m[1].toLowerCase();
     out.set(key, [...(out.get(key) || []), m[2]]);
