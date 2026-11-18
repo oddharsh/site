@@ -23,7 +23,8 @@ comes back (its `Checked by:` line names it). Take its number from
 | `cal/`, `serendipity/` | modules the site Worker serves at `/coffee` and `/serendipity` |
 | `counter/` | `aadhar-counter`, which owns the `Counter` Durable Object |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | separately deployed auxiliary Workers (TypeScript config, gotcha 41) |
-| `tools/` | the build, the contract tests (`tests/contract-*.test.ts`), checks, generators, `photos/` |
+| `tools/` | the build, the cross-cutting contract tests (`tests/contract-*.test.ts`), checks, generators, `photos/` |
+| `src/**/tests/` | tests that cover one module directory, beside it (gotcha 105) |
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |
 | `design/` | the Luna design system; `tokens/` and `DESIGN.md` are canonical |

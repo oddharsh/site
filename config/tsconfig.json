@@ -94,5 +94,6 @@
     "../src/worker/**/*.ts",
     "../serendipity/**/*.ts",
     "./.generated/workers-runtime.d.ts"
-  ]
+  ],
+  "exclude": ["../**/node_modules", "../src/**/tests/**"]
 }

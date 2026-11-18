@@ -22,6 +22,8 @@
 // How a dependent NAMES the asset, which decides the pattern step 6 rewrites.
 // Each shape is exact syntax on purpose: the garage pages mention /nav.js and
 // /hoist.js in prose and in <code>, and a bare-path match would rewrite them.
+import { inTestsDir } from "./test-roots.ts";
+
 export type Loader =
   // src="/x.js" or href="/x.css" in markup, quoted, backslash-quoted or unquoted
   // (the HTML minifier unquotes). `fragment` keeps a #fragment (the icon sprite).
@@ -510,7 +512,7 @@ export const twinOracleRows = (assets: readonly ClientAsset[] = CLIENT_ASSETS): 
 export function clientScriptProblems(srcClientFiles: readonly string[], assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] {
   const rows = new Map(minifiedScripts(assets).map((r) => [clientSourceFile(r.file).slice("src/client/".length), r.marker]));
   const problems: string[] = [];
-  const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !rows.has(f));
+  const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !inTestsDir(f) && !rows.has(f));
   if (missing.length)
     problems.push(`${missing.join(", ")} in src/client but not in the client asset registry, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);

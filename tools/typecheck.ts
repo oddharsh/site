@@ -26,11 +26,13 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASELINE = join(REPO, "config/ts-baseline.json");
 
 // Which tree's errors each program reports. Explicit scopes also keep a
-// partial --update from erasing another program's baseline.
-const OWNS: Record<string, string[]> = {
+// partial --update from erasing another program's baseline. A test in a tests/
+// directory under src/ is tools code (node and bun types), so the tools program
+// owns it by pattern, and the Worker and browser programs exclude it.
+const OWNS: Record<string, (string | RegExp)[]> = {
   "config/tsconfig.json": ["src/worker/", "cal/", "serendipity/", "counter/"],
   "config/tsconfig.browser.json": ["src/client/", "public/", "pipelines/"],
-  "config/tsconfig.tools.json": ["tools/", "pipelines/"],
+  "config/tsconfig.tools.json": ["tools/", "pipelines/", /^src\/(?:.+\/)?tests\//],
   "config/tsconfig.sw.json": ["src/client/sw.ts", "src/client/sw-globals.d.ts"],
   "config/tsconfig.lwe-ask.json": ["lwe-ask/"],
   "config/tsconfig.cf-garage.json": ["cf-garage/"],
@@ -85,12 +87,14 @@ export function programFiles(root: string, config: string, named = false, execut
   return check(root, config, ["--listFilesOnly", ...(named ? ["--noResolve"] : [])], executable).files;
 }
 
-export function checkProgram(root: string, config: string, owns: string[], executable = process.execPath) {
+const owned = (file: string, owns: readonly (string | RegExp)[]) => owns.some((scope) => (scope instanceof RegExp ? scope.test(file) : file.startsWith(scope)));
+
+export function checkProgram(root: string, config: string, owns: readonly (string | RegExp)[], executable = process.execPath) {
   const { files, diagnostics } = check(root, config, ["--listFiles"], executable);
   const counts: Record<string, number> = {};
   for (const line of diagnostics) {
     const file = /^(.+?)\(\d+,\d+\):/.exec(line)![1];
-    if (owns.some((prefix) => file.startsWith(prefix))) counts[file] = (counts[file] ?? 0) + 1;
+    if (owned(file, owns)) counts[file] = (counts[file] ?? 0) + 1;
   }
   return { files, counts };
 }
@@ -156,7 +160,7 @@ function main() {
 
   const actual = Object.fromEntries([...counts].sort((a, b) => a[0].localeCompare(b[0])));
   const declared: Record<string, number> = JSON.parse(readFileSync(BASELINE, "utf8")).files;
-  const inScope = (f: string) => programs.some((c) => OWNS[c].some((prefix) => f.startsWith(prefix)));
+  const inScope = (f: string) => programs.some((c) => owned(f, OWNS[c]));
 
   if (update) {
     const kept = Object.fromEntries(Object.entries(declared).filter(([f]) => !inScope(f)));

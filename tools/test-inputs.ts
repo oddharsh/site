@@ -27,6 +27,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { splitTestScript, suiteFiles } from "./lib/test-roots.ts";
 
 const ROOT = process.cwd();
 
@@ -269,7 +270,7 @@ export function select(map: InputMap | null, tests: string[], { paths: changed, 
 }
 
 const git = (...args: string[]) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
-const testFiles = () => [...new Bun.Glob("tools/tests/**/*.test.ts").scanSync(ROOT)].sort();
+const testFiles = () => suiteFiles(ROOT);
 
 function trackedSet(): Set<string> {
   const set = new Set<string>();
@@ -296,10 +297,8 @@ function traced(command: string[], dir: string, name: string): Promise<{ code: n
  * null. Bun reads a bare argument as a path filter, so each file is ./-anchored.
  */
 export function suiteCommand(script: string, files: string[] | null): string[] {
-  const argv = script.trim().split(/\s+/);
-  if (argv[0] !== "bun" || argv[1] !== "test" || argv.at(-1) !== "tools/tests/")
-    throw new Error(`package.json's test script no longer ends in tools/tests/, so it can't be narrowed: ${script}`);
-  return files ? [...argv.slice(0, -1), ...files.map((f) => `./${f}`)] : argv;
+  const { argv } = splitTestScript(script);
+  return files ? [...argv, ...files.map((f) => `./${f}`)] : script.trim().split(/\s+/);
 }
 
 /** The map at `path` and what changed since its commit, in the working tree; null with a reason when it can't be read. */

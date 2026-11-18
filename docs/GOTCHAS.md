@@ -64,7 +64,7 @@ skips it.
     real workerd. Also: the Worker sees a rewritten `Accept-Encoding`, and the
     edge down-converts br for clients that don't take it, so don't negotiate
     compression in the Worker.
-    Checked by: `tools/tests/contract-encodebody-survives-a-rebuild-in-workerd.test.ts`, `tools/tests/contract-the-speculation-ledger.test.ts`.
+    Checked by: `tools/tests/contract-encodebody-survives-a-rebuild-in-workerd.test.ts`, `src/worker/tests/contract-the-speculation-ledger.test.ts`.
 
 14. **Deltas are dcz (zstd), plain responses are brotli q11.** dcz wins on
     decode time, which scales with the reconstruction rather than the delta.
@@ -86,7 +86,7 @@ skips it.
     else is also imported by the contract suite outside workerd. Tracing is
     injected (`installTracing`) instead. Nothing cal imports may reach
     `cloudflare:workers`, directly or transitively.
-    Checked by: `tools/tests/contract-census-never-publishes-a-refused-check.test.ts`.
+    Checked by: `src/worker/tests/contract-census-never-publishes-a-refused-check.test.ts`.
 
 17. **`script-src` is per-document sha256 hashes, computed at build.**
     `lib/csp-hashes.ts` ships empty and build step 7c fills it; a path with no
@@ -96,7 +96,7 @@ skips it.
     (`islandResponse`, cal's slot list) send `script-src 'self'` with no
     hashes, since `innerHTML` never runs their scripts. `bun run csp:sweep` is
     the browser check; perturb one script as its control.
-    Checked by: `tools/tests/contract-worker-pages-hash-their-inline-scripts.test.ts`.
+    Checked by: `src/worker/tests/contract-worker-pages-hash-their-inline-scripts.test.ts`.
 
 18. **`scrollbar-color` inherits and disables `::-webkit-scrollbar` rules.**
     So does a non-auto `scrollbar-width` on the element itself. Reset to
@@ -121,12 +121,12 @@ skips it.
     rather than falling back, so it comes from config, never a literal.
     Gateway caching stays off where a repeated request should get a fresh
     answer.
-    Checked by: `tools/tests/contract-serendipity-event-tags.test.ts`.
+    Checked by: `src/worker/lib/tests/contract-serendipity-event-tags.test.ts`.
 
 24. **`deploy:promote` reads `checkpoints.json` from your working tree.** Ramp
     from a fresh worktree at `origin/main`, or the changelog row is silently
     skipped.
-    Checked by: `tools/deploy-promote.ts`, `tools/tests/contract-encode-read-the-container-decode-nothing.test.ts`.
+    Checked by: `tools/deploy-promote.ts`, `src/worker/tests/contract-encode-read-the-container-decode-nothing.test.ts`.
 
 25. **After changing a secret, don't ramp a version built before the change.**
     Secret versions carry no alias, so the ramp skips them; a version built
@@ -137,7 +137,7 @@ skips it.
 26. **`run_worker_first` caps at 100 RAW rows.** Duplicates count. The list is
     derived from `src/worker/routes.ts`; check for a covering wildcard before
     adding a row. `wrangler deploy --dry-run` catches an over-cap config.
-    Checked by: `tools/tests/contract-the-route-list-derives-every-route-list.test.ts`.
+    Checked by: `src/worker/tests/contract-the-route-list-derives-every-route-list.test.ts`.
 
 27. **A red `github-advanced-security` check is usually Copilot's agent
     failing, not your diff.** The tell is `CAPIError: 400` in the job log
@@ -197,7 +197,7 @@ skips it.
     off `cpuTime`, never status codes. Pin a version with the FULL UUID in
     `Cloudflare-Workers-Version-Overrides`. A workflow's conclusion doesn't
     say whether a release shipped: ask `bun run deploy:promote --status`.
-    Checked by: `tools/tests/contract-lens-compare-stays-under-the-subrequest-cap.test.ts`, `tools/tests/contract-no-cron-tick-outspends-the-subrequest-cap.test.ts`.
+    Checked by: `src/worker/tests/contract-lens-compare-stays-under-the-subrequest-cap.test.ts`, `src/worker/tests/contract-no-cron-tick-outspends-the-subrequest-cap.test.ts`.
 
 37. **`Bun.Image` is the OS imaging stack.** It's fine for a throwaway
     thumbnail and wrong for a served tier: fatter output, no 16-bit HEIF
@@ -469,7 +469,7 @@ skips it.
     invocation, one subrequest) or `withSelfFetch` (in-process, the same
     budget). The workerd cron test couldn't see it because the harness
     has no AI binding or secrets, so the dispatch skipped before it fetched.
-    Checked by: `tools/tests/contract-every-cron-fires-in-workerd.test.ts`, `tools/tests/contract-the-luma-session-jar.test.ts`.
+    Checked by: `src/worker/tests/contract-every-cron-fires-in-workerd.test.ts`, `src/worker/lib/tests/contract-the-luma-session-jar.test.ts`.
 
 65. **A catch on the promise you await doesn't clear the one you handed
     `ctx.waitUntil`.** index.ts's cron helper passes the same promise to
@@ -762,7 +762,7 @@ skips it.
     asset layer ignores `Range` (a `bytes=0-99` on `/og/home.jpg` came back
     200 with all 105,441 bytes), so anything a player streams goes through
     the Worker.
-    Checked by: `tools/tests/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
+    Checked by: `src/worker/tests/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
 
 84. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
     changes.** 1.3.0 stopped routing gray PNGs through RGB, and its new gray
@@ -970,7 +970,7 @@ skips it.
     production only when its rows say so: `aadhar_misses` carries the
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
-    Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+    Checked by: `src/worker/tests/contract-a-404-says-where-the-pages-are.test.ts`.
 
 97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
     whole window sideways on a phone.** An `<input>` keeps its 20-character
@@ -1038,7 +1038,7 @@ skips it.
     `shouldUseWorkersCache` refuses the request, so audit the inner tier with
     a query string (`?probe=1`), which skips the front tier and keeps the same
     Cache API key.
-    Checked by: `tools/tests/contract-photo-jxl-originals.test.ts`.
+    Checked by: `src/worker/tests/contract-photo-jxl-originals.test.ts`.
 
 101. **Every PNG djxl writes carries gAMA and cHRM, so a scorer that refuses
     those chunks refuses all of hif-archive.ts.** photo-metrics decodes
@@ -1098,3 +1098,18 @@ skips it.
     `lint-reads-an-eslint-config` and `lint-flavor-key-dropped` plant both
     defects.
     Checked by: `tools/check-bun-lint.ts`.
+
+105. **A test beside its module is suite code, and everything that walks `src/`
+    for the program has to skip it.** Since 2026-11-18, a test covering one
+    `src/` directory lives in that directory's `tests/`. The first build of
+    that layout staged 5 client tests into `.build/public/` as
+    `/garage/tests/*.test.js` with Brotli twins, because the served tree
+    transpiles every `.ts` under `src/client/`. 9 contract tests that scan
+    "every Worker module" (gotcha 16's `cloudflare:workers` check, the
+    encodeBody walk, the lazy-import census) failed on fixtures the moved
+    tests quote. `inTestsDir` in `tools/lib/test-roots.ts` is the one
+    definition: the served tree, the build's source walkers, the Worker
+    staging, the typecheck's program split and each scanner use it. A new
+    walker over `src/` needs it too; the control
+    `served-tree-takes-in-client-tests` plants the served-tree half.
+    Checked by: `tools/tests/contract-tests-live-beside-what-they-cover.test.ts`.
