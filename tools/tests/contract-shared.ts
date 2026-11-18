@@ -106,6 +106,7 @@ import {
   renderAroundSnapshot,
 } from "../../src/worker/around.ts";
 import * as tui from "../../src/worker/lib/tui.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 import {
   ART_VERSION,
   WARM_MAX_URLS,
@@ -465,6 +466,7 @@ async function configText(name) {
 
 export {
   configText,
+  inTestsDir,
   testGlobals,
   AGENT_SURFACES,
   ART_VERSION,

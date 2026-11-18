@@ -115,10 +115,13 @@ minimumReleaseAgeExcludes = [
 # fetched FlatBuffers, whose own tests import a package nothing here installs;
 # it now builds inside node_modules/av2-tone, which bun test never walks.
 
+# Bare `bun test` collects what package.json's test script does: tools/tests/
+# and the tests/ directories under src/. cal, cf-garage and lens-reader run their
+# own suites with their own config, and .claude/ holds other worktrees.
 [test]
-root = "tools/tests"
+root = "."
 preload = ["./tools/lib/no-network.ts"]
-pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
+pathIgnorePatterns = [".claude/**", ".build/**", "cal/**", "cf-garage/**", "lens-reader/**", "tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
 
 # bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) formats the tree:
 # `bun run format` writes, `bun run format:check` is a validate step, and

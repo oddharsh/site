@@ -32,9 +32,9 @@ test("the harness collector finds every contract test that boots createTestHarne
   const found = harnessTests(root);
   assert.ok(found.length >= HARNESS_TEST_FLOOR, `found ${found.length}; the collector has stopped matching`);
   for (const rel of [
-    "tools/tests/contract-census-duplicate-id-in-workerd.test.ts",
+    "src/worker/tests/contract-census-duplicate-id-in-workerd.test.ts",
     "tools/tests/contract-encodebody-survives-a-rebuild-in-workerd.test.ts",
-    "tools/tests/contract-every-cron-fires-in-workerd.test.ts",
+    "src/worker/tests/contract-every-cron-fires-in-workerd.test.ts",
   ])
     assert.ok(found.includes(rel), `${rel} boots the harness and the collector missed it`);
 
@@ -63,11 +63,11 @@ test("the gate runs those files with `bun run test`'s own flags", () => {
   const script = JSON.parse(read("package.json")).scripts.test;
   const argv = testArgv(script, ["tools/a.test.ts", "tools/b.test.ts"]);
   assert.equal(argv[0], "test");
-  assert.ok(!argv.includes("tools/tests/"), "the whole-suite target must be swapped out, or the gate runs every test");
-  assert.deepEqual(argv.slice(-2), ["tools/a.test.ts", "tools/b.test.ts"]);
-  assert.deepEqual(argv.slice(1, -2), script.trim().split(/\s+/).slice(2, -1), "every flag validate passes, in order");
-  assert.throws(() => testArgv("node --test tools/", []), /re-anchor/);
-  assert.throws(() => testArgv("bun test tools/tests/ extra", []), /re-anchor/);
+  assert.ok(!argv.includes("./tools/tests/") && !argv.includes("./src/"), "the whole-suite roots must be swapped out, or the gate runs every test");
+  assert.deepEqual(argv.slice(-2), ["./tools/a.test.ts", "./tools/b.test.ts"], "./-anchored, since a bare path is a substring filter");
+  assert.deepEqual(argv.slice(1, -2), script.trim().split(/\s+/).slice(2, -2), "every flag validate passes, in order");
+  assert.throws(() => testArgv("node --test tools/", []), /doesn't end in \.\/-anchored roots/);
+  assert.throws(() => testArgv("bun test tools/tests/ extra", []), /doesn't end in \.\/-anchored roots/);
 });
 
 test("canary-wrangler.ts wires the harness tests as a HARD gate, before the watches", () => {

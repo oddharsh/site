@@ -154,7 +154,7 @@ test("test-inputs: run is package.json's test script, narrowed to ./-anchored fi
   const { test: script } = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts;
   assert.deepEqual(suiteCommand(script, null), script.split(" "), "unnarrowed, it is bun run test");
   const narrowed = suiteCommand(script, ["tools/tests/a.test.ts"]);
-  assert.deepEqual(narrowed.slice(0, -1), script.split(" ").slice(0, -1), "the same flags");
+  assert.deepEqual(narrowed.slice(0, -1), script.split(" ").slice(0, -2), "the same flags, without the two roots");
   assert.equal(narrowed.at(-1), "./tools/tests/a.test.ts", "a bare path would be a substring filter");
-  assert.throws(() => suiteCommand("bun test --parallel=4 tools/", ["tools/tests/a.test.ts"]), /can't be narrowed/);
+  assert.throws(() => suiteCommand("bun test --parallel=4 tools/", ["tools/tests/a.test.ts"]), /doesn't end in \.\/-anchored roots/);
 });

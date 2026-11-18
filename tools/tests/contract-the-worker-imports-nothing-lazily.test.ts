@@ -1,5 +1,5 @@
 // ── no Worker module imports another lazily ──────────────────────────────────
-import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import { ROOT, assert, inTestsDir, readFile, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
 
 // Gotcha 56. A module reached through `import()` runs its top level inside the
@@ -38,7 +38,7 @@ test("the lazy-import matcher finds a lazy import and nothing else", () => {
 });
 
 test("no Worker module imports another lazily", async () => {
-  const files = repoFiles(WORKER_SOURCES);
+  const files = repoFiles(WORKER_SOURCES).filter((file) => !inTestsDir(file));
   // 127 on 2026-10-14; a glob that stopped matching would pass over nothing.
   assert.ok(files.length >= 80, `only ${files.length} Worker sources found; the globs have stopped matching`);
 

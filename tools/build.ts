@@ -62,6 +62,7 @@ import {
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
+import { inTestsDir } from "./lib/test-roots.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
 import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
@@ -195,7 +196,9 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // prose.css built clean, and the flat readdirs elsewhere missed both subtrees
 // (gotcha 55).
 const shellFiles = async (): Promise<string[]> => [
-  ...(await readdir("src/client", { recursive: true })).filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/client", { recursive: true }))
+    .filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts") && !inTestsDir(r))
+    .map((r) => `src/client/${r}`),
   ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
 ];
 
@@ -608,7 +611,7 @@ async function checkInvariants() {
     // the AVIF/JPEG tiers or OG PNGs as UTF-8.
     const activeText = (rel: string): boolean => rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
     const programFiles = async (root: string): Promise<string[]> =>
-      (await readdir(root, { recursive: true })).filter((rel) => /\.(?:[cm]?[jt]sx?)$/i.test(rel)).map((rel) => `${root}/${rel}`);
+      (await readdir(root, { recursive: true })).filter((rel) => /\.(?:[cm]?[jt]sx?)$/i.test(rel) && !inTestsDir(rel)).map((rel) => `${root}/${rel}`);
     const served = [
       ...(await servedFiles(activeText)),
       ...(await shellFiles()),
@@ -731,7 +734,7 @@ async function checkInvariants() {
     const files = [
       ...(await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/)),
       ...(await shellFiles()),
-      ...(await collect("src/worker", /\.ts$/)),
+      ...(await collect("src/worker", /\.ts$/, /^tests$/)),
       ...(await flat("cal/src", /\.ts$/)),
       // .ts since #523 (2026-08-23). It matched /\.js$/ until 2026-10-17 and
       // scanned 0 of serendipity's 3 files, so each root now has to yield one
@@ -916,8 +919,14 @@ await Promise.all([
   // at .build/src/worker/index.ts, and every deploy path and content hash
   // downstream is therefore untouched by the move.
   // a whole tree, so one clonefile(2) where it can (tools/lib/clone-tree.ts)
+  // Its tests/ directories are suite code, so they leave the staged tree before
+  // any pass over it: the Worker never imports them, and nothing here ships them.
   cloneTree(resolve("src/worker"), resolve(`${OUT}/src/worker`)).then(async (cloned) => {
     if (!cloned) await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
+    const staged = await readdir(`${OUT}/src/worker`, { recursive: true, withFileTypes: true });
+    await Promise.all(
+      staged.filter((e) => e.isDirectory() && e.name === "tests").map((e) => rm(`${e.parentPath}/${e.name}`, { recursive: true, force: true })),
+    );
   }),
   cloneTree(resolve("cal/src"), resolve(`${OUT}/cal/src`)).then(async (cloned) => {
     if (!cloned) await cp("cal/src", `${OUT}/cal/src`, { recursive: true });

@@ -127,7 +127,9 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
       const authored = rel ? `${rel}/${entry.name}` : entry.name;
       const source = `${root}/${authored}`;
       const child = root === "src/client" && authored.endsWith(".ts") && !authored.endsWith(".d.ts") ? authored.replace(/\.ts$/, ".js") : authored;
-      if (derived.has(source)) {
+      // A tests/ directory under a src/ root is suite code beside the module it
+      // covers (tools/lib/test-roots.ts): it never ships, so it never claims a URL.
+      if (derived.has(source) || (entry.isDirectory() && entry.name === "tests" && root.startsWith("src/"))) {
         skipped.push(source);
         continue;
       }

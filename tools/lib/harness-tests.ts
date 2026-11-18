@@ -20,8 +20,9 @@
 // This module reads files and nothing else, so the contract suite can point it
 // at a fixture tree.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { splitTestScript, suiteFiles } from "./test-roots.ts";
 
 /** Below this, the collector has stopped matching (there were 3 on 2026-09-30). */
 export const HARNESS_TEST_FLOOR = 3;
@@ -41,14 +42,10 @@ export function bootsHarness(source: string): boolean {
   return IMPORTS_WRANGLER.test(code) && BOOTS_HARNESS.test(code);
 }
 
-/** The contract tests under `<root>/tools/tests/` that boot the harness, as paths
- *  relative to `root`, sorted. */
+/** The suite's tests under `root` that boot the harness, as paths relative to
+ *  `root`, sorted. */
 export function harnessTests(root: string): string[] {
-  return readdirSync(join(root, "tools/tests"))
-    .filter((name) => name.endsWith(".test.ts"))
-    .filter((name) => bootsHarness(readFileSync(join(root, "tools/tests", name), "utf8")))
-    .map((name) => `tools/tests/${name}`)
-    .sort();
+  return suiteFiles(root).filter((rel) => bootsHarness(readFileSync(join(root, rel), "utf8")));
 }
 
 /** `bun run test`'s own argv with its `tools/tests/` target swapped for `files`, so
@@ -57,9 +54,7 @@ export function harnessTests(root: string): string[] {
  *  a bun-collected harness test takes. Throws when the script no longer has
  *  the shape this edits, since a guessed command would gate on something else. */
 export function testArgv(testScript: string, files: string[]): string[] {
-  const parts = testScript.trim().split(/\s+/);
-  if (parts[0] !== "bun" || parts[1] !== "test" || parts.at(-1) !== "tools/tests/") {
-    throw new Error(`package.json's "test" is ${JSON.stringify(testScript)}, which is not \`bun test ... tools/tests/\`; re-anchor testArgv()`);
-  }
-  return [...parts.slice(1, -1), ...files];
+  const { argv } = splitTestScript(testScript);
+  // ./-anchored, because bun reads a bare argument as a substring filter.
+  return [...argv.slice(1), ...files.map((f) => `./${f}`)];
 }

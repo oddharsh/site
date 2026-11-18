@@ -25,6 +25,8 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { suiteFiles } from "./test-roots.ts";
 
 export type Mutation =
   /** Replace `find` with `replace`. `find` must occur exactly once. */
@@ -79,7 +81,13 @@ export function plant(root: string, c: Control, dryRun = false): string[] {
 }
 
 export const BUILD = ["bun", "tools/build.ts"];
-const contract = (name: string) => ["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=30000", `tools/tests/${name}.test.ts`];
+// By name, wherever in the suite the file lives (tools/tests/ or a tests/ beside its module).
+const SUITE = suiteFiles(fileURLToPath(new URL("../../", import.meta.url)));
+const contract = (name: string) => {
+  const file = SUITE.find((rel) => rel.endsWith(`/${name}.test.ts`));
+  if (!file) throw new Error(`no contract test named ${name}`);
+  return ["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=30000", `./${file}`];
+};
 
 export const CONTROLS: Control[] = [
   {
@@ -649,6 +657,26 @@ export const CONTROLS: Control[] = [
     mutations: [{ file: "bunfig.toml", find: "Property[key.name=/^(timeout|retry|repeats)$/]", replace: "Property[key.name=/^(timeoutx|retry|repeats)$/]" }],
     run: contract("contract-lint-selectors"),
     expect: /a sleep or timeout selector stopped matching in a test file/,
+  },
+  {
+    id: "test-placed-away-from-what-it-covers",
+    plants: "a new tools/tests/ file that imports only src/worker/lib, which belongs in src/worker/lib/tests/",
+    mutations: [
+      {
+        file: "tools/tests/contract-planted-away-from-its-module.test.ts",
+        create:
+          'import { test } from "./contract-shared.ts";\nimport { asRecord } from "../../src/worker/lib/parse.ts";\ntest("planted", () => void asRecord({}));\n',
+      },
+    ],
+    run: contract("contract-tests-live-beside-what-they-cover"),
+    expect: /contract-planted-away-from-its-module\.test\.ts covers src\/worker\/lib\/ alone, so it belongs in src\/worker\/lib\/tests\//,
+  },
+  {
+    id: "served-tree-takes-in-client-tests",
+    plants: "the served tree stops skipping src/ tests/ directories, so client tests would ship from the site root",
+    mutations: [{ file: "tools/lib/served-tree.ts", find: '(entry.isDirectory() && entry.name === "tests" && root.startsWith("src/"))', replace: "false" }],
+    run: contract("contract-tests-live-beside-what-they-cover"),
+    expect: /a colocated test would be served/,
   },
   {
     id: "lint-reads-an-eslint-config",
