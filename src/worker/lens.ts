@@ -2693,7 +2693,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       };
       out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
       out.structured = {
-        title: (parseable.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
+        title: (lensElements(parseable, LENS_ELEMENTS.title).next().value?.inner ?? "").replace(/\s+/g, " ").trim(),
         meta: attrs.meta,
         og: attrs.og,
         twitter: attrs.twitter,
@@ -3830,22 +3830,120 @@ function lensParseJsonld(raw) {
   }
 }
 
+// Lens reads pages written by whoever owns the other origin, so every element
+// pattern below has to scan them in linear time. As regexes of the form
+// /<pre[^>]*>([\s\S]*?)<\/pre>/gi they did not: each opener with no closer after
+// it rescans to the end of the input, and "<pre>" repeated 64,000 times took
+// 3.6 s in Node 26 (2026-11-18), with all 15 patterns growing 16x per 4x input.
+//
+// lensElements finds the matches such a regex finds, in the same order. An opener
+// matches one way only (a name, then [^>]* to the first ">"), and its lazy body
+// ends at the first closer after it. A closer missing after one point is missing
+// after every later one, so each search is remembered instead of rerun. Every
+// match ends at a ">", so nothing past the last one is searched; that tail is
+// where an opener or closer would otherwise run [^>]* to the end of the input.
+//
+// It relies on no name in a head being a prefix of another (script, svg), so the
+// name an opener matched is the only one it could have matched. The fuzz in
+// contract-lens-element-scans-stay-linear.test.ts compares it against the regexes it replaced.
+type LensElement = {
+  head: RegExp; // global; group 1, when present, is the name the closer repeats
+  attrs: boolean; // the opener goes on with [^>]*>
+  closer: (name: string) => RegExp; // global, for the lowercased name
+};
+
+function* lensElements(html: string, { head, attrs, closer }: LensElement) {
+  const src = html.slice(0, html.lastIndexOf(">") + 1);
+  const open = new RegExp(head);
+  const closers = new Map<string, { re: RegExp; from: number; at: number; end: number }>();
+  let gt = -1;
+  let m;
+  while ((m = open.exec(src))) {
+    const name: string = m[1] ?? "";
+    let from = open.lastIndex;
+    if (attrs) {
+      if (gt < from) gt = src.indexOf(">", from);
+      if (gt < 0) return;
+      from = gt + 1;
+    }
+    const key = name.toLowerCase();
+    let c = closers.get(key);
+    if (!c) closers.set(key, (c = { re: closer(key), from: Infinity, at: -1, end: -1 }));
+    if (from < c.from || (c.at >= 0 && c.at < from)) {
+      c.re.lastIndex = from;
+      const hit = c.re.exec(src);
+      c.from = from;
+      c.at = hit ? hit.index : -1;
+      c.end = hit ? c.re.lastIndex : -1;
+    }
+    if (c.at < 0) {
+      open.lastIndex = m.index + 1;
+      continue;
+    }
+    yield { start: m.index, end: c.end, name, inner: src.slice(from, c.at) };
+    open.lastIndex = c.end;
+  }
+}
+
+export function lensReplaceElements(html: string, el: LensElement, fn: (inner: string, name: string, whole: string) => string) {
+  let out = "";
+  let last = 0;
+  for (const m of lensElements(html, el)) {
+    out += html.slice(last, m.start) + fn(m.inner, m.name, html.slice(m.start, m.end));
+    last = m.end;
+  }
+  return out + html.slice(last);
+}
+
+// html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html. The greedy body runs
+// to the LAST closer, so the first "<body" decides: if the ">" ending it falls
+// after the last "</body>", every later opener's does too.
+export function lensBody(html: string) {
+  const open = html.search(/<body/i);
+  if (open < 0) return html;
+  const from = html.indexOf(">", open) + 1;
+  let close = -1;
+  for (const m of html.matchAll(/<\/body>/gi)) close = m.index;
+  return from > 0 && close >= from ? html.slice(from, close) : html;
+}
+
+const lensFixedCloser = (closer: RegExp) => () => new RegExp(closer);
+const lensNamedCloser = (tail: string) => (name: string) => new RegExp("<\\/" + name + tail, "gi");
+const lensPair = (name: string): LensElement => ({
+  head: new RegExp("<" + name, "gi"),
+  attrs: true,
+  closer: lensFixedCloser(new RegExp("<\\/" + name + ">", "gi")),
+});
+export const LENS_ELEMENTS = {
+  title: lensPair("title"),
+  pre: lensPair("pre"),
+  code: lensPair("code"),
+  blockquote: lensPair("blockquote"),
+  li: lensPair("li"),
+  heading: { head: /<h([1-6])/gi, attrs: true, closer: (level) => new RegExp("<\\/h" + level + ">", "gi") },
+  link: { head: /<a\b/gi, attrs: true, closer: lensFixedCloser(/<\/a>/gi) },
+  strong: { head: /<(strong|b)\b/gi, attrs: true, closer: lensNamedCloser(">") },
+  em: { head: /<(em|i)\b/gi, attrs: true, closer: lensNamedCloser(">") },
+  comment: { head: /<!--/g, attrs: false, closer: lensFixedCloser(/-->|--!>/g) },
+  textSkip: { head: /<(script|style|noscript|template|svg)/gi, attrs: false, closer: lensNamedCloser(">") },
+  markdownSkip: { head: /<(script|style|noscript|template|svg|head|nav|footer|aside)\b/gi, attrs: false, closer: lensNamedCloser("\\b[^>]*>") },
+} satisfies Record<string, LensElement>;
+
 function lensHeadings(html) {
   const out: { level: number; text: string }[] = [];
-  const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
-  let m;
-  while ((m = re.exec(html)) && out.length < 250) {
-    const txt = lensStripInline(m[2]).trim();
-    if (txt) out.push({ level: +m[1], text: txt.slice(0, 300) });
+  for (const m of lensElements(html, LENS_ELEMENTS.heading)) {
+    if (out.length >= 250) break;
+    const txt = lensStripInline(m.inner).trim();
+    if (txt) out.push({ level: +m.name, text: txt.slice(0, 300) });
   }
   return out;
 }
 
 export function lensText(html) {
-  let s = html;
-  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  if (b) s = b[1];
-  s = stripTags(s.replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " "), " ");
+  const s = stripTags(
+    lensReplaceElements(lensBody(html), LENS_ELEMENTS.textSkip, () => " "),
+    " ",
+  );
   return lensDecode(s).replace(/\s+/g, " ").trim();
 }
 
@@ -3878,31 +3976,32 @@ export function lensText(html) {
 // a real extractor needs a DOM, ~46 KiB gzip there (lens-reader/src/index.ts). This stays
 // crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
-  let s = html;
-  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  if (b) s = b[1];
-  s = s.replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
-  s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\b[^>]*>/gi, "");
-  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(stripTags(i, "")).replace(/\n+$/g, "") + "\n```\n\n");
-  s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (m, i) => "`" + lensStripInline(i).trim() + "`");
+  let s = lensReplaceElements(lensBody(html), LENS_ELEMENTS.comment, () => "");
+  s = lensReplaceElements(s, LENS_ELEMENTS.markdownSkip, () => "");
+  s = lensReplaceElements(s, LENS_ELEMENTS.pre, (i) => "\n\n```\n" + lensDecode(stripTags(i, "")).replace(/\n+$/g, "") + "\n```\n\n");
+  s = lensReplaceElements(s, LENS_ELEMENTS.code, (i) => "`" + lensStripInline(i).trim() + "`");
   s = s.replace(/<br\s*\/?>/gi, "\n");
   s = s.replace(/<hr\s*\/?>/gi, "\n\n---\n\n");
-  s = s.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (m, l, i) => "\n\n" + "#".repeat(+l) + " " + lensStripInline(i).trim() + "\n\n");
-  s = s.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (m, i) => "\n\n> " + lensStripInline(i).trim().replace(/\n+/g, "\n> ") + "\n\n");
-  s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (m, i) => "- " + lensStripInline(i).trim() + "\n");
-  s = s.replace(/<img\b[^>]*>/gi, (m) => {
-    const alt = lensTagAttr(m, "alt");
-    const src = lensAbs(lensTagAttr(m, "src"), baseUrl);
-    return src ? `![${alt}](${src})` : "";
-  });
-  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (m, i) => {
+  s = lensReplaceElements(s, LENS_ELEMENTS.heading, (i, l) => "\n\n" + "#".repeat(+l) + " " + lensStripInline(i).trim() + "\n\n");
+  s = lensReplaceElements(s, LENS_ELEMENTS.blockquote, (i) => "\n\n> " + lensStripInline(i).trim().replace(/\n+/g, "\n> ") + "\n\n");
+  s = lensReplaceElements(s, LENS_ELEMENTS.li, (i) => "- " + lensStripInline(i).trim() + "\n");
+  // An <img with no ">" after it runs [^>]* to the end, once per opener, so the
+  // tail past the last ">" (which holds no match) skips the regex.
+  const imgEnd = s.lastIndexOf(">") + 1;
+  s =
+    s.slice(0, imgEnd).replace(/<img\b[^>]*>/gi, (m) => {
+      const alt = lensTagAttr(m, "alt");
+      const src = lensAbs(lensTagAttr(m, "src"), baseUrl);
+      return src ? `![${alt}](${src})` : "";
+    }) + s.slice(imgEnd);
+  s = lensReplaceElements(s, LENS_ELEMENTS.link, (i, _, m) => {
     const href = lensAbs(lensTagAttr(m, "href"), baseUrl);
     const txt = lensStripInline(i).trim();
     if (!txt) return "";
     return href ? `[${txt}](${href})` : txt;
   });
-  s = s.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "**" + lensStripInline(i).trim() + "**");
-  s = s.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "*" + lensStripInline(i).trim() + "*");
+  s = lensReplaceElements(s, LENS_ELEMENTS.strong, (i) => "**" + lensStripInline(i).trim() + "**");
+  s = lensReplaceElements(s, LENS_ELEMENTS.em, (i) => "*" + lensStripInline(i).trim() + "*");
   s = s.replace(/<\/(p|div|section|article|header|main|ul|ol|table|tr|h[1-6])>/gi, "\n\n");
   s = stripTags(s, "");
   s = lensDecode(s);
