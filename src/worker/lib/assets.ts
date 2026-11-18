@@ -658,7 +658,7 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
   // index.html, which build.ts bakes into a deterministic document precisely so
   // it can take this path. Has to come before the guard below, which would
   // otherwise hand `/` to the asset layer and skip the twin entirely.
-  const rel = url.pathname === "/" ? "index" : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  const rel = url.pathname === "/" ? "index" : url.pathname.replace(/^\/+/, "").replace(/(?<!\/)\/+$/, "");
   if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {

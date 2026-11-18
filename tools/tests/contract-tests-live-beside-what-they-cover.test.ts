@@ -28,13 +28,27 @@ const STATIC = /^\s*import\s+(type\s+)?([^'"]*?)\s*from\s*["'](\.[^"']+)["']|^\s
 // quote that shape, aren't read as imports (harness-tests.ts does the same).
 const DYNAMIC = /^[^'"`\n]*\bimport\(\s*["'](\.[^"']+)["']\s*\)/gm;
 
+const TYPE_SPECIFIER = /^type\s+[\w$]+(?:\s+as\s+[\w$]+)?$/;
+
+/** Whether an import clause names only types: `{ type A, type B as C }`. */
+function typeOnly(clause: string): boolean {
+  const braced = clause.trim();
+  if (!braced.startsWith("{") || !braced.endsWith("}")) return false;
+  const names = braced
+    .slice(1, -1)
+    .split(",")
+    .map((name) => name.trim());
+  if (names.at(-1) === "") names.pop(); // a trailing comma
+  return names.length > 0 && names.every((name) => TYPE_SPECIFIER.test(name));
+}
+
 /** The src/ directories whose modules `file` (repo-relative) imports, sorted. */
 export function ownerDirs(file: string, code: string): string[] {
   const specs: string[] = [];
   for (const m of code.matchAll(STATIC)) {
     const [, typeKeyword, clause, from, bare] = m;
     if (bare) specs.push(bare);
-    else if (!typeKeyword && !/^\{\s*(?:type\s+[\w$]+(?:\s+as\s+[\w$]+)?\s*,?\s*)+\}$/.test(clause.trim())) specs.push(from);
+    else if (!typeKeyword && !typeOnly(clause)) specs.push(from);
   }
   for (const m of code.matchAll(DYNAMIC)) specs.push(m[1]);
   const dirs = specs

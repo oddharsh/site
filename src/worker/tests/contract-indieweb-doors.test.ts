@@ -50,7 +50,8 @@ const decode = (s) => s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&"
 function parseHtml(html) {
   const root = { tag: "#root", attrs: {}, children: [] as any[] };
   const stack = [root];
-  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|<!--[\s\S]*?-->|<![^>]*>/g;
+  const tagRe =
+    /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"'a-zA-Z0-9-](?:[^>"']|"[^"]*"|'[^']*')*|"[^"]*"(?:[^>"']|"[^"]*"|'[^']*')*|'[^']*'(?:[^>"']|"[^"]*"|'[^']*')*)?)>|<!--[\s\S]*?-->|<![^>]*>/g;
   let at = 0;
   for (let m; (m = tagRe.exec(html));) {
     const top = stack[stack.length - 1];

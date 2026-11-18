@@ -41,7 +41,10 @@ const DESTS = [
 ];
 
 async function resolve(cmd, env, request) {
-  const q = cmd.trim().toLowerCase().replace(/\/+$/, "");
+  const q = cmd
+    .trim()
+    .toLowerCase()
+    .replace(/(?<!\/)\/+$/, "");
   if (!q) return null;
 
   for (const [name, path] of DESTS) {

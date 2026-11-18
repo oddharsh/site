@@ -139,9 +139,9 @@ async function loadApiRecords(zoneId, token) {
 const SVCB_KEY_ORDER = { mandatory: 0, alpn: 1, "no-default-alpn": 2, port: 3, ipv4hint: 4, ech: 5, ipv6hint: 6 };
 
 function canonicalSvcb(value) {
-  const m = /^(\d+)\s+(\S+)\s*(.*)$/.exec(value.trim());
+  const m = /^(\d+)\s+(\S+)(?:\s+(\S.*))?$/.exec(value.trim());
   if (!m) return value.trim();
-  const [, priority, target, rest] = m;
+  const [, priority, target, rest = ""] = m;
   const params = [...rest.matchAll(/([a-zA-Z0-9-]+)(?:=(?:"([^"]*)"|([^\s]+)))?/g)]
     .map((x) => ({ k: x[1], v: x[2] ?? x[3] ?? null }))
     .filter((p) => p.k)

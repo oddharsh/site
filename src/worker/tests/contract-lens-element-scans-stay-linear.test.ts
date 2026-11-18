@@ -80,10 +80,16 @@ test("lensBody takes what the greedy <body> match took", async () => {
 
 test("lensText and lensMarkdown stay inside the budget on 256 KB of openers with no closer", async () => {
   const { lensMarkdown, lensText } = await import("../lens.ts");
-  // Each unit ends in ">", so the generic tag strip that follows has a match for
-  // every "<" and this times the element passes alone.
-  for (const unit of ["<pre>", "<code>", "<h2>", "<blockquote>", "<li>", "<a>", "<b>", "<i>", "<!--x>", "<script>", "<nav>", "<body>"]) {
-    const html = `<p>kept</p>${unit.repeat(Math.floor((256 * 1024) / unit.length))}`;
+  const openers = ["<pre>", "<code>", "<h2>", "<blockquote>", "<li>", "<a>", "<b>", "<i>", "<!--x>", "<script>", "<nav>", "<body>"];
+  // The rest leave a tail with no ">" in it, which no pass may search: an <img
+  // runs [^>]* to the end, and so does every "</nav " the <nav> closer tries.
+  const tails = [
+    ["", "<img x"],
+    ["", "<pre"],
+    ["<nav>", "</nav x"],
+  ];
+  for (const [lead, unit] of [...openers.map((unit) => ["", unit]), ...tails]) {
+    const html = `<p>kept</p>${lead}${unit.repeat(Math.floor((256 * 1024) / unit.length))}`;
     let md = "";
     let text = "";
     const ms = elapsed(() => {

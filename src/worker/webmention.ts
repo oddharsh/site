@@ -692,7 +692,7 @@ function sameOriginPath(raw, origin) {
   try {
     const u = new URL(raw);
     if (u.origin !== origin) return null;
-    return u.pathname.replace(/\/+$/, "") || "/";
+    return u.pathname.replace(/(?<!\/)\/+$/, "") || "/";
   } catch {
     return null;
   }

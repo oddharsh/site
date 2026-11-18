@@ -95,7 +95,7 @@ for (const tool of tools) {
 // cannot see these, because the name only exists as a loop word. That blind spot
 // is gotcha 29's, in a different costume.
 let guardLists = 0;
-const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n]+);?[ \t]*(?:do)?[ \t]*$/gm;
+const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n \t][^;\n]*|[ \t])(?:;[ \t]*(?:do[ \t]*)?)?$/gm;
 for (const [rel, text] of source) {
   for (const match of text.matchAll(guardPattern)) {
     const [, variable, wordsRaw] = match;

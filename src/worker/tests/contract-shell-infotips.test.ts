@@ -58,7 +58,7 @@ test('"what was hovered" is answered in exactly one place', async () => {
   // It still reads the DOM for per-family facts (which builder, and whether the
   // target sits on the taskbar), and those are single selectors. What it must
   // never grow is a LIST — that is the copy this test exists to stop.
-  assert.doesNotMatch(tip, /\.axp-\w[^\n"]*,[^\n"]*\.axp-/, "a second target list in infotip.js is the drift this test exists to stop");
+  assert.doesNotMatch(tip, /\.axp-\w[^\n",]*,[^\n"]*\.axp-/, "a second target list in infotip.js is the drift this test exists to stop");
 });
 
 test("the infotip yields to every richer hover surface on the page", async () => {
