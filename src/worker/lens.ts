@@ -16,6 +16,7 @@ import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensReci
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import type { ReadinessStatus } from "./lib/readiness-status.ts";
 import { asRecord, asText } from "./lib/parse.ts";
+import { stripTags } from "./lib/text.ts";
 import { parseMcpBody } from "./lib/mcp-protocol.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
 import { VIEW_SAMPLE, classifyWalls } from "./lens-walls.ts";
@@ -1883,7 +1884,7 @@ export function lensParseCloudflareAgentScore(body, contentType = "") {
   if (!parsed.ok || !parsed.payload.result || parsed.payload.result.isError) return null;
   const { result } = parsed.payload;
   const text = Array.isArray(result.content) ? result.content.map((item) => (item && item.text) || "").join("\n") : JSON.stringify(result);
-  const match = text.match(/\bLevel\s+([0-5])\s*\/\s*5(?:\s*(?:--|[-:\u2013\u2014])\s*\**\s*([^\n*]+))?/i);
+  const match = text.match(/\bLevel\s+([0-5])\s*\/\s*5(?:\s*(?:--|[-:\u2013\u2014])\s*(?:\*+\s*)?([^\n*]+))?/i);
   if (!match) return null;
   const level = Number(match[1]);
   return {
@@ -3038,7 +3039,7 @@ function lensDetectDictionary(headers) {
 export function svcbHasEch(dataStr) {
   const s = String(dataStr || "").trim();
   if (/(?:^|[\s"])ech=/i.test(s)) return { ech: true, parsed: true };
-  const m = s.match(/^\\#\s+\d+\s+([0-9a-fA-F\s]+)$/);
+  const m = s.match(/^\\#\s+\d+\s([0-9a-fA-F\s]+)$/);
   if (!m) return { ech: false, parsed: false };
   let bytes;
   try {
@@ -3844,7 +3845,7 @@ export function lensText(html) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i);
   if (b) s = b[1];
-  s = s.replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ");
+  s = stripTags(s.replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " "), " ");
   return lensDecode(s).replace(/\s+/g, " ").trim();
 }
 
@@ -3882,7 +3883,7 @@ export function lensMarkdown(html, baseUrl) {
   if (b) s = b[1];
   s = s.replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
   s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\b[^>]*>/gi, "");
-  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(i.replace(/<[^>]+>/g, "")).replace(/\n+$/g, "") + "\n```\n\n");
+  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(stripTags(i, "")).replace(/\n+$/g, "") + "\n```\n\n");
   s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (m, i) => "`" + lensStripInline(i).trim() + "`");
   s = s.replace(/<br\s*\/?>/gi, "\n");
   s = s.replace(/<hr\s*\/?>/gi, "\n\n---\n\n");
@@ -3903,17 +3904,17 @@ export function lensMarkdown(html, baseUrl) {
   s = s.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "**" + lensStripInline(i).trim() + "**");
   s = s.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "*" + lensStripInline(i).trim() + "*");
   s = s.replace(/<\/(p|div|section|article|header|main|ul|ol|table|tr|h[1-6])>/gi, "\n\n");
-  s = s.replace(/<[^>]+>/g, "");
+  s = stripTags(s, "");
   s = lensDecode(s);
   s = s
-    .replace(/[ \t]+\n/g, "\n")
+    .replace(/(?<![ \t])[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ");
   return s.trim();
 }
 
 function lensStripInline(h) {
-  return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+  return lensDecode(stripTags(String(h), " ")).replace(/\s+/g, " ");
 }
 
 // Built once per name: lensMarkdown asks for alt, src and href on every
@@ -4245,7 +4246,7 @@ export async function lensProbeNlweb(origin, env) {
     // failing. This probe demanded JSON and therefore graded a correctly
     // behaving instance ABSENT — and a bot wall does not stream, so accepting
     // this reopens none of the false positives the tightening below closed.
-    const streamed = /^text\/event-stream$/i.test(ct) || /^\s*(event|data):/m.test(head);
+    const streamed = /^text\/event-stream$/i.test(ct) || /^[^\S\n\r\u2028\u2029]*(event|data):/m.test(head);
     if (streamed && res.ok) return { verdict: "likely", detail: "event stream at /ask (NLWeb streams by default)" };
     if (json && res.ok) return { verdict: "maybe", detail: "JSON at /ask (HTTP " + res.status + ") — NLWeb-shaped" };
     // A refusal that NAMES the required parameter is the strongest evidence this

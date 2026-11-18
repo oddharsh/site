@@ -1280,7 +1280,7 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
 
 /** Every tool in TOOL_NAMES, and its .txt representation. */
 export async function handleTool(request, env, ctx, url = new URL(request.url)) {
-  const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
+  const raw = url.pathname.replace(/^\//, "").replace(/(?<!\/)\/+$/, "");
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
   if (!TOOL_NAMES.has(name)) {

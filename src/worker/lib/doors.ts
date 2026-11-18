@@ -182,7 +182,7 @@ type McpDoorReading =
   | { ok: false; unreadable?: true; gated?: true; detail?: string; count?: undefined; tools?: undefined };
 
 export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}): Promise<McpDoorReading> {
-  const url = origin.replace(/\/+$/, "") + "/mcp";
+  const url = origin.replace(/(?<!\/)\/+$/, "") + "/mcp";
   // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
   // empty because this probe reads a catalogue and offers the server nothing:
   // no roots, no sampling, no elicitation. Sending it matters twice over — a
@@ -363,7 +363,7 @@ export type ForeignNlwebProbe =
  * shut (there is no endpoint), unreadable (we never got to look), or ok.
  */
 export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}): Promise<ForeignNlwebProbe> {
-  const base = origin.replace(/\/+$/, "") + "/ask";
+  const base = origin.replace(/(?<!\/)\/+$/, "") + "/ask";
   const query =
     String(opts.query || "")
       .trim()
@@ -401,7 +401,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
     const got = await readResponseCapped(res, ASK_CAP);
     if (got.truncated) return { ok: false, unreadable: true, detail: `answer over ${ASK_CAP / 1024} KB — not read` };
 
-    const framing = /event-stream/.test(contentType) || /^\s*(event|data):/m.test(got.text) ? "sse" : "json";
+    const framing = /event-stream/.test(contentType) || /^[^\S\n\r\u2028\u2029]*(event|data):/m.test(got.text) ? "sse" : "json";
     const parsed = framing === "sse" ? parseAskStream(got.text) : parseAskJson(got.text);
     if (!parsed.ok) {
       // A non-2xx that also failed to parse is reported by STATUS, because "not

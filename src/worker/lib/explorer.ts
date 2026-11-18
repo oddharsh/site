@@ -46,7 +46,7 @@ const PLACE_LABEL = new Map(PLACES.map((place) => [place.path, place.label]));
 function trail(path: string): string[] {
   const parts = String(path || "/")
     .split("?")[0]
-    .replace(/\/+$/, "")
+    .replace(/(?<!\/)\/+$/, "")
     .split("/")
     .filter(Boolean);
   const out: string[] = [];
@@ -129,7 +129,7 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] }: { 
   const rows: Detail[] = [];
   const here = name && name !== "aadhar.sh" ? name : "";
   if (here) rows.push({ term: "Name", value: here });
-  rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
+  rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/(?<!\/)\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
   boxes.push(group("Details", html`<dl>${rows.map((row) => html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
 

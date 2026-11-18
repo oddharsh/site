@@ -159,7 +159,7 @@ export function parseAskRequest(url, body) {
   const siteToken = String(site ?? "")
     .trim()
     .toLowerCase()
-    .replace(/\/+$/, "");
+    .replace(/(?<!\/)\/+$/, "");
   if (!SITE_TOKENS.has(siteToken)) {
     return {
       ok: false as const,

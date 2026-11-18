@@ -461,7 +461,7 @@ async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext
 }
 
 async function routeCalHost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  const path = url.pathname.replace(/\/+$/, "") || "/";
+  const path = url.pathname.replace(/(?<!\/)\/+$/, "") || "/";
   if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
 
   if (env.WORK_CALENDAR_SLUG && path === `/${env.WORK_CALENDAR_SLUG}`) {

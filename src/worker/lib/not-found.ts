@@ -149,7 +149,7 @@ export function canonicalPage(path: string, pages: readonly string[]): string | 
       .toLowerCase()
       .replace(/\/index(?:\.html?)?$/, "")
       .replace(/\.html?$/, "")
-      .replace(/\/+$/, "") || "/";
+      .replace(/(?<!\/)\/+$/, "") || "/";
   const want = norm(path);
   const hit = pages.find((p) => norm(p) === want);
   return hit && hit !== path ? hit : null;
@@ -180,7 +180,10 @@ function likeness(a: string, b: string): number {
  *  whole sitemap otherwise. A floor keeps an unrelated page from being offered
  *  as a near miss. */
 export function nearestPages(path: string, pages: readonly string[], limit = 3): { section: string | null; pages: string[] } {
-  const parts = path.replace(/\/+$/, "").split("/").filter(Boolean);
+  const parts = path
+    .replace(/(?<!\/)\/+$/, "")
+    .split("/")
+    .filter(Boolean);
   const top = parts.length > 1 ? `/${parts[0]}` : null;
   const section = top && pages.includes(top) ? top : null;
   const pool = section ? pages.filter((p) => p.startsWith(`${section}/`)) : pages.filter((p) => p !== "/");

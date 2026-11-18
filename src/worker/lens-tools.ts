@@ -50,7 +50,7 @@ const LENS_TOOLS = defineLens({
         ok: true,
         origin,
         host,
-        endpoint: origin.replace(/\/+$/, "") + "/mcp",
+        endpoint: origin.replace(/(?<!\/)\/+$/, "") + "/mcp",
         count: probe.count,
         shown: probe.tools.length,
         withSchema,
