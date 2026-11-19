@@ -1113,3 +1113,19 @@ skips it.
     walker over `src/` needs it too; the control
     `served-tree-takes-in-client-tests` plants the served-tree half.
     Checked by: `tools/tests/contract-tests-live-beside-what-they-cover.test.ts`.
+
+106. **The speculation ledger never sees a speculation that Workers Cache
+    answers.** `countSpeculativeLoad` runs in the dispatcher, and a cache hit
+    returns before the dispatcher runs. `Sec-Purpose` doesn't bail a request
+    out of the cache, so every speculation of a `CACHEABLE_PATHS` path (`/`,
+    `/writing`, `/about` and 26 more) or a `/writing/` post counts only on a
+    miss. The activation beacon goes to `/ledger/prefetch`, which is never
+    cached, so it counts every activation. On a cacheable page `rate` reads
+    high; read it as an upper bound. The `reached` split counts activations
+    alone and carries no bias. Measured on production 2026-11-19: a prerender
+    request to `/writing` came back `cf-cache-status: HIT` with no Worker log
+    line and no ledger row, while one to `/garage/ranges`, which isn't
+    cacheable, wrote its row within a second.
+    The check fails once a speculation stops riding Workers Cache, and this
+    entry can retire then.
+    Checked by: `src/worker/tests/contract-the-speculation-ledger.test.ts`.

@@ -69,6 +69,21 @@ test("the speculation denominator counts real speculations and nothing else", as
   );
 });
 
+// Gotcha 106. The day this fails, a speculation no longer rides Workers Cache,
+// the denominator counts cacheable pages in full, and the gotcha can retire.
+test("a speculation of a cacheable page goes to Workers Cache, whose hits the denominator never sees", async () => {
+  const { isEdgeCacheable } = await import("../dispatch.ts");
+  const { CACHEABLE_PATHS } = await import("../routes.ts");
+  const admitted = (path: string) => {
+    const url = new URL(`https://aadhar.sh${path}`);
+    const headers = { "sec-purpose": "prefetch;prerender", "sec-fetch-dest": "document", accept: "text/html" };
+    return isEdgeCacheable(new Request(url, { headers }), url);
+  };
+  for (const path of CACHEABLE_PATHS) assert.equal(admitted(path), true, `a prerender of ${path} is answered by Workers Cache on a hit`);
+  assert.equal(admitted("/writing/in-flux"), true, "a post under the /writing/ prefix is cached too");
+  assert.equal(admitted("/garage"), false, "/garage is not cacheable, so its every speculation reaches the counter");
+});
+
 test("the activation beacon answers 204 and records which page paid off", async () => {
   const { handlePrefetchActivation, prefetchActivationHeader } = await import("../speculation.ts");
 
