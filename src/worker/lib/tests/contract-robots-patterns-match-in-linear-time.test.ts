@@ -3,8 +3,8 @@
 // can be handed both halves of a bad match. Until 2026-11-19 each `*` compiled
 // to `.*`, and "/a*a*a*a*b" against 400 "a"s took 1.1 s under bun. The budget
 // below is far above what the glob match takes on 64 KB.
-import { assert, test } from "../../../tools/tests/contract-shared.ts";
-import { lensPathMatch } from "../lib/robots.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { lensPathMatch } from "../robots.ts";
 
 const BUDGET_MS = 50;
 const elapsed = (run: () => void) => {
