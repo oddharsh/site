@@ -32,7 +32,7 @@
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
 import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
-import { esc, extractMeta, extractTitle } from "./lib/http.ts";
+import { cappedRequestBody, esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 import { sign, verify } from "./lib/sign.ts";
@@ -111,9 +111,11 @@ export async function handleWebmention(request, env, ctx) {
     );
   }
 
+  const capped = await cappedRequestBody(request);
+  if (!capped) return text("That body is too large for a source and a target.", 413);
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return text("Send application/x-www-form-urlencoded with source and target.", 400);
   }

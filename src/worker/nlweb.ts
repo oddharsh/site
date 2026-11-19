@@ -45,7 +45,7 @@
 // you have, name what it is, never fabricate the thing you do not.
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { ASK_LIMITS } from "./lib/api-limits.ts";
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 import { span } from "./lib/trace.ts";
 import { SEARCH_TERM_MAX, searchCorpusFor, searchSiteRanked } from "./search.ts";
@@ -381,8 +381,10 @@ export async function handleAsk(request, env, _ctx?, url = new URL(request.url))
 
   let body = null;
   if (request.method === "POST") {
+    const capped = await cappedRequestBody(request);
+    if (!capped) return jsonResponse({ error: "POST body too large" }, 413);
     try {
-      body = await request.json();
+      body = await capped.json();
     } catch {
       return jsonResponse({ error: "POST body must be JSON" }, 400);
     }
