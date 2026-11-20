@@ -12,7 +12,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
-import { esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
+import { cappedRequestBody, esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
 import { shareMeta } from "../src/worker/lib/chrome.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
@@ -852,9 +852,11 @@ export function parseCookies(raw) {
 async function handleCookies(request, env, d, uid) {
   const back = (msg, toDash?) =>
     new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const capped = await cappedRequestBody(request);
+  if (!capped) return back("That form was too large");
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return back("Couldn't read the form");
   }
@@ -1633,9 +1635,11 @@ async function addEventsByLink(d, uid, raw) {
 async function handleAddEvent(request, env, d, uid) {
   const back = (msg, toDash?) =>
     new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const capped = await cappedRequestBody(request);
+  if (!capped) return back("That form was too large");
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return back("Couldn't read the form");
   }
@@ -3763,9 +3767,11 @@ export async function handleMcp(request, env, d) {
     // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
     return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
   }
+  const capped = await cappedRequestBody(request);
+  if (!capped) return respond(mcpError(null, -32600, "Request body too large"), 413);
   let payload;
   try {
-    payload = await request.json();
+    payload = await capped.json();
   } catch {
     return respond(mcpError(null, -32700, "Parse error"));
   }

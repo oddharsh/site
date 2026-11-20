@@ -1,4 +1,4 @@
-import { jsonResponse } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "./lib/http.ts";
 import { deadline } from "./lib/cache.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 import type { Env } from "./lib/env.ts";
@@ -434,9 +434,11 @@ export async function handleSiteMcp(request, env, ctx) {
     body === null ? new Response(null, { status, headers: cors }) : jsonResponse(body, status, { ...cors, "cache-control": "no-store" });
   if (request.method !== "POST") return respond({ error: "Use POST with JSON-RPC 2.0." }, 405);
 
+  const capped = await cappedRequestBody(request);
+  if (!capped) return respond(mcpError(null, -32600, "Request body too large"), 413);
   let payload;
   try {
-    payload = await request.json();
+    payload = await capped.json();
   } catch {
     return respond(mcpError(null, -32700, "Parse error"));
   }

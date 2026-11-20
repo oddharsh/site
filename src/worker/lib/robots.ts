@@ -93,22 +93,26 @@ export function lensPathMatch(pattern, path) {
   return compilePattern(pattern)(robotsOctets(path));
 }
 
+// Matched as a glob, without a regex: the other origin writes the pattern and
+// the visitor picks the path. Until 2026-11-19 each `*` became `.*`, and a
+// failing match backtracked through every split of the path between stars:
+// "/a*a*a*a*b" against 400 "a"s took 1.1 s under bun. Taking each literal
+// piece at its leftmost fit is enough for globs, so this does at most one
+// indexOf per piece, and an anchored last piece must sit at the end.
 function compilePattern(pattern: string): PathMatcher {
   pattern = robotsOctets(pattern);
   const anchored = pattern.endsWith("$");
-  const body = anchored ? pattern.slice(0, -1) : pattern;
-  const rx =
-    "^" +
-    body
-      .split("*")
-      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join(".*") +
-    (anchored ? "$" : "");
-  try {
-    const re = new RegExp(rx);
-    return (path) => re.test(path);
-  } catch {
-    const prefix = body.split("*")[0];
-    return (path) => path.startsWith(prefix);
-  }
+  const [first, ...rest] = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const last = anchored ? rest.pop() : undefined;
+  return (path) => {
+    if (!path.startsWith(first)) return false;
+    if (anchored && last === undefined) return path.length === first.length;
+    let at = first.length;
+    for (const piece of rest) {
+      const found = path.indexOf(piece, at);
+      if (found < 0) return false;
+      at = found + piece.length;
+    }
+    return last === undefined || (path.length - last.length >= at && path.endsWith(last));
+  };
 }

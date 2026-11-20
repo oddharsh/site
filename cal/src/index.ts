@@ -56,7 +56,7 @@ import {
   errorPage,
   type BookingAnswers,
 } from "./templates.ts";
-import { jsonResponse } from "../../src/worker/lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "../../src/worker/lib/http.ts";
 import { ISLAND_CSP, ISLAND_MARKER } from "../../src/worker/lib/island.ts";
 
 // Re-exported for cal/wrangler.test.toml, whose `main` is this file and whose
@@ -185,11 +185,13 @@ async function route_slots(req, env, ctx) {
 
 async function route_book(req, env, ctx) {
   const ct = req.headers.get("content-type") || "";
+  const capped = await cappedRequestBody(req);
+  if (!capped) return failPage(env, 413, "that request was too large.");
   let payload;
   if (ct.includes("application/json")) {
-    payload = await req.json();
+    payload = await capped.json();
   } else {
-    const form = await req.formData();
+    const form = await capped.formData();
     payload = Object.fromEntries(form);
   }
 
@@ -419,7 +421,10 @@ async function route_location_form(req, env, ctx, url) {
 }
 
 async function route_location_save(req, env, ctx) {
-  const form = await req.formData();
+  const capped = await cappedRequestBody(req);
+  if (!capped) return failPage(env, 413, "that form was too large.");
+  // cal's own forms post urlencoded, so every field reads back as a string.
+  const form = new URLSearchParams(await capped.text());
   const id = (form.get("t") || "").toString();
   const sig = (form.get("sig") || "").toString();
   const { err } = await resolveLocationTarget(env, id, sig);
@@ -456,7 +461,9 @@ async function route_reschedule_form(req, env, ctx, url) {
 }
 
 async function route_reschedule_save(req, env, ctx) {
-  const form = await req.formData();
+  const capped = await cappedRequestBody(req);
+  if (!capped) return failPage(env, 413, "that form was too large.");
+  const form = new URLSearchParams(await capped.text());
   const id = (form.get("t") || "").toString();
   const sig = (form.get("sig") || "").toString();
   const { booking, err } = await resolveHostAction(env, id, sig, "reschedule");
@@ -520,7 +527,9 @@ async function route_cancel_form(req, env, ctx, url) {
 }
 
 async function route_cancel_apply(req, env, ctx) {
-  const form = await req.formData();
+  const capped = await cappedRequestBody(req);
+  if (!capped) return failPage(env, 413, "that form was too large.");
+  const form = new URLSearchParams(await capped.text());
   const id = (form.get("t") || "").toString();
   const sig = (form.get("sig") || "").toString();
   const { err } = await resolveHostAction(env, id, sig, "cancel");

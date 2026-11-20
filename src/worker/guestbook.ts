@@ -37,7 +37,7 @@ import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { EMPTY, html, type Html } from "./lib/html.ts";
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
 import { PENDING, isPending, island, islandResponse, islandScript, type Pending, type Read } from "./lib/island.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -208,8 +208,9 @@ async function sign(request: Request, env) {
   if (await overBudget(GUESTBOOK_BUDGET, request, env)) {
     return json({ error: "too many signatures from this address; try again in a minute" }, 429, rateLimitedHeaders(GUESTBOOK_BUDGET));
   }
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
+  const capped = await cappedRequestBody(request, MAX_BODY_BYTES);
+  if (!capped) return json({ error: "too large" }, 413);
+  const text = await capped.text();
   let body: unknown;
   try {
     body = JSON.parse(text);
