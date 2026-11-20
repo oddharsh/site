@@ -6,6 +6,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, isOwnerBust, jsonResponse } from "./lib/http.ts";
+import { compareCodepoints } from "./lib/text.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
@@ -251,7 +252,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
       changes: fields,
     });
   }
-  changes.sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)));
+  changes.sort((a, b) => compareCodepoints(b.observedAt, a.observedAt));
   return {
     ok: true,
     available: true,
