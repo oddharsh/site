@@ -36,6 +36,22 @@ export function stripTags(html: string, replacement: string): string {
   return html.slice(0, end).replace(/<[^>]+>/g, replacement) + html.slice(end);
 }
 
+// The next match of a global regex at or after `from`, for a scan whose `from`
+// only grows. A match found past where the caller looked is kept for the next
+// call, so a run of tags that fail never rescans the text up to that match.
+export function forwardSearch(re: RegExp, text: string): (from: number) => RegExpExecArray | null {
+  let searched = false;
+  let found: RegExpExecArray | null = null;
+  return (from) => {
+    if (!searched || (found !== null && found.index < from)) {
+      re.lastIndex = from;
+      found = re.exec(text);
+      searched = true;
+    }
+    return found;
+  };
+}
+
 // The original tokenizer, byte-for-byte. Site search is pinned on its behaviour
 // (length > 1 drops "a"/"I", 12 terms caps the fan-out), so it moved houses
 // without changing.
