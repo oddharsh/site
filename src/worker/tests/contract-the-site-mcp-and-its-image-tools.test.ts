@@ -134,10 +134,10 @@ test("site MCP image workbench returns an image content block and exact receipt"
     env,
     context(),
   );
-  const names = (await list.json()).result.tools.map((tool) => tool.name);
-  assert.ok(names.includes("image_inspect"));
-  assert.ok(names.includes("image_transform"));
-  assert.ok(names.includes("image_compare"));
+  const names = new Set((await list.json()).result.tools.map((tool) => tool.name));
+  assert.ok(names.has("image_inspect"));
+  assert.ok(names.has("image_transform"));
+  assert.ok(names.has("image_compare"));
   const call = await handleSiteMcp(
     new Request("https://aadhar.sh/mcp", {
       method: "POST",

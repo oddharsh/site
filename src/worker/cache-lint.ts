@@ -120,11 +120,13 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: { 
     // TOKENS, not substring. "accept-encoding".includes("accept") is true, so a
     // substring test waves through the exact header combination #195 shipped
     // with. The contract test above pins that case.
-    const varyTokens = (first.headers?.vary || "")
-      .toLowerCase()
-      .split(",")
-      .map((t) => t.trim());
-    const variesOnAccept = varyTokens.includes("accept") || varyTokens.includes("*");
+    const varyTokens = new Set(
+      (first.headers?.vary || "")
+        .toLowerCase()
+        .split(",")
+        .map((t) => t.trim()),
+    );
+    const variesOnAccept = varyTokens.has("accept") || varyTokens.has("*");
     const differs = negotiated.headers?.["content-type"] !== first.headers?.["content-type"];
     if (differs && !variesOnAccept) {
       add(

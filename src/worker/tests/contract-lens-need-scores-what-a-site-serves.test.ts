@@ -81,9 +81,9 @@ test("a blog that serves its readers is not docked for OAuth, MCP or payments", 
   // Missing JSON-LD and sitemap cost recommended points, nothing more.
   assert.ok((need.overall ?? 0) >= 80, `a blog with only website basics scores ${need.overall}, which should be at least 80`);
   // The mirror's fails it has no reason to fix are named, with a reason.
-  const skipped = need.skip.map((s) => s.key);
+  const skipped = new Set(need.skip.map((s) => s.key));
   for (const k of ["oauthDiscovery", "oauthProtectedResource", "authMd", "mcpServerCard"]) {
-    assert.ok(skipped.includes(k), `${k} belongs on the skip list for a site with no API or MCP`);
+    assert.ok(skipped.has(k), `${k} belongs on the skip list for a site with no API or MCP`);
   }
 });
 

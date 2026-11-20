@@ -100,7 +100,7 @@ const FINGER_PANES = ["overview", "writing", "reading", "listening", "photos", "
 // FINGER_PANES. That is the accurate behavior — the original protocol had no
 // menu either, you fingered a name and got whatever was in the file. Reachable
 // only by already knowing to ask: ?pane=plan.
-const HIDDEN_PANES = ["plan"];
+const HIDDEN_PANES = new Set(["plan"]);
 
 const clampInt = (raw, min, max, fallback) => {
   const n = Number.parseInt(raw ?? "", 10);
@@ -113,7 +113,7 @@ export function readState(url, app) {
   const pane = str(params.get("pane"), 24);
   return {
     app,
-    pane: FINGER_PANES.includes(pane) || HIDDEN_PANES.includes(pane) ? pane : FINGER_PANES[0],
+    pane: FINGER_PANES.includes(pane) || HIDDEN_PANES.has(pane) ? pane : FINGER_PANES[0],
     cursor: clampInt(params.get("cursor"), 0, 4999, 0),
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),

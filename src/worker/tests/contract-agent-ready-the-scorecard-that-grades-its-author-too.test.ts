@@ -10,8 +10,8 @@ test("the lift table is internally consistent and names its baseline", async () 
   const { LIFT, BASELINE, liftTotals, LIFT_CHECKED } = await import("../agent-ready.ts");
   assert.match(LIFT_CHECKED, /^\d{4}-\d{2}-\d{2}$/, "the bill must carry a checked date");
 
-  const names = LIFT.map(([n]) => n);
-  for (const b of BASELINE) assert.ok(names.includes(b), `baseline names ${b}, which is not in the table`);
+  const names = new Set(LIFT.map(([n]) => n));
+  for (const b of BASELINE) assert.ok(names.has(b), `baseline names ${b}, which is not in the table`);
 
   const totals = liftTotals();
   assert.equal(

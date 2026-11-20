@@ -351,6 +351,13 @@ correctness = "error"
 # failure. 0 findings, measured 2026-08-27; it fires on a two-member union
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
+# An array built only to answer `.includes()` is a Set that pays a linear scan
+# on every lookup. Taken from @cloudflare/oxlint-config 0.1.0. 15 findings,
+# measured 2026-11-20, all fixed. The rule can't see types: it reads any
+# `.slice()` as an array, so its autofix turned a string in check-tools.ts into
+# a Set of characters, and that site's guard scan then matched 0 loops. Read
+# every `--fix` diff for a string before trusting it.
+"unicorn/prefer-set-has" = "error"
 
 # FOUR IMPORT RULES, each measured at 0 on this tree on 2026-08-27 and each proven
 # to fire on a planted violation, because a rule that reports nothing looks
