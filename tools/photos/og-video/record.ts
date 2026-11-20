@@ -262,7 +262,9 @@ async function record(browser, cardPage, luna, c: Clip, out) {
         im.src = url;
         await im.decode();
         (document.getElementById("s") as HTMLElement).style.backgroundImage = `url(${url})`;
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        await new Promise((r) => {
+          requestAnimationFrame(() => requestAnimationFrame(r));
+        });
       }, raw[j].data);
       last = j;
     }

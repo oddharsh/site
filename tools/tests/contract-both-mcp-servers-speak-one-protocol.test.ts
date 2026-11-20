@@ -283,7 +283,9 @@ test("Serendipity social reads overlap independent D1 queries", async () => {
       const run = async (kind, args) => {
         active++;
         peak = Math.max(peak, active);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
         active--;
         if (kind === "get" && sql.includes("WHERE a.name LIKE")) {
           const alice = String(args[0]).includes("Alice");

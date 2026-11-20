@@ -128,7 +128,9 @@ test("the replay overlaps only two probes and preserves its evidence order", asy
       active++;
       peak = Math.max(peak, active);
       accepts.push(request.headers.get("accept"));
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5);
+      });
       active--;
       return new Response("<h1>control</h1>", { headers: { "content-type": "text/html", vary: "Accept" } });
     },
