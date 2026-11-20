@@ -862,14 +862,21 @@ type PlannedField = {
         copy.addEventListener("click", function () {
           // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
           var btn = this;
+          // lens.js owns the live region; it exists before this module loads
+          var live = document.getElementById("lx-copy-status");
+          var announce = (msg) => {
+            if (live) live.textContent = live.textContent === msg ? msg + "\u00A0" : msg;
+          };
           navigator.clipboard.writeText(curlPre.textContent).then(
             () => {
+              announce("Copied");
               btn.textContent = "Copied";
               setTimeout(() => {
                 btn.textContent = "Copy curl";
               }, 1200);
             },
             () => {
+              announce("Copy failed");
               btn.textContent = "Copy failed";
               setTimeout(() => {
                 btn.textContent = "Copy curl";
