@@ -364,7 +364,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # One worker per vCPU; tools/controls.ts gives each its own tree.
       - name: Plant each guard's defect
+        env:
+          CONTROLS_JOBS: 4
         run: bun run controls
 
   # Opens every manifest page in Chrome and reads what a visitor's browser
