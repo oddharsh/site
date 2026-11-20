@@ -55,6 +55,33 @@ test("cappedRequestBody hands back the same body under the cap and null over it"
   assert.equal(chunked.seen.bytes, REQUEST_BODY_CAP + CHUNK);
 });
 
+// #1746 read request bodies through the crawl reader, which hashes every body
+// for the receipts that crawls write. Nothing reads a request body's hash, and
+// the CPU sweep charged POST /mcp tools/list 4 ms for that digest: 2.66 ms
+// median before #1746, 6.75 after (2026-11-20, node 26, 11 runs each). The
+// crawl reader still has to hash, so its digest of "abc" is pinned too.
+test("cappedRequestBody reads a body without hashing it, and the crawl reader still hashes", async () => {
+  const { readResponseCapped } = await import("../lib/public-fetch.ts");
+  const subtle = crypto.subtle;
+  const digest = subtle.digest.bind(subtle);
+  let digests = 0;
+  subtle.digest = (...args: Parameters<SubtleCrypto["digest"]>) => {
+    digests += 1;
+    return digest(...args);
+  };
+  try {
+    const capped = await cappedRequestBody(new Request("https://aadhar.sh/x", { method: "POST", body: '{"jsonrpc":"2.0"}' }));
+    assert.equal(await capped!.text(), '{"jsonrpc":"2.0"}');
+    assert.equal(digests, 0, "cappedRequestBody hashed a request body nothing reads the hash of");
+
+    const crawled = await readResponseCapped(new Response("abc"));
+    assert.equal(crawled.digest, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    assert.equal(digests, 1);
+  } finally {
+    delete (subtle as { digest?: unknown }).digest;
+  }
+});
+
 test("the vitals beacon and the site MCP stop reading a chunked flood at the cap", async () => {
   const { handleVitals } = await import("../vitals.ts");
   const beacon = flood("https://aadhar.sh/vitals", "text/plain");
