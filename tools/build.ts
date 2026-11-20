@@ -605,7 +605,7 @@ async function checkInvariants() {
   // NOT from the font law: /garage and /lwe exist to show the platform off, so
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0,
-    tasteOk = [];
+    tasteOk: string[] = [];
   try {
     // Taste rules can execute only from text a browser parses or from a program
     // that emits that text. So the walk keeps active textual assets, the client
@@ -723,7 +723,7 @@ async function checkInvariants() {
   // which is exactly how a guard on the one deploy path ends up commented out.
   let conflictScanned = 0;
   try {
-    const collect = async (dir, match, skip = /^$/, out = []) => {
+    const collect = async (dir, match, skip = /^$/, out: string[] = []) => {
       for (const e of await readdir(dir, { withFileTypes: true })) {
         const p = `${dir}/${e.name}`;
         if (e.isDirectory()) {
@@ -2381,7 +2381,7 @@ phase("6 hash shell assets");
       "garage/chunks.html", // slack, in corpus order
     ];
     const SIZE = 65_536;
-    const parts = [];
+    const parts: Buffer[] = [];
     let total = 0;
     // THROUGH minifiedPage(). This block runs before step 7b reaches the staged
     // files, so a bare read here returns the READABLE source: indentation,

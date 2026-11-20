@@ -181,8 +181,8 @@ const HTML_ENVELOPE = {
   brotliKiB: 20,
 };
 
-const fails = [];
-const warnings = [];
+const fails: string[] = [];
+const warnings: string[] = [];
 const ok = (m) => console.log(`  ok    ${m}`);
 const bad = (m) => {
   console.log(`  FAIL  ${m}`);
