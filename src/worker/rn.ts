@@ -1,9 +1,11 @@
 import { signedFetch } from "./lib/botauth.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, recordBudget, type Budget } from "./lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
+import type { Budget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { mapWithConcurrency } from "./lib/crawl.ts";
-import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { cappedRequestBody, esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";

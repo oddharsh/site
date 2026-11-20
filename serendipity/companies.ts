@@ -22,7 +22,8 @@
 // Pure apart from askClairic's binding call, and node-safe (gotcha 16).
 
 import { asNumber, asText } from "../src/worker/lib/parse.ts";
-import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
+import { runClef } from "../src/worker/lib/clef.ts";
+import type { ClefEnv, ClefModel } from "../src/worker/lib/clef.ts";
 import { tagInputHash } from "./event-tags.ts";
 
 export const COMPANY_MODEL: ClefModel = "clairic";

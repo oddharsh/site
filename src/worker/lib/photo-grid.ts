@@ -14,7 +14,8 @@
 // ever thrown away). This module deliberately imports nothing that touches a
 // Worker global, so Node can import it straight out of the staged tree at
 // build time.
-import { EMPTY, html, joinHtml, type Html } from "./html.ts";
+import { EMPTY, html, joinHtml } from "./html.ts";
+import type { Html } from "./html.ts";
 import { asNumber } from "./parse.ts";
 
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the

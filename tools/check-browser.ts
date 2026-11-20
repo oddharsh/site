@@ -44,7 +44,8 @@
 // scroll, a 300px block pushed in above the content for shift, a number
 // formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { chromium } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,7 +53,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
-import { reach, rereadsEverything, type Reach } from "./lib/browser-pages.ts";
+import { reach, rereadsEverything } from "./lib/browser-pages.ts";
+import type { Reach } from "./lib/browser-pages.ts";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 

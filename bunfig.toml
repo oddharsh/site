@@ -351,6 +351,14 @@ correctness = "error"
 # failure. 0 findings, measured 2026-08-27; it fires on a two-member union
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
+
+# One way to import a type: `import type { T }` on its own line, never
+# `import { a, type T }`. Under verbatimModuleSyntax the top-level form is the
+# one that says the whole statement erases. Taken from @cloudflare/oxlint-config
+# 0.1.0. 96 findings in 57 files, measured 2026-11-20, all mixed imports that
+# --fix split into a value import and a type import. None imported types alone,
+# so no runtime import moved. It fires on a planted `import { a, type B }`.
+"import/consistent-type-specifier-style" = ["error", "prefer-top-level"]
 # An array built only to answer `.includes()` is a Set that pays a linear scan
 # on every lookup. Taken from @cloudflare/oxlint-config 0.1.0. 15 findings,
 # measured 2026-11-20, all fixed. The rule can't see types: it reads any

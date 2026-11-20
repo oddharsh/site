@@ -22,7 +22,8 @@
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).
-import { OPENAPI_PATH, OPERATIONS, sharesReadBudget, type Operation } from "./public-api.ts";
+import { OPENAPI_PATH, OPERATIONS, sharesReadBudget } from "./public-api.ts";
+import type { Operation } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { jsonResponse } from "./http.ts";
 import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts";

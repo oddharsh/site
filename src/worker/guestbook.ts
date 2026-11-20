@@ -36,9 +36,11 @@
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
-import { EMPTY, html, type Html } from "./lib/html.ts";
+import { EMPTY, html } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
-import { PENDING, isPending, island, islandResponse, islandScript, type Pending, type Read } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
+import type { Pending, Read } from "./lib/island.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";

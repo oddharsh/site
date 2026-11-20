@@ -22,7 +22,8 @@
 //   bun run colors:drift            near-token band + unnamed shared colours
 //   bun run colors:drift --json     the same, as JSON
 import { readFileSync } from "node:fs";
-import { COPY_DE, colorLiteralsIn, cssSources, deltaEOK, loadTokenValueMap, parseOklch, tokenCopiesIn, type Lab } from "./lib/token-literals.ts";
+import { COPY_DE, colorLiteralsIn, cssSources, deltaEOK, loadTokenValueMap, parseOklch, tokenCopiesIn } from "./lib/token-literals.ts";
+import type { Lab } from "./lib/token-literals.ts";
 
 /** CSS Color 4's just-noticeable difference in OKLab. Past this, a literal is a different colour. */
 const JND = 0.02;

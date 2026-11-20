@@ -54,8 +54,8 @@ import {
   cancelPage,
   cancelledPage,
   errorPage,
-  type BookingAnswers,
 } from "./templates.ts";
+import type { BookingAnswers } from "./templates.ts";
 import { cappedRequestBody, jsonResponse } from "../../src/worker/lib/http.ts";
 import { ISLAND_CSP, ISLAND_MARKER } from "../../src/worker/lib/island.ts";
 

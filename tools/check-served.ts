@@ -29,7 +29,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { downloadManifest as fetchManifest, originBuild } from "./lib/ci-manifest.ts";
-import { changedUrls, checkOrigin, parseManifest, type ServedManifest, type UrlResult } from "./lib/served-manifest.ts";
+import { changedUrls, checkOrigin, parseManifest } from "./lib/served-manifest.ts";
+import type { ServedManifest, UrlResult } from "./lib/served-manifest.ts";
 
 const { values } = parseArgs({
   options: {
