@@ -153,10 +153,24 @@ export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
 // distinguishes an exactly-max-sized body from a truncated one without ever
 // buffering an unbounded response.
 export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP, signal?: AbortSignal) {
+  const read = await readBytesCapped(response, maxBytes, signal);
+  if (!read) return { text: "", bytesRead: 0, truncated: false, digest: "" };
+  return {
+    text: new TextDecoder("utf-8").decode(read.bytes),
+    bytesRead: read.bytes.byteLength,
+    truncated: read.truncated,
+    digest: await sha256Hex(read.bytes),
+  };
+}
+
+// The capped read without the text or the hash, for a caller that keeps
+// neither: lib/http.ts reads every request body through it. null means the
+// response had no body to read.
+export async function readBytesCapped(response, maxBytes: number, signal?: AbortSignal): Promise<{ bytes: Uint8Array; truncated: boolean } | null> {
   const reader = response && response.body && response.body.getReader ? response.body.getReader() : null;
   if (!reader) {
     signal?.throwIfAborted();
-    return { text: "", bytesRead: 0, truncated: false, digest: "" };
+    return null;
   }
 
   // Annotated because an empty literal infers `never[]` under strictNullChecks,
@@ -205,12 +219,7 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return {
-    text: new TextDecoder("utf-8").decode(bytes),
-    bytesRead,
-    truncated,
-    digest: await sha256Hex(bytes),
-  };
+  return { bytes, truncated };
 }
 
 export async function sha256Hex(value) {
