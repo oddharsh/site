@@ -14,7 +14,8 @@
 // module invents nothing: given no tasks and no details it renders the two rows
 // it can always prove (where you are, and what is above you) and stops. A task
 // pane that pads itself out with plausible links is worse than no task pane.
-import { Html, html } from "./html.ts";
+import type { Html } from "./html.ts";
+import { html } from "./html.ts";
 
 /** One row of the task pane: somewhere this object can go. */
 export type Task = { href: string; label: string; glyph?: string };

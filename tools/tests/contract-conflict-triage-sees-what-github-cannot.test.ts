@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, test } from "./contract-shared.ts";
 import { HEAVY_HUNK, gradeHunk, parseHunks, renderHtml } from "../conflict-triage.ts";
+import type { Report } from "../conflict-triage.ts";
 
 // tools/conflict-triage.ts answers "can this conflict go through GitHub's web
 // editor". The fixture carries one conflict of each kind that matters, merged
@@ -245,7 +246,7 @@ test("the three-way view escapes every side and every note", () => {
   // Hunk text is file content and notes are model-written, so neither may
   // reach the page as markup.
 
-  const report: import("../conflict-triage.ts").Report = {
+  const report: Report = {
     label: "fixture",
     base: "main",
     head: "f".repeat(40),

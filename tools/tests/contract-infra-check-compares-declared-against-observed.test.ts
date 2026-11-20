@@ -56,6 +56,8 @@ import {
   readZoneSetting,
 } from "../lib/infra-ports.ts";
 import { createReport } from "../lib/infra-report.ts";
+import type { AgentSurface } from "../lib/agent-representation.ts";
+import type { AgentAnswer, EdgeObservation, Finding } from "../lib/infra-compare.ts";
 
 const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
 const repo = infra.repository;
@@ -432,7 +434,7 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
 test("early data: a rejection is advisory on a hosted runner and a drift on a workstation", () => {
   const check = edgeCheck("tls-0rtt-on");
 
-  const rejected: import("../lib/infra-compare.ts").EdgeObservation = { kind: "early-data", result: { accepted: false, attempts: 3 } };
+  const rejected: EdgeObservation = { kind: "early-data", result: { accepted: false, attempts: 3 } };
 
   const hosted = compareEdgeCheck(check, rejected, { hostedRunner: true });
   assert.equal(hosted.length, 1);
@@ -451,11 +453,7 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
 test("edge: an observation of the wrong kind, a missing body and a missing check are advisories", () => {
   const body = edgeCheck("rocket-loader-off");
 
-  const unusable: (import("../lib/infra-compare.ts").EdgeObservation | undefined)[] = [
-    { kind: "response", headers: {} },
-    { kind: "prefers", got: "br" },
-    undefined,
-  ];
+  const unusable: (EdgeObservation | undefined)[] = [{ kind: "response", headers: {} }, { kind: "prefers", got: "br" }, undefined];
   for (const seen of unusable) {
     const findings = compareEdgeCheck(body, seen, { hostedRunner: false });
     assert.equal(findings.length, 1);
@@ -468,10 +466,6 @@ test("edge: an observation of the wrong kind, a missing body and a missing check
 
 // The registry these tests judge is the real one, so a surface added tomorrow
 // is covered by them without an edit.
-
-type AgentSurface = import("../lib/agent-representation.ts").AgentSurface;
-
-type AgentAnswer = import("../lib/infra-compare.ts").AgentAnswer;
 
 const agentPages: AgentSurface[] = agentSurfaces(JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces);
 
@@ -704,7 +698,7 @@ for (const [how, respond] of Object.entries(refusals)) {
     const cf = cloudflareReader("unused-token-value", fetchImpl);
     const zone = infra.zone.name;
 
-    const sections: [string, string, import("../lib/infra-compare.ts").Finding[]][] = [
+    const sections: [string, string, Finding[]][] = [
       ["KV namespaces", "Workers KV Storage:Read", compareKvNamespaces(bindings, await readKvNamespaces(cf, "acct"))],
       ["R2 buckets", "Workers R2 Storage:Read", compareR2Buckets(bindings, await readR2Buckets(cf, "acct"))],
       ["D1 databases", "D1:Read", compareD1Databases(bindings, await readD1Databases(cf, "acct"))],
