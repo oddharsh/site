@@ -100,7 +100,9 @@ for (const [rel, text] of source) {
   for (const match of text.matchAll(guardPattern)) {
     const [, variable, wordsRaw] = match;
     // Only a loop whose body probes the loop variable is a precondition guard.
-    const after = text.slice(match.index, match.index + 400);
+    // `substring`, because unicorn/prefer-set-has reads `.slice()` as an array
+    // and its autofix turned this string into a Set of characters (2026-11-20).
+    const after = text.substring(match.index, match.index + 400);
     if (!after.includes(`command -v "$${variable}"`) && !after.includes(`-x "$${variable}"`)) continue;
     guardLists += 1;
     for (const word of wordsRaw.trim().split(/\s+/)) {

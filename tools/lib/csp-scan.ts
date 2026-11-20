@@ -25,9 +25,9 @@ import { createHash } from "node:crypto";
 // NOT cover data blocks (application/json for the quiz payloads, ld+json), which
 // are parsed as data and never reach script-src. 31 of this site's inline blocks
 // are data, so getting this wrong in either direction is 31 wrong answers.
-const JAVASCRIPT_TYPES = ["text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"];
+const JAVASCRIPT_TYPES = new Set(["text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"]);
 export const EXECUTABLE_EXTRA = new Set(["speculationrules"]);
-const isExecutableType = (type: string) => !type || JAVASCRIPT_TYPES.includes(type) || EXECUTABLE_EXTRA.has(type);
+const isExecutableType = (type: string) => !type || JAVASCRIPT_TYPES.has(type) || EXECUTABLE_EXTRA.has(type);
 
 const HANDLER_ATTR = /^on[a-z]+$/;
 

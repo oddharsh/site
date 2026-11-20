@@ -167,11 +167,13 @@ export function variesOnAccept(vary) {
 // freshness. Read as tokens for the same reason Vary is: "private" inside a
 // quoted no-cache field list is not the directive.
 export function sharedStorable(cacheControl) {
-  const directives = String(cacheControl || "")
-    .toLowerCase()
-    .split(",")
-    .map((d) => d.trim().split("=")[0].trim());
-  return !directives.includes("no-store") && !directives.includes("private");
+  const directives = new Set(
+    String(cacheControl || "")
+      .toLowerCase()
+      .split(",")
+      .map((d) => d.trim().split("=")[0].trim()),
+  );
+  return !directives.has("no-store") && !directives.has("private");
 }
 
 // Vary is a claim every variant has to make, and the public checklist reads it

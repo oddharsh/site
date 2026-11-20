@@ -126,17 +126,17 @@ test("every response schema is typed all the way down", () => {
     }
     const variants = node.anyOf || node.oneOf;
     if (variants) return variants.flatMap((v, i) => untyped(v, `${at}|${i}`, seen));
-    const types = [node.type].flat();
+    const types = new Set([node.type].flat());
     if (!node.type) return [`${at}: no type`];
     const out: any[] = [];
-    if (types.includes("object")) {
+    if (types.has("object")) {
       if (node.additionalProperties === true) out.push(`${at}: additionalProperties: true`);
       const props = Object.entries(node.properties || {});
       if (!props.length && typeof node.additionalProperties !== "object") out.push(`${at}: an object with nothing named`);
       for (const [k, v] of props) out.push(...untyped(v, `${at}.${k}`, seen));
       if (typeof node.additionalProperties === "object") out.push(...untyped(node.additionalProperties, `${at}{}`, seen));
     }
-    if (types.includes("array")) out.push(...untyped(node.items, `${at}[]`, seen));
+    if (types.has("array")) out.push(...untyped(node.items, `${at}[]`, seen));
     return out;
   }
   for (const { path, method, op } of operations) {

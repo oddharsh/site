@@ -96,10 +96,10 @@ test("encode judges chroma and depth against this site's own measurements", asyn
   // delivery size and 8-bit AVIF are the two it should always flag.
   const { judgeEncode } = await import("../encode.ts");
   const fat = judgeEncode({ format: "jpeg", subsampling: "4:4:4", progressive: false, scans: 1, tables: [], width: 600, height: 600, icc: true }, 90000);
-  const ids = fat.warns.map((w) => w.id);
-  assert.ok(ids.includes("chroma"), "4:4:4 at delivery size must be flagged");
-  assert.ok(ids.includes("scan"), "baseline must be flagged — progressive is free bytes");
-  assert.ok(ids.includes("metadata"), "ICC riding along on a thumbnail must be flagged");
+  const ids = new Set(fat.warns.map((w) => w.id));
+  assert.ok(ids.has("chroma"), "4:4:4 at delivery size must be flagged");
+  assert.ok(ids.has("scan"), "baseline must be flagged — progressive is free bytes");
+  assert.ok(ids.has("metadata"), "ICC riding along on a thumbnail must be flagged");
 
   const lean = judgeEncode({ format: "jpeg", subsampling: "4:2:0", progressive: true, scans: 8, tables: [], width: 600, height: 600 }, 40000);
   assert.equal(lean.warns.length, 0, "a well-made delivery JPEG should draw no warnings");

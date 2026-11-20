@@ -457,10 +457,10 @@ function representativeCard(doc, pageUrl) {
   const page = sameUrl(pageUrl);
   const top = doc.items.filter((i) => i.type.includes("h-card"));
   const urls = (c, p) => mf2Strings(c, p).map(sameUrl);
-  const me = (doc.rels.me || []).map(sameUrl);
+  const me = new Set((doc.rels.me || []).map(sameUrl));
   const byUid = top.find((c) => urls(c, "uid").includes(page) && urls(c, "url").includes(page));
   if (byUid) return byUid;
-  const byMe = top.find((c) => urls(c, "url").some((u) => me.includes(u)));
+  const byMe = top.find((c) => urls(c, "url").some((u) => me.has(u)));
   if (byMe) return byMe;
   const byUrl = top.filter((c) => urls(c, "url").includes(page));
   return byUrl.length === 1 ? byUrl[0] : null;
