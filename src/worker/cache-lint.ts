@@ -75,7 +75,7 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
 // callers have no opinion about. The body reads it behind a guard, and the lint's
 // own tests pass three of the four fields.
 export function judgeRevalidation({ first, second, conditional, negotiated }: { first?: any; second?: any; conditional?: any; negotiated?: any }) {
-  const findings = [];
+  const findings: { id: string; verdict: string; detail: string }[] = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
 
   const etag1 = first.headers?.etag;
