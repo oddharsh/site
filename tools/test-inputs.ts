@@ -134,7 +134,10 @@ export function accesses(log: string, cwd: string): Access[] {
     const strings = [...args.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1].replace(/\\(.)/g, "$1"));
     const [raw] = strings;
     if (raw === undefined) continue;
-    const dirfd = /^\d+<([^>]+)>,/.exec(args);
+    // -y prints the kernel's cwd after AT_FDCWD. Trust it over the cwd map: a
+    // vfork child's call can print before its parent's clone returns, while
+    // the map still gives the child the starting directory.
+    const dirfd = /^(?:\d+|AT_FDCWD)<([^>]+)>,/.exec(args);
     const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : cwdOf(pid).dir, raw);
     if (name === "execve" && path.endsWith("/git")) {
       // argv after argv[0]; `-C dir` moves where it runs, `-c k=v` doesn't.
