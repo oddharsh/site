@@ -31,7 +31,8 @@
 // buttons, one that throws, one with no handler, one that spins for 400 ms and
 // one that pushes a 600px block into the page. A reading that misses its
 // plant exits 2 ("blind").
-import { chromium, type BrowserContext, type Page } from "playwright-core";
+import { chromium } from "playwright-core";
+import type { BrowserContext, Page } from "playwright-core";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
