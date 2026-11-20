@@ -63,7 +63,8 @@ export class CensusWorkflow extends WorkflowEntrypoint<Record<string, any>> {
         // connection). Three attempts over a couple of minutes, then give up and
         // let the instance fail loudly, which is the outcome the old code
         // swallowed. `lensInspect` does not throw on a 403 or a timeout at the
-        // target, so a hostile host does not reach this path at all.
+        // target, and censusScanOne returns a robots.txt Disallow as a
+        // `refused` row, so neither reaches a retry.
         retries: { limit: 2, delay: "30 seconds", backoff: "exponential" },
         timeout: "5 minutes",
       },
