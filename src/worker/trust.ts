@@ -12,7 +12,8 @@
 // there is no second copy to drift. A claim on /privacy with no constant
 // behind it names the module that makes it true.
 import { lunaPage } from "./lib/chrome.ts";
-import { html, type Html } from "./lib/html.ts";
+import { html } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { missJson } from "./lib/not-found.ts";
 import { LEAVES_OUT, OPENAPI_PATH, OPERATIONS, exampleUrl, operation } from "./lib/public-api.ts";
 import { API_READ_BUDGET } from "./lib/api-limits.ts";

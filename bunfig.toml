@@ -352,6 +352,13 @@ correctness = "error"
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
 
+# One way to import a type: `import type { T }` on its own line, never
+# `import { a, type T }`. Under verbatimModuleSyntax the top-level form is the
+# one that says the whole statement erases. Taken from @cloudflare/oxlint-config
+# 0.1.0. 96 findings in 57 files, measured 2026-11-20, all mixed imports that
+# --fix split into a value import and a type import. None imported types alone,
+# so no runtime import moved. It fires on a planted `import { a, type B }`.
+"import/consistent-type-specifier-style" = ["error", "prefer-top-level"]
 # A value returned from a Promise executor goes nowhere: `return reject(e)` or
 # `(r) => setTimeout(r, ms)` reads as if the return settled something. Taken
 # from @cloudflare/oxlint-config 0.1.0. 30 findings, measured 2026-11-20: 27

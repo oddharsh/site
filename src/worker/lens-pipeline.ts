@@ -33,7 +33,8 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget, rateLimitedHeaders, rateLimitPolicy, type NamedBudget } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
+import type { NamedBudget } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";

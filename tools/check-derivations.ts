@@ -25,7 +25,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type Derivation, type Lock, record, relock, verify } from "./lib/derive.ts";
+import { record, relock, verify } from "./lib/derive.ts";
+import type { Derivation, Lock } from "./lib/derive.ts";
 import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

@@ -17,7 +17,8 @@
 // Node-safe (gotcha 16): build.ts imports it from the staged tree.
 import { ASK_LIMITS, CHANGE_RADAR_LIMITS, LENS_FETCH_TIMEOUT_MS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } from "./api-limits.ts";
 import { ASK_BUDGET } from "../ask-rank.ts";
-import { RATE_WINDOW_S, rateLimitPolicy, type NamedBudget } from "./ratelimit.ts";
+import { RATE_WINDOW_S, rateLimitPolicy } from "./ratelimit.ts";
+import type { NamedBudget } from "./ratelimit.ts";
 import { LENS_BUDGETS } from "../lens-pipeline.ts";
 import { CENSUS_ROSTER } from "../census.ts";
 

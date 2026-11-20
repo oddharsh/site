@@ -18,7 +18,8 @@
 // which reaches `cloudflare:workers` too), so it binds one per route id and
 // this module never imports a page.
 import type { Env, SiteRequest } from "./lib/env.ts";
-import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { ALBUMS, albumPath } from "./albums.ts";
+import type { Album } from "./albums.ts";
 import { withBotPolicyCache } from "./lib/botauth.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { CANONICAL_HOST, isCanonicalHost } from "./lib/const.ts";
@@ -33,7 +34,8 @@ import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
 import { countSpeculativeLoad } from "./speculation.ts";
-import { CACHEABLE_PATHS, CAL_HOST, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS, type ExactPath, type PrefixLabel } from "./routes.ts";
+import { CACHEABLE_PATHS, CAL_HOST, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "./routes.ts";
+import type { ExactPath, PrefixLabel } from "./routes.ts";
 
 // A worker-owned route handler, as dispatchTraced() calls one. A real type
 // because a `@typedef` in a .ts file is inert (gotcha 42). index.ts's handler

@@ -20,8 +20,8 @@ import {
   sharedStorable,
   variesOnAccept,
   varyEveryVariant,
-  type ProbeRow,
 } from "../lens-markdown.ts";
+import type { ProbeRow } from "../lens-markdown.ts";
 import { wantsMarkdown } from "../lib/http.ts";
 
 const worker = await readFile(new URL("../lens-markdown.ts", import.meta.url), "utf8");

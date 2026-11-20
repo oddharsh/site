@@ -29,7 +29,8 @@ import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cloneTree } from "./lib/clone-tree.ts";
-import { CONTROLS, type Control, plant } from "./lib/controls.ts";
+import { CONTROLS, plant } from "./lib/controls.ts";
+import type { Control } from "./lib/controls.ts";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const args = process.argv.slice(2);

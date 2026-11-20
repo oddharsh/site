@@ -7,7 +7,8 @@
 // were pinned by `indexOf` offsets and regexes over index.ts's source text,
 // because index.ts imports `cloudflare:workers` and cannot load here (gotcha 16).
 import { assert, context, handleSiteMcp, test } from "../../../tools/tests/contract-shared.ts";
-import { createDispatch, isEdgeCacheable, type DispatchHandlers, type RouteHandler } from "../dispatch.ts";
+import { createDispatch, isEdgeCacheable } from "../dispatch.ts";
+import type { DispatchHandlers, RouteHandler } from "../dispatch.ts";
 import { ALBUMS, albumPath } from "../albums.ts";
 import { CACHEABLE_PATHS, EXACT_PATHS, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "../routes.ts";
 import { _resetSitemap } from "../lib/not-found.ts";
