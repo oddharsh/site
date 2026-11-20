@@ -1,43 +1,16 @@
-// ── a test that calls worker.fetch() on wrangler's harness runs under NODE ──
-//
-// Wrap the body of any test that dispatches a request through
-// createTestHarness's getWorker().fetch():
+// harness-dispatch.ts: run a test that calls worker.fetch() under node.
 //
 //   test(NAME, underNode(import.meta.url, NAME, async () => { ... }));
 //
-// Under node it IS the body. Under bun it re-runs that one test in a node child
-// and fails with the child's output if the child did.
+// Under node it is the body. Under bun it reruns that one test in a node child.
+// miniflare's dispatchFetch needs fetch to honour `{ dispatcher }`
+// (workers-sdk#15906), and bun's fetch ignores it (oven-sh/bun#39247), so no
+// URL works from a bun test (#1037, measured 2026-09-30; gotcha 38). Retire
+// this when the `fetch-honours-dispatcher` watch in upstream-watches.ts flips.
 //
-// WHY, measured 2026-09-30 on the wrangler pin ddaa558 (#1037). miniflare's
-// dispatchFetch used to rewrite the request URL onto the runtime's own origin
-// itself and hand undici a Dispatcher only to ADD headers. workers-sdk#15906
-// ("preserve request body length in dispatchFetch") moved the rewrite INTO that
-// Dispatcher, so the request now reaches workerd only if fetch honours
-// `{ dispatcher }`. node's undici does; bun's fetch ignores the option
-// (oven-sh/bun#39247, the `fetch-honours-dispatcher` watch in
-// upstream-watches.ts). On one throwaway Worker, the same three calls:
-//
-//   | worker.fetch(...)          | node | bun                           |
-//   |----------------------------|------|-------------------------------|
-//   | "/rel"                     | 200  | 404 No entrypoint worker found |
-//   | "http://x.test/abs"        | 200  | ENOTFOUND x.test               |
-//   | new URL("/p", listen().url)| 200  | 404 No entrypoint worker found |
-//
-// So there is no URL a bun test can pass that works: the in-process door
-// gotcha 38 describes as bun-safe now needs the same Dispatcher the wire door
-// always did. getEnv() and the Workflow introspectors do not go through
-// dispatchFetch, which is why cal's suite (it calls handlers directly with the
-// harness's env) stayed green on the same pin.
-//
-// Retire this when that watch flips, or when miniflare rewrites the URL itself
-// again. The child has to exit 0 AND print `# pass 1`, because a name
-// pattern that matches nothing exits 0 having run nothing.
-//
-// The child needs the PINNED node, not whichever one is on PATH. A CI job with
-// no setup-node gets the runner's (22.23 on 2026-09-30), which knows only
-// --experimental-test-isolation, so the child died on the flag with exit 9 and
-// the gate reported "status 9" with node's own complaint cut off (#1058,
-// #1061). nodeFloor() says which node it found before spawning anything.
+// The child must exit 0 and print `# pass 1`, because a name pattern that
+// matches nothing also exits 0. It needs the pinned node: a runner's older
+// node dies on --test-isolation with exit 9 (#1058, #1061).
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -83,9 +56,8 @@ export function underNode(file: string, name: string, body: Body): Body {
     const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;
     const count = (label: string) => Number(out.match(new RegExp(`^# ${label} (\\d+)$`, "m"))?.[1] ?? NaN);
     if (run.error || run.status !== 0 || count("pass") !== 1 || count("fail") !== 0) {
-      // node's TAP diff prints a Buffer one byte per line, so a failed deepEqual
-      // on encodeBody's 17,600-byte page put its message 467 KB above the tail
-      // and the tail alone said nothing. Lift each failure's first error line.
+      // A failed deepEqual on a Buffer prints one byte per line (467 KB for a
+      // 17,600-byte page), so lift each failure's first error line above the tail.
       const reasons = [...out.matchAll(/^\s+error: (?:\|-\n\s+(\S.*|[^\S\n\r\u2028\u2029])|(.+))$/gm)].map((m) => `  ${m[1] ?? m[2]}\n`).join("");
       throw new Error(
         `under node, "${name}" did not pass exactly once ` +
