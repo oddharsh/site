@@ -48,15 +48,21 @@
 // A factor is right for a model's usual runner, and one runner can still be
 // slow all over: on 2026-10-09 an EPYC 9V74 read every confirmed route 1.27x
 // higher than the model's six other runs, and failed six routes on a PR that
-// changed no Worker byte (#1273). The control saw it: scaled, /robots.txt read
-// 33% over its usual 2.3 reference ms, where 30 ordinary runs on three models
-// read between 16% under and 16% over. So the control's median, scaled, is checked
-// against `control.ms` in the budget file, and a run more than `control.drift`
-// off it is inconclusive. The factor stays the scale. Used as the scale, the
-// control spread 5.4% around what the routes said each run's scale was, against
-// 3.9% for the model factor, since a 2 ms route is noisy on its own. The
-// control's spread, checked above, missed that runner at a 0.30 ms floor,
-// because a host that is slow all over reads tight.
+// changed no Worker byte (#1273). So the routes themselves say whether a runner
+// is off its model: `reference.routes` in the budget file holds each heavy
+// route's usual median in reference ms, and a run whose routes read, at the
+// median of their ratios to it, more than `reference.drift` off is
+// inconclusive (gotcha 57). The median is the point: one route a PR slows can't
+// move it, so that route still fails, and only a change that slows over half the
+// reference routes reads as a slow host, in which case refitting the references
+// shows it in the diff. Over 178 calibrated runs (2026-11-13 to 11-20) ordinary
+// runners read between 18% under and 10% over, and the 11 slow EPYC 9V74s
+// between 25% and 37% over. The /robots.txt control did this job until
+// 2026-11-20 and was dropped: a slow 9V74 slows heavy routes more than a 2 ms
+// one, and it read +6.5% on a runner whose routes read 1.24 to 1.40x and failed
+// /radar (#1771), while two ordinary runs read 21% and 24% under. The factor
+// stays the scale. The control's spread, checked above, missed #1273's runner
+// too, at a 0.30 ms floor, because a host that is slow all over reads tight.
 //
 // THE GATE. --gate exits 1 when a route's median is over its ceiling: GATE_MS,
 // or the ceilingMs that config/cpu-budget.json allows it with a reason. An entry
@@ -318,8 +324,8 @@ if (!recorded && !existsSync(BUNDLE)) {
 }
 type Budget = {
   machines: Record<string, { factor: number; runs: number }>;
-  // the control's usual median in reference ms, and how far a run may read from it
-  control?: { ms: number; drift: number };
+  // each heavy route's usual median in reference ms, and how far a run's routes may read from them
+  reference?: { drift: number; routes: Record<string, number> };
   routes: Record<string, { ceilingMs: number; why: string }>;
 };
 const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
@@ -425,14 +431,17 @@ const rows = await pool(
 );
 rows.sort((a, b) => b.ms - a.ms);
 const over = rows.filter((r) => r.ms > r.ceilingMs);
-const unknown = Object.keys(budget.routes).filter((r) => !known.has(r));
+const unknown = [...new Set([...Object.keys(budget.routes), ...Object.keys(budget.reference?.routes ?? {})])].filter((r) => !known.has(r));
 const stale = rows.filter((r) => budget.routes[r.route] && r.ms < STALE_MS);
 const noisy = floor * scale > FLOOR_MAX_MS;
-// How far this run's control, scaled, reads from the reference: a runner slower
-// or faster all over than its model's factor says. Only a calibrated run has
-// reference ms to compare.
-const drift = calibrated && budget.control ? (median(control) * scale) / budget.control.ms - 1 : 0;
-const offModel = budget.control !== undefined && Math.abs(drift) > budget.control.drift;
+// How far this run's reference routes, scaled, read from their usual medians:
+// a runner slower or faster all over than its model's factor says. Only a
+// calibrated run has reference ms to compare, and a run that swept none of the
+// reference routes (--routes) has nothing to compare them with.
+const refs = calibrated && budget.reference ? budget.reference.routes : {};
+const ratios = rows.filter((r) => r.route in refs).map((r) => r.ms / refs[r.route]);
+const drift = ratios.length ? median(ratios) - 1 : 0;
+const offModel = budget.reference !== undefined && Math.abs(drift) > budget.reference.drift;
 const inconclusive = noisy || offModel;
 writeFileSync(
   values.out!,
@@ -441,7 +450,8 @@ writeFileSync(
       gateMs: GATE_MS,
       machine,
       calibration: { calibrated, scale },
-      control: { median: median(control), iqr: floor, drift, samples: control },
+      control: { median: median(control), iqr: floor, samples: control },
+      reference: { drift, routes: ratios.length },
       inconclusive,
       unknown,
       stale: stale.map((r) => r.route),
@@ -459,10 +469,10 @@ const pct = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
 const verdict = noisy
   ? `inconclusive: the control's spread was ${(floor * scale).toFixed(2)} ms (over ${FLOOR_MAX_MS})`
   : offModel
-    ? `inconclusive: the control read ${(median(control) * scale).toFixed(2)} ms, ${pct(drift)} off the ${budget.control!.ms} ms this model's factor expects (over ±${Math.round(budget.control!.drift * 100)}%), so this runner is off its model`
+    ? `inconclusive: its ${ratios.length} reference routes read a median ${pct(drift)} off their usual EPYC 7763 ms (over ±${Math.round(budget.reference!.drift * 100)}%), so this runner is off its model`
     : `${over.length} of ${rows.length} routes over their ceiling, against a ${(floor * scale).toFixed(2)} ms floor`;
 const notes = [
-  ...unknown.map((r) => `config/cpu-budget.json allows ${r}, which the sweep doesn't know`),
+  ...unknown.map((r) => `config/cpu-budget.json names ${r}, which the sweep doesn't know`),
   ...stale.map((r) => `${r.route} reads ${r.ms.toFixed(2)} ms, under ${STALE_MS} ms, half the gate: drop its entry from config/cpu-budget.json`),
 ];
 const shown = rows.filter((r) => r.ms > SCREEN_MS || r.ms > r.ceilingMs);
@@ -504,6 +514,6 @@ if (values.gate) {
         "error",
         `${r.route} read ${r.ms.toFixed(2)} ms, over ${budget.routes[r.route] ? `the ${r.ceilingMs} ms ceiling config/cpu-budget.json allows it` : `the ${GATE_MS} ms gate`}`,
       );
-  for (const r of unknown) annotate("error", `config/cpu-budget.json allows ${r}, which the sweep doesn't know`);
+  for (const r of unknown) annotate("error", `config/cpu-budget.json names ${r}, which the sweep doesn't know`);
 }
 process.exit(values.gate && ((judged && over.length) || unknown.length) ? 1 : 0);

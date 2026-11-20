@@ -371,9 +371,13 @@ skips it.
     changed no Worker byte. Refitting the factor wouldn't have saved it: a
     factor is a model's usual runner, and this runner was unusual. The control's
     spread (its IQR) missed it too, at 0.30 ms, because a host that's slow all
-    over reads tight. Its median caught it, 33% over the reference where
-    ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
-    makes such a run inconclusive.
+    over reads tight. Its median caught that runner, 33% over its reference,
+    and missed the next ones: a slow 9V74 slows a 2 ms route less than a 15 ms
+    one, so on #1771's run the control read +6.5% while every heavy route read
+    1.24 to 1.40x and `/radar` failed. Now the heavy routes judge the host:
+    `config/cpu-budget.json` `reference` holds each one's usual median, and
+    a run whose routes read more than 15% off it, at the median ratio, is
+    inconclusive. The median keeps the route a PR slows from excusing itself.
     Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
 
 58. **Cloudflare's on-demand CPU profile reads wall time on a quiet Worker.**
