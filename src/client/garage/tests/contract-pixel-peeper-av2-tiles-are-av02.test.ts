@@ -38,7 +38,7 @@ test("an option is labeled AV2 exactly when its file's image item is av02, and e
     const labeledAv2 = o.label.startsWith("AV2 ");
     const got = await decode(tileBytes(o.src), { wasm }).then(
       (d) => d,
-      (e) => e,
+      (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
     );
     if (labeledAv2) {
       assert.ok(!(got instanceof Error), `${o.src} is labeled "${o.label}" but the AV2 decoder refused it: ${got instanceof Error ? got.message : ""}`);

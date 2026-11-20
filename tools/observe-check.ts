@@ -176,7 +176,7 @@ async function github(): Promise<Reading> {
 }
 
 const [inv, logs, issues, routes, spans, perfProbe, botLedger, gh] = await Promise.all([
-  token().then(invocations, (e) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
+  token().then(invocations, (e: unknown) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
   sqlCount("logs.workersLogs", "timestamp", `scriptName = '${SCRIPT}'`),
   exceptionIssues(),
   route(),
