@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/resample: Half the light</title>
+<title>aadhar.sh/garage/resample: Every resizer averages a checkerboard to 128 where light says 188</title>
 <meta name="description" content="A one-pixel checkerboard should shrink to sRGB 188, and every resizer says 128, your browser&#39;s canvas included. Why, plus five defects measurement missed.">
 <link rel="canonical" href="https://aadhar.sh/garage/resample">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/garage/resample: Half the light">
+<meta property="og:title" content="aadhar.sh/garage/resample: Every resizer averages a checkerboard to 128 where light says 188">
 <meta property="og:description" content="A one-pixel checkerboard should shrink to sRGB 188, and every resizer says 128, your browser&#39;s canvas included. Why, plus five defects measurement missed.">
 <meta property="og:url" content="https://aadhar.sh/garage/resample">
 <meta name="twitter:card" content="summary_large_image">
@@ -46,7 +46,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-<h1>Half the light</h1>
+<h1>Every resizer averages a checkerboard to 128 where light says 188</h1>
 <p class="garage-intro">A one pixel black and white checkerboard is exactly half black and half white, so any honest downscale has to average it. The right answer is <a class="term" data-t="srgb" href="https://en.wikipedia.org/wiki/SRGB" title="The standard colour space for screens and the web. Its values are gamma-encoded, so code 128 holds about a fifth of the light of 255." rel="external">sRGB</a> <data value="187.5 (sRGB code)">188</data>, because the average is over light. Every resizer I measured returns about 128: <code>sips</code>, ffmpeg, the Rust <a href="https://github.com/image-rs/image">image</a> crate, <a href="https://github.com/cykooz/fast_image_resize">fast_image_resize</a>, <code>Bun.Image</code>, and the <a class="term" data-t="canvas-api" href="https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API" title="The browser's drawing surface for scripts. Its drawImage call can copy an image onto it at a new size." rel="external">canvas</a> in whatever browser is rendering this sentence. Their kernels agree with each other to seven decimal places. All of them average in the wrong space, which <a href="http://www.ericbrasseur.org/gamma.html">Eric Brasseur wrote up in 2007</a> and the defaults have outlived.</p>
 
 <h2>Your browser is doing it right now</h2>

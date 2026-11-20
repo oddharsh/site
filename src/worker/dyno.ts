@@ -307,7 +307,7 @@ export function renderDynoPage() {
     fallback: { says: "The chart and the recent pulls arrive", shows: "them", json: "/garage/dyno.json" },
   });
   return lunaPage({
-    title: "Dyno · aadhar.sh",
+    title: "aadhar.sh/garage/dyno: A nightly job weighs the Worker bundle and every page",
     path: "Dyno",
     route: "/garage/dyno",
     width: 700,
@@ -357,7 +357,7 @@ td.src{font-size:var(--text-3xs);color:var(--slate-55)}
 #dy-pulls[data-state="failed"] + .dy-fail{display:block}
 `,
     body: html`
-    <h1>Dyno</h1>
+    <h1>A nightly job weighs the Worker bundle and every page</h1>
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
     weighs what would go over the wire, and records a pull.</p>
