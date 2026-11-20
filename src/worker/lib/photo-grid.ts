@@ -5,7 +5,8 @@
 // /photos/grid.html renders a random twelve per request, which the hydrator
 // swaps in. Imports nothing that touches a Worker global, so build.ts can load
 // it under Node.
-import { EMPTY, html, joinHtml, type Html } from "./html.ts";
+import { EMPTY, html, joinHtml } from "./html.ts";
+import type { Html } from "./html.ts";
 import { asNumber } from "./parse.ts";
 
 // Each tile names one format, AVIF. A <picture> with a JPEG fallback loaded the

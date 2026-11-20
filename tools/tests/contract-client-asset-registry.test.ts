@@ -36,8 +36,7 @@ import {
   unbudgetedAssets,
 } from "../lib/client-assets.ts";
 import { hashClientAssets } from "../lib/hash-client-assets.ts";
-
-type ClientAsset = import("../lib/client-assets.ts").ClientAsset;
+import type { ClientAsset } from "../lib/client-assets.ts";
 
 const sha8 = (bytes) => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 

@@ -6,17 +6,8 @@
 // scan whatever the view count, identical pages asked once, a missing answer is
 // never "no wall", and the sample never reaches JSON.
 import { assert, test } from "../../../tools/tests/contract-shared.ts";
-import {
-  CLEF_DEADLINE_MS,
-  VIEW_SAMPLE,
-  WALL_MODEL,
-  WALL_THRESHOLD,
-  buildWallRequest,
-  classifyWalls,
-  wallCandidates,
-  wallDedupeKey,
-  type View,
-} from "../lens-walls.ts";
+import { CLEF_DEADLINE_MS, VIEW_SAMPLE, WALL_MODEL, WALL_THRESHOLD, buildWallRequest, classifyWalls, wallCandidates, wallDedupeKey } from "../lens-walls.ts";
+import type { View } from "../lens-walls.ts";
 import { lensFieldEvidence } from "../lens.ts";
 
 /** One element by key, or a loud failure rather than an undefined to read through. */

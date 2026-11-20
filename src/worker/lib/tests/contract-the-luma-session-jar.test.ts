@@ -219,7 +219,9 @@ test("the cron batches upcoming and past roster selection into one D1 call", asy
     },
     async batch(statements) {
       batchCalls++;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
       assert.equal(statements.length, 2, "the batch must carry both independently capped reads");
       assert.deepEqual(
         statements.map((statement) => statement.args.length),
@@ -341,7 +343,9 @@ test("the contribute page escapes its complete summary from one D1 call", async 
           return {
             async first() {
               calls++;
-              await new Promise((resolve) => setTimeout(resolve, 10));
+              await new Promise((resolve) => {
+                setTimeout(resolve, 10);
+              });
               if (!sql.includes("AS active_count") || !sql.includes("AS event_count")) throw new Error(`unexpected contribute query: ${sql}`);
               return uid === "abc"
                 ? { active_count: 2, user_key: "abc", label, enabled: 1, event_count: 7 }

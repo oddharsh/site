@@ -15,6 +15,7 @@ import { fetchFollowingPublicRedirects } from "../lib/public-fetch.ts";
 import { lensFetch, lensFetchAsBot } from "../lens.ts";
 import { probeRevalidation } from "../cache-lint.ts";
 import { foreignMcpTools, foreignNlwebAsk } from "../lib/doors.ts";
+import type { OutboundRequest } from "../lib/outbound.ts";
 
 const origin = "https://example.com";
 const metadata = "http://169.254.169.254/latest/meta-data/";
@@ -42,7 +43,7 @@ function fakeNetwork(respond: (record: any) => Response, robots: (record: any) =
 const BOT = { as: "aadharshbot" };
 const PROBE = { as: "unsigned-probe" };
 
-const get = (identity, maxHops = 4): import("../lib/outbound.ts").OutboundRequest => ({
+const get = (identity, maxHops = 4): OutboundRequest => ({
   method: "GET",
   headers: { accept: "text/plain", "user-agent": "fixture-agent/1.0" },
   identity,

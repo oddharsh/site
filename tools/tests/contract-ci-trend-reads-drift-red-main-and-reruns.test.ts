@@ -1,6 +1,7 @@
 // ── ci:trend: a job that got slower, a main that stays red, a job that reruns green ──
 import { assert, test } from "./contract-shared.ts";
-import { FLOOR_S, MIN_RUNS, brokenMain, regressions, rerunFlakes, type Run } from "../ci-trend.ts";
+import { FLOOR_S, MIN_RUNS, brokenMain, regressions, rerunFlakes } from "../ci-trend.ts";
+import type { Run } from "../ci-trend.ts";
 
 // tools/ci-trend.ts judges the Actions API's runs and jobs. These fixtures are
 // that shape, trimmed: a main push every 4 hours, so a 3-day stretch holds 18.

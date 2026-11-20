@@ -36,7 +36,8 @@ import { cronJob } from "./lib/cron.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import type { Album } from "./albums.ts";
-import { createDispatch, isEdgeCacheable, type RouteHandler } from "./dispatch.ts";
+import { createDispatch, isEdgeCacheable } from "./dispatch.ts";
+import type { RouteHandler } from "./dispatch.ts";
 import {
   AROUND_SNAPSHOT_URL,
   CAL_HOST,
@@ -47,9 +48,8 @@ import {
   LEDGER_LINES_URL,
   READING_LIST_URL,
   WHOAREYOU_VALUES_URL,
-  type ExactPath,
-  type PrefixLabel,
 } from "./routes.ts";
+import type { ExactPath, PrefixLabel } from "./routes.ts";
 import { handleReading, handleReadingList } from "./reading.ts";
 import { handleGithubJson } from "./github.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";

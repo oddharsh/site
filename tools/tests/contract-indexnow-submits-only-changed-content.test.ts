@@ -2,6 +2,7 @@
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { changedPages, contentUrl, INDEXNOW_KEY, readStatus, sitemapPaths, submission } from "../lib/indexnow.ts";
 import { SCHEMA } from "../lib/served-manifest.ts";
+import type { ServedManifest } from "../lib/served-manifest.ts";
 
 // After each release, tools/indexnow.ts diffs the two signed served manifests
 // and submits the sitemap pages whose content moved. "Content" is the page's
@@ -9,7 +10,7 @@ import { SCHEMA } from "../lib/served-manifest.ts";
 // bytes move on every shell re-mint: measured across #1063, 53 of 56 sitemap
 // pages changed bytes and 0 changed content.
 
-const manifest = (files: Record<string, string>): import("../lib/served-manifest.ts").ServedManifest => ({ schema: SCHEMA, commit: null, files });
+const manifest = (files: Record<string, string>): ServedManifest => ({ schema: SCHEMA, commit: null, files });
 
 test("indexnow: the key is served at /<key>.txt, as the protocol requires", async () => {
   assert.match(INDEXNOW_KEY, /^[a-zA-Z0-9-]{8,128}$/);

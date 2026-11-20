@@ -32,7 +32,8 @@
 // findings are plain data, and tools/lib/infra-report.ts redacts every message
 // on the way into its store.
 
-import { agentRepresentation, type AgentSurface } from "./agent-representation.ts";
+import { agentRepresentation } from "./agent-representation.ts";
+import type { AgentSurface } from "./agent-representation.ts";
 
 export type Level = "fail" | "warn" | "pass";
 export type Finding = { level: Level; message: string };

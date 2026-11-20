@@ -186,7 +186,9 @@ test("image_compare encodes independent formats in one binding latency window", 
           async output(options) {
             active++;
             peak = Math.max(peak, active);
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await new Promise((resolve) => {
+              setTimeout(resolve, 10);
+            });
             active--;
             return { response: () => new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } }) };
           },
@@ -284,7 +286,9 @@ test("photo_recipe fetches only the indexes its lookup can use, without a serial
         paths.push(path);
         active++;
         peak = Math.max(peak, active);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
         active--;
         return Response.json(files[path]);
       },
@@ -317,7 +321,9 @@ test("representation vault stores normalized snapshots and compares digests", as
     "https://example.com/page": async () => {
       active++;
       peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
       active--;
       return new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, {
         headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" },

@@ -166,7 +166,8 @@ export function handlePrefetchActivation(request, env) {
 // page's rate reads high (gotcha 106). Read it as an ordering, which is what tools/speculation-report.ts does with it. The report
 // is also where any promotion to a more eager rule is decided; this route only
 // answers.
-import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
+import { analyticsReadError, analyticsSql, text } from "./ledger.ts";
+import type { AnalyticsRow } from "./ledger.ts";
 import { jsonResponse, methodGuard } from "./lib/http.ts";
 import { compareCodepoints } from "./lib/text.ts";
 

@@ -39,7 +39,8 @@
 //
 // Pure apart from the one runClef call, and node-safe (gotcha 16).
 
-import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";
+import { runClef } from "./lib/clef.ts";
+import type { ClefEnv, ClefModel } from "./lib/clef.ts";
 import { asNumber, asText } from "./lib/parse.ts";
 
 export const WALL_MODEL: ClefModel = "clef";

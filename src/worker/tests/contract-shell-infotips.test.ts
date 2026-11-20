@@ -679,7 +679,9 @@ test("site MCP resources/read deadlines cover stalled dispatch and body reads", 
       ]);
       clearTimeout(watchdog);
       if (deliver) deliver(response());
-      await new Promise((resolve) => realTimer(resolve, 0));
+      await new Promise((resolve) => {
+        realTimer(resolve, 0);
+      });
       assert.ok(out, `${phase} must return even when the producer ignores abort`);
       assert.equal(out.error.code, -32602);
       assert.ok(signal.aborted, `${phase} request is aborted`);

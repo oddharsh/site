@@ -327,8 +327,8 @@
         });
       })
       .then(done)
-      .catch((error) => {
-        done({ ok: false, error: String((error && error.message) || error) });
+      .catch((error: unknown) => {
+        done({ ok: false, error: error instanceof Error && error.message ? error.message : String(error) });
         if (onError) onError(error);
       });
   }

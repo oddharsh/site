@@ -164,7 +164,9 @@ async function main(): Promise<number> {
         break;
       }
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => {
+      setTimeout(r, 500);
+    });
   }
 
   const total = stems.filter((s) => alt[s]).length;

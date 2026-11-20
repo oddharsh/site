@@ -24,7 +24,8 @@
 // POST body that lensFetch cannot express, so it re-states each of those bounds
 // itself rather than inheriting them, per-hop redirect validation included.
 // This module adds no new way to reach the network.
-import { outboundRead, type OutboundRefusal } from "./outbound.ts";
+import { outboundRead } from "./outbound.ts";
+import type { OutboundRefusal } from "./outbound.ts";
 import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";

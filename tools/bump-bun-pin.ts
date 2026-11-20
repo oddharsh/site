@@ -94,7 +94,6 @@ import {
   writePin,
 } from "./lib/bun-pin.ts";
 import {
-  type Gate,
   TSC_REFERENCE,
   bunIdentity,
   byteIdenticalBuildGate,
@@ -106,6 +105,7 @@ import {
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
+import type { Gate } from "./lib/bun-gates.ts";
 import { ensureTimbradoEngine } from "./lib/upstream-watches.ts";
 import { defaultPrograms } from "./typecheck.ts";
 

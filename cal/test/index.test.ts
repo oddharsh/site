@@ -12,12 +12,13 @@ import { sign } from "../../src/worker/lib/sign.ts";
 import { getBooking, listHeld } from "../src/booking.ts";
 import { reserveSlot } from "../src/reservation.ts";
 import { expireIfStillPending } from "../src/workflow.ts";
+import type { CalEnv } from "./harness.ts";
 
 const SECRET = "integration-signing-secret";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
-let env: import("./harness.ts").CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
+let env: CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
 // Booting miniflare took over 5 s, bun's default, on a loaded CI runner on 2026-10-18.
 beforeAll(async () => {
   cal = await bootCal();
@@ -106,7 +107,9 @@ async function postBook(fields, overrides: Record<string, any> = {}) {
 function readBeforeEitherWrites(kv, parties = 2) {
   let arrived = 0;
   let release = () => {};
-  const allRead = new Promise<void>((r) => (release = r));
+  const allRead = new Promise<void>((r) => {
+    release = r;
+  });
   return new Proxy(kv, {
     get(target, prop) {
       const value = Reflect.get(target, prop);

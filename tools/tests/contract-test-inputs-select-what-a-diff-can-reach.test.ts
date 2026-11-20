@@ -1,7 +1,8 @@
 // ── test-inputs: a diff selects the test files that opened what it changed ──
 import { assert, test } from "./contract-shared.ts";
 import { readFileSync } from "node:fs";
-import { accesses, entry, lockPackages, packageOf, select, suiteCommand, type InputMap } from "../test-inputs.ts";
+import { accesses, entry, lockPackages, packageOf, select, suiteCommand } from "../test-inputs.ts";
+import type { InputMap } from "../test-inputs.ts";
 
 // tools/test-inputs.ts reads `strace -f -y` logs. These lines are that format,
 // trimmed: pid, syscall, args, and the result.

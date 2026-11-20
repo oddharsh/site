@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ISLAND_MARKER, islandPreload, islandScript } from "../lib/island.ts";
 import { handleReadingList, LIST_URL, refreshReadingList, renderReadingList, renderReadingPage } from "../reading.ts";
+import type { Env } from "../lib/env.ts";
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
-const NO_BINDINGS = {} as unknown as import("../lib/env.ts").Env;
+const NO_BINDINGS = {} as unknown as Env;
 
 // cachedRender reads and writes caches.default, which neither test runtime
 // provides. A cache that never hits is the cold-miss path every colo takes once.

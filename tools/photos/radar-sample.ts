@@ -158,7 +158,9 @@ if (has("--json")) {
   for (;;) {
     const frame = await draw(base, await sample());
     process.stdout.write("\x1b[H\x1b[2J" + frame);
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => {
+      setTimeout(r, 2000);
+    });
   }
 } else {
   console.log(await draw(base, await sample()));

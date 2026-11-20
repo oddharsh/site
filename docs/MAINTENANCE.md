@@ -903,13 +903,14 @@ annotation on the run. The job has `continue-on-error`, so the run stays green:
 never hold up a release. It isn't a required check; making it one is a ruleset
 change in `config/infra.json`, applied with `infra:apply`. On a model with no
 factor, a run whose `/robots.txt` control spread over 1 ms, or a run whose
-control's median, scaled, reads more than 20% off `control.ms`, it judges
-nothing and leaves a warning annotation. That last case is a runner slower or
-faster all over than its model's factor says (gotcha 57).
+heavy routes, scaled, read more than 15% off `reference.routes` at their
+median ratio, it judges nothing and leaves a warning annotation. That last
+case is a runner slower or faster all over than its model's factor says (gotcha 57).
 
 **When the warning says a runner is off its model:** rerun the job. One such
-run is a slow host. If every run says it, on every model, the dispatcher's own
-cost moved: set `control.ms` to the median control of a few EPYC 7763 runs.
+run is a slow host. If every run says it, on every model, the routes' own
+cost moved: refit `reference.routes` to each route's median over 20 or more
+calibrated CI runs.
 
 **When a route gets cheaper:** the sweep prints its entry as stale once it reads
 under 4 ms, half the gate. Delete the entry.
@@ -935,9 +936,12 @@ after it and record them in the row's `measured`.
 
 **When the warning names a CPU model with no factor:** collect two runs on it
 (rerun the job until it lands there twice; the units line names the model) and
-two or more on an EPYC 7763. Take each route confirmed in all of them (5
-samples), divide its 7763 median by its median on the new model, and record the
-median of those ratios with the run count. On one model a typical route moves
+two or more on an EPYC 7763. Take each route that reads over 8 ms on the 7763
+and appears in every run, divide its 7763 median by its median on the new
+model, and record the median of those ratios with the run count. Use the
+screening samples: a model with no factor reads raw, so few of its routes reach
+the 75% of a ceiling that confirms them, and on 2026-11-20 no route was
+confirmed in every run of any Intel model. On one model a typical route moves
 ±6% between runs and the worst ±17%, so a factor from one run can be off by that
 much; that's why a model waits for its second.
 

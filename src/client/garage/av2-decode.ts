@@ -236,7 +236,7 @@ if ("WorkerGlobalScope" in globalThis) {
   scope.onmessage = ({ data: { id, buf } }) => {
     decode(buf).then(
       (r) => scope.postMessage({ id, ...r }, [r.rgba]),
-      (e) => scope.postMessage({ id, error: String(e instanceof Error ? e.message : e) }),
+      (e: unknown) => scope.postMessage({ id, error: String(e instanceof Error ? e.message : e) }),
     );
   };
 }

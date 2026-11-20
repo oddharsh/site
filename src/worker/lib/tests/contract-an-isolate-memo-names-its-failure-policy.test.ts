@@ -13,7 +13,9 @@ function gate<T>() {
   const pending: { resolve: (v: T) => void; reject: (e: Error) => void }[] = [];
   const derive = (arg: string) => {
     calls.push(arg);
-    return new Promise<T>((resolve, reject) => pending.push({ resolve, reject }));
+    return new Promise<T>((resolve, reject) => {
+      pending.push({ resolve, reject });
+    });
   };
   return { calls, pending, derive };
 }
