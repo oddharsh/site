@@ -421,7 +421,7 @@ jobs:
         env:
           PICK: ${{ github.event_name == 'pull_request' && '--changed HEAD^1 --sample 5' || '' }}
         run: |
-          node tools/probe-shift.ts --viewport ${{ matrix.viewport }} --n 15 --only /coffee,/whoareyou,/garage/ranges,/lwe/dac,/garage/resample,/pixel-peeper,/restore | grep "^{" > probe.jsonl
+          node tools/probe-shift.ts --viewport ${{ matrix.viewport }} --n 15 --only /coffee,/lwe/dac,/garage/resample,/pixel-peeper,/,/garage,/lens | grep "^{" > probe.jsonl
           cat probe.jsonl
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,

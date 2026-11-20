@@ -6,7 +6,7 @@ import { createTestHarness } from "wrangler";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 
-const { values } = parseArgs({ options: { only: { type: "string" }, n: { type: "string" }, viewport: { type: "string" }, parallel: { type: "string" } } });
+const { values } = parseArgs({ options: { only: { type: "string" }, n: { type: "string" }, viewport: { type: "string" }, parallel: { type: "string" }, rate: { type: "string" } } });
 const paths = values.only!.split(",");
 const N = Number(values.n ?? 10);
 const PAR = Number(values.parallel ?? 3);
@@ -33,6 +33,9 @@ function instrument() {
   new PerformanceObserver((list) => {
     for (const e of list.getEntries()) seen.marks.push(`${e.name}@${Math.round(e.startTime)}`);
   }).observe({ type: "paint", buffered: true });
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) seen.marks.push(`lcp@${Math.round(e.startTime)}`);
+  }).observe({ type: "largest-contentful-paint", buffered: true });
   document.addEventListener("DOMContentLoaded", () => seen.marks.push(`dcl@${Math.round(performance.now())}`));
   addEventListener("load", () => seen.marks.push(`load@${Math.round(performance.now())}`));
   addEventListener("resize", () => seen.marks.push(`resize@${Math.round(performance.now())} ${innerWidth}x${innerHeight}`));
@@ -49,7 +52,7 @@ async function run(base: string) {
     for (let j = jobs.shift(); j; j = jobs.shift()) {
       const page = await ctx.newPage();
       const cdp = await ctx.newCDPSession(page);
-      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: Number(values.rate ?? 4) });
       await page.addInitScript(instrument);
       await page.goto(base + j.p, { waitUntil: "load", timeout: 45_000 });
       await page.waitForTimeout(1500);
