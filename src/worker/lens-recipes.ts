@@ -98,6 +98,7 @@
 // The enum a receipt's `note` may carry. Anything else becomes "unknown"
 // server-side rather than being echoed, because echoing is the injection.
 import { asRecord, asText } from "./lib/parse.ts";
+import { forwardSearch } from "./lib/text.ts";
 
 const RECIPE_NOTES = new Set(["acted", "none-found", "blocked", "threw"]);
 
@@ -209,7 +210,30 @@ export function lensRecipeCatalog() {
   return LENS_RECIPES.map((r) => ({ id: r.id, label: r.label, claim: r.claim, script: r.script }));
 }
 
-const RECEIPT_RE = new RegExp(`<script[^>]*\\bid=["']?${LENS_RECEIPT_ID}["']?[^>]*>([\\s\\S]*?)</script\\s*>`, "i");
+// The first match of
+// /<script[^>]*\bid=["']?lens-recipe-receipt["']?[^>]*>([\s\S]*?)<\/script\s*>/i,
+// found in one forward pass. The page is whatever the other origin rendered, and
+// until 2026-11-20 that regex rescanned to the end from every "<script" it
+// could not match: 256 KB of "<script " took 3.6 s in Node 26. Every "<script"
+// before the same ">" can match only what the first can, so each tag is tried
+// once, and a receipt tag with no closer after it means no later one has one.
+export function lensFindReceipt(html: string): { start: number; end: number; json: string } | null {
+  const id = forwardSearch(new RegExp(`\\bid=["']?${LENS_RECEIPT_ID}`, "gi"), html);
+  const open = /<script/gi;
+  for (let m; (m = open.exec(html));) {
+    const gt = html.indexOf(">", m.index + 7);
+    if (gt < 0) return null;
+    const tag = id(m.index + 7);
+    if (tag && tag.index + tag[0].length <= gt) {
+      const close = /<\/script\s*>/gi;
+      close.lastIndex = gt + 1;
+      const end = close.exec(html);
+      return end ? { start: m.index, end: end.index + end[0].length, json: html.slice(gt + 1, end.index) } : null;
+    }
+    open.lastIndex = gt;
+  }
+  return null;
+}
 
 const clampCount = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), RECIPE_COUNT_MAX) : 0);
 
@@ -222,15 +246,15 @@ const clampCount = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n),
 // `__lens_webmcp_runtime__` assertion is the precedent for this exact bug class.
 export function lensRecipeReceipt(html, nonce) {
   const source = String(html || "");
-  const match = source.match(RECEIPT_RE);
+  const match = lensFindReceipt(source);
   // Strip unconditionally: a receipt we refuse to trust must still not reach the
   // reader's `content` field, or a forged one becomes visible page text.
-  const stripped = match ? source.replace(RECEIPT_RE, "") : source;
+  const stripped = match ? source.slice(0, match.start) + source.slice(match.end) : source;
   if (!match) return { receipt: null, html: stripped };
 
   let parsed;
   try {
-    parsed = JSON.parse(match[1]);
+    parsed = JSON.parse(match.json);
   } catch (_e) {
     return { receipt: null, html: stripped };
   }
