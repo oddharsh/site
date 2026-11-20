@@ -63,6 +63,16 @@ const { values } = parseArgs({
   options: { base: { type: "string" }, only: { type: "string" }, viewport: { type: "string" }, changed: { type: "string" }, sample: { type: "string" } },
 });
 
+/**
+ * What a --base run adds to Chrome's own user agent, so a deployment can tell
+ * this check from a visitor. The visit counter reads "bot" in it and does not
+ * advance (PEEK_UA in src/worker/counter.ts); a sweep with Chrome's bare string
+ * counted as two visits to / a night. Everything else Chrome sends stays, so
+ * the page served is the one a visitor gets. Unset on a local run.
+ */
+const OWN_UA = "aadhar-sh-browser-check/1.0 (+https://aadhar.sh/bot)";
+let userAgent: string | undefined;
+
 /** Phone widths, widest first: the page loads once at 390 and is narrowed. */
 const WIDTHS = [390, 360, 320];
 /**
@@ -71,11 +81,11 @@ const WIDTHS = [390, 360, 320];
  * nothing, so CI runs each as its own job and a failure names its viewport.
  */
 const VIEWPORTS = {
-  desktop: { at: "1280px", widths: [], open: (b: Browser) => b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" }) },
+  desktop: { at: "1280px", widths: [], open: (b: Browser) => b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block", userAgent }) },
   phone: {
     at: `${WIDTHS[0]}px`,
     widths: WIDTHS,
-    open: (b: Browser) => b.newContext({ viewport: { width: WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" }),
+    open: (b: Browser) => b.newContext({ viewport: { width: WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block", userAgent }),
   },
 } satisfies Record<string, { at: string; widths: number[]; open: (b: Browser) => Promise<BrowserContext> }>;
 type Viewport = keyof typeof VIEWPORTS;
@@ -317,6 +327,8 @@ async function sweep(browser: Browser, base: string) {
   const legs = await Promise.all(viewports.map(async (v) => ({ ...VIEWPORTS[v], ctx: await VIEWPORTS[v].open(browser) })));
   const failures: string[] = [];
   const stale: string[] = [];
+  const notes: string[] = [];
+  const suspects: { path: string; leg: (typeof legs)[number]; max: number; under: number }[] = [];
   const queue = [...paths];
   const worker = async () => {
     for (let path = queue.shift(); path !== undefined; path = queue.shift()) {
@@ -326,9 +338,9 @@ async function sweep(browser: Browser, base: string) {
       const fail = (kind: string, detail: string) => failures.push(`FAIL  ${kind.padEnd(6)} ${path}  ${detail}`);
       const every = (pick: (r: Reading) => string[]) => [...new Set(readings.flatMap(({ r }) => pick(r)))];
       for (const status of new Set(readings.map(({ r }) => r.status))) if (status < 200 || status > 299) fail("status", `answered ${status}`);
-      for (const { at, r } of readings) {
-        if (r.shift > max) fail("shift", `${r.shift.toFixed(3)} at ${at}, over ${max}: ${[...new Set(r.moved)].slice(0, 4).join(", ") || "no source named"}`);
-      }
+      readings.forEach(({ r }, i) => {
+        if (r.shift > max) suspects.push({ path, leg: legs[i]!, max, under: r.shift });
+      });
       const calls = every((r) => r.intl);
       if (calls.length && !budget.intl[path]) fail("intl", `${calls.join(", ")} before the reader acts`);
       for (const error of every((r) => r.errors)) fail("error", error);
@@ -355,20 +367,39 @@ async function sweep(browser: Browser, base: string) {
     }
   };
   await Promise.all(Array.from({ length: PARALLEL }, worker));
+  // A shift over its limit has to repeat with the page read ALONE before it
+  // fails. Two readings side by side were not enough: a production sweep on
+  // 2026-11-20 read /coffee 0.014 twice with three pages loading at once, and
+  // 0.000 in each of three runs on its own. A shift that needs the runner to be
+  // busy can't be reproduced by whoever is handed the failure, so it is printed
+  // as a NOTE and does not fail the run.
+  for (const { path, leg, max, under } of suspects) {
+    const alone = await load(leg.ctx, base + path, []);
+    if (alone.shift > max) {
+      const moved = [...new Set(alone.moved)].slice(0, 4).join(", ") || "no source named";
+      failures.push(`FAIL  ${"shift".padEnd(6)} ${path}  ${alone.shift.toFixed(3)} at ${leg.at}, over ${max}: ${moved}`);
+    } else notes.push(`${path} read ${under.toFixed(3)} at ${leg.at} beside other loads and ${alone.shift.toFixed(3)} alone`);
+  }
   await Promise.all(legs.map((leg) => leg.ctx.close()));
-  return { failures: failures.sort(), stale: stale.sort() };
+  return { failures: failures.sort(), stale: stale.sort(), notes: notes.sort() };
 }
 
 async function run(base: string) {
   const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
   try {
+    if (values.base) {
+      const probe = await browser.newPage();
+      userAgent = `${await probe.evaluate(() => navigator.userAgent)} ${OWN_UA}`;
+      await probe.close();
+    }
     const blind = await controls(browser, base);
     if (blind.length) {
       for (const line of blind) console.error(`browser:check is BLIND. ${line}`);
       return 2;
     }
-    const { failures, stale } = await sweep(browser, base);
+    const { failures, stale, notes } = await sweep(browser, base);
     for (const line of failures) console.log(line);
+    for (const line of notes) console.log(`NOTE  shift  ${line}`);
     for (const line of stale) console.log(`STALE ${line}: drop it from config/browser-budget.json`);
     console.log(
       `browser:check: ${paths.length} pages at ${viewports.join(" and ")} against ${values.base ?? "the local build"}, ${failures.length} failure(s), ${stale.length} stale budget(s); every planted control was caught.`,

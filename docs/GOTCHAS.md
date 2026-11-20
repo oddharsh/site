@@ -993,7 +993,9 @@ skips it.
     real rows widened them, so a data table scrolls in its own box.
     `bun run browser:check` opens every manifest page in Chrome at 320, 360
     and 390px, plants a 600px block first to prove it can fail, and takes
-    `--base https://aadhar.sh` to read the deployment.
+    `--base https://aadhar.sh` to read the deployment, which
+    `production-browser.yml` does every night, since the rows change without
+    a deploy.
     Checked by: `tools/check-browser.ts`.
 
 98. **A script that builds what the reader is looking at moves the page

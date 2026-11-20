@@ -1,0 +1,150 @@
+name: Production in a browser
+
+# browser:check against the deployment, every night.
+#
+# ci.yml runs the same check on every PR against a Worker booted in the
+# runner, whose KV, R2 and D1 are empty, so a data-backed page is read in its
+# fallback state there. The two worst findings so far needed real rows:
+# /around and /ledger passed locally on 2026-11-10 and scrolled sideways in
+# production at every phone width, 103px and 3px out at 390px, because the
+# rows widened their tables (gotcha 97). The data changes without a deploy
+# (the neighborhood crawl and the crawler ledger refill daily), so the reading
+# that sees it has to run on a clock, and this is it.
+#
+# It reads production's bytes and writes nothing there: the check sends
+# `aadhar-sh-browser-check` in its user agent on a --base run, which the visit
+# counter reads as a bot and does not count (PEEK_UA in src/worker/counter.ts).
+#
+# A failure files ONE issue and adds each later failing night to it as a
+# comment, the way test-order.yml does. Exit 2 is the check saying it is BLIND
+# (a planted defect went unseen, so nothing it read can be trusted), and the
+# issue says which.
+#
+# Reproduce: bun run browser:check -- --base https://aadhar.sh
+# A dispatch can read another deployment, a preview URL for instance:
+#   gh workflow run production-browser.yml -f base=https://<version>-aadhar-sh.aadharsh2010.workers.dev
+
+on:
+  schedule:
+    - cron: "23 10 * * *" # daily, after the 05:41Z neighborhood crawl, off the hour
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Read this origin instead of https://aadhar.sh"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-browser
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Read production in Chrome
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write # the only write it has, and only to report a failing night
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The check imports wrangler's harness even when it reads a deployment,
+      # and wrangler runs under node (gotcha 38).
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Read every page of the deployment
+        id: sweep
+        env:
+          INPUT_BASE: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+
+          base="${INPUT_BASE:-https://aadhar.sh}"
+          [[ $base =~ ^https://[A-Za-z0-9.-]+$ ]] || { echo "::error title=Bad base::'$base' is not an https origin"; exit 3; }
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+          # gotcha 40: no pipe in front of the command whose status is the
+          # answer. The check's exit code is data here, so `set -e` steps aside
+          # for exactly this line.
+          set +e
+          bun run browser:check -- --base "$base" > sweep.txt 2>&1
+          verdict=$?
+          set -e
+          cat sweep.txt
+
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          exit "$verdict"
+
+      - name: Report the night
+        if: failure() && steps.sweep.outputs.verdict != '' && steps.sweep.outputs.verdict != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ steps.sweep.outputs.base }}
+          VERDICT: ${{ steps.sweep.outputs.verdict }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          title="Production in a browser: a page fails"
+          found=$(grep -E '^(FAIL|STALE) |BLIND' sweep.txt | head -30 || true)
+          [ -n "$found" ] || found="(no FAIL or BLIND lines; the run failed outside the sweep, see the log)"
+          if [ "$VERDICT" = "2" ]; then
+            what="The check is **blind** against \`$BASE\`: a defect it planted went unseen, so it read nothing it can vouch for"
+          else
+            what="\`$BASE\` fails browser:check"
+          fi
+
+          body=$(cat <<BODY
+          $what, with \`$(git rev-parse --short HEAD)\` checked out ([run]($RUN_URL)).
+
+          \`\`\`
+          $found
+          \`\`\`
+
+          Reproduce:
+
+          \`\`\`bash
+          bun run browser:check -- --base $BASE
+          \`\`\`
+
+          A page that passes \`bun run browser:check\` on the same commit and fails here is failing on its data: production's rows, slots or snapshot make it wider or taller than the fallback state the local Worker serves. Fix the page so it holds either way (gotchas 97 and 98).
+          BODY
+          )
+
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --assignee oddharsh \
+              --label "type: test" --label "area: tools" --type Watch \
+              --title "$title" --body "$body"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production in a browser"
+            echo
+            echo '```'
+            grep -E '^(FAIL|STALE) |BLIND|^browser:check: ' sweep.txt 2>/dev/null || echo "(the sweep did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
