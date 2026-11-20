@@ -732,7 +732,7 @@ export async function handleCensusJson(request, env) {
   // Read beside the series: `lastYmd` says when a
   // row last landed, and `lastSweep` says what the latest sweep did, including
   // a sweep that landed nothing.
-  const lastSweep = await fetchCensusLastSweep(env).catch((e) => ({ error: detailOf(e) }));
+  const lastSweep = await fetchCensusLastSweep(env).catch((e: unknown) => ({ error: detailOf(e) }));
   return jsonResponse(
     {
       ok: true,

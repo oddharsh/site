@@ -100,8 +100,8 @@ export function watchClientSources(dest = FARM, cwd = ".") {
         await mkdir(dirname(output), { recursive: true });
         await writeFile(output, js);
       })
-      .catch((error) => {
-        console.error(`dev: ${filename}: ${error.message}`);
+      .catch((error: unknown) => {
+        console.error(`dev: ${filename}: ${error instanceof Error ? error.message : String(error)}`);
       });
   });
 }

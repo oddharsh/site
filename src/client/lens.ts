@@ -555,9 +555,9 @@
         renderStatus();
         maybeAutoRunBrowser();
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         busy = false;
-        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -736,9 +736,9 @@
               '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
             : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         vsBusy = false;
-        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }

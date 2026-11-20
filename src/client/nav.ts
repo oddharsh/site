@@ -676,7 +676,7 @@
     if (saverOn) return;
     saverOn = true;
     if (!saverPromise)
-      saverPromise = import("/nav-pipes.js").catch((e) => {
+      saverPromise = import("/nav-pipes.js").catch((e: unknown) => {
         saverPromise = null;
         throw e;
       });
@@ -723,7 +723,7 @@
         .then((loaded) => {
           return loaded[1].createTips({ key: TIPS_KEY, kbd: KBD, sound: AXP_SND });
         })
-        .catch((e) => {
+        .catch((e: unknown) => {
           tipsPromise = null;
           throw e;
         });

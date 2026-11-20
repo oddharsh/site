@@ -553,7 +553,7 @@ async function main() {
   if (ok < results.length) process.exitCode = 1;
 }
 
-main().catch((e) => {
+main().catch((e: unknown) => {
   console.error(e);
   process.exit(1);
 });
