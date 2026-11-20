@@ -36,6 +36,7 @@ for (const { file, args, status } of cases) {
       assert.equal(good.status, status, good.stderr + good.stdout);
       assert.match(await read("trace"), /metadata/);
       if (file === "add-photos.sh") assert.match(await read("trace"), /downstream-hash/);
+      // fixture() fails any jpegtran call but -revert, the rotation tripwire (gotcha 3).
       if (file === "gen-encoding-samples.sh") assert.match(await read("trace"), /jpegtran -revert .*-optimize[\s\S]*jpegtran -revert .*-progressive/);
       if (file === "export-for-instagram.sh") assert.equal(await read("exports/frame.jpg"), "encoded");
     });
