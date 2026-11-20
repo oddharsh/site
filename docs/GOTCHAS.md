@@ -1129,3 +1129,17 @@ skips it.
     The check fails once a speculation stops riding Workers Cache, and this
     entry can retire then.
     Checked by: `src/worker/tests/contract-the-speculation-ledger.test.ts`.
+
+108. **On a slow CPU Chrome paints half a window, and the rest of the parse
+    moves it.** Chrome yields the HTML parser mid-document and paints what it
+    has, so markup parsed after that frame counts as layout shift. luna.css's
+    `.window:has(>.axp-tasks)` rail widened `/lwe/dac` from 644 to 844px once
+    the task pane arrived, `/coffee` dropped 32px onto the HyperCam band, and
+    `/pixel-peeper`'s statusbar fell from y 294 to 781 as content filled in
+    above it. It never showed on a Mac at 4x, where first paint lands after
+    `load`; a GitHub ubuntu runner at 4x read `/coffee` 0.0136 on 8 of 15
+    loads (2026-11-20), and the Mac at 12x reproduces it. `DESKTOP_HOLD`
+    (`<link rel="expect" href="#axp-icons" blocking="render">`) holds the
+    first frame until the element after the window is parsed. Every
+    renderer that ships `DESKTOP_CHROME` needs it in `<head>`.
+    Checked by: `src/worker/tests/contract-the-shell-holds-its-first-frame.test.ts`.

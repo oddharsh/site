@@ -134,7 +134,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   const chromeHtml = iconsHtml + taskbarHtml;
   const histnavHtml = HISTNAV_HTML;
   // Holds the first frame until the parser reaches #axp-icons, the first thing
-  // after the window, so the window never paints half parsed. On a slow CPU
+  // after the window, so the window never paints half parsed (gotcha 108). On a slow CPU
   // Chrome yields the parser mid-document and paints what it has; markup parsed
   // after that frame then moves the window: the rail luna.css adds for
   // .window:has(>.axp-tasks) widened /lwe/dac from 644 to 844px, and /coffee
