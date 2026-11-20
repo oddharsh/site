@@ -123,11 +123,14 @@ test("background steps keep the three ordering edges and all join before the job
   for (const step of steps.filter((s) => s.background)) assert.ok(step.id, `${step.name} runs in the background without an id`);
 
   // The suite reads .build/, and two of its tests skip without one. The build
-  // stays in the foreground so everything after it sees a finished tree.
+  // may run in the background, but every step that reads .build/ starts after
+  // it has finished.
   const build = at("bun run perf-budget");
-  assert.notEqual(steps[build].background, true, "the build must finish before the manifest cut and the suite read .build/");
-  assert.ok(at(SUITE) > build, "the suite must start after the build it reads");
-  assert.ok(at("bun run routes:check --prebuilt .build/.perfbudget") > build, "the route oracle loads the build's bundle");
+  const built = (i) => i > build && (!steps[build].background || waited(steps[build].id, i));
+  const cut = steps.findIndex((step) => String(step.run ?? "").startsWith("bun run served:manifest"));
+  assert.ok(cut >= 0 && built(cut), "the manifest is cut from a finished build");
+  assert.ok(built(at(SUITE)), "the suite must start after the build it reads");
+  assert.ok(built(at("bun run routes:check --prebuilt .build/.perfbudget")), "the route oracle loads the build's bundle");
 
   // lint and typecheck both open with the generator; it finishes, once, first.
   const gen = at("bun tools/gen-runtime-types.ts");
