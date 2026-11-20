@@ -214,7 +214,7 @@ async function main() {
   console.log(`\nchips: ${chips.join(" · ")}`);
 }
 
-main().catch((e) => {
+main().catch((e: unknown) => {
   console.error(e);
   process.exit(1);
 });

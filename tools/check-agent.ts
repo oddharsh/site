@@ -299,8 +299,8 @@ async function main() {
 // of this stripper passed a source-shape assertion while still leaking script
 // bodies into the word count.
 if (import.meta.main) {
-  main().catch((e) => {
-    console.error(e && e.stack ? e.stack : String(e));
+  main().catch((e: unknown) => {
+    console.error(e instanceof Error && e.stack ? e.stack : String(e));
     process.exit(2);
   });
 }

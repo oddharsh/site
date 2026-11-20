@@ -95,7 +95,7 @@ if (controlFailure) {
   process.exit(2);
 }
 
-const site = await siteTools().catch((error) => {
+const site = await siteTools().catch((error: unknown) => {
   console.error(`webmcp:check: ${ORIGIN}/mcp tools/list failed: ${String(error).split("\n")[0]}`);
   process.exit(2);
 });

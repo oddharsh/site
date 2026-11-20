@@ -263,9 +263,9 @@ async function main() {
 // `words` directly, and a bare import that made 500 outbound requests would be
 // a memorable way to find that out.
 if (import.meta.main)
-  main().catch((e) => {
+  main().catch((e: unknown) => {
     // A survey that dies half way must not leave a truncated JSON body looking
     // like a complete result. Fail loudly and write nothing usable.
-    process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
+    process.stderr.write(`ua-survey failed: ${e instanceof Error && e.stack ? e.stack : String(e)}\n`);
     process.exitCode = 1;
   });

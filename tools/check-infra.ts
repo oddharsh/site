@@ -57,6 +57,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile, access } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
 import { agentSurfaces } from "./lib/agent-representation.ts";
@@ -168,14 +169,14 @@ async function probeEarlyData(host: string): Promise<EarlyDataResult> {
         "sh",
         ["-c", `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" 2>&1`],
         { timeout: 20000 },
-      ).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      ).catch((e: unknown) => ({ stdout: `${asText(asRecord(e)?.stdout, "")}${asText(asRecord(e)?.stderr, "")}` }));
       if (!/^New, TLS/m.test(first.stdout || "")) continue;
       resumptions++;
       const out = await execFileP(
         "sh",
         ["-c", `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`],
         { timeout: 20000 },
-      ).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      ).catch((e: unknown) => ({ stdout: `${asText(asRecord(e)?.stdout, "")}${asText(asRecord(e)?.stderr, "")}` }));
       if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true, attempts: attempt + 1 };
     }
     if (!resumptions) return { skip: `no TLS handshake with ${host}:443 completed in ${BACKOFF_MS.length} attempts, so there was no session to resume` };

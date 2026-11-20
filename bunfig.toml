@@ -359,6 +359,13 @@ correctness = "error"
 # call reject or resolve, then return. It fires on a planted
 # `new Promise((r) => setTimeout(r, 1))`.
 "no-promise-executor-return" = "error"
+# A rejection callback's parameter is `any` unless it says otherwise, so
+# `.catch((e) => e.message)` type-checks and prints `undefined` when the
+# rejection isn't an Error. Taken from @cloudflare/oxlint-config 0.1.0. 26
+# findings, measured 2026-11-20. 25 now say `: unknown`, and the 12 that read a
+# field narrow first, keeping their output; the 26th is in a frozen fixture,
+# exempt below.
+"typescript/use-unknown-in-catch-callback-variable" = "error"
 # An array built only to answer `.includes()` is a Set that pays a linear scan
 # on every lookup. Taken from @cloudflare/oxlint-config 0.1.0. 15 findings,
 # measured 2026-11-20, all fixed. The rule can't see types: it reads any
@@ -586,3 +593,12 @@ files = ["**/test/**", "**/*.test.*", "tools/tests/contract-shared.ts"]
 files = ["cal/test/**"]
 [lint.overrides.rules]
 "typescript/await-thenable" = "off"
+
+# The minifier fixtures are frozen bytes: tools/lib/upstream-watches.ts measures
+# oxc-minify's brotli output on exactly these files against SWC's 5,786 B, so an
+# edit would move the number it compares. They're also JavaScript, where the
+# `: unknown` this rule asks for can't be written.
+[[lint.overrides]]
+files = ["tools/fixtures/minify-parity/**"]
+[lint.overrides.rules]
+"typescript/use-unknown-in-catch-callback-variable" = "off"
