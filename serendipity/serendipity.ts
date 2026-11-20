@@ -2618,6 +2618,7 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
     } catch (err) {
       console.log(JSON.stringify({ cron: "serendipity", record_write_failed: errorText(err) }));
     }
+    // oxlint-disable-next-line typescript/only-throw-error -- rethrows what the catch above caught, unchanged, so the cron's error keeps its own stack
     if (thrown) throw thrown;
     return record;
   });

@@ -352,6 +352,14 @@ correctness = "error"
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
 
+# A thrown non-Error has no stack and no message, so whatever catches it can
+# only log `0`. Taken from @cloudflare/oxlint-config 0.1.0, and one of the
+# Bun defaults held back below until now. 5 findings, measured 2026-11-20: four
+# `throw 0` sentinels in tooltip.ts, now Errors, and one rethrow in
+# serendipity.ts that keeps its suppression because it rethrows the caught
+# value unchanged. It fires on a planted `throw 0`.
+"@typescript-eslint/only-throw-error" = "error"
+
 # FOUR IMPORT RULES, each measured at 0 on this tree on 2026-08-27 and each proven
 # to fire on a planted violation, because a rule that reports nothing looks
 # identical to a rule that is not running. no-cycle earns the most here. The
@@ -414,7 +422,6 @@ correctness = "error"
 "@typescript-eslint/no-unsafe-function-type" = "off"
 "@typescript-eslint/no-unsafe-member-access" = "off"
 "@typescript-eslint/no-unsafe-return" = "off"
-"@typescript-eslint/only-throw-error" = "off"
 "@typescript-eslint/prefer-promise-reject-errors" = "off"
 "@typescript-eslint/require-await" = "off"
 "@typescript-eslint/restrict-plus-operands" = "off"

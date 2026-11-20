@@ -219,11 +219,11 @@ export function start(initial) {
       .then((r) => {
         // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
         // failure and fall to .catch (which frees the stem so we can retry).
-        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw new Error(`photo meta ${stem}: no JSON (${r.status})`);
         return r.json();
       })
       .then((m) => {
-        if (!asRecord(m)) throw 0;
+        if (!asRecord(m)) throw new Error(`photo meta ${stem}: not an object`);
         metaMap[stem] = m; // superset of the index entry: EXIF plus .hi
         // re-render if this photo's tip is still the open one. `hoist` is
         // declared below but always initialized by the time this fetch
@@ -251,11 +251,11 @@ export function start(initial) {
     indexRequested = true;
     fetch(`/images/exif.json?${META_V}`, { priority: "low" })
       .then((r) => {
-        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw new Error(`exif index: no JSON (${r.status})`);
         return r.json();
       })
       .then((all) => {
-        if (!asRecord(all)) throw 0;
+        if (!asRecord(all)) throw new Error("exif index: not an object");
         for (const stem of Object.keys(all)) {
           // never clobber a per-photo record already in hand: that one has .hi
           if (!metaMap[stem]) metaMap[stem] = all[stem];
