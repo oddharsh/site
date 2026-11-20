@@ -9,6 +9,7 @@ import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { html, unsafeHtml, type Html } from "./lib/html.ts";
 import { esc, isOwnerBust } from "./lib/http.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
+import { compareCodepoints } from "./lib/text.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { HN_MAP_KEY, hnThreadFor, readHnMap, type HnMap } from "./reading-hn.ts";
 import { READING_LIST_URL } from "./routes.ts";
@@ -67,7 +68,7 @@ export async function fetchCuriusLinks(env) {
     }
     if (saved.length < PER) break; // short page = last page
   }
-  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || ""))); // newest first
+  out.sort((a, b) => compareCodepoints(String(b.created || ""), String(a.created || ""))); // newest first
   return out;
 }
 

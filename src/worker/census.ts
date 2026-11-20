@@ -3,6 +3,7 @@ import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
+import { compareCodepoints } from "./lib/text.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
 import { CENSUS_TABLE_URL } from "./routes.ts";
@@ -430,7 +431,7 @@ export async function fetchCensusGrouped(env) {
 export function summarizeCensusRuns(rows) {
   if (!rows || !rows.length) return null;
   const ymd = rows.reduce((max, r) => (r.ymd > max ? r.ymd : max), rows[0].ymd);
-  const day = rows.filter((r) => r.ymd === ymd).sort((a, b) => a.host.localeCompare(b.host));
+  const day = rows.filter((r) => r.ymd === ymd).sort((a, b) => compareCodepoints(a.host, b.host));
   const outcomes: Record<string, number> = {};
   for (const r of day) outcomes[r.outcome] = (outcomes[r.outcome] || 0) + 1;
   return {

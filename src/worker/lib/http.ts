@@ -3,6 +3,7 @@
 // crawled titles, and the constant-time owner-secret check.
 
 import { escape } from "./html.ts";
+import { readResponseCapped } from "./public-fetch.ts";
 import { forwardSearch } from "./text.ts";
 
 // The one JSON response every route builds. Defaults to a private reply: never
@@ -14,6 +15,21 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders };
   for (const key of Object.keys(headers)) if (headers[key] === null) delete headers[key];
   return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), { status, headers });
+}
+
+// Every inbound request body goes through here. Cloudflare accepts a body of
+// up to 100 MB on Workers Free and the isolate has 128 MB, so buffering
+// whatever anyone POSTs could take down every request sharing the isolate.
+// This stops reading at maxBytes and returns null; under the cap it hands back
+// the same bytes as a Body, so callers keep their .json(), .formData() or .text().
+// contract-request-bodies-stop-at-their-cap fails on a raw read anywhere public.
+export const REQUEST_BODY_CAP = 64 * 1024;
+export async function cappedRequestBody(request: Request, maxBytes = REQUEST_BODY_CAP): Promise<Response | null> {
+  if (Number(request.headers.get("content-length")) > maxBytes) return null;
+  const { text, truncated } = await readResponseCapped(request, maxBytes);
+  if (truncated) return null;
+  const type = request.headers.get("content-type");
+  return new Response(text, type ? { headers: { "content-type": type } } : {});
 }
 
 // The headers Response.json() sends, for an internal hop (a Durable Object

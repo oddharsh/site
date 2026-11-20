@@ -6,7 +6,7 @@ import { mapWithConcurrency } from "./lib/crawl.ts";
 import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { cappedRequestBody, esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -1386,15 +1386,17 @@ export async function readParams(request, url) {
   const out = new URLSearchParams(url.searchParams);
   if (request.method === "POST") {
     const ct = (request.headers.get("content-type") || "").toLowerCase();
+    const capped = await cappedRequestBody(request);
+    if (!capped) return out;
     try {
       if (ct.startsWith("application/x-www-form-urlencoded")) {
-        const body = await request.text();
+        const body = await capped.text();
         for (const [k, v] of new URLSearchParams(body)) {
           if (!out.has(k)) out.set(k, v);
         }
       } else if (ct.startsWith("application/json")) {
-        const data = await request.json();
-        for (const k of Object.keys(data || {})) {
+        const data = asRecord(await capped.json()) ?? {};
+        for (const k of Object.keys(data)) {
           if (!out.has(k)) out.set(k, String(data[k]));
         }
       }

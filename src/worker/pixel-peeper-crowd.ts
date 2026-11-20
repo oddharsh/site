@@ -36,7 +36,7 @@
 //
 // Nothing about the caller is stored: no IP, no user agent, no cookie.
 // /privacy says so (trust.ts).
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
 import type { Env } from "./lib/env.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -289,8 +289,9 @@ export async function handlePixelPeeperRun(request: Request, env, ctx?: Executio
   if (await overBudget(PIXEL_PEEPER_BUDGET, request, env)) {
     return json({ error: "too many runs from this address; try again in a minute" }, 429, rateLimitedHeaders(PIXEL_PEEPER_BUDGET));
   }
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return json({ error: "too large" }, 413);
+  const capped = await cappedRequestBody(request, MAX_BODY_BYTES);
+  if (!capped) return json({ error: "too large" }, 413);
+  const text = await capped.text();
   let body: unknown;
   try {
     body = JSON.parse(text);
