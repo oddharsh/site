@@ -101,8 +101,11 @@ function notify() {
   }
 }
 
+// `started` is performance.now(), which no clock change can move: Date.now() is
+// the wall clock, so an NTP correction while the consent gate waited could
+// read a call as negative or hours long. `at` stays a wall time for display.
 function record(name, started, outcome, gated) {
-  audit.push({ name, at: started, ms: Date.now() - started, outcome, gated });
+  audit.push({ name, at: performance.timeOrigin + started, ms: performance.now() - started, outcome, gated });
   notify();
 }
 
@@ -329,7 +332,7 @@ export async function registerTool(def: ToolDef): Promise<"registered" | "taken"
     // the person cancels this call (Modern Web Guidance, agentic-javascript-
     // tools, 2026-11-20). An engine that passes none leaves it undefined.
     execute: async (args: any, options?: { signal?: AbortSignal }) => {
-      const started = Date.now();
+      const started = performance.now();
       const signal = options?.signal;
       let gated = false;
       try {
