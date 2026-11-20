@@ -128,6 +128,10 @@
 
   // ── Details: a sortable table over the same photos ────────────────────────
   var list: HTMLElement | null = null;
+  // One message per sort, from a region that exists before the first one and
+  // sits outside the table, since drawList replaces the table's contents
+  // (Modern Web Guidance, sortable-table, 2026-11-20).
+  var sortStatus: HTMLElement | null = null;
   var sortBy = 0,
     sortDir = 1;
   function drawList() {
@@ -159,7 +163,9 @@
           "</tr>",
       )
       .join("");
-    (list as HTMLElement).innerHTML = "<table><thead><tr>" + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+    // The caption is the table's accessible name, hidden visually: the window's
+    // title bar already says what this is to a sighted reader.
+    (list as HTMLElement).innerHTML = "<table><caption>Photos</caption><thead><tr>" + head + "</tr></thead><tbody>" + body + "</tbody></table>";
   }
   function showList() {
     if (!list) {
@@ -173,8 +179,12 @@
         sortBy = i;
         drawList();
         (list as HTMLElement).querySelector<HTMLElement>('[data-col="' + i + '"]')!.focus();
+        sortStatus!.textContent = "Sorted by " + COLUMNS[i].label + ", " + (sortDir > 0 ? "ascending" : "descending") + ", " + photos.length + " rows";
       });
-      sheet!.before(list);
+      sortStatus = D.createElement("span");
+      sortStatus.setAttribute("role", "status");
+      Object.assign(sortStatus.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" });
+      sheet!.before(list, sortStatus);
     }
     list.hidden = false;
     drawList();
