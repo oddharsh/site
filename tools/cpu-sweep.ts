@@ -84,6 +84,8 @@ import { cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { warmIcu } from "./lib/warm-icu.ts";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -285,6 +287,17 @@ if (values.one) {
       await crypto.subtle.digest("SHA-256", new Uint8Array(64));
       await new Request("https://warm.invalid/", { method: "POST", body: "{}" }).body!.getReader().read();
     }
+  // Every byte allocated before this line decides whether a scavenge lands inside
+  // the timed request: under --trace-gc, one fired in the window of every /finger
+  // and /photos/query.json sample, at the 18.3 MB the nursery filled to, and moving
+  // this warm-up moved it (on CI, three passes took /photos/query.json from 13.9 to
+  // 17.4 ms; one pass before the bundle import, 12.7 and /finger 20.6 to 14.5).
+  // A fresh workerd isolate starts its first request with a near-empty nursery,
+  // so a minor GC here does too. Measured 2026-11-20, M3 Max, 5 samples each:
+  // /photos/query.json 13.7-20.2 to 10.0-10.7 raw ms, the control unchanged. A
+  // full GC doubled the control (2.1 to 4.0 ms on CI), so it's minor only.
+  setFlagsFromString("--expose-gc");
+  (runInNewContext("gc") as (options: { type: "minor" }) => void)({ type: "minor" });
   const t0 = process.cpuUsage();
   const status = await run(values.one);
   const d = process.cpuUsage(t0);

@@ -1138,7 +1138,11 @@ skips it.
     14 to 22 ms against 9 to 12 before, failing 20 runs in a day on all three
     CI models. The sweep now warms both in the timed isolate before timing,
     as it does ICU (in a throwaway one, since ICU is per process), and
-    `--cold-platform` skips that, as the control. A route that reaches
-    another node-only lazy path pays it the same way: compare its reading
-    under node against workerd before trusting a jump.
+    `--cold-platform` skips that, as the control. A warm-up also moves GC:
+    every byte allocated before the timed request decides whether a
+    scavenge lands inside it, and on CI three warm-up passes took
+    `/photos/query.json` from 13.9 to 17.4 ms. So the sample runs a minor
+    GC right before timing, as a fresh workerd isolate starts near empty.
+    A route that reaches another node-only lazy path pays it the same way:
+    compare its reading under node against workerd before trusting a jump.
     Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
