@@ -352,6 +352,20 @@ correctness = "error"
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
 
+# `n! == 1` reads as `n !== 1` at a glance and means the opposite. Taken from
+# @cloudflare/oxlint-config 0.1.0. 0 findings, measured 2026-11-20; it fires on
+# a planted `n! == 1`.
+#
+# The same day's counts for the rest of that preset's additions, so nobody has
+# to re-run them. no-eval and unbound-method already run here. The others need
+# their own PR because each has sites to fix: eqeqeq 206, no-unsafe-type-assertion
+# 330, no-non-null-assertion 114, consistent-type-specifier-style 96,
+# no-unnecessary-type-assertion 73, no-promise-executor-return 30,
+# consistent-type-imports 28, use-unknown-in-catch-callback-variable 26,
+# prefer-set-has 15 and only-throw-error 5 (4 of those 5 are in tooltip.ts, a
+# hashed client asset, gotcha 35).
+"typescript/no-confusing-non-null-assertion" = "error"
+
 # FOUR IMPORT RULES, each measured at 0 on this tree on 2026-08-27 and each proven
 # to fire on a planted violation, because a rule that reports nothing looks
 # identical to a rule that is not running. no-cycle earns the most here. The
