@@ -8709,8 +8709,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
   if (!navigator.sendBeacon || !types.length) return;
   var nav = performance.getEntriesByType("navigation")[0];
   var activation = (nav && nav.activationStart) || 0;
-  // a prerender is hidden on purpose until it activates; only a real background tab counts
-  var background = document.visibilityState === "hidden" && !document.prerendering;
+  // a prerender is hidden on purpose until it activates; only a real background tab counts.
+  // This script runs at the end of a long document, so a reader who opened it in
+  // a background tab and switched to it before the parser got here reads
+  // "visible". The timeline's first visibility-state entry records the state at
+  // load regardless (Chromium); elsewhere the state at run time is all there is.
+  var seen = (performance.getEntriesByType && performance.getEntriesByType("visibility-state")) || [];
+  var background = document.prerendering || activation > 0 ? false
+    : seen.length ? seen[0].name === "hidden"
+    : document.visibilityState === "hidden";
   var v = { p: location.pathname };
   function watch(type, each, extra) {
     if (types.indexOf(type) === -1) return false;
