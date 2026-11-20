@@ -149,6 +149,17 @@ jobs:
         run: bun run --filter cal-aadhar-sh test
         background: true
 
+      # perf-budget owns the build and the Worker dry-run; the route oracle
+      # below loads that exact bundle. It starts in the background, right
+      # after install, so the Rust cache restores below overlap it instead of
+      # holding it back: they ran first, about 10 s at p50 over 65 PR runs
+      # (2026-11-14 to 11-20), and nothing they write is read by the build,
+      # which calls no cargo or rustc. Every reader of .build/ waits for it.
+      - name: Build, with the performance budget
+        id: build
+        run: bun run perf-budget
+        background: true
+
       # rust-toolchain.toml pins the compiler, and the runner image doesn't
       # ship that version: the first rustc or cargo call made rustup download
       # it, about 8.5s a run. Read the pin from the file, never from
@@ -218,12 +229,8 @@ jobs:
         run: cargo test --locked --quiet --manifest-path tools/photos/photo-metrics/Cargo.toml
         background: true
 
-      # perf-budget owns the build and the Worker dry-run; the route oracle
-      # below loads that exact bundle. It stays in the foreground: the
-      # manifest is cut from what it leaves, and every step after it reads
-      # .build/.
-      - name: Build, with the performance budget
-        run: bun run perf-budget
+      - name: Wait for the build
+        wait: build
 
       # What this build stages, URL by URL, for tools/check-served.ts to compare
       # against production. Cut right after the build, before any later step can

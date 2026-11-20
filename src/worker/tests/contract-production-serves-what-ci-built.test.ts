@@ -188,7 +188,12 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   const steps = ci.jobs.validate.steps;
   const build = steps.findIndex((s) => s.run === "bun run perf-budget");
   const cut = steps.findIndex((s) => s.name === "Cut the served manifest");
-  assert.ok(build >= 0 && cut === build + 1, "the manifest must be cut straight after the build, before any later step touches .build/");
+  // A background build finishes at the step that waits for it; the cut comes
+  // straight after that, and nothing started meanwhile names .build/.
+  const done = steps[build]?.background ? steps.findIndex((s) => s.wait === steps[build].id) : build;
+  assert.ok(build >= 0 && done >= build && cut === done + 1, "the manifest must be cut straight after the build, before any later step touches .build/");
+  for (const s of steps.slice(build + 1, cut))
+    assert.ok(!String(s.run ?? "").includes(".build"), `${s.name} reads .build/ while the build may still be writing it`);
   assert.equal(steps[cut].if, "github.event_name == 'push'", "only a push to main builds the commit Workers Builds ships");
   assert.match(steps[cut].run, /served:manifest --commit "\$\{\{ github\.sha \}\}"/);
 
