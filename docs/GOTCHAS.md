@@ -1129,3 +1129,16 @@ skips it.
     The check fails once a speculation stops riding Workers Cache, and this
     entry can retire then.
     Checked by: `src/worker/tests/contract-the-speculation-ledger.test.ts`.
+
+107. **The CPU sweep charges a route for node's platform code.** Each sample
+    is a fresh node process, and node implements `crypto.subtle` and body
+    streams in JS it loads and compiles per isolate, where workerd binds them
+    natively. #1746 put every POST body through `getReader()` and a SHA-256
+    (`readResponseCapped`), and from 2026-11-20 `POST /mcp search_site` read
+    14 to 22 ms against 9 to 12 before, failing 20 runs in a day on all three
+    CI models. The sweep now warms both in the timed isolate before timing,
+    as it does ICU (in a throwaway one, since ICU is per process), and
+    `--cold-platform` skips that, as the control. A route that reaches
+    another node-only lazy path pays it the same way: compare its reading
+    under node against workerd before trusting a jump.
+    Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.

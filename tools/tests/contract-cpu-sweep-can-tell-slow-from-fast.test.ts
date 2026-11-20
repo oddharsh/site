@@ -58,7 +58,7 @@ const row = (report, route) => report.rows.find((r) => r.route === route);
 // The one live sweep the budget verdicts share, at this model's factor of 1 with
 // no allowlist, so /spin is re-sampled and the rest are not.
 let live;
-const recording = () => (live ??= sweep("/spin,/still,/icu,/copy", atFactor(1)));
+const recording = () => (live ??= sweep("/spin,/still,/icu,/digest,/copy", atFactor(1)));
 const replay = (budget, ...flags) => sweep({ replay: recording().report }, budget, ...flags);
 const replayIn = (env, budget, ...flags) => sweepIn(env, { replay: recording().report }, budget, ...flags);
 
@@ -164,6 +164,20 @@ test("a route's first date format is cheap in a warm process, and --cold-icu sho
     cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
+});
+
+// node loads crypto.subtle per isolate on first use, which workerd never pays,
+// and after #1746 put a SHA-256 on every POST body, MCP routes read 4 to 6 ms
+// over their old cost on every CI model. The warm-up has to be what makes /digest
+// cheap, so --cold-platform must read it heavy again, and /spin, timed in the same
+// warmed run, still reads over the gate. A ratio, since CI reads about 2.5x a
+// laptop's raw ms: on an M3 Max cold read 2.27 to 3.91 ms and warm 0.29 to 0.67
+// (2026-11-20), and without the warm-up the two are the same reading.
+test("a route's first SHA-256 is cheap after the platform warm-up, and --cold-platform shows the cold one", () => {
+  const warm = row(recording().report, "/digest"),
+    cold = row(sweep("/digest", UNCALIBRATED, "--cold-platform").report, "/digest");
+  assert.ok(cold.ms > 2 * warm.ms, `/digest read ${cold.ms} ms cold and ${warm.ms} ms warmed, so the warm-up proves nothing`);
+  assert.ok(row(recording().report, "/spin").ms > recording().report.gateMs, "the warm-up hid a slow route");
 });
 
 // A route measured without its bindings measures a crash: cal copies env, and a

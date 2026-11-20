@@ -19,7 +19,9 @@
 // warms ICU in a throwaway isolate (tools/lib/warm-icu.ts): ICU's data is per
 // process, workerd's processes are shared and already have it, and a cold
 // process charged every date-formatting route about 10 ms that production
-// doesn't pay. --cold-icu skips the warm-up, as the control.
+// doesn't pay. --cold-icu skips the warm-up, as the control. In the timed isolate
+// it also warms node's crypto.subtle and body streams (gotcha 107);
+// --cold-platform skips that.
 //
 // One screening sample per route; a route that reads CONFIRM_AT of its ceiling
 // or more gets CONFIRMS more and is judged on the median. (Confirming everything
@@ -139,6 +141,7 @@ const { values } = parseArgs({
     budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
     "cold-icu": { type: "boolean" },
+    "cold-platform": { type: "boolean" },
     replay: { type: "string" },
   },
 });
@@ -267,6 +270,21 @@ if (values.one) {
     return r.status;
   };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
+  // node implements crypto.subtle and body streams in JS it loads and compiles per
+  // isolate; workerd binds both natively. Since #1746 every POST body goes through
+  // getReader() and a SHA-256 (readResponseCapped), and MCP routes read 4 to 6 ms
+  // over their old cost on all three CI models. Measured 2026-11-20, node 26.13 on
+  // an M3 Max, 15 paired samples: POST /mcp tools/list 3.48 to 1.42 raw ms with
+  // this warm-up, search_site 7.03 to 5.06, and the control and GET routes within
+  // 0.15 ms. One digest left the fixture's /digest at 0.27 to 1.87 ms; three, 0.27
+  // to 0.43. A worker thread can't take this the way warmIcu does, since the cost
+  // is per isolate, so it runs here and touches no Worker code. --cold-platform
+  // skips it, as the control.
+  if (!values["cold-platform"])
+    for (let k = 0; k < 3; k++) {
+      await crypto.subtle.digest("SHA-256", new Uint8Array(64));
+      await new Request("https://warm.invalid/", { method: "POST", body: "{}" }).body!.getReader().read();
+    }
   const t0 = process.cpuUsage();
   const status = await run(values.one);
   const d = process.cpuUsage(t0);
@@ -304,10 +322,22 @@ for (const r of routes) known.add(r);
 
 const sample = (spec: string) =>
   new Promise<{ ms: number; status: number }>((resolve, reject) => {
-    const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", BUNDLE, ...(values["cold-icu"] ? ["--cold-icu"] : [])], {
-      cwd: ROOT,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      process.execPath,
+      [
+        import.meta.filename,
+        "--one",
+        spec,
+        "--bundle",
+        BUNDLE,
+        ...(values["cold-icu"] ? ["--cold-icu"] : []),
+        ...(values["cold-platform"] ? ["--cold-platform"] : []),
+      ],
+      {
+        cwd: ROOT,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     let out = "",
       err = "";
     child.stdout.on("data", (d) => {
