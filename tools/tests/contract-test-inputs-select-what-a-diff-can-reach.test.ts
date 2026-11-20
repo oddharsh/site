@@ -79,6 +79,20 @@ test("test-inputs: a child keeps its parent's directory until it changes its own
   assert.deepEqual(entry(accesses(log, ROOT), TRACKED, ROOT).reads, ["docs/GOTCHAS.md"], "the fixture outside the repo isn't an input");
 });
 
+test("test-inputs: a vfork child's relative open resolves to the parent's chdir, even when it prints before the clone returns", () => {
+  const log = [
+    `300 chdir("/repo/docs") = 0`,
+    `300 clone(child_stack=0xffffe51a6030, flags=CLONE_VM|CLONE_VFORK|SIGCHLD <unfinished ...>`,
+    `301 openat(AT_FDCWD</repo/docs>, "GOTCHAS.md", O_RDONLY) = 3</repo/docs/GOTCHAS.md>`,
+    `300 <... clone resumed>) = 301`,
+    `301 openat(AT_FDCWD</repo/docs>, "missing.md", O_RDONLY) = -1 ENOENT (No such file or directory)`,
+  ].join("\n");
+  assert.deepEqual(accesses(log, ROOT), [
+    { path: "/repo/docs/GOTCHAS.md", listed: false, missing: false, byGit: false },
+    { path: "/repo/docs/missing.md", listed: false, missing: true, byGit: false },
+  ]);
+});
+
 test("test-inputs: git is judged by the call and the repo it ran in", () => {
   const git = (cwd: string, ...argv: string[]) =>
     [
