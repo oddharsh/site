@@ -359,6 +359,13 @@ correctness = "error"
 # call reject or resolve, then return. It fires on a planted
 # `new Promise((r) => setTimeout(r, 1))`.
 "no-promise-executor-return" = "error"
+# A type reaches a file through `import type`, so a reader sees at the top what
+# the file depends on and the build can drop it without asking. Taken from
+# @cloudflare/oxlint-config 0.1.0. 28 findings, measured 2026-11-20: 3 value
+# imports of `Html` that only typed something, now `import type` by --fix, and
+# 25 inline `import("...").T` annotations, now named in a top-level
+# `import type`. It fires on a planted `let x: import("./a.ts").A`.
+"typescript/consistent-type-imports" = "error"
 # A rejection callback's parameter is `any` unless it says otherwise, so
 # `.catch((e) => e.message)` type-checks and prints `undefined` when the
 # rejection isn't an Error. Taken from @cloudflare/oxlint-config 0.1.0. 26

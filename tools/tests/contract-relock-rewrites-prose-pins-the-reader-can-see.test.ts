@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { BASELINE_HEADING, auditDependencyDocs, planDocPinRewrites } from "../lib/dependency-docs.ts";
+import type { DependencyVersions } from "../lib/dependency-docs.ts";
 
 const ALIASES = [
   { prose: "Oxlint", pkg: "oxlint" },
@@ -68,7 +69,7 @@ test("leaves alone what it cannot know a pin for", () => {
   // A range pin names no single version the prose could be wrong about, and an
   // absent pin or versionless source names none at all. Guessing invents a claim.
 
-  const cases: import("../lib/dependency-docs.ts").DependencyVersions[] = [{ oxlint: "^1.80.0" }, { oxlint: "^1.80.0", wrangler: null }];
+  const cases: DependencyVersions[] = [{ oxlint: "^1.80.0" }, { oxlint: "^1.80.0", wrangler: null }];
   for (const pins of cases) {
     const { updated, edits } = planDocPinRewrites({ doc, pins, aliases: ALIASES, versionless: new Map() });
     assert.deepEqual(edits, []);

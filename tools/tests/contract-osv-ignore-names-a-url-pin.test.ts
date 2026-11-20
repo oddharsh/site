@@ -13,6 +13,7 @@ import { wranglerPin } from "../lib/wrangler-provenance.ts";
 // advisory too.
 import { parse } from "../lib/toml.ts";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
+import type { TomlValue } from "../lib/toml.ts";
 
 // The one advisory this tree ignores, and the package whose pin excuses it.
 const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
@@ -23,7 +24,7 @@ const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
  *
  *
  * */
-function tables(config: Record<string, import("../lib/toml.ts").TomlValue>, key: string) {
+function tables(config: Record<string, TomlValue>, key: string) {
   const value = config[key];
   return Array.isArray(value) ? (value as Record<string, any>[]) : [];
 }
