@@ -1063,9 +1063,15 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
     :Promise.resolve(drawCard(...args))));
   const blob=()=>png().then(c=>new Promise(res=>c.toBlob(res,"image/png")));
 
+  // the button's own text is the visible feedback; a screen reader needs a live
+  // region outside the button, already in the DOM before the first copy
+  const live=document.createElement("span");live.setAttribute("role","status");
+  Object.assign(live.style,{position:"absolute",width:"1px",height:"1px",overflow:"hidden",clipPath:"inset(50%)",whiteSpace:"nowrap"});
+  document.getElementById("copyimg").after(live);
+  const say=(el,msg)=>{live.textContent=live.textContent===msg?msg+"\u00A0":msg;flash(el,msg);};
   document.getElementById("copytext").onclick=ev=>{
-    const b=ev.target;if(!navigator.clipboard){flash(b,"Copy failed");return;}
-    navigator.clipboard.writeText(txt).then(()=>flash(b,"Copied ✓"),()=>flash(b,"Copy failed"));};
+    const b=ev.target;if(!navigator.clipboard){say(b,"Copy failed");return;}
+    navigator.clipboard.writeText(txt).then(()=>say(b,"Copied ✓"),()=>say(b,"Copy failed"));};
 
   const ci=document.getElementById("copyimg");
   // ClipboardItem takes the PROMISE, not the blob — Safari requires the item to
@@ -1073,8 +1079,8 @@ function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   // clipboard write at all, so it gets the download button and nothing else.
   if(!(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write)) ci.hidden=true;
   else ci.onclick=async ev=>{
-    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob()})]);flash(ev.target,"Copied ✓");}
-    catch(e){flash(ev.target,"Use Save PNG");}
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob()})]);say(ev.target,"Copied ✓");}
+    catch(e){say(ev.target,"Use Save PNG");}
   };
   // A REAL link, not a click handler: rendering the PNG needs an await, and a
   // programmatic a.click() after one has left the user gesture, which Safari

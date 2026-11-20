@@ -1,0 +1,38 @@
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+
+// Git hooks for anyone who commits here, people and agents alike
+// (tools/push-gate.ts sees only Claude Code's Bash tool). `hk install` once per
+// clone; worktrees share the clone's hooks.
+//
+// pre-commit formats and lints the staged files. pre-push runs the same five
+// checks as tools/push-gate.ts, the ones that failed 28 of October 2026's 55
+// red CI runs; the build and the contract suite stay CI's.
+local code = List("**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs", "**/*.css", "**/*.html", "**/*.yml", "**/*.yaml")
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stage = true
+    stash = "git"
+    steps {
+      ["format"] {
+        glob = code
+        check = "bun fmt --check {{files}}"
+        fix = "bun fmt {{files}}"
+        batch = true
+      }
+      ["lint"] {
+        depends = List("format")
+        glob = List("**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs")
+        check = "bun lint {{files}}"
+      }
+    }
+  }
+  ["pre-push"] {
+    steps {
+      ["gate"] {
+        check = "bun run --parallel format:check typecheck pages:check derive:check lint"
+      }
+    }
+  }
+}

@@ -5,7 +5,7 @@
 // mode lists it as over 8 ms and still exits 0, --gate fails on it, and the
 // allowlist and this CPU model's factor in the budget file each change that
 // verdict. With no factor for the CPU model, --gate judges nothing, and on a
-// runner whose control reads off its model it judges nothing either. A ceiling
+// runner whose routes read off its model it judges nothing either. A ceiling
 // re-fitted from CI runs has to clear the highest of them (gotcha 81).
 //
 // Two live sweeps, and every verdict about a budget is a --replay of the first.
@@ -114,29 +114,45 @@ test("--gate judges nothing on a CPU model with no factor, and says so", () => {
   assert.match(stdout, /^::warning title=CPU per route::--gate judged nothing: config\/cpu-budget\.json has no factor for /m);
 });
 
-// A factor fits a model's usual runner. One runner, slow all over, read 33% high
-// on its control and failed six routes on a PR that changed no Worker byte
-// (#1273, gotcha 57). A control reference of 0.01 ms makes this machine that
-// runner. A band too wide to cross is the control: the same run is judged again.
-test("--gate judges nothing on a runner whose control reads off its model, and judges once the band allows it", () => {
-  const off = replayIn({ GITHUB_ACTIONS: "true" }, { ...atFactor(1), control: { ms: 0.01, drift: 0.2 } }, "--gate");
-  assert.ok(off.report.control.drift > 0.2, `drift read ${off.report.control.drift}`);
+// A factor fits a model's usual runner. One runner, slow all over, failed six
+// routes on a PR that changed no Worker byte (#1273, gotcha 57), and the routes
+// themselves show it: their median ratio to their usual readings. References of
+// 0.01 ms make this machine that runner. A band too wide to cross is the
+// control: the same run is judged again.
+const everyRoute = (ms: (route: string, recorded: number) => number) => Object.fromEntries(recording().report.rows.map((r) => [r.route, ms(r.route, r.ms)]));
+test("--gate judges nothing on a runner whose routes read off their model, and judges once the band allows it", () => {
+  const routes = everyRoute(() => 0.01);
+  const off = replayIn({ GITHUB_ACTIONS: "true" }, { ...atFactor(1), reference: { drift: 0.15, routes } }, "--gate");
+  assert.ok(off.report.reference.drift > 0.15, `drift read ${off.report.reference.drift}`);
+  assert.equal(off.report.reference.routes, off.report.rows.length, "every swept route has a reference here");
   assert.equal(off.report.inconclusive, true);
   assert.ok(row(off.report, "/spin").ms > off.report.gateMs, "the reading is still over 8 ms");
   assert.equal(off.code, 0, "a runner off its model can't fail the gate");
   assert.match(
     off.stdout,
-    /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: the control read [\d.]+ ms, \+\d+% off the 0\.01 ms this model's factor expects/m,
+    /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: its \d+ reference routes read a median \+\d+% off their usual EPYC 7763 ms \(over ±15%\)/m,
   );
-  const within = replay({ ...atFactor(1), control: { ms: 0.01, drift: 1e9 } }, "--gate");
+  const within = replay({ ...atFactor(1), reference: { drift: 1e9, routes } }, "--gate");
   assert.equal(within.report.inconclusive, false);
   assert.equal(within.code, 1, "inside the band, the slow route fails");
 });
 
-test("the committed budget names a control reference, so the drift check can't go missing", () => {
-  const { control } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
-  assert.ok(control?.ms > 0, "config/cpu-budget.json needs control.ms");
-  assert.ok(control.drift > 0 && control.drift < 1, `control.drift is ${control?.drift}`);
+// The statistic is a median so that the route a PR slows can't excuse itself:
+// /spin reads 1000x its reference here, the others read theirs exactly,
+// and /spin still fails.
+test("one route far over its reference can't make the run inconclusive", () => {
+  const routes = everyRoute((route, ms) => (route === "/spin" ? ms / 1000 : ms));
+  const { code, report } = replay({ ...atFactor(1), reference: { drift: 0.15, routes } }, "--gate");
+  assert.equal(report.reference.drift, 0);
+  assert.equal(report.inconclusive, false);
+  assert.equal(code, 1, "/spin fails on its own");
+});
+
+test("the committed budget names enough reference routes that one can't move their median", () => {
+  const { reference } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
+  assert.ok(Object.keys(reference?.routes ?? {}).length >= 10, "config/cpu-budget.json needs 10 or more reference.routes");
+  for (const [route, ms] of Object.entries<any>(reference.routes)) assert.ok(ms > 0, `${route}: reference ${ms}`);
+  assert.ok(reference.drift > 0 && reference.drift < 1, `reference.drift is ${reference?.drift}`);
 });
 
 // A ceiling inside its route's own spread fails PRs that changed no Worker
