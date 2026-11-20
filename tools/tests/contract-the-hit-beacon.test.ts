@@ -89,7 +89,9 @@ test("the /hit odometer waits for the number it renders", async () => {
   // Once the DO is reached, setImmediate runs after every pending microtask, so a
   // handler that answered without awaiting it would have settled by then.
   await entered;
-  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => {
+    setImmediate(r);
+  });
   assert.equal(settled, false, "the SVG shape must not answer before the DO does");
   release();
   const res = await pending;

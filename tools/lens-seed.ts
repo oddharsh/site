@@ -170,7 +170,9 @@ async function captureWire(browser, url) {
     }
     // The settle window is what catches the analytics beacons that fire ON load,
     // which are most of what this lens exists to show.
-    await new Promise((r) => setTimeout(r, WIRE_TIMING.settleAfterLoadMs));
+    await new Promise((r) => {
+      setTimeout(r, WIRE_TIMING.settleAfterLoadMs);
+    });
 
     let execution = null;
     try {

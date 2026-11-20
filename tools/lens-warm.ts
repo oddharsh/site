@@ -54,7 +54,10 @@ const targets = urls.length ? urls : lensChipTargets();
 // so serial with a gap finishes sooner in wall-clock terms than a retried burst.
 const GAP_MS = 21_000;
 const BACKOFF_MS = 45_000;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) =>
+  new Promise((r) => {
+    setTimeout(r, ms);
+  });
 
 // Two refusals that look alike and mean opposite things. A per-minute limit
 // clears by waiting; the daily allowance does not clear until 00:00 UTC, and

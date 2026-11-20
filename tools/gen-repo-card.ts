@@ -41,7 +41,10 @@ const OUT = outIdx === -1 ? path.join(ROOT, ".github") : path.resolve(argv[outId
 const want = argv.filter((a, i) => !a.startsWith("--") && i !== outIdx + 1);
 const VARIANTS = want.length ? want : ["desktop", "card"];
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 async function navigate(view, url, timeout = 30_000) {
   let timer;

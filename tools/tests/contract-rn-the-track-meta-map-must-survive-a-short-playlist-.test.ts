@@ -316,7 +316,9 @@ test("scheduled crawl fan-out respects its concurrency cap", async () => {
   const output = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (value) => {
     active++;
     peak = Math.max(peak, active);
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1);
+    });
     active--;
     return value * 2;
   });

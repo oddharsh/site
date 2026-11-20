@@ -17,7 +17,9 @@ test("deadline lets a fast read through unmarked", async () => {
   // in expiry order, and this one is set after it with the same 50 ms, so the
   // deadline's would have fired first had settling not cleared it.
   // oxlint-disable-next-line no-restricted-syntax
-  await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => {
+    setTimeout(r, 50);
+  });
   assert.equal(marked, false, "a settled read must never be marked deadlined");
 });
 
@@ -32,12 +34,12 @@ test("deadline lets a fast read through unmarked", async () => {
 test("deadline ships the fallback at the budget and leaves the read running", async () => {
   let marked = false;
   let settled = false;
-  const slow = new Promise((r) =>
+  const slow = new Promise((r) => {
     setTimeout(() => {
       settled = true;
       r("late");
-    }, 400),
-  );
+    }, 400);
+  });
   const t0 = Date.now();
   const v = await deadline(slow, 15, "fallback", () => {
     marked = true;

@@ -351,6 +351,14 @@ correctness = "error"
 # failure. 0 findings, measured 2026-08-27; it fires on a two-member union
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
+
+# A value returned from a Promise executor goes nowhere: `return reject(e)` or
+# `(r) => setTimeout(r, ms)` reads as if the return settled something. Taken
+# from @cloudflare/oxlint-config 0.1.0. 30 findings, measured 2026-11-20: 27
+# concise arrows now have block bodies, and lens-wire.ts's three early exits
+# call reject or resolve, then return. It fires on a planted
+# `new Promise((r) => setTimeout(r, 1))`.
+"no-promise-executor-return" = "error"
 # An array built only to answer `.includes()` is a Set that pays a linear scan
 # on every lookup. Taken from @cloudflare/oxlint-config 0.1.0. 15 findings,
 # measured 2026-11-20, all fixed. The rule can't see types: it reads any

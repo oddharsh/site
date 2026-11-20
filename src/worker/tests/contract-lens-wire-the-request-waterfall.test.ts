@@ -47,7 +47,9 @@ test("the wire lens overlaps independent CDP domain enables", async () => {
     calls.push(method);
     active++;
     peak = Math.max(peak, active);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
     active--;
     return {};
   };

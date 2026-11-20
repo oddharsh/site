@@ -211,7 +211,9 @@ async function main() {
       const runs = [];
       for (let i = 0; i < trials; i++) {
         runs.push(await sample(target, identity));
-        await new Promise((r) => setTimeout(r, 400)); // one request at a time, deliberately slow
+        await new Promise((r) => {
+          setTimeout(r, 400);
+        }); // one request at a time, deliberately slow
       }
       const ok = runs.filter((r) => r.status !== null);
       results[identity.key] = {

@@ -106,7 +106,9 @@ async function postBook(fields, overrides: Record<string, any> = {}) {
 function readBeforeEitherWrites(kv, parties = 2) {
   let arrived = 0;
   let release = () => {};
-  const allRead = new Promise<void>((r) => (release = r));
+  const allRead = new Promise<void>((r) => {
+    release = r;
+  });
   return new Proxy(kv, {
     get(target, prop) {
       const value = Reflect.get(target, prop);

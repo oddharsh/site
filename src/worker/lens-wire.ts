@@ -289,7 +289,10 @@ function cdpClient(ws) {
   // callers below read one or two fields each and guard for absence.
   const send = (method: string, params?: unknown, sessionId?: string) =>
     new Promise<Record<string, any>>((resolve, reject) => {
-      if (closed) return reject(closed);
+      if (closed) {
+        reject(closed);
+        return;
+      }
       const id = nextId++;
       pending.set(id, { resolve, reject });
       // sessionId is OPTIONAL on the wire: a browser-level command carries none,
@@ -300,7 +303,8 @@ function cdpClient(ws) {
         ws.send(JSON.stringify(frame));
       } catch (e) {
         pending.delete(id);
-        return reject(e);
+        reject(e);
+        return;
       }
       setTimeout(() => {
         if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`));
@@ -313,7 +317,10 @@ function cdpClient(ws) {
   const waitFor = (method, ms) =>
     new Promise((resolve) => {
       const seen = events.find((e) => e.method === method);
-      if (seen) return resolve(seen);
+      if (seen) {
+        resolve(seen);
+        return;
+      }
       const t = setTimeout(() => {
         ws.removeEventListener("message", onMsg);
         resolve(null);
@@ -337,7 +344,10 @@ function cdpClient(ws) {
   return { send, waitFor, events };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) =>
+  new Promise((r) => {
+    setTimeout(r, ms);
+  });
 
 type PageCdpSend = (method: string, params?: unknown) => Promise<Record<string, any>>;
 
