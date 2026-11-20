@@ -555,9 +555,9 @@
         renderStatus();
         maybeAutoRunBrowser();
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         busy = false;
-        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -736,9 +736,9 @@
               '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
             : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         vsBusy = false;
-        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -1899,8 +1899,19 @@
     };
   }
 
+  // Copy feedback changes the button's own text, which a screen reader doesn't
+  // reliably announce (a button's children are presentational). This region,
+  // in the DOM before any copy, says it again for them. lens-tools.js writes
+  // here too. A repeat gets a no-break space, since VoiceOver skips a message
+  // identical to the last (Modern Web Guidance, copy-button, 2026-11-20).
+  var copyStatus = document.createElement("span");
+  copyStatus.id = "lx-copy-status";
+  copyStatus.setAttribute("role", "status");
+  Object.assign(copyStatus.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" });
+  document.body.appendChild(copyStatus);
   function copyText(text, button) {
     var say = (msg) => {
+      copyStatus.textContent = copyStatus.textContent === msg ? msg + "\u00A0" : msg;
       if (!button) return;
       var old = button.textContent;
       button.textContent = msg;

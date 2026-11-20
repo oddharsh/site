@@ -596,8 +596,8 @@ async function main(): Promise<number> {
           buf += c;
         });
         p.on("close", (code) => (code === 0 ? resolve(buf) : reject(new Error(`${stem} exited ${code}`))));
-      }).catch((e) => {
-        console.error(`  x ${stem}: ${e.message}`);
+      }).catch((e: unknown) => {
+        console.error(`  x ${stem}: ${e instanceof Error ? e.message : String(e)}`);
         return "";
       });
       if (out) rows.push(...(JSON.parse(out) as Row[]));

@@ -92,7 +92,15 @@ test("only the pages VITALS_PATHS names ship the beacon", async () => {
 // The observer is inline in horizon.html, so these run that exact script
 // against a stubbed browser: visibility, the four entry types, sendBeacon,
 // and fetchLater where a case says the browser has it.
-function horizonVitals(o: { fetchLater?: "works" | "throws"; startHidden?: boolean; prerendering?: boolean; activationStart?: number }) {
+function horizonVitals(o: {
+  fetchLater?: "works" | "throws";
+  startHidden?: boolean;
+  prerendering?: boolean;
+  activationStart?: number;
+  // Chromium's visibility-state timeline, oldest first. Unset is an engine
+  // without VisibilityStateEntry (Firefox, Safari), which returns none.
+  timeline?: ("hidden" | "visible")[];
+}) {
   const html = readFileSync(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   // our own page, so slice around the endpoint rather than parse the document
   const at = html.indexOf('"/ledger/vitals"');
@@ -124,7 +132,15 @@ function horizonVitals(o: { fetchLater?: "works" | "throws"; startHidden?: boole
     document,
     location: { pathname: "/garage/horizon" },
     navigator: { sendBeacon: (_url: string, body: string) => beacons.push(body) > 0 },
-    performance: { getEntriesByType: () => [{ activationStart: o.activationStart ?? 0 }], now: () => now },
+    performance: {
+      getEntriesByType: (type: string) =>
+        type === "navigation"
+          ? [{ activationStart: o.activationStart ?? 0 }]
+          : type === "visibility-state"
+            ? (o.timeline ?? []).map((name, i) => ({ name, startTime: i * 50 }))
+            : [],
+      now: () => now,
+    },
     addEventListener: (type: string, fn: () => void) => {
       if (type === "visibilitychange") onVisibility.push(fn);
     },
@@ -223,6 +239,31 @@ test("a view that loaded in a background tab reports no LCP, but keeps CLS and I
   page.entry("event", click(120));
   page.hide();
   assert.deepEqual(page.beacons(), [{ p: "/garage/horizon", cls: 0, inp: 120 }]);
+});
+
+test("a view opened in a background tab and shown before the script ran still reports no LCP", () => {
+  // The script sits at the end of a long page, so it can first run after the
+  // reader has already switched to the tab: the state then reads visible, and
+  // only the timeline remembers the hidden start.
+  const page = horizonVitals({ timeline: ["hidden", "visible"] });
+  page.entry("largest-contentful-paint", { startTime: 5000 });
+  page.entry("event", click(120));
+  page.hide();
+  assert.deepEqual(page.beacons(), [{ p: "/garage/horizon", cls: 0, inp: 120 }]);
+});
+
+test("a view the timeline saw start visible reports its LCP, the control for the row above", () => {
+  const page = horizonVitals({ timeline: ["visible"] });
+  page.entry("largest-contentful-paint", { startTime: 900 });
+  page.hide();
+  assert.deepEqual(page.beacons(), [{ p: "/garage/horizon", lcp: 900, cls: 0 }]);
+});
+
+test("an activated prerender starts hidden on the timeline and still reports LCP from activation", () => {
+  const page = horizonVitals({ timeline: ["hidden", "visible"], activationStart: 800 });
+  page.entry("largest-contentful-paint", { startTime: 2000 });
+  page.hide();
+  assert.deepEqual(page.beacons(), [{ p: "/garage/horizon", lcp: 1200, cls: 0 }]);
 });
 
 test("a prerendered view is hidden on purpose, so it still reports LCP from activation", () => {

@@ -138,7 +138,7 @@ test("a served path two roots author is refused once, by the planner, with the p
   try {
     const refused = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED }).then(
       () => null,
-      (error) => error,
+      (error: unknown) => error,
     );
     assert.ok(refused instanceof ServedTreeCollision, "the planner must refuse, and say which kind of refusal it is");
     assert.deepEqual(refused.paths.sort(), ["_headers", "garage"], "file against file, and file against directory");

@@ -3,7 +3,7 @@
 // crawled titles, and the constant-time owner-secret check.
 
 import { escape } from "./html.ts";
-import { readResponseCapped } from "./public-fetch.ts";
+import { readBytesCapped } from "./public-fetch.ts";
 import { forwardSearch } from "./text.ts";
 
 // The one JSON response every route builds. Defaults to a private reply: never
@@ -26,8 +26,9 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
 export const REQUEST_BODY_CAP = 64 * 1024;
 export async function cappedRequestBody(request: Request, maxBytes = REQUEST_BODY_CAP): Promise<Response | null> {
   if (Number(request.headers.get("content-length")) > maxBytes) return null;
-  const { text, truncated } = await readResponseCapped(request, maxBytes);
-  if (truncated) return null;
+  const read = await readBytesCapped(request, maxBytes);
+  if (read?.truncated) return null;
+  const text = read ? new TextDecoder("utf-8").decode(read.bytes) : "";
   const type = request.headers.get("content-type");
   return new Response(text, type ? { headers: { "content-type": type } } : {});
 }
