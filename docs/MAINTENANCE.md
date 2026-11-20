@@ -936,9 +936,12 @@ after it and record them in the row's `measured`.
 
 **When the warning names a CPU model with no factor:** collect two runs on it
 (rerun the job until it lands there twice; the units line names the model) and
-two or more on an EPYC 7763. Take each route confirmed in all of them (5
-samples), divide its 7763 median by its median on the new model, and record the
-median of those ratios with the run count. On one model a typical route moves
+two or more on an EPYC 7763. Take each route that reads over 8 ms on the 7763
+and appears in every run, divide its 7763 median by its median on the new
+model, and record the median of those ratios with the run count. Use the
+screening samples: a model with no factor reads raw, so few of its routes reach
+the 75% of a ceiling that confirms them, and on 2026-11-20 no route was
+confirmed in every run of any Intel model. On one model a typical route moves
 ±6% between runs and the worst ±17%, so a factor from one run can be off by that
 much; that's why a model waits for its second.
 
