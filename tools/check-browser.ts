@@ -45,7 +45,7 @@
 // formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
 import { chromium } from "playwright-core";
-import type { Browser, BrowserContext, Page } from "playwright-core";
+import type { Browser, BrowserContext } from "playwright-core";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,6 +56,7 @@ import { createTestHarness } from "wrangler";
 import { reach, rereadsEverything } from "./lib/browser-pages.ts";
 import type { Reach } from "./lib/browser-pages.ts";
 import { chromeChannel } from "./lib/browser-channel.ts";
+import { overflows } from "./lib/browser-readings.ts";
 import { writeSiteConfigFile } from "./lib/site-config.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -220,28 +221,6 @@ function instrument() {
     });
   }
 }
-
-/** Every scroller wider than its box, with the leaf elements that stick out. */
-const overflows = (page: Page) =>
-  page.evaluate(() => {
-    const name = (el: Element) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : "") + (el.classList.length ? `.${el.classList[0]}` : "");
-    const found: string[] = [];
-    for (const box of [document.documentElement, ...document.querySelectorAll("main, .content")]) {
-      if (box.scrollWidth <= box.clientWidth + 1) continue;
-      const edge = box.getBoundingClientRect().left + box.clientWidth + 1;
-      const past = (el: Element) => el.getBoundingClientRect().right > edge;
-      const clips = (el: Element) => getComputedStyle(el).overflowX !== "visible";
-      const culprits: string[] = [];
-      for (const el of box.querySelectorAll("*")) {
-        if (!past(el) || [...el.children].some(past)) continue;
-        let up = el.parentElement;
-        while (up && up !== box && !clips(up)) up = up.parentElement;
-        if (up === box) culprits.push(`${name(el)} +${Math.round(el.getBoundingClientRect().right - edge)}px`);
-      }
-      found.push(`${name(box)} is ${box.scrollWidth}px in a ${box.clientWidth}px box: ${culprits.slice(0, 4).join(", ") || "no leaf found"}`);
-    }
-    return found;
-  });
 
 type Reading = { status: number; shift: number; moved: string[]; intl: string[]; csp: string[]; errors: string[]; scroll: Record<number, string[]> };
 

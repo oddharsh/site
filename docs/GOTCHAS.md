@@ -1152,3 +1152,28 @@ skips it.
     A route that reaches another node-only lazy path pays it the same way:
     compare its reading under node against workerd before trusting a jump.
     Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
+108. **A check that stops when the page has loaded has read none of what
+    the page does.** `browser:check` reads 77 pages while they load; 44 of
+    them carry about 880 controls between them (sliders, filters, pickers,
+    demo buttons), and until 2026-11-20 nothing had operated one. `bun run
+    act:check` presses, slides, picks and types into each at 390px and reads
+    four things after: a thrown error, a press that caused nothing, one
+    task over 300 ms under 4x CPU throttle, a page left wider than the
+    phone. The first sweeps flagged 132 controls and then none: 519
+    operated, no error, no page widened, and nothing dead or slow that was
+    not built to be. Everything it flagged was the instrument, and each
+    fix is a rule it keeps: scroll a control to mid-screen and wait
+    before pressing it, since a lazy demo starts only when it nears the
+    screen and a `content-visibility` section moves the control as it
+    lands; close whatever the last press opened; give a press that has
+    caused nothing a second look 750 ms later; and call only a BUTTON dead,
+    since a field, slider, select or radio holds its value whether or not a
+    script answers; leave the shell's own DOM changes out, which made the
+    inert plant read alive in 1 run of 7; and make a slow press repeat on a
+    fresh page, since /garage/horizon's "Pop out" read 338 ms once and 136
+    to 187 ms in six presses alone. It plants four buttons in /search first (one throws, one
+    is inert, one spins 400 ms, one widens the page), and
+    `config/interaction-budget.json` holds the buttons that are inert or
+    slow on purpose. It runs against the local Worker only: it presses
+    everything, and a deployment has real writes behind some of it.
+    Checked by: `tools/check-interactions.ts`.

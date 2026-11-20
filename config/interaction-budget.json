@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "Exceptions to tools/check-interactions.ts, by page and control, each with its",
+    "reason. A control not named here must do something when pressed, answer",
+    "inside 300 ms under 4x CPU throttle, throw nothing and leave the page no wider",
+    "than a phone. The check reports an entry its control no longer needs."
+  ],
+  "pages": {
+    "/garage/horizon": {
+      "button#sy-block \"run one 600ms task\"": {
+        "allow": ["slow"],
+        "why": "The demo is a 600 ms task: it blocks on purpose so scheduler.yield() has something to interrupt."
+      },
+      "button.xp-button \"Cut\"": { "allow": ["dead"], "why": "The focusgroup demo's toolbar: the buttons exist to be arrowed between, and do nothing." },
+      "button.xp-button \"Copy\"": { "allow": ["dead"], "why": "The focusgroup demo's toolbar, as Cut." },
+      "button.xp-button \"Paste\"": { "allow": ["dead"], "why": "The focusgroup demo's toolbar, as Cut." },
+      "button.xp-button \"Delete\"": { "allow": ["dead"], "why": "The focusgroup demo's toolbar, as Cut." },
+      "button.xp-button \"label\"": { "allow": ["dead"], "why": "The align-content demo sets a <button> beside a <div> to compare how each centres its label. It is a specimen." }
+    },
+    "/garage/pretext": {
+      "button#race \"Race 2,000 re-layouts\"": {
+        "allow": ["slow"],
+        "why": "The demo is the race: 2,000 DOM reflows on the main thread, timed against pretext doing the same layout without them."
+      }
+    }
+  }
+}

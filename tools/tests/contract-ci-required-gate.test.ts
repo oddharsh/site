@@ -46,8 +46,11 @@ test("CI is one required job named validate that cannot be skipped or softened",
   // `browser-check` (2026-11-10) opens every page in Chrome and reads sideways
   // scroll, layout shift, early Intl and uncaught errors (gotchas 92, 97, 98).
   // A page that fails one is a bug to fix, and it reports on the same terms.
-  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "controls", "browser-check", "attest"]);
-  for (const name of ["cpu-sweep", "controls", "browser-check"]) {
+  // `act-check` (2026-11-20) operates every control on every page once and
+  // reads what each press caused (gotcha 108). A dead button is a bug to fix
+  // too, and it reports the same way.
+  assert.deepEqual(Object.keys(workflow.jobs), ["validate", "cpu-sweep", "controls", "browser-check", "act-check", "attest"]);
+  for (const name of ["cpu-sweep", "controls", "browser-check", "act-check"]) {
     const job = workflow.jobs[name];
     assert.equal(job["continue-on-error"], true, `${name} may fail its job, never the run promote-production waits on`);
     assert.equal(job.needs, undefined, `nothing waits on ${name}, and it waits on nothing`);

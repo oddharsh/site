@@ -425,6 +425,39 @@ jobs:
           PICK: ${{ github.event_name == 'pull_request' && '--changed HEAD^1 --sample 5' || '' }}
         run: bun run browser:check -- --viewport ${{ matrix.viewport }} $PICK
 
+  # Operates every control on every page once, at 390px, and reads what each
+  # press caused: a thrown error, nothing at all, a task that blocks past
+  # 300 ms under throttle, a page left wider than the phone
+  # (tools/check-interactions.ts, gotcha 108). browser:check stops when a page
+  # has loaded; this is everything after. Its own runner for the same reason
+  # (it builds and boots its own Worker, about three minutes on top of the
+  # install) and continue-on-error on the same terms: a dead button is a
+  # finding to fix, never a reason to hold up a release.
+  act-check:
+    name: act check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Operate every control
+        run: bun run act:check
+
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts
   # verifies it with `gh attestation verify --signer-workflow` before trusting
