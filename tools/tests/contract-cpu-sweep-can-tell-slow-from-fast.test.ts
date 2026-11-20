@@ -169,7 +169,7 @@ test("a route's first date format is cheap in a warm process, and --cold-icu sho
 // node loads crypto.subtle per isolate on first use, which workerd never pays,
 // and after #1746 put a SHA-256 on every POST body, MCP routes read 4 to 6 ms
 // over their old cost on every CI model. The warm-up has to be what makes /digest
-// cheap, so --cold-platform must read it heavy again, and /spin, timed in the same
+// cheap, so --cold-platform must read it heavy again (gotcha 107), and /spin, timed in the same
 // warmed run, still reads over the gate. A ratio, since CI reads about 2.5x a
 // laptop's raw ms: on an M3 Max cold read 2.27 to 3.91 ms and warm 0.29 to 0.67
 // (2026-11-20), and without the warm-up the two are the same reading.
