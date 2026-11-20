@@ -870,6 +870,12 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
     let s = String(raw).trim()
       .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
       .replace(" ", "T");
+    // EXIF capture time is a wall clock with no zone. new Date() would read it
+    // in the viewer's zone, and a time inside a spring-forward gap (02:30 on a
+    // US change day) comes back an hour late, so read the digits as written.
+    // A string with a zone is an instant and still goes through Date.
+    const wall = !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) && s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (wall) return `${wall[2]}-${wall[3]}-${wall[1]}, ${wall[4]}:${wall[5]}`;
     const d = new Date(s);
     if (isNaN(d)) return "";
     const mm  = String(d.getMonth() + 1).padStart(2, "0");
