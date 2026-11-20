@@ -133,6 +133,16 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   // boot was the version before the inline one, and landed after first paint.
   const chromeHtml = iconsHtml + taskbarHtml;
   const histnavHtml = HISTNAV_HTML;
+  // Holds the first frame until the parser reaches #axp-icons, the first thing
+  // after the window, so the window never paints half parsed. On a slow CPU
+  // Chrome yields the parser mid-document and paints what it has; markup parsed
+  // after that frame then moves the window: the rail luna.css adds for
+  // .window:has(>.axp-tasks) widened /lwe/dac from 644 to 844px, and /coffee
+  // dropped 32px onto the HyperCam band. Measured 2026-11-20 on a GitHub
+  // ubuntu runner, 4x CPU throttle: /coffee read 0.0136 on 8 of 15 loads. With
+  // the hold, Mac at 12x: 0 of 12, FCP +140 ms median, LCP inside the spread.
+  // Chrome only; other engines ignore it and paint as before.
+  const holdHtml = '<link rel="expect" href="#axp-icons" blocking="render">';
 
   // The sprite banner names the generator by NAME, never by PATH. icons.svg is
   // content-hashed and served from /a/, so a path in its bytes couples the
@@ -146,9 +156,11 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     `// site-manifest.json. Do not hand-edit; run bun run gen:shell.\n` +
     `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n` +
     `// DESKTOP_HISTNAV opens the page window's title bar (Back/Forward).\n` +
+    `// DESKTOP_HOLD goes in <head>: no first frame until the window is parsed.\n` +
     `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n` +
     `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n` +
     `export const DESKTOP_HISTNAV = ${JSON.stringify(histnavHtml)};\n` +
+    `export const DESKTOP_HOLD = ${JSON.stringify(holdHtml)};\n` +
     `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
 
   const spriteWidth = Math.max(...cells.map((cell) => cell.right));
@@ -174,7 +186,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     ]),
   );
 
-  return { desktopHtml, chromeHtml, histnavHtml, moduleSource, sprite, favicons };
+  return { desktopHtml, chromeHtml, histnavHtml, holdHtml, moduleSource, sprite, favicons };
 }
 
 // The sprite ships from /a/ on every page, and the icon sources in shell-data.ts
@@ -382,7 +394,9 @@ export function patchStaticShell(source, artifacts, label = "page") {
   let next = source
     .replace(new RegExp(`${TOP_OPEN}[\\s\\S]*?${TOP_CLOSE}\\n?`, "g"), "")
     .replace(new RegExp(`${CHROME_OPEN}[\\s\\S]*?${CHROME_CLOSE}\\n?`, "g"), "");
-  next = stripSpeculationBlocks(next);
+  next = stripSpeculationBlocks(next).replaceAll(`${artifacts.holdHtml}\n`, "");
+  if (!next.includes("</head>")) throw new Error("shell page has no </head>");
+  next = next.replace("</head>", `${artifacts.holdHtml}\n</head>`);
   const body = next.match(/<body[^>]*>/i);
   if (!body) throw new Error("shell page has no <body>");
   if (!next.includes("</body>")) throw new Error("shell page has no </body>");

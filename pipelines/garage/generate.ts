@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.ts";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HOLD, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 import { titleBar } from "../../src/worker/lib/window.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +98,7 @@ export function pageHtml(spec) {
 <link rel="stylesheet" href="/prose.css">
 <style>${BASE_CSS}${pageCss}</style>
 <link rel="stylesheet" href="/luna.css">
+${DESKTOP_HOLD}
 </head>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->

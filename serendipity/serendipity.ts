@@ -9,7 +9,7 @@ const PREFIX = "/serendipity";
 // one path resolves in both. The markup is in the document and nav.js only
 // wires behavior, as on every other page; letting nav.js build the desktop after
 // load gave curl and JS-off visitors no desktop and everyone else a shell pop.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HOLD, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
 import { cappedRequestBody, esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
@@ -523,7 +523,7 @@ function shell(title, currentPath, bodyHtml, head = "", description = POOL_DESCR
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="https://aadhar.sh${esc(currentPath)}">${String(shareMeta({ title: currentPath === PREFIX ? "Serendipity" : title + " · Serendipity", description, path: currentPath }))}${twinLink}
 <style>${shellCss()}</style>
-<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${DESKTOP_HOLD}${head}</head><body>${DESKTOP_TOP}
 <div class="window">
   ${String(titleBar({ caption: "aadhar.sh/serendipity", closeHref: "/", closeTitle: "back to aadhar.sh" }))}
   <div class="body">

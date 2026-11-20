@@ -2,7 +2,7 @@
 // Notepad windows.
 
 import { cachedRender } from "./lib/cache.ts";
-import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_HOLD, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
 import { shareMeta } from "./lib/chrome.ts";
 import { esc } from "./lib/http.ts";
@@ -113,7 +113,9 @@ export function writingShell(o) {
     '<link rel="alternate" type="application/rss+xml" title="aadhar.sh — writing" href="/writing/feed.xml">' +
     "<style>" +
     NOTEPAD_CSS +
-    '</style><link rel="stylesheet" href="/luna.css"></head><body class="np-page">' +
+    '</style><link rel="stylesheet" href="/luna.css">' +
+    DESKTOP_HOLD +
+    '</head><body class="np-page">' +
     DESKTOP_TOP +
     o.body +
     DESKTOP_CHROME +

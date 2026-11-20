@@ -33,7 +33,7 @@
 // resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
-import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_HOLD, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 // The site's island contract, imported the same way desktop.ts is: island.ts
 // and html.ts are pure modules that never reach cloudflare:workers (gotcha 16).
 // cal builds strings with the site's esc(), so what it hands island() is
@@ -425,7 +425,7 @@ function shell(title, body, env, head = "") {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<link rel="stylesheet" href="/luna.css">
+<link rel="stylesheet" href="/luna.css">${onShell ? "\n" + DESKTOP_HOLD : ""}
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">

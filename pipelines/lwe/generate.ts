@@ -33,7 +33,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.ts";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HOLD, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { titleBar } from "../../src/worker/lib/window.ts";
 
@@ -118,6 +118,7 @@ function pageHtml(spec) {
 <style>${chromeCss(c)}
 ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <link rel="stylesheet" href="/luna.css">
+${DESKTOP_HOLD}
 </head>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->

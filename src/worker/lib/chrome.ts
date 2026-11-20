@@ -243,6 +243,7 @@ ${unsafeHtml(xpChromeCss())}
 ${unsafeHtml(css || "")}
 </style>
 <link rel="stylesheet" href="/luna.css">
+<link rel="expect" href="#axp-icons" blocking="render">
 </head>
 <body>
 ${unsafeHtml(DESKTOP_TOP)}
