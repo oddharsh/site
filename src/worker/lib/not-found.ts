@@ -44,6 +44,7 @@ import { lunaPage } from "./chrome.ts";
 import { html } from "./html.ts";
 import { HASHED_ASSETS, SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { AGENT_SURFACES } from "./site-manifest.ts";
+import { compareCodepoints } from "./text.ts";
 import { getThumbHashes } from "../photos.ts";
 import { matchCrawler } from "../ledger.ts";
 import { forMethod, namesHtml, wantsJson, wantsMarkdown } from "./http.ts";
@@ -191,7 +192,7 @@ export function nearestPages(path: string, pages: readonly string[], limit = 3):
   const scored = pool
     .map((p) => ({ p, score: section ? likeness(leaf, p.slice(section.length + 1)) : likeness(path, p) }))
     .filter((s) => s.score >= 0.5)
-    .sort((a, b) => b.score - a.score || a.p.localeCompare(b.p));
+    .sort((a, b) => b.score - a.score || compareCodepoints(a.p, b.p));
   return { section, pages: scored.slice(0, limit).map((s) => s.p) };
 }
 

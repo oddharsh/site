@@ -168,6 +168,7 @@ export function handlePrefetchActivation(request, env) {
 // answers.
 import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
 import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { compareCodepoints } from "./lib/text.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
@@ -225,7 +226,7 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
     row.speculated = row.prefetch + row.prerender;
     row.rate = row.speculated ? Math.min(1, row.activated / row.speculated) : null;
   }
-  return out.sort((a, b) => b.speculated - a.speculated || a.path.localeCompare(b.path));
+  return out.sort((a, b) => b.speculated - a.speculated || compareCodepoints(a.path, b.path));
 }
 
 export async function handleSpeculationJson(request, env) {

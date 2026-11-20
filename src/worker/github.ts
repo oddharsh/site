@@ -30,6 +30,7 @@ import { signedFetch } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
+import { compareCodepoints } from "./lib/text.ts";
 
 export const GITHUB_USER = "oddharsh";
 export const GITHUB_CACHE_KEY = "github:activity:v1";
@@ -98,7 +99,7 @@ export function normalizePrs(body: unknown): GithubActivity["prs"] {
     if (p.at > g.latest.at) g.latest = p;
     byRepo.set(p.repo, g);
   }
-  const repos = [...byRepo.values()].sort((a, b) => b.count - a.count || b.latest.at.localeCompare(a.latest.at));
+  const repos = [...byRepo.values()].sort((a, b) => b.count - a.count || compareCodepoints(b.latest.at, a.latest.at));
   return {
     total: totalOf(body),
     merged: prs.filter((p) => p.state === "merged").length,
@@ -118,7 +119,7 @@ export function normalizeIssues(body: unknown): GithubActivity["issues"] {
       at: text(it.created_at),
     }))
     .filter((i) => i.repo && i.title)
-    .sort((a, b) => b.at.localeCompare(a.at));
+    .sort((a, b) => compareCodepoints(b.at, a.at));
   return { total: totalOf(body), repoCount: new Set(list.map((i) => i.repo)).size, items: list };
 }
 
@@ -147,7 +148,7 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
   return {
     total,
     coveredSince: total > list.length && list.length ? day(oldest) : since,
-    repos: [...byRepo.values()].sort((a, b) => b.count - a.count || b.latest.at.localeCompare(a.latest.at)),
+    repos: [...byRepo.values()].sort((a, b) => b.count - a.count || compareCodepoints(b.latest.at, a.latest.at)),
   };
 }
 
