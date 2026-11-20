@@ -75,6 +75,7 @@ import { cloneTree } from "./lib/clone-tree.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
 import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import type * as albumsModule from "../src/worker/albums.ts";
 
 const { phase, finish: finishPhases } = phaseClock();
 
@@ -1409,7 +1410,7 @@ phase("1e photos + bot");
   // with no members is a registry entry nobody ran the pipeline for, and a page
   // that renders 503 at deploy is a page whose route would 503 in production,
   // so it fails the build by name rather than shipping the fallback.
-  const albums: typeof import("../src/worker/albums.ts") = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
+  const albums: typeof albumsModule = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
   const { ALBUMS, albumPath } = albums;
   const albumSizes: string[] = [];
   for (const album of Object.values(ALBUMS)) {

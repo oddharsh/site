@@ -13,10 +13,11 @@ import { test } from "node:test";
 import { ISLAND_MARKER, islandPreload, islandScript } from "../lib/island.ts";
 import { MAIL_URL, renderInboxMail, renderInboxPage, handleInboxMail } from "../inbox.ts";
 import { CENSUS_ROSTER, TABLE_URL, censusExhibitHtml, handleCensusTable, renderCensusPage } from "../census.ts";
+import type { Env } from "../lib/env.ts";
 
 const mountOf = (shell) => shell.slice(shell.indexOf("data-island="), shell.indexOf("<noscript>", shell.indexOf("data-island=")));
 const count = (s, re) => (s.match(re) || []).length;
-const NO_BINDINGS = {} as unknown as import("../lib/env.ts").Env;
+const NO_BINDINGS = {} as unknown as Env;
 
 for (const { name, render, url } of [
   { name: "/inbox", render: renderInboxPage, url: MAIL_URL },

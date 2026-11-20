@@ -24,6 +24,7 @@ import {
   syncHealthLine,
   syncSpanAttrs,
 } from "../../../../serendipity/serendipity.ts";
+import type { SyncRecord } from "../../../../serendipity/serendipity.ts";
 
 const COOKIES = JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "usr-test.secret" }] });
 
@@ -230,10 +231,7 @@ test("the record folds counts it can read and leaves the rest undefined", () => 
 test("the dashboard line reads ok, error and stale against two ticks of the declared schedule", () => {
   const now = Date.parse("2026-09-30T12:30:00.000Z");
 
-  const rec: (at: string, ok: boolean) => import("../../../../serendipity/serendipity.ts").SyncRecord = (
-    at,
-    ok,
-  ): import("../../../../serendipity/serendipity.ts").SyncRecord => ({ at, ok, session: ok ? "ok" : "error", events_fetched: 42 });
+  const rec: (at: string, ok: boolean) => SyncRecord = (at, ok): SyncRecord => ({ at, ok, session: ok ? "ok" : "error", events_fetched: 42 });
   const fresh = rec("2026-09-30T12:23:00.000Z", true);
   assert.match(syncHealthLine({ attempt: fresh, lastOk: fresh }, now), /data-sync="ok">Last Luma sync 7 min ago: ok, 42 events\./);
 
