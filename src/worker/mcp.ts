@@ -8,7 +8,7 @@ import { captureRepresentation, compareRepresentation, readRepresentation } from
 import { frameText, terminalToolFrame } from "./terminal.ts";
 import { radarFrame, readSamples } from "./radar.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
-import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "./lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpBatchRefusal, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "./lib/mcp-protocol.ts";
 import { mcpTool } from "./lib/mcp-tools.ts";
 import { previewToolRefusal } from "./lib/preview.ts";
 import { overBudget } from "./lib/ratelimit.ts";
@@ -46,10 +46,6 @@ const CACHE_TOOLS = CACHE_STATIC;
 const CACHE_RESOURCES = CACHE_STATIC;
 const CACHE_READ = CACHE_LIVE;
 const CACHE_PROMPTS = CACHE_EMPTY;
-// Generous for a real client (they batch a handful of calls, not hundreds) and
-// small enough that a batch can't outrun the per-IP crawl budgets. See the note
-// at the batch branch in handleSiteMcp.
-const MCP_MAX_BATCH = 16;
 
 const HOSTED_TOOLS = [
   {
@@ -507,9 +503,8 @@ export async function handleSiteMcp(request, env, ctx) {
     // asynchronously, and that it is "intentionally designed to not be used as
     // an accurate accounting system". So the cap is what makes the ceiling mean
     // anything, exactly as before, for a different underlying reason.
-    if (payload.length > MCP_MAX_BATCH) {
-      return respond(mcpError(null, -32600, `Batch too large: ${payload.length} messages, limit ${MCP_MAX_BATCH}.`), 413);
-    }
+    const refused = mcpBatchRefusal(payload);
+    if (refused) return respond(refused, 413);
     const output = (await Promise.all(payload.map(handleOne))).filter(Boolean);
     return output.length ? respond(output) : respond(null, 202);
   }

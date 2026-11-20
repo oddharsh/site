@@ -268,6 +268,17 @@ function mcpGate(msg, request) {
 
 export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
+// Generous for a real client (they batch a handful of calls, not hundreds).
+// Both servers run a batch through Promise.all, so every message starts before
+// any of them finishes and a per-call limit sees them all as the first. The
+// note at the batch branch in handleSiteMcp has the measurement behind that.
+export const MCP_MAX_BATCH = 16;
+
+// The error to answer with a 413, or null when the batch fits.
+export function mcpBatchRefusal(batch: readonly unknown[]) {
+  return batch.length > MCP_MAX_BATCH ? mcpError(null, -32600, `Batch too large: ${batch.length} messages, limit ${MCP_MAX_BATCH}.`) : null;
+}
+
 // ── which era is actually calling ───────────────────────────────────
 // The legacy half of this module exists for one reason, that a pre-2026 client
 // has no fall-forward mechanism. That reason expires when those clients stop
