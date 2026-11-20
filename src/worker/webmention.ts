@@ -166,7 +166,9 @@ export async function handleWebmention(request, env, ctx) {
   // Accepted: everything past here is slow (a third-party fetch, D1, email), and
   // the spec is explicit that verification may be async. The sender gets 202
   // immediately and never waits on my moderation.
-  const job = processMention(checked.url, origin + targetPath, request, env).catch((e) => console.error("webmention processing failed", e?.message || e));
+  const job = processMention(checked.url, origin + targetPath, request, env).catch((e: unknown) =>
+    console.error("webmention processing failed", e instanceof Error && e.message ? e.message : e),
+  );
   if (ctx?.waitUntil) ctx.waitUntil(job);
   else await job;
 

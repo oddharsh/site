@@ -455,7 +455,7 @@
         });
       })
       .then(done)
-      .catch((error) => {
+      .catch((error: unknown) => {
         // The shell answers false when this run belongs to a scan it has moved
         // past, and the pane already shows the newer one.
         if (onError(error) === false) return;
