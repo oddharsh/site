@@ -161,7 +161,10 @@ async function probeEarlyData(host: string): Promise<EarlyDataResult> {
     // that run used to report "rejected on 3 spaced resumptions" as drift.
     let resumptions = 0;
     for (let attempt = 0; attempt < BACKOFF_MS.length; attempt++) {
-      if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+      if (BACKOFF_MS[attempt])
+        await new Promise((r) => {
+          setTimeout(r, BACKOFF_MS[attempt]);
+        });
       const first = await execFileP(
         "sh",
         ["-c", `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" 2>&1`],

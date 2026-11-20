@@ -352,6 +352,13 @@ correctness = "error"
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
 
+# A value returned from a Promise executor goes nowhere: `return reject(e)` or
+# `(r) => setTimeout(r, ms)` reads as if the return settled something. Taken
+# from @cloudflare/oxlint-config 0.1.0. 30 findings, measured 2026-11-20: 27
+# concise arrows now have block bodies, and lens-wire.ts's three early exits
+# call reject or resolve, then return. It fires on a planted
+# `new Promise((r) => setTimeout(r, 1))`.
+"no-promise-executor-return" = "error"
 # A type reaches a file through `import type`, so a reader sees at the top what
 # the file depends on and the build can drop it without asking. Taken from
 # @cloudflare/oxlint-config 0.1.0. 28 findings, measured 2026-11-20: 3 value
