@@ -19,6 +19,7 @@ import {
   sha256,
 } from "../../../tools/lib/served-manifest.ts";
 import { buildWhoareyouGroups } from "../whoareyou.ts";
+import type { ServedManifest } from "../../../tools/lib/served-manifest.ts";
 
 // Two builders make every release: ci.yml's `validate` (to test it) and Workers
 // Builds (to ship it). ci.yml cuts a manifest of every static URL's sha256 from
@@ -98,16 +99,16 @@ test("served-manifest: a staged tree becomes a stable manifest, and two files ca
 });
 
 test("served-manifest: --since scope is exactly the URLs whose bytes moved or arrived", () => {
-  const prev: import("../../../tools/lib/served-manifest.ts").ServedManifest = { schema: SCHEMA, commit: null, files: { "/": "a", "/x": "b", "/gone": "c" } };
+  const prev: ServedManifest = { schema: SCHEMA, commit: null, files: { "/": "a", "/x": "b", "/gone": "c" } };
 
-  const next: import("../../../tools/lib/served-manifest.ts").ServedManifest = { schema: SCHEMA, commit: null, files: { "/": "a", "/x": "B", "/new": "d" } };
+  const next: ServedManifest = { schema: SCHEMA, commit: null, files: { "/": "a", "/x": "B", "/new": "d" } };
   assert.deepEqual(changedUrls(prev, next), ["/new", "/x"]);
 });
 
 test("served-manifest: the comparison decodes, refuses redirects, and has teeth", async () => {
   const body = new TextEncoder().encode("<!doctype html>page");
 
-  const manifest: import("../../../tools/lib/served-manifest.ts").ServedManifest = {
+  const manifest: ServedManifest = {
     schema: SCHEMA,
     commit: COMMIT,
     files: {

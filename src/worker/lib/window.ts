@@ -25,7 +25,8 @@
 // labelled button) is fixed on purpose: those are the accessibility contract
 // contract-histnav-ships-in-the-html asserts, and a field for them is how the
 // drift came back.
-import { EMPTY, Html, html } from "./html.ts";
+import type { Html } from "./html.ts";
+import { EMPTY, html } from "./html.ts";
 
 // The same bytes as desktop.ts's DESKTOP_HISTNAV, written as an `html` literal
 // rather than spliced through the unescaped door, whose use count
