@@ -921,6 +921,7 @@ const VIEW_CSS = `/*min*/
   @media (max-width: 640px) { .ph-film { grid-template-columns: minmax(0, 1fr); } }
 
   .ph-list { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--slate-80); background: var(--paper); }
+  .ph-list caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ph-list table { width: 100%; border-collapse: collapse; font: 11px/1.4 var(--font-ui); white-space: nowrap; }
   .ph-list th { padding: 0; font-weight: 400; text-align: left; }
   .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-button); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }

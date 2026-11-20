@@ -9,7 +9,9 @@
 // clonefile(2), ~130 ms for the whole worktree on 2026-10-29), so a planted
 // conflict marker never lands where another session can commit it. Off macOS
 // there is no clonefile, and the runner refuses unless CI=true, where the
-// checkout is private and it plants in place and restores after each control.
+// checkout is private. There each pool worker owns one tree, the checkout or
+// a copy of it made once (node_modules linked back), and plants in place,
+// restoring every touched file after each control.
 //
 // Before any control, each distinct check runs once on an unplanted clone and
 // must pass. A check that is already red proves nothing by going red again.
@@ -21,7 +23,7 @@
 // Gotcha 90 is why this exists.
 
 import { execFileSync, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,20 +95,20 @@ async function inClone<T>(fn: (root: string, env: Record<string, string>) => Pro
   }
 }
 
-// CI only: plant in the checkout itself, then put every touched file back.
-async function inPlace<T>(c: Control | null, fn: (root: string, env: Record<string, string>) => Promise<T>): Promise<T> {
+// CI only: plant in a worker's tree, then put every touched file back.
+async function inPlace<T>(root: string, c: Control | null, fn: (root: string, env: Record<string, string>) => Promise<T>): Promise<T> {
   const saved = new Map<string, string | null>();
   for (const m of c?.mutations ?? []) {
-    const p = join(ROOT, m.file);
+    const p = join(root, m.file);
     saved.set(p, existsSync(p) ? readFileSync(p, "utf8") : null);
   }
   try {
-    return await fn(ROOT, {});
+    return await fn(root, {});
   } finally {
     for (const [p, text] of saved) {
       if (text === null) {
         rmSync(p, { force: true });
-        execFileSync("git", ["reset", "-q", "--", p], { cwd: ROOT });
+        execFileSync("git", ["reset", "-q", "--", p], { cwd: root });
       } else writeFileSync(p, text);
     }
   }
@@ -122,19 +124,31 @@ if (!cloning && process.env.CI !== "true") {
   console.error("controls: no clonefile here, and planting defects in a shared tree is how one ends up committed. Run on macOS, or under CI=true.");
   process.exit(2);
 }
-const isolate = <T>(c: Control | null, fn: (root: string, env: Record<string, string>) => Promise<T>) => (cloning ? inClone(fn) : inPlace(c, fn));
-
 // Cap concurrency: each build is itself parallel, and four at once already
 // saturates a 12-core M3.
-const JOBS = cloning ? Math.max(1, Math.min(4, Math.floor(availableParallelism() / 3))) : 1;
-async function pool<T, R>(items: T[], fn: (t: T) => Promise<R>): Promise<R[]> {
+const JOBS = cloning ? Math.max(1, Math.min(4, Math.floor(availableParallelism() / 3))) : Math.max(1, Number(process.env.CONTROLS_JOBS ?? 1));
+
+// One tree per worker when planting in place. The copy carries .git, so each
+// tree has its own index for the controls that stage files.
+const trees = [ROOT];
+if (!cloning)
+  for (let w = 1; w < JOBS; w++) {
+    const dir = join(scratch, `w${w}`);
+    execFileSync("rsync", ["-a", "--exclude=/node_modules", "--exclude=/.build", `${ROOT}/`, `${dir}/`]);
+    symlinkSync(join(ROOT, "node_modules"), join(dir, "node_modules"));
+    trees.push(dir);
+  }
+const isolate = <T>(c: Control | null, fn: (root: string, env: Record<string, string>) => Promise<T>, w: number) =>
+  cloning ? inClone(fn) : inPlace(trees[w], c, fn);
+
+async function pool<T, R>(items: T[], fn: (t: T, w: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
-    Array.from({ length: Math.min(JOBS, items.length) }, async () => {
+    Array.from({ length: Math.min(JOBS, items.length) }, async (_, w) => {
       while (next < items.length) {
         const i = next++;
-        out[i] = await fn(items[i]);
+        out[i] = await fn(items[i], w);
       }
     }),
   );
@@ -153,7 +167,7 @@ const t0 = performance.now();
 
 // 1. Baselines: every distinct check passes on the unplanted tree.
 const checks = [...new Map(selected.map((c) => [c.run.join(" "), c.run])).values()];
-const baselines = new Map(await pool(checks, async (argv) => [argv.join(" "), await isolate(null, (root, env) => exec(argv, root, env))] as const));
+const baselines = new Map(await pool(checks, async (argv, w) => [argv.join(" "), await isolate(null, (root, env) => exec(argv, root, env), w)] as const));
 let failed = 0;
 for (const [cmd, r] of baselines) {
   if (r.code === 0) continue;
@@ -163,21 +177,25 @@ for (const [cmd, r] of baselines) {
 
 // 2. Controls, each against a check whose baseline passed.
 const runnable = selected.filter((c) => baselines.get(c.run.join(" "))?.code === 0);
-const results = await pool(runnable, (c) =>
-  isolate(c, async (root, env) => {
-    const stale = plant(root, c);
-    if (stale.length) return { c, verdict: "STALE", detail: stale.join("; "), r: null as Run | null };
-    // A created file is untracked. CI sees it committed, so mark it
-    // intent-to-add (in the clone's private index) and test what CI tests,
-    // unless the control is about the local run before `git add`, which a
-    // git census that reads only the index can't see (gotcha 91).
-    const created = c.mutations.filter((m) => "create" in m && !m.untracked).map((m) => m.file);
-    if (created.length) execFileSync("git", ["add", "-N", "--", ...created], { cwd: root, env: { ...process.env, ...env } });
-    const r = await exec(c.run, root, env);
-    if (r.code === 0) return { c, verdict: "BLIND", detail: "the check passed with the defect in place", r };
-    if (!c.expect.test(r.out)) return { c, verdict: "WRONG REASON", detail: `red (exit ${r.code}) but never printed ${c.expect}`, r };
-    return { c, verdict: "CAUGHT", detail: r.out.match(c.expect)![0], r };
-  }),
+const results = await pool(runnable, (c, w) =>
+  isolate(
+    c,
+    async (root, env) => {
+      const stale = plant(root, c);
+      if (stale.length) return { c, verdict: "STALE", detail: stale.join("; "), r: null as Run | null };
+      // A created file is untracked. CI sees it committed, so mark it
+      // intent-to-add (in the clone's private index) and test what CI tests,
+      // unless the control is about the local run before `git add`, which a
+      // git census that reads only the index can't see (gotcha 91).
+      const created = c.mutations.filter((m) => "create" in m && !m.untracked).map((m) => m.file);
+      if (created.length) execFileSync("git", ["add", "-N", "--", ...created], { cwd: root, env: { ...process.env, ...env } });
+      const r = await exec(c.run, root, env);
+      if (r.code === 0) return { c, verdict: "BLIND", detail: "the check passed with the defect in place", r };
+      if (!c.expect.test(r.out)) return { c, verdict: "WRONG REASON", detail: `red (exit ${r.code}) but never printed ${c.expect}`, r };
+      return { c, verdict: "CAUGHT", detail: r.out.match(c.expect)![0], r };
+    },
+    w,
+  ),
 );
 
 for (const { c, verdict, detail, r } of results) {
@@ -192,6 +210,6 @@ for (const { c, verdict, detail, r } of results) {
 const caught = results.filter((x) => x.verdict === "CAUGHT").length;
 const gotchas = [...new Set(selected.map((c) => c.gotcha).filter(Boolean))].sort((a, b) => a! - b!);
 console.log(
-  `controls: ${caught}/${selected.length} caught across ${checks.length} checks in ${secs(performance.now() - t0)} (${cloning ? `clones, ${JOBS} at a time` : "in place, CI"}); gotchas covered: ${gotchas.join(", ") || "none"}`,
+  `controls: ${caught}/${selected.length} caught across ${checks.length} checks in ${secs(performance.now() - t0)} (${cloning ? "clones" : "in place, CI"}, ${JOBS} at a time); gotchas covered: ${gotchas.join(", ") || "none"}`,
 );
 process.exit(failed ? 1 : 0);
