@@ -6,10 +6,11 @@
 //   bun run browser:check -- --base https://aadhar.sh   # sweep a deployment, with its real data
 //   bun run browser:check -- --only /coffee,/lens       # some pages
 //   bun run browser:check -- --viewport phone           # one viewport (CI runs each as its own job)
+//   bun run browser:check -- --engine webkit --viewport phone   # the phone widths in the engine an iPhone runs (gotcha 109)
 //   bun run browser:check -- --changed origin/main --sample 5   # pages the diff reaches, and 1 in 5 of the rest
 //                                                  # (built and served beside origin/main when the map can't place a file)
 //
-// Five readings per manifest surface, in Chrome:
+// Five readings per manifest surface, in Chrome (WebKit takes three; ENGINES says which and why):
 //
 //   scroll  the window's scroller and the document are no wider than their box
 //           at 320, 360 and 390px (gotcha 97). A page that is, drags sideways.
@@ -44,7 +45,7 @@
 // scroll, a 300px block pushed in above the content for shift, a number
 // formatted for intl, a thrown error for error, an inline onclick for csp. A reading that misses its
 // plant exits 2 ("blind") and nothing is reported as passing.
-import { chromium } from "playwright-core";
+import { chromium, webkit } from "playwright-core";
 import type { Browser, BrowserContext } from "playwright-core";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -61,8 +62,33 @@ import { writeSiteConfigFile } from "./lib/site-config.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const { values } = parseArgs({
-  options: { base: { type: "string" }, only: { type: "string" }, viewport: { type: "string" }, changed: { type: "string" }, sample: { type: "string" } },
+  options: {
+    base: { type: "string" },
+    only: { type: "string" },
+    viewport: { type: "string" },
+    changed: { type: "string" },
+    sample: { type: "string" },
+    engine: { type: "string" },
+  },
 });
+
+/**
+ * The engine that reads the pages. Chrome reads all five. WebKit is what an
+ * iPhone runs, in every browser on it, and it reads three: it has no
+ * layout-shift entries (PerformanceObserver.supportedEntryTypes, WebKit 27.2),
+ * it reports an inline handler's CSP violation only when the handler fires, and
+ * it has no CDP to throttle the CPU through. A reading an engine can't take is
+ * named in the run's last line and its control is not planted; it is never
+ * counted as passing.
+ */
+const ENGINES = {
+  chromium: { name: "Chrome", reads: ["scroll", "shift", "intl", "error", "csp"], launch: () => chromium.launch({ channel: chromeChannel(), headless: true }) },
+  webkit: { name: "WebKit", reads: ["scroll", "intl", "error"], launch: () => webkit.launch({ headless: true }) },
+} satisfies Record<string, { name: string; reads: string[]; launch: () => Promise<Browser> }>;
+const engineName = values.engine ?? "chromium";
+if (!(engineName in ENGINES)) throw new Error(`--engine takes ${Object.keys(ENGINES).join(" or ")}, got ${engineName}`);
+const engine = ENGINES[engineName as keyof typeof ENGINES];
+const reads = (reading: string) => engine.reads.includes(reading);
 
 /**
  * What a --base run adds to Chrome's own user agent, so a deployment can tell
@@ -189,14 +215,15 @@ function instrument() {
   );
   const name = (node: Node | null) =>
     node instanceof Element ? node.tagName.toLowerCase() + (node.id ? `#${node.id}` : "") + (node.classList.length ? `.${node.classList[0]}` : "") : "?";
-  new PerformanceObserver((list) => {
+  const shifts = new PerformanceObserver((list) => {
     for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean; sources: { node: Node | null }[] })[]) {
       // No hadRecentInput skip: this harness sends no input, and under
       // isMobile Chrome flags every shift as following input (gotcha 102).
       seen.shift += entry.value;
       if (entry.value > 0.005) seen.moved.push(...entry.sources.slice(0, 2).map((s) => name(s.node)));
     }
-  }).observe({ type: "layout-shift", buffered: true });
+  });
+  if (PerformanceObserver.supportedEntryTypes.includes("layout-shift")) shifts.observe({ type: "layout-shift", buffered: true });
   for (const key of ["DateTimeFormat", "NumberFormat", "Collator", "Segmenter", "PluralRules", "RelativeTimeFormat", "ListFormat", "DisplayNames"] as const) {
     const real = Intl[key];
     Object.defineProperty(Intl, key, {
@@ -222,27 +249,79 @@ function instrument() {
   }
 }
 
-type Reading = { status: number; shift: number; moved: string[]; intl: string[]; csp: string[]; errors: string[]; scroll: Record<number, string[]> };
+type Reading = {
+  status: number;
+  shift: number;
+  moved: string[];
+  intl: string[];
+  csp: string[];
+  errors: string[];
+  scroll: Record<number, string[]>;
+  styled: boolean;
+};
+
+/**
+ * WebKit over plain http needs one directive taken out of each document's CSP.
+ * Every page sends `upgrade-insecure-requests`, and WebKit applies it to
+ * http://127.0.0.1 where Chrome exempts loopback: each stylesheet and script
+ * was re-requested over https, failed its TLS handshake, and the first WebKit
+ * sweep read 77 unstyled pages as 255 sideways scrolls (2026-11-20). Only that
+ * directive is removed, only from documents, and only here; a deployment is
+ * https and is read untouched. The control that checks /search's taskbar is
+ * `position: fixed` is what proves a page was read styled.
+ */
+async function prepared(ctx: BrowserContext, base: string): Promise<BrowserContext> {
+  if (engine !== ENGINES.webkit) return ctx;
+  // An iPhone overlays its scrollbar and ignores ::-webkit-scrollbar. WebKit on
+  // Linux honours luna.css's 16px one, which narrows the window's scroller from
+  // 288px to 272px at 320px and reads 16px of overflow no phone has.
+  await ctx.addInitScript(() => {
+    addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.textContent = "*::-webkit-scrollbar{width:0!important;height:0!important}";
+      document.head.append(style);
+    });
+  });
+  if (!base.startsWith("http://")) return ctx;
+  await ctx.route(
+    () => true,
+    async (route) => {
+      if (route.request().resourceType() !== "document") return route.fallback();
+      const response = await route.fetch();
+      const headers = { ...response.headers() };
+      const csp = headers["content-security-policy"];
+      if (csp) headers["content-security-policy"] = csp.replace(/;?\s*upgrade-insecure-requests/, "");
+      await route.fulfill({ response, headers });
+    },
+  );
+  return ctx;
+}
 
 /** One throttled load. `plant` runs in the page once it has loaded, before the settle. */
 async function load(ctx: BrowserContext, url: string, widths: number[], plant?: () => void): Promise<Reading> {
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(String(error).slice(0, 160)));
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  if (reads("shift")) {
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  }
   await page.addInitScript(instrument);
   const response = await page.goto(url, { waitUntil: "load", timeout: 45_000 });
   if (plant) await page.evaluate(plant);
   await page.waitForTimeout(SETTLE_MS);
   const seen = await page.evaluate(() => globalThis.__seen);
+  const styled = await page.evaluate(() => {
+    const taskbar = document.getElementById("axp-taskbar");
+    return !!taskbar && getComputedStyle(taskbar).position === "fixed";
+  });
   const scroll: Record<number, string[]> = {};
   for (const width of widths) {
     await page.setViewportSize({ width, height: 844 });
     scroll[width] = await overflows(page);
   }
   await page.close();
-  return { status: response?.status() ?? 0, ...seen, errors, scroll };
+  return { status: response?.status() ?? 0, ...seen, errors, scroll, styled };
 }
 
 /**
@@ -266,14 +345,18 @@ async function controls(browser: Browser, base: string) {
   const url = `${base}/search`;
   for (const v of viewports) {
     const { at, widths, open } = VIEWPORTS[v];
-    const ctx = await open(browser);
+    const ctx = await prepared(await open(browser), base);
     const clean = await load(ctx, url, []);
+    if (!clean.styled)
+      blind.push(`the control page /search is unstyled in ${engine.name} at ${at}: its taskbar is not position: fixed, so no page was read as it ships`);
     if (clean.shift > SHIFT_MAX || clean.intl.length || clean.csp.length || clean.errors.length)
       blind.push(`the control page /search is not clean itself at ${at}: ${JSON.stringify(clean)}`);
-    const shifted = await load(ctx, url, [], () => {
-      setTimeout(() => document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<div style="height:300px"></div>'), 300);
-    });
-    if (shifted.shift <= SHIFT_MAX) blind.push(`shift: a 300px block pushed in above /search's content read ${shifted.shift} at ${at}`);
+    const shifted = !reads("shift")
+      ? null
+      : await load(ctx, url, [], () => {
+          setTimeout(() => document.querySelector("main")?.insertAdjacentHTML("afterbegin", '<div style="height:300px"></div>'), 300);
+        });
+    if (shifted && shifted.shift <= SHIFT_MAX) blind.push(`shift: a 300px block pushed in above /search's content read ${shifted.shift} at ${at}`);
     const formatted = await load(ctx, url, [], () => void (1234).toLocaleString());
     if (!formatted.intl.includes("toLocaleString")) blind.push(`intl: a number formatted on /search went uncounted at ${at}`);
     const built = await load(ctx, url, [], () => {
@@ -286,8 +369,10 @@ async function controls(browser: Browser, base: string) {
       }, 0);
     });
     if (!thrown.errors.some((e) => e.includes("planted"))) blind.push(`error: an exception thrown on /search went unreported at ${at}`);
-    const handler = await load(ctx, url, [], () => document.querySelector("main")?.insertAdjacentHTML("beforeend", '<b onclick="void 0"></b>'));
-    if (!handler.csp.some((s) => s.startsWith("script-src-attr"))) blind.push(`csp: an inline onclick parsed into /search went unreported at ${at}`);
+    const handler = !reads("csp")
+      ? null
+      : await load(ctx, url, [], () => document.querySelector("main")?.insertAdjacentHTML("beforeend", '<b onclick="void 0"></b>'));
+    if (handler && !handler.csp.some((s) => s.startsWith("script-src-attr"))) blind.push(`csp: an inline onclick parsed into /search went unreported at ${at}`);
     if (widths.length) {
       const widened = await load(ctx, url, widths, () => {
         document.querySelector("main")?.insertAdjacentHTML("beforeend", '<div id="planted" style="width:600px;height:1px"></div>');
@@ -303,7 +388,7 @@ async function controls(browser: Browser, base: string) {
 }
 
 async function sweep(browser: Browser, base: string) {
-  const legs = await Promise.all(viewports.map(async (v) => ({ ...VIEWPORTS[v], ctx: await VIEWPORTS[v].open(browser) })));
+  const legs = await Promise.all(viewports.map(async (v) => ({ ...VIEWPORTS[v], ctx: await prepared(await VIEWPORTS[v].open(browser), base) })));
   const failures: string[] = [];
   const stale: string[] = [];
   const notes: string[] = [];
@@ -337,7 +422,7 @@ async function sweep(browser: Browser, base: string) {
       // call one unneeded: the desktop job alone would retire a budget the
       // phone load still spends. CI's split jobs never judge; a local
       // `bun run browser:check` does.
-      if (!values.base && viewports.length === NAMES.length) {
+      if (!values.base && viewports.length === NAMES.length && engine === ENGINES.chromium) {
         const allowed = budget.shift[path];
         const worst = Math.max(...readings.map(({ r }) => r.shift));
         if (allowed && worst <= SHIFT_MAX / 2) stale.push(`${path} holds a shift budget of ${allowed.max} and read ${worst.toFixed(3)}`);
@@ -364,7 +449,7 @@ async function sweep(browser: Browser, base: string) {
 }
 
 async function run(base: string) {
-  const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
+  const browser = await engine.launch();
   try {
     if (values.base) {
       const probe = await browser.newPage();
@@ -380,8 +465,9 @@ async function run(base: string) {
     for (const line of failures) console.log(line);
     for (const line of notes) console.log(`NOTE  shift  ${line}`);
     for (const line of stale) console.log(`STALE ${line}: drop it from config/browser-budget.json`);
+    const unread = ENGINES.chromium.reads.filter((r) => !reads(r));
     console.log(
-      `browser:check: ${paths.length} pages at ${viewports.join(" and ")} against ${values.base ?? "the local build"}, ${failures.length} failure(s), ${stale.length} stale budget(s); every planted control was caught.`,
+      `browser:check: ${paths.length} pages at ${viewports.join(" and ")} in ${engine.name} against ${values.base ?? "the local build"}, ${failures.length} failure(s), ${stale.length} stale budget(s); every planted control was caught${unread.length ? `. NOT READ in ${engine.name}: ${unread.join(", ")}` : ""}.`,
     );
     return failures.length || stale.length ? 1 : 0;
   } finally {

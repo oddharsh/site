@@ -1177,3 +1177,24 @@ skips it.
     slow on purpose. It runs against the local Worker only: it presses
     everything, and a deployment has real writes behind some of it.
     Checked by: `tools/check-interactions.ts`.
+
+109. **Chrome at 390px is not an iPhone.** Every phone reading
+    `browser:check` took until 2026-11-20 came from Chrome with a narrow
+    window, and every browser on an iPhone runs WebKit. WebKit draws text,
+    emoji and `<select>`s at other widths: 15 pages that passed in Chrome
+    scrolled sideways in WebKit at 320px (13 /lwe pages by 11px, on one
+    `nowrap` button labelled with an emoji; /access by 19px, on a select as
+    wide as its longest option; /garage/compression by 17px). `--engine
+    webkit` reads the phone widths there, in CI and in the nightly
+    production sweep. Three traps on the way: WebKit applies
+    `upgrade-insecure-requests` to http://127.0.0.1 where Chrome exempts
+    loopback, so every stylesheet failed a TLS handshake and the first
+    sweep read 77 UNSTYLED pages as 255 sideways scrolls, which is why the
+    check now refuses a control page whose taskbar is not `position:
+    fixed`; WebKit on Linux honours `::-webkit-scrollbar` where iOS
+    overlays, which read 16px of overflow no phone has; and WebKit has no
+    layout-shift entries and reports an inline handler's CSP violation only
+    when it fires, so those two readings are named as NOT READ there rather
+    than passed. Its fonts are still Linux's, so a pass is the conservative
+    reading here too.
+    Checked by: `tools/check-browser.ts`.
