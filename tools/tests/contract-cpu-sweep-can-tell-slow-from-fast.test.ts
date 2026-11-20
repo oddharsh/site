@@ -58,7 +58,7 @@ const row = (report, route) => report.rows.find((r) => r.route === route);
 // The one live sweep the budget verdicts share, at this model's factor of 1 with
 // no allowlist, so /spin is re-sampled and the rest are not.
 let live;
-const recording = () => (live ??= sweep("/spin,/still,/icu,/copy", atFactor(1)));
+const recording = () => (live ??= sweep("/spin,/still,/icu,/crypto,/copy", atFactor(1)));
 const replay = (budget, ...flags) => sweep({ replay: recording().report }, budget, ...flags);
 const replayIn = (env, budget, ...flags) => sweepIn(env, { replay: recording().report }, budget, ...flags);
 
@@ -164,6 +164,16 @@ test("a route's first date format is cheap in a warm process, and --cold-icu sho
     cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
+});
+
+// The same for node's WebCrypto, which builds its tables on first use in each
+// isolate. workerd's is native and pays nothing; before the warm-up, POST /mcp
+// tools/list read about 4 ms for it (#1761, tools/lib/warm-crypto.ts).
+test("a route's first hash is cheap in a warm process, and --cold-crypto shows the cold one", () => {
+  const warm = row(recording().report, "/crypto"),
+    cold = row(sweep("/crypto", UNCALIBRATED, "--cold-crypto").report, "/crypto");
+  assert.ok(warm.ms < 2, `warm process: /crypto read ${warm.ms} ms`);
+  assert.ok(cold.ms > 5, `cold process: /crypto read ${cold.ms} ms, so the warm-up proves nothing`);
 });
 
 // A route measured without its bindings measures a crash: cal copies env, and a

@@ -2,6 +2,7 @@
 // answers at once. The sweep has to read the first as over its 8 ms gate and
 // the second as under it, or it can't tell a slow route from a fast one. /icu
 // is a route's first date format and collation, which a warm process makes cheap.
+// /crypto is a route's first SHA-256 and HMAC, which the warm-up makes cheap.
 // /copy answers 500 unless a declared binding survives a copy of env, as cal's
 // { ...env, BASE_PATH } needs.
 export default {
@@ -14,6 +15,12 @@ export default {
     if (new URL(request.url).pathname === "/icu") {
       new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric" }).format(0);
       "b".localeCompare("a");
+    }
+    if (new URL(request.url).pathname === "/crypto") {
+      const bytes = new TextEncoder().encode("a route's own bytes");
+      await crypto.subtle.digest("SHA-256", bytes);
+      const key = await crypto.subtle.importKey("raw", new Uint8Array(32), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      await crypto.subtle.sign("HMAC", key, bytes);
     }
     if (new URL(request.url).pathname === "/spin") {
       const start = process.cpuUsage();

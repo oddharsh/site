@@ -19,7 +19,11 @@
 // warms ICU in a throwaway isolate (tools/lib/warm-icu.ts): ICU's data is per
 // process, workerd's processes are shared and already have it, and a cold
 // process charged every date-formatting route about 10 ms that production
-// doesn't pay. --cold-icu skips the warm-up, as the control.
+// doesn't pay. --cold-icu skips the warm-up, as the control. It also builds
+// node's WebCrypto tables, in the sample's own isolate because half that cost
+// is per isolate (tools/lib/warm-crypto.ts): workerd's crypto.subtle is native,
+// and a route's first digest read about 4 ms it doesn't pay in production.
+// --cold-crypto skips that one.
 //
 // One screening sample per route; a route that reads CONFIRM_AT of its ceiling
 // or more gets CONFIRMS more and is judged on the median. (Confirming everything
@@ -82,6 +86,7 @@ import { cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { warmCrypto } from "./lib/warm-crypto.ts";
 import { warmIcu } from "./lib/warm-icu.ts";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -139,6 +144,7 @@ const { values } = parseArgs({
     budget: { type: "string", default: join(ROOT, "config/cpu-budget.json") },
     out: { type: "string", default: join(ROOT, ".build/cpu-sweep.json") },
     "cold-icu": { type: "boolean" },
+    "cold-crypto": { type: "boolean" },
     replay: { type: "string" },
   },
 });
@@ -267,6 +273,12 @@ if (values.one) {
     return r.status;
   };
   await run(values.one === CONTROL ? "/favicon.ico" : CONTROL); // the warm-up is never the timed route
+  // Last, right before the clock, because it has to run in this isolate and its
+  // jobs also drain what setup left queued. Run before the imports, it left the
+  // fixture's /crypto paying 2.4 ms more, on a digest that yields to the event
+  // loop (2026-11-20). On the site bundle both placements read alike, and
+  // /robots.txt, the control, read the same with it and without.
+  if (!values["cold-crypto"]) await warmCrypto();
   const t0 = process.cpuUsage();
   const status = await run(values.one);
   const d = process.cpuUsage(t0);
@@ -304,10 +316,22 @@ for (const r of routes) known.add(r);
 
 const sample = (spec: string) =>
   new Promise<{ ms: number; status: number }>((resolve, reject) => {
-    const child = spawn(process.execPath, [import.meta.filename, "--one", spec, "--bundle", BUNDLE, ...(values["cold-icu"] ? ["--cold-icu"] : [])], {
-      cwd: ROOT,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      process.execPath,
+      [
+        import.meta.filename,
+        "--one",
+        spec,
+        "--bundle",
+        BUNDLE,
+        ...(values["cold-icu"] ? ["--cold-icu"] : []),
+        ...(values["cold-crypto"] ? ["--cold-crypto"] : []),
+      ],
+      {
+        cwd: ROOT,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     let out = "",
       err = "";
     child.stdout.on("data", (d) => {

@@ -711,4 +711,11 @@ export const CONTROLS: Control[] = [
     run: ["bun", "tools/check-bun-lint.ts"],
     expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
   },
+  {
+    id: "cpu-sweep-stops-warming-webcrypto",
+    plants: "the sweep stops building node's WebCrypto tables before the clock, so a route's first digest reads about 4 ms workerd never charges",
+    mutations: [{ file: "tools/cpu-sweep.ts", find: '  if (!values["cold-crypto"]) await warmCrypto();\n', replace: "" }],
+    run: contract("contract-cpu-sweep-can-tell-slow-from-fast"),
+    expect: /warm process: \/crypto read [\d.]+ ms/,
+  },
 ];
