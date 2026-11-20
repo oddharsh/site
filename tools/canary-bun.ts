@@ -57,20 +57,10 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  BUN_WATCHES,
-  VERDICT_WATCHES,
-  ensureTimbradoEngine,
-  runWatch,
-  type Watch,
-  type WatchResult,
-  watchMoved,
-  watchRow,
-  watchSignature,
-} from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, VERDICT_WATCHES, ensureTimbradoEngine, runWatch, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import type { Watch, WatchResult } from "./lib/upstream-watches.ts";
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, installedMatchesPin } from "./lib/bun-pin.ts";
 import {
-  type Gate,
   TSC_REFERENCE,
   bunIdentity,
   byteIdenticalBuildGate,
@@ -83,6 +73,7 @@ import {
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
+import type { Gate } from "./lib/bun-gates.ts";
 import { defaultPrograms } from "./typecheck.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));

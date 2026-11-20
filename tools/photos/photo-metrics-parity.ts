@@ -36,7 +36,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DECODE, beats, searchDistance, stripJpegExif, stripPng, type Score } from "./hif-archive.ts";
+import { DECODE, beats, searchDistance, stripJpegExif, stripPng } from "./hif-archive.ts";
+import type { Score } from "./hif-archive.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ZENC = path.join(HERE, "zenc/target/release/zenc");

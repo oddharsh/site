@@ -72,7 +72,8 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 
-import { type Browser, type Page, chromium, firefox, webkit } from "playwright-core";
+import { chromium, firefox, webkit } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 

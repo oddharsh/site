@@ -39,7 +39,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { agentSurfaces, needsBuiltTwin, type AgentSurface } from "./lib/agent-representation.ts";
+import { agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
+import type { AgentSurface } from "./lib/agent-representation.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 
 export const ORIGIN = "https://aadhar.sh";

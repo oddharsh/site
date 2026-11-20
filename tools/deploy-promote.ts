@@ -354,7 +354,10 @@ function die(message: string): never {
   process.exit(1);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) =>
+  new Promise((r) => {
+    setTimeout(r, ms);
+  });
 
 const active = await currentDeployment();
 const activeIds = active.map((v) => `${v.id.slice(0, 8)} @ ${v.pct}%`).join(", ");

@@ -134,15 +134,22 @@
   var sortStatus: HTMLElement | null = null;
   var sortBy = 0,
     sortDir = 1;
-  function drawList() {
+  // Photo indexes in the current sort. Blank fields sort last in both
+  // directions, the way Explorer kept them.
+  function ordered() {
     var col = COLUMNS[sortBy];
-    // Blank fields sort last in both directions, the way Explorer kept them.
-    var rows = photos.slice().sort((a, b) => {
-      var x = col.key(a),
-        y = col.key(b);
-      if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
-      return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
-    });
+    return photos
+      .map((p, n) => n)
+      .sort((a, b) => {
+        var x = col.key(photos[a]),
+          y = col.key(photos[b]);
+        if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+        return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+      });
+  }
+  // The full render: first show, and again when the EXIF data arrives and
+  // every cell's content changes. A sort goes through sortList instead.
+  function drawList() {
     var head = COLUMNS.map((c, i) => {
       var sort = i === sortBy ? ' aria-sort="' + (sortDir > 0 ? "ascending" : "descending") + '"' : "";
       // The arrow is decoration: aria-sort already says the direction, and as
@@ -152,13 +159,15 @@
       var arrow = i === sortBy ? '<span aria-hidden="true">' + (sortDir > 0 ? " ▴" : " ▾") + "</span>" : "";
       return "<th" + (c.num ? ' class="num"' : "") + sort + '><button type="button" data-col="' + i + '">' + c.label + arrow + "</button></th>";
     }).join("");
-    var body = rows
+    var body = ordered()
       .map(
-        (p) =>
-          "<tr>" +
+        (n) =>
+          '<tr data-n="' +
+          n +
+          '">' +
           COLUMNS.map((c, i) => {
             var cls = (c.num ? "num" : "") + (i === sortBy ? " sorted" : "");
-            return "<td" + (cls ? ' class="' + cls.trim() + '"' : "") + ">" + c.cell(p) + "</td>";
+            return "<td" + (cls ? ' class="' + cls.trim() + '"' : "") + ">" + c.cell(photos[n]) + "</td>";
           }).join("") +
           "</tr>",
       )
@@ -166,6 +175,33 @@
     // The caption is the table's accessible name, hidden visually: the window's
     // title bar already says what this is to a sighted reader.
     (list as HTMLElement).innerHTML = "<table><caption>Photos</caption><thead><tr>" + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+  }
+  // A sort moves the rows that exist and repaints the header in place, so the
+  // header button keeps focus and nothing inside a row is rebuilt (Modern Web
+  // Guidance, sortable-table, 2026-11-20: "Move the existing <tr> elements").
+  // moveBefore keeps a moved node's state; append is the fallback that moves
+  // it too, in engines without it.
+  function sortList() {
+    var table = (list as HTMLElement).querySelector("table")!;
+    [].forEach.call(table.tHead!.rows[0].cells, (th: HTMLTableCellElement, i: number) => {
+      var on = i === sortBy;
+      if (on) th.setAttribute("aria-sort", sortDir > 0 ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+      var button = th.querySelector("button")!;
+      var arrow = button.querySelector("span");
+      if (arrow) arrow.remove();
+      if (on) button.insertAdjacentHTML("beforeend", '<span aria-hidden="true">' + (sortDir > 0 ? " ▴" : " ▾") + "</span>");
+    });
+    var body = table.tBodies[0];
+    var rowOf = new Map<number, HTMLTableRowElement>();
+    [].forEach.call(body.rows, (tr: HTMLTableRowElement) => {
+      rowOf.set(+(tr.dataset.n as string), tr);
+      [].forEach.call(tr.cells, (td: HTMLTableCellElement, i: number) => td.classList.toggle("sorted", i === sortBy));
+    });
+    // moveBefore is newer than the DOM lib this repo types against.
+    var mover = body as HTMLTableSectionElement & { moveBefore?: (node: Node, child: Node | null) => void };
+    var move = mover.moveBefore ? (tr: Node) => mover.moveBefore!(tr, null) : (tr: Node) => body.append(tr);
+    for (var n of ordered()) move(rowOf.get(n)!);
   }
   function showList() {
     if (!list) {
@@ -177,8 +213,7 @@
         var i = +(head.dataset.col as string);
         sortDir = i === sortBy ? -sortDir : 1;
         sortBy = i;
-        drawList();
-        (list as HTMLElement).querySelector<HTMLElement>('[data-col="' + i + '"]')!.focus();
+        sortList();
         sortStatus!.textContent = "Sorted by " + COLUMNS[i].label + ", " + (sortDir > 0 ? "ascending" : "descending") + ", " + photos.length + " rows";
       });
       sortStatus = D.createElement("span");

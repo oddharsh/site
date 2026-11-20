@@ -4,14 +4,17 @@
 
 import { cachedRender, shouldUseWorkersCache } from "./lib/cache.ts";
 import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
-import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms } from "./lib/text.ts";
-import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
-import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf } from "./lib/photo-search.ts";
+import type { PhotoSearchIndex } from "./lib/photo-search.ts";
+import { ALBUMS, albumPath } from "./albums.ts";
+import type { Album } from "./albums.ts";
 import { CACHEABLE_PATHS } from "./routes.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and

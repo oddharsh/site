@@ -64,7 +64,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Reading, runWatch as measureWatch, type Watch } from "timbrado/watch";
+import { runWatch as measureWatch } from "timbrado/watch";
+import type { Reading, Watch } from "timbrado/watch";
 
 import { asNumber, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";

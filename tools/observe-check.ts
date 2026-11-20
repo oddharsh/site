@@ -20,16 +20,8 @@ import { promisify } from "node:util";
 import { CF_ACCOUNT, cf } from "./lib/cf.ts";
 import { redactCredentials } from "./lib/redact.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
-import {
-  CADENCE_FRESH_HOURS,
-  LEDGER_FRESH_HOURS,
-  verdicts,
-  type Automation,
-  type Policy,
-  type Reading,
-  type Route,
-  type Webhook,
-} from "./lib/observe-signals.ts";
+import { CADENCE_FRESH_HOURS, LEDGER_FRESH_HOURS, verdicts } from "./lib/observe-signals.ts";
+import type { Automation, Policy, Reading, Route, Webhook } from "./lib/observe-signals.ts";
 
 const exec = promisify(execFile);
 const SCRIPT = "aadhar-sh";
@@ -176,7 +168,7 @@ async function github(): Promise<Reading> {
 }
 
 const [inv, logs, issues, routes, spans, perfProbe, botLedger, gh] = await Promise.all([
-  token().then(invocations, (e) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
+  token().then(invocations, (e: unknown) => ({ invocations: unreadable(e), exceptions: unreadable(e) })),
   sqlCount("logs.workersLogs", "timestamp", `scriptName = '${SCRIPT}'`),
   exceptionIssues(),
   route(),

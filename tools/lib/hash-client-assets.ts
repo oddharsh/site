@@ -22,17 +22,8 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import {
-  CLIENT_ASSETS,
-  assetBase,
-  assetExt,
-  hashOrder,
-  loaderNeedles,
-  loaderRewrites,
-  registryProblems,
-  stagedPath,
-  type ClientAsset,
-} from "./client-assets.ts";
+import { CLIENT_ASSETS, assetBase, assetExt, hashOrder, loaderNeedles, loaderRewrites, registryProblems, stagedPath } from "./client-assets.ts";
+import type { ClientAsset } from "./client-assets.ts";
 
 const hash8 = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 

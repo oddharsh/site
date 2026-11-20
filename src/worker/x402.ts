@@ -18,7 +18,8 @@
 import type { Env, SiteRequest } from "./lib/env.ts";
 import { servePrecompressedText } from "./lib/assets.ts";
 import { jsonResponse } from "./lib/http.ts";
-import { renderLlmsFull, WRITING_HEADING, type LlmsFullDoc } from "./lib/llms-full.ts";
+import { renderLlmsFull, WRITING_HEADING } from "./lib/llms-full.ts";
+import type { LlmsFullDoc } from "./lib/llms-full.ts";
 
 const X402_VERSION = 1;
 const PRICE_ATOMIC = "10000"; // USDC has 6 decimals → $0.01

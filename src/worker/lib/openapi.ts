@@ -7,23 +7,8 @@
 // tests import it, so none of it ships in the Worker bundle.
 //
 // Node-safe (gotcha 16).
-import {
-  LEAVES_OUT,
-  OPERATIONS,
-  arr,
-  bool,
-  budgeted,
-  int,
-  limited,
-  nullStr,
-  num,
-  obj,
-  ref,
-  sharesReadBudget,
-  str,
-  type Operation,
-  type Schema,
-} from "./public-api.ts";
+import { LEAVES_OUT, OPERATIONS, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str } from "./public-api.ts";
+import type { Operation, Schema } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { allowedMethods } from "./api-contract.ts";
 import { READINESS_STATUSES } from "./readiness-status.ts";

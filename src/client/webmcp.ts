@@ -83,7 +83,7 @@ const META = {
 // an agent did to THIS page in front of THIS person rather than building a
 // profile of either.
 
-const audit: Array<{ name: string; at: number; ms: number; outcome: "ok" | "refused" | "failed"; gated: boolean }> = [];
+const audit: Array<{ name: string; at: number; ms: number; outcome: "ok" | "refused" | "failed" | "cancelled"; gated: boolean }> = [];
 
 const listeners: Set<() => void> = new Set();
 let registered = 0;
@@ -101,8 +101,11 @@ function notify() {
   }
 }
 
+// `started` is performance.now(), which no clock change can move: Date.now() is
+// the wall clock, so an NTP correction while the consent gate waited could
+// read a call as negative or hours long. `at` stays a wall time for display.
 function record(name, started, outcome, gated) {
-  audit.push({ name, at: started, ms: Date.now() - started, outcome, gated });
+  audit.push({ name, at: performance.timeOrigin + started, ms: performance.now() - started, outcome, gated });
   notify();
 }
 
@@ -190,8 +193,8 @@ function safetyNote(a: Record<string, unknown>, writes: boolean): string {
 
 let dialog: HTMLDialogElement | null = null;
 
-function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
-  if (!globalThis.document || !document.body) return Promise.resolve(false);
+function gate(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<boolean> {
+  if (!globalThis.document || !document.body || signal?.aborted) return Promise.resolve(false);
   if (!dialog) {
     dialog = document.createElement("dialog");
     dialog.id = "webmcp-consent";
@@ -249,6 +252,9 @@ function gate(name: string, args: Record<string, unknown>): Promise<boolean> {
     yes.addEventListener("click", () => finish(true));
     // Esc, backdrop dismissal, and anything else that closes it all mean no.
     d.addEventListener("close", () => finish(false), { once: true });
+    // A call the agent or the person cancelled has nobody waiting on the answer,
+    // so the question goes away with it rather than staying up to be allowed.
+    signal?.addEventListener("abort", () => finish(false), { once: true });
     d.showModal();
     no.focus();
   });
@@ -275,7 +281,7 @@ type ToolDef = {
   inputSchema?: unknown;
   annotations?: Record<string, unknown>;
   writes?: boolean;
-  execute: (args: any) => unknown;
+  execute: (args: any, signal?: AbortSignal) => unknown;
 };
 
 function claims(def: Pick<ToolDef, "annotations" | "writes">) {
@@ -322,13 +328,18 @@ export async function registerTool(def: ToolDef): Promise<"registered" | "taken"
       untrustedContentHint: annotations.untrustedContentHint === true,
       consequentialHint: writes,
     },
-    execute: async (args: any) => {
-      const started = Date.now();
+    // The second argument is per execution: { signal } aborts when the agent or
+    // the person cancels this call (Modern Web Guidance, agentic-javascript-
+    // tools, 2026-11-20). An engine that passes none leaves it undefined.
+    execute: async (args: any, options?: { signal?: AbortSignal }) => {
+      const started = performance.now();
+      const signal = options?.signal;
       let gated = false;
       try {
         if (writes) {
           gated = true;
-          const allowed = await gate(def.name, args || {});
+          const allowed = await gate(def.name, args || {}, signal);
+          signal?.throwIfAborted();
           if (!allowed) {
             record(def.name, started, "refused", gated);
             // isError rather than throw: a throw reaches the agent as "the script
@@ -339,10 +350,17 @@ export async function registerTool(def: ToolDef): Promise<"registered" | "taken"
             };
           }
         }
-        const out = await def.execute(args || {});
+        const out = await def.execute(args || {}, signal);
+        signal?.throwIfAborted();
         record(def.name, started, "ok", gated);
         return out;
       } catch (error) {
+        // A cancelled call rethrows so the caller sees the abort itself; nobody
+        // is left to read an isError result.
+        if (signal?.aborted) {
+          record(def.name, started, "cancelled", gated);
+          throw signal.reason;
+        }
         record(def.name, started, "failed", gated);
         const message = (error && (error as Error).message) || String(error);
         return { content: [{ type: "text", text: "Tool failed: " + message }], isError: true };
@@ -368,9 +386,10 @@ export async function registerTool(def: ToolDef): Promise<"registered" | "taken"
 
 // ---- the site's own /mcp tools ----------------------------------------------
 
-async function callSiteTool(name: string, args: Record<string, unknown>) {
+async function callSiteTool(name: string, args: Record<string, unknown>, signal?: AbortSignal) {
   const response = await fetch("/mcp", {
     method: "POST",
+    signal,
     headers: {
       "content-type": "application/json",
       // Both framings, because a Streamable HTTP server may answer either and
@@ -412,7 +431,7 @@ export async function registerSiteTools(): Promise<{ registered: string[]; taken
       description: tool.description,
       inputSchema: tool.inputSchema,
       annotations: tool.annotations || {},
-      execute: (args) => callSiteTool(tool.name, args),
+      execute: (args, signal) => callSiteTool(tool.name, args, signal),
     });
     if (outcome === "registered") out.registered.push(tool.name);
     else if (outcome === "taken") out.taken.push(tool.name);

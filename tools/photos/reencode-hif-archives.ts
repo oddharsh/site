@@ -39,7 +39,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { hifArchive } from "./hif-archive.ts";
-import { jxlKind, pretty, sortKeysDeep, type IndexEntry } from "./pipeline-json.ts";
+import { jxlKind, pretty, sortKeysDeep } from "./pipeline-json.ts";
+import type { IndexEntry } from "./pipeline-json.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const INDEX = path.join(ROOT, "src/worker/photo-index.json");

@@ -38,9 +38,11 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
-import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
+import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision } from "./lib/served-tree.ts";
+import type { ServedTreePlan } from "./lib/served-tree.ts";
 import { transform as transformCss } from "lightningcss";
-import { minifySync, type MinifyOptions } from "oxc-minify";
+import { minifySync } from "oxc-minify";
+import type { MinifyOptions } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
@@ -75,6 +77,7 @@ import { cloneTree } from "./lib/clone-tree.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
 import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import type * as albumsModule from "../src/worker/albums.ts";
 
 const { phase, finish: finishPhases } = phaseClock();
 
@@ -1409,7 +1412,7 @@ phase("1e photos + bot");
   // with no members is a registry entry nobody ran the pipeline for, and a page
   // that renders 503 at deploy is a page whose route would 503 in production,
   // so it fails the build by name rather than shipping the fallback.
-  const albums: typeof import("../src/worker/albums.ts") = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
+  const albums: typeof albumsModule = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
   const { ALBUMS, albumPath } = albums;
   const albumSizes: string[] = [];
   for (const album of Object.values(ALBUMS)) {

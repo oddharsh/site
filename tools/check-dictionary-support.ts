@@ -15,7 +15,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
-import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
+import { FAMILY_DICT_DIR, readCommittedFamily } from "./lib/page-family.ts";
+import type { CommittedFamily } from "./lib/page-family.ts";
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 import { parseFamilyDictionary, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
 

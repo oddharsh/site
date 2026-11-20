@@ -30,7 +30,8 @@
 // finding, 2 when the instrument could not read an archive at all. Read-only and
 // advisory: it measures production, so it belongs beside dcz:check, never in CI.
 import { readFileSync } from "node:fs";
-import { gateClass, paintGate, type PaintGate } from "../lib/jpeg-paint-gate.ts";
+import { gateClass, paintGate } from "../lib/jpeg-paint-gate.ts";
+import type { PaintGate } from "../lib/jpeg-paint-gate.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => {
