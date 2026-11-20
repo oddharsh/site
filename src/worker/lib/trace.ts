@@ -100,9 +100,9 @@ export function setAttributes<N extends SpanName>(span: Span<N>, attrs: SpanAttr
 // error, it just stops checking.
 export function span<N extends SpanName, T>(name: N, fn: (span: Span<N>) => T, attrs?: SpanAttrs<N>): T {
   const t = tracing;
-  if (!t) return fn(INERT as Span<N>);
+  if (!t) return fn(INERT);
   return t.enterSpan(name, (s) => {
     apply(s, attrs);
-    return fn(s as Span<N>);
+    return fn(s);
   });
 }

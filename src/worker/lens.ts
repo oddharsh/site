@@ -3072,7 +3072,7 @@ async function lensProbeEch(hostname) {
   try {
     const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
     const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-    const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
+    const body = await res.json<{ Answer?: any[]; AD?: boolean }>();
     const answers = Array.isArray(body.Answer) ? body.Answer : [];
     const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
     return {
@@ -3329,7 +3329,7 @@ export async function originDiscovery(
         // Cast rather than validated, and the cast is honest: this blob is
         // exactly `JSON.stringify(result)` from the live path below, written by
         // this same function. Nothing else writes this key.
-        const cached = (await hit.json()) as DiscoveryPayload;
+        const cached = await hit.json<DiscoveryPayload>();
         opts.board?.pass(opts.side || "");
         return { ...cached, cached: true };
       }
@@ -3512,7 +3512,7 @@ export async function lensProbeDnsAid(hostname) {
         const deadline = AbortSignal.timeout(4500);
         const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
         const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-        const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
+        const body = await res.json<{ Answer?: any[]; AD?: boolean }>();
         const answers = Array.isArray(body.Answer) ? body.Answer : [];
         return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
       }),

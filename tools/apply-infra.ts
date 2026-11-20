@@ -63,7 +63,7 @@ const OWNER = {
 // is how the HTTPS RR looked after the `contains` mode arrived in a later
 // change than this map. Fail loudly instead, so the next new mode cannot
 // quietly degrade the one list whose entire job is explaining what is skipped.
-for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
+for (const mode of new Set<string>(infra.dns.map((r) => r.match))) {
   if (mode !== "exact" && !OWNER[mode]) {
     console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.ts.`);
     console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
@@ -242,8 +242,8 @@ for (const record of managed) {
   // Both sides through the same normaliser. Comparing a declared value against
   // a normalised live one would be an asymmetry, and for SVCB that asymmetry is
   // the whole bug: the declaration's param order is not the API's.
-  const want = new Set(record.expect.map((v) => normalize(record.type, v))) as Set<string>;
-  const have = new Set(live) as Set<string>;
+  const want = new Set<string>(record.expect.map((v) => normalize(record.type, v)));
+  const have = new Set<string>(live);
 
   for (const value of want) if (!have.has(value)) create.push({ record, value });
   for (const value of have) if (!want.has(value)) prune.push({ record, value });

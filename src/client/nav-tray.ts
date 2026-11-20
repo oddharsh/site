@@ -217,7 +217,7 @@ export function createTray(options) {
     // popover opening) lands here, so aria-expanded is written in one place.
     // open() sets balloonKind before showPopover, which fires this synchronously.
     b.addEventListener("beforetoggle", (e) => {
-      var opening = (e as ToggleEvent).newState === "open";
+      var opening = e.newState === "open";
       var ic = iconFor(balloonKind);
       if (ic) ic.setAttribute("aria-expanded", String(opening));
       if (opening) return;

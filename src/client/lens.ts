@@ -4038,7 +4038,7 @@
         // the person last typed. Write both, and let the box win if it holds
         // something a human put there.
         nlwebQuery = String(args.query).slice(0, 200);
-        var box = machineBody.querySelector("#lx-nlweb-q") as HTMLInputElement | null;
+        var box = machineBody.querySelector<HTMLInputElement>("#lx-nlweb-q");
         if (box) box.value = nlwebQuery;
       }
       setLens(tab);

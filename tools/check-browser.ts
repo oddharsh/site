@@ -125,7 +125,7 @@ function changedPages(ref: string): string[] {
     console.log(`browser:check: ${reached.all}; ${served.pages.length} page(s) serve different bytes than ${ref} (diffed in ${took})`);
     reached = served;
   }
-  const turn = n && parseInt(git("rev-parse", "HEAD")[0]!.slice(0, 8), 16) % n;
+  const turn = n && parseInt(git("rev-parse", "HEAD")[0].slice(0, 8), 16) % n;
   const others = n ? every.filter((p) => !reached.pages.includes(p)).filter((_, i) => i % n === turn) : [];
   console.log(
     `browser:check: ${changed.length} changed file(s) reach ${reached.pages.join(", ") || "no page"}; sampling ${others.length} more${n ? ` (slice ${turn + 1} of ${n})` : ""}`,

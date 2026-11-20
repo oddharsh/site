@@ -89,7 +89,7 @@ let writing = Promise.resolve();
 const record = (stem: string, size: number) => {
   index[stem] = { ...index[stem], size };
   writing = writing.then(() => {
-    fs.writeFileSync(`${INDEX}.tmp`, pretty(sortKeysDeep(index as never)));
+    fs.writeFileSync(`${INDEX}.tmp`, pretty(sortKeysDeep(index)));
     fs.renameSync(`${INDEX}.tmp`, INDEX);
   });
   return writing;
