@@ -245,7 +245,7 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
   const widths = cols.map((c) => c.width || flexW);
 
   const layRow = (cells, style?) => {
-    const out = [];
+    const out: Span[] = [];
     cells.forEach((cell, i) => {
       const spans = Array.isArray(cell) && Array.isArray(cell[0]) ? cell : Array.isArray(cell) ? [cell] : [s(cell ?? "", style)];
       const cw = widths[i];
@@ -272,7 +272,7 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
 export function plainFrame({ title, body, status }) {
   // A title, a blank line, and indented content. No border, because the border
   // was drawing a window inside a window.
-  const out = [];
+  const out: Line[] = [];
   if (title) {
     out.push([s(title, "strong")]);
     out.push([s("")]);
@@ -287,7 +287,7 @@ export function plainFrame({ title, body, status }) {
 
 /** A nested single-line pane inside the window body. `body` sized to w - 4. */
 export function pane({ title, body, width: w = COLS }) {
-  const out = [];
+  const out: Line[] = [];
   if (title) out.push(rule(w - 4, title));
   for (const spans of rows(...body)) out.push(spans);
   return out;
@@ -295,7 +295,7 @@ export function pane({ title, body, width: w = COLS }) {
 
 /** The status bar's `KEY label` pairs, laid out as one line. */
 export function keys(pairs) {
-  const out = [];
+  const out: Span[] = [];
   pairs.forEach(([key, label], i) => {
     if (i) out.push(s("  "));
     out.push(s(key, "key"), s(" " + label));

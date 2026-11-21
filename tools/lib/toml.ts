@@ -95,7 +95,7 @@ export function parse(src: string): TomlTable {
       const table = Array.isArray(next) ? next.at(-1) : next;
       // a table is the only non-array object this parser makes
       if (!(table instanceof Object) || Array.isArray(table)) return fail(`${keys.join(".")} is not a table`);
-      at = table as TomlTable;
+      at = table;
     }
     return at;
   };

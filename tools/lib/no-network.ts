@@ -63,7 +63,7 @@ const escaped: string[] = state.escaped;
 
 const urlOf = (input) => {
   try {
-    return new Request(input as any).url;
+    return new Request(input).url;
   } catch {
     return String(input);
   }

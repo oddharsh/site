@@ -183,7 +183,7 @@ export function createTips(options) {
       if (!node.contains(e.relatedTarget as Node | null)) hold(false)();
     });
     node.addEventListener("toggle", (e) => {
-      if ((e as ToggleEvent).newState !== "closed") return;
+      if (e.newState !== "closed") return;
       disarm();
       held = false;
       sound.play("close");

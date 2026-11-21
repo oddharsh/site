@@ -1175,7 +1175,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    the Machine pane. The two controls answer different questions (what am I
    looking at vs which report), so they no longer share a row to be confused in. */
 .lx-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
-.lx-view { display:inline-flex; }
+.lx-view { display:inline-flex; flex-wrap:wrap; max-width:100%; }
 .lx-seg { font-size:var(--text-xs); padding:3px 11px; color:var(--grey-28); background:linear-gradient(180deg,#fbfbfb,#e3e3da); border:1px solid oklch(55% 0 0); border-right-width:0; }
 @media (max-width:420px){ .lx-seg { padding-inline:7px; } }
 @media (max-width:340px){ .lx-seg { padding-inline:4px; } }
@@ -3072,7 +3072,7 @@ async function lensProbeEch(hostname) {
   try {
     const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
     const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-    const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
+    const body = await res.json<{ Answer?: any[]; AD?: boolean }>();
     const answers = Array.isArray(body.Answer) ? body.Answer : [];
     const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
     return {
@@ -3329,7 +3329,7 @@ export async function originDiscovery(
         // Cast rather than validated, and the cast is honest: this blob is
         // exactly `JSON.stringify(result)` from the live path below, written by
         // this same function. Nothing else writes this key.
-        const cached = (await hit.json()) as DiscoveryPayload;
+        const cached = await hit.json<DiscoveryPayload>();
         opts.board?.pass(opts.side || "");
         return { ...cached, cached: true };
       }
@@ -3512,7 +3512,7 @@ export async function lensProbeDnsAid(hostname) {
         const deadline = AbortSignal.timeout(4500);
         const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
         const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: deadline, cf: { cacheTtl: 0 } });
-        const body = (await res.json()) as { Answer?: any[]; AD?: boolean };
+        const body = await res.json<{ Answer?: any[]; AD?: boolean }>();
         const answers = Array.isArray(body.Answer) ? body.Answer : [];
         return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
       }),

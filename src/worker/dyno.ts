@@ -351,6 +351,7 @@ td{padding:4px 6px;border-bottom:1px solid var(--mist-96);color:var(--slate-38)}
 td.sha{color:#7a4eb0}
 td.src{font-size:var(--text-3xs);color:var(--slate-55)}
 @media (max-width:340px){td,th{padding-inline:2px}}
+@media (max-width:540px){table{display:block;overflow-x:auto}}
 .foot{font-size:var(--text-micro);color:var(--slate-55);border-top:1px solid var(--surface-desktop);padding-top:9px;margin-top:13px;line-height:1.55}
 /* the island's failure note, shown only if the pulls request failed */
 .dy-fail{display:none;font-size:var(--text-micro);color:var(--slate-55);margin:0 0 13px}

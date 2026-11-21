@@ -351,3 +351,33 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
     "the family regex must still match the message Lightning actually emits",
   );
 });
+
+// A batch runs through Promise.all, so every message in it starts before any
+// of them finishes. The site server learned to cap that in mcp.ts and
+// Serendipity never did: until 2026-11-20 one 64 KiB POST there could carry
+// about 1,600 pings, or as many D1 queries.
+for (const server of ["site", "serendipity"]) {
+  test(`${server} MCP answers a 16-message batch and refuses a 17-message one`, async () => {
+    const { handleMcp } = await import("../../serendipity/serendipity.ts");
+    const post = (count: number) => {
+      const body = Array.from({ length: count }, (_, id) => ({ jsonrpc: "2.0", id, method: "ping" }));
+      const request = new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify(body) });
+      return server === "site" ? handleSiteMcp(request, {}, context()) : handleMcp(request, {}, null);
+    };
+
+    const allowed = await post(16);
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(
+      await allowed.json(),
+      Array.from({ length: 16 }, (_, id) => ({ jsonrpc: "2.0", id, result: {} })),
+    );
+
+    const refused = await post(17);
+    assert.equal(refused.status, 413);
+    assert.deepEqual(await refused.json(), {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "Batch too large: 17 messages, limit 16." },
+    });
+  });
+}

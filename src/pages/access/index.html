@@ -91,6 +91,9 @@ small,.meta{font-size:var(--text-mono);color:var(--ink-dim);font-family:var(--fo
 /* a caption and the control it names wrap as one item, so a narrow toolbar
    cannot leave the word ZOOM stranded on a row above its own buttons */
 .bar-grp{display:flex;gap:8px;align-items:center}
+/* A select is as wide as its longest option, and WebKit draws "Unknown device"
+   24px past a 320px phone. The group may shrink and the select with it. */
+.bar-grp{min-width:0}.bar-grp select{min-width:0;flex:0 1 auto}
 .seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--darkshadow);background:var(--grad-button)}
 .seg button{font:inherit;font-size:calc(var(--text-sm) * var(--sc));color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--shadow)}

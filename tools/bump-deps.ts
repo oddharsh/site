@@ -78,7 +78,7 @@ async function registryFor(names: string[]) {
   for (let i = 0; i < names.length; i += 8) {
     const batch = names.slice(i, i + 8);
     const docs = await Promise.all(batch.map(fetchDoc));
-    batch.forEach((n, j) => docs[j] && registry.set(n, docs[j]!));
+    batch.forEach((n, j) => docs[j] && registry.set(n, docs[j]));
   }
   return registry;
 }

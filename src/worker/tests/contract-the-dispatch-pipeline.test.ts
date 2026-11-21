@@ -311,7 +311,7 @@ test("a request handed its URL is not parsed again on the way to its handler", a
       super(input, base);
       parses++;
     }
-  } as typeof URL;
+  };
   try {
     await r.dispatch.serveWorkerRequest(bare, r.env, r.ctx); // the control: no URL handed over, so dispatch parses one
     const control = parses;

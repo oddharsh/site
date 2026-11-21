@@ -58,7 +58,7 @@ let bad = 0,
   swept = 0;
 for (const path of paths) {
   const page = await ctx.newPage();
-  const violations = [];
+  const violations: { directive: string; blocked: string; disposition: string; sample: string; line: number }[] = [];
   const errors: string[] = [];
   await page.addInitScript(() => {
     globalThis.__csp = [];

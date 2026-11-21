@@ -90,7 +90,7 @@ const REF_ATTRS = ["href", "src", "data-src"];
 const SET_ATTRS = ["srcset", "data-srcset"];
 
 export async function internalRefs(html) {
-  const out = [];
+  const out: string[] = [];
   const take = (raw) => {
     if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return;
     const path = raw.split("#")[0].split("?")[0];
