@@ -1,0 +1,266 @@
+{
+  "dotfiles.js": {
+    "pipeline": "oxc",
+    "source_sha256": "ed8e2ca48d9983df778851c18469490450974de225a7dbe8760b71140fec8b0b",
+    "engines": {
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 1450,
+    "brotli_pick": 1450
+  },
+  "garage/av2-decode.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "e7ed7421f2712d1582d56180bf30b935bf5c472cd0653366991ee3ef2a4bedcf",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 1679,
+    "brotli_pick": 1667
+  },
+  "garage/md-to-html.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "64b98dfa54c2f6b0c2554242b59553a0f901edf52414bacca94a13a87dcc03a8",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2065,
+    "brotli_pick": 2053
+  },
+  "garage/pretext.lib.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "d3fc1101ee281d91e724a6f398619b8a629e3d4e2654811e55313af4256d2261",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 34629,
+    "brotli_pick": 33833
+  },
+  "hoist.js": {
+    "pipeline": "swc",
+    "source_sha256": "c2fa928dcc29ff4dbd1b940d3689dcaae6be61dd907d9b215762a73be4a2e206",
+    "engines": {
+      "swc": "1.16.22"
+    },
+    "brotli_oxc": 1125,
+    "brotli_pick": 1118
+  },
+  "infotip.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "b081bbf574763cf9fb5b57c81462ae68edbe324a774af6016b1d31955213a8c5",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 2626,
+    "brotli_pick": 2578
+  },
+  "lens-boot.js": {
+    "pipeline": "swc",
+    "source_sha256": "15280418d11b350544d9c2bf6501babfa5176892eaa94629362926deb372e2c8",
+    "engines": {
+      "swc": "1.16.22"
+    },
+    "brotli_oxc": 523,
+    "brotli_pick": 505
+  },
+  "lens-browser.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "eb5d55887102a141bde3baf9c785c39d357511576abf6af07cb4fdf46ab517e5",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 3847,
+    "brotli_pick": 3832
+  },
+  "lens-markdown.js": {
+    "pipeline": "oxc",
+    "source_sha256": "2103e99bebadc96acd20f24d8f70e945d380f94bca546c0c5415278cb0db91e6",
+    "engines": {
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2002,
+    "brotli_pick": 2002
+  },
+  "lens-nlweb.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "2d7f70b076fad7d2924581e0f917589539006d52bfe7450914cf3f364f052312",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2089,
+    "brotli_pick": 2082
+  },
+  "lens-reader.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "1875b5338dd5cceb88c025d5bf843f36b1275b597bf6515ddfd24e87ca82c74e",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2429,
+    "brotli_pick": 2416
+  },
+  "lens-tools.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "e62a0ccb33a0e213581cafc34d5cb27226151e0ac2b4a850d7a74d67bdf5c3cb",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 5106,
+    "brotli_pick": 5021
+  },
+  "lens-webmcp.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "5e0739d9b05468dfe0b02d00fcf9cd85f36a5fb7f5b0b64f16ee2a80cb11339d",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 1471,
+    "brotli_pick": 1412
+  },
+  "lens-wire.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "008064c261030021e666981556720c5e9489a2d5bccb40ce092e910768aa424b",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2749,
+    "brotli_pick": 2728
+  },
+  "lens.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "fe8803e5a25f3ce5bb40f23d857d568e4ea83f8c00b9539428532f6d7026388d",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 26947,
+    "brotli_pick": 26731
+  },
+  "lwe/ask.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "2cfa2b29e685dc081e9e94332051eb51a40ff0f109b2cb4602a919032791deb2",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2887,
+    "brotli_pick": 2864
+  },
+  "nav-pipes.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "f08cf779e38d923f18fe572c5fb5c03a8e799249002584773ec9901ad3a59003",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 5614,
+    "brotli_pick": 5461
+  },
+  "nav-run.js": {
+    "pipeline": "swc",
+    "source_sha256": "72499e310b3f552788e0781c4f88edecd64b8195b1fb2affc475817cdf1f2960",
+    "engines": {
+      "swc": "1.16.22"
+    },
+    "brotli_oxc": 5985,
+    "brotli_pick": 5923
+  },
+  "nav-tips.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "d2ffff672ebfcb19aa2bc7501ae2298f728abb03fc079ce4abcea115b06b0888",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 2730,
+    "brotli_pick": 2672
+  },
+  "nav-tray.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "75043090fa70e04cac684fb2802fbe99252697c283161183fd3ad18275b5b152",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2095,
+    "brotli_pick": 2074
+  },
+  "nav.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "e5d9310cbd1c0f27f7b7c7fcecc9e9e1e2c34eeb2fbd1b1fa9329a8ba3e268e4",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 6289,
+    "brotli_pick": 6173
+  },
+  "notepad.js": {
+    "pipeline": "swc",
+    "source_sha256": "2951b486a4a6bfaff20887dda3241a3e46fc3f462fb495974a329b9a25917e0a",
+    "engines": {
+      "swc": "1.16.22"
+    },
+    "brotli_oxc": 2951,
+    "brotli_pick": 2884
+  },
+  "photos-view.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "2760d7f957829cf128f75079c394b2726b86d7fb49d39ea19abe123aed8410f0",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 3445,
+    "brotli_pick": 3437
+  },
+  "quiz.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "9c635d63b73ac07034d468dc76764e7d18a87ac82a91a6a4713216577ade45ca",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2393,
+    "brotli_pick": 2332
+  },
+  "serendipity.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "f745ba6fbb863826945c67d560730d6e6e80d61d783186e2381e28d527a18789",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 1157,
+    "brotli_pick": 1145
+  },
+  "tooltip.js": {
+    "pipeline": "swc>oxc",
+    "source_sha256": "01973737f29a963546ce5fe5b0b43290cc8cd61b29caddb9bc44459c7659bde2",
+    "engines": {
+      "swc": "1.16.22",
+      "oxc": "0.159.0"
+    },
+    "brotli_oxc": 2919,
+    "brotli_pick": 2846
+  },
+  "webmcp.js": {
+    "pipeline": "oxc>terser",
+    "source_sha256": "ff2f070544a2aafab0683361f82468e50756352db73a9bb7f0eea5da75804419",
+    "engines": {
+      "oxc": "0.159.0",
+      "terser": "5.51.2"
+    },
+    "brotli_oxc": 2202,
+    "brotli_pick": 2130
+  }
+}

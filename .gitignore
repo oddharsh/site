@@ -34,6 +34,8 @@
 # GENERATED from cloudflare.config.ts + wrangler.config.ts by tools/lib/site-config.ts
 .wrangler.site.jsonc
 .wrangler.site.local.jsonc
+# tools/check-minify-diff.ts boots the Worker through a seeded entry with this config
+.wrangler.minify-diff.json
 
 # macOS
 .DS_Store
