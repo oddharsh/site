@@ -115,7 +115,7 @@ async function readBytesCapped(response, maxBytes) {
     return bytes.byteLength <= maxBytes ? { bytes, truncated: false } : { bytes: null, truncated: true };
   }
   const reader = response.body.getReader();
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   let truncated = false;
   try {

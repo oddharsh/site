@@ -346,7 +346,7 @@ function sseHeaders() {
  */
 function streamAnswer(payload, structured) {
   const encoder = new TextEncoder();
-  const frames = [];
+  const frames: string[] = [];
   const named = (event, data) => frames.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   const plain = (data) => frames.push(`data: ${JSON.stringify(data)}\n\n`);
 
