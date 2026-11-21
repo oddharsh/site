@@ -113,9 +113,7 @@ async function walk(ctx: BrowserContext, base: string, path: string): Promise<Re
     for (let i = 0; i < n; i++) {
       const target = controls.nth(i);
       const label = await target.evaluate((el) => `${el.tagName.toLowerCase()}#${el.id}.${el.className}`).catch(() => "gone");
-      await target
-        .click({ timeout: 1_000, noWaitAfter: true })
-        .catch((e: unknown) => rec.steps.push({ step: `click ${i} failed`, dom: firstLine(e) }));
+      await target.click({ timeout: 1_000, noWaitAfter: true }).catch((e: unknown) => rec.steps.push({ step: `click ${i} failed`, dom: firstLine(e) }));
       await snap(`click ${i} ${label}`);
       if (page.url() !== url) {
         rec.steps.push({ step: "left the page", dom: unhash(page.url().replace(base, "")) });
