@@ -51,7 +51,7 @@ import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
-import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
+import { dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
   familyDictionaryName,
@@ -2636,6 +2636,7 @@ phase("7 shell q11 + deltas");
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0,
       deltaBytes = 0;
+    const pairs: Array<{ asset: (typeof shell)[number]; d: (typeof cands)[number]; bytes: Buffer; dictionary: Buffer }> = [];
     for (const asset of shell) {
       // An svg delta is built like any other and served like any other, since
       // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
@@ -2646,22 +2647,27 @@ phase("7 shell q11 + deltas");
         // Identical bytes mean the content-hashed URL did not change, so no client will
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
-
-        const { out, tag } = dczEncode(targetBytes, dictBytes);
-
-        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
-        // serve more bytes AND cost the client a dictionary lookup.
-        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
-        if (out.length >= plainTwin) {
-          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
-          continue;
-        }
-        const deltaName = shellDeltaName(asset, tag);
-        await writeFile(`${OUT}/public/ad/${deltaName}`, out);
-        n++;
-        deltaBytes += out.length;
-        console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
+        pairs.push({ asset, d, bytes: targetBytes, dictionary: dictBytes });
       }
+    }
+    // Through the zstd cache with the page deltas: encoded one by one outside
+    // it, these cost a no-op build 339 ms of level-19 CPU (2026-11-21 profile).
+    const frames = await zstdBatch(pairs);
+    for (const [i, { asset, d, dictionary: dictBytes }] of pairs.entries()) {
+      const { out, tag } = frameDcz(frames[i], dictBytes);
+
+      // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+      // serve more bytes AND cost the client a dictionary lookup.
+      const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+      if (out.length >= plainTwin) {
+        console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+        continue;
+      }
+      const deltaName = shellDeltaName(asset, tag);
+      await writeFile(`${OUT}/public/ad/${deltaName}`, out);
+      n++;
+      deltaBytes += out.length;
+      console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
     }
     // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
     // expected. "Candidates exist but none produced a delta" means every pair lost to plain
