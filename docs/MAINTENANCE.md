@@ -2196,8 +2196,12 @@ when the tab first hides. A view that loaded in a background tab has no LCP
 row. Each metric is
 its own row in `aadhar_vitals`: `blob1` is the metric, `blob2` the path, `blob3`
 the Worker version, `double1` the value (milliseconds for LCP and INP, unitless
-for CLS). A view with no interaction has no INP row. The p75 per metric over
-the last 28 days, the window Chrome's field data uses:
+for CLS). A view with no interaction has no INP row. `bun run vitals:report` prints the p75 per page and metric over the last 28
+days beside Core Web Vitals' own lines (LCP 2.5 s, INP 200 ms, CLS 0.1) and
+exits 1 when a page with at least 20 views is past one; `--versions` splits it
+by release and `--days N` moves the window. It needs a token with Account
+Analytics: Read (`CLOUDFLARE_API_TOKEN`, else wrangler's login). The query it
+runs, for when you want it by hand:
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \
