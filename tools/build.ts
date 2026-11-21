@@ -61,7 +61,8 @@ import {
   parseShellAsset,
   shellDeltaName,
 } from "../src/worker/lib/dictionary-names.ts";
-import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_DICT_SIZE, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { trainFamilyDictionary } from "./lib/family-trainer.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { inTestsDir } from "./lib/test-roots.ts";
@@ -1286,11 +1287,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   return out;
 };
 
-// The exact transform step 7b writes for every non-homepage HTML document. Kept
-// here as one function because the page-family dictionary samples the bytes the
-// browser will actually receive, before step 7b reaches the files themselves.
-// A dictionary sampled from the readable pre-minification source still works, but
-// wastes its scarce 64KB on whitespace and comments absent from every target.
+// The exact transform step 7b writes for every non-homepage HTML document.
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
@@ -2227,8 +2224,8 @@ phase("5d quiz data");
 // shape and why the element stays.
 //
 // HERE, after 5c renamed custom properties (so the file holds exactly the bytes
-// the page used to ship) and before step 6, whose family corpus samples four of
-// these pages and should sample what is served. Step 7 then gives each file its
+// the page used to ship) and before step 6. The family dictionary is trained in
+// step 8 on the served pages, which no longer carry these blocks. Step 7 then gives each file its
 // q11 twin like every other /a/ asset. It stays off the dictionary path
 // (DICTIONARY_TYPES in lib/assets.ts): the name is per page, so there is no
 // earlier version of the same URL family for a delta to start from.
@@ -2293,10 +2290,6 @@ phase("5e build info");
   console.log(info ? `build-info: ${info.commit.slice(0, 12)} on ${info.branch ?? "?"}` : "build-info: not a Workers Builds build, BUILD_INFO stays null");
 }
 
-// The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
-// against the final page bytes and the committed src/dict/f-dict dictionary.
-let freshFamily: Buffer | null = null;
-
 phase("5f non-blocking shell css");
 // 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
 // blocking first paint, behind the subset of each that can apply to the page.
@@ -2342,83 +2335,6 @@ phase("6 hash shell assets");
   // dependent's hash covers its final bytes (nav.js imports hoist; lens.js
   // loads its six feature modules; lens-boot.js imports lens.js).
   const { urls: hashedFor, filesTouched } = await hashClientAssets(OUT, { log: console.log });
-
-  // RFC 9842 requires dcz to treat the supplied bytes as a RAW dictionary. A zstd
-  // --train artifact is self-describing, so a server library recognizes its tables
-  // while Chrome treats those same response bytes as raw content; the decoders
-  // disagree and the navigation fails. Build one site-wide corpus from the final,
-  // repointed bytes of two complementary pages: the compact LWE shell plus the
-  // Garage compression explainer, with 4 KB of vigenere filling the window.
-  //
-  // The corpus is a LIST rather than a fixed pair, and it is read in order until the
-  // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
-  // meant an ordinary edit trimming either page by ~2% would have hard-failed the
-  // deploy under a message naming the wrong cause. The trailing entries are slack:
-  // they contribute nothing while the leading pages are long enough, and they keep a
-  // content edit from becoming a release incident.
-  //
-  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. Tails of four outlier
-  // pages (horizon, vt-b, vt-check, access/index) sat at the start of the corpus
-  // from 2026-08-11, tuned against IN-SAMPLE measurements: the pages the tails
-  // were cut from were among the pages scored, and a page whose bytes sit in the
-  // dictionary compresses to almost nothing.
-  //
-  // tools/family-holdout.ts (in git history) asked the production question: rebuild
-  // this dictionary from the pages served at each dictionary roll, and score it
-  // on the pages served k rolls LATER, with every corpus page left out of the
-  // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12
-  // set in every window: +1.80 points of plain q11 at k=1 (33 of 33), +1.78 at k=3
-  // (31 of 31), +1.64 at k=8 (26 of 26). The gain is the LWE shell drivers brings
-  // back, worth 300-740 B on each /lwe page. A delta that fails to beat q11 is
-  // skipped in step 8, so a losing page costs nothing past its q11 twin. Re-run
-  // the holdout before re-adding a tail, and read it with the corpus pages
-  // excluded.
-  {
-    const BASE_CORPUS = [
-      "lwe/drivers.html", // the LWE shell every /lwe page shares
-      "garage/compression.html", // the Garage explainer: the shell every other page shares
-      "lwe/vigenere.html", // fills the last ~4 KB
-      "garage/chunks.html", // slack, in corpus order
-    ];
-    const SIZE = 65_536;
-    const parts = [];
-    let total = 0;
-    // THROUGH minifiedPage(). This block runs before step 7b reaches the staged
-    // files, so a bare read here returns the READABLE source: indentation,
-    // comments, none of it in any target. The note on minifiedPage already says a
-    // dictionary sampled that way "wastes its scarce 64KB on whitespace and
-    // comments absent from every target". Measured 2026-08-31 over the 55 staged
-    // pages, family deltas against plain q11: 510,803 B from the readable corpus,
-    // 480,187 B from this one, 55/55 pages still beating brotli either way. 30,616
-    // B for reading the right bytes.
-    for (const rel of BASE_CORPUS) {
-      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
-      const bytes = Buffer.from(minifiedPage(staged, rel));
-      parts.push(bytes);
-      total += bytes.length;
-      if (total >= SIZE) break;
-    }
-    if (total < SIZE) {
-      throw new Error(
-        `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
-          `Add another staged page to BASE_CORPUS in build.ts (order is load-bearing; append, do not reorder).`,
-      );
-    }
-    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
-    if (dictionary.readUInt32LE(0) === 0xec30a437) {
-      throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
-    }
-    // NOT written to /a/ here, and not the dictionary that necessarily ships. The
-    // URL is the hash of these bytes, and these bytes sample pages that carry every
-    // /a/<name>.<hash8> shell reference, so shipping the derivation as-is re-minted
-    // the dictionary on most deploys and cost every returning visitor a 17 KB
-    // re-fetch for a 0.1-point gain (measured 2026-09-02). Step 8 decides between
-    // this derivation and the committed src/dict/f-dict copy against the FINAL page
-    // bytes, which do not exist yet: step 7b has not minified them. The rule and
-    // its arithmetic live in tools/lib/page-family.ts.
-    freshFamily = dictionary;
-    console.log(`site-page corpus: fresh candidate ${hash8(dictionary)} (${dictionary.length} raw bytes); step 8 chooses between it and ${FAMILY_DICT_DIR}`);
-  }
 
   // Point the worker's Early-Hints header at the exact same content-addressed
   // assets as the staged documents. Its HTML dictionary Link header is patched in
@@ -3053,13 +2969,26 @@ phase("8 page q11 + deltas");
   //
   // These are the final bytes, so this is the one place the comparison is honest.
   // The committed dictionary is what browsers already hold (the roll adopts it from
-  // production); the fresh one is what step 6 just derived. Shipping the committed
+  // production); the fresh one is what the trainer derives below. Shipping the committed
   // copy keeps /a/page-family.<hash8>.dict stable across deploys, which is the whole
   // point: a re-mint costs every returning visitor a 17 KB fetch, and the fresh
   // corpus was measured 0.1 point better than the one they held. The rule, the
   // threshold and its arithmetic are in tools/lib/page-family.ts; this block only
   // applies it and writes down what it did, for the roll and for the log.
-  if (!freshFamily) throw new Error("page-family: step 6 derived no fresh corpus, so there is nothing to choose from");
+  //
+  // The fresh candidate: tools/lib/family-trainer.ts picks the 1 KiB segments
+  // the most pages share, from these final bytes in path order so the
+  // derivation is a pure function of the tree. RFC 9842 needs RAW bytes, which
+  // is why zstd's own trainer output can't ship; the trainer's header has the
+  // measurements against it and against the four-page concat this replaced.
+  const freshFamily = trainFamilyDictionary(
+    compressedPages.toSorted((x, y) => (x.page < y.page ? -1 : x.page > y.page ? 1 : 0)).map(({ bytes }) => bytes),
+    FAMILY_DICT_SIZE,
+  );
+  if (freshFamily.readUInt32LE(0) === 0xec30a437) {
+    throw new Error("page-family dictionary starts with the zstd --train magic; dcz needs RAW bytes");
+  }
+  console.log(`site-page corpus: fresh candidate ${hash8(freshFamily)} (${freshFamily.length} raw bytes, trained on ${compressedPages.length} pages)`);
   const committedFamily = await readCommittedFamily();
   const family = await chooseFamilyDictionary({
     fresh: freshFamily,
