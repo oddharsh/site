@@ -172,12 +172,12 @@
         // Light dismiss and a native Esc both close from outside this code, so
         // the bookkeeping follows the popover rather than the other way round.
         drop.addEventListener("beforetoggle", (e) => {
-          if ((e as ToggleEvent).newState === "closed") settle(menu);
+          if (e.newState === "closed") settle(menu);
         });
         drop.addEventListener("toggle", (e) => {
-          if ((e as ToggleEvent).newState === "closed") drop.remove();
+          if (e.newState === "closed") drop.remove();
         });
-        drop.showPopover({ source: btn } as ShowPopoverOptions);
+        drop.showPopover({ source: btn });
       } else {
         drop.style.left = btn.offsetLeft + "px";
       }
@@ -496,7 +496,7 @@
       (e) => {
         if (e.key !== "Escape") return;
         if (D.querySelector(".np-drop:popover-open, dialog:modal")) return;
-        var open = D.querySelectorAll(".np-note:popover-open") as NodeListOf<HTMLElement>;
+        var open = D.querySelectorAll<HTMLElement>(".np-note:popover-open");
         if (open.length) {
           e.preventDefault();
           open[open.length - 1].hidePopover();

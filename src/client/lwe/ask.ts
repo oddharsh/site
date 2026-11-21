@@ -29,6 +29,7 @@
     "@media (hover: hover) and (pointer: fine) {.lwe-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}}" +
     ".lwe-btn:active{box-shadow:inset 1px 1px 0 #b9c2d4,inset -1px -1px 0 #fff}" +
     ".lwe-btn:disabled{color:#aab;background:linear-gradient(to bottom,#f3f3f3,#e6e6e6);border-color:#bbb;cursor:not-allowed}" +
+    ".lwe-verify{white-space:normal}" +
     ".lwe-btn.go{font-weight:bold;background:linear-gradient(to bottom,#eaf6ec,#cdeccf);border-color:#4a9a52}" +
     ".lwe-status{font-size:8pt;font-family:var(--font-mono);min-height:1em}" +
     ".lwe-status.ok{color:#2c7a36}.lwe-status.no{color:#c43636}" +

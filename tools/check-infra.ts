@@ -566,7 +566,7 @@ async function checkCodeqlWorkflow(repo) {
   if (got.join(",") !== declared.join(",")) {
     const added = got.filter((l) => !declared.includes(l));
     const dropped = declared.filter((l) => !got.includes(l));
-    const parts = [];
+    const parts: string[] = [];
     if (added.length) parts.push(`gained ${added.join(", ")}`);
     if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
     fail(

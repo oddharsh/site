@@ -214,8 +214,8 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   const lastmod = readLastmod(root);
   const files = new Map();
   const descriptions = {};
-  const skipped = [];
-  const generated = [];
+  const skipped: string[] = [];
+  const generated: string[] = [];
   // Twins that ship as committed files (/index.md), which this function never
   // writes but which are twins all the same.
   const committed: string[] = [];
@@ -543,7 +543,7 @@ export const TWIN_FACTS = [
 ];
 
 export function checkTwinFacts(root = ".") {
-  const problems = [];
+  const problems: string[] = [];
   for (const { twin, facts } of TWIN_FACTS) {
     const t = join(root, twin);
     if (!existsSync(t)) {

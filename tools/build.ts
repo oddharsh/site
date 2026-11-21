@@ -546,7 +546,7 @@ async function checkInvariants() {
     // both directions so neither the registry nor the surface can drift alone.
     const want = (f) => surfaces.filter((s) => s.flags[f]).map((s) => s.path);
     const bidi = (label, wantPaths, have, opts: { subsetOnly?: boolean } = {}) => {
-      const w = new Set(wantPaths) as Set<string>;
+      const w = new Set<string>(wantPaths);
       for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
       if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
     };
@@ -606,7 +606,7 @@ async function checkInvariants() {
   // NOT from the font law: /garage and /lwe exist to show the platform off, so
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0,
-    tasteOk = [];
+    tasteOk: string[] = [];
   try {
     // Taste rules can execute only from text a browser parses or from a program
     // that emits that text. So the walk keeps active textual assets, the client
@@ -724,7 +724,7 @@ async function checkInvariants() {
   // which is exactly how a guard on the one deploy path ends up commented out.
   let conflictScanned = 0;
   try {
-    const collect = async (dir, match, skip = /^$/, out = []) => {
+    const collect = async (dir, match, skip = /^$/, out: string[] = []) => {
       for (const e of await readdir(dir, { withFileTypes: true })) {
         const p = `${dir}/${e.name}`;
         if (e.isDirectory()) {
@@ -1091,7 +1091,7 @@ phase("1a photo indexes");
   const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
   const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  const entries = Object.entries(exif) as [string, Record<string, any>][];
+  const entries = Object.entries<Record<string, any>>(exif);
   await Promise.all(
     entries.map(async ([stem, record]) => {
       const out = { ...record };
@@ -2240,7 +2240,7 @@ phase("5d quiz data");
   // Which pages carry a quiz in SOURCE. The staged set is checked against this,
   // so a page whose block a later edit made unmatchable fails here by name
   // instead of shipping its answer key inline or shipping no quiz at all.
-  const sources = ((await readdir("src/pages", { recursive: true })) as string[]).filter((rel) => rel.endsWith(".html"));
+  const sources = (await readdir("src/pages", { recursive: true })).filter((rel) => rel.endsWith(".html"));
   const authored = new Set<string>();
   await Promise.all(
     sources.map(async (rel) => {
@@ -2248,7 +2248,7 @@ phase("5d quiz data");
     }),
   );
 
-  const staged = ((await readdir(`${OUT}/public`, { recursive: true })) as string[])
+  const staged = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && !rel.startsWith("a/"))
     .sort();
   let files = 0,
@@ -2917,7 +2917,7 @@ phase("7c csp");
   if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");
   await writeFile(target, source.replace(marker, `export const PAGE_SCRIPT_HASHES = ${JSON.stringify(map)}; // build:csp-hashes`));
 
-  const bytes = (Object.values(map) as string[][]).reduce((n, h) => n + h.length * 72, 0);
+  const bytes = Object.values<string[]>(map).reduce((n, h) => n + h.length * 72, 0);
   console.log(
     `csp-hash: ${blocks} inline blocks across ${covered} documents, ${Object.values(map).flat().length} hashes (~${Math.round(bytes / covered)} B/page of header)`,
   );

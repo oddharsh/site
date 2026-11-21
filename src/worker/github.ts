@@ -82,11 +82,11 @@ const totalOf = (body: unknown) => Math.max(0, Math.trunc(asNumber(asRecord(body
 /** Pull requests, newest first, grouped by repository and ranked by volume. */
 export function normalizePrs(body: unknown): GithubActivity["prs"] {
   const prs: Pr[] = items(body)
-    .map((it) => ({
+    .map((it): Pr => ({
       repo: repoOf(it.repository_url),
       title: clip(it.title, 140),
       url: ghUrl(it.html_url),
-      state: (asRecord(it.pull_request)?.merged_at ? "merged" : it.state === "open" ? "open" : "closed") as PrState,
+      state: asRecord(it.pull_request)?.merged_at ? "merged" : it.state === "open" ? "open" : "closed",
       at: text(it.created_at),
     }))
     .filter((p) => p.repo && p.title);
@@ -111,11 +111,11 @@ export function normalizePrs(body: unknown): GithubActivity["prs"] {
 /** Issues, newest first. Titles carry the content here, so they stay a list. */
 export function normalizeIssues(body: unknown): GithubActivity["issues"] {
   const list: Issue[] = items(body)
-    .map((it) => ({
+    .map((it): Issue => ({
       repo: repoOf(it.repository_url),
       title: clip(it.title, 140),
       url: ghUrl(it.html_url),
-      state: (it.state === "open" ? "open" : "closed") as Issue["state"],
+      state: it.state === "open" ? "open" : "closed",
       at: text(it.created_at),
     }))
     .filter((i) => i.repo && i.title)
