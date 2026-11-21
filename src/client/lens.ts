@@ -2211,7 +2211,7 @@
     var checkHtml =
       '<div class="lx-readiness-checks">' +
       checks
-        .map((item) => {
+        .map((item, i) => {
           var state = readinessStatus(item);
           var copy = readinessCopy(item);
           var fix = copy.fix;
@@ -2243,7 +2243,9 @@
             esc(copy.label) +
             '" data-fix="' +
             esc(fix) +
-            '"><div class="lx-readiness-check-top"><b>' +
+            '"><div class="lx-readiness-check-top"><b id="lx-check-' +
+            i +
+            '">' +
             glossify(esc(copy.label)) +
             "</b>" +
             badge(state.text, state.kind) +
@@ -2254,7 +2256,17 @@
             (item.status === "fail"
               ? '<div class="lx-readiness-fix"><span>' +
                 glossify(esc(fix)) +
-                '</span><button class="lx-copy-fix" type="button" data-fix="' +
+                // Every failing check renders one, so "Copy fix" alone named a dozen
+                // identical buttons for a screen reader. aria-labelledby joins the
+                // button's own visible text to its row's heading ("Copy fix
+                // robots.txt"), and still reads "Copied robots.txt" while confirming.
+                '</span><button class="lx-copy-fix" type="button" id="lx-fix-' +
+                i +
+                '" aria-labelledby="lx-fix-' +
+                i +
+                " lx-check-" +
+                i +
+                '" data-fix="' +
                 esc(fix) +
                 '">Copy fix</button></div>'
               : "") +
