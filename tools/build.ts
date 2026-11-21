@@ -1226,8 +1226,8 @@ const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
 // search index at 1i. Its output is a pure function of the page, the options
 // and its own code, which sourceDigest walks import by import.
 const HTML_TO_MD = `html-to-md ${sourceDigest("tools/lib/html-to-md.ts")}`;
-const readDocumentMemo: typeof readDocument = (html, options = {}) =>
-  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options), html], () => JSON.stringify(readDocument(html, options))));
+const readDocumentMemo: typeof readDocument = (html, options) =>
+  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options ?? {}), html], () => JSON.stringify(readDocument(html, options))));
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
