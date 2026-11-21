@@ -51,7 +51,7 @@ if (tools.length === 0) {
 
 const byBin = new Map(tools.map((t) => [t.bin, t]));
 const declaredBins = new Set(byBin.keys());
-const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean)) as Set<string>;
+const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean));
 
 // These prerequisites already have canonical repository pins and checks:
 // .node-version (contract-the-node-pin-is-declared-once) and package.json

@@ -71,7 +71,7 @@ initWhenNear("crCanvas", function(){
   var el = (document.getElementById('crCanvas') as HTMLCanvasElement | null); if (!el) return;
   var ctx2d = el.getContext('2d'); if (!ctx2d) return;
   // non-null aliases: var narrowing does not reach the render closure
-  var c = (el as HTMLCanvasElement), ctx = (ctx2d as CanvasRenderingContext2D);
+  var c = (el), ctx = (ctx2d);
   var rng = (document.getElementById('crScale') as HTMLInputElement | null);
   var sel = (document.getElementById('crMode') as HTMLSelectElement | null);
   var outF = document.getElementById('crF'), info = document.getElementById('crInfo');
@@ -207,9 +207,9 @@ function progressiveDemo(id: string) {
   const root = document.getElementById(id);
   if (!root) return;
   const panes = Array.from(root.querySelectorAll("[data-pj-src]"));
-  const rangeQ = (root.querySelector("input[type=range]") as HTMLInputElement | null);
+  const rangeQ = (root.querySelector<HTMLInputElement>("input[type=range]"));
   const outQ = root.querySelector("output");
-  const pickQ = (root.querySelector("select") as HTMLSelectElement | null);
+  const pickQ = (root.querySelector<HTMLSelectElement>("select"));
   const bodyQ = root.querySelector("tbody");
   if (!rangeQ || !outQ || !pickQ || !bodyQ || !panes.length) return;
   // rebound after the guard: the checker drops the narrowing inside the callbacks below
@@ -234,7 +234,7 @@ function progressiveDemo(id: string) {
       out.textContent = (n / 1024).toFixed(1) + " KB arrived (" + Math.round(n / max * 100) + "%)";
       panes.forEach(function (p, k) {
         const f = files[k], cut = Math.min(n, f.length), sc = info[k].scans;
-        const cv = (p.querySelector("canvas") as HTMLCanvasElement | null), state = p.querySelector("[data-pj-state]");
+        const cv = (p.querySelector<HTMLCanvasElement>("canvas")), state = p.querySelector("[data-pj-state]");
         const ctx = cv && cv.getContext("2d");
         if (!cv || !ctx) return;
         const whole = sc.filter(function (s) { return s.end <= cut; }).length;

@@ -309,7 +309,7 @@ try {
 // prints when the advisory fires: on a green run it is noise.
 try {
   const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
-  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][]).find(
+  const entry = Object.entries<{ inputs?: Record<string, { bytesInOutput?: number }> }>(meta.outputs).find(
     ([name]) => name.endsWith(".js") && !name.endsWith(".map"),
   );
   const inputs = Object.entries(entry?.[1]?.inputs ?? {})
@@ -330,7 +330,7 @@ try {
   // A collapsed count is the failure mode worth guarding: an empty or tiny
   // metafile would otherwise report a huge improvement. Floor it at 40 modules,
   // under half the 83 the bundle carried on 2026-08-16.
-  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[]).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
+  const sourceKib = kib(Object.values<{ bytes?: number }>(meta.inputs ?? {}).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
   const modules = Object.keys(meta.inputs ?? {}).length;
   if (modules < 40) {

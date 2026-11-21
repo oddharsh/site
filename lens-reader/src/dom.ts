@@ -390,7 +390,7 @@ class Element extends Node {
     this.svg = svg;
     // Real array: Readability indexes it, reads .length, and passes it to
     // Array.from, all of which an array already satisfies.
-    this.attributes = [] as any;
+    this.attributes = [];
   }
 
   get nodeName() {

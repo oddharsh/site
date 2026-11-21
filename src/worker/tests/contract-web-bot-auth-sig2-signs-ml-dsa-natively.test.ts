@@ -36,7 +36,7 @@ type Jwk = JsonWebKey & { pub?: string; priv?: string; kid?: string };
 type TestKey = { pair: CryptoKeyPair; priv: Jwk; pub: Jwk };
 
 async function edKey(): Promise<TestKey> {
-  const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+  const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   const priv = (await crypto.subtle.exportKey("jwk", pair.privateKey)) as Jwk;
   const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Jwk;
   return { pair, priv, pub: { ...pub, kid: await jwkThumbprint(pub) } };

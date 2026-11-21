@@ -229,9 +229,9 @@ async function main(hif: string, repack: string, direct: string) {
     if (!ref || best > 2) throw new Error(`no orientation lines the HIF up with its decodes (best mean error ${best.toFixed(2)}/255)`);
 
     const report = CROPS.map((c, n) => {
-      const ej = error(fromJpeg.outs[n], ref![n]),
-        eh = error(fromHif.outs[n], ref![n]);
-      writePng(path.join(OUT, `jx-${c.name}-hif.png`), ref![n]);
+      const ej = error(fromJpeg.outs[n], ref[n]),
+        eh = error(fromHif.outs[n], ref[n]);
+      writePng(path.join(OUT, `jx-${c.name}-hif.png`), ref[n]);
       writePng(path.join(OUT, `jx-${c.name}-from-jpeg.png`), fromJpeg.outs[n]);
       writePng(path.join(OUT, `jx-${c.name}-from-hif.png`), fromHif.outs[n]);
       writePng(path.join(OUT, `jx-${c.name}-from-jpeg-err.png`), ej.map);

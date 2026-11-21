@@ -80,7 +80,7 @@ if (vars.size < 5 || required.size < 5) fail(`vars (${vars.size}) or secrets.req
 function tier(name: string, floor: number) {
   const m = envSource.match(new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`));
   if (!m) fail(`env.ts no longer exports interface ${name}`);
-  const names = [...m![1].matchAll(/^  ([A-Z][A-Z0-9_]*)\??:/gm)].map((x) => x[1]);
+  const names = [...m[1].matchAll(/^  ([A-Z][A-Z0-9_]*)\??:/gm)].map((x) => x[1]);
   if (names.length < floor) fail(`env.ts ${name} matched only ${names.length} member(s); the scanner is reading nothing`);
   return new Set(names);
 }

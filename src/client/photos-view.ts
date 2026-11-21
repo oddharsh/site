@@ -24,8 +24,8 @@
   "use strict";
   var D = document;
   var main = D.getElementById("main");
-  var bar = D.querySelector(".ph-menubar") as HTMLElement | null;
-  var sheet = D.querySelector(".sheet") as HTMLElement | null;
+  var bar = D.querySelector<HTMLElement>(".ph-menubar");
+  var sheet = D.querySelector<HTMLElement>(".sheet");
   if (!main || !bar || !sheet || !("showPopover" in HTMLElement.prototype)) return;
   var btn = D.getElementById("ph-view") as HTMLButtonElement;
   var drop = D.getElementById("ph-views") as HTMLElement;
@@ -200,7 +200,7 @@
     });
     // moveBefore is newer than the DOM lib this repo types against.
     var mover = body as HTMLTableSectionElement & { moveBefore?: (node: Node, child: Node | null) => void };
-    var move = mover.moveBefore ? (tr: Node) => mover.moveBefore!(tr, null) : (tr: Node) => body.append(tr);
+    var move = mover.moveBefore ? (tr: Node) => mover.moveBefore(tr, null) : (tr: Node) => body.append(tr);
     for (var n of ordered()) move(rowOf.get(n)!);
   }
   function showList() {
@@ -208,7 +208,7 @@
       list = D.createElement("div");
       list.className = "ph-list";
       list.addEventListener("click", (e) => {
-        var head = (e.target as HTMLElement).closest("[data-col]") as HTMLElement | null;
+        var head = (e.target as HTMLElement).closest<HTMLElement>("[data-col]");
         if (!head) return;
         var i = +(head.dataset.col as string);
         sortDir = i === sortBy ? -sortDir : 1;
@@ -241,7 +241,7 @@
     if (!h || !Array.isArray(h.l) || !h.l.length) return "";
     var n = h.l.length;
     var pts = (a: number[]) => a.map((v, i) => i + "," + (32 - (Math.max(0, Math.min(100, v)) * 30) / 100).toFixed(1)).join(" ");
-    var line = (k: "r" | "g" | "b") => (Array.isArray(h[k]) ? '<polyline class="' + k + '" points="' + pts(h[k] as number[]) + '"/>' : "");
+    var line = (k: "r" | "g" | "b") => (Array.isArray(h[k]) ? '<polyline class="' + k + '" points="' + pts(h[k]) + '"/>' : "");
     return (
       '<svg class="ph-hist" viewBox="0 0 ' +
       (n - 1) +
@@ -347,7 +347,7 @@
         '<button type="button" class="xp-button" data-step="1" aria-label="Next picture">Next &#9658;</button>' +
         '</div></div><div class="ph-info" aria-live="polite"></div>';
       film.addEventListener("click", (e) => {
-        var step = (e.target as HTMLElement).closest("[data-step]") as HTMLElement | null;
+        var step = (e.target as HTMLElement).closest<HTMLElement>("[data-step]");
         if (step) select(current + +(step.dataset.step as string));
       });
       sheet!.before(film);
@@ -413,7 +413,7 @@
     if (drop.matches(":popover-open")) drop.hidePopover();
   }
   drop.addEventListener("beforetoggle", (e) => {
-    var open = (e as ToggleEvent).newState === "open";
+    var open = e.newState === "open";
     btn.setAttribute("aria-expanded", String(open));
     if (!open) return;
     var r = btn.getBoundingClientRect();
@@ -424,7 +424,7 @@
   // focus follows once it is shown. Toggle events coalesce when keys come
   // fast, so the arrow keys below focus directly rather than through this.
   drop.addEventListener("toggle", (e) => {
-    if ((e as ToggleEvent).newState === "open" && !drop.contains(D.activeElement)) focusItem(false);
+    if (e.newState === "open" && !drop.contains(D.activeElement)) focusItem(false);
   });
   btn.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;

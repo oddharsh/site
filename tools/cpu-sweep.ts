@@ -154,7 +154,7 @@ const { values } = parseArgs({
   },
 });
 // absolute, so a relative --bundle names a file rather than a package in the child
-const BUNDLE = resolve(values.bundle!);
+const BUNDLE = resolve(values.bundle);
 
 function request(spec: string): Request {
   const [method, path, tool] = spec.startsWith("POST ") ? spec.split(" ") : ["GET", spec];
@@ -328,7 +328,7 @@ type Budget = {
   reference?: { drift: number; routes: Record<string, number> };
   routes: Record<string, { ceilingMs: number; why: string }>;
 };
-const budget: Budget = JSON.parse(readFileSync(values.budget!, "utf8"));
+const budget: Budget = JSON.parse(readFileSync(values.budget, "utf8"));
 // The scale, from this CPU model to the EPYC 7763. A model with no factor reads
 // raw, and --gate judges nothing on it. A replay is judged on the model it ran on.
 const machine = recorded?.machine ?? cpus()[0]?.model.trim() ?? "unknown";
@@ -444,7 +444,7 @@ const drift = ratios.length ? median(ratios) - 1 : 0;
 const offModel = budget.reference !== undefined && Math.abs(drift) > budget.reference.drift;
 const inconclusive = noisy || offModel;
 writeFileSync(
-  values.out!,
+  values.out,
   JSON.stringify(
     {
       gateMs: GATE_MS,
