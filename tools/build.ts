@@ -31,7 +31,7 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -74,6 +74,7 @@ import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
+import { browserJavaScripts } from "./lib/browser-source.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
 import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
@@ -914,8 +915,27 @@ await Promise.all([
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
+// Erasing client TypeScript spawns node, 182 ms of every build on 2026-11-21,
+// so each island's erased text is memoized on the node binary that erases it,
+// both halves of the eraser's source, and the island's path and text.
+const nodeBinary = realpathSync(Bun.which("node") ?? "node");
+const { size: nodeSize, mtimeMs: nodeMtime } = statSync(nodeBinary);
+const eraserSource = ["tools/lib/browser-source.ts", "tools/lib/browser-source-node.ts"].map((p) => createHash("sha256").update(readFileSync(p)).digest("hex"));
+const ERASE = `browser-source ${eraserSource.join(" ")} node ${nodeBinary} ${nodeSize} ${nodeMtime}`;
+const erase = async (sources: ReadonlyMap<string, string>): Promise<Map<string, string>> => {
+  const islands = [...sources];
+  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {
+    const erased = browserJavaScripts(new Map(missed.map((i) => islands[i])));
+    return missed.map((i) => {
+      const text = erased.get(islands[i][0]);
+      if (text === undefined) throw new Error(`browser-source: no output for ${islands[i][0]}`);
+      return text;
+    });
+  });
+  return new Map(islands.map(([file], i) => [file, texts[i]]));
+};
 await Promise.all([
-  copyServedTree(servedPlan, `${OUT}/public`),
+  copyServedTree(servedPlan, `${OUT}/public`, { erase }),
   // The Worker is a PROGRAM, not a document, so its source lives in src/worker
   // beside cal/ and serendipity/ rather than inside the tree of things a browser
   // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
