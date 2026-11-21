@@ -711,4 +711,17 @@ export const CONTROLS: Control[] = [
     run: ["bun", "tools/check-bun-lint.ts"],
     expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
   },
+  {
+    id: "build-memo-key-forgets-an-input",
+    plants: "the client-island eraser's cache key drops the island's text, so a warm build ships last build's tooltip.js after an edit",
+    mutations: [
+      {
+        file: "tools/build.ts",
+        find: "  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {",
+        replace: "  const texts = await cache.memoBatch(ERASE, islands.map(([file]) => [file]), async (missed) => {",
+      },
+    ],
+    run: ["bun", "tools/build-equivalence.ts", "--seed", "1", "--plan", "island"],
+    expect: /build-equivalence: step 1 \(island\): the warm \.build differs from a clean build in \d+ files/,
+  },
 ];
