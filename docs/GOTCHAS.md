@@ -1198,3 +1198,23 @@ skips it.
     than passed. Its fonts are still Linux's, so a pass is the conservative
     reading here too.
     Checked by: `tools/check-browser.ts`.
+
+110. **A control can work for a mouse and not exist for a keyboard or a
+    screen reader, and reading that from a script goes wrong three ways.**
+    `act:check` asks of every control whether Chrome's accessibility tree
+    names it, whether Tab can land on it, whether landing there draws
+    anything, and, for a control that is not a native one, whether Enter or
+    Space works it. All 519 controls passed on 2026-11-21, after three
+    wrong readings on the way. A scripted `focus()` after a press draws no
+    ring, since `:focus-visible` follows the last input: 406 of 519 read
+    ringless until the check forced the pseudo-class through the DevTools
+    protocol and compared what was drawn. A `content-visibility` section
+    that has not been scrolled to has no accessibility nodes: 27 buttons
+    with plain text labels on /garage/horizon read nameless from the top of
+    the page. And a modal the last press opened makes the rest of the page
+    inert, which reads as no name and no focus. So it scrolls to a control,
+    closes what is open, then reads. Parsing a name out of an ARIA
+    snapshot's YAML also failed, on every label holding a colon or an
+    apostrophe; the tree's own `name.value` does not. Four planted controls
+    prove each reading can fail, and three plain ones prove it can pass.
+    Checked by: `tools/check-interactions.ts`.

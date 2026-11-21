@@ -1,7 +1,8 @@
 {
   "$comment": [
     "Exceptions to tools/check-interactions.ts, by page and control, each with its",
-    "reason. A control not named here must do something when pressed, answer",
+    "reason. A control not named here must have a name a screen reader can",
+    "announce, take keyboard focus and show it, do something when pressed, answer",
     "inside 300 ms under 4x CPU throttle, throw nothing and leave the page no wider",
     "than a phone. The check reports an entry its control no longer needs."
   ],

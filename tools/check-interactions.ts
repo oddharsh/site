@@ -9,8 +9,15 @@
 // browser:check reads a page while it loads and stops (gotcha 108). The site's substance is
 // what happens after: the demos, sliders, filters, pickers. This opens each
 // manifest surface at 390px, finds the controls inside the page's own content,
-// operates each one the way a thumb would, and reads four things after each:
+// reads what a keyboard and a screen reader get from each one, operates it
+// the way a thumb would, and reads what that caused. Eight readings:
 //
+//   name    Chrome's accessibility tree has no name for it, so a screen reader
+//           announces "button" and nothing else (gotcha 110).
+//   focus   the Tab key can't land on it.
+//   ring    nothing on screen changes when the keyboard does land on it.
+//   key     it is not a native control, and answers a click but neither Enter
+//           nor Space.
 //   error   the control threw.
 //   dead    nothing observable happened: no DOM change, no canvas draw, no
 //           request, no sound, no navigation. A control that does nothing is
@@ -27,12 +34,15 @@
 // config/interaction-budget.json holds the exceptions, each with its reason,
 // keyed by page and control. An entry its control no longer needs is reported.
 //
-// THE CONTROLS RUN EVERY TIME, on /search, before the sweep: four planted
-// buttons, one that throws, one with no handler, one that spins for 400 ms and
-// one that pushes a 600px block into the page. A reading that misses its
-// plant exits 2 ("blind").
+// THE CONTROLS RUN EVERY TIME, on /search, before the sweep: eight planted
+// controls, one per reading. One throws, one has no handler, one spins for
+// 400 ms, one pushes a 600px block into the page, one has no text, one is a
+// span that takes no focus, one has its focus ring removed and one answers
+// only a click. Three of them must fail their own reading and no other, which
+// proves the keyboard readings pass a control that is fine. A reading that
+// misses its plant exits 2 ("blind").
 import { chromium } from "playwright-core";
-import type { BrowserContext, Page } from "playwright-core";
+import type { BrowserContext, CDPSession, Page } from "playwright-core";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -56,7 +66,8 @@ const PARALLEL = 3;
 // /rn answers 302 to Spotify, so there is no page of ours to operate.
 const OFFSITE = new Set(["/rn"]);
 
-type Budget = Record<string, Record<string, { allow: ("dead" | "slow" | "error" | "scroll")[]; why: string }>>;
+type Verdict = "dead" | "slow" | "error" | "scroll" | "name" | "focus" | "ring" | "key";
+type Budget = Record<string, Record<string, { allow: Verdict[]; why: string }>>;
 const budget: Budget = JSON.parse(readFileSync(`${root}config/interaction-budget.json`, "utf8")).pages;
 const manifest: { surfaces: { path: string }[] } = JSON.parse(readFileSync(`${root}config/site-manifest.json`, "utf8"));
 const only = values.only?.split(",");
@@ -188,6 +199,103 @@ const controlsIn = (page: Page, scope: string) =>
     return found;
   }, scope);
 
+/** What a keyboard and a screen reader get from a control, read before it is pressed. */
+type Reach = { name: string | null; focusable: boolean; ring: boolean; native: boolean };
+
+/**
+ * Three readings, taken through the DevTools protocol so they are the
+ * browser's own answers. The NAME is the one Chrome's accessibility tree
+ * computes, which is what a screen reader is handed. Whether Tab can LAND on
+ * it is read by focusing it. The RING is read by forcing :focus-visible on it
+ * and comparing what is drawn: a scripted focus after a press draws no ring in
+ * Chrome, since :focus-visible follows the last input, and the first sweep read
+ * 406 of 519 controls as ringless that way.
+ */
+async function reach(page: Page, cdp: CDPSession, control: Control): Promise<Reach | null> {
+  const selector = `[data-act=${JSON.stringify(control.key)}]`;
+  const el = page.locator(selector).first();
+  if (!(await el.count()) || !(await el.isVisible())) return null;
+  // Whatever the last press opened is closed first: a modal dialog makes the
+  // rest of the page inert, and an inert control has no name and takes no focus.
+  await page.evaluate(() => {
+    for (const open of document.querySelectorAll(":popover-open")) if (open instanceof HTMLElement) open.hidePopover();
+    for (const open of document.querySelectorAll("dialog[open]")) if (open instanceof HTMLDialogElement) open.close();
+  });
+  // On screen first. A content-visibility section that has not been scrolled to
+  // is not rendered, and what is not rendered has no accessibility node and
+  // takes no focus: read from the top of /garage/horizon, 27 buttons with
+  // plain text labels had "no name".
+  await el.evaluate((node) => node.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(250);
+  const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+  const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector });
+  if (!nodeId) return null;
+  const { nodes } = await cdp.send("Accessibility.getPartialAXTree", { nodeId, fetchRelatives: false });
+  const name = nodes[0]?.ignored ? null : String(nodes[0]?.name?.value ?? "").trim() || null;
+  // What focus is allowed to change: the control, the label that draws it (a
+  // radio shown as its label, as /coffee's slots are), or its parent.
+  const look = () =>
+    el.evaluate((node) =>
+      [node, node.closest("label"), node.parentElement]
+        .filter((e) => e instanceof HTMLElement)
+        .map((e) => {
+          const s = getComputedStyle(e);
+          return [
+            s.outlineStyle,
+            s.outlineWidth,
+            s.outlineColor,
+            s.outlineOffset,
+            s.boxShadow,
+            s.borderColor,
+            s.borderWidth,
+            s.backgroundColor,
+            s.backgroundImage,
+            s.color,
+            s.textDecorationLine,
+          ].join("|");
+        })
+        .join("\n"),
+    );
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  const before = await look();
+  await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["focus", "focus-visible"] });
+  const ring = (await look()) !== before;
+  await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
+  const seen = await el.evaluate((node) => {
+    if (!(node instanceof HTMLElement)) return { focusable: false, native: false };
+    node.focus({ preventScroll: true });
+    const landed = document.activeElement === node;
+    // In the tab order, or inside a group whose members the arrow keys reach.
+    const roving = !!node.closest('[role="radiogroup"], [role="toolbar"], [role="tablist"], [role="menu"], [role="menubar"], [role="listbox"], [focusgroup]');
+    node.blur();
+    return { focusable: landed && (node.tabIndex >= 0 || roving), native: node.matches("button, input, select, textarea, summary, a[href]") };
+  });
+  return { name, ring, ...seen };
+}
+
+/** What a reach reading fails on. */
+function reachVerdicts(r: Reach): Verdict[] {
+  const failed: Verdict[] = [];
+  if (!r.name) failed.push("name");
+  if (!r.focusable) failed.push("focus");
+  else if (!r.ring) failed.push("ring");
+  return failed;
+}
+
+/** A control that is not a native one has to answer Enter or Space itself. */
+async function answersKeys(page: Page, control: Control): Promise<boolean> {
+  const el = page.locator(`[data-act=${JSON.stringify(control.key)}]`).first();
+  if (!(await el.count()) || !(await el.isVisible())) return true;
+  for (const key of ["Enter", " "]) {
+    await page.evaluate(() => globalThis.__act.mark());
+    await el.focus({ timeout: 3000 }).catch(() => {});
+    await page.keyboard.press(key);
+    await page.waitForTimeout(SETTLE_MS);
+    if (await page.evaluate(() => globalThis.__act.effects.length > 0)) return true;
+  }
+  return false;
+}
+
 type Outcome = { effects: string[]; longest: number; errors: string[]; scroll: string[]; gone?: true; left?: true; pressed?: boolean };
 
 /** Operate one control the way a thumb would, then read what it caused. */
@@ -266,12 +374,17 @@ async function open(ctx: BrowserContext, url: string) {
   await page.addInitScript(instrument);
   await page.goto(url, { waitUntil: "load", timeout: 45_000 });
   await page.waitForTimeout(800);
-  return { page, errors };
+  // One Tab, so the page knows a keyboard is in use: :focus-visible follows the
+  // last input, and without a key press a focused button draws no ring at all.
+  await page.keyboard.press("Tab");
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  return { page, errors, cdp };
 }
 
 /** What an outcome fails on. A selection that changed is not an effect: something has to answer it. */
-function verdicts(o: Outcome): ("dead" | "slow" | "error" | "scroll")[] {
-  const failed: ("dead" | "slow" | "error" | "scroll")[] = [];
+function verdicts(o: Outcome): Verdict[] {
+  const failed: Verdict[] = [];
   if (o.errors.length) failed.push("error");
   if (!o.left && !o.effects.length && !o.errors.length && o.pressed) failed.push("dead");
   if (o.longest > SLOW_MS) failed.push("slow");
@@ -288,35 +401,58 @@ const context = (browser: Awaited<ReturnType<typeof chromium.launch>>) =>
     permissions: ["clipboard-read", "clipboard-write"],
   });
 
+/** Every reading for one control: what a keyboard and a screen reader get, then what a press causes. */
+async function read(page: Page, cdp: CDPSession, control: Control, errors: string[]): Promise<{ outcome: Outcome; failed: Verdict[] } | null> {
+  const reached = await reach(page, cdp, control);
+  const outcome = await operate(page, control, errors);
+  if (outcome.gone || !reached) return null;
+  const failed = [...reachVerdicts(reached), ...verdicts(outcome)];
+  if (control.kind === "press" && !reached.native && reached.focusable && !outcome.left && !(await answersKeys(page, control))) failed.push("key");
+  return { outcome, failed };
+}
+
 async function controls(ctx: BrowserContext, base: string) {
-  const { page, errors } = await open(ctx, `${base}/search`);
+  const { page, errors, cdp } = await open(ctx, `${base}/search`);
   await page.evaluate(() => {
     const main = document.querySelector("main");
     main?.insertAdjacentHTML(
       "beforeend",
-      '<p id="plants"><button type="button" id="p-throw">throws</button><button type="button" id="p-dead">dead</button><button type="button" id="p-slow">slow</button><button type="button" id="p-wide">wide</button></p>',
+      '<p id="plants"><button type="button" id="p-throw">throws</button><button type="button" id="p-dead">dead</button><button type="button" id="p-slow">slow</button>' +
+        '<button type="button" id="p-noname" style="width:30px;height:20px"></button><span role="button" id="p-nofocus">no focus</span>' +
+        '<button type="button" id="p-noring" style="all:unset">no ring</button><span role="button" tabindex="0" id="p-nokey">no key</span>' +
+        '<button type="button" id="p-wide">wide</button></p>',
     );
     document.getElementById("p-throw")?.addEventListener("click", () => {
       throw new Error("planted");
     });
     document.getElementById("p-slow")?.addEventListener("click", () => {
       for (const until = performance.now() + 400; performance.now() < until;);
-      document.title += ".";
+      document.getElementById("p-slow")?.setAttribute("data-pressed", "");
     });
+    for (const id of ["p-noname", "p-nofocus", "p-noring", "p-nokey"]) {
+      document.getElementById(id)?.addEventListener("click", () => document.getElementById(id)?.setAttribute("data-pressed", ""));
+    }
     document.getElementById("p-wide")?.addEventListener("click", () => {
       main?.insertAdjacentHTML("beforeend", '<div id="planted" style="width:600px;height:1px"></div>');
     });
   });
   const found = await controlsIn(page, "#plants");
   const blind: string[] = [];
-  const expect = async (id: string, verdict: "dead" | "slow" | "error" | "scroll") => {
+  const expect = async (id: string, verdict: Verdict, only = false) => {
     const control = found.find((c) => c.key.includes(`#${id}`));
-    const got = control ? verdicts(await operate(page, control, errors)) : [];
+    const got = (control && (await read(page, cdp, control, errors))?.failed) ?? [];
     if (!got.includes(verdict)) blind.push(`${verdict}: the planted #${id} read ${JSON.stringify(got)}`);
+    // The plain plants also prove the keyboard readings pass a control that is fine.
+    if (only && got.length !== 1) blind.push(`the planted #${id} should fail ${verdict} alone and read ${JSON.stringify(got)}`);
   };
-  await expect("p-throw", "error");
-  await expect("p-dead", "dead");
-  await expect("p-slow", "slow");
+  await expect("p-throw", "error", true);
+  await expect("p-dead", "dead", true);
+  await expect("p-slow", "slow", true);
+  await expect("p-noname", "name");
+  await expect("p-nofocus", "focus");
+  await expect("p-noring", "ring");
+  await expect("p-nokey", "key");
+  // Last, since it leaves the page wide for whatever is read after it.
   await expect("p-wide", "scroll");
   await page.close();
   return blind;
@@ -331,7 +467,7 @@ async function sweep(ctx: BrowserContext, base: string) {
   const queue = [...paths];
   const worker = async () => {
     for (let path = queue.shift(); path !== undefined; path = queue.shift()) {
-      let { page, errors } = await open(ctx, base + path);
+      let { page, errors, cdp } = await open(ctx, base + path);
       const found = await controlsIn(page, "main");
       if (values.list) {
         notes.push(`${String(found.length).padStart(3)}  ${path}`);
@@ -342,11 +478,12 @@ async function sweep(ctx: BrowserContext, base: string) {
       const allowed = budget[path] ?? {};
       const used = new Set<string>();
       for (const control of found.slice(0, PER_PAGE)) {
-        const outcome = await operate(page, control, errors);
-        if (outcome.gone) continue;
+        const reading = await read(page, cdp, control, errors);
+        if (!reading) continue;
+        const { outcome, failed } = reading;
         operated++;
         const allow = new Set(allowed[control.key]?.allow);
-        for (const verdict of verdicts(outcome)) {
+        for (const verdict of failed) {
           if (allow.has(verdict)) {
             used.add(`${control.key}\n${verdict}`);
             continue;
@@ -360,13 +497,21 @@ async function sweep(ctx: BrowserContext, base: string) {
               ? outcome.errors[0]
               : verdict === "scroll"
                 ? outcome.scroll[0]
-                : `${control.kind === "press" ? "pressing" : "changing"} it caused nothing`;
+                : verdict === "name"
+                  ? "a screen reader has no name to announce for it"
+                  : verdict === "focus"
+                    ? "the Tab key can't land on it"
+                    : verdict === "ring"
+                      ? "nothing changes on screen when the keyboard lands on it"
+                      : verdict === "key"
+                        ? "it answers a click and neither Enter nor Space"
+                        : `${control.kind === "press" ? "pressing" : "changing"} it caused nothing`;
           failures.push(`FAIL  ${verdict.padEnd(6)} ${path}  ${control.key}: ${detail}`);
         }
         // A control that left the page, or widened it, gets a fresh page for the next one.
         if (outcome.left || outcome.scroll.length) {
           await page.close();
-          ({ page, errors } = await open(ctx, base + path));
+          ({ page, errors, cdp } = await open(ctx, base + path));
           await controlsIn(page, "main");
         }
       }
@@ -421,7 +566,7 @@ try {
       for (const line of failures) console.log(line);
       for (const line of stale) console.log(`STALE ${line}: drop it from config/interaction-budget.json`);
       console.log(
-        `act:check: ${operated} control(s) operated on ${paths.length} pages at 390px, ${failures.length} failure(s), ${stale.length} stale exception(s); all four planted controls were caught.`,
+        `act:check: ${operated} control(s) operated on ${paths.length} pages at 390px, ${failures.length} failure(s), ${stale.length} stale exception(s); all eight planted controls were caught.`,
       );
       code = failures.length || stale.length ? 1 : 0;
     }
