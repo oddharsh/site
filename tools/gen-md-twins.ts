@@ -209,7 +209,8 @@ export function renderWritingIndex(root = ".") {
  * the staged pages are rewritten (hashed asset refs, minification); build.ts
  * owns that ordering and reads the source tree first for everything that has one.
  */
-export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
+export function buildTwins(root = ".", opts: { generatedRoot?: string; read?: typeof readDocument } = {}) {
+  const read = opts.read ?? readDocument;
   const manifest = readManifest(root);
   const lastmod = readLastmod(root);
   const files = new Map();
@@ -250,7 +251,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     const generatedAbs = opts.generatedRoot ? join(opts.generatedRoot, "public", `${surface.path === "/" ? "index" : surface.path.slice(1)}.html`) : null;
 
     if (rel) {
-      doc = readDocument(readFileSync(join(root, rel), "utf8"), { origin: ORIGIN });
+      doc = read(readFileSync(join(root, rel), "utf8"), { origin: ORIGIN });
       body = doc.body;
       if (!body) {
         // A page whose content is assembled in the browser has no prose to
@@ -270,7 +271,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
     } else if (existsSync(handAbs)) {
       body = readFileSync(handAbs, "utf8").trim();
     } else if (generatedAbs && existsSync(generatedAbs)) {
-      doc = readDocument(readFileSync(generatedAbs, "utf8"), { origin: ORIGIN });
+      doc = read(readFileSync(generatedAbs, "utf8"), { origin: ORIGIN });
       body = doc.body;
       if (!body) continue; // nothing to mirror and no source URL claim to make
       generated.push(surface.path);

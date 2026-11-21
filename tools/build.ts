@@ -76,7 +76,8 @@ import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
 import { browserJavaScripts } from "./lib/browser-source.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
-import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
+import { buildCache, buildCacheEnabled, sourceDigest } from "./lib/build-cache.ts";
+import { readDocument } from "./lib/html-to-md.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import type * as albumsModule from "../src/worker/albums.ts";
 
@@ -1221,6 +1222,12 @@ const digestFile = (path: string): string => createHash("sha256").update(readFil
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
 const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
 const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
+// html-to-md parses every page twice a build, for the twins at 1g and the
+// search index at 1i. Its output is a pure function of the page, the options
+// and its own code, which sourceDigest walks import by import.
+const HTML_TO_MD = `html-to-md ${sourceDigest("tools/lib/html-to-md.ts")}`;
+const readDocumentMemo: typeof readDocument = (html, options = {}) =>
+  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options), html], () => JSON.stringify(readDocument(html, options))));
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
@@ -1557,7 +1564,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
-  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT });
+  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT, read: readDocumentMemo });
   // The registry advertises every agents:true surface to agents (MCP
   // resources/list), so each one owes a Markdown twin unless it declares the
   // representation its route renders live (`mimeType`, as /rn and the terminal
@@ -1939,7 +1946,7 @@ phase("1i search index");
 // because nobody set its flag, never because this step ran too early.
 {
   const { buildSearchIndex } = await import("./generate-search-index.ts");
-  const index = await buildSearchIndex(".");
+  const index = await buildSearchIndex(".", { read: readDocumentMemo });
   // Both floors guard a SILENT failure, which is the only kind this artifact
   // has. getSearchIndex() in search.ts falls back to an empty list on a
   // missing or unreadable file, so a collapsed index renders /search perfectly

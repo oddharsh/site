@@ -22,8 +22,33 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 export const BUILD_CACHE_DIR = "node_modules/.cache/aadhar-build";
+
+// The digest of a module and of every relative module it imports, for a memo
+// key named by its code: a helper the module imports later changes the key
+// without anyone remembering to add it. A package import throws, since its
+// bytes live outside the repo; key on the package version instead (toolVersion
+// in build.ts).
+export function sourceDigest(entry: string): string {
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const h = createHash("sha256");
+  const seen = new Set<string>();
+  const visit = (path: string) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const text = readFileSync(path, "utf8");
+    h.update(path).update("\0").update(text).update("\0");
+    for (const { path: spec } of transpiler.scanImports(text)) {
+      if (spec.startsWith("node:")) continue;
+      if (!spec.startsWith(".")) throw new Error(`sourceDigest: ${path} imports the package ${spec}; key on its version instead`);
+      visit(resolve(dirname(path), spec));
+    }
+  };
+  visit(resolve(entry));
+  return h.digest("hex");
+}
 
 export function buildCacheEnabled(env: Record<string, string | undefined> = process.env): boolean {
   if (env.BUILD_CACHE === "0") return false;
