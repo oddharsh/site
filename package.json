@@ -56,6 +56,7 @@
     "deps:pin": "bun tools/bump-deps.ts",
     "deps:snapshot": "bun --no-install tools/dependency-snapshot.ts",
     "test:node": "node --import ./tools/lib/no-network.ts --test --test-isolation=none 'tools/tests/*.test.ts' 'src/**/tests/*.test.ts'",
+    "test:workerd": "node tools/test-workerd.ts",
     "lint": "bun tools/check-bun-lint.ts && bun tools/gen-runtime-types.ts && bun lint --type-aware",
     "format": "bun fmt",
     "format:check": "bun fmt --check",
