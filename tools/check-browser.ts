@@ -403,7 +403,7 @@ async function sweep(browser: Browser, base: string) {
       const every = (pick: (r: Reading) => string[]) => [...new Set(readings.flatMap(({ r }) => pick(r)))];
       for (const status of new Set(readings.map(({ r }) => r.status))) if (status < 200 || status > 299) fail("status", `answered ${status}`);
       readings.forEach(({ r }, i) => {
-        if (r.shift > max) suspects.push({ path, leg: legs[i]!, max, under: r.shift });
+        if (r.shift > max) suspects.push({ path, leg: legs[i], max, under: r.shift });
       });
       const calls = every((r) => r.intl);
       if (calls.length && !budget.intl[path]) fail("intl", `${calls.join(", ")} before the reader acts`);

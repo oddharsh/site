@@ -348,7 +348,7 @@ async function operate(page: Page, control: Control, errors: string[]): Promise<
         node.dispatchEvent(new Event("change", { bubbles: true }));
       }, control.kind);
   } catch (e) {
-    return { effects: [], longest: 0, errors: [`could not be operated: ${String(e).split("\n")[0]!.slice(0, 120)}`], scroll: [] };
+    return { effects: [], longest: 0, errors: [`could not be operated: ${String(e).split("\n")[0].slice(0, 120)}`], scroll: [] };
   }
   await page.waitForTimeout(SETTLE_MS);
   // A button that answers late is not dead: /garage/horizon's "Read layout
