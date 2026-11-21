@@ -31,7 +31,7 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -51,7 +51,7 @@ import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
-import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
+import { dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
   familyDictionaryName,
@@ -74,8 +74,10 @@ import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
+import { browserJavaScripts } from "./lib/browser-source.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
-import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
+import { buildCache, buildCacheEnabled, sourceDigest } from "./lib/build-cache.ts";
+import { readDocument } from "./lib/html-to-md.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import type * as albumsModule from "../src/worker/albums.ts";
 
@@ -914,8 +916,27 @@ await Promise.all([
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
+// Erasing client TypeScript spawns node, 182 ms of every build on 2026-11-21,
+// so each island's erased text is memoized on the node binary that erases it,
+// both halves of the eraser's source, and the island's path and text.
+const nodeBinary = realpathSync(Bun.which("node") ?? "node");
+const { size: nodeSize, mtimeMs: nodeMtime } = statSync(nodeBinary);
+const eraserSource = ["tools/lib/browser-source.ts", "tools/lib/browser-source-node.ts"].map((p) => createHash("sha256").update(readFileSync(p)).digest("hex"));
+const ERASE = `browser-source ${eraserSource.join(" ")} node ${nodeBinary} ${nodeSize} ${nodeMtime}`;
+const erase = async (sources: ReadonlyMap<string, string>): Promise<Map<string, string>> => {
+  const islands = [...sources];
+  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {
+    const erased = browserJavaScripts(new Map(missed.map((i) => islands[i])));
+    return missed.map((i) => {
+      const text = erased.get(islands[i][0]);
+      if (text === undefined) throw new Error(`browser-source: no output for ${islands[i][0]}`);
+      return text;
+    });
+  });
+  return new Map(islands.map(([file], i) => [file, texts[i]]));
+};
 await Promise.all([
-  copyServedTree(servedPlan, `${OUT}/public`),
+  copyServedTree(servedPlan, `${OUT}/public`, { erase }),
   // The Worker is a PROGRAM, not a document, so its source lives in src/worker
   // beside cal/ and serendipity/ rather than inside the tree of things a browser
   // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
@@ -1201,6 +1222,12 @@ const digestFile = (path: string): string => createHash("sha256").update(readFil
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
 const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
 const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
+// html-to-md parses every page twice a build, for the twins at 1g and the
+// search index at 1i. Its output is a pure function of the page, the options
+// and its own code, which sourceDigest walks import by import.
+const HTML_TO_MD = `html-to-md ${sourceDigest("tools/lib/html-to-md.ts")}`;
+const readDocumentMemo: typeof readDocument = (html, options) =>
+  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options ?? {}), html], () => JSON.stringify(readDocument(html, options))));
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
@@ -1537,7 +1564,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
-  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT });
+  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT, read: readDocumentMemo });
   // The registry advertises every agents:true surface to agents (MCP
   // resources/list), so each one owes a Markdown twin unless it declares the
   // representation its route renders live (`mimeType`, as /rn and the terminal
@@ -1919,7 +1946,7 @@ phase("1i search index");
 // because nobody set its flag, never because this step ran too early.
 {
   const { buildSearchIndex } = await import("./generate-search-index.ts");
-  const index = await buildSearchIndex(".");
+  const index = await buildSearchIndex(".", { read: readDocumentMemo });
   // Both floors guard a SILENT failure, which is the only kind this artifact
   // has. getSearchIndex() in search.ts falls back to an empty list on a
   // missing or unreadable file, so a collapsed index renders /search perfectly
@@ -2636,6 +2663,7 @@ phase("7 shell q11 + deltas");
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0,
       deltaBytes = 0;
+    const pairs: Array<{ asset: (typeof shell)[number]; d: (typeof cands)[number]; bytes: Buffer; dictionary: Buffer }> = [];
     for (const asset of shell) {
       // An svg delta is built like any other and served like any other, since
       // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
@@ -2646,22 +2674,27 @@ phase("7 shell q11 + deltas");
         // Identical bytes mean the content-hashed URL did not change, so no client will
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
-
-        const { out, tag } = dczEncode(targetBytes, dictBytes);
-
-        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
-        // serve more bytes AND cost the client a dictionary lookup.
-        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
-        if (out.length >= plainTwin) {
-          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
-          continue;
-        }
-        const deltaName = shellDeltaName(asset, tag);
-        await writeFile(`${OUT}/public/ad/${deltaName}`, out);
-        n++;
-        deltaBytes += out.length;
-        console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
+        pairs.push({ asset, d, bytes: targetBytes, dictionary: dictBytes });
       }
+    }
+    // Through the zstd cache with the page deltas: encoded one by one outside
+    // it, these cost a no-op build 339 ms of level-19 CPU (2026-11-21 profile).
+    const frames = await zstdBatch(pairs);
+    for (const [i, { asset, d, dictionary: dictBytes }] of pairs.entries()) {
+      const { out, tag } = frameDcz(frames[i], dictBytes);
+
+      // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+      // serve more bytes AND cost the client a dictionary lookup.
+      const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+      if (out.length >= plainTwin) {
+        console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+        continue;
+      }
+      const deltaName = shellDeltaName(asset, tag);
+      await writeFile(`${OUT}/public/ad/${deltaName}`, out);
+      n++;
+      deltaBytes += out.length;
+      console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
     }
     // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
     // expected. "Candidates exist but none produced a delta" means every pair lost to plain

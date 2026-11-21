@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "bun tools/build.ts",
+    "build:equivalence": "bun tools/build-equivalence.ts",
     "dev": "bun tools/dev.ts",
     "dev:remote": "bun tools/lib/site-config.ts --dev && bun tools/gen-remote-config.ts .wrangler.dev.jsonc && bun tools/dev-stage.ts --watch -- node node_modules/wrangler/bin/wrangler.js dev -c .wrangler.remote.jsonc -c counter/wrangler.jsonc",
     "deploy:direct": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false --strict",
