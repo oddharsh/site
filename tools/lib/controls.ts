@@ -448,6 +448,19 @@ export const CONTROLS: Control[] = [
     expect: /a replayable GET-shaped write is refused in early data/,
   },
   {
+    id: "serendipity-mcp-batch-cap-dropped",
+    plants: "the Serendipity MCP server stops capping a JSON-RPC batch, so one POST starts as many D1 queries as fit in 64 KiB",
+    mutations: [
+      {
+        file: "serendipity/serendipity.ts",
+        find: "    const refused = mcpBatchRefusal(payload);\n    if (refused) return respond(refused, 413);\n",
+        replace: "",
+      },
+    ],
+    run: contract("contract-both-mcp-servers-speak-one-protocol"),
+    expect: /serendipity MCP answers a 16-message batch and refuses a 17-message one/,
+  },
+  {
     id: "declared-deploy-loses-auto-create-pin",
     plants: "infra.json's production deploy_command drops --x-auto-create=false, so a deploy may create Cloudflare resources",
     mutations: [
