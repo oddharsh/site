@@ -1175,7 +1175,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    the Machine pane. The two controls answer different questions (what am I
    looking at vs which report), so they no longer share a row to be confused in. */
 .lx-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
-.lx-view { display:inline-flex; }
+.lx-view { display:inline-flex; flex-wrap:wrap; max-width:100%; }
 .lx-seg { font-size:var(--text-xs); padding:3px 11px; color:var(--grey-28); background:linear-gradient(180deg,#fbfbfb,#e3e3da); border:1px solid oklch(55% 0 0); border-right-width:0; }
 @media (max-width:420px){ .lx-seg { padding-inline:7px; } }
 @media (max-width:340px){ .lx-seg { padding-inline:4px; } }
