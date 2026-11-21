@@ -232,6 +232,18 @@ export const CONTROLS: Control[] = [
     expect: /contains em dashes/,
   },
   {
+    id: "footnote-href-drift",
+    plants: "a footnote whose marker href no longer matches its note, so the hover bubble shows stale text",
+    mutations: [
+      {
+        file: "src/pages/control-footnote.html",
+        create: '<p>Body<a class="note-ref" href="#Old note.">1</a>.</p><ol class="footnotes"><li id="New note.">New note.</li></ol>\n',
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /footnote marker 1's href "#Old note\." doesn't match footnote 1's id "New note\."/,
+  },
+  {
     id: "new-type-error",
     plants: "a fresh type error in a Worker module, past the ratcheted baseline",
     mutations: [{ file: "src/worker/lib/control-probe.ts", create: "export const probe: number = 'not a number';\n" }],
