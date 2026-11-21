@@ -46,6 +46,7 @@
     "colors:drift": "bun tools/color-drift.ts",
     "tools:check": "bun tools/check-tools.ts",
     "controls": "bun tools/controls.ts",
+    "sim": "bun tools/sim.ts",
     "derive:check": "bun tools/check-derivations.ts",
     "gotcha:next": "bun tools/gotcha-next.ts",
     "ci:census": "bun tools/ci-census.ts",

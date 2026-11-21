@@ -711,4 +711,20 @@ export const CONTROLS: Control[] = [
     run: ["bun", "tools/check-bun-lint.ts"],
     expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
   },
+  {
+    id: "hit-retries-a-lost-do-reply",
+    plants: "handleHit retries the Counter fetch when its reply is lost, so a visit the DO already counted counts twice",
+    mutations: [
+      {
+        file: "src/worker/counter.ts",
+        find: '      return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n    } catch {\n      return null;\n',
+        replace:
+          '      return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n    } catch {\n      try {\n        const again = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));\n        return (await (await again.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n      } catch {\n        return null;\n      }\n',
+      },
+    ],
+    // Seeds 1 to 60 inside a 120 s cap; seed 11 caught it in 1.1 s on
+    // 2026-11-21 and shrank to 2 events, a counting visit and the lost reply.
+    run: ["bun", "tools/sim.ts", "--seed", "1", "--seeds", "60", "--budget", "120", "--stop-on-fail"],
+    expect: /FAIL counter: counter double-counted: GET \/hit\S* moved the count by 2/,
+  },
 ];
