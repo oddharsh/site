@@ -349,7 +349,7 @@ export function parseHunks(text: string): Hunk[] {
       hunks.push({
         line: start,
         main: main.length,
-        base: base === null ? null : (base as string[]).length,
+        base: base === null ? null : base.length,
         pr: pr.length,
         clash,
         grade,

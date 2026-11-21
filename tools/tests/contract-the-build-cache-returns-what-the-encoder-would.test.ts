@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { assert, test } from "./contract-shared.ts";
 
-const { buildCache, buildCacheEnabled } = await import("../lib/build-cache.ts");
+const { buildCache, buildCacheEnabled, sourceDigest } = await import("../lib/build-cache.ts");
 
 // A counting brotli encoder: how many inputs actually reached it.
 function counted(name = "brotli test") {
@@ -179,6 +179,38 @@ test("prune keeps what this build used, drops stale strangers, and runs at most 
     assert.ok(existsSync(join(dir, "recent")), "an unused entry younger than the cutoff stays");
     utimesSync(join(dir, "recent"), old, old);
     assert.equal(await buildCache({ dir, enabled: true }).prune(14), 0, "a second sweep the same day does nothing");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("memoBatch sends only the misses to one produce call, in order", async () => {
+  const dir = fresh();
+  try {
+    const calls: number[][] = [];
+    const produce = async (missed: number[]) => {
+      calls.push(missed);
+      return missed.map((i) => `out ${i}`);
+    };
+    assert.deepEqual(await buildCache({ dir, enabled: true }).memoBatch("batch test", [["a"], ["b"]], produce), ["out 0", "out 1"]);
+    assert.deepEqual(await buildCache({ dir, enabled: true }).memoBatch("batch test", [["a"], ["c"], ["b"]], produce), ["out 0", "out 1", "out 1"]);
+    assert.deepEqual(calls, [[0, 1], [1]], "the second call produced only c");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("sourceDigest follows relative imports and refuses a package import", () => {
+  const dir = fresh();
+  try {
+    writeFileSync(join(dir, "entry.ts"), 'import { helper } from "./helper.ts";\nimport { join } from "node:path";\nexport const x = helper + join("a");\n');
+    writeFileSync(join(dir, "helper.ts"), "export const helper = 1;\n");
+    const before = sourceDigest(join(dir, "entry.ts"));
+    assert.equal(sourceDigest(join(dir, "entry.ts")), before, "the same tree digests the same");
+    writeFileSync(join(dir, "helper.ts"), "export const helper = 2;\n");
+    assert.notEqual(sourceDigest(join(dir, "entry.ts")), before, "an edit to the imported helper changes the digest");
+    writeFileSync(join(dir, "entry.ts"), 'import { transform } from "lightningcss";\nexport const y = transform;\n');
+    assert.throws(() => sourceDigest(join(dir, "entry.ts")), /imports the package lightningcss; key on its version instead/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

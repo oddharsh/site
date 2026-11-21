@@ -553,7 +553,7 @@ export function compareEdgeCheck(check, seen: EdgeObservation | undefined, opts:
       const got = (header(name) || "").trim();
       if (got !== expected) problems.push(`${name} is ${JSON.stringify(got || "(absent)")}, declared ${JSON.stringify(expected)}`);
     }
-    for (const [name, needle] of Object.entries(want.headerContains || {}) as [string, string][]) {
+    for (const [name, needle] of Object.entries<string>(want.headerContains || {})) {
       const got = header(name) || "";
       if (!got.includes(needle)) problems.push(`${name} does not contain ${JSON.stringify(needle)} (got ${JSON.stringify(got || "(absent)")})`);
     }

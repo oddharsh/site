@@ -162,7 +162,7 @@ async function runOne(seed: number, steps: number, given: SimEvent[] | null): Pr
   const world = createWorld(seed, root);
   for (const method of ["log", "info", "warn", "error", "debug"] as const) console[method] = () => {};
   const { Counter } = await import("../counter/src/counter.ts");
-  world.loadCounter(Counter as never);
+  world.loadCounter(Counter);
   const { default: worker } = await import("../src/worker/index.ts");
   const { EXACT_PATHS, PREFIX_ROUTES } = await import("../src/worker/routes.ts");
   const paths = [...EXACT_PATHS, ...PREFIX_ROUTES.map((p) => p.probe), "/", "/no-such-page", "/writing/no-such-post"];

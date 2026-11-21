@@ -171,7 +171,10 @@ export async function planServedTree(options: PlanOptions = {}): Promise<ServedT
   return { roots, files, directories, skipped, declarations };
 }
 
-type AdapterOptions = { cwd?: string };
+type Erase = (sources: ReadonlyMap<string, string>) => Map<string, string> | Promise<Map<string, string>>;
+// `erase` turns client TypeScript into browser JavaScript. The build passes a
+// memoized one (tools/build.ts); everything else spawns node each time.
+type AdapterOptions = { cwd?: string; erase?: Erase };
 
 // The first root (public/, 994 of the 1,102 staged files on 2026-10-16) cloned whole
 // with one clonefile(2) where the platform allows (tools/lib/clone-tree.ts),
@@ -206,13 +209,13 @@ async function cloneFirstRoot(plan: ServedTreePlan, out: string, cwd: string): P
 // THE BUILD ADAPTER: copy every planned file to `dest`. Directories are made
 // first, from the plan's union, so no two copies race through mkdir for a
 // directory several roots share, and an empty authored directory still ships.
-async function clientScripts(plan: ServedTreePlan, cwd: string): Promise<Map<string, string>> {
+async function clientScripts(plan: ServedTreePlan, cwd: string, erase: Erase): Promise<Map<string, string>> {
   const sources = await Promise.all(
     [...plan.files]
       .filter(([served, source]) => source.endsWith(".ts") && served.endsWith(".js"))
       .map(async ([, source]): Promise<[string, string]> => [source, await readFile(resolve(cwd, source), "utf8")]),
   );
-  return browserJavaScripts(new Map(sources));
+  return erase(new Map(sources));
 }
 
 const COPY_WIDTH = 64;
@@ -223,7 +226,7 @@ export async function copyServedTree(
 ): Promise<{ files: number; dirs: number; cloned: string | null }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
-  const scripts = await clientScripts(plan, cwd);
+  const scripts = await clientScripts(plan, cwd, options.erase ?? browserJavaScripts);
   const cloned = await cloneFirstRoot(plan, out, cwd);
   await Promise.all([...plan.directories.keys()].map((dir) => mkdir(resolve(out, dir), { recursive: true })));
   const pending = cloned ? [...plan.files].filter(([rel, source]) => source !== `${cloned}/${rel}`) : [...plan.files];
@@ -256,7 +259,7 @@ export async function copyServedTree(
 export async function linkServedTree(plan: ServedTreePlan, dest: string, options: AdapterOptions = {}): Promise<{ links: number; dirs: number }> {
   const cwd = options.cwd ?? ".";
   const out = resolve(cwd, dest);
-  const scripts = await clientScripts(plan, cwd);
+  const scripts = await clientScripts(plan, cwd, options.erase ?? browserJavaScripts);
 
   const children = new Map<string, Set<string>>();
   const adopt = (path: string) => {

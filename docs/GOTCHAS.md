@@ -993,7 +993,9 @@ skips it.
     real rows widened them, so a data table scrolls in its own box.
     `bun run browser:check` opens every manifest page in Chrome at 320, 360
     and 390px, plants a 600px block first to prove it can fail, and takes
-    `--base https://aadhar.sh` to read the deployment.
+    `--base https://aadhar.sh` to read the deployment, which
+    `production-browser.yml` does every night, since the rows change without
+    a deploy.
     Checked by: `tools/check-browser.ts`.
 
 98. **A script that builds what the reader is looking at moves the page
@@ -1150,3 +1152,69 @@ skips it.
     A route that reaches another node-only lazy path pays it the same way:
     compare its reading under node against workerd before trusting a jump.
     Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
+108. **A check that stops when the page has loaded has read none of what
+    the page does.** `browser:check` reads 77 pages while they load; 44 of
+    them carry about 880 controls between them (sliders, filters, pickers,
+    demo buttons), and until 2026-11-20 nothing had operated one. `bun run
+    act:check` presses, slides, picks and types into each at 390px and reads
+    four things after: a thrown error, a press that caused nothing, one
+    task over 300 ms under 4x CPU throttle, a page left wider than the
+    phone. The first sweeps flagged 132 controls and then none: 519
+    operated, no error, no page widened, and nothing dead or slow that was
+    not built to be. Everything it flagged was the instrument, and each
+    fix is a rule it keeps: scroll a control to mid-screen and wait
+    before pressing it, since a lazy demo starts only when it nears the
+    screen and a `content-visibility` section moves the control as it
+    lands; close whatever the last press opened; give a press that has
+    caused nothing a second look 750 ms later; and call only a BUTTON dead,
+    since a field, slider, select or radio holds its value whether or not a
+    script answers; leave the shell's own DOM changes out, which made the
+    inert plant read alive in 1 run of 7; and make a slow press repeat on a
+    fresh page, since /garage/horizon's "Pop out" read 338 ms once and 136
+    to 187 ms in six presses alone. It plants four buttons in /search first (one throws, one
+    is inert, one spins 400 ms, one widens the page), and
+    `config/interaction-budget.json` holds the buttons that are inert or
+    slow on purpose. It runs against the local Worker only: it presses
+    everything, and a deployment has real writes behind some of it.
+    Checked by: `tools/check-interactions.ts`.
+
+109. **Chrome at 390px is not an iPhone.** Every phone reading
+    `browser:check` took until 2026-11-20 came from Chrome with a narrow
+    window, and every browser on an iPhone runs WebKit. WebKit draws text,
+    emoji and `<select>`s at other widths: 15 pages that passed in Chrome
+    scrolled sideways in WebKit at 320px (13 /lwe pages by 11px, on one
+    `nowrap` button labelled with an emoji; /access by 19px, on a select as
+    wide as its longest option; /garage/compression by 17px). `--engine
+    webkit` reads the phone widths there, in CI and in the nightly
+    production sweep. Three traps on the way: WebKit applies
+    `upgrade-insecure-requests` to http://127.0.0.1 where Chrome exempts
+    loopback, so every stylesheet failed a TLS handshake and the first
+    sweep read 77 UNSTYLED pages as 255 sideways scrolls, which is why the
+    check now refuses a control page whose taskbar is not `position:
+    fixed`; WebKit on Linux honours `::-webkit-scrollbar` where iOS
+    overlays, which read 16px of overflow no phone has; and WebKit has no
+    layout-shift entries and reports an inline handler's CSP violation only
+    when it fires, so those two readings are named as NOT READ there rather
+    than passed. Its fonts are still Linux's, so a pass is the conservative
+    reading here too.
+    Checked by: `tools/check-browser.ts`.
+
+110. **A control can work for a mouse and not exist for a keyboard or a
+    screen reader, and reading that from a script goes wrong three ways.**
+    `act:check` asks of every control whether Chrome's accessibility tree
+    names it, whether Tab can land on it, whether landing there draws
+    anything, and, for a control that is not a native one, whether Enter or
+    Space works it. All 519 controls passed on 2026-11-21, after three
+    wrong readings on the way. A scripted `focus()` after a press draws no
+    ring, since `:focus-visible` follows the last input: 406 of 519 read
+    ringless until the check forced the pseudo-class through the DevTools
+    protocol and compared what was drawn. A `content-visibility` section
+    that has not been scrolled to has no accessibility nodes: 27 buttons
+    with plain text labels on /garage/horizon read nameless from the top of
+    the page. And a modal the last press opened makes the rest of the page
+    inert, which reads as no name and no focus. So it scrolls to a control,
+    closes what is open, then reads. Parsing a name out of an ARIA
+    snapshot's YAML also failed, on every label holding a colon or an
+    apostrophe; the tree's own `name.value` does not. Four planted controls
+    prove each reading can fail, and three plain ones prove it can pass.
+    Checked by: `tools/check-interactions.ts`.

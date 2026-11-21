@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "bun tools/build.ts",
+    "build:equivalence": "bun tools/build-equivalence.ts",
     "dev": "bun tools/dev.ts",
     "dev:remote": "bun tools/lib/site-config.ts --dev && bun tools/gen-remote-config.ts .wrangler.dev.jsonc && bun tools/dev-stage.ts --watch -- node node_modules/wrangler/bin/wrangler.js dev -c .wrangler.remote.jsonc -c counter/wrangler.jsonc",
     "deploy:direct": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false --strict",
@@ -42,6 +43,7 @@
     "observe:check": "bun tools/observe-check.ts",
     "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
+    "act:check": "node tools/check-interactions.ts",
     "browser:check": "node tools/check-browser.ts",
     "colors:drift": "bun tools/color-drift.ts",
     "tools:check": "bun tools/check-tools.ts",
@@ -89,6 +91,7 @@
     "checkpoints:record": "bun tools/check-checkpoints.ts --record",
     "indexnow": "bun tools/indexnow.ts",
     "ask:eval": "bun tools/ask-rank-eval.ts",
+    "vitals:report": "bun tools/vitals-report.ts",
     "webmention:eval": "bun tools/webmention-sort-eval.ts"
   },
   "devDependencies": {

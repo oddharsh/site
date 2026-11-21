@@ -283,7 +283,7 @@ test("tsconfig.browser.json resolves absolute imports across the plan's browser 
 test("neither consumer restates the roots or the skip list", async () => {
   const build = await readFile(path.join(ROOT, "tools/build.ts"), "utf8");
   const dev = await readFile(path.join(ROOT, "tools/dev-stage.ts"), "utf8");
-  assert.match(build, /copyServedTree\(servedPlan, `\$\{OUT\}\/public`\)/, "build.ts step 1 must copy the plan");
+  assert.match(build, /copyServedTree\(servedPlan, `\$\{OUT\}\/public`, \{ erase \}\)/, "build.ts step 1 must copy the plan");
   assert.doesNotMatch(build, /\bcp\("[^"]+",\s*`\$\{OUT\}\/public`/, "build.ts must not copy a root into the served tree by hand");
   assert.match(dev, /linkServedTree\(plan, FARM\)/, "dev-stage.ts must link the plan");
   for (const [name, source] of [

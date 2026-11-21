@@ -71,7 +71,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     TASKBAR.map((item) => [item.path, surfaces.filter((surface) => surface.path.startsWith(item.path + "/") && surface.flags.run).length]),
   );
 
-  const cells = [];
+  const cells: { name: string; inner: string; dy: number; view: string; right: number; bottom: number }[] = [];
   let spriteY = 0;
   const gutter = 16;
   const spriteRef = (name, svg) => {

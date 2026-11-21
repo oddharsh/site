@@ -259,7 +259,7 @@ export async function auditActionPins(io: ActionIo): Promise<ActionAudit> {
     for (const found of scanActionRefs(rel, source)) {
       audit.refs.push(found);
       if (found.kind === "unreadable" || found.kind === "unpinned") {
-        audit.problems.push({ file: rel, line: found.line, ref: found.ref, kind: found.kind as ActionProblem["kind"], why: found.why ?? "" });
+        audit.problems.push({ file: rel, line: found.line, ref: found.ref, kind: found.kind, why: found.why ?? "" });
         continue;
       }
       if (found.kind === "pinned") {

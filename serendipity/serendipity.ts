@@ -23,7 +23,7 @@ import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } fr
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { setAttributes, span } from "../src/worker/lib/trace.ts";
 import type { SpanAttrs } from "../src/worker/lib/span-vocabulary.ts";
-import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpBatchRefusal, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
@@ -3818,6 +3818,10 @@ export async function handleMcp(request, env, d) {
 
   if (Array.isArray(payload)) {
     if (payload.length === 0) return respond(mcpError(null, -32600, "Invalid Request"));
+    // This server has no per-call rate limit, so the batch cap is the only
+    // bound on how many D1 queries one POST starts.
+    const refused = mcpBatchRefusal(payload);
+    if (refused) return respond(refused, 413);
     const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
     return out.length ? respond(out) : respond(null, 202);
   }

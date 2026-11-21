@@ -35,10 +35,7 @@ function d1(db = new DatabaseSync(":memory:")) {
 const DB = d1();
 const env = { SOCIAL_DB: DB };
 
-function signRequest(
-  body: unknown,
-  { ip = "203.0.113.7", ua = "ExampleAgent/1.0", headers = {} as Record<string, string>, cf = {} as Record<string, unknown> } = {},
-) {
+function signRequest(body: unknown, { ip = "203.0.113.7", ua = "ExampleAgent/1.0", headers = {}, cf = {} } = {}) {
   const req = new Request("https://aadhar.sh/guestbook", {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": ip, "user-agent": ua, ...headers },

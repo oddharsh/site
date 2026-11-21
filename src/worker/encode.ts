@@ -121,7 +121,7 @@ export function parseJpeg(bytes) {
       while (p < payload + length - 2) {
         const spec = bytes[p];
         const precision = spec >> 4;
-        const values = [];
+        const values: number[] = [];
         for (let k = 0; k < 64; k++) values.push(precision ? u16(p + 1 + k * 2) : bytes[p + 1 + k]);
         out.tables.push({ id: spec & 0x0f, precision, values });
         p += 1 + (precision ? 128 : 64);
@@ -211,7 +211,7 @@ export function parseAvif(bytes) {
 
 // ── the verdicts, which are where this site's measurements pay off ─────────
 export function judgeEncode(info, byteLength) {
-  const findings = [];
+  const findings: { id: string; verdict: string; detail: string }[] = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
   const pixels = info.width && info.height ? info.width * info.height : null;
   const bpp = pixels ? (byteLength * 8) / pixels : null;
@@ -255,7 +255,7 @@ export function judgeEncode(info, byteLength) {
       }
     }
 
-    const metaBytes = [];
+    const metaBytes: string[] = [];
     if (info.icc) metaBytes.push("ICC");
     if (info.exif) metaBytes.push("EXIF");
     if (info.xmp) metaBytes.push("XMP");
@@ -338,7 +338,7 @@ export async function fetchImageBytes(url, env, lensFetch) {
     const type = (res.headers.get("content-type") || "").split(";")[0].trim();
     const reader = res.body?.getReader();
     if (!reader) return { ok: false, why: "no body" };
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     let total = 0,
       truncated = false;
     for (;;) {
