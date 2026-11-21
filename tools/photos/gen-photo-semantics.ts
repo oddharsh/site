@@ -110,7 +110,7 @@ const shutterSeconds = (value) => {
 // neither, so it is not here. Same rule the tooltip follows: skip the line
 // rather than fabricate it.
 function derivedTerms(record) {
-  const out = [];
+  const out: string[] = [];
   const film = String(record.film || "");
   if (film) {
     out.push(film.toLowerCase());
