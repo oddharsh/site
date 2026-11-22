@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "bun tools/build.ts",
+    "build:equivalence": "bun tools/build-equivalence.ts",
     "dev": "bun tools/dev.ts",
     "dev:remote": "bun tools/lib/site-config.ts --dev && bun tools/gen-remote-config.ts .wrangler.dev.jsonc && bun tools/dev-stage.ts --watch -- node node_modules/wrangler/bin/wrangler.js dev -c .wrangler.remote.jsonc -c counter/wrangler.jsonc",
     "deploy:direct": "wrangler deploy --x-new-config --x-provision=false --x-auto-create=false --strict",
@@ -57,6 +58,7 @@
     "deps:pin": "bun tools/bump-deps.ts",
     "deps:snapshot": "bun --no-install tools/dependency-snapshot.ts",
     "test:node": "node --import ./tools/lib/no-network.ts --test --test-isolation=none 'tools/tests/*.test.ts' 'src/**/tests/*.test.ts'",
+    "test:workerd": "node tools/test-workerd.ts",
     "lint": "bun tools/check-bun-lint.ts && bun tools/gen-runtime-types.ts && bun lint --type-aware",
     "format": "bun fmt",
     "format:check": "bun fmt --check",

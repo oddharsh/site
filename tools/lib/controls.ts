@@ -232,6 +232,18 @@ export const CONTROLS: Control[] = [
     expect: /contains em dashes/,
   },
   {
+    id: "footnote-href-drift",
+    plants: "a footnote whose marker href no longer matches its note, so the hover bubble shows stale text",
+    mutations: [
+      {
+        file: "src/pages/control-footnote.html",
+        create: '<p>Body<a class="note-ref" href="#Old note.">1</a>.</p><ol class="footnotes"><li id="New note.">New note.</li></ol>\n',
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /footnote marker 1's href "#Old note\." doesn't match footnote 1's id "New note\."/,
+  },
+  {
     id: "new-type-error",
     plants: "a fresh type error in a Worker module, past the ratcheted baseline",
     mutations: [{ file: "src/worker/lib/control-probe.ts", create: "export const probe: number = 'not a number';\n" }],
@@ -723,5 +735,18 @@ export const CONTROLS: Control[] = [
     ],
     run: ["bun", "tools/check-bun-lint.ts"],
     expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
+  },
+  {
+    id: "build-memo-key-forgets-an-input",
+    plants: "the client-island eraser's cache key drops the island's text, so a warm build ships last build's tooltip.js after an edit",
+    mutations: [
+      {
+        file: "tools/build.ts",
+        find: "  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {",
+        replace: "  const texts = await cache.memoBatch(ERASE, islands.map(([file]) => [file]), async (missed) => {",
+      },
+    ],
+    run: ["bun", "tools/build-equivalence.ts", "--seed", "1", "--plan", "island"],
+    expect: /build-equivalence: step 1 \(island\): the warm \.build differs from a clean build in \d+ files/,
   },
 ];
