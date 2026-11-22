@@ -195,7 +195,10 @@ async function walk(dir: string): Promise<string[]> {
  * of committed bytes (the three ROOTS plus site-manifest.json), which is why
  * step 1i of the build calls this instead of a checked-in file existing at all.
  */
-export async function buildSearchIndex(root = "."): Promise<{ version: number; generatedAt: string; records: SearchRecord[] }> {
+export async function buildSearchIndex(
+  root = ".",
+  { read = readDocument }: { read?: typeof readDocument } = {},
+): Promise<{ version: number; generatedAt: string; records: SearchRecord[] }> {
   const records: SearchRecord[] = [];
   for (const [url, title, description, kind] of await manualRecords(root)) {
     records.push({ url, title, description, text: `${title} ${description}`, kind });
@@ -208,7 +211,7 @@ export async function buildSearchIndex(root = "."): Promise<{ version: number; g
       if (!url || url === "/search") continue;
       if (!/\.(?:html|md|txt)$/i.test(rel)) continue;
       const raw = await readFile(file, "utf8");
-      const doc = rel.endsWith(".html") ? readDocument(raw, { format: "text" }) : null;
+      const doc = rel.endsWith(".html") ? read(raw, { format: "text" }) : null;
       const text = doc ? doc.body : stripMarkup(raw);
       // A generated app shell can have metadata without authored body prose
       // (Pixel Peeper). Its title and description must still be searchable.

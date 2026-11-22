@@ -49,7 +49,7 @@ const OFFSITE = new Set(["/rn"]);
 
 type Record = { path: string; steps: Array<{ step: string; dom: string }>; console: string[]; errors: string[]; requests: string[] };
 
-const firstLine = (e: unknown) => (e instanceof Error ? e.message : String(e)).split("\n")[0]!;
+const firstLine = (e: unknown) => (e instanceof Error ? e.message : String(e)).split("\n")[0];
 
 const unhash = (text: string) => text.replace(/\/a\/([\w./-]+?)\.[0-9a-f]{8}\.(\w+)/g, "/a/$1.$2");
 
@@ -61,11 +61,11 @@ const MUTATIONS: Array<[RegExp, (m: string) => string]> = [
   [/"([a-z])/g, (m) => `"Z${m.slice(2)}`],
 ];
 const mutate = (body: string, k: number): string => {
-  const [re, fn] = MUTATIONS[k % MUTATIONS.length]!;
+  const [re, fn] = MUTATIONS[k % MUTATIONS.length];
   const hits = [...body.matchAll(re)];
   if (hits.length === 0) throw new Error(`--mutate: no site for mutation ${k}`);
-  const h = hits[(Math.floor(k / MUTATIONS.length) * 7919) % hits.length]!;
-  return body.slice(0, h.index) + fn(h[0]) + body.slice(h.index! + h[0].length);
+  const h = hits[(Math.floor(k / MUTATIONS.length) * 7919) % hits.length];
+  return body.slice(0, h.index) + fn(h[0]) + body.slice(h.index + h[0].length);
 };
 
 async function walk(ctx: BrowserContext, base: string, path: string): Promise<Record> {

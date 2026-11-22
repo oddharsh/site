@@ -53,7 +53,8 @@ for (const row of minifiedScripts()) {
     source_sha256: sourceDigest(source),
     engines: enginesFor(pipeline, versions, renamed.map),
     renames: renamed.map,
-    ...(renamed.map.length ? { renamer: renamerDigest() } : {}),
+    // undefined, so JSON leaves the key out, when there is no map to tie it to.
+    renamer: renamed.map.length ? renamerDigest() : undefined,
     brotli_oxc: oxc.brotli,
     brotli_pick: renamed.map.length ? renamed.after : chosen.brotli,
   };
@@ -62,7 +63,7 @@ for (const row of minifiedScripts()) {
     .filter((c) => c.verdict.kind === "different" || c.verdict.kind === "engine-failed")
     .map((c) => `${c.pipeline} (${c.verdict.kind})`);
   console.log(
-    `${row.file}: ${result.pipeline}, ${oxc.brotli} -> ${chosen.brotli} B brotli, ${renamed.map.length} renames -> ${picks[row.file]!.brotli_pick} B${state.kind === "stale" ? ` [${state.reason}]` : ""}${rejected.length ? `; rejected ${rejected.join(", ")}` : ""}`,
+    `${row.file}: ${result.pipeline}, ${oxc.brotli} -> ${chosen.brotli} B brotli, ${renamed.map.length} renames -> ${picks[row.file].brotli_pick} B${state.kind === "stale" ? ` [${state.reason}]` : ""}${rejected.length ? `; rejected ${rejected.join(", ")}` : ""}`,
   );
 }
 const ordered = Object.fromEntries(Object.entries(picks).sort(([a], [b]) => a.localeCompare(b)));

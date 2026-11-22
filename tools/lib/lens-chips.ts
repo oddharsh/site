@@ -22,7 +22,7 @@ const FLOOR = 5;
 
 export function lensChips() {
   const src = readFileSync(SHELL, "utf8");
-  const urls = [];
+  const urls: string[] = [];
   // Quote-aware on purpose: the source is a JS template literal, so the
   // attributes are quoted here even though the SERVED bytes are not (the HTML minifier
   // unquotes them). This reads the source, never the build output.
@@ -37,7 +37,7 @@ export function lensChips() {
 // sides, so a warm that skips them leaves half the comparison cold.
 export function lensVsChips() {
   const src = readFileSync(SHELL, "utf8");
-  const pairs = [];
+  const pairs: [string, string][] = [];
   for (const m of src.matchAll(/data-vs-pair="([^"]+)"/g)) {
     const [a, b] = m[1].split("|");
     if (a && b) pairs.push([a, b]);

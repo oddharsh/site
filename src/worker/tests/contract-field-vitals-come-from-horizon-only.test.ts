@@ -45,7 +45,7 @@ test("the receiver drops other pages, junk bodies, and impossible values", async
 test("one data point per metric, indexed by metric, stamped with the version", async () => {
   const { handleVitals } = await import("../vitals.ts");
   const { env, points } = vitalsEnv();
-  const res = await handleVitals(post(HORIZON), env as any);
+  const res = await handleVitals(post(HORIZON), env);
   assert.equal(res.status, 204);
   assert.equal(res.headers.get("cache-control"), "no-store");
   assert.deepEqual(points, [
@@ -61,7 +61,7 @@ test("a beacon the receiver can't use still answers 204 and writes nothing", asy
   assert.equal((await handleVitals(post(JSON.stringify({ p: "/", lcp: 900 })), env as any)).status, 204);
   assert.equal(points.length, 0);
 
-  const get = await handleVitals(new Request("https://aadhar.sh/ledger/vitals"), env as any);
+  const get = await handleVitals(new Request("https://aadhar.sh/ledger/vitals"), env);
   assert.equal(get.status, 405);
   assert.equal(get.headers.get("allow"), "POST");
   assert.equal(points.length, 0);

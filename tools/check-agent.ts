@@ -131,7 +131,7 @@ async function probeDeclared() {
 
 /** Evidence one engine produces for one URL. */
 async function renderOnce(page, url) {
-  const errs = [];
+  const errs: string[] = [];
   const onConsole = (m) => {
     if (m.type() === "error") errs.push(m.text().slice(0, 160));
   };

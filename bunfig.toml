@@ -352,6 +352,18 @@ correctness = "error"
 # missing a case.
 "typescript/switch-exhaustiveness-check" = "error"
 
+# An assertion that changes nothing still reads as a claim someone checked, and
+# `querySelector(s) as T | null` is a cast where `querySelector<T>(s)` asks the
+# overload. Taken from @cloudflare/oxlint-config 0.1.0, and one of the Bun
+# defaults held back below until now. 74 findings, measured 2026-11-20: 53
+# removed by --fix, 21 moved into the call's type argument. --fix also removed
+# 5 the checker still needed (two literal-union ternaries in github.ts, three
+# `new Set(...) as Set<string>` in apply-infra.ts); the linter's type engine read
+# those as redundant and bun check didn't. They now say it with a return type
+# and `new Set<string>(...)`. Read a --fix diff against typecheck before
+# trusting it. It fires on a planted `("a" as string)`.
+"@typescript-eslint/no-unnecessary-type-assertion" = "error"
+
 # One way to import a type: `import type { T }` on its own line, never
 # `import { a, type T }`. Under verbatimModuleSyntax the top-level form is the
 # one that says the whole statement erases. Taken from @cloudflare/oxlint-config
@@ -462,7 +474,6 @@ correctness = "error"
 "@typescript-eslint/no-empty-object-type" = "off"
 "@typescript-eslint/no-explicit-any" = "off"
 "@typescript-eslint/no-namespace" = "off"
-"@typescript-eslint/no-unnecessary-type-assertion" = "off"
 "@typescript-eslint/no-unnecessary-type-constraint" = "off"
 "@typescript-eslint/no-unsafe-argument" = "off"
 "@typescript-eslint/no-unsafe-assignment" = "off"

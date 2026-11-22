@@ -94,7 +94,7 @@ test("each twin is generated from its baked page, not written by hand", async ()
     mkdirSync(join(root, "public"), { recursive: true });
     for (const [route, render] of PAGES) writeFileSync(join(root, "public", `${route}.html`), await render().text());
     const { files } = buildTwins(".", { generatedRoot: root });
-    const generated = buildTwins(".", { generatedRoot: root }).generated as string[];
+    const generated = buildTwins(".", { generatedRoot: root }).generated;
     for (const [route] of PAGES) {
       assert.ok(!existsSync(`src/content/md${route}.md`), `${route} has no hand twin to drift`);
       assert.ok(generated.includes(route), `${route} takes the generated tier`);

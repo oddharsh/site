@@ -208,7 +208,7 @@ async function main() {
   for (const target of targets) {
     const results: Record<string, any> = {};
     for (const identity of IDENTITIES) {
-      const runs = [];
+      const runs: Sample[] = [];
       for (let i = 0; i < trials; i++) {
         runs.push(await sample(target, identity));
         await new Promise((r) => {

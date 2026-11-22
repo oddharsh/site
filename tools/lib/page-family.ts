@@ -1,7 +1,7 @@
 // page-family.ts — the site-page dictionary as a COMMITTED, stable artifact.
 //
 // build.ts derives a fresh 64 KiB family corpus from the staged documents on
-// every run, and until 2026-09-02 it shipped that derivation as-is at
+// every run (tools/lib/family-trainer.ts since 2026-11-21), and until 2026-09-02 it shipped that derivation as-is at
 // /a/page-family.<hash8>.dict. The hash is of the corpus bytes, and the corpus
 // samples pages that carry every /a/<name>.<hash8> shell reference, so any
 // deploy that touched nav.js, luna.css, quiz.js or the taskbar partial re-minted

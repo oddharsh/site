@@ -204,12 +204,12 @@ test("served-manifest: CI cuts and signs it, and every release checks it", async
   assert.equal(attest.permissions["id-token"], "write");
   assert.ok(!attest.steps.some((s) => String(s.uses ?? "").startsWith("actions/checkout")), "the job holding an OIDC token runs no repository code");
   assert.ok(attest.steps.some((s) => String(s.uses).startsWith("actions/attest@") && s.with["subject-path"] === "served-manifest.json"));
-  // cpu-sweep, controls and browser-check report beside validate, and
+  // cpu-sweep, controls, browser-check and act-check report beside validate, and
   // contract-ci-required-gate holds their reasons.
   assert.deepEqual(
     Object.keys(ci.jobs),
-    ["validate", "cpu-sweep", "controls", "browser-check", "attest"],
-    "a sixth job would need its own reason; validate stays the one required check",
+    ["validate", "cpu-sweep", "controls", "browser-check", "act-check", "attest"],
+    "a seventh job would need its own reason; validate stays the one required check",
   );
 
   const checker = await readFile(new URL("tools/check-served.ts", ROOT), "utf8");

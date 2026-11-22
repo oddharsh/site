@@ -73,7 +73,7 @@ const NAMED = { cr: "\r", enter: "\r", esc: "\x1b", tab: "\t", sp: " ", up: "k",
 const MAX_KEYS = 32;
 
 export function tokenizeKeys(input) {
-  const out = [];
+  const out: string[] = [];
   const text = String(input ?? "").slice(0, 256);
   let i = 0;
   while (i < text.length && out.length < MAX_KEYS) {

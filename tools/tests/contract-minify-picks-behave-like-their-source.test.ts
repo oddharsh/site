@@ -66,7 +66,7 @@ test("every fresh pick behaves like its source, and a planted bug does not", { s
   // The control: nav.js's guard flag flipped in its shipped bytes must read as
   // a different program, or the oracle above is not looking.
   const source = readFileSync(".build/public/nav.src.js", "utf8");
-  const pick = picks["nav.js"]!;
+  const pick = picks["nav.js"];
   const shipped = await replayPick(pick, source, { filename: "nav.js", module: false });
   const planted = shipped.replace(/__axpNav=(!0|true)/, "__axpNav=!1");
   assert.notEqual(planted, shipped, "the control's plant site moved; pick another");

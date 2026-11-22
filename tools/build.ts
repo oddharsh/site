@@ -31,7 +31,7 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -53,7 +53,7 @@ import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
-import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
+import { dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
   familyDictionaryName,
@@ -63,7 +63,8 @@ import {
   parseShellAsset,
   shellDeltaName,
 } from "../src/worker/lib/dictionary-names.ts";
-import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_DICT_SIZE, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { trainFamilyDictionary } from "./lib/family-trainer.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
 import { inTestsDir } from "./lib/test-roots.ts";
@@ -76,8 +77,10 @@ import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
+import { browserJavaScripts } from "./lib/browser-source.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
-import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
+import { buildCache, buildCacheEnabled, sourceDigest } from "./lib/build-cache.ts";
+import { readDocument } from "./lib/html-to-md.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import type * as albumsModule from "../src/worker/albums.ts";
 
@@ -547,7 +550,7 @@ async function checkInvariants() {
     // both directions so neither the registry nor the surface can drift alone.
     const want = (f) => surfaces.filter((s) => s.flags[f]).map((s) => s.path);
     const bidi = (label, wantPaths, have, opts: { subsetOnly?: boolean } = {}) => {
-      const w = new Set(wantPaths) as Set<string>;
+      const w = new Set<string>(wantPaths);
       for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
       if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
     };
@@ -607,7 +610,7 @@ async function checkInvariants() {
   // NOT from the font law: /garage and /lwe exist to show the platform off, so
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0,
-    tasteOk = [];
+    tasteOk: string[] = [];
   try {
     // Taste rules can execute only from text a browser parses or from a program
     // that emits that text. So the walk keeps active textual assets, the client
@@ -725,7 +728,7 @@ async function checkInvariants() {
   // which is exactly how a guard on the one deploy path ends up commented out.
   let conflictScanned = 0;
   try {
-    const collect = async (dir, match, skip = /^$/, out = []) => {
+    const collect = async (dir, match, skip = /^$/, out: string[] = []) => {
       for (const e of await readdir(dir, { withFileTypes: true })) {
         const p = `${dir}/${e.name}`;
         if (e.isDirectory()) {
@@ -916,8 +919,27 @@ await Promise.all([
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
+// Erasing client TypeScript spawns node, 182 ms of every build on 2026-11-21,
+// so each island's erased text is memoized on the node binary that erases it,
+// both halves of the eraser's source, and the island's path and text.
+const nodeBinary = realpathSync(Bun.which("node") ?? "node");
+const { size: nodeSize, mtimeMs: nodeMtime } = statSync(nodeBinary);
+const eraserSource = ["tools/lib/browser-source.ts", "tools/lib/browser-source-node.ts"].map((p) => createHash("sha256").update(readFileSync(p)).digest("hex"));
+const ERASE = `browser-source ${eraserSource.join(" ")} node ${nodeBinary} ${nodeSize} ${nodeMtime}`;
+const erase = async (sources: ReadonlyMap<string, string>): Promise<Map<string, string>> => {
+  const islands = [...sources];
+  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {
+    const erased = browserJavaScripts(new Map(missed.map((i) => islands[i])));
+    return missed.map((i) => {
+      const text = erased.get(islands[i][0]);
+      if (text === undefined) throw new Error(`browser-source: no output for ${islands[i][0]}`);
+      return text;
+    });
+  });
+  return new Map(islands.map(([file], i) => [file, texts[i]]));
+};
 await Promise.all([
-  copyServedTree(servedPlan, `${OUT}/public`),
+  copyServedTree(servedPlan, `${OUT}/public`, { erase }),
   // The Worker is a PROGRAM, not a document, so its source lives in src/worker
   // beside cal/ and serendipity/ rather than inside the tree of things a browser
   // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
@@ -1092,7 +1114,7 @@ phase("1a photo indexes");
   const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
   const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  const entries = Object.entries(exif) as [string, Record<string, any>][];
+  const entries = Object.entries<Record<string, any>>(exif);
   await Promise.all(
     entries.map(async ([stem, record]) => {
       const out = { ...record };
@@ -1203,6 +1225,12 @@ const digestFile = (path: string): string => createHash("sha256").update(readFil
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
 const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
 const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
+// html-to-md parses every page twice a build, for the twins at 1g and the
+// search index at 1i. Its output is a pure function of the page, the options
+// and its own code, which sourceDigest walks import by import.
+const HTML_TO_MD = `html-to-md ${sourceDigest("tools/lib/html-to-md.ts")}`;
+const readDocumentMemo: typeof readDocument = (html, options) =>
+  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options ?? {}), html], () => JSON.stringify(readDocument(html, options))));
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
@@ -1288,11 +1316,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   return out;
 };
 
-// The exact transform step 7b writes for every non-homepage HTML document. Kept
-// here as one function because the page-family dictionary samples the bytes the
-// browser will actually receive, before step 7b reaches the files themselves.
-// A dictionary sampled from the readable pre-minification source still works, but
-// wastes its scarce 64KB on whitespace and comments absent from every target.
+// The exact transform step 7b writes for every non-homepage HTML document.
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
@@ -1539,7 +1563,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
-  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT });
+  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT, read: readDocumentMemo });
   // The registry advertises every agents:true surface to agents (MCP
   // resources/list), so each one owes a Markdown twin unless it declares the
   // representation its route renders live (`mimeType`, as /rn and the terminal
@@ -1921,7 +1945,7 @@ phase("1i search index");
 // because nobody set its flag, never because this step ran too early.
 {
   const { buildSearchIndex } = await import("./generate-search-index.ts");
-  const index = await buildSearchIndex(".");
+  const index = await buildSearchIndex(".", { read: readDocumentMemo });
   // Both floors guard a SILENT failure, which is the only kind this artifact
   // has. getSearchIndex() in search.ts falls back to an empty list on a
   // missing or unreadable file, so a collapsed index renders /search perfectly
@@ -2251,8 +2275,8 @@ phase("5d quiz data");
 // shape and why the element stays.
 //
 // HERE, after 5c renamed custom properties (so the file holds exactly the bytes
-// the page used to ship) and before step 6, whose family corpus samples four of
-// these pages and should sample what is served. Step 7 then gives each file its
+// the page used to ship) and before step 6. The family dictionary is trained in
+// step 8 on the served pages, which no longer carry these blocks. Step 7 then gives each file its
 // q11 twin like every other /a/ asset. It stays off the dictionary path
 // (DICTIONARY_TYPES in lib/assets.ts): the name is per page, so there is no
 // earlier version of the same URL family for a delta to start from.
@@ -2267,7 +2291,7 @@ phase("5d quiz data");
   // Which pages carry a quiz in SOURCE. The staged set is checked against this,
   // so a page whose block a later edit made unmatchable fails here by name
   // instead of shipping its answer key inline or shipping no quiz at all.
-  const sources = ((await readdir("src/pages", { recursive: true })) as string[]).filter((rel) => rel.endsWith(".html"));
+  const sources = (await readdir("src/pages", { recursive: true })).filter((rel) => rel.endsWith(".html"));
   const authored = new Set<string>();
   await Promise.all(
     sources.map(async (rel) => {
@@ -2275,7 +2299,7 @@ phase("5d quiz data");
     }),
   );
 
-  const staged = ((await readdir(`${OUT}/public`, { recursive: true })) as string[])
+  const staged = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && !rel.startsWith("a/"))
     .sort();
   let files = 0,
@@ -2316,10 +2340,6 @@ phase("5e build info");
   await writeFile(p, bakeBuildInfo(await readFile(p, "utf8"), info));
   console.log(info ? `build-info: ${info.commit.slice(0, 12)} on ${info.branch ?? "?"}` : "build-info: not a Workers Builds build, BUILD_INFO stays null");
 }
-
-// The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
-// against the final page bytes and the committed src/dict/f-dict dictionary.
-let freshFamily: Buffer | null = null;
 
 phase("5f non-blocking shell css");
 // 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
@@ -2366,83 +2386,6 @@ phase("6 hash shell assets");
   // dependent's hash covers its final bytes (nav.js imports hoist; lens.js
   // loads its six feature modules; lens-boot.js imports lens.js).
   const { urls: hashedFor, filesTouched } = await hashClientAssets(OUT, { log: console.log });
-
-  // RFC 9842 requires dcz to treat the supplied bytes as a RAW dictionary. A zstd
-  // --train artifact is self-describing, so a server library recognizes its tables
-  // while Chrome treats those same response bytes as raw content; the decoders
-  // disagree and the navigation fails. Build one site-wide corpus from the final,
-  // repointed bytes of two complementary pages: the compact LWE shell plus the
-  // Garage compression explainer, with 4 KB of vigenere filling the window.
-  //
-  // The corpus is a LIST rather than a fixed pair, and it is read in order until the
-  // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
-  // meant an ordinary edit trimming either page by ~2% would have hard-failed the
-  // deploy under a message naming the wrong cause. The trailing entries are slack:
-  // they contribute nothing while the leading pages are long enough, and they keep a
-  // content edit from becoming a release incident.
-  //
-  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. Tails of four outlier
-  // pages (horizon, vt-b, vt-check, access/index) sat at the start of the corpus
-  // from 2026-08-11, tuned against IN-SAMPLE measurements: the pages the tails
-  // were cut from were among the pages scored, and a page whose bytes sit in the
-  // dictionary compresses to almost nothing.
-  //
-  // tools/family-holdout.ts (in git history) asked the production question: rebuild
-  // this dictionary from the pages served at each dictionary roll, and score it
-  // on the pages served k rolls LATER, with every corpus page left out of the
-  // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12
-  // set in every window: +1.80 points of plain q11 at k=1 (33 of 33), +1.78 at k=3
-  // (31 of 31), +1.64 at k=8 (26 of 26). The gain is the LWE shell drivers brings
-  // back, worth 300-740 B on each /lwe page. A delta that fails to beat q11 is
-  // skipped in step 8, so a losing page costs nothing past its q11 twin. Re-run
-  // the holdout before re-adding a tail, and read it with the corpus pages
-  // excluded.
-  {
-    const BASE_CORPUS = [
-      "lwe/drivers.html", // the LWE shell every /lwe page shares
-      "garage/compression.html", // the Garage explainer: the shell every other page shares
-      "lwe/vigenere.html", // fills the last ~4 KB
-      "garage/chunks.html", // slack, in corpus order
-    ];
-    const SIZE = 65_536;
-    const parts = [];
-    let total = 0;
-    // THROUGH minifiedPage(). This block runs before step 7b reaches the staged
-    // files, so a bare read here returns the READABLE source: indentation,
-    // comments, none of it in any target. The note on minifiedPage already says a
-    // dictionary sampled that way "wastes its scarce 64KB on whitespace and
-    // comments absent from every target". Measured 2026-08-31 over the 55 staged
-    // pages, family deltas against plain q11: 510,803 B from the readable corpus,
-    // 480,187 B from this one, 55/55 pages still beating brotli either way. 30,616
-    // B for reading the right bytes.
-    for (const rel of BASE_CORPUS) {
-      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
-      const bytes = Buffer.from(minifiedPage(staged, rel));
-      parts.push(bytes);
-      total += bytes.length;
-      if (total >= SIZE) break;
-    }
-    if (total < SIZE) {
-      throw new Error(
-        `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
-          `Add another staged page to BASE_CORPUS in build.ts (order is load-bearing; append, do not reorder).`,
-      );
-    }
-    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
-    if (dictionary.readUInt32LE(0) === 0xec30a437) {
-      throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
-    }
-    // NOT written to /a/ here, and not the dictionary that necessarily ships. The
-    // URL is the hash of these bytes, and these bytes sample pages that carry every
-    // /a/<name>.<hash8> shell reference, so shipping the derivation as-is re-minted
-    // the dictionary on most deploys and cost every returning visitor a 17 KB
-    // re-fetch for a 0.1-point gain (measured 2026-09-02). Step 8 decides between
-    // this derivation and the committed src/dict/f-dict copy against the FINAL page
-    // bytes, which do not exist yet: step 7b has not minified them. The rule and
-    // its arithmetic live in tools/lib/page-family.ts.
-    freshFamily = dictionary;
-    console.log(`site-page corpus: fresh candidate ${hash8(dictionary)} (${dictionary.length} raw bytes); step 8 chooses between it and ${FAMILY_DICT_DIR}`);
-  }
 
   // Point the worker's Early-Hints header at the exact same content-addressed
   // assets as the staged documents. Its HTML dictionary Link header is patched in
@@ -2660,6 +2603,7 @@ phase("7 shell q11 + deltas");
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0,
       deltaBytes = 0;
+    const pairs: Array<{ asset: (typeof shell)[number]; d: (typeof cands)[number]; bytes: Buffer; dictionary: Buffer }> = [];
     for (const asset of shell) {
       // An svg delta is built like any other and served like any other, since
       // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
@@ -2670,22 +2614,27 @@ phase("7 shell q11 + deltas");
         // Identical bytes mean the content-hashed URL did not change, so no client will
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
-
-        const { out, tag } = dczEncode(targetBytes, dictBytes);
-
-        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
-        // serve more bytes AND cost the client a dictionary lookup.
-        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
-        if (out.length >= plainTwin) {
-          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
-          continue;
-        }
-        const deltaName = shellDeltaName(asset, tag);
-        await writeFile(`${OUT}/public/ad/${deltaName}`, out);
-        n++;
-        deltaBytes += out.length;
-        console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
+        pairs.push({ asset, d, bytes: targetBytes, dictionary: dictBytes });
       }
+    }
+    // Through the zstd cache with the page deltas: encoded one by one outside
+    // it, these cost a no-op build 339 ms of level-19 CPU (2026-11-21 profile).
+    const frames = await zstdBatch(pairs);
+    for (const [i, { asset, d, dictionary: dictBytes }] of pairs.entries()) {
+      const { out, tag } = frameDcz(frames[i], dictBytes);
+
+      // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+      // serve more bytes AND cost the client a dictionary lookup.
+      const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+      if (out.length >= plainTwin) {
+        console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+        continue;
+      }
+      const deltaName = shellDeltaName(asset, tag);
+      await writeFile(`${OUT}/public/ad/${deltaName}`, out);
+      n++;
+      deltaBytes += out.length;
+      console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
     }
     // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
     // expected. "Candidates exist but none produced a delta" means every pair lost to plain
@@ -3025,7 +2974,7 @@ phase("7c csp");
   if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");
   await writeFile(target, source.replace(marker, `export const PAGE_SCRIPT_HASHES = ${JSON.stringify(map)}; // build:csp-hashes`));
 
-  const bytes = (Object.values(map) as string[][]).reduce((n, h) => n + h.length * 72, 0);
+  const bytes = Object.values<string[]>(map).reduce((n, h) => n + h.length * 72, 0);
   console.log(
     `csp-hash: ${blocks} inline blocks across ${covered} documents, ${Object.values(map).flat().length} hashes (~${Math.round(bytes / covered)} B/page of header)`,
   );
@@ -3077,13 +3026,26 @@ phase("8 page q11 + deltas");
   //
   // These are the final bytes, so this is the one place the comparison is honest.
   // The committed dictionary is what browsers already hold (the roll adopts it from
-  // production); the fresh one is what step 6 just derived. Shipping the committed
+  // production); the fresh one is what the trainer derives below. Shipping the committed
   // copy keeps /a/page-family.<hash8>.dict stable across deploys, which is the whole
   // point: a re-mint costs every returning visitor a 17 KB fetch, and the fresh
   // corpus was measured 0.1 point better than the one they held. The rule, the
   // threshold and its arithmetic are in tools/lib/page-family.ts; this block only
   // applies it and writes down what it did, for the roll and for the log.
-  if (!freshFamily) throw new Error("page-family: step 6 derived no fresh corpus, so there is nothing to choose from");
+  //
+  // The fresh candidate: tools/lib/family-trainer.ts picks the 1 KiB segments
+  // the most pages share, from these final bytes in path order so the
+  // derivation is a pure function of the tree. RFC 9842 needs RAW bytes, which
+  // is why zstd's own trainer output can't ship; the trainer's header has the
+  // measurements against it and against the four-page concat this replaced.
+  const freshFamily = trainFamilyDictionary(
+    compressedPages.toSorted((x, y) => (x.page < y.page ? -1 : x.page > y.page ? 1 : 0)).map(({ bytes }) => bytes),
+    FAMILY_DICT_SIZE,
+  );
+  if (freshFamily.readUInt32LE(0) === 0xec30a437) {
+    throw new Error("page-family dictionary starts with the zstd --train magic; dcz needs RAW bytes");
+  }
+  console.log(`site-page corpus: fresh candidate ${hash8(freshFamily)} (${freshFamily.length} raw bytes, trained on ${compressedPages.length} pages)`);
   const committedFamily = await readCommittedFamily();
   const family = await chooseFamilyDictionary({
     fresh: freshFamily,

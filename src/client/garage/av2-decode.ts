@@ -157,11 +157,10 @@ function load(wasm: string | BufferSource = WASM_URL) {
         },
       },
     };
-    const { instance } = (
+    const { instance } =
       ArrayBuffer.isView(wasm) || wasm instanceof ArrayBuffer
-        ? await WebAssembly.instantiate(wasm as BufferSource, imports)
-        : await WebAssembly.instantiateStreaming(fetch(wasm), imports)
-    ) as WebAssembly.WebAssemblyInstantiatedSource;
+        ? await WebAssembly.instantiate(wasm, imports)
+        : await WebAssembly.instantiateStreaming(fetch(wasm), imports);
     const x = instance.exports as unknown as Av2Exports;
     memory = x.memory;
     x._initialize();
