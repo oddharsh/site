@@ -11,7 +11,7 @@
         "lightningcss": "1.33.0",
         "oxc-minify": "0.159.0",
         "playwright-core": "1.65.1",
-        "spokeshave": "github:oddharsh/spokeshave#ddec5d4ab19c0132f731e1d1224505172b73a0c3",
+        "spokeshave": "github:oddharsh/spokeshave#0d5f25597eedf7ca8217be6810e8f6d72bc857c0",
         "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
         "wrangler": "catalog:",
       },
@@ -319,7 +319,7 @@
 
     "source-map-support": ["source-map-support@0.5.21", "", { "dependencies": { "buffer-from": "^1.0.0", "source-map": "^0.6.0" } }, "sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w=="],
 
-    "spokeshave": ["spokeshave@github:oddharsh/spokeshave#ddec5d4", { "dependencies": { "@swc/wasm": "1.16.22", "oxc-minify": "0.159.0", "terser": "5.51.2" } }, "oddharsh-spokeshave-ddec5d4", "sha512-76LKbuBGCCRbx7EMLIEpCgGSaqAy7douZXqAaEfj8bCNUQnKNgH4oHbZBnxVnVFbCPTi2rzPO9gemtY/4Wks/A=="],
+    "spokeshave": ["spokeshave@github:oddharsh/spokeshave#0d5f255", { "dependencies": { "@swc/wasm": "1.16.22", "oxc-minify": "0.159.0", "terser": "5.51.2" } }, "oddharsh-spokeshave-0d5f255", "sha512-qIgXFMNKRxY1o9JXF8MgY7FkGOiy1W2d7ZhgwGQOE63vO3x8/B/wOSx3ct90aKN0zh068uIzxrbKaeLjCPo3IQ=="],
 
     "supports-color": ["supports-color@10.2.2", "", {}, "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g=="],
 

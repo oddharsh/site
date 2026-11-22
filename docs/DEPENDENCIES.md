@@ -467,6 +467,9 @@ does not make a failed write safe to ignore.
   `/*min*/` CSS literals and any stale pick still go through it directly.
   Bumping spokeshave is how an SWC, terser or Oxc release reaches the picks;
   MAINTENANCE.md's "Re-pick a client script's minifier" has the steps.
+  Its renamer (`spokeshave/rename`) loads terser's parser and scope analysis
+  from files outside terser's package exports, so a terser bump inside
+  spokeshave needs spokeshave's own conformance run, which fails if they move.
   SWC is the WebAssembly build on purpose: the native @swc/core binding
   failed to load in Workers Builds on 2026-11-21 while it loaded on GitHub's
   runner, and @swc/wasm wrote byte-identical output on all 27 scripts.

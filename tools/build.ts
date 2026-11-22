@@ -44,8 +44,8 @@ import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import type { MinifyOptions } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
-import { engineVersions, runPipeline } from "spokeshave";
-import { freshness, pipelineOf, readPicks } from "./lib/minify-picks.ts";
+import { engineVersions } from "spokeshave";
+import { freshness, readPicks, replayPick } from "./lib/minify-picks.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { spliceMinLiterals } from "./lib/css-literal.ts";
@@ -2024,7 +2024,7 @@ for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   const state = picks === null ? null : freshness(picks[file], src, pickVersions);
   let code: string;
   if (state?.kind === "fresh") {
-    code = await runPipeline(pipelineOf(state.pick), src, { filename: file, kind: module ? "module" : "script", toplevel: module });
+    code = await replayPick(state.pick, src, { filename: file, module });
   } else {
     if (state?.kind === "stale") stalePicks.push(`${file} (${state.reason})`);
     code = module

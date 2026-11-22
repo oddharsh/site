@@ -1,8 +1,8 @@
 // ── each client script's minifier pick behaves like its readable source ─────
 //
-// config/minify-picks.json names the pipeline each script ships with
-// (tools/lib/minify-picks.ts). The build replays a fresh pick without checking
-// it, so this is where the check lives: replay every fresh pick on the build's
+// config/minify-picks.json names the pipeline and renames each script ships
+// with (tools/lib/minify-picks.ts). The build checks only that the renames are
+// alpha-equivalent, so this is where the behavior check lives: replay every fresh pick on the build's
 // readable twin and run spokeshave's effect-trace oracle on the pair. The
 // oracle runs both in node:vm with recording stubs for every global, fires
 // every callback, and compares calls, writes, throws and leftover globals.
@@ -18,7 +18,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { minifiedScripts } from "../lib/client-assets.ts";
-import { freshness, pipelineOf, readPicks } from "../lib/minify-picks.ts";
+import { dashTokens, freshness, readPicks, replayPick } from "../lib/minify-picks.ts";
 
 const SLOW = new Set(["garage/pretext.lib.js"]);
 const needs = typeof Bun === "undefined" ? "spokeshave's engines need Bun" : !existsSync(".build/public/nav.src.js") && "needs a build";
@@ -31,7 +31,7 @@ test("every client script has a pick, and the picks name no other file", () => {
 });
 
 test("every fresh pick behaves like its source, and a planted bug does not", { skip: needs }, async () => {
-  const { engineVersions, runPipeline } = await import("spokeshave");
+  const { engineVersions } = await import("spokeshave");
   const { compare } = await import("spokeshave/oracle");
   const versions = await engineVersions();
   const picks = readPicks();
@@ -47,9 +47,15 @@ test("every fresh pick behaves like its source, and a planted bug does not", { s
       continue;
     }
     const kind = row.module ? "module" : "script";
-    const shipped = await runPipeline(pipelineOf(state.pick), source, { filename: row.file, kind, toplevel: row.module });
+    // replayPick re-proves its renames alpha-equivalent; this checks the whole
+    // shipped file against the readable source.
+    const shipped = await replayPick(state.pick, source, { filename: row.file, module: row.module });
     const verdict = await compare({ code: source, kind }, { code: shipped, kind });
     assert.equal(verdict.kind, "same", `${row.file} (${state.pick.pipeline}): ${JSON.stringify(verdict)}`);
+    // Renames must not mint a `--name` token, which step 5c would count as a
+    // taken custom-property name and shift CSS names site-wide.
+    const unrenamed = await replayPick({ ...state.pick, renames: [] }, source, { filename: row.file, module: row.module });
+    assert.deepEqual([...dashTokens(shipped)].sort(), [...dashTokens(unrenamed)].sort(), `${row.file}: renames changed its --name tokens`);
     checked++;
   }
   if (stale.length) console.log(`minify picks: stale, so not checked: ${stale.join(", ")}`);
@@ -61,7 +67,7 @@ test("every fresh pick behaves like its source, and a planted bug does not", { s
   // a different program, or the oracle above is not looking.
   const source = readFileSync(".build/public/nav.src.js", "utf8");
   const pick = picks["nav.js"]!;
-  const shipped = await runPipeline(pipelineOf(pick), source, { filename: "nav.js", kind: "script", toplevel: false });
+  const shipped = await replayPick(pick, source, { filename: "nav.js", module: false });
   const planted = shipped.replace(/__axpNav=(!0|true)/, "__axpNav=!1");
   assert.notEqual(planted, shipped, "the control's plant site moved; pick another");
   assert.equal((await compare({ code: source, kind: "script" }, { code: planted, kind: "script" })).kind, "different");

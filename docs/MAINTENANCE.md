@@ -1303,7 +1303,10 @@ GITHUB token with `issues: write`.
 Each client script ships the pipeline `config/minify-picks.json` names for its
 exact bytes: oxc, SWC or terser alone, or oxc then terser, or SWC then oxc,
 whichever spokeshave found smallest in brotli that still behaves like the
-source (`tools/lib/minify-picks.ts` has the reasoning). A pick goes stale when
+source, followed by the renames its compression-aware renamer found
+(`tools/lib/minify-picks.ts` has the reasoning). The build replays the renames
+from their recorded map and re-proves them alpha-equivalent, so a map that
+stops fitting fails the build rather than shipping a different program. A pick goes stale when
 its script's source changes, or when spokeshave bumps an engine the pick runs.
 The build then ships oxc output for that script and prints
 `minify picks: N script(s) shipped oxc output`, and the contract suite skips it.
