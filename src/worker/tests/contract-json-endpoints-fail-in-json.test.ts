@@ -1,14 +1,12 @@
 // ── a JSON endpoint fails in JSON ────────────────────────────────────────────
 // An agent reading /lens/census.json or /rn/tracks parses the body it gets. A
 // storage throw used to escape both handlers and reach the client as
-// Cloudflare's HTML 1101 page, and /ledger/speculation.json answered a wrong
-// method with an empty 405. Each is driven into its failure here and must
+// Cloudflare's HTML 1101 page. Each is driven into its failure here and must
 // answer with the site's error shape: `error` (a sentence) and `code` (a token).
 import { assert, test } from "../../../tools/tests/contract-shared.ts";
 import { handleCensusJson } from "../census.ts";
 import { handleRnTracks, handleRnTracksHtml } from "../rn.ts";
 import { handleLedgerJson } from "../ledger.ts";
-import { handleSpeculationJson } from "../speculation.ts";
 
 async function assertJsonError(r: Response, status, code) {
   assert.equal(r.status, status);
@@ -61,13 +59,6 @@ test("/rn/tracks answers a KV throw with a JSON 503", async () => {
   const r = await quiet(() => handleRnTracks(new Request("https://aadhar.sh/rn/tracks"), env, ctx));
   const body = await assertJsonError(r, 503, "storage_unavailable");
   assert.deepEqual(body.tracks, [], "the tracks key survives, so a client's empty-list path still works");
-});
-
-test("/ledger/speculation.json answers a wrong method with a JSON 405", async () => {
-  const r = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json", { method: "POST" }), {});
-  const body = await assertJsonError(r, 405, "method_not_allowed");
-  assert.equal(r.headers.get("allow"), "GET, HEAD");
-  assert.deepEqual(body.allow, ["GET", "HEAD"]);
 });
 
 test("/rn/tracks with no playlist set is a 503 for machines and still a 200 fragment for the homepage", async () => {

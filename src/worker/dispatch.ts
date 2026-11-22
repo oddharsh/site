@@ -23,8 +23,9 @@ import type { Album } from "./albums.ts";
 import { withBotPolicyCache } from "./lib/botauth.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { CANONICAL_HOST, isCanonicalHost } from "./lib/const.ts";
-import { apiPreflight, withApiContract } from "./lib/api-contract.ts";
+import { apiMethods, apiPreflight, withApiContract } from "./lib/api-contract.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
+import { methodGuard } from "./lib/http.ts";
 import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { canonicalPage, countMiss, recoverNotFound, sitemapPaths } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
@@ -34,8 +35,8 @@ import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
 import { countSpeculativeLoad } from "./speculation.ts";
-import { CACHEABLE_PATHS, CAL_HOST, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "./routes.ts";
-import type { ExactPath, PrefixLabel } from "./routes.ts";
+import { CACHEABLE_PATHS, CAL_HOST, EXACT_METHODS, EXACT_ROUTES, PREFIX_METHODS, PREFIX_ROUTES, SELF_FETCH_PATHS } from "./routes.ts";
+import type { ExactPath, Methods, PrefixLabel } from "./routes.ts";
 
 // A worker-owned route handler, as dispatchTraced() calls one. A real type
 // because a `@typedef` in a .ts file is inert (gotcha 42). index.ts's handler
@@ -117,18 +118,33 @@ export function createDispatch(handlers: DispatchHandlers) {
     return handle;
   };
 
+  // A wrong method is refused here, before the handler runs, from routes.ts's
+  // `methods` (or the API contract's, for a documented API path).
+  const guarded = (declared: Methods | undefined, path: string | null, handle: RouteHandler): RouteHandler => {
+    if (declared === "handler") return handle;
+    const allow = (path === null ? null : apiMethods(path)) ?? declared ?? ["GET"];
+    return (request, env, ctx, url) => methodGuard(request, allow) ?? handle(request, env, ctx, url);
+  };
+
   const exactRoutes = new Map<string, RouteHandler>();
   for (const { path } of EXACT_ROUTES) {
     const handle = need(handlers.exact[path], path);
-    exactRoutes.set(path, SELF_FETCH_PATHS.has(path) ? withSelfFetchHandler(handle) : handle);
+    exactRoutes.set(path, guarded(EXACT_METHODS.get(path), path, SELF_FETCH_PATHS.has(path) ? withSelfFetchHandler(handle) : handle));
   }
   // one page per album (albums.ts), generated at deploy like /photos, with the
   // dynamic handler as the 404 fallback
   for (const album of Object.values(ALBUMS)) {
-    exactRoutes.set(albumPath(album), (request, env, ctx, url) => handlers.album(album, request, env, ctx, url));
+    exactRoutes.set(
+      albumPath(album),
+      guarded(undefined, null, (request, env, ctx, url) => handlers.album(album, request, env, ctx, url)),
+    );
   }
   // Walked in routes.ts's order, which is load-bearing (its PREFIX_ROUTES header).
-  const prefixRoutes = PREFIX_ROUTES.map((r) => ({ label: r.label, match: r.match, handle: need(handlers.prefix[r.label], r.label) }));
+  const prefixRoutes = PREFIX_ROUTES.map((r) => ({
+    label: r.label,
+    match: r.match,
+    handle: guarded(PREFIX_METHODS.get(r.label), null, need(handlers.prefix[r.label], r.label)),
+  }));
 
   // The self-dispatcher itself, factored out because the CRON needs it too and a
   // second copy is how the two drift. `scheduled()` has no request to build one

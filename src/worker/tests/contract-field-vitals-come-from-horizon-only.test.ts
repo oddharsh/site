@@ -61,11 +61,6 @@ test("a beacon the receiver can't use still answers 204 and writes nothing", asy
   assert.equal((await handleVitals(post(JSON.stringify({ p: "/", lcp: 900 })), env as any)).status, 204);
   assert.equal(points.length, 0);
 
-  const get = await handleVitals(new Request("https://aadhar.sh/ledger/vitals"), env);
-  assert.equal(get.status, 405);
-  assert.equal(get.headers.get("allow"), "POST");
-  assert.equal(points.length, 0);
-
   // a dataset that throws must not turn into a 500 for the browser
   const throwing = {
     VITALS: {

@@ -45,7 +45,7 @@
 // you have, name what it is, never fabricate the thing you do not.
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { ASK_LIMITS } from "./lib/api-limits.ts";
-import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 import { span } from "./lib/trace.ts";
 import { SEARCH_TERM_MAX, searchCorpusFor, searchSiteRanked } from "./search.ts";
@@ -376,9 +376,6 @@ function streamAnswer(payload, structured) {
 }
 
 export async function handleAsk(request, env, _ctx?, url = new URL(request.url)) {
-  const refused = methodGuard(request, ["GET", "POST"]);
-  if (refused) return refused;
-
   let body = null;
   if (request.method === "POST") {
     const capped = await cappedRequestBody(request);

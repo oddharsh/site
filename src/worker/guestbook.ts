@@ -38,7 +38,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
 import { EMPTY, html } from "./lib/html.ts";
 import type { Html } from "./lib/html.ts";
-import { cappedRequestBody, jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "./lib/http.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import type { Pending, Read } from "./lib/island.ts";
 import { isolateMemo } from "./lib/isolate-memo.ts";
@@ -274,8 +274,6 @@ async function sign(request: Request, env) {
 
 /** The route: the page on GET, a signature on POST. */
 export function handleGuestbook(request: Request, env, _ctx?: ExecutionContext, url = new URL(request.url)) {
-  const refused = methodGuard(request, ["GET", "POST"]);
-  if (refused) return refused;
   if (request.method === "POST") return sign(request, env);
   return serveBuiltPage(request, env, url, {
     headers: { "cache-control": PAGE_CACHE_CONTROL, link: SHELL_PRELOAD_LINK },
@@ -290,8 +288,6 @@ export async function handleGuestbookEntries(_request: Request, env) {
 }
 
 export async function handleGuestbookJson(request: Request, env) {
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   const read = await readEntries(env);
   if (read.state !== "ok")
     return json({ error: read.state === "unbound" ? "the guestbook is not bound on this deployment" : "the guestbook did not answer" }, 503);

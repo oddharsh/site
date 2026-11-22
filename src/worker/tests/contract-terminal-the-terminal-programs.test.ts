@@ -173,9 +173,6 @@ test("an unknown program 404s and names the ones that exist", async () => {
     assert.ok(body.includes(`  ${tool}\n`) || body.includes(`  ${tool} `), `the 404 body does not list ${tool}`);
   }
   assert.ok(!body.includes("/terminal"), "the 404 body still points at the retired console");
-  const post = await handleTool(new Request("https://aadhar.sh/finger", { method: "POST" }), terminalEnv(), context());
-  assert.equal(post.status, 405);
-  assert.equal(post.headers.get("allow"), "GET, HEAD");
 });
 
 test("every frame tool the MCP server lists is one the server can actually call", async () => {

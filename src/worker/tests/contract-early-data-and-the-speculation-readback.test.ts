@@ -114,10 +114,8 @@ test("speculation readback: reached splits client activations by how far the pre
   assert.equal(row.activated, 21, "the client total still wins the max over the header's 7");
 });
 
-test("speculation readback: the route is wired, allowlisted, and refuses writes", async () => {
+test("speculation readback: the route is wired and allowlisted", async () => {
   const { handleSpeculationJson } = await import("../speculation.ts");
-  const bad = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json", { method: "POST" }), {});
-  assert.equal(bad.status, 405);
   // no token: an "unconfigured" 503 (a 200 until 2026-10-13, which a client
   // reading the status took for data), the same answer /ledger.json gives
   const none = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json"), {});
