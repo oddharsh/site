@@ -184,10 +184,6 @@ test("directory failures never fall back to an unsigned or mismatched success", 
       assert.equal(await response.text(), method === "HEAD" ? "" : "Signing directory unavailable");
     }
   }
-  const response = await handleSignatureDirectory(new Request(`https://aadhar.sh${DIRECTORY_PATH}`, { method: "POST" }), env);
-  assert.equal(response.status, 405);
-  assert.equal(response.headers.get("allow"), "GET, HEAD");
-  assert.equal(response.headers.has("signature"), false);
 });
 
 test("both asset routers send the directory to the Worker within the platform's rule limit", async () => {

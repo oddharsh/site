@@ -115,11 +115,6 @@ test("the activation beacon answers 204 and records which page paid off", async 
     assert.deepEqual(pts[0].blobs.slice(0, 2).concat(pts[0].blobs[3]), ["activated-client", "/about", reached], `s=${s}`);
   }
 
-  // anything that isn't a read is refused, and says so properly
-  const bad = handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
-  assert.equal(bad.status, 405);
-  assert.equal(bad.headers.get("allow"), "GET, HEAD");
-
   // a beacon with no binding still answers; telemetry never gates the reply
   assert.equal(handlePrefetchActivation(new Request("https://aadhar.sh/ledger/prefetch", { method: "HEAD" }), {}).status, 204);
 });

@@ -42,6 +42,12 @@ export function allowedMethods(ops: readonly Operation[]): string[] {
   return ["GET", "HEAD", "POST", "OPTIONS"].filter((m) => methods.has(m));
 }
 
+/** The methods a documented API path answers, or null off the API. */
+export function apiMethods(pathname: string): string[] | null {
+  const ops = BY_PATH.get(pathname);
+  return ops ? allowedMethods(ops) : null;
+}
+
 const READ_BUDGETED: ReadonlySet<string> = new Set([...BY_PATH].filter(([, ops]) => ops.every(sharesReadBudget)).map(([path]) => path));
 const READ_POLICY_HEADER = rateLimitPolicy(API_READ_BUDGET);
 
