@@ -26,7 +26,7 @@ test("a method a documented path does not serve is a JSON 405 with Allow", async
   for (const method of ["DELETE", "PUT", "PATCH"]) assert.equal((await apiPreflight(req("/lens/fetch", { method }), "/lens/fetch", {}))?.status, 405, method);
   // The controls: what the path does serve passes through, and so does any
   // path the description does not name.
-  for (const method of ["GET", "HEAD", "OPTIONS"]) assert.equal(await apiPreflight(req("/search.json", { method }), "/search.json", {}), null, method);
+  for (const method of ["GET", "HEAD"]) assert.equal(await apiPreflight(req("/search.json", { method }), "/search.json", {}), null, method);
   assert.equal(await apiPreflight(req("/ask", { method: "POST" }), "/ask", {}), null, "POST /ask is documented");
   assert.deepEqual(allowedMethods(OPERATIONS.filter((o) => o.path === "/ask")), ["GET", "HEAD", "POST", "OPTIONS"]);
   assert.equal(await apiPreflight(req("/webmention", { method: "POST" }), "/webmention", {}), null, "an undocumented path is its handler's business");
@@ -84,6 +84,36 @@ test("dispatch runs the contract around the real route table", async () => {
   assert.doesNotMatch(page.headers.get("link") || "", /<\/openapi\.json>/, "a page is not an API answer");
 });
 
+test("OPTIONS on every documented path is a 204 naming its methods, and no handler runs", async () => {
+  const ran: string[] = [];
+  const fake = (id: string) => () => {
+    ran.push(id);
+    return Response.json({ ok: true });
+  };
+  const dispatch = createDispatch({
+    exact: Object.fromEntries(EXACT_ROUTES.map((r) => [r.path, fake(r.path)])),
+    prefix: Object.fromEntries(PREFIX_ROUTES.map((r) => [r.label, fake(r.label)])),
+    album: fake("album"),
+    calHost: fake("calHost"),
+  } as any);
+  const env = { ASSETS: { fetch: async () => new Response("", { status: 404 }) } } as any;
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+
+  const paths = [...new Set(OPERATIONS.map((op) => op.path))];
+  assert.equal(paths.length, 13);
+  for (const path of paths) {
+    const r = await dispatch.serveWorkerRequest(req(path, { method: "OPTIONS" }), env, ctx);
+    assert.equal(r.status, 204, path);
+    assert.equal(r.headers.get("allow"), path === "/ask" ? "GET, HEAD, POST, OPTIONS" : "GET, HEAD, OPTIONS", path);
+    assert.equal(await r.text(), "", `${path}: a 204 has no body`);
+    assert.match(r.headers.get("link") || "", /rel="service-desc"/, `${path} names the description`);
+  }
+  assert.deepEqual(ran, [], "OPTIONS is the contract's to answer");
+  // the control: a read on the same path still reaches its handler
+  await dispatch.serveWorkerRequest(req("/search.json?q=fhe"), env, ctx);
+  assert.deepEqual(ran, ["/search.json"]);
+});
+
 /** A limiter binding that refuses, and records the keys it was asked about. */
 const refusing = () => {
   const keys: any[] = [];
@@ -117,7 +147,7 @@ test("an endpoint with no limiter of its own bills the shared read budget and sa
   assert.equal(await apiPreflight(req("/lens/fetch?url=example.com"), "/lens/fetch", lens.env), null);
   assert.deepEqual(lens.keys, [], "/lens/fetch is billed by LENS_BUDGETS, not the read budget");
   const options = refusing();
-  assert.equal(await apiPreflight(req("/search.json", { method: "OPTIONS" }), "/search.json", options.env), null);
+  assert.equal((await apiPreflight(req("/search.json", { method: "OPTIONS" }), "/search.json", options.env))?.status, 204);
   assert.deepEqual(options.keys, []);
   const allowing = {
     [API_READ_BUDGET.binding]: {
