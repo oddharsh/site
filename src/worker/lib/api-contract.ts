@@ -5,8 +5,8 @@
 // as a whole and are kept here, so no handler can forget one:
 //
 //   - the methods. A path in OPERATIONS answers the methods listed for it, plus
-//     HEAD where it has GET, plus OPTIONS. Anything else is a JSON 405 with an
-//     Allow header (RFC 9110 section 15.5.6), before the handler runs. Most of
+//     HEAD where it has GET, plus OPTIONS, which this answers itself with a 204
+//     naming the methods. Anything else is a JSON 405 with an Allow header (RFC 9110 section 15.5.6), before the handler runs. Most of
 //     these handlers never looked at the method, so a POST to /search.json used
 //     to read like a GET.
 //   - the rate. An operation with no limiter of its own (sharesReadBudget)
@@ -65,8 +65,13 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
       { allow: allow.join(", ") },
     );
   }
-  // OPTIONS is a question about the API rather than a read of it, so it is free.
-  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
+  // OPTIONS is a question about the API rather than a read of it: free, and
+  // answered here, since 9 of the 13 handlers read it as a GET and 4 refused
+  // it (measured 2026-11-22). No CORS headers: only 5 of the 13 paths send
+  // access-control-allow-origin on their reads, so a preflight that granted
+  // more would promise what the read then withholds.
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { allow: allow.join(", ") } });
+  if (READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
     return contractError(
       429,
       "rate_limited",
