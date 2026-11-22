@@ -1,0 +1,167 @@
+[
+  {
+    "test": "src/worker/lib/tests/contract-dictionary-names-agree-between-build-and-worker.test.ts :: an encoded delta decodes against its dictionary once the header is parsed off",
+    "cause": "workerd",
+    "why": "node:zlib's zstd functions drop the dictionary option",
+    "link": "https://github.com/cloudflare/workerd/issues/6967"
+  },
+  {
+    "test": "src/worker/lib/tests/contract-explorer-chrome-escapes-a-heading-once.test.ts :: no staged page's Explorer chrome carries a double escape",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/lib/tests/contract-explorer-chrome-escapes-a-heading-once.test.ts :: no staged page's address bar carries its heading's pill",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/lib/tests/contract-html-escapes-by-construction.test.ts :: the unescaped door is counted, and the count may only go down",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/lib/tests/contract-lens-reads-the-browser-local-tool-catalog.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-data-tables-declare-their-headers.test.ts :: no static page ships a data table without a declared header row",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-field-vitals-come-from-horizon-only.test.ts :: only the pages VITALS_PATHS names ship the beacon",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-histnav-ships-in-the-html.test.ts :: every static page carries the pair once, at the head of its window's title bar",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-lens-clears-every-tab-and-answers-the-keyboard.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-llms-txt-lists-the-api.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-pixel-peeper-crowd.test.ts :: a run is one UPDATE, the cap refuses without writing, and the crowd reads it back",
+    "cause": "lane",
+    "why": "the test fakes D1 with SQLite and skips when it can't open one; workerd's node:sqlite refuses new DatabaseSync"
+  },
+  {
+    "test": "src/worker/tests/contract-request-bodies-stop-at-their-cap.test.ts :: no public Worker reads a request body except through cappedRequestBody",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-search-matches-body-text-in-place.test.ts :: /ask's whole-corpus excerpts are the same",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-search-matches-body-text-in-place.test.ts :: search finds the same pages, in the same order, with the same snippets",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-security-is-a-built-document.test.ts :: /security.json answers from request.cf and nothing else, uncacheable",
+    "cause": "test-code",
+    "why": "the test assigns request.cf, which bun allows and workerd's Request keeps read-only; new Request(url, { cf }) works in both"
+  },
+  {
+    "test": "src/worker/tests/contract-shell-infotips.test.ts :: site MCP resources/read refuses failed and redirected pages and cancels their bodies",
+    "cause": "workerd",
+    "why": "cancel() on a ReadableStream with a queued chunk after close() never reaches the source's cancel(); node and bun call it, as the streams spec says",
+    "link": "https://github.com/cloudflare/workerd/issues/8787"
+  },
+  {
+    "test": "src/worker/tests/contract-shell-infotips.test.ts :: the speculation ruleset has exactly one author",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-shell-infotips.test.ts :: the staged Worker names the built ruleset on HTML and only on HTML",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-skip-link-lands-on-one-main.test.ts :: every static shell page resolves #main once",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts :: every text twin decodes to the bytes beside it, and is smaller",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-the-speculation-ledger.test.ts :: every Response rebuilt from another response's body either preserves encodeBody or is recorded as not needing it",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "src/worker/tests/contract-the-speculation-ledger.test.ts :: every inline script in the STAGED tree is covered by the emitted hash map",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-web-bot-auth-sig2-signs-ml-dsa-natively.test.ts :: with sig2 unavailable, the directory drops its AKP entry and still proves sig1",
+    "cause": "workerd",
+    "why": "exportKey('jwk') returns 14 absent members as enumerable undefined, so a deep compare against the served (JSON-round-tripped) key fails; the served bytes are right",
+    "link": "https://github.com/cloudflare/workerd/issues/6892"
+  },
+  {
+    "test": "src/worker/tests/contract-webmention-author-mf2.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "src/worker/tests/contract-whoareyou-is-a-built-document.test.ts :: /whoareyou/values.html answers with this request's values and the island marker",
+    "cause": "test-code",
+    "why": "the test assigns request.cf, which bun allows and workerd's Request keeps read-only; new Request(url, { cf }) works in both"
+  },
+  {
+    "test": "tools/tests/contract-form-fields-have-names.test.ts :: no static page ships a field without a name",
+    "cause": "workerd",
+    "why": "recursive readdir names entries from the root, so the joined path repeats /bundle/<dir>; fixed upstream after 1.20261121.1",
+    "link": "https://github.com/cloudflare/workerd/issues/7678"
+  },
+  {
+    "test": "tools/tests/contract-webmcp-live-catalog-probe.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  },
+  {
+    "test": "tools/tests/contract-webmcp-one-door-onto-the-browser-catalog.test.ts :: <load>",
+    "cause": "workerd",
+    "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
+    "link": "https://github.com/cloudflare/workerd/issues/8786"
+  }
+]
