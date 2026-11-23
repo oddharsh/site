@@ -1293,3 +1293,16 @@ skips it.
     93 were headless tools (browser:check, runtime-dcz-probe, curl), so a
     dictionary is no proof of a person.
     Checked by: `tools/tests/contract-user-bytes-prices-a-visit-by-what-the-visitor-holds.test.ts`.
+115. **A Bun worker whose module statically imports a top-level `await` drops
+    a message posted while that await settles.** Build step 5e proves its class
+    rename on a worker thread (`tools/lib/class-names-proof.ts`). The first
+    version imported `spokeshave/classes` at the top, and that module awaits
+    terser's files when it loads. A static import holds the worker's body
+    until the await settles, and the event loop runs in the meantime, so the
+    job the build posted was delivered with no `onmessage` set and was
+    dropped. No error, no close event: the proof never answered, and a
+    script waiting on it exited without printing. The handler is now set
+    first and imports the census inside it, and `proveRename` fails after 60
+    s with no answer rather than waiting forever. A worker that loads
+    anything asynchronous sets its handler before it loads.
+    Checked by: `tools/tests/contract-class-names-keep-page-edits-out-of-the-shell.test.ts`.

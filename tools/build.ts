@@ -2282,9 +2282,11 @@ phase("5e class names");
 // A later step that reads a class out of a staged page asks servedClass for
 // the name it ships as (gotcha 113).
 let servedClass = (name: string): string => name;
+// The class-name proof, running on its own thread; awaited before the build reports.
+let classNamesProven: Promise<void> = Promise.resolve();
 if (process.env.CLASS_NAMES === "off") console.log("class names: skipped (CLASS_NAMES=off)");
 else {
-  const { censusFile, renameClasses } = await import("./lib/class-names.ts");
+  const { censusFile, planRename, proveRename } = await import("./lib/class-names.ts");
   const staged = (await readdir(OUT, { recursive: true })).filter(censusFile).sort();
   const texts = await Promise.all(
     staged.map(async (rel) => {
@@ -2299,8 +2301,47 @@ else {
   });
   // The floor is 600 of the 1,151 names renameable on 2026-11-22, so a census
   // that quietly stops matching fails here instead of shipping a no-op.
-  const { before: census, map, after } = renameClasses(before, SHELL_RANKED, 600);
-  const changed = [...after].filter(([rel, text]) => text !== before.get(rel));
+  const FLOOR = 600;
+  // Memoized: the rename is a pure function of the staged files it reads, the
+  // shell set and the code below, so a build whose inputs match the last one
+  // skips both censuses (3.7 s of a 6.5 s warm build on 2026-11-23). The key
+  // names the step's own code by digest and spokeshave by its installed
+  // classes.ts and package.json, which pins terser and amaro exactly.
+  const resolveHere = (spec: string) => Bun.resolveSync(spec, import.meta.dir);
+  const CLASS_NAMES_STEP = `class-names floor ${FLOOR} ${digestFile("tools/lib/class-names.ts")} spokeshave ${digestFile(resolveHere("spokeshave/classes"))} ${digestFile(resolveHere("spokeshave/package.json"))}`;
+  const parts = [JSON.stringify([...SHELL_RANKED].sort()), ...[...before].flatMap(([rel, text]) => [rel, text])];
+  type Renamed = { map: Array<[string, string]>; changed: Array<[string, string]>; names: number; tainted: number };
+  // On a miss the plan is ready after one census and the proof runs on a worker
+  // thread through the rest of the build; classNamesProven is awaited before the
+  // build reports its staged tree, and an entry is written only once its proof
+  // has passed. On a hit both are done.
+  const planned = Promise.withResolvers<Renamed>();
+  classNamesProven = cache
+    .memoBatch(CLASS_NAMES_STEP, [parts], async () => {
+      const plan = planRename(before, SHELL_RANKED);
+      const renamed: Renamed = {
+        map: [...plan.map],
+        changed: [...plan.after].filter(([rel, text]) => text !== before.get(rel)),
+        names: plan.before.counts.size,
+        tainted: plan.before.tainted.size,
+      };
+      planned.resolve(renamed);
+      const proofStarted = performance.now();
+      await proveRename(plan, FLOOR);
+      console.log(`class names: the rename is proven, by a second census on its own thread (${Math.round(performance.now() - proofStarted)} ms)`);
+      return [JSON.stringify(renamed)];
+    })
+    .then(
+      ([text]) => planned.resolve(JSON.parse(text)),
+      (error: unknown) => {
+        planned.reject(error);
+        throw error;
+      },
+    );
+  const result = await planned.promise;
+  const map = new Map(result.map);
+  const changed = result.changed;
+  const census = { counts: { size: result.names }, tainted: { size: result.tainted } };
   await Promise.all(changed.map(([rel, text]) => writeFile(`${OUT}/${rel}`, text)));
   servedClass = (name) => map.get(name) ?? name;
   // Beside the staged tree, never served: what a test reading a built page
@@ -3395,6 +3436,11 @@ phase("text twins");
   console.log(`text-twins: ${wins.length} brotli q11 twins for static text assets, ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB`);
 }
 
+// The class-name proof (step 5e) ran on its own thread through steps 6 to 8.
+// A rename that changed more than names fails the build here, before it
+// reports a staged tree, so nothing it built is deployed.
+phase("5e class-name proof");
+await classNamesProven;
 phase("sweep old build");
 await sweep;
 phase("cache prune");
