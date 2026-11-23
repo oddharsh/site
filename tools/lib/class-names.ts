@@ -107,9 +107,41 @@ export const censusFile = (rel: string): boolean =>
  * names that counts as a working census.
  */
 export function renameClasses(staged: ReadonlyMap<string, string>, shellFiles: ReadonlySet<string>, floor: number) {
+  const planned = planRename(staged, shellFiles);
+  assertClassIntegrity(planned.before, censusClasses(planned.after, { publicDir: "public" }), planned.map, floor);
+  return planned;
+}
+
+/** The first census, the plan and the rewrite, without the proof. */
+export function planRename(staged: ReadonlyMap<string, string>, shellFiles: ReadonlySet<string>) {
   const before = censusClasses(staged, { publicDir: "public" });
   const map = planClassNames(before, shellFiles);
   const after = applyClassNames(staged, before, map);
-  assertClassIntegrity(before, censusClasses(after, { publicDir: "public" }), map, floor);
   return { before, map, after };
+}
+
+/**
+ * The proof, on a worker thread: the census of the rewritten tree against the
+ * first one. It is the step's second census and half its time, and no later
+ * step needs its answer, so the build starts it here and waits on it only
+ * before it reports a staged tree. Rejects with the integrity error when the rename
+ * changed more than names.
+ */
+export function proveRename(planned: ReturnType<typeof planRename>, floor: number, timeoutMs = 60_000): Promise<void> {
+  const worker = new Worker(new URL("./class-names-proof.ts", import.meta.url));
+  return new Promise<void>((resolve, reject) => {
+    // A worker that never answers fails the proof: an unanswered one is how a
+    // dropped job looked (class-names-proof.ts), and the proof is the only
+    // thing standing between a census blind spot and a page whose CSS misses.
+    const timer = setTimeout(() => settle(new Error(`class names: the proof worker gave no answer in ${timeoutMs} ms`)), timeoutMs);
+    const settle = (error: Error | null) => {
+      clearTimeout(timer);
+      worker.terminate();
+      if (error) reject(error);
+      else resolve();
+    };
+    worker.onmessage = (event: MessageEvent<{ error: string | null }>) => settle(event.data.error === null ? null : new Error(event.data.error));
+    worker.onerror = (event) => settle(new Error(`class names: the proof worker failed: ${event.message}`));
+    worker.postMessage({ before: planned.before, after: planned.after, map: planned.map, floor });
+  });
 }
