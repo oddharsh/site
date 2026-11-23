@@ -36,7 +36,7 @@ import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { brotliCompress, brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
 import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision } from "./lib/served-tree.ts";
 import type { ServedTreePlan } from "./lib/served-tree.ts";
@@ -71,7 +71,7 @@ import { inTestsDir } from "./lib/test-roots.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
 import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
-import { NON_BLOCKING_PAGES } from "./lib/critical-css.ts";
+import { NON_BLOCKING_PAGES, nonBlocking } from "./lib/critical-css.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
@@ -1726,7 +1726,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     out = foldLongProse(out);
     // After the folds, so a page whose first paint waits for its first fold
     // pauses only past it (parser-pause.ts).
-    out = pauseBelowFirstScreen(out, { afterFirstFold: NON_BLOCKING_PAGES.includes(rel) });
+    out = pauseBelowFirstScreen(out, { afterFirstFold: nonBlocking(rel, out) });
     return { html: out, addedLink, addedChrome };
   };
 
@@ -2391,8 +2391,10 @@ phase("5e build info");
 }
 
 phase("5f non-blocking shell css");
-// 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
-// blocking first paint, behind the subset of each that can apply to the page.
+// 5f) pages load luna.css and prose.css without blocking first paint, behind
+// the subset of each that can apply to the page: every page that links
+// luna.css and still fits the first round trip once it carries the subset,
+// plus the ones lib/critical-css.ts names.
 // It runs after 5c so the subset carries the same short custom-property names
 // as the stylesheet it came from, and before 6 so the swapped links get hashed
 // like any other. The subset is derived here on every build and never
@@ -2400,17 +2402,47 @@ phase("5f non-blocking shell css");
 // Step 7b gives the page's readable twin the same swap, so the twin stays the
 // same program as the page it twins.
 const { nonBlockingPage } = await import("./lib/critical-css.ts");
-const toNonBlocking = async (page: string) => {
+const toNonBlocking = async (page: string, paneClass = servedClass("axp-tasks")) => {
   const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
   const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
   const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
-  return nonBlockingPage(page, sheets, scripts);
+  return nonBlockingPage(page, sheets, scripts, { taskPane: `<div class="${paneClass}"` });
 };
-for (const rel of NON_BLOCKING_PAGES) {
-  const page = await readFile(`${OUT}/public/${rel}`, "utf8");
-  const out = await toNonBlocking(page);
-  await writeFile(`${OUT}/public/${rel}`, out);
-  console.log(`non-blocking shell css: ${rel} inlines ${out.length - page.length} B for luna.css and prose.css`);
+// Only a page that still fits the first round trip once it carries the subset
+// gains anything: a cold connection sends about 14,600 B before its first ack
+// (10 packets, RFC 6928), and a page past that waits a round trip for its own
+// HTML anyway, so it would only carry the subset's bytes. Measured with
+// `bun run user-bytes` on 2026-11-23: swapping every page cut first paint 7.0 ms
+// a view and added 3,348 B; pages at 15 to 26 KB of brotli kept their 34 to 36
+// ms. The budget leaves 1,100 B of the window to the response's headers and
+// TLS framing, and it's read on the page before 7b minifies it, which can only
+// overstate the size.
+const FIRST_WINDOW_BODY_BYTES = 13_500;
+const swappedPages = new Set<string>();
+{
+  const pages = (await readdir(`${OUT}/public`, { recursive: true })).filter((f) => f.endsWith(".html") && !f.endsWith(".src.html")).sort();
+  let inlined = 0,
+    tooBig = 0;
+  for (const rel of pages) {
+    const page = await readFile(`${OUT}/public/${rel}`, "utf8");
+    if (!nonBlocking(rel, page)) continue;
+    const out = await toNonBlocking(page);
+    // /garage measured its own win in a lab run (critical-css.ts), so it stays swapped.
+    // q9 runs in milliseconds where q11 took 5.2 s over 75 pages. On the 78
+    // built pages (2026-11-23) q9 ran 8.0 to 13.5% over q11 and never under, so
+    // a page q9 puts within 1.08 of the budget also fits once step 8 encodes it.
+    const brotli9 = brotliCompressSync(Buffer.from(out), { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 9 } }).length;
+    if (!NON_BLOCKING_PAGES.includes(rel) && brotli9 > FIRST_WINDOW_BODY_BYTES * 1.08) {
+      tooBig++;
+      continue;
+    }
+    await writeFile(`${OUT}/public/${rel}`, out);
+    swappedPages.add(rel);
+    inlined += out.length - page.length;
+  }
+  console.log(
+    `non-blocking shell css: ${swappedPages.size} pages inline ${inlined} B of luna.css and prose.css subsets; ${tooBig} would pass the first window and stay blocking`,
+  );
 }
 
 phase("6 hash shell assets");
@@ -2781,7 +2813,8 @@ phase("7b minify pages");
       }
       // outside the try, so a page that can't take the swap fails the build
       // instead of reading as "no authored source"
-      if (NON_BLOCKING_PAGES.includes(rel)) twin = await toNonBlocking(twin);
+      // A twin read from the staged copy (a page with no authored source) is already swapped.
+      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(twin, "axp-tasks");
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;

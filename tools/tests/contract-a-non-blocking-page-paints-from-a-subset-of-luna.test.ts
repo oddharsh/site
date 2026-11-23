@@ -65,5 +65,32 @@ test("the page swaps each link once and waits for the first fold", needsParser, 
       '<noscript><link rel="stylesheet" href="/luna.css"></noscript></head>' +
       '<body><div class="window"><main class="content"><section class="fold" id="first-fold" style="x"></section><section class="fold"></section></main></div></body>',
   );
-  await assert.rejects(nonBlockingPage(page.replace('class="fold"', 'class="x"').replace('class="fold"', 'class="x"'), [], []), /no prose fold/);
+});
+
+test("a page with no fold waits for its task pane, and one with neither paints as it arrives", needsParser, async () => {
+  const sheet = [{ href: "/luna.css", css: ".window{gap:0}" }];
+  const page =
+    '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head>' +
+    '<body><div class="window"><main class="content"><p>x</p></main><div class="h2l"><aside></aside></div></div></body>';
+  const held = await nonBlockingPage(page, sheet, [], { taskPane: '<div class="h2l"' });
+  assert.match(held, /<meta charset="utf-8">\n<link rel="expect" href="#first-pane" blocking="render">/);
+  assert.match(held, /<div class="h2l" id="first-pane"><aside>/);
+  // No fold and no pane: swapped, with no expect, rather than refused.
+  const bare = await nonBlockingPage(page.replace('<div class="h2l"><aside></aside></div>', ""), sheet, [], { taskPane: '<div class="h2l"' });
+  assert.match(bare, /<style>\.window\{gap:0\}<\/style>/);
+  assert.doesNotMatch(bare, /rel="expect"/);
+});
+
+test("a sheet the page never links is skipped, and luna.css is always required", needsParser, async () => {
+  const page = '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head><body><div class="window"></div></body>';
+  const out = await nonBlockingPage(
+    page,
+    [
+      { href: "/luna.css", css: ".window{gap:0}" },
+      { href: "/prose.css", css: ".p{gap:0}" },
+    ],
+    [],
+  );
+  assert.doesNotMatch(out, /prose/);
+  await assert.rejects(nonBlockingPage("<head></head>", [{ href: "/luna.css", css: ".window{gap:0}" }], []), /expected exactly one/);
 });

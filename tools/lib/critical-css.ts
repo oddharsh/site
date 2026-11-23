@@ -184,13 +184,20 @@ export function isOrderedSubset(subset: string, sheet: string): boolean {
   return true;
 }
 
-// The pages that load their shell stylesheets without blocking first paint,
-// keyed by staged path. /garage measured 2026-11-06 with @rolldown/perf-kit
-// 0.1.0 (1.6 Mbit/s, 150 ms RTT, 4x CPU, 7 runs): FCP = LCP 663 to 370 ms,
-// CLS 0 in every run, rendered output identical on 12 pinned pages. The
-// subset is 39.9 of luna's 45.1 KB raw, about 9.6 KB more on the wire per
-// load, which a repeat visit pays where a cached luna.css would be free.
+// Pages that swap whatever their size, keyed by staged path. /garage measured
+// 2026-11-06 with @rolldown/perf-kit 0.1.0 (1.6 Mbit/s, 150 ms RTT, 4x CPU, 7
+// runs): FCP = LCP 663 to 370 ms, CLS 0 in every run, rendered output
+// identical on 12 pinned pages. The subset is 39.9 of luna's 45.1 KB raw,
+// about 9.6 KB more on the wire per load, which a repeat visit pays where a
+// cached luna.css would be free.
 export const NON_BLOCKING_PAGES = ["garage/index.html"];
+
+/** Whether a staged page is a candidate to load its shell stylesheets without
+ *  blocking first paint: every page that links luna.css, except the homepage,
+ *  which inlines a hand-kept copy instead (src/pages/index.html). Build step 5f
+ *  swaps a candidate only if the swapped page still fits the first round trip. */
+export const nonBlocking = (rel: string, html: string): boolean =>
+  rel !== "index.html" && (NON_BLOCKING_PAGES.includes(rel) || html.includes(`<link rel="stylesheet" href="/luna.css">`));
 
 // the homepage's flip (src/pages/index.html has the reasons for each part)
 const swap = (href: string, id: string) =>
@@ -208,11 +215,18 @@ const swap = (href: string, id: string) =>
  *  applied: CLS 0.048 on the loads where the HTML split there. The first fold
  *  is where prose-fold.ts already put the end of the first screen. Chromium
  *  only; other engines paint the partial DOM as before. */
-export async function nonBlockingPage(html: string, sheets: { href: string; css: string }[], scripts: string[]): Promise<string> {
+export async function nonBlockingPage(
+  html: string,
+  sheets: { href: string; css: string }[],
+  scripts: string[],
+  { taskPane }: { taskPane?: string } = {},
+): Promise<string> {
   let out = html;
   for (const { href, css } of sheets) {
     const link = `<link rel="stylesheet" href="${href}">`;
-    if (out.split(link).length !== 2) throw new Error(`critical-css: expected exactly one ${link}`);
+    const count = out.split(link).length - 1;
+    if (count === 0 && href !== "/luna.css") continue; // a page that never loads prose.css
+    if (count !== 1) throw new Error(`critical-css: expected exactly one ${link}`);
     const subset = await criticalCss(css, html, scripts);
     if (!isOrderedSubset(subset, css)) throw new Error(`critical-css: the ${href} subset is not an ordered subset of it`);
     const id = `${href.replace(/^\/|\.css$/g, "")}-css`;
@@ -220,7 +234,15 @@ export async function nonBlockingPage(html: string, sheets: { href: string; css:
   }
   const fold = '<section class="fold"';
   const charset = '<meta charset="utf-8">';
-  if (!out.includes(fold)) throw new Error("critical-css: no prose fold to hold first paint for");
+  // A page with no fold holds paint for its Explorer task pane instead: the
+  // pane is what the `:has(>.axp-tasks)` grid waits on, and on 8 fold-less
+  // pages a throttled cold load (1.6 Mbit/s, 150 ms RTT, 4x CPU) read CLS 0 to
+  // 0.048 without the hold, the shift above. `taskPane` is the pane's opening
+  // tag as it stands when this runs, after step 5e shortened its class.
+  // A page with neither has nothing that grows the window, and paints as it arrives.
+  const [target, id] = out.includes(fold) ? [fold, "first-fold"] : taskPane && out.includes(taskPane) ? [taskPane, "first-pane"] : [];
+  if (!target || !id) return out;
+  if (out.split(target).length !== 2 && id === "first-pane") throw new Error(`critical-css: expected one ${taskPane}`);
   if (!out.includes(charset)) throw new Error(`critical-css: no ${charset} to put the render-blocking expect after`);
-  return out.replace(fold, `${fold} id="first-fold"`).replace(charset, `${charset}\n<link rel="expect" href="#first-fold" blocking="render">`);
+  return out.replace(target, `${target} id="${id}"`).replace(charset, `${charset}\n<link rel="expect" href="#${id}" blocking="render">`);
 }
