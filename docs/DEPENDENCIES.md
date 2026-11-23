@@ -457,6 +457,22 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
+- **spokeshave is pinned by commit, as of 2026-11-21** (github.com/oddharsh/spokeshave,
+  the owner's own package, the way timbrado and av2-tone are). It brings
+  @swc/wasm 1.16.22 and terser 5.51.2, exact-pinned in its own package.json,
+  so the build can replay each client script's pick from
+  `config/minify-picks.json`. Measured that day: 2,035 B brotli (1.55%) under
+  Oxc alone across the 27 scripts, and 0 of 77 pages different in Chrome.
+  Oxc Minify stays a root pin, because inline `<script>` blocks, the Worker's
+  `/*min*/` CSS literals and any stale pick still go through it directly.
+  Bumping spokeshave is how an SWC, terser or Oxc release reaches the picks;
+  MAINTENANCE.md's "Re-pick a client script's minifier" has the steps.
+  Its renamer (`spokeshave/rename`) loads terser's parser and scope analysis
+  from files outside terser's package exports, so a terser bump inside
+  spokeshave needs spokeshave's own conformance run, which fails if they move.
+  SWC is the WebAssembly build on purpose: the native @swc/core binding
+  failed to load in Workers Builds on 2026-11-21 while it loaded on GitHub's
+  runner, and @swc/wasm wrote byte-identical output on all 27 scripts.
 - **The linter is Bun's, as of 2026-10-15.** `bun run lint`, a required step
   in `validate`, runs `bun lint --type-aware`, which read `.oxlintrc.json` as
   it stood and runs the type-aware rules against the same programs Bun's

@@ -44,6 +44,8 @@ import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import type { MinifyOptions } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
+import { engineVersions } from "spokeshave";
+import { freshness, readPicks, replayPick } from "./lib/minify-picks.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { spliceMinLiterals } from "./lib/css-literal.ts";
@@ -2026,6 +2028,15 @@ phase("2 homepage");
 }
 
 phase("3 shells");
+// Each script ships the pipeline config/minify-picks.json names for its exact
+// bytes (tools/lib/minify-picks.ts has why the build replays a pick instead of
+// choosing). A stale pick ships oxc output. MINIFY_PICKS=off ships oxc for
+// every script, which is the baseline build tools/check-minify-diff.ts compares
+// a pick against.
+const picks = process.env.MINIFY_PICKS === "off" ? null : readPicks();
+const pickVersions = await engineVersions();
+const stalePicks: string[] = [];
+
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   const src = await readFile(`${OUT}/public/${file}`, "utf8");
@@ -2034,9 +2045,16 @@ for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   // An ES module parses as one (a script parse refuses `export`), and its
   // top-level names are module-scoped rather than globals, so mangling them is
   // safe and is where most of such a file's saving comes from.
-  const code = module
-    ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
-    : minifyJavaScript(`src/client/${file}`, src);
+  const state = picks === null ? null : freshness(picks[file], src, pickVersions);
+  let code: string;
+  if (state?.kind === "fresh") {
+    code = await replayPick(state.pick, src, { filename: file, module });
+  } else {
+    if (state?.kind === "stale") stalePicks.push(`${file} (${state.reason})`);
+    code = module
+      ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
+      : minifyJavaScript(`src/client/${file}`, src);
+  }
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -2047,6 +2065,12 @@ for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
 
   await writeFile(`${OUT}/public/${file}`, min);
   console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
+}
+
+if (stalePicks.length) {
+  console.log(
+    `minify picks: ${stalePicks.length} script(s) shipped oxc output, since their pick is stale: ${stalePicks.join(", ")}. Run \`bun run minify:pick\` to re-pick.`,
+  );
 }
 
 phase("4 luna.css");

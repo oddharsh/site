@@ -345,6 +345,8 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/minify-pick.ts": "writes config/minify-picks.json, whose inputs are the build's readable twins (in .build, never committed) and spokeshave's engine versions, so no checkout can hash them here. Each pick records its own source sha256 and engine versions instead: the build ships oxc for a pick whose record no longer matches, and contract-minify-picks-behave-like-their-source runs the oracle on every pick that does.",
+      "tools/check-minify-diff.ts": "writes Chrome records into the directory it is handed, plus a seeded Worker entry under .build and the gitignored .wrangler.minify-diff.json. Nothing it writes is committed or served.",
       "tools/user-bytes.ts": "writes only the file --save-traffic names: Workers Logs rows (UAs and network names, never an address) for a later --traffic replay. The caller picks the path, which belongs outside the repo; nothing is committed or served.",
       "tools/push-gate.ts": "writes only push-gate-passed in the worktree's git dir (git rev-parse --git-path), the tree ids that passed its gates, so a re-push of the same tree skips them. Never inside the tree, never committed or served.",
       "tools/test-inputs.ts": "trace writes the map of which repo paths each contract test file opened (--out, test-inputs.json by default) and per-file strace logs under a mkdtemp it deletes. The nightly workflow saves the map to the Actions cache; nothing is committed or served.",

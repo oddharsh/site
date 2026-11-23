@@ -1298,6 +1298,37 @@ GITHUB token with `issues: write`.
 (`csp:sweep`, `lens-seed`, the OG cards, ...):
 `CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary, and unset means the stable Chrome it always meant.
 
+## Re-pick a client script's minifier (`bun run minify:pick`)
+
+Each client script ships the pipeline `config/minify-picks.json` names for its
+exact bytes: oxc, SWC or terser alone, or oxc then terser, or SWC then oxc,
+whichever spokeshave found smallest in brotli that still behaves like the
+source, followed by the renames its compression-aware renamer found
+(`tools/lib/minify-picks.ts` has the reasoning). The build replays the renames
+from their recorded map and re-proves them alpha-equivalent, so a map that
+stops fitting fails the build rather than shipping a different program. A pick goes stale when
+its script's source changes, or when spokeshave bumps an engine the pick runs.
+The build then ships oxc output for that script and prints
+`minify picks: N script(s) shipped oxc output`, and the contract suite skips it.
+Nothing fails, so a client edit never waits on a re-pick.
+
+To re-pick, after a build:
+
+```bash
+bun run minify:pick          # stale picks only; --all re-picks every script
+```
+
+That takes about 30 s, mostly pretext.lib.js. A changed pick re-mints that
+script's `/a/` URL, so the PR takes the `hashed-asset` label. Before merging a
+changed pick, run the Chrome page differential that `tools/minify-pick.ts`'s
+header spells out: 3 records of the `MINIFY_PICKS=off` build, 1 of the pick
+build, then `diff`. Expect about 1 timing false alarm in 77 pages per sweep;
+re-record that page alone with `--only` before believing it.
+
+Engine upgrades arrive through spokeshave's pins (github.com/oddharsh/spokeshave).
+Bump the spokeshave commit in package.json, rebuild, and `minify:pick --all`:
+every file is re-judged against the new engines.
+
 ## Re-run the user-agent survey (`/garage/useragent`)
 
 ```bash

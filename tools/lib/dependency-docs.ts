@@ -47,6 +47,10 @@ export const VERSIONLESS = new Map<string, string>([
     "a git dependency pinned to a full commit sha of github.com/oddharsh/av2-tone since 2026-10-14: the AV2 tooling that moved out of tools/photos (the pinned libavif + AVM build, the tuned encoder patches, the WebAssembly decoder, GDF on Metal), unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0 by design until the Rust decoder publishes to crates.io, and the prose names the shape rather than a number",
   ],
   [
+    "spokeshave",
+    "a git dependency pinned to a full commit sha of github.com/oddharsh/spokeshave since 2026-11-21: the minifier portfolio (Oxc, SWC, terser and two chains, judged by brotli bytes and an effect-trace oracle) whose picks config/minify-picks.json records. Unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0, and the prose names the shape and the engine pins it carries rather than its own number",
+  ],
+  [
     "timbrado",
     "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number",
   ],

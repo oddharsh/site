@@ -770,6 +770,17 @@ export const CONTROLS: Control[] = [
     expect: /build-equivalence: step 1 \(island\): the warm \.build differs from a clean build in \d+ files/,
   },
   {
+    id: "minify-diff-walks-an-empty-event-pool",
+    plants: "the page differential boots serendipity with no events again, so a planted bug in its week filter ships unseen",
+    // serendipity:3 flips the week chip's `===` (`l===\`week\``); before the
+    // seed, all 4 of serendipity's mutants were missed because events.html
+    // answered 503 and the filter had no cards. About 2 minutes: an oxc build
+    // and 4 one-page records.
+    mutations: [{ file: "tools/check-minify-diff.ts", find: "    await seedSerendipity(await server.getWorker<SeedEnv>().getEnv());\n", replace: "" }],
+    run: ["node", "tools/check-minify-diff.ts", "catch", "serendipity:3", "--only", "/serendipity", "--build"],
+    expect: /catch: missed serendipity:3 on \/serendipity/,
+  },
+  {
     id: "contract-shared-imports-a-worker-module",
     plants: "contract-shared.ts re-exports a Worker module again, so every test's trace reads it and a change there reruns the suite",
     gotcha: 111,
