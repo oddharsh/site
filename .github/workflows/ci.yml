@@ -373,7 +373,7 @@ jobs:
 
       # The route-handler controls run the suite narrowed the way validate
       # does on a pull request, so they need the same map (gotcha 111).
-      - name: Restore the test input map
+      - name: Restore the test input map for the controls
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
