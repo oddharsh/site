@@ -357,6 +357,9 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
 - [Twitter](https://x.com/oddhash): Day-to-day thinking out loud.
 - [Instagram](https://www.instagram.com/aadharsh.hif): Photographs.
 - [GitHub](https://github.com/oddharsh): Code.
+- [oddharsh/site](https://github.com/oddharsh/site): This site's source.
+  [AGENTS.md](https://github.com/oddharsh/site/blob/main/AGENTS.md) is how a
+  coding agent should work in it.
 - [LinkedIn](https://www.linkedin.com/in/aadharsh-pannirselvam): Professional profile.
 - [Spotify](https://open.spotify.com/user/aadharsh2010): My profile;
   individual eras live as renamed playlists.

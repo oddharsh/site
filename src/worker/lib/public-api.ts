@@ -245,7 +245,7 @@ export const OPERATIONS: readonly Operation[] = [
       q(
         "url",
         str(),
-        "The public http or https URL. https:// is assumed when no scheme is given. Ports other than 80 and 443, credentials, and private or link-local hosts are refused.",
+        "A public http or https URL, https:// if no scheme is given. Ports other than 80 and 443, credentials, and private or link-local hosts are refused.",
         true,
       ),
       q("phases", str(undefined, { enum: ["page"] }), "page limits the scan to fields derived from the page itself (one subrequest)."),

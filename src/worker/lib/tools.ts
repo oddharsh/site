@@ -28,6 +28,9 @@ import { ASK_LIMITS, CHANGE_RADAR_LIMITS, PHOTO_QUERY_LIMITS, SEARCH_LIMITS } fr
 import { serendipityFindEvents } from "../../../serendipity/serendipity.ts";
 import { EVENT_FORMATS, EVENT_TOPICS } from "../../../serendipity/event-tags.ts";
 import { asRecord, asText } from "./parse.ts";
+import { operation } from "./public-api.ts";
+import type { Schema } from "./public-api.ts";
+import { SCHEMAS } from "./openapi.ts";
 
 export function toolError(message) {
   return { _error: String(message).slice(0, 400) };
@@ -60,6 +63,7 @@ const DATA_TOOL_DEFINITIONS = [
     // (`url`/`name`/`site`/`score`/`description`/`schema_object`). A caller who
     // wants a schema.org object per hit wants this one.
     name: "ask",
+    operationId: "askSite",
     description:
       "Ask aadhar.sh a natural-language question and get NLWeb-shaped results: for each match a url, name, site, score (0-100), description, and a schema.org schema_object. Retrieval is lexical over the site's own corpus and descriptions are extractive, so this returns the passages that answer the question rather than a written answer. mode=summarize and mode=generate are refused by name: this origin runs no language model.",
     inputSchema: {
@@ -88,6 +92,7 @@ const DATA_TOOL_DEFINITIONS = [
   },
   {
     name: "search_site",
+    operationId: "searchSite",
     description: "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
     inputSchema: {
       type: "object",
@@ -100,11 +105,13 @@ const DATA_TOOL_DEFINITIONS = [
   },
   {
     name: "now_playing",
+    operationId: "getNowPlaying",
     description: "Read the cached current rn playlist and its tracks. A cold cache may refresh from the public Spotify embed using AadharshBot.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "photo_query",
+    operationId: "queryPhotos",
     description:
       'Search the photo archive. `q` is free text scored per term across caption, EXIF and an offline term expansion, so "classic chrome bridge" matches film and subject; camera, lens, film, recipe and from/to are exact filters. Results carry `score`, `matched` (fields that answered) and a `recipe` card of in-camera settings. `ranking.mode` is all-terms, partial or no-match; `ranking.dropped` and `ranking.common` name ignored terms. GPS and unlisted EXIF are never returned.',
     inputSchema: {
@@ -127,17 +134,20 @@ const DATA_TOOL_DEFINITIONS = [
   },
   {
     name: "coffee_availability",
+    operationId: "getCoffeeAvailability",
     description:
       "Read bookable coffee slots in the host timezone. If the calendar is stale or unavailable, the result is explicitly unavailable and contains no slots.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "change_radar",
+    operationId: "getChangeRadar",
     description: "Read the bounded historical diff of the latest AadharshBot neighborhood observations. Raw crawled bodies are not stored or returned.",
     inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: CHANGE_RADAR_LIMITS.limitMax } } },
   },
   {
     name: "lens_inspect",
+    parametersFrom: "inspectUrl",
     description:
       "Inspect one public HTTP(S) URL through Lens and return a compact agent-readiness observation. Private, local, and non-HTTP targets are rejected.",
     inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
@@ -149,12 +159,14 @@ const DATA_TOOL_DEFINITIONS = [
     // rather than zero, and `phases` says so, because "no agent doors" and
     // "nobody looked" are different claims.
     name: "lens_page",
+    parametersFrom: "inspectUrl",
     description:
       "Read one public URL and return only what derives from the page's own bytes: anatomy, structured data, a markdown rendering, and what it costs an agent to ingest. Skips the origin-level fan-out entirely, so it is far cheaper and far faster than lens_inspect. Readiness, agent doors and terms are ABSENT from the result (not zero) because they were not checked; `phases.discovery` is false. Use lens_inspect when you need those.",
     inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
   },
   {
     name: "lens_compare",
+    parametersFrom: "compareUrls",
     description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
   },
@@ -187,7 +199,49 @@ const DATA_TOOL_DEFINITIONS = [
   },
 ];
 
-export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
+// A tool that runs the same function as a REST operation (operationId) takes
+// that operation's schemas rather than restating them: its outputSchema is the
+// operation's 200 body, and a parameter with no description of its own takes
+// the operation's description of the parameter with the same name. MCP has no
+// components to point a $ref into, so the schema is inlined. The Lens tools
+// return a summary of their own rather than the REST body, so they name their
+// operation in parametersFrom and take only its parameter descriptions.
+// contract-mcp-tools-share-their-rest-schemas checks each mapped tool's real
+// result against the schema it now declares.
+function inlined(schema: Schema): Schema {
+  // JSON.stringify visits every node top-down, so a resolved component is walked
+  // in turn and nested refs resolve too. A component that referred to itself
+  // would recurse until the stack overflows; none in lib/openapi.ts does.
+  return JSON.parse(
+    JSON.stringify(schema, (_key, value) => {
+      const ref = value?.$ref;
+      if (ref === undefined) return value;
+      const name = String(ref).replace("#/components/schemas/", "");
+      if (!(name in SCHEMAS)) throw new Error(`tools: unresolvable ${ref}`);
+      return SCHEMAS[name];
+    }),
+  );
+}
+
+function withOperationSchemas(tool) {
+  const operationId = tool.operationId ?? tool.parametersFrom;
+  if (!operationId) return tool;
+  const op = operation(operationId);
+  const body = op.responses[200]?.content?.["application/json"]?.schema;
+  if (tool.operationId && !body) throw new Error(`tools: ${tool.name} names ${tool.operationId}, which has no JSON 200 body`);
+  const described = new Map((op.parameters ?? []).map((p) => [p.name, p.description]));
+  const properties = Object.fromEntries(
+    Object.entries(tool.inputSchema.properties ?? {}).map(([name, prop]: [string, Record<string, unknown>]) => [
+      name,
+      prop.description || !described.get(name) ? prop : { ...prop, description: described.get(name) },
+    ]),
+  );
+  const { operationId: _operationId, parametersFrom: _parametersFrom, ...rest } = tool;
+  const inputSchema = { ...tool.inputSchema, properties };
+  return tool.operationId ? { ...rest, inputSchema, outputSchema: inlined(body) } : { ...rest, inputSchema };
+}
+
+export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(withOperationSchemas(tool)));
 
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 

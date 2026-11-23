@@ -319,6 +319,36 @@ const MODERN_META = {
 // double; anything else wants a real type.
 const testGlobals: any = globalThis;
 
+// The subset of JSON Schema that lib/openapi.ts writes: type (one or a list),
+// properties, required, items, enum, const, anyOf/oneOf and additionalProperties.
+// Returns every violation with its path, so a failure names the field.
+function schemaViolations(schema, value, at = "$"): string[] {
+  if (schema.anyOf || schema.oneOf) {
+    const branches = (schema.anyOf || schema.oneOf).map((branch) => schemaViolations(branch, value, at));
+    return branches.some((b) => b.length === 0) ? [] : [`${at}: matches no branch (${branches.map((b) => b[0]).join("; ")})`];
+  }
+  if ("const" in schema && value !== schema.const) return [`${at}: ${JSON.stringify(value)} is not the const ${JSON.stringify(schema.const)}`];
+  if (schema.enum && !schema.enum.includes(value)) return [`${at}: ${JSON.stringify(value)} is not in ${JSON.stringify(schema.enum)}`];
+  if (schema.type) {
+    const kind = value === null ? "null" : Array.isArray(value) ? "array" : Number.isInteger(value) ? "integer" : typeof value;
+    const allowed = [schema.type].flat();
+    const fits = allowed.includes(kind) || (kind === "integer" && allowed.includes("number"));
+    if (!fits) return [`${at}: ${kind}, the schema says ${allowed.join("|")}`];
+  }
+  const out: string[] = [];
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const key of schema.required ?? []) if (!(key in value)) out.push(`${at}.${key}: required and missing`);
+    for (const [key, child] of Object.entries(value)) {
+      const sub = schema.properties?.[key];
+      if (sub) out.push(...schemaViolations(sub, child, `${at}.${key}`));
+      else if (schema.additionalProperties === false) out.push(`${at}.${key}: not in the schema`);
+      else if (typeof schema.additionalProperties === "object") out.push(...schemaViolations(schema.additionalProperties, child, `${at}.${key}`));
+    }
+  }
+  if (Array.isArray(value) && schema.items) value.forEach((item, i) => out.push(...schemaViolations(schema.items, item, `${at}[${i}]`)));
+  return out;
+}
+
 export {
   testGlobals,
   MODERN_META,
@@ -342,6 +372,7 @@ export {
   readFileSync,
   readdir,
   representationD1,
+  schemaViolations,
   staticAssets,
   test,
   wmEnv,
