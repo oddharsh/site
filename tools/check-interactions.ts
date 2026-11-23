@@ -69,6 +69,18 @@ const OFFSITE = new Set(["/rn"]);
 type Verdict = "dead" | "slow" | "error" | "scroll" | "name" | "focus" | "ring" | "key";
 type Budget = Record<string, Record<string, { allow: Verdict[]; why: string }>>;
 const budget: Budget = JSON.parse(readFileSync(`${root}config/interaction-budget.json`, "utf8")).pages;
+// A control's key names its first class as the page serves it, and build step
+// 5e serves short names (gotcha 113). The budget is written in authored names,
+// so a key is read back through the map the build wrote beside the tree.
+const authoredClass: Map<string, string> = (() => {
+  try {
+    const map: { [name: string]: string } = JSON.parse(readFileSync(`${root}.build/class-names.json`, "utf8"));
+    return new Map(Object.entries(map).map(([from, to]) => [to, from]));
+  } catch {
+    return new Map();
+  }
+})();
+const authoredKey = (key: string) => key.replace(/^([a-z0-9]+)\.([\w-]+)/, (_m, tag: string, cls: string) => `${tag}.${authoredClass.get(cls) ?? cls}`);
 const manifest: { surfaces: { path: string }[] } = JSON.parse(readFileSync(`${root}config/site-manifest.json`, "utf8"));
 const only = values.only?.split(",");
 const paths = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
@@ -482,10 +494,11 @@ async function sweep(ctx: BrowserContext, base: string) {
         if (!reading) continue;
         const { outcome, failed } = reading;
         operated++;
-        const allow = new Set(allowed[control.key]?.allow);
+        const named = authoredKey(control.key);
+        const allow = new Set(allowed[named]?.allow);
         for (const verdict of failed) {
           if (allow.has(verdict)) {
-            used.add(`${control.key}\n${verdict}`);
+            used.add(`${named}\n${verdict}`);
             continue;
           }
           if (verdict === "slow") {
@@ -506,7 +519,7 @@ async function sweep(ctx: BrowserContext, base: string) {
                       : verdict === "key"
                         ? "it answers a click and neither Enter nor Space"
                         : `${control.kind === "press" ? "pressing" : "changing"} it caused nothing`;
-          failures.push(`FAIL  ${verdict.padEnd(6)} ${path}  ${control.key}: ${detail}`);
+          failures.push(`FAIL  ${verdict.padEnd(6)} ${path}  ${named}: ${detail}`);
         }
         // A control that left the page, or widened it, gets a fresh page for the next one.
         if (outcome.left || outcome.scroll.length) {
