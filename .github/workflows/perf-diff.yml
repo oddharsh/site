@@ -329,7 +329,7 @@ jobs:
           bun install --frozen-lockfile
 
       - name: Read both in Chrome
-        run: node tools/paint-diff.ts "$RUNNER_TEMP/paint-base" --out "$RUNNER_TEMP/paint.md"
+        run: bun run paint:diff "$RUNNER_TEMP/paint-base" --out "$RUNNER_TEMP/paint.md"
 
       - name: Summarize
         if: always()
