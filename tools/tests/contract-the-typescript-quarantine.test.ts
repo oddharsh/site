@@ -143,6 +143,11 @@ test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", as
 // THE EIGHTH, taken 2026-11-21: `test:workerd` (tools/test-workerd.ts). It
 // drives miniflare's dispatchFetch, so the 2026-09-16 measurement above is its
 // reason too (tools/lib/harness-dispatch.ts has the table).
+//
+// THE NINTH, taken 2026-11-23: `paint:diff` (tools/paint-diff.ts). It boots a
+// harness for the base and one for HEAD through tools/paint-serve.ts, spawned
+// as node children from the module, so the 2026-09-16 measurement above is its
+// reason too and the scan below sees only the package script.
 // Browser erasure is another module-level Node boundary: Bun does not export
 // node:module.stripTypeScriptTypes. browser-source.ts batches the browser
 // programs through browser-source-node.ts; contract-browser-typescript.test.ts
@@ -155,7 +160,7 @@ test("script-level node commands stay declared alongside the module-level harnes
     .filter(([, cmd]) => /(^|&& |\| )node /.test(cmd))
     .map(([k]) => k)
     .sort();
-  assert.deepEqual(nodeScripts, ["act:check", "browser:check", "cpu:sweep", "routes:check", "routes:check:remote", "test:node", "test:workerd"]);
+  assert.deepEqual(nodeScripts, ["act:check", "browser:check", "cpu:sweep", "paint:diff", "routes:check", "routes:check:remote", "test:node", "test:workerd"]);
   const files = repoFiles(["*.sh", "**/*.sh", ".github/workflows/*.yml"], root);
   const spawns: any[] = [];
   for (const rel of files) {
