@@ -71,16 +71,22 @@ type Budget = Record<string, Record<string, { allow: Verdict[]; why: string }>>;
 const budget: Budget = JSON.parse(readFileSync(`${root}config/interaction-budget.json`, "utf8")).pages;
 // A control's key names its first class as the page serves it, and build step
 // 5e serves short names (gotcha 113). The budget is written in authored names,
-// so a key is read back through the map the build wrote beside the tree.
-const authoredClass: Map<string, string> = (() => {
-  try {
-    const map: { [name: string]: string } = JSON.parse(readFileSync(`${root}.build/class-names.json`, "utf8"));
-    return new Map(Object.entries(map).map(([from, to]) => [to, from]));
-  } catch {
-    return new Map();
+// so a key is read back through the map the build wrote beside the tree. Read
+// on first use, not at load: in CI the harness builds .build after this module
+// loads, and a map read before it was empty.
+let authoredClass: Map<string, string> | undefined;
+const authoredKey = (key: string) => {
+  if (!authoredClass) {
+    try {
+      const map: { [name: string]: string } = JSON.parse(readFileSync(`${root}.build/class-names.json`, "utf8"));
+      authoredClass = new Map(Object.entries(map).map(([from, to]) => [to, from]));
+    } catch {
+      authoredClass = new Map();
+    }
   }
-})();
-const authoredKey = (key: string) => key.replace(/^([a-z0-9]+)\.([\w-]+)/, (_m, tag: string, cls: string) => `${tag}.${authoredClass.get(cls) ?? cls}`);
+  const names = authoredClass;
+  return key.replace(/^([a-z0-9]+)\.([\w-]+)/, (_m, tag: string, cls: string) => `${tag}.${names.get(cls) ?? cls}`);
+};
 const manifest: { surfaces: { path: string }[] } = JSON.parse(readFileSync(`${root}config/site-manifest.json`, "utf8"));
 const only = values.only?.split(",");
 const paths = manifest.surfaces.map((s) => s.path).filter((p) => !OFFSITE.has(p) && (!only || only.includes(p)));
