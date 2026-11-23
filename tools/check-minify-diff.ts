@@ -48,6 +48,15 @@
 // are what moved that; the PR that added them has the before and after table.
 // About 5 minutes a record, so it runs by hand, not in validate; `catch` is
 // the one-page self-test tools/lib/controls.ts runs.
+//
+//   node tools/check-minify-diff.ts record <dir> --classes   # for a class rename (build step 5e)
+//
+// --classes is the record for a class rename. A renamed class shows up in
+// styling, not in the DOM, so each snapshot drops script and style bodies
+// (their text is renamed on purpose), reads every class token back through the
+// inverse of .build/class-names.json, and appends each element's box and a set
+// of computed styles, ::before and ::after content included. Record both
+// builds with it.
 import { chromium } from "playwright-core";
 import type { BrowserContext, Page } from "playwright-core";
 import { execFileSync } from "node:child_process";
@@ -64,7 +73,7 @@ import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { only: { type: "string" }, mutate: { type: "string" }, build: { type: "boolean" } },
+  options: { only: { type: "string" }, mutate: { type: "string" }, build: { type: "boolean" }, classes: { type: "boolean" } },
 });
 const [verb, dirA, dirB] = positionals;
 
@@ -101,6 +110,55 @@ const SERENDIPITY_EVENTS = [
   ["sd-fixture-3", "Fixture: reading group", "2026-06-20T23:00:00.000Z", "Queens"],
   ["sd-fixture-4", "Fixture: far future", "2030-01-15T23:00:00.000Z", "Online"],
 ] as const;
+
+// Short name -> authored name, from the map build step 5e wrote, for --classes.
+const AUTHORED: Map<string, string> = (() => {
+  if (!values.classes) return new Map();
+  try {
+    const map: { [name: string]: string } = JSON.parse(readFileSync(".build/class-names.json", "utf8"));
+    return new Map(Object.entries(map).map(([from, to]) => [to, from]));
+  } catch {
+    return new Map();
+  }
+})();
+const authored = (classes: string) => classes.replace(/\S+/g, (t) => AUTHORED.get(t) ?? t);
+// The walk's own selectors name authored classes; this is the name a renamed build serves.
+const served = (name: string) => [...AUTHORED].find(([, from]) => from === name)?.[0] ?? name;
+const forClasses = (dom: string) =>
+  dom
+    .replace(/(<(script|style)\b[^>]*>)[\s\S]*?(<\/\2>)/g, "$1$3")
+    .replace(/ class="([^"]*)"/g, (_m, v: string) => ` class="${authored(v)}"`)
+    // <noscript> content is text while scripts run, so its minified, unquoted attributes survive as written.
+    .replace(/ class=([^\s"'=<>`]+)/g, (_m, v: string) => ` class=${authored(v)}`);
+const STYLES = [
+  "display",
+  "position",
+  "visibility",
+  "color",
+  "background-color",
+  "background-image",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "line-height",
+  "margin-top",
+  "margin-left",
+  "padding-top",
+  "padding-left",
+  "border-top-width",
+  "border-top-color",
+  "border-top-style",
+  "opacity",
+  "transform",
+  "flex-direction",
+  "grid-template-columns",
+  "z-index",
+  "cursor",
+  "text-decoration-line",
+  "box-shadow",
+  "white-space",
+  "overflow-x",
+];
 
 type Record = { path: string; steps: Array<{ step: string; dom: string }>; console: string[]; errors: string[]; requests: string[] };
 
@@ -196,7 +254,24 @@ async function walk(ctx: BrowserContext, base: string, path: string, mutant: str
         return document.documentElement.outerHTML + state.join("");
       })
       .catch((e: unknown) => `unreadable: ${firstLine(e)}`);
-    rec.steps.push({ step, dom: unhash(dom) });
+    if (!values.classes) {
+      rec.steps.push({ step, dom: unhash(dom) });
+      return;
+    }
+    const boxes = await page
+      .evaluate((props) => {
+        const out: string[] = [];
+        for (const el of document.querySelectorAll("*")) {
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          const box = [r.x, r.y, r.width, r.height].map(Math.round).join(",");
+          const pseudo = `${getComputedStyle(el, "::before").content} ${getComputedStyle(el, "::after").content}`;
+          out.push(`${el.tagName} ${box} ${props.map((p) => cs.getPropertyValue(p)).join("|")} ${pseudo}`);
+        }
+        return out.join("\n");
+      }, STYLES)
+      .catch((e: unknown) => `unreadable: ${firstLine(e)}`);
+    rec.steps.push({ step, dom: unhash(`${forClasses(dom)}\n${boxes}`) });
   };
   try {
     await page.goto(base + path, { waitUntil: "load", timeout: 20_000 });
@@ -233,7 +308,10 @@ async function walk(ctx: BrowserContext, base: string, path: string, mutant: str
     );
     for (let i = 0; i < FIELDS && i < (await fields.count()); i++) {
       const field = fields.nth(i);
-      const label = await field.evaluate((el) => `${el.tagName.toLowerCase()}#${el.id}.${el.className}`).catch(() => "gone");
+      const label = await field
+        .evaluate((el) => [el.tagName.toLowerCase(), el.id, el.className])
+        .then(([tag, id, cls]) => `${tag}#${id}.${authored(cls)}`)
+        .catch(() => "gone");
       await field.click({ timeout: 1_000 }).catch(() => field.focus().catch(() => {}));
       await page.keyboard.type(FIELD_TEXT);
       await page.keyboard.press("Enter");
@@ -241,13 +319,16 @@ async function walk(ctx: BrowserContext, base: string, path: string, mutant: str
     }
     // History buttons leave the page, which the route block cannot stop.
     const controls = page.locator(
-      'button:not(.axp-back):not(.axp-fwd):visible, summary:visible, input:is([type="checkbox"], [type="radio"]):visible, [role="button"]:visible, [role="tab"]:visible, [role="menuitem"]:visible',
+      `button:not(.${served("axp-back")}):not(.${served("axp-fwd")}):visible, summary:visible, input:is([type="checkbox"], [type="radio"]):visible, [role="button"]:visible, [role="tab"]:visible, [role="menuitem"]:visible`,
     );
     // Counted again before every click: photos' view switch reveals the sort
     // headers, which a count taken once at the start never reached.
     for (let i = 0; i < CLICKS && i < (await controls.count()); i++) {
       const target = controls.nth(i);
-      const label = await target.evaluate((el) => `${el.tagName.toLowerCase()}#${el.id}.${el.className}`).catch(() => "gone");
+      const label = await target
+        .evaluate((el) => [el.tagName.toLowerCase(), el.id, el.className])
+        .then(([tag, id, cls]) => `${tag}#${id}.${authored(cls)}`)
+        .catch(() => "gone");
       // A control Playwright calls not actionable (lens's tab strip, every one
       // of its chips) still gets its click, sent to the element itself.
       await target.click({ timeout: 1_000, noWaitAfter: true }).catch(async (e: unknown) => {

@@ -56,6 +56,19 @@ const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 // too; real budgets live in perf-budget.ts.
 const MINIFIED_MAX_RATIO = 0.8;
 
+// Build step 5e shortens class names and writes its map to .build/class-names.json (gotcha 113).
+// A marker that is a class name is looked for under the name the build ships,
+// from the map of the tree this checkout built; with no built tree it stays as
+// written. A readable .src twin keeps the authored names.
+const CLASS_NAMES: Record<string, string> = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL("../.build/class-names.json", import.meta.url), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+const servedMarker = (path: string, marker: string): string => (path.includes(".src.") ? marker : (CLASS_NAMES[marker] ?? marker));
+
 // VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
 // because a local Worker has empty KV/R2 and no Browser Run, and remote bindings
@@ -762,7 +775,7 @@ async function probe(r) {
     // shipped 16% fat for weeks in July 2026 (see serveStaticPage's index note).
     const enc = (res.headers.get("content-encoding") || "").toLowerCase();
     const okEnc = !r.encoding || enc === r.encoding;
-    const okMarker = !r.marker || body.includes(r.marker);
+    const okMarker = !r.marker || body.includes(servedMarker(r.path, r.marker));
     const cors = res.headers.get("access-control-allow-origin");
     const okCors = !r.cors || cors === r.cors;
     const location = res.headers.get("location");

@@ -1257,6 +1257,26 @@ skips it.
     q11, since the preview runs the same Worker without the zone. A
     `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
     Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
+113. **A built page ships short class names, so a check that greps one for an
+    authored class finds nothing.** Build step 5e renames 1,121 of the site's
+    1,724 class names across the staged tree (`tools/lib/class-names.ts`,
+    through spokeshave's census). `.window` stays `.window` only because
+    the census couldn't rule it out. `.title-bar` ships as a one- or
+    two-letter name. On 2026-11-22 two contract tests and two route-oracle
+    markers matched `axp-address`, `axp-here`, `xp-day-label` and
+    `tool-out` in built output, and all four failed on the first renamed
+    build. The build writes its map to `.build/class-names.json`, outside
+    the served tree. A check reading built pages, the built Worker's
+    responses or `/a/` assets looks a class up there first. A readable
+    `.src.*` twin keeps the authored names. A check that greps built output
+    for any other class name also needs a floor, the way the Explorer-chrome
+    test counts its matches, or it passes on zero. A build step after 5e
+    asks `servedClass`, and a browser tool that can't read the map names
+    its classes in `TOOLING_RESERVED` (`tools/lib/class-names.ts`), which
+    the rename leaves alone. The Explorer-chrome test's floor fails when
+    its lookup is dropped, and the route oracle's `/dict` and
+    `/coffee/slots.html` markers fail the same way.
+    Checked by: `src/worker/lib/tests/contract-explorer-chrome-escapes-a-heading-once.test.ts`, `tools/verify-routes.ts`.
 
 114. **In Workers Logs, a request's `accept-encoding` header is the edge's,
     so every visitor seems to refuse dcz.** The Worker sees Accept-Encoding

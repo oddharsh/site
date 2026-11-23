@@ -7,7 +7,7 @@
 // Details box, and /garage/safari27, /garage/chunks and /lwe/vigenere did the
 // same with `&apos;`, `&amp;` and `&egrave;`. Nothing failed, because a
 // double-escaped name is still valid HTML.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { ROOT, assert, readFile, readdir, test } from "../../../../tools/tests/contract-shared.ts";
 import { addressBar, taskPane } from "../explorer.ts";
 import { objectNameOf } from "../../../../tools/lib/object-name.ts";
@@ -15,8 +15,6 @@ import { objectNameOf } from "../../../../tools/lib/object-name.ts";
 // `&amp;` followed by what would have been a reference: a name or a number,
 // then `;`. "R&amp;D" is a single escape and stays legal.
 const TWICE = /&amp;(?:#[0-9]+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i;
-// From the address bar to the end of the pane, quoted or minified.
-const CHROME = /class="?axp-address"?[\s\S]*?class="?axp-pane"?[\s\S]*?<\/aside>/;
 
 const chromeFor = (path, source) => {
   const options = { path, name: objectNameOf(source) };
@@ -53,6 +51,13 @@ test("the address bar and the task pane escape the name once, and still escape i
 
 const BUILT = new URL(".build/public/", ROOT);
 const needsBuild = !existsSync(BUILT) && "needs a built tree: bun run build";
+// Build step 5e shortens class names in the staged tree and writes the map it
+// used beside it, so a built page is read under the names it actually ships
+// (gotcha 113).
+const CLASS_MAP = new URL(".build/class-names.json", ROOT);
+const served = (name: string): string => (existsSync(CLASS_MAP) ? (JSON.parse(readFileSync(CLASS_MAP, "utf8"))[name] ?? name) : name);
+// From the address bar to the end of the pane, quoted or minified.
+const CHROME = new RegExp(`class="?${served("axp-address")}"?[\\s\\S]*?class="?${served("axp-pane")}"?[\\s\\S]*?</aside>`);
 
 test("no staged page's Explorer chrome carries a double escape", { skip: needsBuild }, async () => {
   const pages = (await readdir(BUILT, { recursive: true })).filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
@@ -77,10 +82,10 @@ test("no staged page's address bar carries its heading's pill", { skip: needsBui
   const offenders: any[] = [];
   for (const rel of pages) {
     const page = await readFile(new URL(rel, BUILT), "utf8");
-    const here = /class="?axp-here"?[^>]*>([^<]*)</.exec(page);
+    const here = new RegExp(`class="?${served("axp-here")}"?[^>]*>([^<]*)<`).exec(page);
     const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(page);
     if (!here || !h1) continue;
-    for (const pill of h1[1].matchAll(/<span\b[^>]*\bclass="?[^">]*\b(?:badge|status)\b[^>]*>([^<]*)<\/span>/gi)) {
+    for (const pill of h1[1].matchAll(new RegExp(`<span\\b[^>]*\\bclass="?[^">]*\\b(?:${served("badge")}|${served("status")})\\b[^>]*>([^<]*)</span>`, "gi"))) {
       pilled++;
       if (here[1].trim().endsWith(pill[1].trim())) offenders.push(`${rel}: ${here[1]}`);
     }

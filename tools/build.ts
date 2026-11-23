@@ -2262,6 +2262,55 @@ phase("5c custom properties");
   );
 }
 
+phase("5e class names");
+// 5e) shorten CSS class names across the whole staged tree: stylesheets, page
+// markup, client scripts and the Worker source that builds markup, at once.
+//
+// spokeshave's census (spokeshave/src/classes.ts) records every class position
+// with its offset and decides which names nothing else in the tree could
+// become; lib/class-names.ts names them in the shell and hashed tiers 5c uses.
+// It runs after 5c for the same reasons 5c runs where it does: every document
+// and Worker literal is staged, and step 6 has not hashed anything yet, so the
+// content hashes, CSP hashes and deltas all see final bytes.
+//
+// The `.src.*` twins keep the authored names, as they keep the custom property
+// names: they are the readable copy.
+//
+// CLASS_NAMES=off skips the step, which is the baseline check-minify-diff.ts
+// --classes records a rename against.
+//
+// A later step that reads a class out of a staged page asks servedClass for
+// the name it ships as (gotcha 113).
+let servedClass = (name: string): string => name;
+if (process.env.CLASS_NAMES === "off") console.log("class names: skipped (CLASS_NAMES=off)");
+else {
+  const { censusFile, renameClasses } = await import("./lib/class-names.ts");
+  const staged = (await readdir(OUT, { recursive: true })).filter(censusFile).sort();
+  const texts = await Promise.all(
+    staged.map(async (rel) => {
+      const full = `${OUT}/${rel}`;
+      return (await stat(full)).isFile() ? readFile(full, "utf8") : null;
+    }),
+  );
+  const before = new Map<string, string>();
+  staged.forEach((rel, i) => {
+    const text = texts[i];
+    if (text !== null) before.set(rel, text);
+  });
+  // The floor is 600 of the 1,151 names renameable on 2026-11-22, so a census
+  // that quietly stops matching fails here instead of shipping a no-op.
+  const { before: census, map, after } = renameClasses(before, SHELL_RANKED, 600);
+  const changed = [...after].filter(([rel, text]) => text !== before.get(rel));
+  await Promise.all(changed.map(([rel, text]) => writeFile(`${OUT}/${rel}`, text)));
+  servedClass = (name) => map.get(name) ?? name;
+  // Beside the staged tree, never served: what a test reading a built page
+  // needs to find a class under the name it ships as.
+  await writeFile(`${OUT}/class-names.json`, JSON.stringify(Object.fromEntries([...map].sort(([a], [b]) => (a < b ? -1 : 1))), null, 1) + "\n");
+  console.log(
+    `class names: ${map.size} of ${census.counts.size} renamed across ${changed.length} staged files (${census.tainted.size} files with an untraced class sink)`,
+  );
+}
+
 phase("5d quiz data");
 // 5d) the understanding check's payload leaves the document.
 //
@@ -2724,7 +2773,7 @@ phase("7b minify pages");
         // chrome the build injects at 1g2, and a twin missing markup the page
         // carries stops being the same program — which is the entire argument for
         // minifying these pages at all. Dress the twin from the same builder.
-        if (staged.includes('class="axp-tasks"') && !twin.includes('class="axp-tasks"')) {
+        if (staged.includes(`class="${servedClass("axp-tasks")}"`) && !twin.includes('class="axp-tasks"')) {
           twin = dressPage(twin, rel).html;
         }
       } catch {
