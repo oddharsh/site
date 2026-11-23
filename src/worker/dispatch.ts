@@ -30,7 +30,7 @@ import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { canonicalPage, countMiss, recoverNotFound, sitemapPaths } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
-import { withSecurityHeaders } from "./lib/security.ts";
+import { offersDictionary, withSecurityHeaders } from "./lib/security.ts";
 import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
@@ -306,7 +306,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
     // rather than listing the hosts that are not means the next alias is covered by
     // arriving, which is the same argument the preview guard's default-deny wins on.
-    return withSecurityHeaders(response, pathname, { noindex: !isCanonicalHost(hostname) });
+    return withSecurityHeaders(response, pathname, { noindex: !isCanonicalHost(hostname), offerDictionary: offersDictionary(request) });
   }
 
   // SELF_FETCH and the cron arrive without a parsed URL; serveWorkerRequest

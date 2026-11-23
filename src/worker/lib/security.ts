@@ -124,6 +124,28 @@ function headersAreMutable(headers: Headers): boolean {
   }
 }
 
+/**
+ * Whether a document request is offered the page dictionary.
+ *
+ * Chromium fetches the dictionary at idle on every page that names it, 14,846 B
+ * of brotli, and it pays back only on a later page of the site. On the week to
+ * 2026-11-22, 64 cold Chromium page views a day fetched it and 12.9 views a day
+ * used one; of the human cold Chromium views, 4% arrived from another page of
+ * the site and the rest landed from outside, which is a one-page visit far more
+ * often than not. `bun run user-bytes` put serving no dictionary at all at
+ * -7,911 B a view, nearly all of it these fetches.
+ *
+ * So the dictionary is offered to a navigation from this site (the visitor is
+ * already browsing), to a request that holds a dictionary (a returning visitor,
+ * who has to learn the new one after a roll), and to a client that sends no
+ * Sec-Fetch-Site at all, which keeps its old behaviour. A landing from outside
+ * goes without; its second page offers it.
+ */
+export function offersDictionary(request: Request): boolean {
+  const site = request.headers.get("sec-fetch-site");
+  return site === null || site === "same-origin" || request.headers.has("available-dictionary");
+}
+
 export function withSecurityHeaders(response, pathname?, opts?) {
   const noindex = !!(opts && opts.noindex);
 
@@ -198,7 +220,8 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   // browser the same immutable page dictionary. Static/deterministic routes can
   // use it immediately on the next navigation; live pages still seed it for
   // their links without paying a blocking fetch (the relation is idle-loaded).
-  if (PAGE_DICTIONARY && ct.startsWith("text/html")) {
+  // A request that only lands (offersDictionary) isn't taught it.
+  if (PAGE_DICTIONARY && ct.startsWith("text/html") && opts?.offerDictionary !== false) {
     const dictionaryLink = `<${PAGE_DICTIONARY}>; rel="compression-dictionary"`;
     const current = headers.get("link");
     if (!current?.includes('rel="compression-dictionary"')) {
