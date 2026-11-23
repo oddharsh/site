@@ -1,5 +1,6 @@
 // ── Workers preview URLs ────────────────────────────────────────────
-import { MODERN_META, ROOT, SITE_MCP_TOOLS, assert, context, handleSiteMcp, readFile, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, ROOT, assert, context, readFile, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { MCP_TOOLS as SITE_MCP_TOOLS, handleSiteMcp } from "../mcp.ts";
 
 // A preview version runs PRODUCTION bindings and secrets (lib/preview.ts says
 // why at length), so these tests are the difference between a preview URL and

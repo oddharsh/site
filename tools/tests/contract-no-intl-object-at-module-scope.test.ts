@@ -7,8 +7,9 @@
 // constructor counting what it builds.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { assert, inTestsDir, ROOT, test } from "./contract-shared.ts";
+import { assert, ROOT, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const bun = process.versions.bun ? process.execPath : "bun";
 const CLOUDFLARE_WORKERS = /^import[^;]*from\s*["']cloudflare:workers["']/m;

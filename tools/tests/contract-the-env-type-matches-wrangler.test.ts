@@ -1,5 +1,6 @@
 // ── the Env type matches cloudflare.config.ts ─────────────────────────────
-import { configText, assert, readFileSync, test } from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
+import { configText } from "./contract-config.ts";
 
 // src/worker/lib/env.ts is a DECLARATION of the Worker's binding surface, and a
 // declaration nothing diffs is a comment with extra syntax. This is the diff.

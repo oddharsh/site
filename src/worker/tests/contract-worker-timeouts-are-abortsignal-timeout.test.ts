@@ -1,7 +1,8 @@
 // ── Worker request deadlines are AbortSignal.timeout, and a timeout is named ──
 import { readFileSync } from "node:fs";
-import { ROOT, assert, inTestsDir, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, test } from "../../../tools/tests/contract-shared.ts";
 import { repoFiles } from "../../../tools/lib/repo-files.ts";
+import { inTestsDir } from "../../../tools/lib/test-roots.ts";
 
 // Every outbound deadline in the Worker code is `AbortSignal.timeout(ms)`. It
 // replaced 18 hand-rolled ones (an AbortController, a setTimeout that aborted

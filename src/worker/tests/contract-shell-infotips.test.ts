@@ -1,41 +1,32 @@
 // ── shell infotips ──────────────────────────────────────────────────────────
 import {
   testGlobals,
-  AGENT_SURFACES,
-  DESKTOP_CHROME,
   MODERN_META,
   ROOT,
-  SECTION_FAVICONS,
-  SERENDIPITY_MCP_SERVER_INFO,
-  SITE_MCP_SERVER_INFO,
-  TASKBAR,
   assert,
   context,
   deferredContext,
   fakeD1,
-  faviconHref,
-  findEndpointIn,
-  handleSiteMcp,
-  handleWebmention,
   kvForTracks,
   mcpPost,
-  navFenceBody,
-  readFenceBody,
   readFile,
-  readManifest,
   readdir,
-  runProfilesBody,
-  sectionFavicons,
-  speculationRulesJson,
   test,
   wmEnv,
   wmPost,
-  workerModule,
 } from "../../../tools/tests/contract-shared.ts";
-import { SPECULATION } from "../../../tools/photos/shell-data.ts";
+import { SPECULATION, TASKBAR } from "../../../tools/photos/shell-data.ts";
 import { CLIENT_ASSETS, hashOrder, minifiedScripts } from "../../../tools/lib/client-assets.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { existsSync, readFileSync } from "node:fs";
+import { AGENT_SURFACES } from "../lib/site-manifest.ts";
+import { DESKTOP_CHROME, SECTION_FAVICONS } from "../lib/desktop.ts";
+import { SERENDIPITY_MCP_SERVER_INFO } from "../../../serendipity/serendipity.ts";
+import { SITE_MCP_SERVER_INFO, handleSiteMcp } from "../mcp.ts";
+import { faviconHref, sectionFavicons, speculationRulesJson } from "../../../tools/photos/gen-desktop-partial.ts";
+import { findEndpointIn } from "../webmention-send.ts";
+import { handleWebmention } from "../webmention.ts";
+import { navFenceBody, readFenceBody, readManifest, runProfilesBody, workerModule } from "../../../tools/gen-manifest.ts";
 
 // ── shell infotips ──────────────────────────────────────────────────────────
 // infotip.js cannot be imported here: it reaches /hoist.js by absolute

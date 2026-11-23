@@ -1,6 +1,7 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
-import { configText, context, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { context, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 // These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.
 // The route they guard is the one that fetches third parties and spends Browser

@@ -450,6 +450,38 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
   assert.equal(compareEdgeCheck(check, { kind: "early-data", result: { skip: "no openssl" } }, { hostedRunner: false })[0].level, "warn");
 });
 
+// gotcha 112. The two etags are the ones measured on 2026-11-22: production
+// answered / with no etag at all while Cloudflare Fonts re-encoded the twin,
+// and the workers.dev preview of the same
+// version answered with the twin's own validator.
+test("edge: html-twin-reaches-the-wire passes on the twin's -br etag and fails when the edge re-encoded it", () => {
+  const check = edgeCheck("html-twin-reaches-the-wire");
+  assert.deepEqual(check.request, { "accept-encoding": "br" });
+
+  const twin = compareEdgeCheck(
+    check,
+    { kind: "response", headers: { "content-encoding": "br", "etag": 'W/"1e59175172b699000a54210f217055b8-br"' } },
+    { hostedRunner: false },
+  );
+  assert.deepEqual(twin, [{ level: "pass", message: "edge html-twin-reaches-the-wire holds" }]);
+
+  const reencoded = compareEdgeCheck(check, { kind: "response", headers: { "content-encoding": "br" } }, { hostedRunner: false });
+  assert.equal(reencoded.length, 1);
+  assert.equal(reencoded[0].level, "fail");
+  assert.ok(
+    reencoded[0].message.startsWith('production edge: html-twin-reaches-the-wire: etag does not contain "-br\\"" (got "(absent)")'),
+    reencoded[0].message,
+  );
+
+  // The dcz delta's validator is the Worker's too, and still not the twin.
+  const delta = compareEdgeCheck(
+    check,
+    { kind: "response", headers: { "content-encoding": "dcz", "etag": 'W/"1e59175172b699000a54210f217055b8-dcz"' } },
+    { hostedRunner: false },
+  );
+  assert.equal(delta[0].level, "fail");
+});
+
 test("edge: an observation of the wrong kind, a missing body and a missing check are advisories", () => {
   const body = edgeCheck("rocket-loader-off");
 

@@ -1,6 +1,6 @@
 // ── push gate: which commands it holds, and what it says when it does ───────
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assert, test } from "./contract-shared.ts";
@@ -63,8 +63,15 @@ test("push gate: a tree's id moves with every file the gates read, and leaves th
     const git = (...args: string[]) =>
       execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8" });
     git("init", "-q");
+    // An edit inside one timestamp tick (ext4 ticks about every 4 ms) leaves
+    // size, mtime and ctime as the index cached them, so only git's racy-entry
+    // check (file mtime >= index mtime) makes add rehash it. Pin both mtimes
+    // to one second, and ignore ctime, so that case runs on every machine.
+    git("config", "core.trustctime", "false");
+    const tick = 1_700_000_000;
     writeFileSync(join(dir, ".gitignore"), "out/\n");
     writeFileSync(join(dir, "a.ts"), "export const a = 1;\n");
+    utimesSync(join(dir, "a.ts"), tick, tick);
     git("add", "-A");
     git("commit", "-qm", "base");
     const base = treeId(dir);
@@ -76,7 +83,9 @@ test("push gate: a tree's id moves with every file the gates read, and leaves th
     const untracked = treeId(dir);
     assert.notEqual(untracked, base, "an untracked file is");
     writeFileSync(join(dir, "a.ts"), "export const a = 2;\n");
-    assert.notEqual(treeId(dir), untracked, "so is an unstaged edit");
+    utimesSync(join(dir, "a.ts"), tick, tick);
+    utimesSync(join(dir, ".git/index"), tick, tick);
+    assert.notEqual(treeId(dir), untracked, "so is an unstaged edit, even one the index stat data cannot see");
     assert.equal(git("diff", "--cached", "--name-only"), "", "the real index never moved");
   } finally {
     rmSync(dir, { recursive: true, force: true });

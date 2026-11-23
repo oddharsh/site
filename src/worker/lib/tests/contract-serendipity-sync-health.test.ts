@@ -7,7 +7,7 @@
 // of the fix: a record in `settings` on every path (the throw included), a
 // `serendipity.sync` span whose unknowns stay off rather than reading 0, and a
 // dashboard line that goes stale after two missed ticks.
-import { configText, assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
 import { parseJsonc } from "../../../../tools/lib/jsonc.ts";
 import { routeFetch } from "../../../../tools/lib/fetch-routes.ts";
 import { cronJob } from "../cron.ts";
@@ -25,6 +25,7 @@ import {
   syncSpanAttrs,
 } from "../../../../serendipity/serendipity.ts";
 import type { SyncRecord } from "../../../../serendipity/serendipity.ts";
+import { configText } from "../../../../tools/tests/contract-config.ts";
 
 const COOKIES = JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "usr-test.secret" }] });
 

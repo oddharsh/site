@@ -27,12 +27,13 @@
 // the hops reach the no-network preload instead, discovery swallows that as
 // "no endpoint", and no target is left unrecorded.
 import { parseJsonc } from "../../../tools/lib/jsonc.ts";
-import { assert, configText, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
 import { cronJob } from "../lib/cron.ts";
 import { SUBREQUEST_CAP_FREE } from "../lib/budget.ts";
 import { withBotPolicyCache } from "../lib/botauth.ts";
 import { AROUND_SUBREQUEST_LIMIT, AROUND_SUBREQUEST_RESERVE, NEIGHBORS, cronAround } from "../around.ts";
 import { SUBREQUEST_BUDGET, cronSendWebmentions } from "../webmention-send.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 // What one invocation of each outbound job can spend at most. The crawl's
 // ledger meters third-party hops, and its reserve covers the snapshot put and

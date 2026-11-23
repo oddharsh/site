@@ -6,8 +6,8 @@
 // microformats-parser read those; the regex read nothing and reported the
 // hostname. These fixtures pin what lib/mf2.ts reads and what parseSource makes
 // of it, with a plain-text author kept as the control.
-import { assert, deferredContext, fakeD1, handleWebmention, test, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
-import { parseSource } from "../webmention.ts";
+import { assert, deferredContext, fakeD1, test, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
+import { parseSource, handleWebmention } from "../webmention.ts";
 import { parseMf2 } from "../lib/mf2.ts";
 import { renderInboxMail } from "../inbox.ts";
 import { renderWritingPost } from "../writing.ts";
