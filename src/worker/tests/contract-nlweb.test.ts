@@ -64,6 +64,7 @@ test("/ask returns NLWeb's six result fields, with a real schema.org object", as
   // two claims. A legacy GET is answered by a server that does speak 0.55, so
   // one field carrying both would be ambiguous exactly where it matters most.
   assert.equal(payload._meta.version, "0.55");
+  assert.equal(payload._meta.response_type, "answer");
   assert.equal(payload._meta.dialect, "legacy");
   assert.ok(payload.results.length >= 1, "the cached corpus must answer this query");
   for (const row of payload.results) {
@@ -134,6 +135,7 @@ test("/ask refuses the modes it cannot serve instead of degrading to list", asyn
     assert.deepEqual(body.supported_modes, ["list"]);
     assert.ok(body.known_modes.includes(mode), "the refusal names the mode as one the protocol defines");
     assert.equal(body.results.length, 0, "a refusal carries no results");
+    assert.equal(body._meta.response_type, "failure", "NLWeb 0.55 names a refusal in _meta");
   }
   // A mode the protocol never defined is a different error from one it defines
   // and this origin cannot serve.
@@ -190,6 +192,31 @@ test("/ask refuses a site token it does not serve", async () => {
   const res = await askGet(`?query=${NLWEB_HIT}&site=example.com&streaming=0`);
   assert.equal(res.status, 400);
   assert.deepEqual((await res.json()).available_sites, ["aadhar.sh", "all"]);
+});
+
+test("every /ask failure is NLWeb's failure envelope, early returns included", async () => {
+  // NLWeb 0.55 section 4.1.4: _meta.response_type "failure" and an error
+  // OBJECT with a spec code. A client that dispatches on response_type reads
+  // error.code, so a string there would be unreadable to exactly that client.
+  const { handleAsk } = await import("../nlweb.ts");
+  const post = (body: string) =>
+    handleAsk(new Request("https://aadhar.sh/ask", { method: "POST", headers: { "content-type": "application/json" }, body }), nlwebEnv());
+  const cases = [
+    { res: await askGet("?streaming=0"), status: 400, code: "INVALID_QUERY" },
+    { res: await askGet(`?query=${NLWEB_HIT}&mode=generate&streaming=0`), status: 501, code: "UNSUPPORTED_MODE" },
+    { res: await post("{not json"), status: 400, code: "INVALID_QUERY" },
+    { res: await post(JSON.stringify({ query: { text: "x".repeat(70_000) } })), status: 413, code: "TOKEN_LIMIT" },
+  ];
+  for (const { res, status, code } of cases) {
+    assert.equal(res.status, status, code);
+    const body = await res.json();
+    assert.deepEqual(body._meta, { version: "0.55", response_type: "failure" });
+    assert.equal(body.error.code, code);
+    assert.equal(typeof body.error.message, "string");
+    assert.deepEqual(body.results, []);
+  }
+  // The answer side of the same switch, so the failure shape is not the only one.
+  assert.equal((await (await askGet(`?query=${NLWEB_HIT}&streaming=0`)).json())._meta.response_type, "answer");
 });
 
 test("the ask MCP tool and /ask are the same answer", async () => {

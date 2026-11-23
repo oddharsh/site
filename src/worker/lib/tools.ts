@@ -205,7 +205,7 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
     // about what a request means — which is the whole reason the protocol
     // specifies them together.
     const parsed = parseAskRequest(new URL("https://aadhar.sh/ask"), args);
-    if (!parsed.ok) return toolError(parsed.error.error);
+    if (!parsed.ok) return toolError(parsed.error.message);
     return nlwebAsk(env, parsed.params, request);
   }
   if (name === "search_site") return searchSite(env, args.q, args.limit);

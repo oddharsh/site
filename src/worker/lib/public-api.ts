@@ -60,6 +60,14 @@ export const LEAVES_OUT: readonly { what: string; why: string }[] = [
     why: "One person maintains the API, and it has one live shape: the one /openapi.json describes. New endpoints, parameters and fields arrive without notice, so ignore fields you don't know.",
   },
   {
+    what: "Idempotency keys",
+    why: "Every REST operation is a read, POST /ask included, so a retried request cannot duplicate anything and there is no write for a key to protect.",
+  },
+  {
+    what: "Async jobs and 202 Accepted",
+    why: "Every operation answers within its own request. The slowest one, a Lens fetch of another site, gives up after 8 seconds and says so, so there is no job to poll.",
+  },
+  {
     what: "Deprecation and Sunset headers",
     why: "A notice period protects clients that depend on an exact shape, and none is known here. A breaking change lands in /openapi.json the day it ships.",
   },
@@ -84,6 +92,7 @@ export const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${na
 const q = (name: string, schema: Schema, description: string, required = false): Param => ({ name, in: "query", required, description, schema });
 const json = (description: string, schema: Schema): Responses[string] => ({ description, content: { "application/json": { schema } } });
 const err = (description: string) => json(description, ref("Error"));
+const askErr = (description: string) => json(description, ref("AskFailure"));
 // The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
 // Structured Field Lists, one member per policy, named by budget.
 type Policy = Pick<NamedBudget, "name" | "max">;
@@ -163,8 +172,8 @@ export const OPERATIONS: readonly Operation[] = [
         description: "One JSON body when streaming=0, otherwise an NLWeb event stream.",
         content: { "application/json": { schema: ref("AskResponse") }, "text/event-stream": { schema: str() } },
       },
-      400: err("query is missing, or site or mode is unknown."),
-      501: err("mode is summarize or generate."),
+      400: askErr("query is missing, or site or mode is unknown."),
+      501: askErr("mode is summarize or generate."),
     },
     example: "query=how+does+the+site+sign+requests&streaming=0",
   },
@@ -198,7 +207,8 @@ export const OPERATIONS: readonly Operation[] = [
         description: "One JSON body when prefer.streaming is false, otherwise named server-sent events.",
         content: { "application/json": { schema: ref("AskResponse") }, "text/event-stream": { schema: str() } },
       },
-      400: err("The body is not JSON, or a field is invalid."),
+      400: askErr("The body is not JSON, or a field is invalid."),
+      413: askErr("The body is over the size cap (code TOKEN_LIMIT)."),
       405: err("A method other than GET, POST or HEAD."),
     },
   },
