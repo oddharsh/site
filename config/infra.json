@@ -611,6 +611,13 @@
         "why": "compression-on proves the edge CAN speak each encoding, one at a time. This proves which one it PICKS when a real browser offers all of them at once, which is the only version of the question a visitor ever experiences. Cloudflare's default preference is zstd, and its on-the-fly zstd is worse than its own on-the-fly brotli on this site's content: measured 2026-07-28 against /images/manifest.json, chosen because its 35,162-byte body is byte-identical every request while the homepage's is not (a random 12-photo grid moves the size ~1.4KB between renders, which is wider than the effect being measured). br 6,642 bytes, zstd 6,847: +205 bytes and +3.1%, paid by the majority of visitors, since Chrome and Edge both advertise zstd. The fix is a Compression Rule scoped to Default Content Types with the \"Enable Brotli and Gzip Compression\" preset, which drops zstd from the candidate list rather than merely ranking it lower; the recipe and the two form defaults to avoid live in MAINTENANCE.md. If Cloudflare's on-the-fly zstd ever overtakes its brotli, re-measure and flip the rule and this line together — the numbers here are something to re-run, not a constant to trust."
       },
       {
+        "id": "html-twin-reaches-the-wire",
+        "target": "homepage",
+        "request": { "accept-encoding": "br" },
+        "assert": { "headerContains": { "etag": "-br\"" } },
+        "why": "The Worker answers every built page with its brotli q11 twin and a `-br` validator (serveStaticPage in src/worker/lib/assets.ts), and three zone features decode that body to rewrite HTML, re-encode it at the edge's own level, and drop the validator: Rocket Loader, Automatic HTTPS Rewrites and Cloudflare Fonts, all on in the dashboard and all on Cloudflare's list of features that decompress an origin response. None of them changes a byte of this site's HTML, and the identity bodies stayed byte-identical. Measured 2026-11-22 across the 71 registered surfaces with a twin: 867,658 B of brotli on aadhar.sh against 726,098 B from the same version's workers.dev preview, which skips zone features, so 141,560 B (16.3%) lost per full sweep, 25,462 B of it on /garage/horizon alone. The missing etag costs more on repeat visits, because a max-age=0 page with no validator re-downloads its whole body instead of taking a 304. dcz deltas pass through untouched, since the edge cannot decode them. The etag is the observable because the edge strips it whenever it re-encodes, and only the Worker's twin path mints a `-br` one (gotcha 112)."
+      },
+      {
         "id": "markdown-compressed",
         "target": "markdown-twin",
         "assert": { "compressionPrefers": { "offer": "gzip, deflate, br, zstd", "expect": "br" } },

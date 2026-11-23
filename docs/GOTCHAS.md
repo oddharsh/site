@@ -1218,3 +1218,19 @@ skips it.
     apostrophe; the tree's own `name.value` does not. Four planted controls
     prove each reading can fail, and three plain ones prove it can pass.
     Checked by: `tools/check-interactions.ts`.
+
+112. **A precompressed body is not what ships if a zone feature rewrites
+    HTML.** Rocket Loader, Automatic HTTPS Rewrites and Cloudflare Fonts
+    each decode an encoded response so they can rewrite it, then
+    re-encode at the edge's own level and drop the ETag. Nothing on this
+    site's pages matches what they rewrite, so the bytes come back
+    identical and only the encoding changes, which is why it hid behind
+    `encodeBody: "manual"` (gotcha 13) doing its job in the Worker. On
+    2026-11-22 every built page with a q11 twin shipped 15 to 20% over it
+    (/garage/horizon 138,635 B against 113,173 B) with no validator,
+    while the same version's workers.dev preview served the twin
+    exactly. dcz deltas pass through, because the edge cannot decode
+    them. Compare a page against its preview rather than against a local
+    q11, since the preview runs the same Worker without the zone. A
+    `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
+    Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
