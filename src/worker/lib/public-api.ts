@@ -92,6 +92,7 @@ export const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${na
 const q = (name: string, schema: Schema, description: string, required = false): Param => ({ name, in: "query", required, description, schema });
 const json = (description: string, schema: Schema): Responses[string] => ({ description, content: { "application/json": { schema } } });
 const err = (description: string) => json(description, ref("Error"));
+const askErr = (description: string) => json(description, ref("AskFailure"));
 // The RateLimit fields as draft-ietf-httpapi-ratelimit-headers-11 writes them:
 // Structured Field Lists, one member per policy, named by budget.
 type Policy = Pick<NamedBudget, "name" | "max">;
@@ -171,8 +172,8 @@ export const OPERATIONS: readonly Operation[] = [
         description: "One JSON body when streaming=0, otherwise an NLWeb event stream.",
         content: { "application/json": { schema: ref("AskResponse") }, "text/event-stream": { schema: str() } },
       },
-      400: err("query is missing, or site or mode is unknown."),
-      501: err("mode is summarize or generate."),
+      400: askErr("query is missing, or site or mode is unknown."),
+      501: askErr("mode is summarize or generate."),
     },
     example: "query=how+does+the+site+sign+requests&streaming=0",
   },
@@ -206,7 +207,8 @@ export const OPERATIONS: readonly Operation[] = [
         description: "One JSON body when prefer.streaming is false, otherwise named server-sent events.",
         content: { "application/json": { schema: ref("AskResponse") }, "text/event-stream": { schema: str() } },
       },
-      400: err("The body is not JSON, or a field is invalid."),
+      400: askErr("The body is not JSON, or a field is invalid."),
+      413: askErr("The body is over the size cap (code TOKEN_LIMIT)."),
       405: err("A method other than GET, POST or HEAD."),
     },
   },

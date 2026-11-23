@@ -1,5 +1,22 @@
 {
-  "version": "1.0",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
+  "name": "sh.aadhar/serendipity",
+  "title": "Serendipity",
+  "version": "2.0.0",
+  "description": "Community-curated events and who is going, from the Serendipity event pool. Read-only.",
+  "websiteUrl": "https://aadhar.sh/serendipity/mcp-info",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/serendipity/mcp",
+      "supportedProtocolVersions": [
+        "2026-07-28",
+        "2025-06-18",
+        "2025-03-26",
+        "2024-11-05"
+      ]
+    }
+  ],
   "protocolVersion": "2026-07-28",
   "serverInfo": {
     "name": "serendipity",
@@ -11,12 +28,6 @@
     "type": "streamable-http",
     "url": "https://aadhar.sh/serendipity/mcp"
   },
-  "remotes": [
-    {
-      "type": "streamable-http",
-      "url": "https://aadhar.sh/serendipity/mcp"
-    }
-  ],
   "capabilities": {
     "tools": true,
     "resources": false,

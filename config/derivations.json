@@ -209,7 +209,7 @@
       },
       "regenerate": "bun tools/gen-llms-api.ts",
       "recorded": {
-        "inputs": "167b8c6f5c02e1c8ef1b6fa9456a721ebf58426379ff45cc00bad7f5686ceb70",
+        "inputs": "cd841483152aea7014476a3d28e33a80c616e51f786a4a1ac7dd45c08ccc6300",
         "count": 2
       }
     },

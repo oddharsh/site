@@ -1,5 +1,22 @@
 {
-  "version": "1.0",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
+  "name": "sh.aadhar/site",
+  "title": "Aadharsh Site",
+  "version": "2.1.0",
+  "description": "Search, photos, music, coffee availability, Lens and image tools for aadhar.sh. Keyless.",
+  "websiteUrl": "https://aadhar.sh/llms.txt",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/mcp",
+      "supportedProtocolVersions": [
+        "2026-07-28",
+        "2025-06-18",
+        "2025-03-26",
+        "2024-11-05"
+      ]
+    }
+  ],
   "protocolVersion": "2026-07-28",
   "serverInfo": {
     "name": "aadhar.sh",
@@ -11,12 +28,6 @@
     "type": "streamable-http",
     "url": "https://aadhar.sh/mcp"
   },
-  "remotes": [
-    {
-      "type": "streamable-http",
-      "url": "https://aadhar.sh/mcp"
-    }
-  ],
   "capabilities": {
     "tools": true,
     "resources": true,

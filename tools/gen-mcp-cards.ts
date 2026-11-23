@@ -11,7 +11,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 import { MCP_TOOLS as SITE_TOOLS, SITE_MCP_CAPABILITIES, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.ts";
 import { MCP_TOOLS as SERENDIPITY_TOOLS, SERENDIPITY_MCP_CAPABILITIES, SERENDIPITY_MCP_SERVER_INFO } from "../serendipity/serendipity.ts";
-import { MCP_MODERN } from "../src/worker/lib/mcp-protocol.ts";
+import { MCP_MODERN, MCP_SUPPORTED } from "../src/worker/lib/mcp-protocol.ts";
 
 const ROOT = "https://aadhar.sh";
 
@@ -19,16 +19,31 @@ function toolCard({ name, title, description, inputSchema, outputSchema, annotat
   return { name, title, description, inputSchema, outputSchema, annotations };
 }
 
-function card({ serverInfo, capabilities, description, transport, documentationUrl, tools }) {
+// One document for two readers. The root fields are the MCP server-card
+// extension's ServerCard (modelcontextprotocol/ext-server-card schema.ts, read
+// 2026-11-23): $schema, a reverse-DNS name, the server's own version, a
+// description of at most 100 characters, and remotes[].url, which is how a
+// client matches a card to its server. serverInfo, transport, capabilities and
+// tools are the earlier draft's fields, kept so a reader of that draft still
+// finds them. The $schema URL answered 404 on 2026-11-23.
+const SERVER_CARD_SCHEMA = "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json";
+const SERVER_CARD_DESCRIPTION_MAX = 100;
+
+function card({ cardName, summary, serverInfo, capabilities, description, transport, documentationUrl, tools }) {
+  if (summary.length > SERVER_CARD_DESCRIPTION_MAX) {
+    throw new Error(`${cardName}: description is ${summary.length} characters, over the extension's ${SERVER_CARD_DESCRIPTION_MAX}`);
+  }
   return {
-    version: "1.0",
+    $schema: SERVER_CARD_SCHEMA,
+    name: cardName,
+    title: serverInfo.title,
+    version: serverInfo.version,
+    description: summary,
+    websiteUrl: documentationUrl,
+    remotes: [{ type: "streamable-http", url: transport, supportedProtocolVersions: MCP_SUPPORTED }],
     protocolVersion: MCP_MODERN,
     serverInfo: { ...serverInfo, description },
     transport: { type: "streamable-http", url: transport },
-    // The draft MCP server-card extension matches a card to its server by
-    // remotes[].url; a scanner that found this card at the well-known path
-    // still reported "no card for /mcp" on 2026-11-23 without it.
-    remotes: [{ type: "streamable-http", url: transport }],
     capabilities: {
       tools: Boolean(capabilities.tools),
       resources: Boolean(capabilities.resources),
@@ -41,6 +56,8 @@ function card({ serverInfo, capabilities, description, transport, documentationU
 }
 
 const siteCard = card({
+  cardName: "sh.aadhar/site",
+  summary: "Search, photos, music, coffee availability, Lens and image tools for aadhar.sh. Keyless.",
   serverInfo: SITE_MCP_SERVER_INFO,
   capabilities: SITE_MCP_CAPABILITIES,
   description:
@@ -51,6 +68,8 @@ const siteCard = card({
 });
 
 const serendipityCard = card({
+  cardName: "sh.aadhar/serendipity",
+  summary: "Community-curated events and who is going, from the Serendipity event pool. Read-only.",
   serverInfo: SERENDIPITY_MCP_SERVER_INFO,
   capabilities: SERENDIPITY_MCP_CAPABILITIES,
   description: "Read-only access to the Serendipity event pool on aadhar.sh: community-curated events worth going to, and who's going. Public data only.",

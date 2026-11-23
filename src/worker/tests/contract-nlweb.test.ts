@@ -194,6 +194,31 @@ test("/ask refuses a site token it does not serve", async () => {
   assert.deepEqual((await res.json()).available_sites, ["aadhar.sh", "all"]);
 });
 
+test("every /ask failure is NLWeb's failure envelope, early returns included", async () => {
+  // NLWeb 0.55 section 4.1.4: _meta.response_type "failure" and an error
+  // OBJECT with a spec code. A client that dispatches on response_type reads
+  // error.code, so a string there would be unreadable to exactly that client.
+  const { handleAsk } = await import("../nlweb.ts");
+  const post = (body: string) =>
+    handleAsk(new Request("https://aadhar.sh/ask", { method: "POST", headers: { "content-type": "application/json" }, body }), nlwebEnv());
+  const cases = [
+    { res: await askGet("?streaming=0"), status: 400, code: "INVALID_QUERY" },
+    { res: await askGet(`?query=${NLWEB_HIT}&mode=generate&streaming=0`), status: 501, code: "UNSUPPORTED_MODE" },
+    { res: await post("{not json"), status: 400, code: "INVALID_QUERY" },
+    { res: await post(JSON.stringify({ query: { text: "x".repeat(70_000) } })), status: 413, code: "TOKEN_LIMIT" },
+  ];
+  for (const { res, status, code } of cases) {
+    assert.equal(res.status, status, code);
+    const body = await res.json();
+    assert.deepEqual(body._meta, { version: "0.55", response_type: "failure" });
+    assert.equal(body.error.code, code);
+    assert.equal(typeof body.error.message, "string");
+    assert.deepEqual(body.results, []);
+  }
+  // The answer side of the same switch, so the failure shape is not the only one.
+  assert.equal((await (await askGet(`?query=${NLWEB_HIT}&streaming=0`)).json())._meta.response_type, "answer");
+});
+
 test("the ask MCP tool and /ask are the same answer", async () => {
   // The protocol specifies both doors carrying the same arguments and the same
   // result. Two rankings under one name is the drift this asserts against.

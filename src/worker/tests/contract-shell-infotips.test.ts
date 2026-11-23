@@ -742,6 +742,18 @@ test("published MCP server cards and discovery files stay aligned with both live
     assert.equal(card.transport.url, endpoint, `${file} points at the wrong transport`);
     assert.deepEqual(card.capabilities, capabilities, `${file} capabilities drifted`);
     assert.deepEqual(card.tools, live, `${file} tool metadata drifted from tools/list`);
+    // The server-card extension's half of the same document: the root names
+    // the server the way the extension's ServerCard does, and remotes[].url is
+    // the field a client matches the card to its server by.
+    assert.equal(card.$schema, "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json", `${file} $schema`);
+    assert.match(card.name, /^[a-zA-Z0-9.-]+\/[a-zA-Z0-9._-]+$/, `${file} name must be reverse-DNS with one slash`);
+    assert.equal(card.version, info.version, `${file} root version is the server's version`);
+    assert.ok(card.description.length >= 1 && card.description.length <= 100, `${file} description must be 1-100 characters`);
+    assert.deepEqual(
+      card.remotes.map((r) => [r.type, r.url]),
+      [["streamable-http", endpoint]],
+      `${file} remotes must name the endpoint`,
+    );
   }
 
   const agentCard = JSON.parse(await readFile(new URL("public/.well-known/agent-card.json", ROOT), "utf8"));

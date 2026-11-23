@@ -153,7 +153,7 @@ export function parseAskRequest(url, body) {
 
   const text = String(query ?? "").trim();
   if (!text) {
-    return { ok: false as const, status: 400, error: { error: "query is required", parameter: "query", endpoint: "/ask" } };
+    return { ok: false as const, status: 400, error: { code: "INVALID_QUERY", message: "query is required", parameter: "query", endpoint: "/ask" } };
   }
 
   const siteToken = String(site ?? "")
@@ -164,7 +164,7 @@ export function parseAskRequest(url, body) {
     return {
       ok: false as const,
       status: 400,
-      error: { error: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] },
+      error: { code: "INVALID_QUERY", message: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] },
     };
   }
 
@@ -178,7 +178,8 @@ export function parseAskRequest(url, body) {
       ok: false as const,
       status: known ? 501 : 400,
       error: {
-        error: known
+        code: "UNSUPPORTED_MODE",
+        message: known
           ? `mode "${modeToken}" needs a generative model and this origin runs none (Clef, which ranks the list, can only choose, never write). It is refused rather than answered as "list", because a summary you did not get is worse than a summary you were told you cannot have.`
           : `unknown mode "${modeToken}"`,
         parameter: "mode",
@@ -379,15 +380,28 @@ function streamAnswer(payload, structured) {
   );
 }
 
+// NLWeb 0.55 section 4.1.4: a failure is _meta.response_type "failure" plus an
+// error OBJECT with a spec code. What this origin adds to say which field was
+// wrong (parameter, known_modes, available_sites) sits beside it, at the top
+// level where it was before. query_id and results stay so a list-reading
+// client finds an empty list rather than a missing key.
+function askFailure(status: number, { code, message, ...detail }: { code: string; message: string; [field: string]: unknown }) {
+  return jsonResponse(
+    { _meta: { version: NLWEB_VERSION, response_type: "failure" }, error: { code, message }, ...detail, query_id: null, results: [] },
+    status,
+    { "x-robots-tag": "noindex" },
+  );
+}
+
 export async function handleAsk(request, env, _ctx?, url = new URL(request.url)) {
   let body = null;
   if (request.method === "POST") {
     const capped = await cappedRequestBody(request);
-    if (!capped) return jsonResponse({ error: "POST body too large" }, 413);
+    if (!capped) return askFailure(413, { code: "TOKEN_LIMIT", message: "POST body too large" });
     try {
       body = await capped.json();
     } catch {
-      return jsonResponse({ error: "POST body must be JSON" }, 400);
+      return askFailure(400, { code: "INVALID_QUERY", message: "POST body must be JSON" });
     }
   }
 
@@ -395,9 +409,7 @@ export async function handleAsk(request, env, _ctx?, url = new URL(request.url))
   if (!parsed.ok) {
     // An SSE client asking a malformed question still gets JSON: the error is
     // about the request never becoming a query, so there is no stream to open.
-    return jsonResponse({ ...parsed.error, query_id: null, results: [], _meta: { version: NLWEB_VERSION, response_type: "failure" } }, parsed.status, {
-      "x-robots-tag": "noindex",
-    });
+    return askFailure(parsed.status, parsed.error);
   }
 
   return span("nlweb.ask", async (s) => {
