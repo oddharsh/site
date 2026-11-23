@@ -103,7 +103,7 @@
     "lightningcss": "1.33.0",
     "oxc-minify": "0.159.0",
     "playwright-core": "1.65.1",
-    "spokeshave": "github:oddharsh/spokeshave#0d5f25597eedf7ca8217be6810e8f6d72bc857c0",
+    "spokeshave": "github:oddharsh/spokeshave#8128ff662ff382e499219bfa2183c7c1de618874",
     "timbrado": "github:oddharsh/timbrado#ec6c6b19dd97b922ce86f49d60711abfe5924670",
     "wrangler": "catalog:"
   },

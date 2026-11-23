@@ -470,6 +470,10 @@ does not make a failed write safe to ignore.
   Its renamer (`spokeshave/rename`) loads terser's parser and scope analysis
   from files outside terser's package exports, so a terser bump inside
   spokeshave needs spokeshave's own conformance run, which fails if they move.
+  Since 2026-11-22 it also runs build step 5e's class census
+  (`spokeshave/classes`). That brings amaro 1.3.0, Node's own TypeScript
+  stripper, in strip-only mode: it blanks types to spaces, so a class position
+  found in the Worker's TypeScript is the source's own offset.
   SWC is the WebAssembly build on purpose: the native @swc/core binding
   failed to load in Workers Builds on 2026-11-21 while it loaded on GitHub's
   runner, and @swc/wasm wrote byte-identical output on all 27 scripts.
