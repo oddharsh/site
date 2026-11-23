@@ -1240,3 +1240,20 @@ skips it.
     build, and 7 always run. The control
     `contract-shared-imports-a-worker-module` plants a re-export.
     Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`, `tools/tests/contract-test-inputs-select-what-a-diff-can-reach.test.ts`.
+112. **A precompressed body is not what ships if a zone feature rewrites
+    HTML.** Cloudflare Fonts decodes an encoded response to look for
+    Google Fonts links, then re-encodes at the edge's own level and drops
+    the ETag. Rocket Loader, Automatic HTTPS Rewrites, Email Obfuscation,
+    Polish, JavaScript detections and RUM are on the same decompress list. Nothing on this
+    site's pages matches what they rewrite, so the bytes come back
+    identical and only the encoding changes, which is why it hid behind
+    `encodeBody: "manual"` (gotcha 13) doing its job in the Worker. On
+    2026-11-22 every built page with a q11 twin shipped 15 to 20% over it
+    (/garage/horizon 138,635 B against 113,173 B) with no validator
+    until Fonts went off at 03:09 UTC,
+    while the same version's workers.dev preview served the twin
+    exactly. dcz deltas pass through, because the edge cannot decode
+    them. Compare a page against its preview rather than against a local
+    q11, since the preview runs the same Worker without the zone. A
+    `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
+    Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
