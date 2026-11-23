@@ -1257,3 +1257,19 @@ skips it.
     q11, since the preview runs the same Worker without the zone. A
     `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
     Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
+
+114. **In Workers Logs, a request's `accept-encoding` header is the edge's,
+    so every visitor seems to refuse dcz.** The Worker sees Accept-Encoding
+    after Cloudflare rewrites it (`src/worker/lib/assets.ts`, "A WORKER
+    CANNOT NEGOTIATE COMPRESSION"), and the log records that copy: in the week to
+    2026-11-22, no document row carried `dcz` there, while 109
+    of the same 474 rows carried the client's own `dcz` in
+    `cf.clientAcceptEncoding`. A traffic weight built on the header says no
+    visitor ever takes a dictionary delta. Read `cf.clientAcceptEncoding`,
+    and read `available-dictionary` beside it, since Chromium offers dcz only
+    with a dictionary to name. Two more traps sit in the same rows: the logs
+    are head-sampled (each row has `sampleInterval` 10, so weight by it,
+    never count rows), and of the 109 rows that held a dictionary that week,
+    93 were headless tools (browser:check, runtime-dcz-probe, curl), so a
+    dictionary is no proof of a person.
+    Checked by: `tools/tests/contract-user-bytes-prices-a-visit-by-what-the-visitor-holds.test.ts`.
