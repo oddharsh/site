@@ -127,9 +127,13 @@ The controls now use a dedicated blocking-CSS fixture. The runner also refuses
 fewer than six pairs, since five cannot clear its existing two-sided sign test.
 Neither change alters the real-page measurements or their thresholds.
 
-The first controls run also failed minifier parity. That test passed locally;
-the runner now preserves the entire unplanted failure output so another CI
-failure retains its assertion instead of only the suite summary.
+The controls job failed minifier parity in two runs while validation passed it.
+Preserving the entire unplanted failure output identified `nav-pipes.js`: its
+source recorded a WebGL call while the candidate recorded a generic `Error`.
+The oracle uses a 500 ms VM limit. A local load probe still passed, so a timeout
+is an inference rather than a confirmed cause. Unplanted baselines now run
+sequentially to avoid competing parallel builds and test workers. Mutation
+cases remain parallel; no oracle limit or assertion changed.
 
 A nine-pair local rerun caught both paint plants: CSS delay moved FCP by
 148 ms and the inserted block moved CLS by 0.026; the unplanted fixture moved
