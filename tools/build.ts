@@ -70,7 +70,7 @@ import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles
 import { inTestsDir } from "./lib/test-roots.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
-import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
+import { pauseBelowFirstScreen, repauseAfterFirstFold } from "./lib/parser-pause.ts";
 import { NON_BLOCKING_PAGES, nonBlocking } from "./lib/critical-css.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
@@ -1726,7 +1726,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     out = foldLongProse(out);
     // After the folds, so a page whose first paint waits for its first fold
     // pauses only past it (parser-pause.ts).
-    out = pauseBelowFirstScreen(out, { afterFirstFold: nonBlocking(rel, out) });
+    out = pauseBelowFirstScreen(out, { afterFirstFold: NON_BLOCKING_PAGES.includes(rel) });
     return { html: out, addedLink, addedChrome };
   };
 
@@ -2426,7 +2426,9 @@ const swappedPages = new Set<string>();
   for (const rel of pages) {
     const page = await readFile(`${OUT}/public/${rel}`, "utf8");
     if (!nonBlocking(rel, page)) continue;
-    const out = await toNonBlocking(page);
+    // The pause 1g placed has to move past the first fold, or it would hold the
+    // first paint that rel=expect releases there (parser-pause.ts).
+    const out = await toNonBlocking(repauseAfterFirstFold(page));
     // /garage measured its own win in a lab run (critical-css.ts), so it stays swapped.
     // q9 runs in milliseconds where q11 took 5.2 s over 75 pages. On the 78
     // built pages (2026-11-23) q9 ran 8.0 to 13.5% over q11 and never under, so
@@ -2814,7 +2816,7 @@ phase("7b minify pages");
       // outside the try, so a page that can't take the swap fails the build
       // instead of reading as "no authored source"
       // A twin read from the staged copy (a page with no authored source) is already swapped.
-      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(twin, "axp-tasks");
+      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(repauseAfterFirstFold(twin), "axp-tasks");
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;

@@ -40,6 +40,17 @@ export const PAUSE_HREF = "/quiz.css";
 const LINK = `<link rel="stylesheet" href="${PAUSE_HREF}">`;
 const BLOCKS = ".window > .content > *:not(.msgr), .window > .content > .msgr > .log > *";
 
+/** The page with its pause moved past the first prose fold, for a page that
+ *  build step 5f decides to swap once 1g has already placed the pause. */
+export function repauseAfterFirstFold(html: string): string {
+  // With no fold, first paint waits on the task pane, which the Explorer
+  // chrome puts before the content, so the pause already sits past it.
+  if (!html.includes('<section class="fold"')) return html;
+  const count = html.split(LINK).length - 1;
+  if (count > 1) throw new Error(`parser-pause: expected at most one ${LINK}, found ${count}`);
+  return pauseBelowFirstScreen(html.replace(LINK, ""), { afterFirstFold: true });
+}
+
 /** The page with the pause before its first block past FOLD_AFTER_CHARS, or unchanged. */
 export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } = {}): string {
   if (html.includes(LINK)) return html; // already paused: the twin writer re-dresses pages
