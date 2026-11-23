@@ -4,8 +4,8 @@
 // has nothing to scope, so lens.ts marks those checks neutral and
 // notApplicable instead of "fix" (lensKeylessDeclaration). The evidence must
 // be the site's explicit declaration: an omitted `security` stays a fail.
-import { assert, lensReadiness, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
-import { lensKeylessDeclaration } from "../lens.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { lensKeylessDeclaration, lensReadiness } from "../lens.ts";
 
 const AUTHORITY = ["oauthDiscovery", "oauthProtectedResource", "authMd"];
 const probe = (spec) => ({ ok: true, status: 200, body: JSON.stringify(spec), truncated: false });

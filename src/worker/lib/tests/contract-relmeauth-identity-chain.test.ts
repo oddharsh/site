@@ -22,7 +22,9 @@
 // The failure is quiet in the usual direction. `rel="noopener external"` renders
 // and behaves exactly like `rel="noopener me external"`, so losing the token
 // costs nothing visible and takes the domain's identity with it.
-import { DESKTOP_CHROME, PROFILES, assert, test } from "./contract-shared.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { DESKTOP_CHROME } from "../desktop.ts";
+import { PROFILES } from "../../../../tools/photos/shell-data.ts";
 
 // rel is a space-separated token list, so "me" has to BE one of the tokens —
 // the same rule webmention endpoint discovery applies to rel=webmention.

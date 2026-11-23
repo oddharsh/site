@@ -1,5 +1,6 @@
 // ── 0-RTT early data, and the speculation ledger read back ───────────────────
-import { configText, assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 // A request that arrived as TLS early data can be replayed, so the GET-shaped
 // writes answer 425 Too Early (RFC 8470) and every other request is untouched.

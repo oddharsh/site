@@ -4,21 +4,11 @@
 // so a re-send stays declined and mails nobody; a decision link only acts on a
 // pending mention and says so honestly when it doesn't; and a decline link
 // never takes down a mention that is already live.
-import {
-  assert,
-  context,
-  deferredContext,
-  fakeD1,
-  handleInboxMail,
-  handleWebmention,
-  handleWebmentionDecision,
-  sign,
-  test,
-  WM_SECRET,
-  wmEnv,
-  wmPost,
-} from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+import { assert, context, deferredContext, fakeD1, test, WM_SECRET, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { handleInboxMail } from "../inbox.ts";
+import { handleWebmention, handleWebmentionDecision } from "../webmention.ts";
+import { sign } from "../lib/sign.ts";
 
 const TARGET = "https://aadhar.sh/writing/in-flux";
 const SOURCE = "https://spam.example/links";

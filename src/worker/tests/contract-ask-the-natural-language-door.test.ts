@@ -1,5 +1,8 @@
 // ── /ask — the natural-language door ────────────────────────────
-import { DATA_TOOLS, MODERN_META, assert, context, handleSiteMcp, mcpPost, readFileSync, terminalEnv, test } from "./contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { DATA_TOOLS } from "../lib/tools.ts";
+import { handleSiteMcp } from "../mcp.ts";
+import { terminalEnv } from "../../../tools/tests/contract-terminal.ts";
 
 // Every test here runs the ROUTER path (no AI binding), which is the mode CI
 // and local dev get. That is deliberate rather than a limitation: the router is

@@ -1,5 +1,6 @@
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
-import { MODERN_META, assert, context, handleSiteMcp, mcpPost, staticAssets, test } from "./contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
+import { handleSiteMcp } from "../mcp.ts";
 
 // 2026-07-28 deleted the initialize handshake and moved version, identity and
 // capabilities into per-request `_meta`. This server answers BOTH eras on one

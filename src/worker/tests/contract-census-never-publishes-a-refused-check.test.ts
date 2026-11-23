@@ -1,7 +1,9 @@
 // ── the census never publishes a check the platform refused ──────────────────
 import { execFileSync } from "node:child_process";
-import { configText, inTestsDir, ROOT, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
 import { CENSUS_ROSTER, censusCapHit, censusInstanceId } from "../census.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
+import { inTestsDir } from "../../../tools/lib/test-roots.ts";
 
 // THE BUG THIS PINS. Every probe in lens.ts catches its own error and returns
 // `{ ok: false, error }`, which downstream reads as "this door is absent". That

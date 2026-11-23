@@ -1,5 +1,6 @@
 // AadharshBot's signing door: no key means no external request, and a self-dispatch carries no signature.
-import { assert, botHeaders, test } from "./contract-shared.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { botHeaders } from "../botauth.ts";
 
 test("AadharshBot refuses an external request without its signing key", async () => {
   await assert.rejects(botHeaders("https://example.com/", {}, { headers: { accept: "text/html" } }), /signing key is unavailable/);

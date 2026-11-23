@@ -56,11 +56,10 @@
     "tools/photos/gen-og-cards.ts": 18,
     "tools/roll-shell-dictionary.ts": 16,
     "tools/tests/contract-every-lwe-content-page-carries-a-wired-ask-surface.test.ts": 1,
-    "tools/tests/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.ts": 11,
-    "tools/tests/contract-shared.ts": 1,
-    "tools/tests/contract-the-execution-half-of-the-readiness-rubric.test.ts": 1,
+    "src/worker/tests/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.ts": 11,
+    "src/worker/tests/contract-the-execution-half-of-the-readiness-rubric.test.ts": 1,
     "tools/tests/contract-the-vigenere-cracker-scores-against-the-table-it-ships.test.ts": 3,
-    "tools/tests/contract-webmention-inbound.test.ts": 1,
+    "src/worker/tests/contract-webmention-inbound.test.ts": 1,
     "tools/ua-survey.ts": 4,
     "tools/verify-routes.ts": 2
   }

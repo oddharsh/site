@@ -1,6 +1,8 @@
 // ── /agent-ready — the scorecard that grades its author too ──────────────
-import { assert, context, handleTool, terminalGet, terminalReq, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, test } from "../../../tools/tests/contract-shared.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { handleTool } from "../terminal.ts";
+import { terminalGet, terminalReq } from "../../../tools/tests/contract-terminal.ts";
 
 test("the lift table is internally consistent and names its baseline", async () => {
   // The bill is hand-maintained with a checked date, the same contract lens's

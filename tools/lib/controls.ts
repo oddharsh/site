@@ -89,6 +89,10 @@ const contract = (name: string) => {
   return ["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=30000", `./${file}`];
 };
 
+// The suite as validate runs it on a pull request: narrowed by the traced input
+// map at test-inputs.json (gotcha 111), or whole when there is none.
+const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.json"];
+
 export const CONTROLS: Control[] = [
   {
     id: "conflict-marker-in-garage-page",
@@ -764,5 +768,56 @@ export const CONTROLS: Control[] = [
     ],
     run: ["bun", "tools/build-equivalence.ts", "--seed", "1", "--plan", "island"],
     expect: /build-equivalence: step 1 \(island\): the warm \.build differs from a clean build in \d+ files/,
+  },
+  {
+    id: "contract-shared-imports-a-worker-module",
+    plants: "contract-shared.ts re-exports a Worker module again, so every test's trace reads it and a change there reruns the suite",
+    gotcha: 111,
+    mutations: [
+      {
+        file: "tools/tests/contract-shared.ts",
+        find: 'import test from "node:test";\n',
+        replace: 'import test from "node:test";\nexport { handleTool } from "../../src/worker/terminal.ts";\n',
+      },
+    ],
+    run: contract("contract-the-shared-test-helpers-import-nothing-from-the-repo"),
+    expect: /contract-shared\.ts imports \.\.\/\.\.\/src\/worker\/terminal\.ts, which makes every test an input of it \(gotcha 111\)/,
+  },
+  // The next three plant a defect in one route handler each and run the suite
+  // the way validate does on a PR: narrowed by the traced input map. Each
+  // handler reaches 1 to 6 test files since gotcha 111, so a selection that
+  // dropped the one test pinning it would pass here. In the controls job the
+  // map is the nightly one; with no map, `run` falls back to the whole suite,
+  // which proves only that the test catches the defect.
+  {
+    id: "coffee-availability-answers-503-with-slots",
+    plants: "the /coffee/availability.json handler answers 503 when slots are open, so the booking widget reads the calendar as down",
+    gotcha: 111,
+    mutations: [{ file: "src/worker/coffee.ts", find: "const status = payload.available ? 200 : 503;", replace: "const status = 503;" }],
+    run: NARROWED,
+    expect:
+      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts: [\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
+  },
+  {
+    id: "run-error-echoes-the-command-unescaped",
+    plants: "the /run handler prints an unknown command into its error without escaping it, so ?cmd=<script> runs",
+    gotcha: 111,
+    mutations: [{ file: "src/worker/run.ts", find: "<b>Windows cannot find '${esc(cmd)}'.</b>", replace: "<b>Windows cannot find '${cmd}'.</b>" }],
+    run: NARROWED,
+    expect: /contract-run-opens-any-page\.test\.ts: [\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
+  },
+  {
+    id: "inbox-mail-prints-the-author-unescaped",
+    plants: "the /inbox mail island prints a webmention's author without escaping it, so a sender's name can carry markup",
+    gotcha: 111,
+    mutations: [
+      {
+        file: "src/worker/inbox.ts",
+        find: '<span class="oe-from">${esc(m.author || "someone")}</span>',
+        replace: '<span class="oe-from">${m.author || "someone"}</span>',
+      },
+    ],
+    run: NARROWED,
+    expect: /contract-inbox-and-census-are-built-documents\.test\.ts: [\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
   },
 ];

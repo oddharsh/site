@@ -1,5 +1,7 @@
 // ── /radar — the instrument for somebody else's antenna ─────────
-import { assert, context, handleTool, terminalEnv, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, test } from "../../../tools/tests/contract-shared.ts";
+import { handleTool } from "../terminal.ts";
+import { terminalEnv } from "../../../tools/tests/contract-terminal.ts";
 
 test("radar drops readings that are not dBm, and bounds the rest", async () => {
   // The caller is a shell script somebody wrote in five minutes, so a bad sample

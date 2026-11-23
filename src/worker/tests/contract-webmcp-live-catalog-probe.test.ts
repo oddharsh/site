@@ -6,8 +6,9 @@
 // decides pass or fail: the expected set per route, and the diff. A diff that
 // can't report a missing tool would turn the probe green on exactly the
 // failure it exists for.
-import { SITE_MCP_TOOLS, assert, readFileSync, test } from "./contract-shared.ts";
-import { diffCatalog, expectedCatalog, lensPageToolNames } from "../lib/webmcp-catalog.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { diffCatalog, expectedCatalog, lensPageToolNames } from "../../../tools/lib/webmcp-catalog.ts";
+import { MCP_TOOLS as SITE_MCP_TOOLS } from "../mcp.ts";
 
 const LENS_WEBMCP = readFileSync("./src/client/lens-webmcp.ts", "utf8");
 const SITE = SITE_MCP_TOOLS.map((t) => t.name);

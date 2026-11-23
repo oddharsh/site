@@ -1,9 +1,11 @@
 // ── both MCP servers speak one protocol ─────────────────────────────
-import { MCP_SUPPORTED_VERSIONS, MODERN_META, assert, context, handleSiteMcp, readFileSync, test } from "./contract-shared.ts";
+import { MODERN_META, assert, context, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../lib/mcp-protocol.ts";
+import { handleSiteMcp } from "../mcp.ts";
 
 for (const server of ["site", "serendipity"]) {
   test(`${server} MCP rejects malformed envelopes before treating messages as notifications`, async () => {
-    const { handleMcp } = await import("../../serendipity/serendipity.ts");
+    const { handleMcp } = await import("../../../serendipity/serendipity.ts");
     let calls = 0;
     const env = {
       MCP_RL_IMAGE_INSPECT: {
@@ -87,7 +89,7 @@ for (const server of ["site", "serendipity"]) {
   });
 
   test(`${server} MCP validates notifications before dispatch and never replies to them`, async () => {
-    const { handleMcp } = await import("../../serendipity/serendipity.ts");
+    const { handleMcp } = await import("../../../serendipity/serendipity.ts");
     let calls = 0;
     const env = {
       MCP_RL_IMAGE_INSPECT: {
@@ -182,7 +184,7 @@ for (const server of ["site", "serendipity"]) {
 // conformance assertions run against both rather than against the site one.
 
 test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", async () => {
-  const { handleMcp } = await import("../../serendipity/serendipity.ts");
+  const { handleMcp } = await import("../../../serendipity/serendipity.ts");
   const post = (body, headers: Record<string, any> = {}) =>
     new Request("https://aadhar.sh/serendipity/mcp", {
       method: "POST",
@@ -275,7 +277,7 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
 });
 
 test("Serendipity social reads overlap independent D1 queries", async () => {
-  const { handleMcp } = await import("../../serendipity/serendipity.ts");
+  const { handleMcp } = await import("../../../serendipity/serendipity.ts");
   let active = 0;
   let peak = 0;
   const d = {
@@ -328,7 +330,7 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
     assert.ok(!/UNKNOWN_SELECTOR\s*=/.test(src), `${file} re-declares the tolerated warning family instead of importing it`);
   }
 
-  const { parseCss, UNKNOWN_SELECTOR } = await import("../lib/css-parse.ts");
+  const { parseCss, UNKNOWN_SELECTOR } = await import("../../../tools/lib/css-parse.ts");
 
   // The family is tolerated AND preserved verbatim, which is the whole bargain.
   const carousel = 'ul::scroll-marker-group{display:flex}li::scroll-marker{content:""}';
@@ -358,7 +360,7 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
 // about 1,600 pings, or as many D1 queries.
 for (const server of ["site", "serendipity"]) {
   test(`${server} MCP answers a 16-message batch and refuses a 17-message one`, async () => {
-    const { handleMcp } = await import("../../serendipity/serendipity.ts");
+    const { handleMcp } = await import("../../../serendipity/serendipity.ts");
     const post = (count: number) => {
       const body = Array.from({ length: count }, (_, id) => ({ jsonrpc: "2.0", id, method: "ping" }));
       const request = new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify(body) });

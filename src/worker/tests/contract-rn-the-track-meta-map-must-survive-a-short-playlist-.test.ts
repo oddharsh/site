@@ -1,40 +1,31 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
+import { testGlobals, ROOT, TRACKS, assert, assertFullDocument, context, kvForTracks, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import {
-  testGlobals,
   ART_VERSION,
-  ROOT,
-  TRACKS,
   WARM_MAX_URLS,
   artUrls,
   artWarmList,
-  assert,
-  assertFullDocument,
   canonicalArtUrl,
-  context,
   cronEnrichTracks,
-  diffAroundRows,
-  handleAroundChangesJson,
-  handleLensBrowser,
-  handleLensFetch,
-  handleLensShot,
   handleRnArt,
   handleRnTracks,
   handleRnTracksHtml,
-  kvForTracks,
+  renderTrackListHtml,
+  spotifyArtHash,
+  warmArtCache,
+} from "../rn.ts";
+import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "../around.ts";
+import {
+  handleLensBrowser,
+  handleLensFetch,
+  handleLensShot,
   lensDetectWebmcp,
   lensFieldEvidence,
   lensParseCloudflareAgentScore,
-  mapWithConcurrency,
-  readAroundChanges,
-  readFile,
-  readResponseCapped,
   renderLensShell,
-  renderTrackListHtml,
-  spotifyArtHash,
-  test,
-  warmArtCache,
-} from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+} from "../lens.ts";
+import { mapWithConcurrency, readResponseCapped } from "../lib/crawl.ts";
 
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Regression, 2026-08-15. The prune deleted any entry missing from

@@ -1,17 +1,8 @@
 // ── the execution half of the readiness rubric ──────────────────────────────
-import {
-  EXECUTION_META,
-  EXECUTION_PROBE,
-  assert,
-  executionChecks,
-  httpWords,
-  lensAgentDoors,
-  lensReadiness,
-  lensSitemapDeclared,
-  lensSitemapVerdict,
-  readFileSync,
-  test,
-} from "./contract-shared.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../lib/agent-execution.ts";
+import { httpWords } from "../../../tools/check-agent.ts";
+import { lensAgentDoors, lensReadiness, lensSitemapDeclared, lensSitemapVerdict } from "../lens.ts";
 
 // On 2026-08-12 every one of /lens's twenty readiness checks was a declaration
 // audit, which is why they were all green that day while this site's homepage

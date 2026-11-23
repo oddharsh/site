@@ -1,5 +1,6 @@
 // ── webmention link verification ────────────────────────────────────
-import { assert, documentContent, linksTo, test } from "./contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { documentContent, linksTo } from "../webmention.ts";
 
 // The verify step is the ONLY thing standing between "someone sent a POST" and
 // "someone's page appears on my site", so what counts as a link is the whole

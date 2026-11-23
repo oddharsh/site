@@ -1,21 +1,10 @@
 // ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
-import {
-  MODERN_META,
-  TERMINAL_ASSETS,
-  assert,
-  context,
-  handleSiteMcp,
-  handleTool,
-  mcpPost,
-  staticAssets,
-  terminalEnv,
-  terminalGet,
-  terminalReq,
-  test,
-  tokenizeKeys,
-} from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
 import { _resetPhotoCaches } from "../photos.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { TERMINAL_ASSETS, terminalEnv, terminalGet, terminalReq } from "../../../tools/tests/contract-terminal.ts";
+import { handleSiteMcp } from "../mcp.ts";
+import { handleTool, tokenizeKeys } from "../terminal.ts";
 
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops

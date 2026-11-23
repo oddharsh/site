@@ -1,27 +1,23 @@
 // ── webmention (inbound) ────────────────────────────────────────────────────
 import {
   testGlobals,
-  absoluteHttpUrl,
-  WEBMENTION_PATHS,
   WM_SECRET,
   assert,
   context,
   deferredContext,
   fakeD1,
-  handleInbox,
-  handleInboxMail,
-  renderInboxPage,
-  handleWebmention,
-  handleWebmentionDecision,
-  handleWritingIndex,
   readFile,
-  sign,
   staticAssets,
   test,
   wmEnv,
   wmPost,
-} from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+} from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { absoluteHttpUrl, handleWebmention, handleWebmentionDecision } from "../webmention.ts";
+import { WEBMENTION_PATHS } from "../lib/site-manifest.ts";
+import { handleInbox, handleInboxMail, renderInboxPage } from "../inbox.ts";
+import { handleWritingIndex } from "../writing.ts";
+import { sign } from "../lib/sign.ts";
 
 test("webmention rejects targets that do not accept mentions", async () => {
   const env = wmEnv(fakeD1());

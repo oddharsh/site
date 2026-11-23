@@ -1,6 +1,7 @@
 // ── no Worker module imports another lazily ──────────────────────────────────
-import { ROOT, assert, inTestsDir, readFile, test } from "./contract-shared.ts";
+import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 // Gotcha 56. A module reached through `import()` runs its top level inside the
 // request while wrangler inlines it, and in global scope the moment workerd

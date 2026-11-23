@@ -1218,3 +1218,18 @@ skips it.
     apostrophe; the tree's own `name.value` does not. Four planted controls
     prove each reading can fail, and three plain ones prove it can pass.
     Checked by: `tools/check-interactions.ts`.
+
+111. **A helper every test imports makes its imports an input of every
+    test.** Traced selection (`tools/test-inputs.ts`) reruns a test file
+    when the diff touches a path its trace opened, and bun opens every
+    module a test loads. Until 2026-11-22 `tools/tests/contract-shared.ts`
+    re-exported 107 Worker and tool names alongside `test` and `assert`.
+    263 test files import it and most use nothing past the node builtins,
+    yet each one loaded the Worker, so a change to any one route handler
+    selected about 210 of 265 files and selection only paid on docs and
+    design PRs. It now imports node builtins and nothing from the repo; a
+    test imports a Worker name from the module that owns it, and a shared
+    helper that needs a repo module gets its own file (`contract-config.ts`,
+    `contract-terminal.ts`). The control
+    `contract-shared-imports-a-worker-module` plants a re-export.
+    Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`.
