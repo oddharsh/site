@@ -3,9 +3,10 @@
 // person, a list or spam. These pin what that promises: the sort labels the
 // email and decides nothing, every failure still sends the email and says it
 // was not sorted, and Workers AI is spent only when an email will go out.
-import { assert, test, deferredContext, fakeD1, handleWebmention, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
+import { assert, test, deferredContext, fakeD1, wmEnv, wmPost } from "../../../tools/tests/contract-shared.ts";
 import { SORT_CRITERIA, SORT_LABELS, SORT_MODEL, buildSortRequest, sortLine, sortMention, sortSubjectTag } from "../webmention-sort.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { handleWebmention } from "../webmention.ts";
 
 const TARGET = "https://aadhar.sh/writing/in-flux";
 const SOURCE = "https://best-slots-review.click/top-10";

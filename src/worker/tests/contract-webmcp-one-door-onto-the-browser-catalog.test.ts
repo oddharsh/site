@@ -10,10 +10,11 @@
 // so. A module that reaches document.modelContext directly skips the annotation
 // channel and the consent gate, and the tool still works, which is the worst
 // possible outcome for a safety layer.
-import { SITE_MCP_TOOLS, assert, readFileSync, test } from "./contract-shared.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
 import { readdirSync } from "node:fs";
-import { minifiedScripts } from "../lib/client-assets.ts";
-import { lensPageToolNames } from "../lib/webmcp-catalog.ts";
+import { minifiedScripts } from "../../../tools/lib/client-assets.ts";
+import { lensPageToolNames } from "../../../tools/lib/webmcp-catalog.ts";
+import { MCP_TOOLS as SITE_MCP_TOOLS } from "../mcp.ts";
 
 const LENS = readFileSync("./src/client/lens.ts", "utf8");
 const LENS_BOOT = readFileSync("./src/client/lens-boot.ts", "utf8");
@@ -277,7 +278,7 @@ test("registerTool hands the browser the three WebMCP hints, derived from the to
   let wm;
   try {
     // A query of its own, so no other importer inherits the stand-in.
-    wm = await import(new URL("../../src/client/webmcp.ts?hints", import.meta.url).href);
+    wm = await import(new URL("../../client/webmcp.ts?hints", import.meta.url).href);
   } finally {
     if (had) (globalThis as any).document = previous;
     else delete (globalThis as any).document;
@@ -335,7 +336,7 @@ async function lensPageTools() {
   const previous = (globalThis as any).window;
   (globalThis as any).window = {};
   try {
-    const lens = await import(new URL("../../src/client/lens-webmcp.ts", import.meta.url).href);
+    const lens = await import(new URL("../../client/lens-webmcp.ts", import.meta.url).href);
     // /lens renders one tab per LENS_TAB_LABELS key, and lens_show lists them
     // all in its description, so the full set is the longest it gets.
     const src = readFileSync("./src/worker/lens.ts", "utf8");
@@ -369,7 +370,7 @@ test("every WebMCP tool fits Chrome's character budgets as registered", async ()
   // module cache by path under --no-isolate, so a second file importing
   // webmcp.ts would decide which stand-in that test sees; keeping every import
   // in this file, after it, keeps that deterministic.
-  const { registeredDescription } = await import(new URL("../../src/client/webmcp.ts?hints", import.meta.url).href);
+  const { registeredDescription } = await import(new URL("../../client/webmcp.ts?hints", import.meta.url).href);
   const server = SITE_MCP_TOOLS.map((tool) => ({
     name: tool.name,
     // The same shape registerSiteTools() builds from a tools/list answer.

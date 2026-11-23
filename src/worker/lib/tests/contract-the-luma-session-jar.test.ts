@@ -1,9 +1,10 @@
 // ── the Luma session jar ────────────────────────────────────────────
+import { ROOT, assert, readFile, test } from "../../../../tools/tests/contract-shared.ts";
+import { createBudget } from "../budget.ts";
+import { routeFetch } from "../../../../tools/lib/fetch-routes.ts";
 import {
-  ROOT,
   SERENDIPITY_SYNC_LIMITS,
   adminRefusal,
-  assert,
   cookieJar,
   dispatchEnrich,
   enrichBatchLimit,
@@ -12,12 +13,8 @@ import {
   mayPruneRoster,
   parseCookies,
   parseGuestSyncMark,
-  readFile,
   staleGuestIds,
-  test,
-} from "../../../../tools/tests/contract-shared.ts";
-import { createBudget } from "../budget.ts";
-import { routeFetch } from "../../../../tools/lib/fetch-routes.ts";
+} from "../../../../serendipity/serendipity.ts";
 
 // ── the Luma session jar ────────────────────────────────────────────
 // Two failure modes these guard. (1) A whole-domain browser export drags in

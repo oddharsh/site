@@ -1,5 +1,6 @@
 // ── the speculation ledger ────────────────────────────────────────────────────
-import { ROOT, assert, existsSync, inTestsDir, readFile, readFileSync, readdir, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, existsSync, readFile, readFileSync, readdir, test } from "../../../tools/tests/contract-shared.ts";
+import { inTestsDir } from "../../../tools/lib/test-roots.ts";
 
 // ── the speculation ledger ────────────────────────────────────────────────────
 // Both halves are best-effort counters wrapped around a live response, so the

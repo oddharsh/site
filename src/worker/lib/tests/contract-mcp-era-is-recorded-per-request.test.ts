@@ -6,8 +6,9 @@
 // assert the classification on BOTH servers and the narrowing that keeps a
 // caller-controlled string out of the logs. That the log line reads it is
 // asserted by calling the dispatcher, in contract-the-dispatch-pipeline.
-import { MODERN_META, assert, context, handleSiteMcp, test } from "../../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, test } from "../../../../tools/tests/contract-shared.ts";
 import { mcpEraOf } from "../mcp-protocol.ts";
+import { handleSiteMcp } from "../../mcp.ts";
 
 const serendipity = await import("../../../../serendipity/serendipity.ts");
 const database = { prepare: () => ({ all: async () => [] }) };

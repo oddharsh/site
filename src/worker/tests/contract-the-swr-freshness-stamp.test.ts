@@ -5,7 +5,9 @@
 // operation COUNTS, because the whole change is invisible to a test that only
 // checks the value that comes back, and they pin the legacy path, which is the
 // one that runs on the first request after the deploy.
-import { assert, deleteSWRKV, handleHit, swrKV, test } from "./contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { deleteSWRKV, swrKV } from "../lib/cache.ts";
+import { handleHit } from "../counter.ts";
 
 // A KV fake that records ops and stores metadata beside each value, so a test
 // can tell "one read" from "two reads that happen to agree".

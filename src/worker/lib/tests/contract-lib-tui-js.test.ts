@@ -1,5 +1,6 @@
 // ── src/worker/lib/tui.ts ────────────────────────────────────────────────────
-import { assert, test, tui } from "./contract-shared.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
+import * as tui from "../tui.ts";
 
 // A fixed-80-column renderer fails SILENTLY. A frame one column wide or narrow
 // still returns a string, still serves 200, and just looks subtly wrong; nothing

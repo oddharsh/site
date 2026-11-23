@@ -1,40 +1,31 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
+import { testGlobals, ROOT, TRACKS, assert, assertFullDocument, context, kvForTracks, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import {
-  testGlobals,
   ART_VERSION,
-  ROOT,
-  TRACKS,
   WARM_MAX_URLS,
   artUrls,
   artWarmList,
-  assert,
-  assertFullDocument,
   canonicalArtUrl,
-  context,
   cronEnrichTracks,
-  diffAroundRows,
-  handleAroundChangesJson,
-  handleLensBrowser,
-  handleLensFetch,
-  handleLensShot,
   handleRnArt,
   handleRnTracks,
   handleRnTracksHtml,
-  kvForTracks,
+  renderTrackListHtml,
+  spotifyArtHash,
+  warmArtCache,
+} from "../rn.ts";
+import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "../around.ts";
+import {
+  handleLensBrowser,
+  handleLensFetch,
+  handleLensShot,
   lensDetectWebmcp,
   lensFieldEvidence,
   lensParseCloudflareAgentScore,
-  mapWithConcurrency,
-  readAroundChanges,
-  readFile,
-  readResponseCapped,
   renderLensShell,
-  renderTrackListHtml,
-  spotifyArtHash,
-  test,
-  warmArtCache,
-} from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+} from "../lens.ts";
+import { mapWithConcurrency, readResponseCapped } from "../lib/crawl.ts";
 
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Regression, 2026-08-15. The prune deleted any entry missing from
@@ -548,6 +539,7 @@ test("the art warm is capped, so one long playlist cannot drain the subrequest b
 test("the art warm attempts every URL even when one is already cached", async () => {
   const store = new Map();
   const hadCaches = "caches" in globalThis;
+  const realCaches = testGlobals.caches;
   testGlobals.caches = {
     default: {
       async match(req) {
@@ -586,7 +578,8 @@ test("the art warm attempts every URL even when one is already cached", async ()
     assert.equal(res.failed, 0);
     for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
   } finally {
-    if (!hadCaches) delete globalThis.caches;
+    if (hadCaches) testGlobals.caches = realCaches;
+    else delete testGlobals.caches;
   }
 });
 
@@ -597,6 +590,7 @@ test("the art warm attempts every URL even when one is already cached", async ()
 test("the art warm counts a failed or untransformed cover as such, never as warmed", async () => {
   const store = new Map();
   const hadCaches = "caches" in globalThis;
+  const realCaches = testGlobals.caches;
   testGlobals.caches = {
     default: {
       async match(req) {
@@ -629,7 +623,8 @@ test("the art warm counts a failed or untransformed cover as such, never as warm
     assert.deepEqual(res, { warmed: 1, already: 0, untransformed: 1, failed: 1, skipped: 0, spent: 9 });
     assert.equal(store.size, 1, "only the transformed cover may reach the cache");
   } finally {
-    if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
+    if (hadCaches) testGlobals.caches = realCaches;
+    else delete testGlobals.caches;
   }
 });
 
@@ -665,6 +660,7 @@ function cappedArtPlatform(cached: string[] = []) {
 
 async function warmOnPlatform(platform, payload) {
   const hadCaches = "caches" in globalThis;
+  const realCaches = testGlobals.caches;
   testGlobals.caches = platform.caches;
   using _fetch = routeFetch({ "https://i.scdn.co/image/": platform.fetch });
   try {
@@ -675,7 +671,8 @@ async function warmOnPlatform(platform, payload) {
     const settled = await Promise.allSettled(waits);
     return { res, rejected: settled.filter((s) => s.status === "rejected").length };
   } finally {
-    if (!hadCaches) Reflect.deleteProperty(globalThis, "caches");
+    if (hadCaches) testGlobals.caches = realCaches;
+    else delete testGlobals.caches;
   }
 }
 

@@ -1,14 +1,7 @@
 // ── around.ts ────────────────────────────────────────────────────────────────
 import { PENDING } from "../island.ts";
-import {
-  NEIGHBORS,
-  assert,
-  diffAroundRows,
-  persistAroundHistory,
-  renderAroundPage,
-  renderAroundSnapshot,
-  test,
-} from "../../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { NEIGHBORS, diffAroundRows, persistAroundHistory, renderAroundPage, renderAroundSnapshot } from "../../around.ts";
 
 // Every degradation in the neighbourhood crawler is designed to be QUIET: a
 // disallowing robots.txt is a legitimate skip, and a neighbour that has gone

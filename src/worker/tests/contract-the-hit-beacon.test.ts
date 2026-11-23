@@ -1,5 +1,6 @@
 // ── the /hit beacon ─────────────────────────────────────────────────
-import { assert, handleHit, test } from "./contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { handleHit } from "../counter.ts";
 
 // The counter's Durable Object is a single global instance, so reaching it costs
 // a real round trip (185-308ms from SJC; 630ms observed on a cold contended

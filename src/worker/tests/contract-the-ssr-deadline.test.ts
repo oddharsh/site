@@ -1,6 +1,8 @@
 // ── the SSR deadline ────────────────────────────────────────────────
-import { assert, deadline, gatherWhoareyou, test } from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { deadline } from "../lib/cache.ts";
+import { gatherWhoareyou } from "../whoareyou.ts";
 
 // deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
 // homepage TTFB. Two properties are load-bearing: a fast read never marks

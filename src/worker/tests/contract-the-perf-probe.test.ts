@@ -3,19 +3,14 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  configText,
-  assert,
-  cronHomeProbe,
-  cronJob,
-  fetchFollowingPublicRedirects,
-  privateHostBlocked,
-  readFileSync,
-  reservationName,
-  test,
-  validateLensTarget,
-} from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
+import { cronHomeProbe } from "../perf-probe.ts";
+import { cronJob } from "../lib/cron.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "../lib/public-fetch.ts";
+import { reservationName } from "../../../cal/src/reservation.ts";
+import { validateLensTarget } from "../lens.ts";
 
 test("the probe writes one positionally-stable datapoint and never throws", async () => {
   // no PERF_PROBE binding -> a clean no-op, so preview/dev without the dataset
@@ -47,7 +42,7 @@ test("fragment probe preserves timings, missing values, cancellation and version
   const now = Date.now;
   try {
     await mkdir(join(root, "lib"));
-    await copyFile(new URL("../../src/worker/perf-probe.ts", import.meta.url), join(root, "perf-probe.ts"));
+    await copyFile(new URL("../perf-probe.ts", import.meta.url), join(root, "perf-probe.ts"));
     await writeFile(join(root, "lib/const.ts"), 'export const CANONICAL_HOST = "fixture.example";');
     await writeFile(join(root, "home.ts"), 'import { fragment } from "./fixture.mjs"; export const handlePhotoGrid = (...args) => fragment("grid", ...args);');
     await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const rnTracksHtml = (...args) => fragment("tracks", ...args);');
@@ -340,7 +335,7 @@ test("redirect following validates every hop, not just the landing", async () =>
 // the same slot again and nothing says so. This is the assertion that keeps the
 // degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
-  const { parseJsonc } = await import("../lib/jsonc.ts");
+  const { parseJsonc } = await import("../../../tools/lib/jsonc.ts");
   const config = "cloudflare.config.ts";
   const parsed = parseJsonc(await configText(config));
   const bindings = parsed.durable_objects?.bindings ?? [];
@@ -413,7 +408,7 @@ test("the census cron's weekday token and the prose about it agree", async () =>
   // changing the SCHEDULE without changing the copy is caught too.
   const CF_WEEKDAYS = { 1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday" };
 
-  const { parseJsonc } = await import("../lib/jsonc.ts");
+  const { parseJsonc } = await import("../../../tools/lib/jsonc.ts");
   const crons = parseJsonc(await configText("cloudflare.config.ts")).triggers?.crons ?? [];
   assert.ok(crons.length >= 4, `read only ${crons.length} crons from cloudflare.config.ts; the reader is broken`);
   const census = crons.find((expr) => expr.startsWith("17 8 "));

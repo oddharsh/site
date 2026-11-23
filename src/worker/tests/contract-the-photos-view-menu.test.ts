@@ -6,8 +6,9 @@
 // nothing), and the ?mv= cache key the script shares with tooltip.ts, where a
 // bump in one file and not the other serves a year-cached exif.json to one of
 // the two readers.
-import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { ALBUMS, derivePhotoPool, renderAlbumPage, renderPhotosPage } from "./contract-shared.ts";
+import { ROOT, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { ALBUMS } from "../albums.ts";
+import { derivePhotoPool, renderAlbumPage, renderPhotosPage } from "../photos.ts";
 
 const pool = async () =>
   derivePhotoPool(

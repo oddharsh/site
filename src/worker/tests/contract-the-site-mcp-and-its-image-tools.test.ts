@@ -1,22 +1,11 @@
 // ── the site MCP, its image workbench and the representation vault ──────────
-import {
-  MODERN_META,
-  SITE_MCP_TOOLS,
-  assert,
-  context,
-  fakeImages,
-  handleSiteMcp,
-  mcpPost,
-  readFileSync,
-  representationD1,
-  staticAssets,
-  test,
-} from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, fakeImages, mcpPost, readFileSync, representationD1, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
 import { imageCompare, photoRecipe } from "../image-tools.ts";
 import { _resetSearchIndex } from "../search.ts";
 import { buildImageFingerprints } from "../../../tools/lib/photo-indexes.ts";
 import { createHash } from "node:crypto";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { MCP_TOOLS as SITE_MCP_TOOLS, handleSiteMcp } from "../mcp.ts";
 
 // Moved out of the interaction-recipes file on 2026-10-24, where they had
 // accumulated: none of them is about /lens, so a change to /lens must never be

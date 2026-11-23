@@ -1,6 +1,8 @@
 // ── webmention (outbound) ───────────────────────────────────────────────────
-import { PROFILES, SELF_LINK_HOSTS, assert, citationsIn, cronSendWebmentions, test } from "./contract-shared.ts";
-import { routeFetch } from "../lib/fetch-routes.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { PROFILES } from "../../../tools/photos/shell-data.ts";
+import { SELF_LINK_HOSTS, citationsIn, cronSendWebmentions } from "../webmention-send.ts";
 
 test("outbound citations exclude the shell, self-links, and non-public URLs", () => {
   const origin = "https://aadhar.sh";

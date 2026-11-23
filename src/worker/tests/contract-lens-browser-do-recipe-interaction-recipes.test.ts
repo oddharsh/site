@@ -1,15 +1,8 @@
 import { Script } from "node:vm";
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
-import {
-  assert,
-  context,
-  handleLensBrowser,
-  handleLensCompare,
-  lensRecipe,
-  lensRecipeIds,
-  lensRecipeScript,
-  test,
-} from "../../../tools/tests/contract-shared.ts";
+import { assert, context, test } from "../../../tools/tests/contract-shared.ts";
+import { handleLensBrowser, handleLensCompare } from "../lens.ts";
+import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../lens-recipes.ts";
 
 // The feature runs JavaScript inside somebody else's page. Almost every test
 // below is about the blast radius of that rather than the feature working.

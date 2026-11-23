@@ -16,8 +16,9 @@
 // one of the keys below, and the floor stops a projection that lost a block
 // from agreeing vacuously.
 import { existsSync, readFileSync } from "node:fs";
-import { assert, configText, test } from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 import { parseJsonc } from "../lib/jsonc.ts";
+import { configText } from "./contract-config.ts";
 
 // The overlay's whole vocabulary. A key outside this list that differs between
 // the two projections is dev forking production, and it fails by name.

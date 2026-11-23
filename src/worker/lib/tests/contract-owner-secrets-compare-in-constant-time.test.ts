@@ -1,6 +1,7 @@
 // ── Owner secrets compare in constant time, through one gate ─────────────────
-import { assert, inTestsDir, readFileSync, test } from "../../../../tools/tests/contract-shared.ts";
+import { assert, readFileSync, test } from "../../../../tools/tests/contract-shared.ts";
 import { repoFiles } from "../../../../tools/lib/repo-files.ts";
+import { inTestsDir } from "../../../../tools/lib/test-roots.ts";
 
 // Owner-only actions (a cache bust, the playlist admin, the census refresh,
 // serendipity's sync triggers) gate on a secret from the request. `===` stops
