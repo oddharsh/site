@@ -214,6 +214,27 @@
       }
     },
     {
+      "id": "mcp/tool-schemas",
+      "tier": "pinned",
+      "why": "gen-tool-schemas.ts inlines the REST schemas the MCP data tools reuse (their 200 bodies and parameter descriptions) from src/worker/lib/openapi.ts into src/worker/lib/tool-schemas.json, so the Worker imports a few KB of JSON instead of the OpenAPI registry, which cost 7.01 KiB gzip and evaluated all 30 components in every isolate (PR 1835, 2026-11-23). The inputs are the schema registry, the operations and limits it reads, and tools.ts, which names the operations. contract-mcp-tools-share-their-rest-schemas holds the committed file equal to toolSchemas().",
+      "outputs": [
+        "src/worker/lib/tool-schemas.json"
+      ],
+      "inputs": {
+        "paths": [
+          "src/worker/lib/openapi.ts",
+          "src/worker/lib/public-api.ts",
+          "src/worker/lib/api-limits.ts",
+          "src/worker/lib/tools.ts"
+        ]
+      },
+      "regenerate": "bun tools/gen-tool-schemas.ts",
+      "recorded": {
+        "inputs": "5f3091e32dba11d90640e7d37f60c97aa9ac2622cf491d8bcf6b4aa006e88cda",
+        "count": 4
+      }
+    },
+    {
       "id": "images/metadata",
       "tier": "unverifiable",
       "why": "images/metadata.json is the EXIF record keyed by stem, plus the Fujifilm recipe card, read by exif-sooc from the camera originals.",

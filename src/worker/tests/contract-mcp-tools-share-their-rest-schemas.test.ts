@@ -117,3 +117,16 @@ test("the API catalog lists every API it describes as an item, under the RFC 972
   assert.ok(headers.includes(`/.well-known/api-catalog\n  Content-Type: ${profile}\n`), "_headers names the profile");
   assert.ok((await readFile(new URL("src/worker/index.ts", ROOT), "utf8")).includes(profile), "the Worker, which serves the file, names the same profile");
 });
+
+test("tool-schemas.json is what the generator writes, and the Worker never imports openapi.ts", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { ROOT } = await import("../../../tools/tests/contract-shared.ts");
+  const { TOOL_SCHEMAS_PATH, toolSchemas } = await import("../../../tools/gen-tool-schemas.ts");
+  const committed = JSON.parse(await readFile(new URL(TOOL_SCHEMAS_PATH, ROOT), "utf8"));
+  assert.deepEqual(committed, toolSchemas(), "stale: run bun tools/gen-tool-schemas.ts");
+  // The projection exists so the registry stays a build input. Importing it from
+  // a Worker module cost 7.01 KiB gzip and every isolate's startup (PR 1835).
+  const tools = await readFile(new URL("src/worker/lib/tools.ts", ROOT), "utf8");
+  assert.ok(!/from "\.\/openapi\.ts"/.test(tools), "tools.ts imports the OpenAPI registry again");
+  assert.match(tools, /from "\.\/tool-schemas\.json"/);
+});
