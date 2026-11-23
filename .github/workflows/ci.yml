@@ -283,9 +283,11 @@ jobs:
       # A pull request runs the test files its diff can reach, from the map
       # test-inputs.yml traces nightly on main (a PR's cache scope falls back to
       # main). Only a pull request restores one, so a push to main, the commit
-      # promote-production ships, runs the whole suite. Replayed over 40 merged
-      # PRs on 2026-10-31: 7,383 of 10,600 file runs; docs and design PRs ran
-      # 14 to 52 of 265 files, worker changes all of them.
+      # promote-production ships, runs the whole suite. Replayed over the 40
+      # merges to 39715522 on 2026-11-22: 7,742 of 12,280 file runs, where it
+      # had crept to 11,949 of 12,240; an edit to one route handler runs 45 to
+      # 158 of 307 files, and a PR that adds or removes a file still runs all
+      # of them (gotcha 111).
       - name: Restore the test input map
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

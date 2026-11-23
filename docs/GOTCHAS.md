@@ -1220,16 +1220,23 @@ skips it.
     Checked by: `tools/check-interactions.ts`.
 
 111. **A helper every test imports makes its imports an input of every
-    test.** Traced selection (`tools/test-inputs.ts`) reruns a test file
-    when the diff touches a path its trace opened, and bun opens every
-    module a test loads. Until 2026-11-22 `tools/tests/contract-shared.ts`
-    re-exported 107 Worker and tool names alongside `test` and `assert`.
-    263 test files import it and most use nothing past the node builtins,
-    yet each one loaded the Worker, so a change to any one route handler
-    selected about 210 of 265 files and selection only paid on docs and
-    design PRs. It now imports node builtins and nothing from the repo; a
-    test imports a Worker name from the module that owns it, and a shared
-    helper that needs a repo module gets its own file (`contract-config.ts`,
-    `contract-terminal.ts`). The control
+    test, and a directory listing is an input only of its names.** Traced
+    selection (`tools/test-inputs.ts`) reruns a test file when the diff
+    touches a path its trace opened, and bun opens every module a test
+    loads. Until 2026-11-22 `tools/tests/contract-shared.ts` re-exported 107
+    Worker and tool names beside `test` and `assert`, and all 263 tests that
+    import it loaded the Worker. It now imports node builtins and nothing
+    from the repo: a test imports a Worker name from the module that owns
+    it, and a shared helper that needs a repo module gets its own file
+    (`contract-config.ts`, `contract-terminal.ts`). That alone moved
+    nothing, because `bun test`'s discovery walk lists all 306 directories
+    for every file, and `select` matched any changed path against a listed
+    directory. A listing returns names, so it now matches only paths the
+    change adds, removes or renames. Replayed over the 40 merges to
+    39715522: 11,949 of 12,240 file runs before, 7,742 of 12,280 after; a
+    one-file edit to a route handler selects 45 to 158 files (median 49)
+    where it selected 306. The floor under a handler is real: 31
+    whole-tree scanners read every Worker file as text, 11 tests read the
+    build, and 7 always run. The control
     `contract-shared-imports-a-worker-module` plants a re-export.
-    Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`.
+    Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`, `tools/tests/contract-test-inputs-select-what-a-diff-can-reach.test.ts`.
