@@ -185,7 +185,8 @@ let failed = 0;
 for (const [cmd, r] of baselines) {
   if (r.code === 0) continue;
   failed++;
-  console.log(`BASELINE RED  ${cmd} fails before anything is planted (exit ${r.code}), so its controls prove nothing\n${tail(r.out)}`);
+  // The last few lines of a test suite omit the assertion that failed.
+  console.log(`BASELINE RED  ${cmd} fails before anything is planted (exit ${r.code}), so its controls prove nothing\n${r.out}`);
 }
 
 // 2. Controls, each against a check whose baseline passed.

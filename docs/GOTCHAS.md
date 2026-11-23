@@ -1315,3 +1315,11 @@ skips it.
     derivations while preserving the twin's authored names. The served page
     remains the source of truth for which critical rules apply.
     Checked by: `tools/tests/contract-a-non-blocking-page-paints-from-a-subset-of-luna.test.ts`.
+117. **A control must supply the input its plant depends on.** Once `/search`
+    qualified for non-blocking CSS, holding its stylesheets no longer delayed
+    first paint, and the paint comparison correctly reported a blind control.
+    The control now serves a dedicated fixture with one blocking stylesheet;
+    real-page measurements still use their own markup. A serving control also
+    needs its own input: the WASM mutation previously passed without a build
+    because its only serving test skipped with the build-output test.
+    Checked by: `tools/paint-diff.ts`, `src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts`.

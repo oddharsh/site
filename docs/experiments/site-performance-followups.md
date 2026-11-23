@@ -111,3 +111,28 @@ zero stale outputs and retained ten entries classified as unverifiable.
 The four mutation controls are `static-page-twin-cache-policy`,
 `wasm-twin-serving`, `gallery-url-deferral`, and
 `readable-twin-critical-classes`. Each must detect its planted defect.
+
+## CI follow-up
+
+The first PR run passed validation, route checks, Chrome and WebKit browser
+checks, interaction checks, and the Worker preview build. The controls job
+exposed a WASM serving test that skipped without `.build`; it now tests the
+committed decoder through an in-memory asset layer independently of the build
+output test. In a clean checkout, the unplanted test passes and removing WASM
+from the serving allowlist fails with its intended assertion.
+
+The paint comparison exposed a second instrument assumption: `/search` became
+eligible for non-blocking CSS, so delaying its sheets no longer delayed paint.
+The controls now use a dedicated blocking-CSS fixture. The runner also refuses
+fewer than six pairs, since five cannot clear its existing two-sided sign test.
+Neither change alters the real-page measurements or their thresholds.
+
+The first controls run also failed minifier parity. That test passed locally;
+the runner now preserves the entire unplanted failure output so another CI
+failure retains its assertion instead of only the suite summary.
+
+A nine-pair local rerun caught both paint plants: CSS delay moved FCP by
+148 ms and the inserted block moved CLS by 0.026; the unplanted fixture moved
+neither metric significantly. At this runner's 50 Mbps profile, `/photos`
+changed by -8 ms FCP (p=1.000), `/search` by -4 ms (p=0.727), and both retained
+zero CLS. This does not replace the slower-link gallery benchmark above.

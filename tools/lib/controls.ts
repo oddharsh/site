@@ -117,6 +117,7 @@ export const CONTROLS: Control[] = [
   },
   {
     id: "wasm-twin-serving",
+    gotcha: 117,
     plants: "the decoder twin is built but the static asset path no longer admits WASM",
     mutations: [{ file: "src/worker/lib/assets.ts", find: '"js", "css", "wasm"', replace: '"js", "css"' }],
     run: contract("contract-static-text-assets-ship-their-q11-twin"),

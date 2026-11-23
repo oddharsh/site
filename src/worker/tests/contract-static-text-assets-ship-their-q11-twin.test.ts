@@ -5,6 +5,7 @@ import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedAsset, serveStaticPage } from "../lib/assets.ts";
 import { claimedByWorker } from "../routes.ts";
 import { configText } from "../../../tools/tests/contract-config.ts";
+import { q11 } from "../../../tools/check-q11.ts";
 
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
 const textTwinAt = (request: Request, env, opts?) => servePrecompressedAsset(request, env, new URL(request.url), opts);
@@ -77,6 +78,7 @@ test("every text twin sits on a path the Worker claims", { skip: needsBuild }, a
   }
 });
 
+// Gotcha 117: serving assertions must run even when no build has been staged.
 // ── the serving path, against a fake asset layer ─────────────────────────────
 // What _headers says about the PLAIN URL is what a visitor must get, with only
 // the three bytes-on-the-wire corrections applied. The fake below answers the
@@ -118,21 +120,31 @@ function fakeEnv(overrides: Record<string, any> = {}) {
 }
 const get = (headers: Record<string, any> = {}, method = "GET") => new Request("https://aadhar.sh/garage/feed.xml", { method, headers });
 
-test("the AV2 decoder takes the static-page extension path with its WASM type and immutable policy", { skip: needsBuild }, async () => {
+test("the build stages the AV2 decoder and its smaller, byte-exact twin", { skip: needsBuild }, async () => {
   const dir = "garage/av2/";
   const wasm = (await readdir(new URL(dir, BUILT))).find((name) => /^av2dec\.[a-f0-9]{8}\.wasm$/.test(name));
   assert.ok(wasm, "the build must stage the AV2 decoder");
-  const path = `/${dir}${wasm}`;
   const plain = await readFile(new URL(`${dir}${wasm}`, BUILT));
   const twin = await readFile(new URL(`${dir}${wasm}.br`, BUILT));
   assert.ok(brotliDecompressSync(twin).equals(plain));
   assert.ok(twin.length < plain.length);
+});
+
+// The controls job has no build. Its serving guard must exercise the real
+// decoder through an in-memory asset layer even in that clean checkout.
+test("the AV2 decoder takes the static-page extension path with its WASM type and immutable policy", async () => {
+  const dir = "public/garage/av2/";
+  const wasm = (await readdir(new URL(dir, ROOT))).find((name) => /^av2dec\.[a-f0-9]{8}\.wasm$/.test(name));
+  assert.ok(wasm, "the repository must contain the AV2 decoder");
+  const path = `/garage/av2/${wasm}`;
+  const plain = await readFile(new URL(`${dir}${wasm}`, ROOT));
+  const twin = q11(plain);
   await WebAssembly.compile(brotliDecompressSync(twin));
   const env = {
     ASSETS: {
       async fetch(req: Request) {
         const compressed = new URL(req.url).pathname.endsWith(".br");
-        return new Response(req.method === "HEAD" ? null : compressed ? twin : plain, {
+        return new Response(req.method === "HEAD" ? null : new Uint8Array(compressed ? twin : plain), {
           headers: {
             "content-type": compressed ? "application/octet-stream" : "application/wasm",
             "cache-control": "public, max-age=31536000, immutable",
