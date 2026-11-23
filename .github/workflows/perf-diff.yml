@@ -287,3 +287,75 @@ jobs:
                 body,
               });
             }
+
+  # First contentful paint and layout shift, page by page, against the same
+  # merge base (tools/paint-diff.ts). Its own job so a slow browser run never
+  # holds up the byte diff, and its own comment for the same reason. Advisory
+  # like the rest of this file: the script exits 0 on any change it reports,
+  # and 2 only when a planted control goes unseen.
+  paint:
+    name: first paint and layout shift vs merge base
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check out and install the merge base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git worktree add --detach "$RUNNER_TEMP/paint-base" "$(git merge-base HEAD "origin/$BASE_REF")"
+          cd "$RUNNER_TEMP/paint-base"
+          bun install --frozen-lockfile
+
+      - name: Read both in Chrome
+        run: node tools/paint-diff.ts "$RUNNER_TEMP/paint-base" --out "$RUNNER_TEMP/paint.md"
+
+      - name: Summarize
+        if: always()
+        run: if [ -f "$RUNNER_TEMP/paint.md" ]; then cat "$RUNNER_TEMP/paint.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Comment the diff on the pull request
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REPORT_PATH: ${{ runner.temp }}/paint.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const marker = "<!-- paint-diff -->";
+            const body = fs.readFileSync(process.env.REPORT_PATH, "utf8");
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+            const prior = comments.find((comment) => comment.body?.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: prior.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number, body });
+            }
