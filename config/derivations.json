@@ -345,6 +345,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/user-bytes.ts": "writes only the file --save-traffic names: Workers Logs rows (UAs and network names, never an address) for a later --traffic replay. The caller picks the path, which belongs outside the repo; nothing is committed or served.",
       "tools/push-gate.ts": "writes only push-gate-passed in the worktree's git dir (git rev-parse --git-path), the tree ids that passed its gates, so a re-push of the same tree skips them. Never inside the tree, never committed or served.",
       "tools/test-inputs.ts": "trace writes the map of which repo paths each contract test file opened (--out, test-inputs.json by default) and per-file strace logs under a mkdtemp it deletes. The nightly workflow saves the map to the Actions cache; nothing is committed or served.",
       "tools/served-pages.ts": "writes only the hash file named by its first argument, one hash per page this checkout's Worker serves. check-browser.ts passes a path beside the mkdtemp base worktree it builds and deletes both after reading it; nothing is committed or served.",
