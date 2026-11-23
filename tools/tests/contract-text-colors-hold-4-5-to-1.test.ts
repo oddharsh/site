@@ -157,7 +157,9 @@ function scopedColours(css, scope) {
 const groundValue = (ground) => (ground.startsWith("--") ? byName.get(ground) : ground);
 
 test("text on luna.css's tinted grounds holds 4.5:1 against that ground", () => {
-  const css = readFileSync(new URL(LUNA, ROOT), "utf8");
+  const css = [LUNA, "src/styles/home-music.css", "src/styles/nav-run.css", "src/styles/tooltip.css"]
+    .map((path) => readFileSync(new URL(path, ROOT), "utf8"))
+    .join("\n");
   const flat = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const misses: any[] = [];
   let measured = 0;

@@ -219,7 +219,7 @@ export async function nonBlockingPage(
   html: string,
   sheets: { href: string; css: string }[],
   scripts: string[],
-  { taskPane }: { taskPane?: string } = {},
+  { taskPane, matchingHtml = html }: { taskPane?: string; matchingHtml?: string } = {},
 ): Promise<string> {
   let out = html;
   for (const { href, css } of sheets) {
@@ -227,7 +227,7 @@ export async function nonBlockingPage(
     const count = out.split(link).length - 1;
     if (count === 0 && href !== "/luna.css") continue; // a page that never loads prose.css
     if (count !== 1) throw new Error(`critical-css: expected exactly one ${link}`);
-    const subset = await criticalCss(css, html, scripts);
+    const subset = await criticalCss(css, matchingHtml, scripts);
     if (!isOrderedSubset(subset, css)) throw new Error(`critical-css: the ${href} subset is not an ordered subset of it`);
     const id = `${href.replace(/^\/|\.css$/g, "")}-css`;
     out = out.replace(link, `<style>${subset}</style>\n${swap(href, id)}`);

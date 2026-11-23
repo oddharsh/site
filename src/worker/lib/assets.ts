@@ -478,7 +478,7 @@ export async function servePrecompressedShell(request, env, url: URL) {
   });
 }
 
-// servePrecompressedText: the brotli q11 twin for a static TEXT asset that is
+// servePrecompressedAsset: the brotli q11 twin for a static asset that is
 // neither a page nor part of the /a/ shell: the Markdown twins, the photo data
 // indexes, llms.txt, the sitemap, the feeds.
 //
@@ -521,18 +521,20 @@ export async function servePrecompressedShell(request, env, url: URL) {
 // deliberately NOT a member: `/garage/horizon.html` reaches serveStaticPage's
 // extension branch too, and a twin lookup there would answer the page at a
 // second URL with a 200 where the asset layer redirects it to the canonical one.
-// Only the `.src.html` readable twin is admitted, by name, through hasTextTwin.
-const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css"]);
+// Only the `.src.html` readable twin is admitted, by name, through hasStaticTwin.
+// WASM shares this path so streaming compilation keeps the plain asset's
+// application/wasm type while the body comes from its q11 twin.
+const STATIC_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css", "wasm"]);
 const SOURCE_TWIN = /\.src\.html$/i;
 
 /** Does the build write a q11 twin beside this path, if the Worker claims it? */
-export function hasTextTwin(pathname: string): boolean {
+export function hasStaticTwin(pathname: string): boolean {
   const ext = (pathname.split(".").pop() ?? "").toLowerCase();
-  return TEXT_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
+  return STATIC_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
 }
 
-export async function servePrecompressedText(request, env, url: URL, opts: AssetOptions = {}) {
-  if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY) {
+export async function servePrecompressedAsset(request, env, url: URL, opts: AssetOptions = {}) {
+  if (request.method !== "GET" || request.headers.has("range") || !hasStaticTwin(url.pathname) || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, opts);
   }
 
@@ -665,11 +667,11 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
     // Sub-resources under these prefixes are not pages. The TEXT ones (a page's
     // .md twin, a section's llms.txt or feed.xml, and since 2026-09-16 its
     // scripts and its readable .src.html twin) have a q11 twin of their own and
-    // take servePrecompressedText, which falls through to the plain asset on any
+    // take servePrecompressedAsset, which falls through to the plain asset on any
     // miss; everything else (the garage's images) goes straight to the asset
     // layer untouched, as it always did.
-    if (!rel.includes("..") && hasTextTwin(rel)) {
-      return servePrecompressedText(request, env, url);
+    if (!rel.includes("..") && hasStaticTwin(rel)) {
+      return servePrecompressedAsset(request, env, url);
     }
     return serveAssetWith404Clamp(request, env);
   }

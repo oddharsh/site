@@ -42,7 +42,7 @@ test("the accessory window closes with a native button and on Escape", () => {
   assert.match(open, /win\.addEventListener\("keydown"[\s\S]{0,80}e\.key !== "Escape"/, "the accessory must close on Escape");
   // The button is a <button> now, so its rule has to undo the UA's padding,
   // font and colour or the glyph shifts and turns black.
-  const luna = readFileSync("src/styles/luna.css", "utf8");
-  const rule = /\.axp-acc>\.tb \.x\{([^}]*)\}/.exec(luna)?.[1] ?? "";
+  const accessory = readFileSync("src/styles/nav-run.css", "utf8");
+  const rule = /\.axp-acc>\.tb \.x\{([^}]*)\}/.exec(accessory)?.[1] ?? "";
   for (const decl of ["padding:0", "font:inherit", "color:inherit"]) assert.ok(rule.includes(decl), `.axp-acc>.tb .x lacks ${decl}`);
 });

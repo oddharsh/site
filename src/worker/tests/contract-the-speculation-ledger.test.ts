@@ -448,7 +448,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
 
   // The families whose pages take their policy from this file. Pages routed with
   // GENERATED_PAGE_HEADERS get theirs from the worker instead and are pinned above.
-  const families = ["garage", "lwe", "pixel-peeper"];
+  const families = ["garage", "lwe", "pixel-peeper", "access", "dotfiles"];
   let checked = 0;
   for (const family of families) {
     for (const file of (await readdir(new URL(`src/pages/${family}`, ROOT))).sort()) {

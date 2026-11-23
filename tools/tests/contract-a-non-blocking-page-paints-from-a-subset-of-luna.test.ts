@@ -94,3 +94,17 @@ test("a sheet the page never links is skipped, and luna.css is always required",
   assert.doesNotMatch(out, /prose/);
   await assert.rejects(nonBlockingPage("<head></head>", [{ href: "/luna.css", css: ".window{gap:0}" }], []), /expected exactly one/);
 });
+
+// Gotcha 116: authored names cannot match selectors after the class rename.
+test("a readable twin derives the same subset from served markup while retaining authored class names", needsParser, async () => {
+  const source = '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head><div class="authored"></div>';
+  const served = source.replace('class="authored"', 'class="a"');
+  const sheets = [{ href: "/luna.css", css: ".a{height:20px}.absent{height:30px}" }];
+  const twin = await nonBlockingPage(source, sheets, [], { matchingHtml: served });
+  const page = await nonBlockingPage(served, sheets, []);
+  const inline = (html: string) => /<style>(.*?)<\/style>/.exec(html)?.[1];
+  assert.equal(inline(twin), inline(page), "the readable twin must carry the served page's critical rules");
+  assert.equal(inline(twin), ".a{height:20px}");
+  assert.match(twin, /class="authored"/);
+  assert.notEqual(inline(await nonBlockingPage(source, sheets, [])), inline(page), "control: matching authored names against renamed CSS loses the rule");
+});

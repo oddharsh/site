@@ -72,7 +72,7 @@ test("the paywall's own headers survive both paths, and dev still assembles", as
   // The gate is unconfigured here (no X402_PAY_TO), which is the free path and
   // the one production runs today. Its note is set by the handler rather than
   // passed in, so this doubles as the check that the route's own headers are
-  // not lost to the twin's: servePrecompressedText copies the ASSET's headers
+  // not lost to the twin's: servePrecompressedAsset copies the ASSET's headers
   // first and applies the route's over them.
   for (const [label, env] of [
     ["twin", fakeEnv()],

@@ -2443,11 +2443,11 @@ phase("5f non-blocking shell css");
 // Step 7b gives the page's readable twin the same swap, so the twin stays the
 // same program as the page it twins.
 const { nonBlockingPage } = await import("./lib/critical-css.ts");
-const toNonBlocking = async (page: string, paneClass = servedClass("axp-tasks")) => {
+const toNonBlocking = async (page: string, paneClass = servedClass("axp-tasks"), matchingHtml = page) => {
   const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
   const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
   const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
-  return nonBlockingPage(page, sheets, scripts, { taskPane: `<div class="${paneClass}"` });
+  return nonBlockingPage(page, sheets, scripts, { taskPane: `<div class="${paneClass}"`, matchingHtml });
 };
 // Only a page that still fits the first round trip once it carries the subset
 // gains anything: a cold connection sends about 14,600 B before its first ack
@@ -2590,7 +2590,9 @@ phase("6 hash shell assets");
       .split("</nav.js>")
       .join(`<${hashedFor["nav.js"]}>`)
       .split("</lwe-base.css>")
-      .join(`<${hashedFor["lwe-base.css"]}>`);
+      .join(`<${hashedFor["lwe-base.css"]}>`)
+      .split("</prose.css>")
+      .join(`<${hashedFor["prose.css"]}>`);
     if (out === src) throw new Error("_headers: no shell Link target found to hash — did the Early-Hints rule move?");
     await writeFile(p, out);
     console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
@@ -2613,7 +2615,7 @@ phase("7 shell q11 + deltas");
 // This block precompresses /a/ alone: content-addressed, immutable, on the render
 // path. The pages get their twins at step 8, and the static TEXT assets (the
 // Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds) at
-// the text-twins block near the end of this file; servePrecompressedText says
+// the text-twins block near the end of this file; servePrecompressedAsset says
 // why those headers come from the plain asset rather than the twin. Three tiers,
 // three blocks, one brotliQ11.
 //
@@ -2857,7 +2859,9 @@ phase("7b minify pages");
       // outside the try, so a page that can't take the swap fails the build
       // instead of reading as "no authored source"
       // A twin read from the staged copy (a page with no authored source) is already swapped.
-      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(repauseAfterFirstFold(twin), "axp-tasks");
+      // The sheet carries served class names. Match the same served markup for
+      // both representations, even while the readable twin keeps authored names.
+      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(repauseAfterFirstFold(twin), "axp-tasks", staged);
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;
@@ -3355,7 +3359,7 @@ phase("compact data");
 }
 
 phase("text twins");
-// ── brotli q11 twins for the static TEXT assets outside /a/ and outside the pages ──
+// ── brotli q11 twins for the static assets outside /a/ and outside the pages ──
 //
 // The Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds.
 // Until 2026-08-31 none of these had a twin, so every one shipped through the
@@ -3369,7 +3373,7 @@ phase("text twins");
 // directly is dead weight in the upload and a false claim in this log, which is
 // the failure the contract test refuses: every twin written here must match a
 // run_worker_first rule. The globs below are therefore a declaration of what
-// servePrecompressedText can reach, kept beside the rules that make it true,
+// servePrecompressedAsset can reach, kept beside the rules that make it true,
 // rather than "every text file". robots.txt is deliberately absent: it is
 // q11:check's live control precisely BECAUSE it has no twin, and 311 B to
 // crawlers is not worth giving that up. /.well-known/* joined on 2026-09-16 when
@@ -3387,8 +3391,8 @@ phase("text twins");
   const TWINNED = [
     // section prefixes, worker-first for the pages. Text, data, the section's own
     // scripts (/lwe/ask.js, the vendored /garage/pretext.lib.js) and the readable
-    // .src.html twins, all through serveStaticPage's extension branch (hasTextTwin).
-    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.(?:md|txt|xml|json|js|css)$/,
+    // .src.html twins, all through serveStaticPage's extension branch (hasStaticTwin).
+    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.(?:md|txt|xml|json|js|css|wasm)$/,
     /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.src\.html$/, // dotfiles joined 2026-10-01: served:check found its twin 307ing
     /^writing\/[^/]+\.(?:json|txt|xml)$/, // /writing/* is worker-first for the slug route
     /^images\/(?:meta\/)?[^/]+\.json$/, // the data indexes and the per-photo meta

@@ -103,7 +103,6 @@ test("both homepage fragments are preloaded, and the reason that is free still h
 test("homepage selects 12 photos and transfers all of them", async () => {
   const worker = await readFile(new URL("src/worker/home.ts", ROOT), "utf8");
   const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
-  const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
   const nav = await readFile(new URL("src/client/nav.ts", ROOT), "utf8");
   const hoist = await readFile(new URL("src/client/hoist.ts", ROOT), "utf8");
   const tooltip = await readFile(new URL("src/client/tooltip.ts", ROOT), "utf8");
@@ -269,7 +268,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // to alternate auto/pointer under a moving cursor even though one hover system
   // owned the whole region.
   assert.match(page, /\.photos\s*\{[^}]*cursor:\s*pointer/s);
-  assert.match(luna, /\.np-list li\[data-track-title\]\s*\{\s*cursor:\s*pointer;\s*\}/);
+  assert.match(await readFile(new URL("src/styles/home-music.css", ROOT), "utf8"), /\.np-list li\[data-track-title\]\s*\{\s*cursor:\s*pointer;\s*\}/);
 
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   // The random twelve arrive through the one island script, byte-identical to
@@ -306,8 +305,8 @@ test("homepage selects 12 photos and transfers all of them", async () => {
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
     "non-rendering JSON-LD belongs after the visible homepage content",
   );
-  assert.match(luna, /homepage music island \(below the fold\)/);
-  assert.match(luna, /homepage hover island \(non-critical\)/);
+  assert.match(page, /href="\/home-music\.css"/);
+  assert.match(page, /sheet\.href = "\/tooltip\.css"/);
 });
 
 test("the packed histogram survives the round trip tooltip.js and build.ts do", async () => {

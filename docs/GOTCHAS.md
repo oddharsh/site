@@ -1306,3 +1306,12 @@ skips it.
     s with no answer rather than waiting forever. A worker that loads
     anything asynchronous sets its handler before it loads.
     Checked by: `tools/tests/contract-class-names-keep-page-edits-out-of-the-shell.test.ts`.
+116. **A readable twin keeps authored class names while its critical sheet
+    carries renamed selectors.** Deriving the twin's subset from its own
+    markup drops rules the served page keeps. CSS extraction exposed this on
+    2026-11-23 when `/lwe` first fit the non-blocking CSS budget: its served
+    document was 54,742 characters against a 54,610-character readable twin,
+    and the performance gate refused it. Match the served markup for both
+    derivations while preserving the twin's authored names. The served page
+    remains the source of truth for which critical rules apply.
+    Checked by: `tools/tests/contract-a-non-blocking-page-paints-from-a-subset-of-luna.test.ts`.
