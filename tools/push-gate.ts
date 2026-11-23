@@ -23,7 +23,7 @@
 // second remote, and each of those paid the full gate again.
 
 import { execFileSync, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -103,7 +103,14 @@ export function treeId(root: string): string {
   try {
     const index = resolve(root, git(["rev-parse", "--git-path", "index"]));
     const scratch = join(dir, "index");
-    if (existsSync(index)) copyFileSync(index, scratch);
+    if (existsSync(index)) {
+      copyFileSync(index, scratch);
+      // The copy keeps the index's mtime, so git's racy-entry check still
+      // rehashes a file written in the same timestamp tick as the index.
+      // A fresh mtime made add trust stale stat data (CI run 45103283509).
+      const { atime, mtime } = statSync(index);
+      utimesSync(scratch, atime, mtime);
+    }
     const env = { ...process.env, GIT_INDEX_FILE: scratch };
     git(["add", "-A"], env);
     return git(["write-tree"], env);
