@@ -451,8 +451,8 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
 });
 
 // gotcha 112. The two etags are the ones measured on 2026-11-22: production
-// answered / with no etag at all after Rocket Loader, Automatic HTTPS Rewrites
-// and Fonts re-encoded the twin, and the workers.dev preview of the same
+// answered / with no etag at all while Cloudflare Fonts re-encoded the twin,
+// and the workers.dev preview of the same
 // version answered with the twin's own validator.
 test("edge: html-twin-reaches-the-wire passes on the twin's -br etag and fails when the edge re-encoded it", () => {
   const check = edgeCheck("html-twin-reaches-the-wire");

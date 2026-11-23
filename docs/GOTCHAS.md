@@ -1220,14 +1220,16 @@ skips it.
     Checked by: `tools/check-interactions.ts`.
 
 112. **A precompressed body is not what ships if a zone feature rewrites
-    HTML.** Rocket Loader, Automatic HTTPS Rewrites and Cloudflare Fonts
-    each decode an encoded response so they can rewrite it, then
-    re-encode at the edge's own level and drop the ETag. Nothing on this
+    HTML.** Cloudflare Fonts decodes an encoded response to look for
+    Google Fonts links, then re-encodes at the edge's own level and drops
+    the ETag. Rocket Loader, Automatic HTTPS Rewrites, Email Obfuscation,
+    Polish, JavaScript detections and RUM are on the same decompress list. Nothing on this
     site's pages matches what they rewrite, so the bytes come back
     identical and only the encoding changes, which is why it hid behind
     `encodeBody: "manual"` (gotcha 13) doing its job in the Worker. On
     2026-11-22 every built page with a q11 twin shipped 15 to 20% over it
-    (/garage/horizon 138,635 B against 113,173 B) with no validator,
+    (/garage/horizon 138,635 B against 113,173 B) with no validator
+    until Fonts went off at 03:09 UTC,
     while the same version's workers.dev preview served the twin
     exactly. dcz deltas pass through, because the edge cannot decode
     them. Compare a page against its preview rather than against a local
