@@ -53,6 +53,7 @@
     "gotcha:next": "bun tools/gotcha-next.ts",
     "ci:census": "bun tools/ci-census.ts",
     "ua:survey": "bun tools/ua-survey.ts",
+    "user-bytes": "bun tools/user-bytes.ts",
     "test": "bun test --parallel=4 --no-isolate --timeout=30000 --timings=config/test-timings.json --preload ./tools/lib/no-network.ts ./tools/tests/ ./src/",
     "conflicts": "bun tools/conflict-triage.ts",
     "inflight": "bun tools/inflight.ts",
