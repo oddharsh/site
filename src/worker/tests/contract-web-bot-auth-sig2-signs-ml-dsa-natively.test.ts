@@ -12,8 +12,8 @@
 // The keys here are FULL JWKs (pub and priv), because bun and node refuse a
 // priv-only AKP JWK while workerd accepts one. The production secret's bare-
 // seed shape is exercised in workerd itself, in the harness test at the end.
-import { assert, botHeaders, configText, labels, ROOT, readFile, test } from "../../../tools/tests/contract-shared.ts";
-import { handleSignatureDirectory, jwkThumbprint } from "../lib/botauth.ts";
+import { assert, labels, ROOT, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { handleSignatureDirectory, jwkThumbprint, botHeaders } from "../lib/botauth.ts";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +22,7 @@ import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "../../../tools/lib/jsonc.ts";
 import { underNode } from "../../../tools/lib/harness-dispatch.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 const MLDSA = { name: "ML-DSA-44" };
 const DIRECTORY_PATH = "/.well-known/http-message-signatures-directory";

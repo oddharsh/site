@@ -1,17 +1,7 @@
 // ── the deploy-time page renderers ──────────────────────────────────
-import {
-  ALBUMS,
-  ROOT,
-  albumPath,
-  albumPool,
-  assert,
-  curatedPool,
-  derivePhotoPool,
-  readFile,
-  renderAlbumPage,
-  renderPhotosPage,
-  test,
-} from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
+import { ALBUMS, albumPath } from "../albums.ts";
+import { albumPool, curatedPool, derivePhotoPool, renderAlbumPage, renderPhotosPage } from "../photos.ts";
 
 // The album registry is empty since 2026-10-07, when /cota-wec left the site to
 // keep the photo bucket inside R2's 10 GB free tier. A fixture album stamped

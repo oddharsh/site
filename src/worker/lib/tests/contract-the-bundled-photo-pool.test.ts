@@ -1,22 +1,9 @@
 // ── the bundled photo pool ──────────────────────────────────────────
-import {
-  configText,
-  testGlobals,
-  ROOT,
-  assert,
-  cachedRender,
-  derivePhotoPool,
-  existsSync,
-  handleImagesManifest,
-  ifNoneMatchMatches,
-  notModifiedIfFresh,
-  readFile,
-  readFileSync,
-  readdir,
-  renderPhotoSlots,
-  test,
-  withWeakEtag,
-} from "../../../../tools/tests/contract-shared.ts";
+import { testGlobals, ROOT, assert, existsSync, readFile, readFileSync, readdir, test } from "../../../../tools/tests/contract-shared.ts";
+import { configText } from "../../../../tools/tests/contract-config.ts";
+import { cachedRender, ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../cache.ts";
+import { derivePhotoPool, handleImagesManifest } from "../../photos.ts";
+import { renderPhotoSlots } from "../photo-grid.ts";
 
 // The pool is BUILD DATA: photos.ts imports photo-index.json + hashes.json and
 // derives the render-ready rows at module scope. These tests run the real

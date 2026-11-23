@@ -1,9 +1,10 @@
 // ── static text assets ship their q11 twin ───────────────────────────────────
-import { configText, ROOT, assert, readFile, readdir, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFile, readdir, test } from "../../../tools/tests/contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { servePrecompressedText } from "../lib/assets.ts";
 import { claimedByWorker } from "../routes.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
 const textTwinAt = (request: Request, env, opts?) => servePrecompressedText(request, env, new URL(request.url), opts);

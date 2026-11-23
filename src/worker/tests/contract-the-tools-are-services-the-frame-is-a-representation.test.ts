@@ -1,16 +1,8 @@
 // ── the tools are SERVICES, the frame is a representation ────────────────
-import {
-  MODERN_META,
-  assert,
-  context,
-  handleSiteMcp,
-  handleTool,
-  mcpPost,
-  readFileSync,
-  terminalEnv,
-  terminalGet,
-  test,
-} from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { handleSiteMcp } from "../mcp.ts";
+import { handleTool } from "../terminal.ts";
+import { terminalEnv, terminalGet } from "../../../tools/tests/contract-terminal.ts";
 
 test("every tool is a top-level utility, not a subpage of a presentation", async () => {
   // The site's own manifest encodes the rule: utilities live at the root

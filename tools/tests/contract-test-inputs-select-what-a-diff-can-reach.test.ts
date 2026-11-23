@@ -124,13 +124,25 @@ test("test-inputs: a file a test reads but never imports selects it, and nothing
 });
 
 test("test-inputs: a new file in a listed directory, and a source the build read, each select their readers", () => {
-  assert.ok(select(MAP, TESTS, { paths: ["src/pages/b.html"] }).run.includes("tools/tests/pages.test.ts"));
-  assert.ok(!select(MAP, TESTS, { paths: ["src/pages/deep/b.html"] }).run.includes("tools/tests/pages.test.ts"), "only the directory it listed");
+  assert.equal(select(MAP, TESTS, { paths: ["src/pages/b.html"], moved: ["src/pages/b.html"] }).why["tools/tests/pages.test.ts"], "lists src/pages");
+  assert.ok(
+    !select(MAP, TESTS, { paths: ["src/pages/deep/b.html"], moved: ["src/pages/deep/b.html"] }).run.includes("tools/tests/pages.test.ts"),
+    "only the directory it listed",
+  );
   assert.equal(select(MAP, TESTS, { paths: ["src/worker/index.ts"] }).why["tools/tests/built.test.ts"], "reads src/worker/index.ts");
 });
 
+// A listing returns names, so an edit in place leaves it as it was; the file's
+// readers are what rerun. Every test lists every directory through bun test's
+// own discovery walk, so this is the difference between 1 file and the suite
+// (gotcha 111).
+test("test-inputs: an edit in place in a listed directory selects its readers, not its listers", () => {
+  assert.ok(!select(MAP, TESTS, { paths: ["src/pages/a.html"] }).run.includes("tools/tests/pages.test.ts"));
+  assert.equal(select(MAP, TESTS, { paths: ["src/pages/a.html"], moved: ["src/pages/a.html"] }).why["tools/tests/pages.test.ts"], "lists src/pages");
+});
+
 test("test-inputs: a test that lists tracked files reruns when the change adds or removes one", () => {
-  assert.ok(select(MAP, TESTS, { paths: ["src/new.ts"], filesMoved: true }).run.includes("tools/tests/ls.test.ts"));
+  assert.ok(select(MAP, TESTS, { paths: ["src/new.ts"], moved: ["src/new.ts"] }).run.includes("tools/tests/ls.test.ts"));
   assert.ok(!select(MAP, TESTS, { paths: ["src/old.ts"] }).run.includes("tools/tests/ls.test.ts"), "an edit in place doesn't");
 });
 

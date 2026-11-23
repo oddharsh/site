@@ -7,10 +7,11 @@
 // well-formed key, and all of them passed. Found from outside, by a probe that
 // computes the thumbprint (oddharsh/doors, agent-identity). This pins the
 // property the verifier keys on, in every place it has to hold.
-import { configText, ROOT, assert, readFile, test } from "../../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFile, test } from "../../../../tools/tests/contract-shared.ts";
 import { botHeaders, handleSignatureDirectory, jwkThumbprint } from "../botauth.ts";
 import { HOMEPAGE_DISCOVERY_LINK, withSecurityHeaders } from "../security.ts";
 import { parseJsonc } from "../../../../tools/lib/jsonc.ts";
+import { configText } from "../../../../tools/tests/contract-config.ts";
 
 const MEDIA_TYPE = "application/http-message-signatures-directory+json";
 
@@ -184,10 +185,6 @@ test("directory failures never fall back to an unsigned or mismatched success", 
       assert.equal(await response.text(), method === "HEAD" ? "" : "Signing directory unavailable");
     }
   }
-  const response = await handleSignatureDirectory(new Request(`https://aadhar.sh${DIRECTORY_PATH}`, { method: "POST" }), env);
-  assert.equal(response.status, 405);
-  assert.equal(response.headers.get("allow"), "GET, HEAD");
-  assert.equal(response.headers.has("signature"), false);
 });
 
 test("both asset routers send the directory to the Worker within the platform's rule limit", async () => {

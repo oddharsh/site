@@ -43,7 +43,8 @@ import { parseJsonc } from "../../../tools/lib/jsonc.ts";
 import { underNode } from "../../../tools/lib/harness-dispatch.ts";
 import { STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "../../../tools/lib/wrangler-provenance.ts";
 import { CENSUS_ROSTER, isDuplicateInstance } from "../census.ts";
-import { configText, ROOT, assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 const workerSource = (census) => `
 import { WorkflowEntrypoint } from "cloudflare:workers";

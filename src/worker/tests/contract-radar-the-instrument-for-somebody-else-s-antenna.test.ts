@@ -1,5 +1,7 @@
 // ── /radar — the instrument for somebody else's antenna ─────────
-import { assert, context, handleTool, terminalEnv, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, test } from "../../../tools/tests/contract-shared.ts";
+import { handleTool } from "../terminal.ts";
+import { terminalEnv } from "../../../tools/tests/contract-terminal.ts";
 
 test("radar drops readings that are not dBm, and bounds the rest", async () => {
   // The caller is a shell script somebody wrote in five minutes, so a bad sample
@@ -61,20 +63,6 @@ test("the radar frame fits 80 columns and says its angles are meaningless", asyn
   assert.match(text, /-58 dBm/);
   assert.match(text, /arm's reach/);
   assert.equal(res.headers.get("cache-control"), "no-store");
-});
-
-test("radar is the only program that accepts a POST", async () => {
-  // The surface stays read-only apart from the one route whose input this server
-  // structurally cannot produce. A new POST-shaped program should have to argue
-  // for itself here rather than arrive by accident.
-  for (const app of ["finger", "photos", "lens", "dict"]) {
-    const res = await handleTool(new Request(`https://aadhar.sh/${app}`, { method: "POST" }), terminalEnv(), context());
-    assert.equal(res.status, 405, `${app} accepted a POST`);
-    assert.equal(res.headers.get("allow"), "GET, HEAD");
-  }
-  const radar = await handleTool(new Request("https://aadhar.sh/radar", { method: "PUT" }), terminalEnv(), context());
-  assert.equal(radar.status, 405);
-  assert.equal(radar.headers.get("allow"), "GET, HEAD, POST");
 });
 
 test("an empty or malformed radar payload explains itself instead of 500ing", async () => {

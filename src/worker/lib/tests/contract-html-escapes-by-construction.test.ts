@@ -3,9 +3,10 @@
 // DISCIPLINE across 80+ call sites, where forgetting one is an injection rather
 // than a broken build. These assertions pin the properties the rest of the
 // Worker is allowed to rely on.
-import { ROOT, assert, inTestsDir, readFile, test } from "../../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, readFile, test } from "../../../../tools/tests/contract-shared.ts";
 import { Html, escape, html, joinHtml, unsafeHtml } from "../html.ts";
 import { esc } from "../http.ts";
+import { inTestsDir } from "../../../../tools/lib/test-roots.ts";
 
 test("interpolated text is escaped, and Html composes without double-escaping", () => {
   assert.equal(html`<b>${"<script>x</script>"}</b>`.html, "<b>&lt;script&gt;x&lt;/script&gt;</b>");

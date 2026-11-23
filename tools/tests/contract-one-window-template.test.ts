@@ -12,8 +12,9 @@
 // rewrite REFUSES markup it has no field for rather than dropping it, and that
 // no second renderer grows back.
 import { readFileSync, readdirSync } from "node:fs";
-import { assert, inTestsDir, test } from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 import { WINDOW_CLOSE, WINDOW_OPEN, bakeTitleBar, staticShellPages } from "../photos/gen-desktop-partial.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const occurrences = (haystack, needle) => haystack.split(needle).length - 1;
 

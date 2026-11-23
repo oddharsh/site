@@ -1,5 +1,6 @@
 // ── /dict — the registration lint ───────────────────────────────
-import { assert, terminalGet, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
+import { terminalGet } from "../../../tools/tests/contract-terminal.ts";
 
 // The rules ARE the product, and they are asserted as pure functions because
 // every external fetch in this repo dies at signing in a test environment.

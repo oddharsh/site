@@ -6,12 +6,14 @@
 // fake env.ASSETS and watch what a request does. Until 2026-10-02 the same claims
 // were pinned by `indexOf` offsets and regexes over index.ts's source text,
 // because index.ts imports `cloudflare:workers` and cannot load here (gotcha 16).
-import { assert, context, handleSiteMcp, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, test } from "../../../tools/tests/contract-shared.ts";
 import { createDispatch, isEdgeCacheable } from "../dispatch.ts";
 import type { DispatchHandlers, RouteHandler } from "../dispatch.ts";
 import { ALBUMS, albumPath } from "../albums.ts";
-import { CACHEABLE_PATHS, EXACT_PATHS, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "../routes.ts";
+import { CACHEABLE_PATHS, EXACT_METHODS, EXACT_PATHS, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS } from "../routes.ts";
+import { apiMethods } from "../lib/api-contract.ts";
 import { _resetSitemap } from "../lib/not-found.ts";
+import { handleSiteMcp } from "../mcp.ts";
 
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
 const edgeCacheableAt = (request: Request) => isEdgeCacheable(request, new URL(request.url));
@@ -234,6 +236,67 @@ test("a route with no handler fails at isolate init rather than serving static",
   const { "/a/<asset>": _shell, ...withoutShell } = prefix;
   // @ts-expect-error a table missing /a/<asset>, planted for the same reason
   assert.throws(() => createDispatch({ ...rest, exact, prefix: withoutShell }), /no handler for \/a\/<asset>/);
+});
+
+// The routes that answer more than GET and HEAD. A new one has to argue for
+// itself here, because a route that declares nothing refuses every write.
+const API_READ = "GET, HEAD, OPTIONS";
+const ANSWERS: Record<string, string> = {
+  "/ledger/vitals": "POST",
+  "/pixel-peeper/runs": "POST",
+  // radar is the one terminal program whose input this server can't produce
+  "/radar": "GET, HEAD, POST",
+  "/radar.txt": "GET, HEAD, POST",
+  "/rn/set": "GET, HEAD, POST",
+  "/guestbook": "GET, HEAD, POST",
+  "/ask": "GET, HEAD, POST, OPTIONS",
+  "/search.json": API_READ,
+  "/photos/query.json": API_READ,
+  "/lens/fetch": API_READ,
+  "/lens/compare.json": API_READ,
+  "/lens/census.json": API_READ,
+  "/rn/tracks": API_READ,
+  "/around/json": API_READ,
+  "/around/changes.json": API_READ,
+  "/coffee/availability.json": API_READ,
+  "/ledger.json": API_READ,
+  "/images/manifest.json": API_READ,
+  "/resume.json": API_READ,
+};
+// Routes whose module answers every method itself, by path or prefix probe.
+const OWN_METHODS = ["/mcp", "/webmention", "/terminal", "/terminal/", "/terminal/finger", "/coffee", "/serendipity"];
+
+test("every route refuses a method it doesn't answer before its handler runs", async () => {
+  const paths = [...EXACT_PATHS, ...PREFIX_ROUTES.map((p) => p.probe)];
+  for (const path of [...Object.keys(ANSWERS), ...OWN_METHODS]) assert.ok(paths.includes(path), `${path} is in the table but no route serves it`);
+
+  for (const path of paths) {
+    const r = rig();
+    const refused = await r.route(`https://aadhar.sh${path}`, { method: "DELETE" });
+    if (OWN_METHODS.includes(path)) {
+      assert.equal(r.calls.length, 1, `${path}'s module answers its own methods, so DELETE reaches it`);
+      continue;
+    }
+    const allow = ANSWERS[path] ?? "GET, HEAD";
+    assert.equal(refused.status, 405, `${path} answered DELETE with ${refused.status}`);
+    assert.equal(refused.headers.get("allow"), allow, `${path}'s Allow`);
+    const body = await refused.json();
+    assert.equal(body.code, "method_not_allowed");
+    assert.deepEqual(body.allow, allow.split(", "), `${path}'s body names the methods its Allow does`);
+    assert.deepEqual(r.ids(), [], `${path}'s handler ran on a method it doesn't answer`);
+
+    // the control: the first method it answers reaches the handler
+    await r.route(`https://aadhar.sh${path}`, { method: allow.split(", ")[0] });
+    assert.equal(r.calls.length, 1, `${path} refused ${allow.split(", ")[0]}, which it answers`);
+  }
+});
+
+test("a documented API path takes its methods from the API contract and declares none in routes.ts", () => {
+  for (const path of EXACT_PATHS) {
+    if (apiMethods(path)) assert.equal(EXACT_METHODS.has(path), false, `${path} declares methods the API contract overrides`);
+  }
+  assert.deepEqual(apiMethods("/ask"), ["GET", "HEAD", "POST", "OPTIONS"]);
+  assert.equal(apiMethods("/reading"), null, "the control: a page is off the API");
 });
 
 // noteEra() tags each request an MCP server parses; the log line is what makes

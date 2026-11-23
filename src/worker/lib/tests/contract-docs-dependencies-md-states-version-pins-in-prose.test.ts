@@ -1,24 +1,18 @@
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
+import { ROOT, assert, readFile, readdir, test } from "../../../../tools/tests/contract-shared.ts";
+import { spawnSync } from "node:child_process";
 import {
   BASELINE_HEADING,
   FLOOR_CLAIMS,
-  PAGE_FAMILY_MATCH,
-  ROOT,
-  assert,
   auditDependencyDocs,
   baselineSection,
   checkDependencyDocs,
-  collectBlockClasses,
   findClaims,
   parseCargoDeps,
-  readDocument,
-  readFile,
-  readdir,
-  serveMarkdown,
-  serveStaticPage,
-  test,
-} from "../../../../tools/tests/contract-shared.ts";
-import { spawnSync } from "node:child_process";
+} from "../../../../tools/lib/dependency-docs.ts";
+import { PAGE_FAMILY_MATCH, serveStaticPage } from "../assets.ts";
+import { collectBlockClasses, readDocument } from "../../../../tools/lib/html-to-md.ts";
+import { serveMarkdown } from "../../home.ts";
 
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
 const staticPageAt = (request: Request, env, opts?) => serveStaticPage(request, env, new URL(request.url), opts);

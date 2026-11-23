@@ -45,7 +45,7 @@ import { defineLens } from "./lens-pipeline.ts";
 import type { LensOutcome } from "./lens-pipeline.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { cappedRequestBody, esc, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, esc } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
@@ -1258,8 +1258,6 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
     });
   }
-  const refused = methodGuard(request, name === "radar" ? ["GET", "POST"] : ["GET"]);
-  if (refused) return refused;
 
   const frame = await buildFrame(name, request, env, ctx, url);
   const wantsHtml = !explicitText && (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain");
