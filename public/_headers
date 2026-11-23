@@ -319,7 +319,7 @@
 # per the merge note at the top of this file, a wildcard Cache-Control would
 # clobber the explicit per-file rules.
 /.well-known/api-catalog
-  Content-Type: application/linkset+json
+  Content-Type: application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
 
 /.well-known/agent-card.json

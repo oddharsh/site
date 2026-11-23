@@ -87,7 +87,9 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
       },
       `${tool.name} annotations must be explicit`,
     );
-    assert.deepEqual(tool.outputSchema, { type: "object", additionalProperties: true }, `${tool.name} needs an object output schema`);
+    // MCP requires an object at the root; which fields a tool names is pinned in
+    // contract-mcp-tools-share-their-rest-schemas, against the tool's real result.
+    assert.equal(tool.outputSchema.type, "object", `${tool.name} needs an object output schema`);
     // A write must ALSO say so in its description, because Cloudflare's WebMCP
     // bridge registers {name, description, inputSchema, execute} and drops
     // `annotations` entirely — a browser agent never sees the flags asserted
