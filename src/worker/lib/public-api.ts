@@ -60,6 +60,14 @@ export const LEAVES_OUT: readonly { what: string; why: string }[] = [
     why: "One person maintains the API, and it has one live shape: the one /openapi.json describes. New endpoints, parameters and fields arrive without notice, so ignore fields you don't know.",
   },
   {
+    what: "Idempotency keys",
+    why: "Every REST operation is a read, POST /ask included, so a retried request cannot duplicate anything and there is no write for a key to protect.",
+  },
+  {
+    what: "Async jobs and 202 Accepted",
+    why: "Every operation answers within its own request. The slowest one, a Lens fetch of another site, gives up after 8 seconds and says so, so there is no job to poll.",
+  },
+  {
     what: "Deprecation and Sunset headers",
     why: "A notice period protects clients that depend on an exact shape, and none is known here. A breaking change lands in /openapi.json the day it ships.",
   },

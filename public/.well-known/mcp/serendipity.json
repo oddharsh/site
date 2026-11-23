@@ -11,6 +11,12 @@
     "type": "streamable-http",
     "url": "https://aadhar.sh/serendipity/mcp"
   },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/serendipity/mcp"
+    }
+  ],
   "capabilities": {
     "tools": true,
     "resources": false,

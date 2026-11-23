@@ -287,6 +287,7 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
   // payload after inference.
   const responseMeta: {
     version: string;
+    response_type: "answer";
     dialect: string;
     retrieval: string;
     ranking: string;
@@ -296,6 +297,9 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
     decontextualization?: string;
   } = {
     version: NLWEB_VERSION,
+    // NLWeb 0.55 names what a response is (answer, elicitation, promise,
+    // failure) in _meta.response_type; this origin only ever answers.
+    response_type: "answer",
     dialect: params.structured ? "0.55" : "legacy",
     retrieval: byClef ? "every page, chosen by Clef" : "lexical",
     ranking,
@@ -391,7 +395,9 @@ export async function handleAsk(request, env, _ctx?, url = new URL(request.url))
   if (!parsed.ok) {
     // An SSE client asking a malformed question still gets JSON: the error is
     // about the request never becoming a query, so there is no stream to open.
-    return jsonResponse({ ...parsed.error, query_id: null, results: [] }, parsed.status, { "x-robots-tag": "noindex" });
+    return jsonResponse({ ...parsed.error, query_id: null, results: [], _meta: { version: NLWEB_VERSION, response_type: "failure" } }, parsed.status, {
+      "x-robots-tag": "noindex",
+    });
   }
 
   return span("nlweb.ask", async (s) => {

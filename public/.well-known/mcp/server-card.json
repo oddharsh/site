@@ -11,6 +11,12 @@
     "type": "streamable-http",
     "url": "https://aadhar.sh/mcp"
   },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/mcp"
+    }
+  ],
   "capabilities": {
     "tools": true,
     "resources": true,

@@ -25,6 +25,10 @@ function card({ serverInfo, capabilities, description, transport, documentationU
     protocolVersion: MCP_MODERN,
     serverInfo: { ...serverInfo, description },
     transport: { type: "streamable-http", url: transport },
+    // The draft MCP server-card extension matches a card to its server by
+    // remotes[].url; a scanner that found this card at the well-known path
+    // still reported "no card for /mcp" on 2026-11-23 without it.
+    remotes: [{ type: "streamable-http", url: transport }],
     capabilities: {
       tools: Boolean(capabilities.tools),
       resources: Boolean(capabilities.resources),

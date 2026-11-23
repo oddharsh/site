@@ -64,6 +64,7 @@ test("/ask returns NLWeb's six result fields, with a real schema.org object", as
   // two claims. A legacy GET is answered by a server that does speak 0.55, so
   // one field carrying both would be ambiguous exactly where it matters most.
   assert.equal(payload._meta.version, "0.55");
+  assert.equal(payload._meta.response_type, "answer");
   assert.equal(payload._meta.dialect, "legacy");
   assert.ok(payload.results.length >= 1, "the cached corpus must answer this query");
   for (const row of payload.results) {
@@ -134,6 +135,7 @@ test("/ask refuses the modes it cannot serve instead of degrading to list", asyn
     assert.deepEqual(body.supported_modes, ["list"]);
     assert.ok(body.known_modes.includes(mode), "the refusal names the mode as one the protocol defines");
     assert.equal(body.results.length, 0, "a refusal carries no results");
+    assert.equal(body._meta.response_type, "failure", "NLWeb 0.55 names a refusal in _meta");
   }
   // A mode the protocol never defined is a different error from one it defines
   // and this origin cannot serve.
