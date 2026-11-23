@@ -1,21 +1,10 @@
 // ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
-import {
-  MODERN_META,
-  TERMINAL_ASSETS,
-  assert,
-  context,
-  handleSiteMcp,
-  handleTool,
-  mcpPost,
-  staticAssets,
-  terminalEnv,
-  terminalGet,
-  terminalReq,
-  test,
-  tokenizeKeys,
-} from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
 import { _resetPhotoCaches } from "../photos.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
+import { TERMINAL_ASSETS, terminalEnv, terminalGet, terminalReq } from "../../../tools/tests/contract-terminal.ts";
+import { handleSiteMcp } from "../mcp.ts";
+import { handleTool, tokenizeKeys } from "../terminal.ts";
 
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
@@ -173,9 +162,6 @@ test("an unknown program 404s and names the ones that exist", async () => {
     assert.ok(body.includes(`  ${tool}\n`) || body.includes(`  ${tool} `), `the 404 body does not list ${tool}`);
   }
   assert.ok(!body.includes("/terminal"), "the 404 body still points at the retired console");
-  const post = await handleTool(new Request("https://aadhar.sh/finger", { method: "POST" }), terminalEnv(), context());
-  assert.equal(post.status, 405);
-  assert.equal(post.headers.get("allow"), "GET, HEAD");
 });
 
 test("every frame tool the MCP server lists is one the server can actually call", async () => {

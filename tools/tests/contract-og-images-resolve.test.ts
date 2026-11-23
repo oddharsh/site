@@ -18,7 +18,8 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { assert, inTestsDir, test, ROOT } from "./contract-shared.ts";
+import { assert, test, ROOT } from "./contract-shared.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const root = fileURLToPath(ROOT);
 const PAGES = join(root, "src/pages");

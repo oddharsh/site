@@ -108,6 +108,7 @@ export async function handleWebmention(request, env, ctx) {
     return text(
       "This is the Webmention endpoint for aadhar.sh. POST source= and target= (application/x-www-form-urlencoded). See https://www.w3.org/TR/webmention/",
       405,
+      { allow: "POST, OPTIONS" },
     );
   }
 

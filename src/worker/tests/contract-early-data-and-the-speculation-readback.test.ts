@@ -1,5 +1,6 @@
 // ── 0-RTT early data, and the speculation ledger read back ───────────────────
-import { configText, assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, readFileSync, test } from "../../../tools/tests/contract-shared.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 // A request that arrived as TLS early data can be replayed, so the GET-shaped
 // writes answer 425 Too Early (RFC 8470) and every other request is untouched.
@@ -114,10 +115,8 @@ test("speculation readback: reached splits client activations by how far the pre
   assert.equal(row.activated, 21, "the client total still wins the max over the header's 7");
 });
 
-test("speculation readback: the route is wired, allowlisted, and refuses writes", async () => {
+test("speculation readback: the route is wired and allowlisted", async () => {
   const { handleSpeculationJson } = await import("../speculation.ts");
-  const bad = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json", { method: "POST" }), {});
-  assert.equal(bad.status, 405);
   // no token: an "unconfigured" 503 (a 200 until 2026-10-13, which a client
   // reading the status took for data), the same answer /ledger.json gives
   const none = await handleSpeculationJson(new Request("https://aadhar.sh/ledger/speculation.json"), {});

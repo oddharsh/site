@@ -1,24 +1,13 @@
 // ── site search, photo query, coffee availability and the no-JS utility shells ──
-import {
-  _resetPhotoCaches,
-  assert,
-  context,
-  getPublicAvailability,
-  handleCoffeeAvailability,
-  handlePhotoQuery,
-  handleSearchJson,
-  kvType,
-  queryPhotos,
-  renderRun,
-  renderSearchPage,
-  searchSite,
-  staticAssets,
-  test,
-} from "../../../tools/tests/contract-shared.ts";
-import { _resetSearchIndex } from "../search.ts";
+import { assert, context, kvType, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
+import { _resetSearchIndex, handleSearchJson, renderSearchPage, searchSite } from "../search.ts";
 import { fieldMatches } from "../lib/text.ts";
 import { buildPhotoSearchIndex, decodePhotoSearchIndex, encodePhotoSearchIndex, matchingRows, PHOTO_FIELD_WEIGHTS, photoFields } from "../lib/photo-search.ts";
 import { readFile } from "node:fs/promises";
+import { _resetPhotoCaches, handlePhotoQuery, queryPhotos } from "../photos.ts";
+import { getPublicAvailability } from "../../../cal/src/slots.ts";
+import { handleCoffeeAvailability } from "../coffee.ts";
+import { renderRun } from "../run.ts";
 
 // Moved out of the interaction-recipes file on 2026-10-24, where they had
 // accumulated: none of them is about /lens, so a change to /lens must never be

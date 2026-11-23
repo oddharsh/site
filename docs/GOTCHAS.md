@@ -1219,8 +1219,46 @@ skips it.
     prove each reading can fail, and three plain ones prove it can pass.
     Checked by: `tools/check-interactions.ts`.
 
+111. **A helper every test imports makes its imports an input of every
+    test, and a directory listing is an input only of its names.** Traced
+    selection (`tools/test-inputs.ts`) reruns a test file when the diff
+    touches a path its trace opened, and bun opens every module a test
+    loads. Until 2026-11-22 `tools/tests/contract-shared.ts` re-exported 107
+    Worker and tool names beside `test` and `assert`, and all 263 tests that
+    import it loaded the Worker. It now imports node builtins and nothing
+    from the repo: a test imports a Worker name from the module that owns
+    it, and a shared helper that needs a repo module gets its own file
+    (`contract-config.ts`, `contract-terminal.ts`). That alone moved
+    nothing, because `bun test`'s discovery walk lists all 306 directories
+    for every file, and `select` matched any changed path against a listed
+    directory. A listing returns names, so it now matches only paths the
+    change adds, removes or renames. Replayed over the 40 merges to
+    39715522: 11,949 of 12,240 file runs before, 7,742 of 12,280 after; a
+    one-file edit to a route handler selects 45 to 158 files (median 49)
+    where it selected 306. The floor under a handler is real: 31
+    whole-tree scanners read every Worker file as text, 11 tests read the
+    build, and 7 always run. The control
+    `contract-shared-imports-a-worker-module` plants a re-export.
+    Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`, `tools/tests/contract-test-inputs-select-what-a-diff-can-reach.test.ts`.
+112. **A precompressed body is not what ships if a zone feature rewrites
+    HTML.** Cloudflare Fonts decodes an encoded response to look for
+    Google Fonts links, then re-encodes at the edge's own level and drops
+    the ETag. Rocket Loader, Automatic HTTPS Rewrites, Email Obfuscation,
+    Polish, JavaScript detections and RUM are on the same decompress list. Nothing on this
+    site's pages matches what they rewrite, so the bytes come back
+    identical and only the encoding changes, which is why it hid behind
+    `encodeBody: "manual"` (gotcha 13) doing its job in the Worker. On
+    2026-11-22 every built page with a q11 twin shipped 15 to 20% over it
+    (/garage/horizon 138,635 B against 113,173 B) with no validator
+    until Fonts went off at 03:09 UTC,
+    while the same version's workers.dev preview served the twin
+    exactly. dcz deltas pass through, because the edge cannot decode
+    them. Compare a page against its preview rather than against a local
+    q11, since the preview runs the same Worker without the zone. A
+    `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
+    Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
 113. **A built page ships short class names, so a check that greps one for an
-    authored class finds nothing.** Build step 5e renames 1,045 of the site's
+    authored class finds nothing.** Build step 5e renames 1,121 of the site's
     1,724 class names across the staged tree (`tools/lib/class-names.ts`,
     through spokeshave's census). `.window` stays `.window` only because
     the census couldn't rule it out. `.title-bar` ships as a one- or

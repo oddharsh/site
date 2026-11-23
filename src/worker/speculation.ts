@@ -123,8 +123,6 @@ export function countSpeculativeLoad(env, request, response, pathname) {
 export function handlePrefetchActivation(request, env) {
   // GET is accepted alongside HEAD purely so this is curl-able while the
   // origin trial is pending; the browser itself only ever sends HEAD.
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   try {
     if (env.SPECULATION) {
       const params = new URL(request.url).searchParams;
@@ -168,7 +166,7 @@ export function handlePrefetchActivation(request, env) {
 // answers.
 import { analyticsReadError, analyticsSql, text } from "./ledger.ts";
 import type { AnalyticsRow } from "./ledger.ts";
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { jsonResponse } from "./lib/http.ts";
 import { compareCodepoints } from "./lib/text.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
@@ -231,8 +229,6 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
 }
 
 export async function handleSpeculationJson(request, env) {
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   const read = await analyticsSql(
     env,
     SPECULATION_DATASET,

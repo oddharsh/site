@@ -1,6 +1,8 @@
 // ── the TypeScript quarantine ───────────────────────────────────────────────
-import { ROOT, assert, readFile, readdir, remainderHolder, test, wranglerErrorLines } from "./contract-shared.ts";
+import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
+import { remainderHolder } from "../lib/ramp-split.ts";
+import { wranglerErrorLines } from "../lib/wrangler-error.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
 // The migration quarantine is empty. Keep the restriction directly in source:

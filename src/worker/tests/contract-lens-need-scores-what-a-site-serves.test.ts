@@ -4,8 +4,9 @@
 // These pin the applicability rule borrowed from Is Agentic, the cap on
 // emerging doors, the skip list that keeps a blog off the OAuth treadmill, and
 // the ledger that files every is-agentic check exactly once.
-import { assert, lensReadiness, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
 import { ISAG_CATALOG, ISAG_LEDGER, NEED_POOLS, lensNeed, openapiOperationIds } from "../lens-need.ts";
+import { lensReadiness } from "../lens.ts";
 
 const words = (n) => Array.from({ length: n }, (_, i) => "word" + i).join(" ");
 const page = (extra = "") =>

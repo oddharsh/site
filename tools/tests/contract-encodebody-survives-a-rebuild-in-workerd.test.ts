@@ -35,7 +35,8 @@ import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "../lib/jsonc.ts";
 import { underNode } from "../lib/harness-dispatch.ts";
-import { configText, ROOT, assert, test } from "./contract-shared.ts";
+import { ROOT, assert, test } from "./contract-shared.ts";
+import { configText } from "./contract-config.ts";
 
 // Every shape the walker has an opinion about, plus production's own wrapper
 // down each of its three exits.

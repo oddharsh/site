@@ -18,6 +18,17 @@
 # isolated linker there is no single such position. The floors still hold.
 linker = "isolated"
 
+# Isolated packages become symlinks into a store under bun's install cache,
+# shared by every checkout and worktree on the machine. Packages with native
+# binaries or lifecycle scripts (workerd, esbuild, sharp, lightningcss) and
+# their dependents stay as real directories. Measured 2026-11-22 on the pinned
+# bun 1.4.5-canary.20261120.1, from empty caches: 29 of 50 packages linked,
+# node_modules 349 MB to 298 MB, and `bun run build` byte-identical (3053 of
+# 3054 files; the other is phases.json, which differs between any two builds).
+# The cargo target for timbrado's engine now lands inside the shared store, so
+# CI's timbrado cache key (ci.yml) resolves a path under the cache, not .bun/.
+globalStore = true
+
 # A package published in the last 24 hours is REFUSED — the window in which a
 # compromised release is most dangerous and least likely to have been noticed.
 # Stated explicitly rather than left to a default, so the number stays a

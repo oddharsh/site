@@ -75,7 +75,8 @@ import { AROUND_SUBREQUEST_LIMIT, AROUND_SUBREQUEST_RESERVE, NEIGHBORS } from ".
 import { SUBREQUEST_BUDGET, citationsIn } from "../webmention-send.ts";
 import { SUBREQUEST_CAP_FREE } from "../lib/budget.ts";
 import { privateHostBlocked } from "../lib/public-fetch.ts";
-import { configText, ROOT, assert, test } from "../../../tools/tests/contract-shared.ts";
+import { ROOT, assert, test } from "../../../tools/tests/contract-shared.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 const at = (rel) => fileURLToPath(new URL(rel, ROOT));
 const ORIGIN = "https://aadhar.sh";

@@ -10,9 +10,10 @@
 // the order their comments promise, and that every registered surface lands on
 // a route. Each has a control, because a check that cannot fail is decoration.
 import { readFileSync } from "node:fs";
-import { assert, configText, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, test } from "../../../tools/tests/contract-shared.ts";
 import { parseJsonc } from "../../../tools/lib/jsonc.ts";
 import * as routes from "../routes.ts";
+import { configText } from "../../../tools/tests/contract-config.ts";
 
 const read = (p) => readFileSync(new URL(`../../../${p}`, import.meta.url), "utf8");
 const firstPrefix = (path) => routes.PREFIX_ROUTES.find((r) => r.match(path))?.label ?? null;

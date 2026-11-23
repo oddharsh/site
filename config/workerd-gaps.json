@@ -153,13 +153,13 @@
     "link": "https://github.com/cloudflare/workerd/issues/7678"
   },
   {
-    "test": "tools/tests/contract-webmcp-live-catalog-probe.test.ts :: <load>",
+    "test": "src/worker/tests/contract-webmcp-live-catalog-probe.test.ts :: <load>",
     "cause": "workerd",
     "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
     "link": "https://github.com/cloudflare/workerd/issues/8786"
   },
   {
-    "test": "tools/tests/contract-webmcp-one-door-onto-the-browser-catalog.test.ts :: <load>",
+    "test": "src/worker/tests/contract-webmcp-one-door-onto-the-browser-catalog.test.ts :: <load>",
     "cause": "workerd",
     "why": "under new_module_registry, process.cwd() reads / at the top level of a dynamically imported module (/bundle everywhere else), so a top-level relative read or existsSync misses",
     "link": "https://github.com/cloudflare/workerd/issues/8786"

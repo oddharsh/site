@@ -23,7 +23,7 @@
 // Gotcha 90 is why this exists.
 
 import { execFileSync, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,11 +71,17 @@ function exec(argv: string[], cwd: string, env: Record<string, string> = {}): Pr
 // Git in a clone. The clone's .git file still points at this worktree's gitdir,
 // so `git status` there would refresh THIS worktree's index (an opportunistic
 // write, and a lock another session can trip on). Each clone gets a private
-// copy of the index, and optional locks are off.
-const realIndex = (() => {
-  const p = execFileSync("git", ["rev-parse", "--git-path", "index"], { cwd: ROOT, encoding: "utf8" }).trim();
-  return isAbsolute(p) ? p : join(ROOT, p);
-})();
+// gitdir instead: its own HEAD and a copy of the index, sharing objects and refs
+// through commondir, the way `git worktree add` lays one out. Until 2026-11-22
+// the private index came through GIT_INDEX_FILE, which every process the check
+// spawns inherits: a test that runs `git add` in its own temp repo wrote its
+// fixtures into the clone's index, and the whole suite read 21 failures in a
+// clone before anything was planted.
+const gitText = (...args: string[]) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+const absolute = (p: string) => (isAbsolute(p) ? p : join(ROOT, p));
+const realIndex = absolute(gitText("rev-parse", "--git-path", "index"));
+const commonDir = absolute(gitText("rev-parse", "--git-common-dir"));
+const head = gitText("rev-parse", "HEAD");
 
 const scratch = mkdtempSync(join(tmpdir(), "aadhar-controls-"));
 process.on("exit", () => rmSync(scratch, { recursive: true, force: true }));
@@ -85,13 +91,20 @@ let seq = 0;
 async function inClone<T>(fn: (root: string, env: Record<string, string>) => Promise<T>): Promise<T> {
   const dir = join(scratch, `t${seq++}`);
   if (!(await cloneTree(ROOT, dir))) throw new Error("clonefile failed");
-  const index = `${dir}.index`;
-  if (existsSync(realIndex)) copyFileSync(realIndex, index);
+  // A main checkout's .git is a directory, which clonefile already copied.
+  const gitdir = `${dir}.git`;
+  if (statSync(join(dir, ".git")).isFile()) {
+    mkdirSync(gitdir);
+    writeFileSync(join(gitdir, "commondir"), `${commonDir}\n`);
+    writeFileSync(join(gitdir, "HEAD"), `${head}\n`);
+    if (existsSync(realIndex)) copyFileSync(realIndex, join(gitdir, "index"));
+    writeFileSync(join(dir, ".git"), `gitdir: ${gitdir}\n`);
+  }
   try {
-    return await fn(dir, { GIT_INDEX_FILE: index, GIT_OPTIONAL_LOCKS: "0" });
+    return await fn(dir, { GIT_OPTIONAL_LOCKS: "0" });
   } finally {
     rmSync(dir, { recursive: true, force: true });
-    rmSync(index, { force: true });
+    rmSync(gitdir, { recursive: true, force: true });
   }
 }
 
