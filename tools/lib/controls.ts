@@ -101,12 +101,38 @@ export const CONTROLS: Control[] = [
     mutations: [
       {
         file: "tools/lib/critical-css.ts",
-        find: "const subset = await criticalCss(css, matchingHtml, scripts);",
-        replace: "const subset = await criticalCss(css, html, scripts);",
+        find: "const subset = await criticalCss(css, matchingHtml, scripts, siblingCss);",
+        replace: "const subset = await criticalCss(css, html, scripts, siblingCss);",
       },
     ],
     run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
     expect: /the readable twin must carry the served page's critical rules/,
+  },
+  {
+    id: "critical-css-where-is-matching",
+    plants: "critical CSS stops expanding :where() and :is() so unused widget rules leak into every subset",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: 'if (!isElement && (name === "where" || name === "is")) {',
+        replace: "if (false) {",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /unused :where\(\) rule must be dropped/,
+  },
+  {
+    id: "critical-css-root-pruning",
+    plants: "critical CSS stops pruning unreferenced :root custom properties",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords);",
+        replace: "return keep(luna);",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /--dead:#222/,
   },
   {
     id: "static-page-twin-cache-policy",
@@ -659,7 +685,7 @@ export const CONTROLS: Control[] = [
     mutations: [
       {
         file: "tools/lib/critical-css.ts",
-        find: " || namedInScripts(stripPseudos(s), scriptWords)",
+        find: " || namedInScripts(branch, scriptWords)",
         replace: "",
       },
     ],
@@ -669,7 +695,13 @@ export const CONTROLS: Control[] = [
   {
     id: "critical-css-adds-a-rule",
     plants: "the critical-CSS subset carries a rule luna.css doesn't, which would change /garage's settled render",
-    mutations: [{ file: "tools/lib/critical-css.ts", find: "  return keep(luna);", replace: '  return keep(luna) + ".planted{color:red}";' }],
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "  return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords);",
+        replace: '  return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords) + ".planted{color:red}";',
+      },
+    ],
     run: BUILD,
     expect: /critical-css: the \/luna\.css subset is not an ordered subset of it/,
   },

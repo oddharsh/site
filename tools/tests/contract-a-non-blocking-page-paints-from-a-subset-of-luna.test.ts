@@ -108,3 +108,50 @@ test("a readable twin derives the same subset from served markup while retaining
   assert.match(twin, /class="authored"/);
   assert.notEqual(inline(await nonBlockingPage(source, sheets, [])), inline(page), "control: matching authored names against renamed CSS loses the rule");
 });
+
+test("matches inside :where() and :is() and drops @media print", needsParser, async () => {
+  const sheet =
+    ":where(.window){display:block}:where(.xp-tabs){display:flex}" +
+    ":where(.title-bar :is(.min,.absent):focus-visible){outline:1px solid}" +
+    ":is(input,textarea){font-size:16px}" +
+    ":where(.axp-acc){position:fixed}" +
+    "@media print{.window{box-shadow:none}}";
+  const doc = '<html><body><div class="window"><div class="title-bar"><button class="min"></button></div></div></body></html>';
+  const subset = await criticalCss(sheet, doc, ['el("<div class=axp-acc>")']);
+  assert.ok(!subset.includes(".xp-tabs"), "unused :where() rule must be dropped");
+  assert.ok(!subset.includes("textarea"), "unused :is() rule must be dropped");
+  assert.ok(!subset.includes("@media print"), "@media print rules must not be inlined for screen first paint");
+  assert.equal(
+    subset,
+    ":where(.window){display:block}" + ":where(.title-bar :is(.min,.absent):focus-visible){outline:1px solid}" + ":where(.axp-acc){position:fixed}",
+  );
+  assert.equal(isOrderedSubset(subset, sheet), true);
+});
+
+test("prunes unreferenced :root custom properties while keeping transitive, script, and sibling-sheet refs", needsParser, async () => {
+  const sheet =
+    ":root{--used:var(--chain);--chain:#111;--dead:#222;--sa-t:0px;--prose-ink:#333}" +
+    "@media (color-gamut:p3){:root{--used:color(display-p3 0 0 0);--dead:color(display-p3 1 0 0)}}" +
+    ".window{color:var(--used)}";
+  const page =
+    '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"><link rel="stylesheet" href="/prose.css"></head>' +
+    '<body><div class="window"></div></body>';
+  const out = await nonBlockingPage(
+    page,
+    [
+      { href: "/luna.css", css: sheet },
+      { href: "/prose.css", css: ".window{border-color:var(--prose-ink)}" },
+    ],
+    ['getComputedStyle(root).getPropertyValue("--" + "sa-t")'],
+  );
+  const lunaInline = /<style>(.*?)<\/style>/.exec(out)?.[1] ?? "";
+  assert.equal(
+    lunaInline,
+    ":root{--used:var(--chain);--chain:#111;--sa-t:0px;--prose-ink:#333}" +
+      "@media (color-gamut:p3){:root{--used:color(display-p3 0 0 0)}}" +
+      ".window{color:var(--used)}",
+  );
+  assert.equal(isOrderedSubset(lunaInline, sheet), true);
+  assert.equal(isOrderedSubset(":root{--chain:#111;--used:var(--chain)}", sheet), false, "reordered :root declarations are not an ordered subset");
+  assert.equal(isOrderedSubset(":root{--used:#999}", sheet), false, "mutated :root declarations are not an ordered subset");
+});
