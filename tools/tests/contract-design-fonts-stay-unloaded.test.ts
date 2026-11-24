@@ -36,7 +36,7 @@ function findings(text: string, house: string[]): string[] {
 
 test("the matcher finds every way to load fonts.css, and only those", () => {
   const house = families();
-  assert.deepEqual(house, ["Trebuchet MS", "Tahoma", "Verdana", "Geneva", "Courier New"], `${FONTS} declares ${house.join(", ")}`);
+  assert.deepEqual(house, ["Trebuchet MS", "Tahoma", "Verdana", "Geneva", "Courier New", "Menlo"], `${FONTS} declares ${house.join(", ")}`);
   // Each fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(findings('@import "tokens/fonts.css";', house), ["@import of tokens/fonts.css"]);
   assert.deepEqual(findings('@import url("../design/tokens/fonts.css");', house), ["@import of tokens/fonts.css"]);

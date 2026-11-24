@@ -88,7 +88,7 @@ Use these three, and **only** these three. They're defined as tokens
 |---|---|---|
 | `--font-caption` | `"Trebuchet MS", Verdana, Geneva, sans-serif` | title bars, headings (`h1`–`h3`) |
 | `--font-ui` | `Tahoma, Verdana, Geneva, sans-serif` | body, controls, labels, tooltips |
-| `--font-mono` | `"Courier New", Courier, monospace` | numerics, EXIF readouts, `/source`, code |
+| `--font-mono` | `"Courier New", Menlo, Courier, monospace` | numerics, EXIF readouts, `/source`, code |
 
 **Why this order (native availability):** Tahoma is the canonical UI font but is
 **not reliably installed on macOS**, so the UI stack falls through to **Verdana**
