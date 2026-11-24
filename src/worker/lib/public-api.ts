@@ -68,6 +68,10 @@ export const LEAVES_OUT: readonly { what: string; why: string }[] = [
     why: "Every operation answers within its own request. The slowest one, a Lens fetch of another site, gives up after 8 seconds and says so, so there is no job to poll.",
   },
   {
+    what: "A remaining count on every response",
+    why: "The rate limiter answers allowed or refused and never a count, so the one RateLimit field the API can state truthfully is r=0, on the 429 that refuses you. Every budgeted answer names its quota in RateLimit-Policy: pace to q requests per w seconds.",
+  },
+  {
     what: "Deprecation and Sunset headers",
     why: "A notice period protects clients that depend on an exact shape, and none is known here. A breaking change lands in /openapi.json the day it ships.",
   },
