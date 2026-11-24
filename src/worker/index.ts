@@ -647,8 +647,11 @@ function routeFavicon() {
 }
 
 // Agent-discovery docs: extensionless files need the Worker to name their type.
+// RFC 9727 section 7.4 registers the profile parameter that marks a linkset as
+// an API catalog; public/_headers carries the same value.
+const API_CATALOG_TYPE = 'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"';
 function routeApiCatalog(request: SiteRequest, env: Env) {
-  return serveFreshAsset(request, env, "application/linkset+json");
+  return serveFreshAsset(request, env, API_CATALOG_TYPE);
 }
 
 function routeAgentCard(request: SiteRequest, env: Env) {

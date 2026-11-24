@@ -1,0 +1,920 @@
+{
+  "outputs": {
+    "askSite": {
+      "type": "object",
+      "properties": {
+        "query_id": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "site": {
+          "type": "string",
+          "const": "aadhar.sh"
+        },
+        "mode": {
+          "type": "string",
+          "const": "list"
+        },
+        "decontextualized_query": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "name": {
+                "type": "string"
+              },
+              "site": {
+                "type": "string",
+                "const": "aadhar.sh"
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "0-100. With Clef ranking, the probability Clef puts on this page."
+              },
+              "description": {
+                "type": "string",
+                "description": "An extractive snippet, never model-written."
+              },
+              "schema_object": {
+                "type": "object",
+                "properties": {
+                  "@context": {
+                    "type": "string"
+                  },
+                  "@type": {
+                    "type": "string",
+                    "enum": [
+                      "WebPage",
+                      "BlogPosting",
+                      "DigitalDocument",
+                      "WebAPI"
+                    ]
+                  },
+                  "@id": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "description": "A schema.org node for the result."
+              }
+            },
+            "required": [
+              "url",
+              "name",
+              "score"
+            ]
+          }
+        },
+        "_meta": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "response_type": {
+              "type": "string",
+              "const": "answer"
+            },
+            "dialect": {
+              "type": "string",
+              "enum": [
+                "legacy",
+                "0.55"
+              ]
+            },
+            "retrieval": {
+              "type": "string"
+            },
+            "ranking": {
+              "type": "string",
+              "description": "Which ranker ran: Clef, or lexical with the reason."
+            },
+            "description": {
+              "type": "string",
+              "const": "extractive"
+            },
+            "modes_supported": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "query_id",
+        "results"
+      ],
+      "description": "NLWeb /ask answer, returned as one JSON body when streaming=0."
+    },
+    "searchSite": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer",
+          "description": "Matches before the limit."
+        },
+        "returned": {
+          "type": "number",
+          "description": "Rows returned."
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri-reference"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "page",
+                  "writing",
+                  "document",
+                  "utility"
+                ]
+              },
+              "snippet": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url",
+              "title",
+              "kind"
+            ]
+          }
+        }
+      },
+      "required": [
+        "query",
+        "total",
+        "results"
+      ]
+    },
+    "getNowPlaying": {
+      "type": "object",
+      "properties": {
+        "playlist_id": {
+          "type": "string"
+        },
+        "playlist_name": {
+          "type": "string"
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "artists_text": {
+                "type": "string"
+              },
+              "spotify_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "song_link_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "A song.link forwarder to the listener's own music service."
+              },
+              "duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "preview_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "is_explicit": {
+                "type": "boolean"
+              },
+              "image_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "artists": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "spotify_url": {
+                      "type": "string"
+                    },
+                    "image_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "song_link_url"
+            ]
+          }
+        },
+        "fetched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "error": {
+          "type": "string",
+          "description": "Present, with an empty tracks list, when no playlist is set."
+        }
+      },
+      "required": [
+        "tracks"
+      ]
+    },
+    "queryPhotos": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "object",
+          "properties": {
+            "q": {
+              "type": "string"
+            },
+            "camera": {
+              "type": "string"
+            },
+            "lens": {
+              "type": "string"
+            },
+            "film": {
+              "type": "string"
+            },
+            "recipe": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "description": "The normalized filters, empty strings when absent."
+        },
+        "ranking": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "filters-only",
+                "no-terms",
+                "all-terms",
+                "partial",
+                "no-match"
+              ]
+            },
+            "terms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "semantic": {
+              "type": "boolean"
+            },
+            "dropped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Terms dropped as matching nothing; omitted when empty."
+            },
+            "common": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Terms dropped as too common; omitted when empty."
+            }
+          },
+          "required": [
+            "mode",
+            "terms",
+            "semantic"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stem": {
+                "type": "string",
+                "description": "The photo's id."
+              },
+              "alt": {
+                "type": "string",
+                "description": "Caption, up to 240 characters."
+              },
+              "full": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Full-resolution original URL."
+              },
+              "thumb": {
+                "type": "object",
+                "properties": {
+                  "avif": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "jpg": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "small": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "xs": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "camera": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "lens": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "aperture": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As written, for example f/2.8."
+                  },
+                  "shutter": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As written, for example 1/60."
+                  },
+                  "iso": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "focal": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ev": {
+                    "type": [
+                      "number",
+                      "string",
+                      "null"
+                    ],
+                    "description": "Exposure compensation: a number, or a signed string such as +0.33."
+                  },
+                  "date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As EXIF writes it, YYYY:MM:DD HH:MM:SS, with no timezone."
+                  },
+                  "width": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "height": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "color_space": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "white_balance": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "color_temp": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "wb_shift": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "flash": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "exposure_mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "meter": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "focus_mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "drive": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sharpness": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "noise_reduction": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "clarity": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "film": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Fuji film simulation."
+                  },
+                  "dr": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "dr_value": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "chrome": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "chrome_blue": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "grain": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "grain_size": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "highlight_tone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "shadow_tone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "saturation": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "recipe": {
+                    "type": "object",
+                    "description": "The frame's film recipe card, keyed the way a recipe is written down. Absent on frames with no recipe.",
+                    "properties": {
+                      "Film Simulation": {
+                        "type": "string"
+                      },
+                      "Dynamic Range": {
+                        "type": "string"
+                      },
+                      "Grain Effect": {
+                        "type": "string"
+                      },
+                      "Color Chrome Effect": {
+                        "type": "string"
+                      },
+                      "Color Chrome FX Blue": {
+                        "type": "string"
+                      },
+                      "White Balance": {
+                        "type": "string"
+                      },
+                      "Highlight": {
+                        "type": "string"
+                      },
+                      "Shadow": {
+                        "type": "string"
+                      },
+                      "Color": {
+                        "type": "string"
+                      },
+                      "Sharpness": {
+                        "type": "string"
+                      },
+                      "High ISO NR": {
+                        "type": "string"
+                      },
+                      "Clarity": {
+                        "type": "string"
+                      },
+                      "ISO": {
+                        "type": "string"
+                      },
+                      "Exposure Compensation": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "description": "Public-safe EXIF and Fuji fields, read from the file. A field the camera did not record is null and a field the extractor never read is absent: nothing is guessed."
+              },
+              "score": {
+                "type": "number",
+                "description": "Present when q was given."
+              },
+              "matched": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Terms that matched, when q was given."
+              }
+            },
+            "required": [
+              "stem",
+              "thumb",
+              "metadata"
+            ]
+          }
+        }
+      },
+      "required": [
+        "total",
+        "photos"
+      ]
+    },
+    "getCoffeeAvailability": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "fresh",
+            "stale",
+            "live",
+            "none"
+          ]
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ageSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "bookingUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "error": {
+          "type": "string"
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "startMs": {
+                "type": "integer"
+              },
+              "endMs": {
+                "type": "integer"
+              },
+              "durationMinutes": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "available",
+        "slots"
+      ]
+    },
+    "getChangeRadar": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "latestObservedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetCount": {
+          "type": "integer"
+        },
+        "note": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "observedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "previousObservedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ageMs": {
+                "type": "integer"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "status",
+                        "final_url",
+                        "title",
+                        "description",
+                        "content_type",
+                        "robots",
+                        "skipped",
+                        "error",
+                        "content"
+                      ]
+                    },
+                    "before": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "after": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "content only, which carries no before or after."
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "available",
+        "changes"
+      ]
+    }
+  },
+  "parameters": {
+    "askSite": {
+      "query": "The question.",
+      "streaming": "0, false, no or off returns one JSON body. Any other value, or none, streams text/event-stream.",
+      "mode": "Only list is served. summarize and generate return 501 with supported_modes.",
+      "site": "The only site is aadhar.sh.",
+      "top_k": "Maximum results. `limit` is read when top_k is absent.",
+      "prev": "Earlier queries in the conversation, comma-separated, at most 10.",
+      "decontextualized_query": "If present, this string is searched instead of query.",
+      "query_id": "Echoed back. A UUID is generated when absent."
+    },
+    "searchSite": {
+      "q": "Search terms. Stopwords are dropped and at most 12 terms are used.",
+      "limit": "Maximum results. Values outside the range are clamped, and a non-number falls back to the default."
+    },
+    "getNowPlaying": {},
+    "queryPhotos": {
+      "q": "Caption search; the only ranked field.",
+      "camera": "Case-insensitive substring of the camera.",
+      "lens": "Case-insensitive substring of the lens.",
+      "film": "Case-insensitive substring of the film simulation.",
+      "recipe": "Case-insensitive substring anywhere in the recipe card, for example DR400.",
+      "from": "Earliest date, YYYY-MM-DD.",
+      "to": "Latest date, YYYY-MM-DD.",
+      "limit": "Page size. Values outside the range are clamped, and a non-number falls back to the default.",
+      "offset": "Rows to skip."
+    },
+    "getCoffeeAvailability": {},
+    "getChangeRadar": {
+      "limit": "Maximum change records. Values outside the range are clamped, and a non-number falls back to the default."
+    },
+    "inspectUrl": {
+      "url": "A public http or https URL, https:// if no scheme is given. Ports other than 80 and 443, credentials, and private or link-local hosts are refused.",
+      "phases": "page limits the scan to fields derived from the page itself (one subrequest).",
+      "mode": "cloudflare returns the Cloudflare Agent Readiness level instead of the full observation."
+    },
+    "compareUrls": {
+      "left": "The first URL, validated like /lens/fetch.",
+      "right": "The second URL."
+    }
+  }
+}

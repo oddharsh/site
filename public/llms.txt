@@ -40,7 +40,7 @@ require an x402 payment, as described below.
 ## When to use this site
 
 Reach for aadhar.sh for the jobs below. Each line names the door to call. None
-of them needs a key. Where a tool on [/mcp](https://aadhar.sh/mcp) does the
+of them needs a key. Where a tool on the [site MCP server](https://aadhar.sh/.well-known/mcp/server-card.json) does the
 same job, its name is in backticks. Every HTTP endpoint is described, with
 typed parameters and response schemas, in
 [/openapi.json](https://aadhar.sh/openapi.json), and
@@ -278,13 +278,13 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   resume. Aadharsh Pannirselvam's resume as JSON Resume. The same content is
   at /resume.md and /resume.pdf.
 <!-- /endpoints -->
-- [/mcp](https://aadhar.sh/mcp): The canonical bounded MCP interface for site
+- `https://aadhar.sh/mcp` (MCP over Streamable HTTP; a plain GET answers 405): The canonical bounded MCP interface for site
   search, music, photo queries, coffee availability, Change Radar, Lens
   inspection/comparison, ephemeral image inspection/transforms, exact
   published-photo recipe matching, and an HTTP representation vault. Image
   inputs are not persisted; the vault stores normalized headers, metadata, and
   body digests only. Serendipity's specialized MCP remains available at
-  [/serendipity/mcp](https://aadhar.sh/serendipity/mcp). The pre-connection
+  `https://aadhar.sh/serendipity/mcp`. The pre-connection
   server cards are
   [site MCP](https://aadhar.sh/.well-known/mcp/server-card.json) and
   [Serendipity MCP](https://aadhar.sh/.well-known/mcp/serendipity.json); the
@@ -357,6 +357,9 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
 - [Twitter](https://x.com/oddhash): Day-to-day thinking out loud.
 - [Instagram](https://www.instagram.com/aadharsh.hif): Photographs.
 - [GitHub](https://github.com/oddharsh): Code.
+- [oddharsh/site](https://github.com/oddharsh/site): This site's source.
+  [AGENTS.md](https://github.com/oddharsh/site/blob/main/AGENTS.md) is how a
+  coding agent should work in it.
 - [LinkedIn](https://www.linkedin.com/in/aadharsh-pannirselvam): Professional profile.
 - [Spotify](https://open.spotify.com/user/aadharsh2010): My profile;
   individual eras live as renamed playlists.

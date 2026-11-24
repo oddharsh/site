@@ -983,7 +983,7 @@ function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive,showdown){
   const L=needleLabels(showdown);
   const W=1200,H=630,cv=document.createElement("canvas");cv.width=W;cv.height=H;
   const x=cv.getContext("2d");
-  const UI='Tahoma,Verdana,Geneva,sans-serif',CAP='"Trebuchet MS",Verdana,sans-serif',MONO='"Courier New",Courier,monospace';
+  const UI='Tahoma,Verdana,Geneva,sans-serif',CAP='"Trebuchet MS",Verdana,sans-serif',MONO='"Courier New",Menlo,Courier,monospace';
   const bevel=(bx,by,bw,bh,fill)=>{x.fillStyle=fill;x.fillRect(bx,by,bw,bh);
     x.fillStyle="rgba(255,255,255,.32)";x.fillRect(bx,by,bw,2);x.fillRect(bx,by,2,bh);
     x.fillStyle="rgba(0,0,0,.22)";x.fillRect(bx,by+bh-2,bw,2);x.fillRect(bx+bw-2,by,2,bh);};

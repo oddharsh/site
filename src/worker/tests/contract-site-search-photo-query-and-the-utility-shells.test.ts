@@ -1,5 +1,5 @@
 // ── site search, photo query, coffee availability and the no-JS utility shells ──
-import { assert, context, kvType, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
+import { assert, context, kvType, staticAssets, test, schemaViolations } from "../../../tools/tests/contract-shared.ts";
 import { _resetSearchIndex, handleSearchJson, renderSearchPage, searchSite } from "../search.ts";
 import { fieldMatches } from "../lib/text.ts";
 import { buildPhotoSearchIndex, decodePhotoSearchIndex, encodePhotoSearchIndex, matchingRows, PHOTO_FIELD_WEIGHTS, photoFields } from "../lib/photo-search.ts";
@@ -390,6 +390,10 @@ test("coffee availability reuses the booking slot calculation and returns a safe
   assert.equal(payload.timezone, "America/New_York");
   assert.ok(Array.isArray(payload.slots));
   assert.ok(payload.slots.every((slot) => slot.start.endsWith("Z") && slot.durationMinutes === 30));
+  // coffee_availability publishes /coffee/availability.json's schema as its
+  // outputSchema (lib/tools.ts), so this payload has to satisfy it.
+  const { DATA_TOOLS } = await import("../lib/tools.ts");
+  assert.deepEqual(schemaViolations(DATA_TOOLS.find((t) => t.name === "coffee_availability")!.outputSchema, payload), []);
   const response = await handleCoffeeAvailability(new Request("https://aadhar.sh/coffee/availability.json"), coffeeEnv(), context());
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /^application\/json/);

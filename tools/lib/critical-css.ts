@@ -54,31 +54,61 @@ function blocks(css: string): Block[] {
   return out;
 }
 
-// drop every :pseudo and ::pseudo, with its argument list
-function stripPseudos(selector: string): string {
-  let out = "";
+const MAX_EXPAND = 64;
+
+// Expand :where(...) and :is(...) into their branch selectors while stripping
+// every other :pseudo and ::pseudo with its argument list (which can only widen
+// a match). A selector that hits the branch cap collapses to "" so it stays kept.
+function expandPseudos(selector: string): string[] {
+  let partials = [""];
   for (let i = 0; i < selector.length; i++) {
     const c = selector[i];
     if (c === "[") {
       const end = selector.indexOf("]", i);
-      out += selector.slice(i, end + 1);
+      const chunk = end < 0 ? selector.slice(i) : selector.slice(i, end + 1);
+      partials = partials.map((p) => p + chunk);
+      if (end < 0) break;
       i = end;
     } else if (c === ":") {
       let j = i + 1;
-      if (selector[j] === ":") j++;
+      const isElement = selector[j] === ":";
+      if (isElement) j++;
+      const nameStart = j;
       while (j < selector.length && /[\w-]/.test(selector[j])) j++;
+      const name = selector.slice(nameStart, j).toLowerCase();
       if (selector[j] === "(") {
+        const argStart = j + 1;
         let depth = 0;
         for (; j < selector.length; j++) {
-          if (selector[j] === "(") depth++;
-          else if (selector[j] === ")" && --depth === 0) break;
+          const ch = selector[j];
+          if (ch === '"' || ch === "'") {
+            const end = selector.indexOf(ch, j + 1);
+            if (end >= 0) j = end;
+          } else if (ch === "(") depth++;
+          else if (ch === ")" && --depth === 0) break;
         }
+        const arg = selector.slice(argStart, j);
         j++;
+        if (!isElement && (name === "where" || name === "is")) {
+          const branches = selectorList(arg).flatMap((branch) => expandPseudos(branch));
+          const next: string[] = [];
+          for (const p of partials) {
+            for (const b of branches) {
+              // Combining a class/attr prefix with a tag branch (e.g. .x:is(div.y))
+              // is not valid as ".xdiv.y"; keep the wider prefix `p` instead.
+              next.push(p && !/[\s>+~]$/.test(p) && /^[a-zA-Z*]/.test(b) ? p : p + b);
+              if (next.length > MAX_EXPAND) return [""];
+            }
+          }
+          partials = next;
+        }
       }
       i = j - 1;
-    } else out += c;
+    } else {
+      partials = partials.map((p) => p + c);
+    }
   }
-  return out.trim();
+  return partials.map((s) => s.trim());
 }
 
 // split a selector list on top-level commas
@@ -130,17 +160,125 @@ const namedInScripts = (selector: string, scriptWords: Set<string>) => {
   return !!names && names.every((n) => scriptWords.has(n.slice(1)));
 };
 
+// Split a CSS declaration list on top-level semicolons, skipping strings and
+// parenthesised expressions (e.g. data: URIs) so a `;` inside a value stays intact.
+function splitDecls(body: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '"' || c === "'") {
+      const end = body.indexOf(c, i + 1);
+      if (end >= 0) i = end;
+    } else if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === ";" && depth === 0) {
+      const decl = body.slice(from, i).trim();
+      if (decl) out.push(decl);
+      from = i + 1;
+    }
+  }
+  const tail = body.slice(from).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+function declName(decl: string): string {
+  const colon = decl.indexOf(":");
+  return colon < 0 ? "" : decl.slice(0, colon).trim();
+}
+
+// Drop :root custom-property declarations that nothing in the kept subset,
+// page markup, sibling sheets, or page scripts references (transitively).
+function pruneRootVars(css: string, refText: string, scriptWords: Set<string>): string {
+  const defs = new Map<string, string[]>();
+  const nonRoot: string[] = [];
+  const scan = (src: string) => {
+    for (const b of blocks(src)) {
+      if (b.nested) scan(b.body);
+      else if (b.prelude === ":root") {
+        for (const decl of splitDecls(b.body)) {
+          const name = declName(decl);
+          if (name.startsWith("--")) {
+            let list = defs.get(name);
+            if (!list) defs.set(name, (list = []));
+            list.push(decl.slice(decl.indexOf(":") + 1));
+          } else {
+            nonRoot.push(decl);
+          }
+        }
+      } else {
+        nonRoot.push(`${b.prelude}{${b.body}}`);
+      }
+    }
+  };
+  scan(css);
+  if (!defs.size) return css;
+
+  const used = new Set<string>();
+  const addVars = (text: string) => {
+    for (const m of text.matchAll(/--[\w-]+/g)) used.add(m[0]);
+  };
+  addVars(nonRoot.join("\n"));
+  addVars(refText);
+  // Keep any --name whose suffix appears as a word in scripts (e.g. nav.ts
+  // reading `--` + "sa-t" / "taskbar-h" via getComputedStyle).
+  for (const name of defs.keys()) {
+    if (scriptWords.has(name.slice(2))) used.add(name);
+  }
+  // Transitive closure over custom properties referencing other custom properties.
+  const queue = [...used];
+  while (queue.length) {
+    const vals = defs.get(queue.pop()!);
+    if (!vals) continue;
+    for (const v of vals) {
+      for (const m of v.matchAll(/--[\w-]+/g)) {
+        if (!used.has(m[0])) {
+          used.add(m[0]);
+          queue.push(m[0]);
+        }
+      }
+    }
+  }
+
+  const rewrite = (src: string): string =>
+    blocks(src)
+      .map((b) => {
+        if (b.prelude.endsWith(";")) return b.prelude;
+        if (b.nested) {
+          const inner = rewrite(b.body);
+          return inner ? `${b.prelude}{${inner}}` : "";
+        }
+        if (b.prelude === ":root") {
+          const kept = splitDecls(b.body).filter((d) => {
+            const name = declName(d);
+            return !name.startsWith("--") || used.has(name);
+          });
+          return kept.length ? `:root{${kept.join(";")}}` : "";
+        }
+        return `${b.prelude}{${b.body}}`;
+      })
+      .join("");
+  return rewrite(css);
+}
+
 /** luna.css (minified) cut down to the rules that can apply to `html` and to
  *  what `scripts` (the JS that page runs) can add to it. */
-export async function criticalCss(luna: string, html: string, scripts: string[] = []): Promise<string> {
-  const scriptWords = words(scripts.join("\n"));
+export async function criticalCss(luna: string, html: string, scripts: string[] = [], extraRefs = ""): Promise<string> {
+  const scriptSrc = scripts.join("\n");
+  const scriptWords = words(scriptSrc);
   if (/@layer\b/.test(luna)) throw new Error("critical-css: luna.css uses @layer, and a subset could reorder layers; the parity argument no longer holds");
 
   const all = new Set<string>();
+  const isPrintMedia = (prelude: string) => /^@media\s+print\b/i.test(prelude);
   const collect = (css: string) => {
     for (const b of blocks(css)) {
-      if (b.nested) collect(b.body);
-      else if (!b.prelude.startsWith("@")) for (const s of selectorList(b.prelude)) all.add(stripPseudos(s));
+      if (b.nested) {
+        if (!isPrintMedia(b.prelude)) collect(b.body);
+      } else if (!b.prelude.startsWith("@")) {
+        for (const s of selectorList(b.prelude)) for (const branch of expandPseudos(s)) all.add(branch);
+      }
     }
   };
   luna = luna.replace(/\/\*[\s\S]*?\*\//g, ""); // comments, the deploy banner included, stay in luna.css
@@ -152,14 +290,19 @@ export async function criticalCss(luna: string, html: string, scripts: string[] 
       .map((b) => {
         if (b.prelude.endsWith(";")) return b.prelude; // a statement at-rule
         if (b.nested) {
+          // The full sheet already loads with media="print", so print rules
+          // never belong in the screen first-paint subset.
+          if (isPrintMedia(b.prelude)) return "";
           const inner = keep(b.body);
           return inner ? `${b.prelude}{${inner}}` : "";
         }
         if (b.prelude.startsWith("@")) return `${b.prelude}{${b.body}}`; // @property and the like
-        return selectorList(b.prelude).some((s) => hit.has(stripPseudos(s)) || namedInScripts(stripPseudos(s), scriptWords)) ? `${b.prelude}{${b.body}}` : "";
+        return selectorList(b.prelude).some((s) => expandPseudos(s).some((branch) => hit.has(branch) || namedInScripts(branch, scriptWords)))
+          ? `${b.prelude}{${b.body}}`
+          : "";
       })
       .join("");
-  return keep(luna);
+  return pruneRootVars(keep(luna), `${html}\n${scriptSrc}\n${extraRefs}`, scriptWords);
 }
 
 // Every style rule with the at-rule preludes around it, in source order. Two
@@ -171,15 +314,43 @@ function flatRules(css: string, context = ""): string[] {
   );
 }
 
-/** Whether `subset` is `sheet` with rules dropped and none added or reordered,
- *  which is what the parity argument at the top of this file needs. */
+function rootRuleMatch(subRule: string, fullRule: string): boolean {
+  const splitRoot = (rule: string): [string, string] | null => {
+    const marker = ":root{";
+    const at = rule.lastIndexOf(marker);
+    if (at < 0 || !rule.endsWith("}")) return null;
+    if (at > 0 && !rule.slice(0, at).endsWith("{")) return null;
+    return [rule.slice(0, at + marker.length), rule.slice(at + marker.length, -1)];
+  };
+  const a = splitRoot(subRule);
+  const b = splitRoot(fullRule);
+  if (!a || !b || a[0] !== b[0]) return false;
+  const fullDecls = splitDecls(b[1]);
+  let pos = 0;
+  for (const decl of splitDecls(a[1])) {
+    pos = fullDecls.indexOf(decl, pos);
+    if (pos < 0) return false;
+    pos++;
+  }
+  return true;
+}
+
+/** Whether `subset` is `sheet` with rules (and unused :root declarations)
+ *  dropped and none added or reordered, which is what the parity argument at
+ *  the top of this file needs. */
 export function isOrderedSubset(subset: string, sheet: string): boolean {
   const all = flatRules(sheet);
   let at = 0;
   for (const rule of flatRules(subset)) {
-    at = all.indexOf(rule, at);
-    if (at < 0) return false;
-    at++;
+    let found = -1;
+    for (let i = at; i < all.length; i++) {
+      if (all[i] === rule || rootRuleMatch(rule, all[i])) {
+        found = i;
+        break;
+      }
+    }
+    if (found < 0) return false;
+    at = found + 1;
   }
   return true;
 }
@@ -222,12 +393,22 @@ export async function nonBlockingPage(
   { taskPane, matchingHtml = html }: { taskPane?: string; matchingHtml?: string } = {},
 ): Promise<string> {
   let out = html;
-  for (const { href, css } of sheets) {
+  const present = sheets.filter(({ href }) => {
     const link = `<link rel="stylesheet" href="${href}">`;
     const count = out.split(link).length - 1;
-    if (count === 0 && href !== "/luna.css") continue; // a page that never loads prose.css
+    if (count === 0 && href !== "/luna.css") return false; // a page that never loads prose.css
     if (count !== 1) throw new Error(`critical-css: expected exactly one ${link}`);
-    const subset = await criticalCss(css, matchingHtml, scripts);
+    return true;
+  });
+  for (const { href, css } of present) {
+    const link = `<link rel="stylesheet" href="${href}">`;
+    // Sibling linked sheets (e.g. prose.css) may read custom properties defined
+    // in luna.css's :root; include their text so :root pruning never drops them.
+    const siblingCss = present
+      .filter((s) => s.href !== href)
+      .map((s) => s.css)
+      .join("\n");
+    const subset = await criticalCss(css, matchingHtml, scripts, siblingCss);
     if (!isOrderedSubset(subset, css)) throw new Error(`critical-css: the ${href} subset is not an ordered subset of it`);
     const id = `${href.replace(/^\/|\.css$/g, "")}-css`;
     out = out.replace(link, `<style>${subset}</style>\n${swap(href, id)}`);
