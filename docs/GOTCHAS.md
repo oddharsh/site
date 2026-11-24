@@ -1323,3 +1323,13 @@ skips it.
     needs its own input: the WASM mutation previously passed without a build
     because its only serving test skipped with the build-output test.
     Checked by: `tools/paint-diff.ts`, `src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts`.
+119. **A gate's failure detail keeps the end of stdout, not the error.** The
+    canary gates joined stderr, then stdout, and kept the last lines, so a
+    tool that prints a banner to stdout after failing hid its own error.
+    wrangler does: from 2026-11-16 to 2026-11-23 every red wrangler canary,
+    and issue #1718, gave `⛅️ wrangler 4.16x.0 (main)` as the reason, while
+    stderr said `Invalid discriminator value ... at worker.env.ANALYTICS.type`.
+    The pin sat a week behind (#1847). `tools/lib/output-tail.ts` now owns the
+    tail for both canaries: stderr's last visible lines, stdout only when
+    stderr is empty.
+    Checked by: `tools/tests/contract-a-failed-gate-reports-the-error-not-the-banner.test.ts`.
