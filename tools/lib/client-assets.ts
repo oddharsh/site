@@ -202,6 +202,16 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
     load: [IMPORT],
     loadedBy: ["public/nav.js"],
   },
+  // Web Audio chime synthesizer, loaded lazily once sounds are turned on.
+  {
+    file: "nav-sound.js",
+    kind: "module",
+    marker: "createOscillator",
+    scope: "shell",
+    budget: { role: "optional sound synthesizer", gzipKiB: 1, brotliKiB: 1 },
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
   // The six /lens feature modules, each loaded by lens.js as script.src. The
   // ?v=1 ritual retires at the rewrite: the hash IS the version.
   //

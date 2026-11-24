@@ -169,80 +169,30 @@
     return node;
   }
 
-  // ── XP-flavored sound: synthesized via Web Audio (no copyrighted audio, no asset
-  // bytes), gated by the tray mute toggle. Default OFF so there is never surprise
-  // audio; the choice persists in localStorage. Navigation sounds are skipped on
-  // purpose (page unload cuts them) — only in-page shell actions play.
+  // ── XP-flavored sound: synthesized via Web Audio in /nav-sound.js, loaded
+  // lazily only once sound is enabled and a chime actually plays. Default OFF
+  // so there is never surprise audio; the choice persists in localStorage.
   var AXP_SND = (() => {
-    var ctx: any = null,
-      on = false;
+    var on = false,
+      mod: { play: (name: string) => void } | null = null,
+      loading: Promise<{ play: (name: string) => void } | null> | null = null;
     try {
       on = localStorage.getItem("axp-sound") === "on";
     } catch (e) {}
-    function ac() {
-      if (!ctx) {
-        try {
-          var Audio = W.AudioContext || W.webkitAudioContext;
-          if (!Audio) return null;
-          ctx = new Audio();
-        } catch (e) {
-          return null;
-        }
+    function load() {
+      if (!loading) {
+        loading = import("/nav-sound.js").then(
+          (m) => (mod = m),
+          () => {
+            loading = null;
+            return null;
+          },
+        );
       }
-      if (ctx.state === "suspended" && ctx.resume) ctx.resume();
-      return ctx;
+      return loading;
     }
-    // one decaying partial: fast attack, exponential tail (a struck note, not a beep).
-    function partial(c, freq, t0, dur, peak, type) {
-      var o = c.createOscillator(),
-        g = c.createGain();
-      o.type = type || "sine";
-      o.frequency.value = freq;
-      o.connect(g);
-      g.connect(c.destination);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(peak || 0.1, t0 + 0.004);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    }
-    // struck-bell timbre: fundamental + inharmonic overtones, the glassy chime
-    // character XP's notification sounds have (a flat sine beep does not).
-    function bell(c, base, t0, dur, peak) {
-      partial(c, base, t0, dur, peak, "sine");
-      partial(c, base * 2.01, t0, dur * 0.7, peak * 0.5, "sine");
-      partial(c, base * 2.76, t0, dur * 0.5, peak * 0.3, "sine");
-      partial(c, base * 5.18, t0, dur * 0.28, peak * 0.12, "triangle");
-    }
-    var voices = {
-      // notification ding: a quick bright chime up a fourth
-      open: (c, t) => {
-        bell(c, 784, t, 0.45, 0.07);
-        bell(c, 1047, t + 0.045, 0.6, 0.085);
-      },
-      // dismissal: a softer chime down
-      close: (c, t) => {
-        bell(c, 659, t, 0.4, 0.06);
-        bell(c, 494, t + 0.05, 0.5, 0.05);
-      },
-      // critical-stop: a low dissonant pair with a little grit
-      error: (c, t) => {
-        partial(c, 196, t, 0.3, 0.075, "sine");
-        partial(c, 207, t, 0.32, 0.05, "triangle");
-        partial(c, 98, t, 0.34, 0.05, "sine");
-      },
-      // task-complete fanfare: a rising major arpeggio landing on a held octave
-      tada: (c, t) => {
-        [523, 659, 784].forEach((f, i) => {
-          bell(c, f, t + i * 0.09, 0.32, 0.07);
-        });
-        bell(c, 1047, t + 0.27, 0.85, 0.09);
-      },
-    };
     return {
-      on: () => {
-        return on;
-      },
+      on: () => on,
       set: (v) => {
         on = !!v;
         try {
@@ -251,8 +201,11 @@
       },
       play: (name) => {
         if (!on) return;
-        var c = ac();
-        if (c && voices[name]) voices[name](c, c.currentTime);
+        if (mod) mod.play(name);
+        else
+          void load().then((m) => {
+            if (m && on) m.play(name);
+          });
       },
     };
   })();
@@ -390,6 +343,8 @@
       else p.removeAttribute("aria-current");
     });
     var sndBtn = D.getElementById("axp-sound") as HTMLElement;
+    var sndImg = sndBtn && sndBtn.querySelector("img");
+    var sndBase = sndImg ? (sndImg.getAttribute("src") || "").replace(/#.*$/, "") : "";
     if (sndBtn) sndBtn.hidden = false; // the partial ships it hidden: sounds need JS
     function paintSnd() {
       var on = AXP_SND.on();
@@ -397,12 +352,7 @@
       sndBtn.title = on ? "Sounds on (click to mute)" : "Sounds off (click to unmute)";
       sndBtn.setAttribute("aria-label", sndBtn.title);
       sndBtn.setAttribute("aria-pressed", String(!on));
-      sndBtn.innerHTML =
-        '<svg viewBox="0 0 24 24">' +
-        (on
-          ? '<defs><filter id="sdSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="sdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbfb"></stop><stop offset=".5" stop-color="#cfcfcf"></stop><stop offset="1" stop-color="#9c9c9c"></stop></linearGradient></defs><g filter="url(#sdSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#sdC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><path d="M3.9 9.4 H6.1 L9.6 6 V8.6 Z" fill="#ffffff" opacity=".4"></path><g fill="none" stroke="#2e8fd6" stroke-linecap="round"><path d="M13.4 8 Q15.4 11 13.4 14" stroke-width="1.6"></path><path d="M15.7 6 Q19.2 11 15.7 16" stroke-width="1.5" opacity=".82"></path><path d="M18 4.3 Q22.4 11 18 17.7" stroke-width="1.4" opacity=".62"></path></g></g>'
-          : '<defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g>') +
-        "</svg>";
+      if (sndImg && sndBase) sndImg.setAttribute("src", sndBase + (on ? "#tray-sound-on" : "#tray-sound-off"));
     }
     if (sndBtn) {
       sndBtn.addEventListener("click", () => {
@@ -932,7 +882,6 @@
     [].forEach.call(D.querySelectorAll(".window,.np-window"), (f) => {
       if (f.classList.contains("np-folder")) return; // folder hugs its content — not resizable
       if (f.querySelector(":scope > .axp-resize")) return;
-      if (getComputedStyle(f).position === "static") f.style.position = "relative";
       f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
       f.addEventListener("pointerdown", (e) => {
         if (f.classList.contains("axp-max")) return;

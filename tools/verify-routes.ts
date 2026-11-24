@@ -325,6 +325,13 @@ const ROUTES = [
           readable: "src/client/nav-tips.ts",
         },
         {
+          path: "/nav-sound.js",
+          status: 200,
+          ct: ["text/javascript", "application/javascript"],
+          marker: "minified at deploy",
+          readable: "src/client/nav-sound.ts",
+        },
+        {
           path: "/tooltip.js",
           status: 200,
           ct: ["text/javascript", "application/javascript"],
