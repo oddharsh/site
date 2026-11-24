@@ -186,7 +186,7 @@ export function project(top: Record<string, unknown>, tooling: Record<string, un
       case "ai":
         aiBinding = name;
         break;
-      case "analytics":
+      case "analytics-sql":
         analyticsBinding = name;
         break;
       case "kv":
