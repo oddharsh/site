@@ -4,6 +4,15 @@
   "title": "Aadharsh Site",
   "version": "2.1.0",
   "description": "Search, photos, music, coffee availability, Lens and image tools for aadhar.sh. Keyless.",
+  "icons": [
+    {
+      "src": "https://aadhar.sh/bimi.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
   "websiteUrl": "https://aadhar.sh/llms.txt",
   "remotes": [
     {
