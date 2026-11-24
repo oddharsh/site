@@ -13,7 +13,7 @@
       ]
     }
   ],
-  "websiteUrl": "https://aadhar.sh/llms.txt",
+  "websiteUrl": "https://aadhar.sh/developers#mcp",
   "remotes": [
     {
       "type": "streamable-http",
@@ -45,7 +45,7 @@
   "authentication": {
     "required": false
   },
-  "documentationUrl": "https://aadhar.sh/llms.txt",
+  "documentationUrl": "https://aadhar.sh/developers#mcp",
   "tools": [
     {
       "name": "ask",
@@ -1622,12 +1622,14 @@
               "coffee",
               "deploys",
               "search"
-            ]
+            ],
+            "description": "Pane to show before applying keys"
           },
           "cursor": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 4999
+            "maximum": 4999,
+            "description": "Zero-based row to select before applying keys"
           },
           "open": {
             "type": "string",
@@ -1641,7 +1643,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1659,29 +1674,36 @@
         "type": "object",
         "properties": {
           "keys": {
-            "type": "string"
+            "type": "string",
+            "description": "Key sequence, such as j<cr> to move down and open a photo"
           },
           "q": {
-            "type": "string"
+            "type": "string",
+            "description": "Text to find in the archive"
           },
           "film": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by Fuji film simulation, such as Classic Chrome"
           },
           "camera": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by camera body"
           },
           "lens": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by lens model"
           },
           "page": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 200
+            "maximum": 200,
+            "description": "Zero-based results page"
           },
           "cursor": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 4999
+            "maximum": 4999,
+            "description": "Zero-based row to select before applying keys"
           },
           "open": {
             "type": "string",
@@ -1691,7 +1713,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1715,7 +1750,8 @@
               "type": "object",
               "properties": {
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Label for the signal source"
                 },
                 "rssi": {
                   "type": "number",
@@ -1750,7 +1786,21 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "sources": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of signal samples accepted for rendering"
+          }
+        },
+        "required": [
+          "frame",
+          "sources"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1774,7 +1824,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1798,7 +1861,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1822,7 +1898,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1846,7 +1935,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1877,7 +1979,20 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "frame": {
+            "type": "string",
+            "description": "Rendered 80-column terminal frame as plain text"
+          },
+          "url": {
+            "type": "string",
+            "description": "Site-relative path and query string for reopening the terminal view"
+          }
+        },
+        "required": [
+          "frame",
+          "url"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,

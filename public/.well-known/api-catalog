@@ -22,7 +22,7 @@
         { "href": "https://aadhar.sh/.well-known/mcp/server-card.json", "type": "application/json", "title": "Aadharsh site MCP server card" }
       ],
       "service-doc": [
-        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "Aadharsh site MCP and utility catalog" }
+        { "href": "https://aadhar.sh/developers#mcp", "type": "text/html", "title": "aadhar.sh MCP server setup" }
       ]
     },
     {

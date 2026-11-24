@@ -1,5 +1,5 @@
 // ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
-import { MODERN_META, assert, context, mcpPost, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
+import { MODERN_META, assert, context, mcpPost, schemaViolations, staticAssets, test } from "../../../tools/tests/contract-shared.ts";
 import { _resetPhotoCaches } from "../photos.ts";
 import { routeFetch } from "../../../tools/lib/fetch-routes.ts";
 import { TERMINAL_ASSETS, terminalEnv, terminalGet, terminalReq } from "../../../tools/tests/contract-terminal.ts";
@@ -169,14 +169,12 @@ test("every frame tool the MCP server lists is one the server can actually call"
   // when a client believes the list and calls it — which is exactly the caller
   // this surface exists for.
   const env = terminalEnv();
-  const listed = (
-    await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json()
-  ).result.tools.map((tool) => tool.name);
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
+    .result.tools;
   // The MCP tool name IS the route name. One vocabulary: what you curl and
   // what an agent calls are the same word.
-  const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens", "agent_ready"];
-  for (const name of FRAME_TOOLS) assert.ok(listed.includes(name), `${name} has a route but is not an MCP tool`);
-  assert.ok(!listed.some((n) => n.startsWith("terminal_")), "tool names must match their routes, not the console");
+  const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens", "agent_ready", "encode"];
+  assert.ok(!listed.some((tool) => tool.name.startsWith("terminal_")), "tool names must match their routes, not the console");
 
   // `agent_ready` with no arguments audits THIS origin, which fans out to 26
   // door probes plus 4 DNS-AID lookups. Measured 2026-08-21 with a fetch
@@ -199,6 +197,8 @@ test("every frame tool the MCP server lists is one the server can actually call"
     const notFound = () => new Response("not found", { status: 404 });
     using _fetch = routeFetch({ "https://aadhar.sh/": notFound, "https://cloudflare-dns.com/dns-query": notFound });
     for (const name of FRAME_TOOLS) {
+      const tool = listed.find((tool) => tool.name === name);
+      assert.ok(tool, `${name} has a route but is not an MCP tool`);
       const args = name === "lens" ? { url: "https://example.com" } : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] } : {};
       const res = await handleSiteMcp(
         mcpPost({
@@ -212,6 +212,14 @@ test("every frame tool the MCP server lists is one the server can actually call"
       );
       const { result, error } = await res.json();
       assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
+      const schema = tool.outputSchema;
+      assert.deepEqual(schemaViolations(schema, result.structuredContent), [], name);
+      const continuationField = name === "radar" ? "sources" : "url";
+      assert.ok(
+        schemaViolations(schema, { frame: "sample" }).some((violation) => violation.includes(continuationField)),
+        name,
+      );
+      assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent, name);
       // lens cannot complete its read here, so it is allowed to come back as a
       // rendered failure; what it may NOT do is come back unknown.
       const frame = result.structuredContent?.frame ?? "";

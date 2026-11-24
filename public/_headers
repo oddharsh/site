@@ -334,6 +334,10 @@
   Content-Type: application/json; charset=utf-8
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
 
+/.well-known/mcp-registry-auth
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-store
+
 # MCP server cards are static discovery metadata. Cache them at the edge long
 # enough to keep pre-connection discovery cheap; a deploy purges the old bytes.
 /.well-known/mcp/server-card.json

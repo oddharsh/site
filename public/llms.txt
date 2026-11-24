@@ -44,9 +44,12 @@ of them needs a key. Where a tool on the [site MCP server](https://aadhar.sh/.we
 same job, its name is in backticks. Every HTTP endpoint is described, with
 typed parameters and response schemas, in
 [/openapi.json](https://aadhar.sh/openapi.json), and
-[/developers](https://aadhar.sh/developers) has examples, limits and the error
+[aadhar.sh API documentation](https://aadhar.sh/developers) has examples, limits and the error
 shape. It also says what the API leaves out on purpose (keys, OAuth, version
 headers) and why.
+
+See the [aadhar.sh MCP setup](https://aadhar.sh/developers#mcp) and
+[Serendipity MCP setup](https://aadhar.sh/serendipity/mcp-info) for remote client connections.
 
 Every API endpoint and MCP tool is free and needs no account or key, so there
 is nothing to sign up for. Production is the sandbox: the HTTP endpoints in
