@@ -778,7 +778,7 @@ function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
       ? html`<img data-gallery src="${p.thumb_small}" srcset="${i === 0 ? `${p.thumb_small} 400w` : candidates}" sizes="${i === 0 ? "400px" : "auto, 400px"}" data-photo-jpg="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="${i === 0 ? "eager" : "lazy"}"${priority} decoding="async">`
       : html`<img data-gallery data-defer data-src="${p.thumb_small}" data-srcset="${candidates}" sizes="auto, 400px" data-photo-jpg="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy"${priority} decoding="async">`;
   const noScript = html`<noscript><picture>
-<source type="image/avif" srcset="${candidates}" sizes="auto, 400px">
+<source type="image/avif" srcset="${p.thumb_small}">
 <img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy" decoding="async">
 </picture></noscript>`;
   return html`<div class="ph">

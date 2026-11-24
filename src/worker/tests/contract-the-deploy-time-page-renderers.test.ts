@@ -135,7 +135,7 @@ test("the contact sheets defer every tile past the first screen", async () => {
       }
       assert.match(
         tile,
-        /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+" sizes="[^"]+">\s*<img src="[^"]+"/,
+        /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/,
         `${where}: a reader without scripts still gets AVIF/JPEG negotiation`,
       );
     });
