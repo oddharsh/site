@@ -998,6 +998,6 @@
     "src/worker/lib/openapi.ts": "de27b71faf7f3a1b606b3f54f6d9c52a51e34de47ee74e75eaba56d21410d092",
     "src/worker/lib/public-api.ts": "47791aea3a9de9709c913ae64a6b16ed443c3a556a9f3dc4611b98daff4e3601",
     "src/worker/lib/tools.ts": "d7e0cead3660d74024cc1690cba883cf58521c051ea5c623c11e63ef061f9a1e",
-    "tools/photos/shell-data.ts": "f99344cb233bae43cb9800da2e7a2759d55fd40374529934c37cc6a09cd9f346"
+    "tools/photos/shell-data.ts": "760a57ab85e36ce64b88d9a69416dc1998072e374c7ef4669b8f4f69e46fd856"
   }
 }

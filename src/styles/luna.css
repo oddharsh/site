@@ -689,9 +689,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .axp-trayico svg,.axp-trayico img{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* mute/unmute speaker, sits just left of System Properties; matches its tray styling */
 #axp-sound{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:.88}
+#axp-sound[hidden]{display:flex;visibility:hidden;pointer-events:none}
 @media (hover: hover) and (pointer: fine) {#axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}}
 #axp-sound.muted{opacity:.5}
-#axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
+#axp-sound img,#axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* First-interaction surfaces live beside their islands now: nav-run.css,
    nav-tray.css and infotip.css. Their loaders await CSS + JS together, so no
    unstyled surface can be inserted on a cold interaction. */
