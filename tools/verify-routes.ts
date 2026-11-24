@@ -553,7 +553,7 @@ const ROUTES = [
   { path: "/contact", status: 200, ct: "text/html", marker: "coffee@aadhar.sh" },
   { path: "/privacy", status: 200, ct: "text/html", marker: "serendipity-uid" },
   { path: "/developers", status: 200, ct: "text/html", marker: "/openapi.json" },
-  { path: "/developers", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# Developers" },
+  { path: "/developers", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "# aadhar.sh API documentation" },
   { path: "/privacy.md", status: 200, ct: "text/markdown", marker: "# Privacy" },
   // A local KV has no snapshot, so the island is the not-built-yet panel.
   { path: "/around", status: 200, ct: "text/html", marker: "data-island=/around/snapshot.html", fullPage: true },
@@ -682,6 +682,7 @@ const ROUTES = [
   { path: "/garage/horizon.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
   { path: "/index.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
   { path: "/.well-known/mcp/server-card.json", status: 200, ct: "application/json", marker: '"tools"', encoding: "br" },
+  { path: "/.well-known/mcp-registry-auth", status: 200, ct: "text/plain", marker: "v=MCPv1; k=ed25519; p=" },
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", encoding: "br", cors: "*" },
   // "q11 everywhere", 2026-09-26: the favicons and /resume.json got a rule and a
   // twin, and the readable twins under /writing, /lens and /serendipity got a

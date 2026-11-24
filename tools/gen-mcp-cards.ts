@@ -67,7 +67,7 @@ const siteCard = card({
   description:
     "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources.",
   transport: `${ROOT}/mcp`,
-  documentationUrl: `${ROOT}/llms.txt`,
+  documentationUrl: `${ROOT}/developers#mcp`,
   iconPath: "/bimi.svg",
   tools: SITE_TOOLS,
 });

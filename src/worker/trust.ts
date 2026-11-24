@@ -344,10 +344,10 @@ export function renderDevelopersPage() {
 
   return page({
     route: "/developers",
-    title: "aadhar.sh for developers: API, OpenAPI and MCP",
+    title: "aadhar.sh API documentation and MCP setup",
     description: "Call aadhar.sh from code: keyless JSON endpoints described in OpenAPI 3.1, an MCP server, Markdown twins, rate limits and the error shape.",
     body: html`
-    <h1>Developers</h1>
+    <h1>aadhar.sh API documentation</h1>
     <p class="lede">
       Everything on aadhar.sh can be read from code. The endpoints are read-only, need no
       key or signup, and production is the sandbox: there is nothing to break.
@@ -355,13 +355,20 @@ export function renderDevelopersPage() {
 
     <dl class="fields">
       <dt>OpenAPI 3.1</dt><dd><a href="${OPENAPI_PATH}">${OPENAPI_PATH}</a></dd>
-      <dt>MCP server</dt><dd><a href="/mcp">https://aadhar.sh/mcp</a> (card: <a href="/.well-known/mcp/server-card.json">server-card.json</a>)</dd>
+      <dt>MCP</dt><dd><a href="#mcp">Connect to the aadhar.sh MCP server</a></dd>
       <dt>API catalog</dt><dd><a href="/.well-known/api-catalog">/.well-known/api-catalog</a> (RFC 9727)</dd>
       <dt>Site map for agents</dt><dd><a href="/llms.txt">/llms.txt</a></dd>
+      <dt>Source code</dt><dd><a href="https://github.com/oddharsh/site">oddharsh/site</a> · <a href="https://github.com/oddharsh/site/blob/main/AGENTS.md">AGENTS.md</a></dd>
       <dt>Authentication</dt><dd>none</dd>
     </dl>
 
     <h2>Quickstart</h2>${quickstart}
+
+    <h2 id="mcp">aadhar.sh MCP server</h2>
+    <p>In a client that supports Streamable HTTP, add <a href="/mcp">https://aadhar.sh/mcp</a> as a remote
+      server. The <a href="/.well-known/mcp/server-card.json">server card</a> lists its tools and their
+      schemas. Use <code>resources/list</code> to find published pages and <code>resources/read</code> to read them.</p>
+    <p>For event and attendee searches, see the <a href="/serendipity/mcp-info">Serendipity MCP setup guide</a>.</p>
 
     <h2>Endpoints</h2>
     <ul>${endpoints}

@@ -100,7 +100,8 @@ test("each twin is generated from its baked page, not written by hand", async ()
       assert.ok(generated.includes(route), `${route} takes the generated tier`);
       const twin = files.get(`${route}.md`);
       assert.ok(twin, `${route}.md is produced`);
-      assert.match(twin, new RegExp(`^# ${route.slice(1, 2).toUpperCase()}${route.slice(2)}$`, "m"), "the page's h1 leads the twin");
+      const heading = route === "/developers" ? "aadhar.sh API documentation" : route[1].toUpperCase() + route.slice(2);
+      assert.ok(twin.split("\n").includes(`# ${heading}`), "the page's h1 leads the twin");
     }
     assert.ok(files.get("/privacy.md").includes(`stored for ${TTL_BOOKING_DAYS} days`), "a figure survives into the twin");
     assert.ok(files.get("/developers.md").includes(`limited to ${LENS_BUDGETS.inspect.max} a minute`));

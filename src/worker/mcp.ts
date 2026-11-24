@@ -47,6 +47,16 @@ const CACHE_RESOURCES = CACHE_STATIC;
 const CACHE_READ = CACHE_LIVE;
 const CACHE_PROMPTS = CACHE_EMPTY;
 
+const terminalFrameSchema = { type: "string", description: "Rendered 80-column terminal frame as plain text" };
+const terminalOutputSchema = {
+  type: "object",
+  properties: {
+    frame: terminalFrameSchema,
+    url: { type: "string", description: "Site-relative path and query string for reopening the terminal view" },
+  },
+  required: ["frame", "url"],
+};
+
 const HOSTED_TOOLS = [
   {
     name: "image_inspect",
@@ -182,14 +192,19 @@ const MCP_TOOL_DEFINITIONS = [
   // window is noise the model then has to be robust to.
   {
     name: "finger",
+    outputSchema: terminalOutputSchema,
     description:
       "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
     inputSchema: {
       type: "object",
       properties: {
         keys: { type: "string", description: 'a key sequence, up to 32 keys, e.g. "2jj<cr>"' },
-        pane: { type: "string", enum: ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"] },
-        cursor: { type: "integer", minimum: 0, maximum: 4999 },
+        pane: {
+          type: "string",
+          enum: ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"],
+          description: "Pane to show before applying keys",
+        },
+        cursor: { type: "integer", minimum: 0, maximum: 4999, description: "Zero-based row to select before applying keys" },
         open: { type: "string", description: "id of the row to open (slug, index, or version number)" },
         q: { type: "string", description: "query for the search pane" },
       },
@@ -197,18 +212,19 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "photos",
+    outputSchema: terminalOutputSchema,
     description:
       "Browse the published photo archive as a terminal frame, filterable by caption, film simulation, body, and lens. Opening a frame shows its exposure and the in-camera recipe it was shot with. Send `keys` (j/k cursor, <cr> open, n/p page).",
     inputSchema: {
       type: "object",
       properties: {
-        keys: { type: "string" },
-        q: { type: "string" },
-        film: { type: "string" },
-        camera: { type: "string" },
-        lens: { type: "string" },
-        page: { type: "integer", minimum: 0, maximum: 200 },
-        cursor: { type: "integer", minimum: 0, maximum: 4999 },
+        keys: { type: "string", description: "Key sequence, such as j<cr> to move down and open a photo" },
+        q: { type: "string", description: "Text to find in the archive" },
+        film: { type: "string", description: "Filter by Fuji film simulation, such as Classic Chrome" },
+        camera: { type: "string", description: "Filter by camera body" },
+        lens: { type: "string", description: "Filter by lens model" },
+        page: { type: "integer", minimum: 0, maximum: 200, description: "Zero-based results page" },
+        cursor: { type: "integer", minimum: 0, maximum: 4999, description: "Zero-based row to select before applying keys" },
         open: { type: "string", description: "photo stem to open" },
       },
     },
@@ -218,6 +234,14 @@ const MCP_TOOL_DEFINITIONS = [
     // shell has an antenna; this origin does not. So the agent samples and this
     // draws. radar.ts's header says why a hosted radar is otherwise dishonest.
     name: "radar",
+    outputSchema: {
+      type: "object",
+      properties: {
+        frame: terminalFrameSchema,
+        sources: { type: "integer", minimum: 0, description: "Number of signal samples accepted for rendering" },
+      },
+      required: ["frame", "sources"],
+    },
     description:
       "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
     inputSchema: {
@@ -229,7 +253,7 @@ const MCP_TOOL_DEFINITIONS = [
           items: {
             type: "object",
             properties: {
-              name: { type: "string" },
+              name: { type: "string", description: "Label for the signal source" },
               rssi: { type: "number", description: "dBm, negative; e.g. -58" },
               kind: { type: "string", description: "optional tag, e.g. wifi or ble" },
               history: { type: "array", items: { type: "number" }, description: "optional trailing readings for the trend" },
@@ -244,30 +268,35 @@ const MCP_TOOL_DEFINITIONS = [
   },
   {
     name: "encode",
+    outputSchema: terminalOutputSchema,
     description:
       "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "agent_ready",
+    outputSchema: terminalOutputSchema,
     description:
       "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "dict",
+    outputSchema: terminalOutputSchema,
     description:
       "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "cache",
+    outputSchema: terminalOutputSchema,
     description:
       "Does a URL's ETag ever actually 304? A BEHAVIORAL probe rather than a header read: fetches twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin did. Also checks Accept negotiation against Vary. Returns a rendered frame. Same route as /cache.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
   },
   {
     name: "lens",
+    outputSchema: terminalOutputSchema,
     description:
       "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
     inputSchema: {
