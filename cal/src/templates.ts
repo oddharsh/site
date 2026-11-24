@@ -429,7 +429,7 @@ function shell(title, body, env, head = "") {
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">
-${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : STANDALONE_GUTTER}</style>
+${head}<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Menlo,Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : STANDALONE_GUTTER}</style>
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">

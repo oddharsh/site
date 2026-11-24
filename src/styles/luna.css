@@ -327,14 +327,17 @@
    Native-availability order: Tahoma isn't reliably on macOS, so --font-ui falls
    through to Verdana (mac-native, metrically close); Trebuchet MS IS on macOS so
    captions render true on both. Every stack ends generic so it never lands on
-   Arial/Helvetica.
+   Arial/Helvetica. Menlo sits behind Courier New for the glyphs Courier New
+   lacks (block elements like U+2582, the /lens/census sparkline): Chrome's system
+   fallback finds a 0.6em mono face there, but Ladybird 2026.47.7 drew a 1em one
+   and widened the column 168px to 246px (measured 2026-11-23, macOS 27.3).
    ============================================================================ */
 
 :root {
   /* ── FAMILIES ────────────────────────────────────────────────────────────*/
   --font-caption: "Trebuchet MS", Verdana, Geneva, sans-serif; /* title bars, h1–h3      */
   --font-ui:      Tahoma, Verdana, Geneva, sans-serif;         /* body, controls, labels */
-  --font-mono:    "Courier New", Courier, monospace;           /* numerics, EXIF, /source*/
+  --font-mono:    "Courier New", Menlo, Courier, monospace;    /* numerics, EXIF, /source*/
 
   /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
      The site sets body at 10.5pt and scales headings up; control text is 10pt.
