@@ -1436,8 +1436,9 @@ them as detritus. Both have real consumers. Leave them, and re-run the checks
 below whenever they look unreferenced again:
 
 - **`public/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
-  because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
-  deleting the file breaks mail rather than the site.
+  because inboxes circle-crop it). Its consumers are a Cloudflare DNS record and
+  the site MCP server card's `icons[]`, so deleting the file breaks mail and
+  the card's icon rather than a page.
 
   **This one now goes red.** The BIMI record in [`infra.json`](../config/infra.json)
   carries a `consumer` field naming this path, and `bun run infra:check` fails

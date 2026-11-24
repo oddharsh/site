@@ -726,6 +726,7 @@ test("published MCP server cards and discovery files stay aligned with both live
       live: siteLive.result.tools,
       info: { name: SITE_MCP_SERVER_INFO.name, title: SITE_MCP_SERVER_INFO.title, version: SITE_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: true, prompts: false },
+      icon: "/bimi.svg",
     },
     {
       file: "public/.well-known/mcp/serendipity.json",
@@ -733,9 +734,10 @@ test("published MCP server cards and discovery files stay aligned with both live
       live: serendipityLive.result.tools,
       info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: false, prompts: false },
+      icon: "/section-icons/serendipity.svg",
     },
   ];
-  for (const { file, endpoint, live, info, capabilities } of cards) {
+  for (const { file, endpoint, live, info, capabilities, icon } of cards) {
     const card = JSON.parse(await readFile(new URL(file, ROOT), "utf8"));
     assert.equal(card.protocolVersion, "2026-07-28", `${file} must advertise the current MCP revision`);
     assert.deepEqual(card.serverInfo, { ...info, description: card.serverInfo.description }, `${file} server identity drifted`);
@@ -754,6 +756,10 @@ test("published MCP server cards and discovery files stay aligned with both live
       [["streamable-http", endpoint]],
       `${file} remotes must name the endpoint`,
     );
+    // The icon must be a file this origin ships, or the card points a registry
+    // at a 404.
+    assert.deepEqual(card.icons, [{ src: `https://aadhar.sh${icon}`, mimeType: "image/svg+xml", sizes: ["any"] }], `${file} icons`);
+    assert.match(await readFile(new URL(`public${icon}`, ROOT), "utf8"), /^<svg[\s>]/, `${file} icon must be an SVG in public/`);
   }
 
   const agentCard = JSON.parse(await readFile(new URL("public/.well-known/agent-card.json", ROOT), "utf8"));

@@ -293,7 +293,7 @@
       "type": "TXT",
       "match": "exact",
       "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
-      "why": "BIMI logo for inbox display. This record is the ONLY consumer of public/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
+      "why": "BIMI logo for inbox display. This record and the site MCP server card's icons[] are the only consumers of public/bimi.svg, and neither is a link a reference sweep follows, which is why that file reads as detritus to every sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
       "consumer": "public/bimi.svg"
     },
     {

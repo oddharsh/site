@@ -29,7 +29,10 @@ function toolCard({ name, title, description, inputSchema, outputSchema, annotat
 const SERVER_CARD_SCHEMA = "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json";
 const SERVER_CARD_DESCRIPTION_MAX = 100;
 
-function card({ cardName, summary, serverInfo, capabilities, description, transport, documentationUrl, tools }) {
+// Each card's icon is the mark its server's own page already wears, served from
+// this origin (the extension asks consumers to prefer same-domain icons). SVG
+// only: the site serves no PNG mark, and the extension lists SVG as SHOULD.
+function card({ cardName, summary, serverInfo, capabilities, description, transport, documentationUrl, iconPath, tools }) {
   if (summary.length > SERVER_CARD_DESCRIPTION_MAX) {
     throw new Error(`${cardName}: description is ${summary.length} characters, over the extension's ${SERVER_CARD_DESCRIPTION_MAX}`);
   }
@@ -39,6 +42,7 @@ function card({ cardName, summary, serverInfo, capabilities, description, transp
     title: serverInfo.title,
     version: serverInfo.version,
     description: summary,
+    icons: [{ src: `${ROOT}${iconPath}`, mimeType: "image/svg+xml", sizes: ["any"] }],
     websiteUrl: documentationUrl,
     remotes: [{ type: "streamable-http", url: transport, supportedProtocolVersions: MCP_SUPPORTED }],
     protocolVersion: MCP_MODERN,
@@ -64,6 +68,7 @@ const siteCard = card({
     "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources.",
   transport: `${ROOT}/mcp`,
   documentationUrl: `${ROOT}/llms.txt`,
+  iconPath: "/bimi.svg",
   tools: SITE_TOOLS,
 });
 
@@ -75,6 +80,7 @@ const serendipityCard = card({
   description: "Read-only access to the Serendipity event pool on aadhar.sh: community-curated events worth going to, and who's going. Public data only.",
   transport: `${ROOT}/serendipity/mcp`,
   documentationUrl: `${ROOT}/serendipity/mcp-info`,
+  iconPath: "/section-icons/serendipity.svg",
   tools: SERENDIPITY_TOOLS,
 });
 
