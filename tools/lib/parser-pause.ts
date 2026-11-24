@@ -56,9 +56,15 @@ export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } =
   if (html.includes(LINK)) return html; // already paused: the twin writer re-dresses pages
   let text = 0,
     hidden = 0,
-    folds = 0;
+    folds = 0,
+    hasQuiz = false;
   const at: { chars: number; afterFold: boolean }[] = [];
   new HTMLRewriter()
+    .on("script#luq-data", {
+      element() {
+        hasQuiz = true;
+      },
+    })
     .on(".window > .content", {
       text(t) {
         text += t.text.replace(/\s+/g, " ").length;
@@ -76,6 +82,9 @@ export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } =
       },
     })
     .transform(html);
+  // Only pages with an understanding check actually load /quiz.css; pausing a
+  // non-quiz page adds an unused stylesheet fetch and delays the taskbar.
+  if (!hasQuiz) return html;
   const total = text - hidden;
   const pick = at.findIndex((b) => b.chars >= FOLD_AFTER_CHARS && total - b.chars >= PAUSE_MIN_REST && (!afterFirstFold || b.afterFold));
   if (pick < 0) return html;

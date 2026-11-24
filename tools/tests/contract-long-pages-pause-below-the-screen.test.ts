@@ -96,20 +96,26 @@ test("the pause is a direct child of .content, or of the chat .log", needsParser
 });
 
 test("a page whose first paint waits for its first fold pauses only after that fold", needsParser, () => {
-  assert.ok(NON_BLOCKING_PAGES.length > 0, "no page waits for its first fold; this test checks nothing");
-  for (const rel of NON_BLOCKING_PAGES) {
+  const rel = "garage/compression.html";
+  const html = foldLongProse(readFileSync(new URL(`src/pages/${rel}`, ROOT), "utf8"));
+  const firstFoldEnd = html.indexOf("</section>", html.indexOf('<section class="fold"'));
+  assert.ok(pauseBelowFirstScreen(html, { afterFirstFold: true }).indexOf(LINK) > firstFoldEnd, `${rel}: the pause sits before the end of the first fold`);
+  // and without the rule it would have landed before it, so the rule is what moves it
+  assert.ok(pauseBelowFirstScreen(html).indexOf(LINK) < firstFoldEnd, `${rel}: the pause lands after the first fold anyway; the rule is untested`);
+});
+
+test("pages without a quiz never receive the /quiz.css parser pause", needsParser, () => {
+  for (const rel of ["garage/index.html", "access/index.html"]) {
     const html = foldLongProse(readFileSync(new URL(`src/pages/${rel}`, ROOT), "utf8"));
-    const firstFoldEnd = html.indexOf("</section>", html.indexOf('<section class="fold"'));
-    assert.ok(paused(rel, html).indexOf(LINK) > firstFoldEnd, `${rel}: the pause sits before the end of the first fold`);
-    // and without the rule it would have landed before it, so the rule is what moves it
-    assert.ok(pauseBelowFirstScreen(html).indexOf(LINK) < firstFoldEnd, `${rel}: the pause lands after the first fold anyway; the rule is untested`);
+    assert.equal(pauseBelowFirstScreen(html), html, `${rel}: non-quiz page must not inject ${PAUSE_HREF}`);
   }
 });
 
 test("a page too short to have a first screen and a rest gets no pause", needsParser, () => {
-  const html = '<div class="window"><main id="main" class="content prose"><h1>t</h1><p>short</p><h2>a</h2><p>still short</p></main></div>';
+  const quiz = '<script id="luq-data" type="application/json">{}</script>';
+  const html = `<div class="window"><main id="main" class="content prose"><h1>t</h1><p>short</p><h2>a</h2><p>still short</p></main></div>${quiz}`;
   assert.equal(pauseBelowFirstScreen(html), html);
   // the same shape with enough text does pause, at the h2 past the threshold
-  const long = `<div class="window"><main id="main" class="content prose"><h1>t</h1><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><h2>a</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div>`;
+  const long = `<div class="window"><main id="main" class="content prose"><h1>t</h1><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><h2>a</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div>${quiz}`;
   assert.equal(pauseBelowFirstScreen(long), long.replace("<h2>a</h2>", `${LINK}<h2>a</h2>`));
 });

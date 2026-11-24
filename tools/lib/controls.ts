@@ -208,10 +208,17 @@ export const CONTROLS: Control[] = [
   },
   {
     id: "parser-pause-before-the-first-fold",
-    plants: "the parser pause ignores a page's rel=expect first fold, so /garage's first paint waits for the pause's stylesheet",
+    plants: "the parser pause ignores a page's rel=expect first fold, so a non-blocking quiz page's first paint waits for the pause's stylesheet",
     mutations: [{ file: "tools/lib/parser-pause.ts", find: " && (!afterFirstFold || b.afterFold)", replace: "" }],
     run: contract("contract-long-pages-pause-below-the-screen"),
-    expect: /garage\/index\.html: the pause sits before the end of the first fold/,
+    expect: /garage\/compression\.html: the pause sits before the end of the first fold/,
+  },
+  {
+    id: "parser-pause-skips-non-quiz-pages",
+    plants: "the parser pause injects /quiz.css into non-quiz pages",
+    mutations: [{ file: "tools/lib/parser-pause.ts", find: "if (!hasQuiz) return html;", replace: "" }],
+    run: contract("contract-long-pages-pause-below-the-screen"),
+    expect: /non-quiz page must not inject \/quiz\.css/,
   },
   {
     id: "web-font-in-luna",
