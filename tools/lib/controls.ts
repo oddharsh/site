@@ -157,6 +157,19 @@ export const CONTROLS: Control[] = [
     expect: /offscreen tiles must expose no URL to the preload scanner/,
   },
   {
+    id: "restore-stage-height",
+    plants: "System Restore drops its explicit mobile list height so #srList shifts the page on hydration",
+    mutations: [
+      {
+        file: "src/worker/updates.ts",
+        find: ".sr-list{height:170px;max-height:170px}",
+        replace: ".sr-list{max-height:170px}",
+      },
+    ],
+    run: contract("contract-restore-reserves-stage-height"),
+    expect: /phone \.sr-list must reserve explicit height before hydration/,
+  },
+  {
     id: "conflict-marker-in-garage-page",
     plants: "a rebase leaves a conflict marker in a served page (the 2026-07-27 compression.html residue)",
     mutations: [
