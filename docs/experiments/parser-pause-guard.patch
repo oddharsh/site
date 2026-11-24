@@ -1,0 +1,141 @@
+--- a/tools/lib/parser-pause.ts
++++ b/tools/lib/parser-pause.ts
+@@ -9,6 +9,8 @@
+ // anyway once the reader nears the quiz at the bottom, so the pause costs no
+ // new file: a cold visit fetches it at the fold instead of on scroll, and a
+ // warm one has it cached and doesn't pause at all.
++// A page without an understanding check gets no pause: its sheet would be an
++// otherwise unused request, and would still hold the taskbar behind it.
+ //
+ // Measured in the 2026-10 build-off (follow-up T1, an emulation on production
+ // at 59afbac1): phone first paint -85 ms on /garage/compression, -92 ms on
+@@ -34,6 +36,7 @@
+ // prose-fold.ts does.
+
+ import { FOLD_AFTER_CHARS } from "./prose-fold.ts";
++import { quizReference } from "./quiz-data.ts";
+
+ export const PAUSE_MIN_REST = 400; // less text than this left below isn't worth a pause
+ export const PAUSE_HREF = "/quiz.css";
+@@ -53,6 +56,7 @@
+
+ /** The page with the pause before its first block past FOLD_AFTER_CHARS, or unchanged. */
+ export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } = {}): string {
++  if (!quizReference(html)) return html;
+   if (html.includes(LINK)) return html; // already paused: the twin writer re-dresses pages
+   let text = 0,
+     hidden = 0,
+--- a/tools/tests/contract-long-pages-pause-below-the-screen.test.ts
++++ b/tools/tests/contract-long-pages-pause-below-the-screen.test.ts
+@@ -9,6 +9,7 @@
+ //   - a page whose first paint waits for its first fold (`rel=expect`) pausing
+ //     before that fold, which holds first paint for the sheet;
+ //   - the pause adding anything but the one link.
++//   - a non-quiz page paying for a stylesheet it never uses.
+ //
+ // HTMLRewriter is a bun global, so under node the suite skips, matching
+ // contract-long-pages-fold-below-the-screen.test.ts.
+@@ -17,6 +18,7 @@
+ import { test } from "node:test";
+ import { NON_BLOCKING_PAGES } from "../lib/critical-css.ts";
+ import { PAUSE_HREF, PAUSE_MIN_REST, pauseBelowFirstScreen } from "../lib/parser-pause.ts";
++import { quizReference } from "../lib/quiz-data.ts";
+ import { FOLD_AFTER_CHARS, foldLongProse } from "../lib/prose-fold.ts";
+
+ const needsParser = { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" };
+@@ -96,20 +98,29 @@
+ });
+
+ test("a page whose first paint waits for its first fold pauses only after that fold", needsParser, () => {
+-  assert.ok(NON_BLOCKING_PAGES.length > 0, "no page waits for its first fold; this test checks nothing");
+-  for (const rel of NON_BLOCKING_PAGES) {
+-    const html = foldLongProse(readFileSync(new URL(`src/pages/${rel}`, ROOT), "utf8"));
+-    const firstFoldEnd = html.indexOf("</section>", html.indexOf('<section class="fold"'));
+-    assert.ok(paused(rel, html).indexOf(LINK) > firstFoldEnd, `${rel}: the pause sits before the end of the first fold`);
+-    // and without the rule it would have landed before it, so the rule is what moves it
+-    assert.ok(pauseBelowFirstScreen(html).indexOf(LINK) < firstFoldEnd, `${rel}: the pause lands after the first fold anyway; the rule is untested`);
+-  }
++  const html = `<div class="window"><main class="content"><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><section class="fold"><p>first fold</p></section><h2>next</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div><script id="luq-data" type="application/json">{}</script>`;
++  const firstFoldEnd = html.indexOf("</section>");
++  assert.ok(pauseBelowFirstScreen(html).indexOf(LINK) < firstFoldEnd, "the fixture must exercise the early pause");
++  assert.ok(pauseBelowFirstScreen(html, { afterFirstFold: true }).indexOf(LINK) > firstFoldEnd, "quiz page: the pause sits before the end of the first fold");
+ });
+
+ test("a page too short to have a first screen and a rest gets no pause", needsParser, () => {
+-  const html = '<div class="window"><main id="main" class="content prose"><h1>t</h1><p>short</p><h2>a</h2><p>still short</p></main></div>';
++  const html =
++    '<div class="window"><main id="main" class="content prose"><h1>t</h1><p>short</p><h2>a</h2><p>still short</p></main></div><script type="application/json" id="luq-data">{}</script>';
+   assert.equal(pauseBelowFirstScreen(html), html);
+   // the same shape with enough text does pause, at the h2 past the threshold
+-  const long = `<div class="window"><main id="main" class="content prose"><h1>t</h1><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><h2>a</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div>`;
++  const long = `<script type="application/json" id="luq-data">{}</script><div class="window"><main id="main" class="content prose"><h1>t</h1><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><h2>a</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div>`;
+   assert.equal(pauseBelowFirstScreen(long), long.replace("<h2>a</h2>", `${LINK}<h2>a</h2>`));
++  const extracted = long.replace('id="luq-data">{}</script>', 'id="luq-data" data-src="/a/quiz-test.12345678.json"></script>');
++  assert.notEqual(extracted, long, "the fixture must carry extracted quiz data");
++  assert.equal(pauseBelowFirstScreen(extracted), extracted.replace("<h2>a</h2>", `${LINK}<h2>a</h2>`));
+ });
++
++test("pages without a quiz never fetch its stylesheet as a parser pause", needsParser, () => {
++  const authored = ["garage/index.html", "access/index.html"].map((rel) => [rel, readFileSync(new URL(`src/pages/${rel}`, ROOT), "utf8")]);
++  for (const [rel, source] of authored) {
++    const html = foldLongProse(source);
++    assert.equal(quizReference(html), null, `${rel}: this control needs a page without a quiz`);
++    assert.equal(pauseBelowFirstScreen(html), html, `${rel}: non-quiz page must not pause on quiz.css`);
++  }
++});
+--- /dev/null
++++ b/src/worker/tests/contract-non-quiz-pages-do-not-pause-on-quiz-css.test.ts
+@@ -0,0 +1,24 @@
++// Generated pages reuse the same parser-pause eligibility rule as authored pages.
++import assert from "node:assert/strict";
++import { test } from "node:test";
++import { renderBotPage } from "../bot.ts";
++import { renderDevelopersPage, renderPrivacyPage } from "../trust.ts";
++import { pauseBelowFirstScreen } from "../../../tools/lib/parser-pause.ts";
++import { foldLongProse } from "../../../tools/lib/prose-fold.ts";
++import { quizReference } from "../../../tools/lib/quiz-data.ts";
++
++test(
++  "generated non-quiz pages never acquire a quiz stylesheet parser pause",
++  { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" },
++  async () => {
++    for (const [path, render] of [
++      ["/bot", renderBotPage],
++      ["/privacy", renderPrivacyPage],
++      ["/developers", renderDevelopersPage],
++    ] as const) {
++      const html = foldLongProse(await render().text());
++      assert.equal(quizReference(html), null, `${path}: fixture must have no quiz`);
++      assert.equal(pauseBelowFirstScreen(html), html, `${path}: non-quiz page must not pause on quiz.css`);
++    }
++  },
++);
+--- a/tools/lib/controls.ts
++++ b/tools/lib/controls.ts
+@@ -95,6 +95,13 @@
+
+ export const CONTROLS: Control[] = [
+   {
++    id: "parser-pause-requires-a-quiz",
++    plants: "a non-quiz page fetches quiz.css and holds its taskbar behind the parser pause",
++    mutations: [{ file: "tools/lib/parser-pause.ts", find: "  if (!quizReference(html)) return html;", replace: "" }],
++    run: contract("contract-long-pages-pause-below-the-screen"),
++    expect: /non-quiz page must not pause on quiz.css/,
++  },
++  {
+     id: "conflict-marker-in-garage-page",
+     plants: "a rebase leaves a conflict marker in a served page (the 2026-07-27 compression.html residue)",
+     mutations: [
+@@ -172,10 +179,10 @@
+   },
+   {
+     id: "parser-pause-before-the-first-fold",
+-    plants: "the parser pause ignores a page's rel=expect first fold, so /garage's first paint waits for the pause's stylesheet",
++    plants: "the parser pause ignores a page's rel=expect first fold, so first paint waits for the pause's stylesheet",
+     mutations: [{ file: "tools/lib/parser-pause.ts", find: " && (!afterFirstFold || b.afterFold)", replace: "" }],
+     run: contract("contract-long-pages-pause-below-the-screen"),
+-    expect: /garage\/index\.html: the pause sits before the end of the first fold/,
++    expect: /quiz page: the pause sits before the end of the first fold/,
+   },
+   {
+     id: "web-font-in-luna",

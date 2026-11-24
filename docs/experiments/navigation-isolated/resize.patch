@@ -1,0 +1,10 @@
+--- a/src/client/nav.ts
++++ b/src/client/nav.ts
+@@ -932,7 +932,6 @@
+     [].forEach.call(D.querySelectorAll(".window,.np-window"), (f) => {
+       if (f.classList.contains("np-folder")) return; // folder hugs its content — not resizable
+       if (f.querySelector(":scope > .axp-resize")) return;
+-      if (getComputedStyle(f).position === "static") f.style.position = "relative";
+       f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
+       f.addEventListener("pointerdown", (e) => {
+         if (f.classList.contains("axp-max")) return;

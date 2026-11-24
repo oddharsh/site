@@ -1323,3 +1323,10 @@ skips it.
     needs its own input: the WASM mutation previously passed without a build
     because its only serving test skipped with the build-output test.
     Checked by: `tools/paint-diff.ts`, `src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts`.
+118. **A quiz stylesheet can be useful without a quiz.** It also pauses the
+    parser below the first screen. A quiz-only eligibility guard removed an
+    805 B q11 request from five pages, but CI's nine paired cold loads found
+    Access first paint 116 ms later and Developers 56 ms later, with unchanged
+    CLS. Keep the measured parser policy until a replacement preserves that
+    early paint. The rejected guard remains a replayable experiment.
+    Checked by: `tools/tests/contract-long-pages-pause-below-the-screen.test.ts`.

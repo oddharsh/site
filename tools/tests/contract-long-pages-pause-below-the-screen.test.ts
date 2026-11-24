@@ -17,6 +17,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { NON_BLOCKING_PAGES } from "../lib/critical-css.ts";
 import { PAUSE_HREF, PAUSE_MIN_REST, pauseBelowFirstScreen } from "../lib/parser-pause.ts";
+import { quizReference } from "../lib/quiz-data.ts";
 import { FOLD_AFTER_CHARS, foldLongProse } from "../lib/prose-fold.ts";
 
 const needsParser = { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" };
@@ -112,4 +113,14 @@ test("a page too short to have a first screen and a rest gets no pause", needsPa
   // the same shape with enough text does pause, at the h2 past the threshold
   const long = `<div class="window"><main id="main" class="content prose"><h1>t</h1><p>${"x".repeat(FOLD_AFTER_CHARS)}</p><h2>a</h2><p>${"y".repeat(PAUSE_MIN_REST)}</p></main></div>`;
   assert.equal(pauseBelowFirstScreen(long), long.replace("<h2>a</h2>", `${LINK}<h2>a</h2>`));
+});
+
+// A sheet can be useful as a parser pause even when its quiz is absent (gotcha 118).
+test("long non-quiz pages retain their measured first-paint pause", needsParser, () => {
+  for (const rel of ["garage/index.html", "access/index.html"]) {
+    const html = foldLongProse(readFileSync(new URL(`src/pages/${rel}`, ROOT), "utf8"));
+    assert.equal(quizReference(html), null, `${rel}: fixture must have no quiz`);
+    const out = paused(rel, html);
+    assert.ok(out.includes(LINK), `${rel}: non-quiz long page must retain its paint pause`);
+  }
 });
