@@ -440,10 +440,14 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.32.1 is the exact root pin for the helpers
+- @cloudflare/config 1.0.0-rc.3 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
-  0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
+  0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding.
+  It moved from 0.32.1 on 2026-11-24 because wrangler 4.164.0 and later
+  accept only the type `analytics-sql`, which 1.0.0-rc.3 emits from
+  `bindings.analyticsSql()`; 0.32.1 emitted `analytics`, and every nightly
+  wrangler candidate from 4.164.0 to 4.167.0 failed the dry-run on it. workers-sdk#15914 moved them
   out of `wrangler/experimental-config` and into the `cf` CLI as `cf/config`,
   which is a one-line re-export of `@cloudflare/config/public`. Depending on
   `cf` instead would break the one-Miniflare, one-Workerd property above: it
