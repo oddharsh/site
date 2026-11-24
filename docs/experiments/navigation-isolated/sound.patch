@@ -1,0 +1,168 @@
+--- a/src/client/nav.ts
++++ b/src/client/nav.ts
+@@ -173,12 +173,11 @@
+   // bytes), gated by the tray mute toggle. Default OFF so there is never surprise
+   // audio; the choice persists in localStorage. Navigation sounds are skipped on
+   // purpose (page unload cuts them) — only in-page shell actions play.
+-  var AXP_SND = (() => {
+-    var ctx: any = null,
+-      on = false;
+-    try {
+-      on = localStorage.getItem("axp-sound") === "on";
+-    } catch (e) {}
++  var soundOn = false, ctx = null as any, soundPromise = null as Promise<any> | null;
++  try { soundOn = localStorage.getItem("axp-sound") === "on"; } catch {}
++  function loadSound() {
++    return soundPromise ||= import("/nav-sound.js").catch(() => { soundPromise = null; return null; });
++  }
+     function ac() {
+       if (!ctx) {
+         try {
+@@ -192,70 +191,16 @@
+       if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+       return ctx;
+     }
+-    // one decaying partial: fast attack, exponential tail (a struck note, not a beep).
+-    function partial(c, freq, t0, dur, peak, type) {
+-      var o = c.createOscillator(),
+-        g = c.createGain();
+-      o.type = type || "sine";
+-      o.frequency.value = freq;
+-      o.connect(g);
+-      g.connect(c.destination);
+-      g.gain.setValueAtTime(0.0001, t0);
+-      g.gain.exponentialRampToValueAtTime(peak || 0.1, t0 + 0.004);
+-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+-      o.start(t0);
+-      o.stop(t0 + dur + 0.02);
+-    }
+-    // struck-bell timbre: fundamental + inharmonic overtones, the glassy chime
+-    // character XP's notification sounds have (a flat sine beep does not).
+-    function bell(c, base, t0, dur, peak) {
+-      partial(c, base, t0, dur, peak, "sine");
+-      partial(c, base * 2.01, t0, dur * 0.7, peak * 0.5, "sine");
+-      partial(c, base * 2.76, t0, dur * 0.5, peak * 0.3, "sine");
+-      partial(c, base * 5.18, t0, dur * 0.28, peak * 0.12, "triangle");
+-    }
+-    var voices = {
+-      // notification ding: a quick bright chime up a fourth
+-      open: (c, t) => {
+-        bell(c, 784, t, 0.45, 0.07);
+-        bell(c, 1047, t + 0.045, 0.6, 0.085);
+-      },
+-      // dismissal: a softer chime down
+-      close: (c, t) => {
+-        bell(c, 659, t, 0.4, 0.06);
+-        bell(c, 494, t + 0.05, 0.5, 0.05);
+-      },
+-      // critical-stop: a low dissonant pair with a little grit
+-      error: (c, t) => {
+-        partial(c, 196, t, 0.3, 0.075, "sine");
+-        partial(c, 207, t, 0.32, 0.05, "triangle");
+-        partial(c, 98, t, 0.34, 0.05, "sine");
+-      },
+-      // task-complete fanfare: a rising major arpeggio landing on a held octave
+-      tada: (c, t) => {
+-        [523, 659, 784].forEach((f, i) => {
+-          bell(c, f, t + i * 0.09, 0.32, 0.07);
+-        });
+-        bell(c, 1047, t + 0.27, 0.85, 0.09);
+-      },
+-    };
+-    return {
+-      on: () => {
+-        return on;
+-      },
+-      set: (v) => {
+-        on = !!v;
+-        try {
+-          localStorage.setItem("axp-sound", on ? "on" : "off");
+-        } catch (e) {}
+-      },
+-      play: (name) => {
+-        if (!on) return;
+-        var c = ac();
+-        if (c && voices[name]) voices[name](c, c.currentTime);
+-      },
+-    };
+-  })();
++  var AXP_SND = {
++    on: () => soundOn,
++    set: (value) => { soundOn = !!value; try { localStorage.setItem("axp-sound", soundOn ? "on" : "off"); } catch {} },
++    play: (name) => {
++      if (!soundOn) return;
++      var context = ac();
++      if (context) loadSound().then(module => { if (module && soundOn) module.play(context, name); });
++    },
++  };
++  if (soundOn) loadSound();
+
+   function front(win) {
+     win.style.zIndex = ++accZ;
+--- /dev/null
++++ b/src/client/nav-sound.ts
+@@ -0,0 +1,50 @@
++// nav-sound.js: optional synthesized voices; nav owns preference and the gesture-authorized AudioContext.
++    // one decaying partial: fast attack, exponential tail (a struck note, not a beep).
++    function partial(c, freq, t0, dur, peak, type) {
++      var o = c.createOscillator(),
++        g = c.createGain();
++      o.type = type || "sine";
++      o.frequency.value = freq;
++      o.connect(g);
++      g.connect(c.destination);
++      g.gain.setValueAtTime(0.0001, t0);
++      g.gain.exponentialRampToValueAtTime(peak || 0.1, t0 + 0.004);
++      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
++      o.start(t0);
++      o.stop(t0 + dur + 0.02);
++    }
++    // struck-bell timbre: fundamental + inharmonic overtones, the glassy chime
++    // character XP's notification sounds have (a flat sine beep does not).
++    function bell(c, base, t0, dur, peak) {
++      partial(c, base, t0, dur, peak, "sine");
++      partial(c, base * 2.01, t0, dur * 0.7, peak * 0.5, "sine");
++      partial(c, base * 2.76, t0, dur * 0.5, peak * 0.3, "sine");
++      partial(c, base * 5.18, t0, dur * 0.28, peak * 0.12, "triangle");
++    }
++    var voices = {
++      // notification ding: a quick bright chime up a fourth
++      open: (c, t) => {
++        bell(c, 784, t, 0.45, 0.07);
++        bell(c, 1047, t + 0.045, 0.6, 0.085);
++      },
++      // dismissal: a softer chime down
++      close: (c, t) => {
++        bell(c, 659, t, 0.4, 0.06);
++        bell(c, 494, t + 0.05, 0.5, 0.05);
++      },
++      // critical-stop: a low dissonant pair with a little grit
++      error: (c, t) => {
++        partial(c, 196, t, 0.3, 0.075, "sine");
++        partial(c, 207, t, 0.32, 0.05, "triangle");
++        partial(c, 98, t, 0.34, 0.05, "sine");
++      },
++      // task-complete fanfare: a rising major arpeggio landing on a held octave
++      tada: (c, t) => {
++        [523, 659, 784].forEach((f, i) => {
++          bell(c, f, t + i * 0.09, 0.32, 0.07);
++        });
++        bell(c, 1047, t + 0.27, 0.85, 0.09);
++      },
++    };
++
++export function play(c, name) { if (voices[name]) voices[name](c, c.currentTime); }
+--- a/tools/lib/client-assets.ts
++++ b/tools/lib/client-assets.ts
+@@ -150,6 +150,11 @@
+     loadedBy: ["public/nav.js", "public/lens-webmcp.js"],
+   },
+   {
++    file: "nav-sound.js", kind: "module", marker: "createOscillator", scope: "shell",
++    budget: { role: "opt-in sound voices", gzipKiB: 2, brotliKiB: 1.5 },
++    load: [IMPORT], loadedBy: ["public/nav.js"],
++  },
++  {
+     file: "nav-run.js",
+     kind: "script",
+     marker: "axp-run",

@@ -170,6 +170,25 @@ export const CONTROLS: Control[] = [
     expect: /phone \.sr-list must reserve explicit height before hydration/,
   },
   {
+    id: "non-quiz-parser-pause-keeps-first-paint",
+    gotcha: 118,
+    plants: "quiz-only eligibility drops the paint pause that Access and Garage still use",
+    mutations: [
+      {
+        file: "tools/lib/parser-pause.ts",
+        find: 'import { FOLD_AFTER_CHARS } from "./prose-fold.ts";',
+        replace: 'import { FOLD_AFTER_CHARS } from "./prose-fold.ts";\nimport { quizReference } from "./quiz-data.ts";',
+      },
+      {
+        file: "tools/lib/parser-pause.ts",
+        find: "export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } = {}): string {",
+        replace: "export function pauseBelowFirstScreen(html: string, { afterFirstFold = false } = {}): string {\n  if (!quizReference(html)) return html;",
+      },
+    ],
+    run: contract("contract-long-pages-pause-below-the-screen"),
+    expect: /non-quiz long page must retain its paint pause/,
+  },
+  {
     id: "conflict-marker-in-garage-page",
     plants: "a rebase leaves a conflict marker in a served page (the 2026-07-27 compression.html residue)",
     mutations: [

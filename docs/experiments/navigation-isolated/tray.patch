@@ -1,0 +1,30 @@
+--- a/src/client/nav.ts
++++ b/src/client/nav.ts
+@@ -390,7 +390,7 @@
+       else p.removeAttribute("aria-current");
+     });
+     var sndBtn = D.getElementById("axp-sound") as HTMLElement;
+-    if (sndBtn) sndBtn.hidden = false; // the partial ships it hidden: sounds need JS
++    if (sndBtn) (sndBtn as HTMLButtonElement).disabled = false; // the partial ships it hidden: sounds need JS
+     function paintSnd() {
+       var on = AXP_SND.on();
+       sndBtn.className = on ? "" : "muted";
+--- a/src/styles/luna.css
++++ b/src/styles/luna.css
+@@ -1402,3 +1402,5 @@
+   .axp-group,.axp-well,.axp-address{border:1px solid CanvasText}
+   .axp-group>h2{border-bottom:1px solid CanvasText}
+ }
++
++@media (scripting: none){#axp-sound{display:none}}
+--- a/tools/photos/gen-desktop-partial.ts
++++ b/tools/photos/gen-desktop-partial.ts
+@@ -114,7 +114,7 @@
+   }).join("");
+
+   const trayHtml =
+-    '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>' +
++    '<div id="axp-tray"><button id="axp-sound" type="button" disabled aria-label="Sounds off (click to unmute)" aria-pressed="true"></button>' +
+     TRAY_ITEMS.map(
+       (item) =>
+         `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`,

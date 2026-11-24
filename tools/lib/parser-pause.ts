@@ -6,9 +6,12 @@
 // parsing at an in-body stylesheet until it loads and paints what it has
 // meanwhile, so the first frame holds the first screen and not the whole
 // document. The sheet is the understanding check's, which quiz.js loads
-// anyway once the reader nears the quiz at the bottom, so the pause costs no
-// new file: a cold visit fetches it at the fold instead of on scroll, and a
-// warm one has it cached and doesn't pause at all.
+// anyway once the reader nears the quiz at the bottom. A non-quiz page also
+// uses this sheet to release an earlier first frame: removing it delayed cold
+// FCP on Access by 116 ms and Developers by 56 ms (nine paired CI loads,
+// 2026-11-24; docs/experiments/parser-pause-and-navigation.md). The sheet costs
+// 805 B q11 on a cold visit; a warm visit reuses it and does not pause.
+// Quiz presence alone is therefore not an eligibility rule (gotcha 118).
 //
 // Measured in the 2026-10 build-off (follow-up T1, an emulation on production
 // at 59afbac1): phone first paint -85 ms on /garage/compression, -92 ms on
