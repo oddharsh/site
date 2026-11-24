@@ -152,8 +152,9 @@ test("step 5c plans with the registry's shell tier, which is every hashed file m
     "pixel-peeper/manifest.json",
     "quiz.css",
     "prose.css",
+    "home-music.css",
   ].map((f) => `public/${f}`);
-  assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these ten are hashed and ranked as pages");
+  assert.deepEqual([...hashed].filter((f) => !shell.has(f)).sort(), pageScoped.sort(), "exactly these assets are hashed and ranked as pages");
   assert.ok(
     [...shell].every((f) => hashed.has(f)),
     "the shell tier is a subset of what step 6 hashes",

@@ -5,7 +5,7 @@
 // comment, and one 400 ms outlier is a big median-free number from a GC.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FLOOR, median, signTest, verdict } from "../lib/paint-diff.ts";
+import { FLOOR, P_MAX, median, signTest, verdict } from "../lib/paint-diff.ts";
 
 test("the sign test gives the exact two-sided binomial tail", () => {
   assert.equal(signTest(9, 0), 2 / 512);
@@ -14,6 +14,8 @@ test("the sign test gives the exact two-sided binomial tail", () => {
   assert.equal(signTest(7, 2), 92 / 512);
   assert.equal(signTest(0, 0), 1);
   assert.equal(signTest(3, 3), 1);
+  assert.ok(signTest(5, 0) >= P_MAX, "five pairs cannot validate a planted move");
+  assert.ok(signTest(6, 0) < P_MAX, "six agreeing pairs can validate a planted move");
 });
 
 test("median takes the middle, or the mean of the middle two", () => {

@@ -95,6 +95,42 @@ const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.js
 
 export const CONTROLS: Control[] = [
   {
+    id: "readable-twin-critical-classes",
+    plants: "critical CSS for a readable twin matches authored classes against renamed selectors",
+    gotcha: 116,
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "const subset = await criticalCss(css, matchingHtml, scripts);",
+        replace: "const subset = await criticalCss(css, html, scripts);",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /the readable twin must carry the served page's critical rules/,
+  },
+  {
+    id: "static-page-twin-cache-policy",
+    plants: "the Access page rule stops matching its precompressed document",
+    mutations: [{ file: "public/_headers", find: "/access/index.html*", replace: "/access/never-index.html*" }],
+    run: contract("contract-the-speculation-ledger"),
+    expect: /access\/index\.html\.br: no _headers rule matches the twin/,
+  },
+  {
+    id: "wasm-twin-serving",
+    gotcha: 117,
+    plants: "the decoder twin is built but the static asset path no longer admits WASM",
+    mutations: [{ file: "src/worker/lib/assets.ts", find: '"js", "css", "wasm"', replace: '"js", "css"' }],
+    run: contract("contract-static-text-assets-ship-their-q11-twin"),
+    expect: /decoder must use its q11 twin/,
+  },
+  {
+    id: "gallery-url-deferral",
+    plants: "every gallery tile exposes its URL to the preload scanner",
+    mutations: [{ file: "src/worker/photos.ts", find: "const INITIAL_TILES = 12;", replace: "const INITIAL_TILES = Infinity;" }],
+    run: contract("contract-gallery-images-select-existing-tiers"),
+    expect: /offscreen tiles must expose no URL to the preload scanner/,
+  },
+  {
     id: "conflict-marker-in-garage-page",
     plants: "a rebase leaves a conflict marker in a served page (the 2026-07-27 compression.html residue)",
     mutations: [

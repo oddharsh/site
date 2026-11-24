@@ -164,7 +164,7 @@
 # pages it renders (lib/security.js homepage, lib/chrome.js luna pages).
 /garage/*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
-  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </luna.css>; rel=preload; as=style, </prose.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
 # The AV2 decoder, which /garage/av2 and /pixel-peeper start as a worker. Two
@@ -242,6 +242,14 @@
 # year down to nothing. This spelling covers index.html and index.html.br, and reaches
 # neither tiles/ nor manifest.json.
 /pixel-peeper/index.html*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+
+# Match the document and its compressed twin without changing section assets.
+/access/index.html*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+/dotfiles/index.html*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json

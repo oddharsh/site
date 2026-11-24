@@ -497,7 +497,7 @@ const ROUTES = [
   // compressible and production's edge compresses them on the fly too. So an
   // encoding pin on a text/plain row passes whether or not a twin was served,
   // which is the one thing it exists to catch. What does discriminate is the
-  // `vary` and the weakened `-br` etag servePrecompressedText adds, and
+  // `vary` and the weakened `-br` etag servePrecompressedAsset adds, and
   // contract-llms-full-ships-its-q11-twin asserts those against a fake asset
   // layer instead.
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
@@ -650,7 +650,7 @@ const ROUTES = [
   { path: "/dotfiles.md", status: 200, ct: "text/markdown", marker: "How this list was made", encoding: "br" },
   { path: "/dotfiles/macos.sh", status: 200, ct: "text/plain", marker: "log out and back in for the rest" },
   // The brotli q11 twins for static text assets, one row per routing shape that
-  // reaches servePrecompressedText, since each is a different way for a twin to be
+  // reaches servePrecompressedAsset, since each is a different way for a twin to be
   // built and then not served. feed.xml is the control for the design decision in
   // that function: headers come from the PLAIN asset, so the application/rss+xml
   // that _headers sets on the .xml path must survive a body that came from the .br.

@@ -20,7 +20,7 @@
 // back, in a fresh context with a cold cache, at 390px under 4x CPU throttle
 // and a 50 Mbps / 40 ms link. lib/paint-diff.ts turns the pairs into a verdict.
 //
-// THE CONTROLS RUN EVERY TIME, before the sweep, on /search served from HEAD on
+// THE CONTROLS RUN EVERY TIME, before the sweep, on a blocking-CSS fixture from HEAD on
 // both sides: unplanted, nothing may move (the noise floor); with every
 // stylesheet held 150 ms, FCP must move; with a 300px block pushed in above the
 // content, CLS must move. A control that misses exits 2 ("blind").
@@ -55,7 +55,8 @@ if (positionals.length !== 1) {
 const baseDir = resolve(positionals[0]);
 if (!existsSync(join(baseDir, "node_modules"))) throw new Error(`${baseDir}: no node_modules (run \`bun install --frozen-lockfile\` there)`);
 const runs = Number(values.runs);
-if (!Number.isInteger(runs) || runs < 5) throw new Error(`--runs: a whole number of at least 5, got ${values.runs}`);
+// Five pairs cannot clear the two-sided sign test even when all five agree.
+if (!Number.isInteger(runs) || runs < 6) throw new Error(`--runs: a whole number of at least 6, got ${values.runs}`);
 const maxPages = Number(values["max-pages"]);
 if (!Number.isInteger(maxPages) || maxPages < 1) throw new Error(`--max-pages: a whole number, got ${values["max-pages"]}`);
 
@@ -65,7 +66,11 @@ const CPU_THROTTLE = 4;
 const LINK = { offline: false, latency: 40, downloadThroughput: (50e6 / 8) | 0, uploadThroughput: (10e6 / 8) | 0 };
 /** browser:check's settle: long enough for an island's fetch and swap to land under throttle. */
 const SETTLE_MS = 1500;
-const CONTROL_PAGE = "/search";
+const CONTROL_PAGE = "/__paint-control";
+// The real pages may all load CSS without blocking paint. This fixture keeps
+// one sheet render-blocking so its delayed-load control still tests FCP (gotcha 117).
+const CONTROL_HTML =
+  '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"><title>Paint control</title></head><body><main><p>First paint control</p><p>Layout shift control</p><p>Stable content</p></main></body></html>';
 /** What the FCP control holds every stylesheet for. Nine times FLOOR.fcp, so a reading that sees it can't mistake it for noise. */
 const PLANT_CSS_MS = 150;
 // /rn answers 302 to Spotify, so there is no page of ours to measure.
@@ -152,6 +157,15 @@ async function compare(browser: Browser, base: Side, head: Side, path: string): 
 
 /** Each control as [what it plants, the metric it must move, or none for the noise floor]. */
 async function controls(browser: Browser, head: string): Promise<{ blind: string[]; lines: string[] }> {
+  const fixture =
+    (plant?: Plant): Plant =>
+    async (ctx) => {
+      await ctx.route(
+        (url) => url.pathname === CONTROL_PAGE,
+        (route) => route.fulfill({ contentType: "text/html", body: CONTROL_HTML }),
+      );
+      if (plant) await plant(ctx);
+    };
   const holdCss: Plant = (ctx) =>
     ctx.route(
       (url) => url.pathname.endsWith(".css"),
@@ -176,7 +190,7 @@ async function controls(browser: Browser, head: string): Promise<{ blind: string
   const blind: string[] = [];
   const lines: string[] = [];
   for (const [what, plant, must] of cases) {
-    const r = await compare(browser, { url: head }, { url: head, plant }, CONTROL_PAGE);
+    const r = await compare(browser, { url: head, plant: fixture() }, { url: head, plant: fixture(plant) }, CONTROL_PAGE);
     if ("skipped" in r) {
       blind.push(`the control page ${CONTROL_PAGE} was not read with ${what}: ${r.skipped}`);
       continue;

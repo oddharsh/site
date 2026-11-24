@@ -154,11 +154,11 @@ if (!cloning)
 const isolate = <T>(c: Control | null, fn: (root: string, env: Record<string, string>) => Promise<T>, w: number) =>
   cloning ? inClone(fn) : inPlace(trees[w], c, fn);
 
-async function pool<T, R>(items: T[], fn: (t: T, w: number) => Promise<R>): Promise<R[]> {
+async function pool<T, R>(items: T[], fn: (t: T, w: number) => Promise<R>, jobs = JOBS): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
-    Array.from({ length: Math.min(JOBS, items.length) }, async (_, w) => {
+    Array.from({ length: Math.min(jobs, items.length) }, async (_, w) => {
       while (next < items.length) {
         const i = next++;
         out[i] = await fn(items[i], w);
@@ -180,12 +180,16 @@ const t0 = performance.now();
 
 // 1. Baselines: every distinct check passes on the unplanted tree.
 const checks = [...new Map(selected.map((c) => [c.run.join(" "), c.run])).values()];
-const baselines = new Map(await pool(checks, async (argv, w) => [argv.join(" "), await isolate(null, (root, env) => exec(argv, root, env), w)] as const));
+// Each baseline may spawn its own parallel build or test workers. Keep these
+// measurements free of competing checks: the minifier oracle has a 500 ms VM
+// limit, and nav-pipes parity passed validate but failed both loaded CI runs.
+const baselines = new Map(await pool(checks, async (argv, w) => [argv.join(" "), await isolate(null, (root, env) => exec(argv, root, env), w)] as const, 1));
 let failed = 0;
 for (const [cmd, r] of baselines) {
   if (r.code === 0) continue;
   failed++;
-  console.log(`BASELINE RED  ${cmd} fails before anything is planted (exit ${r.code}), so its controls prove nothing\n${tail(r.out)}`);
+  // The last few lines of a test suite omit the assertion that failed.
+  console.log(`BASELINE RED  ${cmd} fails before anything is planted (exit ${r.code}), so its controls prove nothing\n${r.out}`);
 }
 
 // 2. Controls, each against a check whose baseline passed.

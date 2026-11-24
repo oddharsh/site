@@ -47,7 +47,7 @@
       link: link,
       tile: tile,
       alt: img.alt,
-      jpg: img.getAttribute("src") || img.dataset.src || "",
+      jpg: img.dataset.photoJpg || img.getAttribute("src") || img.dataset.src || "",
     };
   });
 
@@ -332,7 +332,7 @@
   // watches the page scroller, which a sideways strip never moves, so this one
   // watches the strip and fills tiles a strip's width ahead.
   function hydrate(scope: Element) {
-    for (var s of scope.querySelectorAll<HTMLSourceElement>("source[data-srcset]")) if (!s.srcset) s.srcset = s.dataset.srcset!;
+    for (var s of scope.querySelectorAll<HTMLImageElement>("img[data-srcset]")) if (!s.srcset && s.dataset.photoJpg) s.srcset = s.dataset.srcset!;
     var img = scope.querySelector<HTMLImageElement>("img[data-src]");
     if (img && !img.getAttribute("src")) img.src = img.dataset.src!;
   }

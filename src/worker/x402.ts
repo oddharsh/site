@@ -16,7 +16,7 @@
 //   X402_FACILITATOR  verify/settle service; defaults to x402.org's hosted
 //                     one (base-sepolia only — mainnet needs e.g. Coinbase's).
 import type { Env, SiteRequest } from "./lib/env.ts";
-import { servePrecompressedText } from "./lib/assets.ts";
+import { servePrecompressedAsset } from "./lib/assets.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { renderLlmsFull, WRITING_HEADING } from "./lib/llms-full.ts";
 import type { LlmsFullDoc } from "./lib/llms-full.ts";
@@ -142,7 +142,7 @@ async function facilitatorPost(url, body) {
 // artifact this site serves. Nothing joins "a file grew" to "a file has no
 // twin", so no check catches losing it.
 //
-// servePrecompressedText owns the `encodeBody: "manual"` rebuild (gotcha 13) and
+// servePrecompressedAsset owns the `encodeBody: "manual"` rebuild (gotcha 13) and
 // falls back to the plain asset when no twin was built. With no staged file at
 // all (`bun run dev` stages nothing derived) it 404s, and the writing half is
 // assembled live through the same renderer.
@@ -155,7 +155,7 @@ async function llmsFullResponse(request: SiteRequest, env: Env, url: URL, extraH
     "cache-control": "no-store",
     ...extraHeaders,
   };
-  const served = await servePrecompressedText(request, env, url, { headers });
+  const served = await servePrecompressedAsset(request, env, url, { headers });
   if (served.status !== 404) return served;
 
   const grab = async (path) => {

@@ -81,6 +81,22 @@ export type ClientAsset = {
 // contract-client-asset-registry proves a shuffled registry hashes to the same
 // bytes. Keeping the old order means hashOrder() reproduces it exactly.
 export const CLIENT_ASSETS: readonly ClientAsset[] = [
+  {
+    file: "home-music.css",
+    kind: "style",
+    scope: "page",
+    budget: { role: "homepage track list", gzipKiB: 1, brotliKiB: 0.75 },
+    load: [{ via: "attr", attr: "href" }],
+    loadedBy: ["public/index.html"],
+  },
+  {
+    file: "tooltip.css",
+    kind: "style",
+    scope: "shell",
+    budget: { role: "rich hover styles", gzipKiB: 1.5, brotliKiB: 1.25 },
+    load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }],
+    loadedBy: ["public/index.html"],
+  },
   // Three first-interaction sheets, each extracted byte-for-byte from luna.css
   // and loaded by nav.js beside its matching island.
   {

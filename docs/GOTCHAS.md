@@ -1306,3 +1306,20 @@ skips it.
     s with no answer rather than waiting forever. A worker that loads
     anything asynchronous sets its handler before it loads.
     Checked by: `tools/tests/contract-class-names-keep-page-edits-out-of-the-shell.test.ts`.
+116. **A readable twin keeps authored class names while its critical sheet
+    carries renamed selectors.** Deriving the twin's subset from its own
+    markup drops rules the served page keeps. CSS extraction exposed this on
+    2026-11-23 when `/lwe` first fit the non-blocking CSS budget: its served
+    document was 54,742 characters against a 54,610-character readable twin,
+    and the performance gate refused it. Match the served markup for both
+    derivations while preserving the twin's authored names. The served page
+    remains the source of truth for which critical rules apply.
+    Checked by: `tools/tests/contract-a-non-blocking-page-paints-from-a-subset-of-luna.test.ts`.
+117. **A control must supply the input its plant depends on.** Once `/search`
+    qualified for non-blocking CSS, holding its stylesheets no longer delayed
+    first paint, and the paint comparison correctly reported a blind control.
+    The control now serves a dedicated fixture with one blocking stylesheet;
+    real-page measurements still use their own markup. A serving control also
+    needs its own input: the WASM mutation previously passed without a build
+    because its only serving test skipped with the build-output test.
+    Checked by: `tools/paint-diff.ts`, `src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts`.

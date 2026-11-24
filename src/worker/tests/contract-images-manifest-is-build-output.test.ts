@@ -2,11 +2,11 @@
 import { ROOT, assert, readFile, test } from "../../../tools/tests/contract-shared.ts";
 import { existsSync } from "node:fs";
 import { brotliDecompressSync } from "node:zlib";
-import { servePrecompressedText } from "../lib/assets.ts";
+import { servePrecompressedAsset } from "../lib/assets.ts";
 import { IMAGES_MANIFEST_HEADERS, PHOTO_POOL, handleImagesManifest, imagesManifestJson } from "../photos.ts";
 
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
-const textTwinAt = (request: Request, env, opts?) => servePrecompressedText(request, env, new URL(request.url), opts);
+const textTwinAt = (request: Request, env, opts?) => servePrecompressedAsset(request, env, new URL(request.url), opts);
 
 // The manifest was rendered per request until 2026-09-26, so the edge compressed
 // it on the fly: 13,082 B on the wire against 9,803 at q11. Its only input is the
@@ -99,7 +99,7 @@ test("the route serves the twin and falls back to the handler", async () => {
   assert.match(src, /"\/images\/manifest\.json": routeImagesManifest,/, "the route's handler must be the twin-serving one, not the per-request handler");
   const body = (src.match(/async function routeImagesManifest\([^)]*\) \{([\s\S]*?)\n\}/) || [])[1];
   assert.ok(body, "routeImagesManifest is gone");
-  assert.match(body, /servePrecompressedText\(request, env, url, \{ headers: IMAGES_MANIFEST_HEADERS \}\)/);
+  assert.match(body, /servePrecompressedAsset\(request, env, url, \{ headers: IMAGES_MANIFEST_HEADERS \}\)/);
   assert.match(body, /status !== 404/);
   assert.match(body, /return handleImagesManifest\(\)/);
 });

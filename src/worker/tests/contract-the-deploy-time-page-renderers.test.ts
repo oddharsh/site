@@ -120,27 +120,26 @@ test("the contact sheets defer every tile past the first screen", async () => {
     const live = (tile) => tile.replace(/<noscript>[\s\S]*?<\/noscript>/g, "");
     tiles.forEach((tile, i) => {
       const where = `${path} tile ${i}`;
-      assert.ok(!live(tile).includes('loading="lazy"'), `${where}: loading="lazy" hands the fetch distance back to the browser`);
+      assert.ok(
+        live(tile).includes(i === 0 ? 'loading="eager"' : 'loading="lazy"'),
+        `${where}: automatic sizes use native lazy loading inside the explicit URL boundary`,
+      );
       if (i < EAGER) {
-        assert.ok(!tile.includes("data-defer"), `${where}: the first ${EAGER} tiles load with the page`);
-        assert.match(tile, /<source type="image\/avif" srcset="[^"]+">/, `${where}: an eager tile names its AVIF`);
+        assert.ok(!live(tile).includes("data-defer"), `${where}: initial tiles expose their URLs`);
+        assert.match(live(tile), /srcset="[^"]+ 400w/, `${where}: initial tiles negotiate an AVIF size`);
       } else {
-        assert.ok(live(tile).includes("<picture data-defer>"), `${where}: a tile past the first screen is deferred`);
+        assert.ok(live(tile).includes("data-defer"), `${where}: a tile past the first screen is deferred`);
         assert.ok(!/ (srcset|src)="/.test(live(tile).replace(/ (href)="[^"]*"/g, "")), `${where}: a deferred tile names no URL the browser would fetch`);
-        assert.match(
-          live(tile),
-          /<source type="image\/avif" data-srcset="[^"]+">/,
-          `${where}: the AVIF source is deferred too, or the browser fetches it anyway`,
-        );
-        assert.match(live(tile), /<img data-src="[^"]+"/, `${where}: the JPEG fallback is deferred`);
-        assert.match(
-          tile,
-          /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/,
-          `${where}: a reader without scripts still gets the photo`,
-        );
+        assert.match(live(tile), /data-srcset="[^"]+ 400w/, `${where}: every AVIF candidate is deferred`);
+        assert.match(live(tile), /data-src="[^"]+"/, `${where}: the default AVIF is deferred`);
       }
+      assert.match(
+        tile,
+        /<noscript><picture>\s*<source type="image\/avif" srcset="[^"]+">\s*<img src="[^"]+"/,
+        `${where}: a reader without scripts still gets AVIF/JPEG negotiation`,
+      );
     });
-    assert.equal(doc.split("picture[data-defer]{display:none}").length - 1, 1, `${path}: without scripts the empty deferred tile is hidden, once`);
+    assert.equal(doc.split("img[data-gallery]{display:none}").length - 1, 1, `${path}: without scripts the scripted tile is hidden, once`);
     assert.equal(doc.split('rootMargin:"25%"').length - 1, 1, `${path}: one swap script, at the measured 25% margin`);
   }
 });

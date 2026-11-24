@@ -660,6 +660,9 @@ footer .signature small { color: var(--ink-faint); }
 <link rel="stylesheet" href="/luna.css" media="print" id="luna-css">
 <script>(function(){var l=document.getElementById("luna-css");function f(){l.media="all"}l.sheet?f():l.addEventListener("load",f,{once:true})})();</script>
 <noscript><link rel="stylesheet" href="/luna.css"></noscript>
+<link rel="stylesheet" href="/home-music.css" media="print" id="music-css">
+<script>(function(){var l=document.getElementById("music-css");function f(){l.media="all"}l.sheet?f():l.addEventListener("load",f,{once:true})})();</script>
+<noscript><link rel="stylesheet" href="/home-music.css"></noscript>
 </head>
 <body>
 <!-- axp:desktop --><a class="axp-skip" href="#main">Skip to content</a><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
@@ -1223,11 +1226,21 @@ footer .signature small { color: var(--ink-faint); }
         // whole reason this loader is gated. The result is unused on purpose,
         // since the import cache is what tooltip.js's own import hits.
         import("/hoist.js").catch(() => {});
-        modulePromise = import("/tooltip.js").then((mod) => {
+        const sheet = document.createElement("link");
+        sheet.rel = "stylesheet";
+        sheet.href = "/tooltip.css";
+        const styles = new Promise((resolve, reject) => {
+          sheet.onload = resolve;
+          sheet.onerror = () => reject(new Error("Tooltip styles failed"));
+        });
+        document.head.appendChild(sheet);
+        modulePromise = Promise.all([styles, import("/tooltip.js")]).then((loaded) => {
+          const mod = loaded[1];
           mod.start(pending);
           pending = null;
           return mod;
         }).catch(() => {
+          sheet.remove();
           modulePromise = null;
           pending = null;
           return null;
