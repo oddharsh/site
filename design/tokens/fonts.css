@@ -59,3 +59,11 @@
   font-style: normal;
   font-display: swap;
 }
+
+@font-face {
+  font-family: "Menlo";
+  src: local("Menlo"), local("Menlo-Regular");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
