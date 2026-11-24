@@ -61,6 +61,7 @@ import { fileURLToPath } from "node:url";
 
 import { suiteCounts, suiteCountsText } from "./lib/bun-gates.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
+import { outputTail } from "./lib/output-tail.ts";
 import { HARNESS_TEST_FLOOR, harnessTests, testArgv } from "./lib/harness-tests.ts";
 import { WRANGLER_WATCHES, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import type { WatchResult } from "./lib/upstream-watches.ts";
@@ -126,8 +127,6 @@ const emit = (verdict: Report["verdict"], subject: Subject, reason?: string) => 
 };
 
 const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) => spawnSync(cmd, args, { encoding: "utf8", ...opts });
-const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 4) =>
-  `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines);
 
 // Under bun this IS bun, which is the one installer that may write the
 // worktree's lockfile: the tree is bun's and a manager that is not bun would
@@ -162,6 +161,11 @@ const cleanup = () => {
   rmSync(scratch, { recursive: true, force: true });
   removed = true;
 };
+// Every red and instrument verdict below ends in process.exit(), which skips
+// the `finally`; before this hook each one left a registered git worktree and
+// a full install behind (two found on 2026-11-24). cleanup is synchronous, as
+// an exit handler must be.
+process.on("exit", cleanup);
 
 try {
   // ------------------------------------------------------------------------
@@ -169,14 +173,14 @@ try {
   // ------------------------------------------------------------------------
   const add = run("git", ["worktree", "add", "--detach", wt, "HEAD"], { cwd: ROOT });
   if (add.status !== 0) {
-    console.error(`git worktree add failed: ${tail(add).join(" ")}`);
+    console.error(`git worktree add failed: ${outputTail(add, 4)}`);
     emit("instrument", bare, "could not create the worktree");
     process.exit(2);
   }
 
   const install = run(BUN, ["install", "--frozen-lockfile"], { cwd: wt });
   if (install.status !== 0) {
-    console.error(`bun install failed in the worktree: ${tail(install).join(" ")}`);
+    console.error(`bun install failed in the worktree: ${outputTail(install, 4)}`);
     emit("instrument", bare, "frozen install failed in a clean checkout of HEAD, which is this tree's problem rather than wrangler's");
     process.exit(2);
   }
@@ -188,7 +192,7 @@ try {
   writeFileSync(manifest, next);
   const added = run(BUN, ["install"], { cwd: wt });
   if (added.status !== 0) {
-    console.error(`bun install with ${url} failed: ${tail(added).join(" ")}`);
+    console.error(`bun install with ${url} failed: ${outputTail(added, 4)}`);
     emit("instrument", bare, `pkg.pr.new did not serve wrangler@${ref}`);
     process.exit(2);
   }
@@ -216,7 +220,7 @@ try {
       name: "deploy --dry-run bundles",
       ok,
       hard: true,
-      detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : tail(out).join(" "),
+      detail: ok ? `index.js ${statSync(join(candidateOut, "index.js")).size} B` : outputTail(out, 4),
     });
     if (!ok) {
       emit("red", subject);
@@ -227,7 +231,7 @@ try {
     const [cmd, args] = wranglerCommand(await siteWranglerArgs(["deploy", "--dry-run", "--outdir", pinnedOut]));
     const out = run(cmd, args, { cwd: ROOT, timeout: 10 * 60_000 });
     if (out.status !== 0 || !existsSync(join(pinnedOut, "index.js"))) {
-      console.error(`the PINNED dry-run failed: ${tail(out).join(" ")}`);
+      console.error(`the PINNED dry-run failed: ${outputTail(out, 4)}`);
       emit("instrument", subject, "the pinned wrangler could not bundle this tree, so there is no baseline");
       process.exit(2);
     }
@@ -350,12 +354,12 @@ try {
       "workerd-honours-zstd-dictionary": (tree) => {
         const out = run(NODE, ["tools/workerd-zstd-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
         const read = interpretZstdProbe(out.stdout);
-        return read.parsed ? { landed: read.honoured, detail: read.detail } : { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` };
+        return read.parsed ? { landed: read.honoured, detail: read.detail } : { landed: null, detail: `did not run: ${outputTail(out, 1).slice(0, 120)}` };
       },
       "workerd-exposes-temporal": (tree) => {
         const out = run(NODE, ["tools/workerd-temporal-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
         const read = interpretTemporalProbe(out.stdout);
-        return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
+        return read.landed === null ? { landed: null, detail: `did not run: ${outputTail(out, 1).slice(0, 120)}` } : read;
       },
     };
     const [pinnedCmd, pinnedArgs] = wranglerCommand([]);

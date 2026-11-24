@@ -27,13 +27,11 @@ import { dirname, join, relative } from "node:path";
 
 import { ZSTD_DICTIONARY_PROBE, interpretZstdProbe } from "./bun-pin.ts";
 import { parseJsonc } from "./jsonc.ts";
+import { outputTail } from "./output-tail.ts";
 
 export type Gate = { name: string; ok: boolean; detail: string; notes?: string[] };
 
 const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) => spawnSync(cmd, args, { encoding: "utf8", ...opts });
-
-const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 2) =>
-  `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines).join(" ");
 
 /**
  * Fetch a bun binary into `work` and return its path. Two shapes: a GitHub
@@ -104,7 +102,7 @@ export function zstdGate(exe: string): Gate {
 export function lockfileReadGate(exe: string, root: string): Gate {
   const out = run(exe, ["install", "--frozen-lockfile", "--dry-run"], { cwd: root });
   const ok = out.status === 0;
-  return { name: "reads the committed bun.lock", ok, detail: ok ? "frozen install resolves" : tail(out) };
+  return { name: "reads the committed bun.lock", ok, detail: ok ? "frozen install resolves" : outputTail(out, 2) };
 }
 
 // WRITE. A mirror of the manifests alone, resolved by each runtime back to
@@ -216,7 +214,7 @@ export function byteIdenticalBuildGate(candidate: string, pinned: string, root: 
     const out = run(exe, ["tools/build.ts"], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
     const ms = Number(process.hrtime.bigint() - started) / 1e6;
     if (out.status !== 0) {
-      throw new Error(`${label} build failed (exit ${out.status}):\n${tail(out, 6)}`);
+      throw new Error(`${label} build failed (exit ${out.status}):\n${outputTail(out, 6)}`);
     }
     return ms;
   };
@@ -442,7 +440,7 @@ export function checkerAgreementGate(candidate: string, pinned: string, tsc: str
   for (const config of programs) {
     const ref = run(tsc, ["-p", config, "--noEmit", "--pretty", "false"], opts);
     if (ref.error || ref.status === null || ref.status > 1)
-      throw new Error(`tsc ${TSC_REFERENCE} could not check ${config} (exit ${ref.status}): ${tail(ref, 4)}`);
+      throw new Error(`tsc ${TSC_REFERENCE} could not check ${config} (exit ${ref.status}): ${outputTail(ref, 4)}`);
     const reference = diagnosticBlocks(ref.stdout);
     total += reference.length;
     const cand = bunCheck(candidate, config);
@@ -456,7 +454,7 @@ export function checkerAgreementGate(candidate: string, pinned: string, tsc: str
     );
     for (const b of d.onlyReference.slice(0, 3)) notes.push(`  - tsc: ${b.split("\n")[0]}`);
     for (const b of d.onlyCandidate.slice(0, 3)) notes.push(`  + bun: ${b.split("\n")[0]}`);
-    if (cand.status !== 0 && cand.status !== 1) notes.push(`  ${tail(cand, 2)}`);
+    if (cand.status !== 0 && cand.status !== 1) notes.push(`  ${outputTail(cand, 2)}`);
   }
   return {
     name: `bun check agrees with tsc ${TSC_REFERENCE}`,
