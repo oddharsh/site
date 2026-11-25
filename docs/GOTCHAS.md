@@ -1333,3 +1333,13 @@ skips it.
     tail for both canaries: stderr's last visible lines, stdout only when
     stderr is empty.
     Checked by: `tools/tests/contract-a-failed-gate-reports-the-error-not-the-banner.test.ts`.
+120. **A dictionary delta needs the full advertised digest, including on a cache miss.**
+    Delta filenames once used only the first 16 hex digits of the SHA-256. Two
+    request headers can share those digits while naming different dictionaries,
+    so the second request selected a frame its browser could not decode. Delta
+    names now use all 64 digits; committed page snapshot names stay at 16. A
+    Brotli fallback also varies on `Available-Dictionary`, and a fallback for
+    an advertised hash sends `CDN-Cache-Control: no-store` so arbitrary hashes
+    do not each store a duplicate response at the edge. Browser cache policy
+    stays unchanged. Empty or already-encoded asset-layer deltas fall back too.
+    Checked by: `src/worker/lib/tests/contract-dictionary-names-agree-between-build-and-worker.test.ts`, `src/worker/lib/tests/contract-dictionary-fallbacks-keep-caches-safe.test.ts`.

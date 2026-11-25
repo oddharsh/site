@@ -22,12 +22,12 @@ import { handleSerendipity } from "../../../serendipity/serendipity.ts";
 // The Worker entry parses a request's URL once and hands it down; these stand in for it.
 const staticPageAt = (request: Request, env, opts?) => serveStaticPage(request, env, new URL(request.url), opts);
 
-test("Available-Dictionary selects the delta named by the digest's first 8 bytes, in hex", async () => {
+test("Available-Dictionary selects the delta named by the digest's full 32 bytes, in hex", async () => {
   // 0x07 needs its leading zero and 0xb8 is past 0x7f: the two places a hand-rolled
   // hex encoder goes wrong. An all-0x01 digest, which the older negotiation test
   // uses, hexes the same under either mistake.
   const digest = Uint8Array.from({ length: 32 }, (_, i) => (i * 0x3b + 0x07) & 0xff);
-  const tag = Buffer.from(digest).subarray(0, 8).toString("hex");
+  const tag = Buffer.from(digest).toString("hex");
   const requested: any[] = [];
   const env = {
     ASSETS: {

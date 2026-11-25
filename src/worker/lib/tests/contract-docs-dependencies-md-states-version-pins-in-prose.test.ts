@@ -457,7 +457,7 @@ test("HEAD advertises the same representation its GET would serve", async () => 
 
 test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
   const digest = Buffer.alloc(32, 1);
-  const tag = digest.toString("hex").slice(0, 16);
+  const tag = digest.toString("hex");
   const available = `:${digest.toString("base64")}:`;
   const makeEnv = (cacheControl) => ({
     ASSETS: {

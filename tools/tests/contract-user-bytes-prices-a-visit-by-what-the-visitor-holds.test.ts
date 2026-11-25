@@ -44,7 +44,7 @@ test("user-bytes: a dcz offer with Available-Dictionary is a returning Chromium 
   assert.deepEqual(classifyRequest(row({ ae: "gzip, deflate, br, dcb, dcz", dict: HELD }), "strict"), {
     kind: "person",
     chromium: true,
-    tag: "0001020304050607",
+    tag: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
     warm: true,
   });
   // The same header without dcz in the client's Accept-Encoding holds nothing usable.
@@ -113,7 +113,7 @@ test("user-bytes: one byte past the initial window costs one more round trip", (
 
 // ── trees ────────────────────────────────────────────────────────────────────
 
-const sha16 = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const LUNA = "p{color:red}";
 const NAV_A = "console.log('a')";
 const NAV_B = "console.log('b')";
@@ -143,7 +143,7 @@ const A = tree({
   "a/nav.aaaaaaaa.css": "nav{}",
   "a/page-family.cccccccc.dict": FAMILY_A,
   "a/page-family.cccccccc.dict.br": 500,
-  [`pd/index.${sha16(FAMILY_A)}.dcz`]: 100,
+  [`pd/index.${sha256(FAMILY_A)}.dcz`]: 100,
 });
 const B = tree({
   "index.html": PAGE.replace("NAV", "nav.dddddddd.js"),
@@ -152,10 +152,10 @@ const B = tree({
   "a/luna.aaaaaaaa.css.br": 300,
   "a/nav.dddddddd.js": NAV_B,
   "a/nav.dddddddd.js.br": 210,
-  [`ad/nav.dddddddd.${sha16(NAV_A)}.dcz`]: 40,
+  [`ad/nav.dddddddd.${sha256(NAV_A)}.dcz`]: 40,
   "a/page-family.cccccccc.dict": FAMILY_A,
   "a/page-family.cccccccc.dict.br": 500,
-  [`pd/index.${sha16(FAMILY_A)}.dcz`]: 95,
+  [`pd/index.${sha256(FAMILY_A)}.dcz`]: 95,
 });
 const C = tree({
   "index.html": PAGE.replace("NAV", "nav.dddddddd.js"),
@@ -166,7 +166,7 @@ const C = tree({
   "a/nav.dddddddd.js.br": 210,
   "a/page-family.eeeeeeee.dict": FAMILY_C,
   "a/page-family.eeeeeeee.dict.br": 520,
-  [`pd/index.${sha16(FAMILY_C)}.dcz`]: 90,
+  [`pd/index.${sha256(FAMILY_C)}.dcz`]: 90,
 });
 const a = readTree(A, ["/", "/serendipity/event/x"]);
 const b = readTree(B, ["/"]);
@@ -181,6 +181,17 @@ test("user-bytes: a cold Chromium visit pays brotli for every file plus the fami
 
 test("user-bytes: a settled dictionary holder pays the family delta and nothing else", () => {
   assert.deepEqual(priceVisit(holder, a), { html: 100, blocking: 0, deferred: 0, dictionary: 0 });
+});
+
+test("user-bytes: older build snapshots still price their short-named deltas", () => {
+  const legacy = tree({
+    "index.html": "<html><head></head><body>hi",
+    "index.html.br": 1000,
+    "a/page-family.cccccccc.dict": FAMILY_A,
+    "a/page-family.cccccccc.dict.br": 500,
+    [`pd/index.${sha256(FAMILY_A).slice(0, 16)}.dcz`]: 100,
+  });
+  assert.equal(priceVisit(holder, readTree(legacy, ["/"]))?.html, 100);
 });
 
 test("user-bytes: the first visit after a re-mint takes the shell delta against the file the visitor holds", () => {

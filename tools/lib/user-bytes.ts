@@ -220,7 +220,7 @@ export type Asset = {
    *  the key that finds this file's predecessor in another tree. The
    *  extension is part of it, since nav-run.js and nav-run.css are two files. */
   lineage: string | null;
-  /** First 16 hex of SHA-256 over the asset's bytes: the tag a browser holding
+  /** SHA-256 over the asset's bytes: the tag a browser holding
    *  it sends back, and so the key of another build's delta against it. */
   tag: string;
   brBytes: number;
@@ -235,7 +235,7 @@ export type Tree = {
 };
 
 const sizeOf = (path: string): number | null => (existsSync(path) ? statSync(path).size : null);
-const sha16 = (bytes: Uint8Array): string => tagOfDigest(new Uint8Array(createHash("sha256").update(bytes).digest()));
+const sha256 = (bytes: Uint8Array): string => tagOfDigest(new Uint8Array(createHash("sha256").update(bytes).digest()));
 
 /** The route's static file, with the same two candidates serveStaticPage
  *  tries (lib/dictionary-names.ts, pageDeltaPaths). null for a route the
@@ -326,7 +326,7 @@ export function readTree(root: string, paths: Iterable<string>): Tree {
     const bytes = readFileSync(join(assetDir, name));
     const brBytes = sizeOf(join(assetDir, `${name}.br`)) ?? bytes.length;
     if (parseFamilyDictionary(name)) {
-      family = { tag: sha16(bytes), brBytes, url: `/a/${name}` };
+      family = { tag: sha256(bytes), brBytes, url: `/a/${name}` };
       continue;
     }
     const shell = parseShellAsset(name);
@@ -338,7 +338,7 @@ export function readTree(root: string, paths: Iterable<string>): Tree {
         deltas.set(file.slice(prefix.length, -".dcz".length), statSync(join(deltaDir, file)).size);
       }
     }
-    assets.set(name, { name, lineage: shell ? `${shell.base}.${shell.ext}` : null, tag: sha16(bytes), brBytes, deltas });
+    assets.set(name, { name, lineage: shell ? `${shell.base}.${shell.ext}` : null, tag: sha256(bytes), brBytes, deltas });
   }
   const pages = new Map<string, Page>();
   for (const path of paths) {
@@ -361,7 +361,7 @@ function pageDeltas(root: string, rel: string): Map<string, number> {
     for (const prefix of prefixes) {
       if (!file.startsWith(prefix) || !file.endsWith(".dcz")) continue;
       const tag = file.slice(prefix.length, -".dcz".length);
-      if (/^[0-9a-f]{16}$/.test(tag)) deltas.set(tag, statSync(join(dir, file)).size);
+      if (/^(?:[0-9a-f]{16}|[0-9a-f]{64})$/.test(tag)) deltas.set(tag, statSync(join(dir, file)).size);
     }
   }
   return deltas;
@@ -421,6 +421,9 @@ export function criticalMs(htmlBytes: number, blockingBytes: number, link: Link)
 export type Cost = { html: number; blocking: number; deferred: number; dictionary: number };
 export const total = (c: Cost): number => c.html + c.blocking + c.deferred + c.dictionary;
 
+// Older build snapshots use 16 hex digits in their artifact names.
+const deltaFor = (deltas: Map<string, number>, tag: string) => deltas.get(tag) ?? deltas.get(tag.slice(0, 16));
+
 /**
  * Steady state on `tree`: everyone who has been here holds this tree's
  * family dictionary and /a/ files. A returning Chromium visitor gets the
@@ -438,7 +441,7 @@ export function priceVisit(v: Views, tree: Tree, before?: Tree): Cost | null {
   if (!page) return null;
   const held = before ?? tree;
   const heldTag = v.tag !== null ? (held.family?.tag ?? null) : null;
-  const html = heldTag !== null && page.deltas.has(heldTag) ? page.deltas.get(heldTag)! : page.brBytes;
+  const html = heldTag !== null ? (deltaFor(page.deltas, heldTag) ?? page.brBytes) : page.brBytes;
   const cost: Cost = { html, blocking: 0, deferred: 0, dictionary: 0 };
   const heldPage = held.pages.get(v.path);
   const heldUrls = new Set((heldPage ?? page).loads.map((l) => l.url));
@@ -454,7 +457,7 @@ export function priceVisit(v: Views, tree: Tree, before?: Tree): Cost | null {
       if (heldAssets.has(name) && (v.tag !== null || heldUrls.has(load.url))) bytes = 0;
       else if (v.chromium && v.tag !== null && asset.lineage) {
         const previous = [...heldAssets.values()].find((a) => a.lineage === asset.lineage);
-        const delta = previous ? asset.deltas.get(previous.tag) : undefined;
+        const delta = previous ? deltaFor(asset.deltas, previous.tag) : undefined;
         if (delta !== undefined) bytes = delta;
       }
     }
