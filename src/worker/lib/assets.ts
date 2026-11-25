@@ -312,6 +312,23 @@ const variantEtag = (etag, suffix) => {
 // module the build names those files with.
 const dictionaryTag = (request) => tagFromAvailableDictionary(request.headers.get("available-dictionary"));
 
+// A miss must vary just like a hit, but caching one Brotli copy for each
+// unrecognized hash lets arbitrary hashes fill the edge cache. Keep the browser
+// policy while forbidding shared caches from storing those fallback variants.
+function dictionaryFallback(headers: Headers, request: Request) {
+  if (
+    !headers
+      .get("vary")
+      ?.split(",")
+      .some((name) => name.trim().toLowerCase() === "available-dictionary")
+  )
+    headers.append("vary", "available-dictionary");
+  if (request.headers.has("available-dictionary")) headers.set("cdn-cache-control", "no-store");
+}
+
+const usableDictionaryDelta = (response: Response) =>
+  response.ok && response.body !== null && response.headers.get("content-length") !== "0" && !response.headers.has("content-encoding");
+
 // serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
 // says it holds, or null to let the caller fall through.
 async function serveDictionaryDelta(url, ext, request, env) {
@@ -331,7 +348,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   } catch {
     return null;
   }
-  if (!res.ok) {
+  if (!usableDictionaryDelta(res)) {
     try {
       await res.body?.cancel();
     } catch {}
@@ -406,6 +423,15 @@ export async function servePrecompressedShell(request, env, url: URL) {
   // DICTIONARY_TYPES gates this: the family dictionary (.dict) sits it out, since it is
   // the dictionary rather than something a dictionary compresses.
   const onDictionaryPath = Boolean(DICTIONARY_TYPES[ext]);
+  const plainShell = async () => {
+    const response = await serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    if (!onDictionaryPath) return response;
+    const headers = new Headers(response.headers);
+    dictionaryFallback(headers, request);
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers };
+    if (response.headers.has("content-encoding")) init.encodeBody = "manual";
+    return new Response(response.body, init);
+  };
   if (onDictionaryPath) {
     const delta = await serveDictionaryDelta(url, ext, request, env);
     if (delta) return delta;
@@ -424,14 +450,14 @@ export async function servePrecompressedShell(request, env, url: URL) {
     });
     br = await env.ASSETS.fetch(sub);
   } catch {
-    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    return plainShell();
   }
 
   if (!br.ok || br.headers.get("content-encoding")) {
     try {
       await br.body?.cancel();
     } catch {}
-    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    return plainShell();
   }
 
   // Carry the asset layer's headers (so the _headers `/a/*` immutable rule still
@@ -466,6 +492,7 @@ export async function servePrecompressedShell(request, env, url: URL) {
   // on the request, and a shared cache must not serve one to a client that asked for
   // the other.
   headers.append("vary", "accept-encoding");
+  if (onDictionaryPath) dictionaryFallback(headers, request);
   // The asset layer's ETag describes the .br file. Two encodings of one resource
   // must not share a strong validator, so weaken it and mark the encoding.
   const etag = headers.get("etag");
@@ -720,7 +747,7 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
             headers: { "accept-encoding": "identity" },
           }),
         );
-        if (d.ok) {
+        if (usableDictionaryDelta(d)) {
           const h = new Headers(d.headers);
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
@@ -785,6 +812,7 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
   // is a compression of the very asset `plain` returns, so the document is the
   // same one, and the two lookups it avoids are pure cost on this path.
   const [br, delta] = env.IDENTITY_BODY ? [null, null] : await Promise.all([findBrotli(), findDelta()]);
+  if (br && !delta) dictionaryFallback(br.headers, request);
   if (br) {
     const fresh = notModifiedIfFresh(request, br);
     if (fresh.status === 304) {
@@ -826,5 +854,6 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
     },
   });
   plain.headers.delete("use-as-dictionary");
+  if (!env.IDENTITY_BODY) dictionaryFallback(plain.headers, request);
   return notModifiedIfFresh(request, plain);
 }

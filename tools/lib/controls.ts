@@ -95,6 +95,45 @@ const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.js
 
 export const CONTROLS: Control[] = [
   {
+    id: "dictionary-shell-fallback-encoding",
+    plants: "the shell identity fallback double-encodes an already compressed response",
+    mutations: [{ file: "src/worker/lib/assets.ts", find: 'if (response.headers.has("content-encoding")) init.encodeBody = "manual";', replace: "" }],
+    run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
+    expect: /shell identity fallback double-encoded an already compressed response/,
+  },
+  {
+    id: "dictionary-full-digest",
+    plants: "two dictionary hashes with the same prefix select the same delta",
+    gotcha: 120,
+    mutations: [{ file: "src/worker/lib/dictionary-names.ts", find: "export const TAG_HEX = 64;", replace: "export const TAG_HEX = 16;" }],
+    run: contract("contract-dictionary-names-agree-between-build-and-worker"),
+    expect: /different full digests must not select the same delta/,
+  },
+  {
+    id: "dictionary-fallback-cache",
+    plants: "an unknown dictionary fallback can fill the CDN cache with duplicate variants",
+    gotcha: 120,
+    mutations: [
+      { file: "src/worker/lib/assets.ts", find: 'headers.set("cdn-cache-control", "no-store")', replace: 'headers.set("cdn-cache-control", "public")' },
+    ],
+    run: contract("contract-dictionary-fallbacks-keep-caches-safe"),
+    expect: /unknown dictionary must not create a CDN cache variant/,
+  },
+  {
+    id: "dictionary-empty-delta",
+    plants: "an empty delta response is labeled dcz",
+    gotcha: 120,
+    mutations: [
+      {
+        file: "src/worker/lib/assets.ts",
+        find: 'response.ok && response.body !== null && response.headers.get("content-length") !== "0" && !response.headers.has("content-encoding")',
+        replace: 'response.ok && !response.headers.has("content-encoding")',
+      },
+    ],
+    run: contract("contract-dictionary-fallbacks-keep-caches-safe"),
+    expect: /empty delta must fall back/,
+  },
+  {
     id: "readable-twin-critical-classes",
     plants: "critical CSS for a readable twin matches authored classes against renamed selectors",
     gotcha: 116,

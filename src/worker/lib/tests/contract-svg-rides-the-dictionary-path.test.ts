@@ -12,7 +12,7 @@ import { assert, test } from "../../../../tools/tests/contract-shared.ts";
 
 const SPRITE = "/a/icons.0123abcd.svg";
 const DICT = Buffer.from("<svg>the sprite this browser already holds</svg>");
-const TAG = createHash("sha256").update(DICT).digest().subarray(0, 8).toString("hex");
+const TAG = createHash("sha256").update(DICT).digest().toString("hex");
 const AVAILABLE = `:${createHash("sha256").update(DICT).digest("base64")}:`;
 
 // A fake ASSETS binding holding the sprite, its q11 twin, and one delta against DICT.

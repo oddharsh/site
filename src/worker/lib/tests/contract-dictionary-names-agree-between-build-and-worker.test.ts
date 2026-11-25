@@ -43,6 +43,19 @@ const available = (dict) => `:${sha(dict).toString("base64")}:`;
 const relOf = (route) => (route === "/" ? "index" : route.replace(/^\/+/, "").replace(/\/+$/, ""));
 
 const DICT = Buffer.from("the bytes a returning browser already holds");
+
+// Gotcha 120: an abbreviated digest can select a frame for another dictionary.
+test("dictionary lookups distinguish hashes with the same 64-bit prefix", () => {
+  const first = sha(DICT);
+  const second = Buffer.from(first);
+  second[31] ^= 1;
+  const header = (digest: Buffer) => `:${digest.toString("base64")}:`;
+  assert.notEqual(
+    tagFromAvailableDictionary(header(first)),
+    tagFromAvailableDictionary(header(second)),
+    "different full digests must not select the same delta",
+  );
+});
 // [staged asset path, the route html_handling serves it at]
 const PAGES = [
   ["index.html", "/"],
@@ -100,8 +113,8 @@ test("a shell delta is found at the name the build wrote it under", () => {
 
 test("the tag the build writes is the tag the Worker derives from Available-Dictionary", () => {
   const tag = dictionaryTag(DICT);
-  assert.match(tag, /^[0-9a-f]{16}$/);
-  assert.equal(tag, sha(DICT).toString("hex").slice(0, 16));
+  assert.match(tag, /^[0-9a-f]{64}$/);
+  assert.equal(tag, sha(DICT).toString("hex"));
   assert.equal(tagOfDigest(sha(DICT)), tag);
   assert.equal(tagFromAvailableDictionary(available(DICT)), tag);
   assert.equal(tagFromAvailableDictionary(`  ${available(DICT)} `), tag);
@@ -131,7 +144,7 @@ test("every name family parses back to what formatted it", () => {
     assert.equal(pageSlug(page.replace(/\.html$/, "")), slug, "an extensionless stem folds the same way");
     assert.deepEqual(parsePageDelta(pageDeltaName(slug, tag)), { slug, tag });
     const snapshot = pageSnapshotName(slug, tag);
-    assert.deepEqual(parsePageSnapshot(snapshot), { slug, tag, name: snapshot });
+    assert.deepEqual(parsePageSnapshot(snapshot), { slug, tag: tag.slice(0, 16), name: snapshot });
   }
   assert.equal(pageSlug("garage/index.html"), "garage__index");
   assert.equal(parsePageDelta("garage__index.0123.dcz"), null);
