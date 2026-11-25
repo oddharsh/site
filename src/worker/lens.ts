@@ -1046,6 +1046,16 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
   // them; #lx-vs holds the head-to-head fragment in their place.
   const vsActive = !!(compare && compare.vsValue);
   const vsValue = (compare && compare.vsValue) || "";
+  const examples = [
+    ["aadhar.sh", "https://aadhar.sh/"],
+    ["a hand-built blog", "https://daringfireball.net/"],
+    ["a modern marketing site", "https://stripe.com/"],
+    ["a Wikipedia article", "https://en.wikipedia.org/wiki/Semantic_Web"],
+    ["a publisher with AI terms", "https://www.nytimes.com/"],
+    ["a bot paywall (x402)", "https://aadhar.sh/llms-full.txt"],
+    ["the bare minimum", "https://example.com/"],
+  ];
+  const compareExamples = ["https://stripe.com/", "https://aadhar.sh/"];
   // Delta is the one stateful view (it holds flipped switches), so its segment
   // carries an amber count of the switches currently on. The client keeps the
   // same span current via updateDeltaCount().
@@ -1158,6 +1168,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    number was already a pixel off WCAG 2.5.8's 24px floor and these were four
    under it. Rounding up to 24 is closer to Luna than what was here. */
 .lx-chip { font-size:var(--text-xs); padding:4px 9px; color:var(--ink); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
+.lx-chips a.lx-chip { display:inline-block; text-decoration:none; }
 @media (hover: hover) and (pointer: fine) {.lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }}
 .lx-chip:active { border-color:var(--ink-quiet) #fff #fff var(--ink-quiet); }
 /* the interaction chip row, sunk so it reads as a control strip rather than
@@ -1745,14 +1756,8 @@ footer a { color:var(--link); }
     </div>
     <div class="lx-chips">
       <span class="lx-chips-label">Try:</span>
-      <button class="lx-chip" data-url="https://aadhar.sh/">aadhar.sh</button>
-      <button class="lx-chip" data-url="https://daringfireball.net/">a hand-built blog</button>
-      <button class="lx-chip" data-url="https://stripe.com/">a modern marketing site</button>
-      <button class="lx-chip" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</button>
-      <button class="lx-chip" data-url="https://www.nytimes.com/">a publisher with AI terms</button>
-      <button class="lx-chip" data-url="https://aadhar.sh/llms-full.txt">a bot paywall (x402)</button>
-      <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
-      <button class="lx-chip" data-vs-pair="https://stripe.com/|https://aadhar.sh/">stripe.com vs aadhar.sh</button>
+      ${examples.map(([label, target]) => `<a class="lx-chip" data-url="${esc(target)}" href="/lens?${esc(new URLSearchParams({ url: target }).toString())}">${esc(label)}</a>`).join("")}
+      <a class="lx-chip" data-vs-pair="${esc(compareExamples.join("|"))}" href="/lens?${esc(new URLSearchParams({ url: compareExamples[0], vs: compareExamples[1] }).toString())}">stripe.com vs aadhar.sh</a>
     </div>
 
     <div class="lx-toolbar is-${state.view}${vsActive ? " lx-off" : ""}" id="lx-toolbar">

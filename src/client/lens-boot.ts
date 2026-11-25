@@ -66,7 +66,7 @@
   }
 
   function control(event) {
-    return event.target && event.target.closest && event.target.closest("button,input,select,textarea");
+    return event.target && event.target.closest && event.target.closest("button,input,select,textarea,a[data-url],a[data-vs-pair]");
   }
 
   function warm(event) {
@@ -74,8 +74,9 @@
   }
 
   function click(event) {
-    var button = event.target && event.target.closest && event.target.closest("button");
+    var button = event.target && event.target.closest && event.target.closest("button,a[data-url],a[data-vs-pair]");
     if (!button || ready || replaying) return;
+    if (button.tagName === "A" && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     var replay = () => {
