@@ -95,6 +95,15 @@ const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.js
 
 export const CONTROLS: Control[] = [
   {
+    id: "lens-examples-without-script",
+    plants: "Lens example controls stop being links without JavaScript",
+    mutations: [
+      { file: "src/worker/lens.ts", find: '<a class="lx-chip" data-url="${esc(target)}"', replace: '<button class="lx-chip" data-url="${esc(target)}"' },
+    ],
+    run: contract("contract-lens-examples-are-real-links"),
+    expect: /all eight Lens examples must be links with scan URLs/,
+  },
+  {
     id: "dictionary-shell-fallback-encoding",
     plants: "the shell identity fallback double-encodes an already compressed response",
     mutations: [{ file: "src/worker/lib/assets.ts", find: 'if (response.headers.has("content-encoding")) init.encodeBody = "manual";', replace: "" }],

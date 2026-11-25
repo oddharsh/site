@@ -3690,13 +3690,18 @@
     else run(urlInput.value);
   });
   [].forEach.call(document.querySelectorAll(".lx-chip"), (c) => {
-    c.addEventListener("click", () => {
+    c.addEventListener("click", (event: MouseEvent) => {
+      if (c.tagName === "A" && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
       var pair = c.getAttribute("data-vs-pair");
       if (pair && pair.indexOf("|") > 0) {
+        event.preventDefault();
         runVs(pair.split("|")[0], pair.split("|")[1]);
         return;
       }
-      if (c.getAttribute("data-url")) run(c.getAttribute("data-url"));
+      if (c.getAttribute("data-url")) {
+        event.preventDefault();
+        run(c.getAttribute("data-url"));
+      }
     });
   });
   if (vsToggle)
