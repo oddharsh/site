@@ -428,7 +428,9 @@ export async function servePrecompressedShell(request, env, url: URL) {
     if (!onDictionaryPath) return response;
     const headers = new Headers(response.headers);
     dictionaryFallback(headers, request);
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers, encodeBody: response.encodeBody });
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers };
+    if (response.headers.has("content-encoding")) init.encodeBody = "manual";
+    return new Response(response.body, init);
   };
   if (onDictionaryPath) {
     const delta = await serveDictionaryDelta(url, ext, request, env);

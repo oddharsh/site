@@ -95,6 +95,13 @@ const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.js
 
 export const CONTROLS: Control[] = [
   {
+    id: "dictionary-shell-fallback-encoding",
+    plants: "the shell identity fallback double-encodes an already compressed response",
+    mutations: [{ file: "src/worker/lib/assets.ts", find: 'if (response.headers.has("content-encoding")) init.encodeBody = "manual";', replace: "" }],
+    run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
+    expect: /shell identity fallback double-encoded an already compressed response/,
+  },
+  {
     id: "dictionary-full-digest",
     plants: "two dictionary hashes with the same prefix select the same delta",
     gotcha: 120,
