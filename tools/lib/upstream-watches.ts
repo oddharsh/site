@@ -202,6 +202,31 @@ export const BUN_WATCHES: Watch[] = [
       ${out('{ landed: called > 0, detail: called > 0 ? "dispatch() called " + called + "x" : "dispatch() never called; fetch went to the network: " + err }')}
     `,
   },
+  {
+    // The fixture is a 119 B ZIP holding one deflated entry, a.txt, which is
+    // "watch\n" 40 times (240 B): deflated because bun's own release ZIPs are,
+    // so a reader that only handles stored entries still reads false. The day
+    // this lands, downloadBun in lib/bun-gates.ts can drop its `unzip` branch.
+    name: "bun-archive-reads-zip",
+    issue: "https://github.com/oven-sh/bun/issues/27077",
+    landed:
+      "`new Bun.Archive(zipBytes).files()` reads a deflated ZIP entry with the right bytes. oven-sh/bun#48792 adds the `bun_archive::zip` reader for `bun upgrade`; wiring it into Bun.Archive is a follow-up this repository means to send",
+    measured:
+      '2026-11-26, bun 1.4.4 and 1.4.5-canary.20261123.1+dac8e3b (the pin): throws "Unrecognized archive format". Control: the same script fed a tgz holding the same a.txt reads landed: true',
+    runtime: "bun",
+    script: `
+      const zip = Buffer.from("UEsDBBQAAgAIADJ6el0g4zGxCwAAAPAAAAAFAAAAYS50eHQrTyxJzuAqHzEkAFBLAQIeAxQAAgAIADJ6el0g4zGxCwAAAPAAAAAFAAAAAAAAAAEAAACkgQAAAABhLnR4dFBLBQYAAAAAAQABADMAAAAuAAAAAAA=", "base64");
+      const first = ${firstLine};
+      let landed = false, detail;
+      try {
+        const files = await new Bun.Archive(zip).files();
+        const text = files.has("a.txt") ? await files.get("a.txt").text() : null;
+        landed = text === "watch\\n".repeat(40);
+        detail = landed ? "a.txt read, 240 B match" : "read " + files.size + " entries, a.txt " + (text === null ? "missing" : "has " + text.length + " B, wrong bytes");
+      } catch (e) { detail = "throws: " + first(e); }
+      ${out("{ landed, detail }")}
+    `,
+  },
   // RETIRED 2026-10-30: `css-minifier-knows-the-seven-pseudo-elements`. It
   // watched oven-sh/bun#41120, which the owner closed 2026-10-19 after
   // #41122 cleared four of the seven. The three warnings left are the
