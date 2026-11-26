@@ -651,6 +651,13 @@
         "why": "Cloudflare's WebMCP bridge is off in the dashboard (Agent Readiness, Labs) and src/client/webmcp.ts registers this origin's tools instead, which is what carries the tool annotations the browser would otherwise drop and what gates a tool that writes behind a human. This check exists for the ORDER rather than for the toggle: /whoareyou and /security both state, in prose, that every script on the page is a file in this repository, and that claim is false for as long as the edge is still injecting. Dashboard first, prose second, exactly like the Workers Builds deploy command. Two things follow from the injection being edge-side. Re-enabling it in the dashboard silently makes two pages lie, and nothing in the tree could see that, which is the same argument app-owns-security-headers makes above. And the bridge never reached / at all, because that document is served as a dcz delta and HTMLRewriter cannot rewrite one, so the homepage registered zero tools while every other page registered 25 (gotcha 20 inverted)."
       },
       {
+        "id": "webmcp-origin-trial-served",
+        "target": "homepage",
+        "assert": { "headerPresent": ["origin-trial"] },
+        "why": "Chrome stable leaves document.modelContext undefined unless the document carries the WebMCP origin trial token (measured 2026-11-26 in Chrome 158), so without this header src/client/webmcp.ts registers nothing for an ordinary visitor and the page looks like a site with no tools. withSecurityHeaders in src/worker/lib/security.ts stamps WEBMCP_ORIGIN_TRIAL on every HTML response, and contract-webmcp-origin-trial pins that and the expiry, but both read the source. This reads the wire: a zone transform or a response rebuilt without the Worker's headers would drop it with nothing in the tree seeing. Presence only, because the value is a 300-character token whose one copy lives in security.ts and gets replaced on renewal; a second copy here would drift on the first renewal. Pairs with webmcp-bridge-off above: that one keeps the edge's tools out, this one keeps ours on.",
+        "pairs_with": "webmcp-bridge-off"
+      },
+      {
         "id": "speed-brain-off",
         "target": "homepage",
         "assert": { "headerAbsent": ["speculation-rules"] },
