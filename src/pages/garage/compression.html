@@ -154,15 +154,15 @@
     <p>
       <a href="https://www.rfc-editor.org/rfc/rfc9842.html" rel="external">RFC 9842</a> defines two encodings for this, and Cloudflare passes both through identically, so
       the choice is free and purely about engineering. Brotli compresses smaller. zstd decodes
-      much faster:
+      about twice as fast:
     </p>
     <table class="cmp">
       <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
       <tbody>
-        <tr><td>all 12 shipping <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">3,344 bytes</td><td>3,589 bytes</td></tr>
-        <tr><td>widest single gap (nav.js)</td><td class="y">685 bytes</td><td>729 bytes</td></tr>
-        <tr><td>decode, 47,615 B rebuilt</td><td>0.1368 ms</td><td class="y">0.0165 ms</td></tr>
-        <tr><td>throughput</td><td>332 MiB/s</td><td class="y">2,752 MiB/s</td></tr>
+        <tr><td>all 12 shipping <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">516,978 bytes</td><td>559,969 bytes</td></tr>
+        <tr><td>widest single gap (pretext-lib.js)</td><td class="y">33,688 bytes</td><td>35,664 bytes</td></tr>
+        <tr><td>decode, average 39,821 B rebuilt</td><td>27.1 µs</td><td class="y">13.4 µs</td></tr>
+        <tr><td>throughput</td><td>1,403 MiB/s</td><td class="y">2,839 MiB/s</td></tr>
       </tbody>
     </table>
     <p>
@@ -170,14 +170,16 @@
       argued from turned out to be wrong in <em>both</em> directions. Re-measured against real
       dictionaries rather than stand-ins, brotli's size edge grew from the one byte I had to 245
       bytes across the set (6.8%, winning 11 of 12). zstd's decode edge grew from the 2x I had to
-      8.3x. The call held anyway, which is the interesting part.
+      8.3x. A third pass on 2026-11-26 put both encoders on the build's exact settings, took 443
+      deltas from the committed dictionary history, and decoded them straight through the C libraries. Brotli's
+      edge held at 7.7%. The 8.3x didn't reproduce: zstd decodes 2.0x faster.
     </p>
     <p>
-      It held for a structural reason: <strong>decode scales with the size of the file it
-      rebuilds.</strong> A 685-byte dcb delta still rebuilds 47,615 bytes, so making the delta
-      smaller never makes the decode gap smaller. Break-even at 9 Mbps is about 135 bytes saved
-      per asset; dcb saves 44, so dcz wins by roughly 3x. On a slow phone the margin widens,
-      because decode scales with the CPU while 44 bytes stays 44 bytes.
+      <strong>Decode still scales with the size of the file it rebuilds,</strong> so making the
+      delta smaller never makes the decode gap smaller. At 2.0x, though, the gap is small. dcb
+      saves 97 bytes per response and costs 13.7 µs more to decode, which breaks even at about
+      57 Mbps on a laptop. Below that dcb wins. On a phone that decodes 3x slower, the line
+      drops to about 19 Mbps. dcz still ships, and on these numbers that's a close call.
     </p>
     <p>
       On the old numbers this was a coin flip, and on these it's lopsided. The
@@ -306,9 +308,9 @@
       "q": "The deltas ship as dcz even though brotli measured smaller. Why?",
       "options": [
         {
-          "t": "Decode scales with the rebuilt file's size, so a smaller delta never closes zstd's decode lead.",
+          "t": "zstd rebuilds the file about twice as fast, which offsets brotli's smaller delta on fast connections.",
           "ok": true,
-          "why": "Right, and the lead is 8.3x. Re-measured against real dictionaries, dcb is 245 bytes (6.8%) ahead across all 12 pairs, and dcz still wins: rebuilding 47,615 bytes costs 0.0165 ms against 0.1368. Break-even at 9 Mbps needs ~135 bytes saved per asset and dcb saves 44."
+          "why": "Right, though it's close. Across 443 deltas dcb is 7.7% smaller and zstd decodes 2.0x faster, 13.4 µs against 27.1 µs per rebuild. dcb's 97 saved bytes beat the extra decode below about 57 Mbps on a laptop, and below about 19 Mbps on a phone that decodes 3x slower."
         },
         {
           "t": "Cloudflare's edge passes dcz through to browsers, and dcb responses get stripped back to plain brotli.",
