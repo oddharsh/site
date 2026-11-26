@@ -26,6 +26,18 @@ const CHANGED: Schema = { type: ["string", "integer", "boolean", "null"] };
 /** A crawl column's value on either side of a change. */
 const COLUMN: Schema = { type: ["string", "integer", "null"] };
 
+// What compareLensTargets returns. /lens/compare.json wraps it in ok and
+// comparedAt; the lens_compare MCP tool returns it bare (TOOL_ONLY_SCHEMAS).
+const LENS_COMPARISON_FIELDS: Record<string, Schema> = {
+  left: ref("LensSummary"),
+  right: ref("LensSummary"),
+  changes: arr(obj({ field: str(), label: str(), before: CHANGED, after: CHANGED }, ["field", "before", "after"])),
+  discovery: obj({
+    left: str(undefined, { enum: ["none", "deferred", "cached", "shared", "refused", "live"] }),
+    right: str(undefined, { enum: ["none", "deferred", "cached", "shared", "refused", "live"] }),
+  }),
+};
+
 export const SCHEMAS: Record<string, Schema> = {
   Error: obj(
     {
@@ -554,13 +566,7 @@ export const SCHEMAS: Record<string, Schema> = {
     {
       ok: bool(),
       comparedAt: str(undefined, { format: "date-time" }),
-      left: ref("LensSummary"),
-      right: ref("LensSummary"),
-      changes: arr(obj({ field: str(), label: str(), before: CHANGED, after: CHANGED }, ["field", "before", "after"])),
-      discovery: obj({
-        left: str(undefined, { enum: ["none", "deferred", "cached", "shared", "refused", "live"] }),
-        right: str(undefined, { enum: ["none", "deferred", "cached", "shared", "refused", "live"] }),
-      }),
+      ...LENS_COMPARISON_FIELDS,
     },
     ["ok", "left", "right", "changes"],
   ),
@@ -842,6 +848,11 @@ function specOperation(op: Operation, allow: string[]) {
   for (const r of Object.values(responses)) r.headers = { ...r.headers, ...CONTRACT_HEADERS };
   return { ...rest, responses };
 }
+
+/** Shapes only an MCP tool returns, kept out of /openapi.json's components. */
+export const TOOL_ONLY_SCHEMAS: Record<string, Schema> = {
+  LensComparisonValue: obj(LENS_COMPARISON_FIELDS, ["left", "right", "changes"]),
+};
 
 export function openApiDocument() {
   const paths: Record<string, Record<string, unknown>> = {};

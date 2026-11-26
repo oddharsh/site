@@ -234,7 +234,7 @@
     {
       "name": "search_site",
       "title": "Search Site",
-      "description": "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
+      "description": "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh by keyword. Returns ranked hits, each with a url, title, kind and snippet. Use it to find a page on this site; use ask when you want NLWeb's result shape with a schema.org object per hit.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -320,7 +320,7 @@
     {
       "name": "now_playing",
       "title": "Now Playing",
-      "description": "Read the cached current rn playlist and its tracks. A cold cache may refresh from the public Spotify embed using AadharshBot.",
+      "description": "Read what Aadharsh is listening to right now: the current rn playlist's id and name and its tracks, each with title, artists, duration and Spotify link. A cold cache may refresh from the public Spotify embed using AadharshBot.",
       "inputSchema": {
         "type": "object",
         "properties": {}
@@ -906,7 +906,7 @@
     {
       "name": "coffee_availability",
       "title": "Coffee Availability",
-      "description": "Read bookable coffee slots in the host timezone. If the calendar is stale or unavailable, the result is explicitly unavailable and contains no slots.",
+      "description": "Read the open coffee-chat slots with Aadharsh, in the host timezone, plus the booking URL. Use it before suggesting a time to meet. If the calendar is stale or unavailable, the result is explicitly unavailable and contains no slots.",
       "inputSchema": {
         "type": "object",
         "properties": {}
@@ -991,7 +991,7 @@
     {
       "name": "change_radar",
       "title": "Change Radar",
-      "description": "Read the bounded historical diff of the latest AadharshBot neighborhood observations. Raw crawled bodies are not stored or returned.",
+      "description": "Read what changed recently across the sites AadharshBot crawls daily (the VC neighborhood on /around): per target, which of status, final URL, title, description, content type, robots and content moved, when, and how severe. Raw crawled bodies are not stored or returned.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1121,7 +1121,7 @@
     {
       "name": "lens_inspect",
       "title": "Lens Inspect",
-      "description": "Inspect one public HTTP(S) URL through Lens and return a compact agent-readiness observation. Private, local, and non-HTTP targets are rejected.",
+      "description": "Inspect one public HTTP(S) URL through Lens, origin-level discovery included, and return a compact agent-readiness summary: status, title, word count, readiness score and level, agent doors counted, and the machine surfaces found. Use it to judge how well agents can read a site. Private, local, and non-HTTP targets are rejected.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1136,7 +1136,182 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "finalUrl": {
+            "type": "string"
+          },
+          "redirected": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "elapsedMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "wordCount": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parsedBytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parseTruncated": {
+            "type": "boolean"
+          },
+          "readiness": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fieldScore": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "levelName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "levelNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+          },
+          "doors": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cost": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "tokens": {
+                "type": "integer"
+              },
+              "usdPerRead": {
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              }
+            }
+          },
+          "phases": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "boolean"
+              },
+              "discovery": {
+                "type": "boolean"
+              },
+              "botViews": {
+                "type": "boolean"
+              },
+              "discoveryDeferred": {
+                "type": "boolean"
+              },
+              "discoveryCached": {
+                "type": "boolean"
+              },
+              "discoveryShared": {
+                "type": "boolean"
+              },
+              "subrequestCap": {
+                "type": "boolean"
+              },
+              "wallCheck": {
+                "type": "string",
+                "description": "ok, none, no AI binding, or the error the wall check hit."
+              }
+            },
+            "required": [
+              "page",
+              "discovery",
+              "botViews"
+            ],
+            "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+          },
+          "surfaces": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Null when discovery did not run.",
+            "properties": {
+              "llms": {
+                "type": "boolean"
+              },
+              "markdown": {
+                "type": "boolean"
+              },
+              "mcp": {
+                "type": "boolean"
+              },
+              "agentCard": {
+                "type": "boolean"
+              },
+              "apiCatalog": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "required": [
+          "url",
+          "finalUrl",
+          "status",
+          "phases"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1164,7 +1339,182 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "finalUrl": {
+            "type": "string"
+          },
+          "redirected": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "elapsedMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "wordCount": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parsedBytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parseTruncated": {
+            "type": "boolean"
+          },
+          "readiness": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fieldScore": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "levelName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "levelNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+          },
+          "doors": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cost": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "tokens": {
+                "type": "integer"
+              },
+              "usdPerRead": {
+                "type": "number"
+              },
+              "model": {
+                "type": "string"
+              }
+            }
+          },
+          "phases": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "boolean"
+              },
+              "discovery": {
+                "type": "boolean"
+              },
+              "botViews": {
+                "type": "boolean"
+              },
+              "discoveryDeferred": {
+                "type": "boolean"
+              },
+              "discoveryCached": {
+                "type": "boolean"
+              },
+              "discoveryShared": {
+                "type": "boolean"
+              },
+              "subrequestCap": {
+                "type": "boolean"
+              },
+              "wallCheck": {
+                "type": "string",
+                "description": "ok, none, no AI binding, or the error the wall check hit."
+              }
+            },
+            "required": [
+              "page",
+              "discovery",
+              "botViews"
+            ],
+            "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+          },
+          "surfaces": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Null when discovery did not run.",
+            "properties": {
+              "llms": {
+                "type": "boolean"
+              },
+              "markdown": {
+                "type": "boolean"
+              },
+              "mcp": {
+                "type": "boolean"
+              },
+              "agentCard": {
+                "type": "boolean"
+              },
+              "apiCatalog": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "required": [
+          "url",
+          "finalUrl",
+          "status",
+          "phases"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1177,7 +1527,7 @@
     {
       "name": "lens_compare",
       "title": "Lens Compare",
-      "description": "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
+      "description": "Inspect two public HTTP(S) URLs side by side. Returns a Lens summary for each (left and right) plus the list of fields that differ across status, content, readiness, spectrum, agent doors and discovery surfaces. Use it to see why one page or site reads better to agents than another.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1197,7 +1547,433 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "left": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "finalUrl": {
+                "type": "string"
+              },
+              "redirected": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "elapsedMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "title": {
+                "type": "string"
+              },
+              "wordCount": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "parsedBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "parseTruncated": {
+                "type": "boolean"
+              },
+              "readiness": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "fieldScore": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "level": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "levelName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "levelNote": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+              },
+              "doors": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "cost": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "tokens": {
+                    "type": "integer"
+                  },
+                  "usdPerRead": {
+                    "type": "number"
+                  },
+                  "model": {
+                    "type": "string"
+                  }
+                }
+              },
+              "phases": {
+                "type": "object",
+                "properties": {
+                  "page": {
+                    "type": "boolean"
+                  },
+                  "discovery": {
+                    "type": "boolean"
+                  },
+                  "botViews": {
+                    "type": "boolean"
+                  },
+                  "discoveryDeferred": {
+                    "type": "boolean"
+                  },
+                  "discoveryCached": {
+                    "type": "boolean"
+                  },
+                  "discoveryShared": {
+                    "type": "boolean"
+                  },
+                  "subrequestCap": {
+                    "type": "boolean"
+                  },
+                  "wallCheck": {
+                    "type": "string",
+                    "description": "ok, none, no AI binding, or the error the wall check hit."
+                  }
+                },
+                "required": [
+                  "page",
+                  "discovery",
+                  "botViews"
+                ],
+                "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+              },
+              "surfaces": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Null when discovery did not run.",
+                "properties": {
+                  "llms": {
+                    "type": "boolean"
+                  },
+                  "markdown": {
+                    "type": "boolean"
+                  },
+                  "mcp": {
+                    "type": "boolean"
+                  },
+                  "agentCard": {
+                    "type": "boolean"
+                  },
+                  "apiCatalog": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "required": [
+              "url",
+              "finalUrl",
+              "status",
+              "phases"
+            ]
+          },
+          "right": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "finalUrl": {
+                "type": "string"
+              },
+              "redirected": {
+                "type": "boolean"
+              },
+              "status": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "elapsedMs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "title": {
+                "type": "string"
+              },
+              "wordCount": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "parsedBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "parseTruncated": {
+                "type": "boolean"
+              },
+              "readiness": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "fieldScore": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "level": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "levelName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "levelNote": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+              },
+              "doors": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "cost": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "tokens": {
+                    "type": "integer"
+                  },
+                  "usdPerRead": {
+                    "type": "number"
+                  },
+                  "model": {
+                    "type": "string"
+                  }
+                }
+              },
+              "phases": {
+                "type": "object",
+                "properties": {
+                  "page": {
+                    "type": "boolean"
+                  },
+                  "discovery": {
+                    "type": "boolean"
+                  },
+                  "botViews": {
+                    "type": "boolean"
+                  },
+                  "discoveryDeferred": {
+                    "type": "boolean"
+                  },
+                  "discoveryCached": {
+                    "type": "boolean"
+                  },
+                  "discoveryShared": {
+                    "type": "boolean"
+                  },
+                  "subrequestCap": {
+                    "type": "boolean"
+                  },
+                  "wallCheck": {
+                    "type": "string",
+                    "description": "ok, none, no AI binding, or the error the wall check hit."
+                  }
+                },
+                "required": [
+                  "page",
+                  "discovery",
+                  "botViews"
+                ],
+                "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+              },
+              "surfaces": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Null when discovery did not run.",
+                "properties": {
+                  "llms": {
+                    "type": "boolean"
+                  },
+                  "markdown": {
+                    "type": "boolean"
+                  },
+                  "mcp": {
+                    "type": "boolean"
+                  },
+                  "agentCard": {
+                    "type": "boolean"
+                  },
+                  "apiCatalog": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "required": [
+              "url",
+              "finalUrl",
+              "status",
+              "phases"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": [
+                    "string",
+                    "integer",
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "after": {
+                  "type": [
+                    "string",
+                    "integer",
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "field",
+                "before",
+                "after"
+              ]
+            }
+          },
+          "discovery": {
+            "type": "object",
+            "properties": {
+              "left": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "deferred",
+                  "cached",
+                  "shared",
+                  "refused",
+                  "live"
+                ]
+              },
+              "right": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "deferred",
+                  "cached",
+                  "shared",
+                  "refused",
+                  "live"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "changes"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1278,7 +2054,156 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "when": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past",
+              "all"
+            ],
+            "description": "The time window searched: upcoming, past or all."
+          },
+          "rsvp": {
+            "type": "string",
+            "enum": [
+              "going",
+              "all",
+              "discovered"
+            ],
+            "description": "The RSVP tier returned: going, all or discovered."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Events in the window that match every filter, before limit."
+          },
+          "returned": {
+            "type": "integer",
+            "description": "Events in this response."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The Luma event id."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The event's title."
+                },
+                "start_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "ISO 8601 start time, or null when the pool has none."
+                },
+                "location": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Venue or place, or null."
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The event's Luma page."
+                },
+                "going": {
+                  "type": "integer",
+                  "description": "Attendees on the roster."
+                },
+                "hosts": {
+                  "type": "integer",
+                  "description": "Hosts on the roster."
+                },
+                "attending": {
+                  "type": "boolean",
+                  "description": "True when a contributor RSVP'd yes or hosts it."
+                },
+                "rsvp": {
+                  "type": "string",
+                  "description": "The contributor's RSVP status, or unknown."
+                },
+                "contributors": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Pool contributors who saw the event, comma separated."
+                },
+                "tags": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "The stored topic and format with their confidences, or null when the event is unclassified.",
+                  "properties": {
+                    "topic": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Topic label."
+                    },
+                    "topic_confidence": {
+                      "type": "number",
+                      "description": "0 to 1."
+                    },
+                    "format": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Format label."
+                    },
+                    "format_confidence": {
+                      "type": "number",
+                      "description": "0 to 1."
+                    }
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "going",
+                "attending",
+                "rsvp"
+              ]
+            },
+            "description": "The matching events, soonest first for upcoming and latest first for past."
+          },
+          "discovered_hidden": {
+            "type": "integer",
+            "description": "With rsvp=going, how many matching events were left out because nobody RSVP'd."
+          },
+          "topic": {
+            "type": "string",
+            "description": "The topic filter applied, when one was."
+          },
+          "format": {
+            "type": "string",
+            "description": "The format filter applied, when one was."
+          },
+          "untagged": {
+            "type": "integer",
+            "description": "With a topic or format filter, events in the window that are not classified yet."
+          }
+        },
+        "required": [
+          "when",
+          "rsvp",
+          "total",
+          "returned",
+          "events"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1291,7 +2216,7 @@
     {
       "name": "image_inspect",
       "title": "Image Inspect",
-      "description": "Inspect an image's dimensions, format, and animation/frame information. Image bytes are processed ephemerally and are not stored.",
+      "description": "Inspect an image's format, dimensions, byte size and whether it is animated, from bytes you send or a public URL. Returns a receipt with the input's size and SHA-256 and what Cloudflare Images read. Use it before image_transform to see what you have. Image bytes are processed ephemerally and are not stored.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1311,7 +2236,123 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "image_data",
+                  "source_url"
+                ],
+                "description": "Which input was used."
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The final URL after redirects, for source_url; null for image_data."
+              },
+              "bytes": {
+                "type": "integer",
+                "description": "Input size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The input's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the input bytes."
+              }
+            },
+            "required": [
+              "source",
+              "bytes",
+              "mimeType",
+              "sha256"
+            ]
+          },
+          "output": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The single encoded output, for image_transform; null otherwise.",
+            "properties": {
+              "bytes": {
+                "type": "integer",
+                "description": "Output size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The output's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the output bytes, the same bytes as the image content block."
+              },
+              "quality": {
+                "type": "integer",
+                "description": "The encoder quality used, 1 to 100."
+              }
+            }
+          },
+          "engine": {
+            "type": "string",
+            "const": "cloudflare-images",
+            "description": "The encoder: always cloudflare-images."
+          },
+          "persistence": {
+            "type": "string",
+            "const": "ephemeral",
+            "description": "Always ephemeral: nothing is stored."
+          },
+          "info": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "What the Images binding read from the input.",
+            "properties": {
+              "format": {
+                "type": "string",
+                "description": "The detected format."
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width in pixels."
+              },
+              "height": {
+                "type": "integer",
+                "description": "Height in pixels."
+              },
+              "fileSize": {
+                "type": "integer",
+                "description": "Size in bytes."
+              },
+              "animated": {
+                "type": "boolean",
+                "description": "True for an animated image."
+              }
+            }
+          },
+          "operation": {
+            "type": "string",
+            "const": "inspect",
+            "description": "Which tool produced the receipt."
+          }
+        },
+        "required": [
+          "input",
+          "output",
+          "engine",
+          "persistence",
+          "info",
+          "operation"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1324,7 +2365,7 @@
     {
       "name": "image_transform",
       "title": "Image Transform",
-      "description": "Run a bounded web image transform through Cloudflare Images and return the transformed image inline plus an exact byte receipt. The output is ephemeral.",
+      "description": "Resize, re-encode or rotate one image through Cloudflare Images, from a preset or explicit width, height, fit, format and quality. Returns the transformed image inline plus a receipt of exact input and output bytes and hashes. Use it to make a web-ready copy. The output is ephemeral.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1403,7 +2444,154 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "image_data",
+                  "source_url"
+                ],
+                "description": "Which input was used."
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The final URL after redirects, for source_url; null for image_data."
+              },
+              "bytes": {
+                "type": "integer",
+                "description": "Input size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The input's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the input bytes."
+              }
+            },
+            "required": [
+              "source",
+              "bytes",
+              "mimeType",
+              "sha256"
+            ]
+          },
+          "output": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The single encoded output, for image_transform; null otherwise.",
+            "properties": {
+              "bytes": {
+                "type": "integer",
+                "description": "Output size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The output's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the output bytes, the same bytes as the image content block."
+              },
+              "quality": {
+                "type": "integer",
+                "description": "The encoder quality used, 1 to 100."
+              }
+            }
+          },
+          "engine": {
+            "type": "string",
+            "const": "cloudflare-images",
+            "description": "The encoder: always cloudflare-images."
+          },
+          "persistence": {
+            "type": "string",
+            "const": "ephemeral",
+            "description": "Always ephemeral: nothing is stored."
+          },
+          "info": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "What the Images binding read from the input.",
+            "properties": {
+              "format": {
+                "type": "string",
+                "description": "The detected format."
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width in pixels."
+              },
+              "height": {
+                "type": "integer",
+                "description": "Height in pixels."
+              },
+              "fileSize": {
+                "type": "integer",
+                "description": "Size in bytes."
+              },
+              "animated": {
+                "type": "boolean",
+                "description": "True for an animated image."
+              }
+            }
+          },
+          "operation": {
+            "type": "string",
+            "const": "transform",
+            "description": "Which tool produced the receipt."
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The preset applied, or null."
+          },
+          "transform": {
+            "type": "object",
+            "properties": {
+              "width": {
+                "type": "integer",
+                "description": "Width requested."
+              },
+              "height": {
+                "type": "integer",
+                "description": "Height requested."
+              },
+              "fit": {
+                "type": "string",
+                "description": "Fit requested."
+              },
+              "rotate": {
+                "type": "integer",
+                "description": "Rotation requested."
+              }
+            },
+            "description": "The resize options sent to Images; a key is absent when neither the call nor the preset set it."
+          }
+        },
+        "required": [
+          "input",
+          "output",
+          "engine",
+          "persistence",
+          "info",
+          "operation",
+          "preset",
+          "transform"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1416,7 +2604,7 @@
     {
       "name": "image_compare",
       "title": "Image Compare",
-      "description": "Encode one image into up to three bounded format variants and report exact byte sizes and hashes. It does not pretend to score visual quality.",
+      "description": "Encode one image into up to three format variants (AVIF, WebP, JPEG) at the same size and quality, and return each variant inline plus a receipt of exact byte sizes, hashes and the smallest format. Use it to pick a delivery format by bytes. It does not score visual quality.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1489,7 +2677,179 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "image_data",
+                  "source_url"
+                ],
+                "description": "Which input was used."
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The final URL after redirects, for source_url; null for image_data."
+              },
+              "bytes": {
+                "type": "integer",
+                "description": "Input size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The input's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the input bytes."
+              }
+            },
+            "required": [
+              "source",
+              "bytes",
+              "mimeType",
+              "sha256"
+            ]
+          },
+          "output": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The single encoded output, for image_transform; null otherwise.",
+            "properties": {
+              "bytes": {
+                "type": "integer",
+                "description": "Output size in bytes."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "The output's MIME type."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256 of the output bytes, the same bytes as the image content block."
+              },
+              "quality": {
+                "type": "integer",
+                "description": "The encoder quality used, 1 to 100."
+              }
+            }
+          },
+          "engine": {
+            "type": "string",
+            "const": "cloudflare-images",
+            "description": "The encoder: always cloudflare-images."
+          },
+          "persistence": {
+            "type": "string",
+            "const": "ephemeral",
+            "description": "Always ephemeral: nothing is stored."
+          },
+          "info": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "What the Images binding read from the input.",
+            "properties": {
+              "format": {
+                "type": "string",
+                "description": "The detected format."
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width in pixels."
+              },
+              "height": {
+                "type": "integer",
+                "description": "Height in pixels."
+              },
+              "fileSize": {
+                "type": "integer",
+                "description": "Size in bytes."
+              },
+              "animated": {
+                "type": "boolean",
+                "description": "True for an animated image."
+              }
+            }
+          },
+          "operation": {
+            "type": "string",
+            "const": "compare",
+            "description": "Which tool produced the receipt."
+          },
+          "preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The preset requested, or null."
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "avif",
+                    "webp",
+                    "jpeg"
+                  ],
+                  "description": "The variant's format."
+                },
+                "mime": {
+                  "type": "string",
+                  "description": "The variant's MIME type."
+                },
+                "quality": {
+                  "type": "integer",
+                  "description": "The encoder quality used."
+                },
+                "sha256": {
+                  "type": "string",
+                  "description": "Hex SHA-256 of the variant, the same bytes as its image content block."
+                }
+              },
+              "required": [
+                "format",
+                "mime",
+                "quality",
+                "sha256"
+              ]
+            },
+            "description": "One entry per encoded format, in request order."
+          },
+          "recommendation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The format of the smallest variant."
+          },
+          "note": {
+            "type": "string",
+            "description": "What the comparison does not measure."
+          }
+        },
+        "required": [
+          "input",
+          "output",
+          "engine",
+          "persistence",
+          "info",
+          "operation",
+          "variants",
+          "recommendation"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1502,7 +2862,7 @@
     {
       "name": "photo_recipe",
       "title": "Photo Recipe",
-      "description": "Return the exact public Fuji recipe for a named archive photo, archive URL, or exact published thumbnail bytes. Arbitrary visual lookalikes are not treated as matches.",
+      "description": "Return the exact public EXIF and Fuji recipe for a named archive photo, an archive URL, or the exact bytes of a published thumbnail. Use it to learn how a photo on aadhar.sh was shot. Returns matched false with a reason for anything else, since visual lookalikes are not treated as matches.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1522,7 +2882,372 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "matched": {
+            "type": "boolean",
+            "description": "True when the input named a published photo exactly."
+          },
+          "inputSha256": {
+            "type": "string",
+            "description": "On a miss by bytes, the SHA-256 that matched nothing."
+          },
+          "reason": {
+            "type": "string",
+            "description": "On a miss, why nothing was returned."
+          },
+          "input": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The SHA-256 of image_data on a byte match; null otherwise.",
+            "properties": {
+              "sha256": {
+                "type": "string",
+                "description": "Hex SHA-256."
+              }
+            }
+          },
+          "photo": {
+            "type": "object",
+            "properties": {
+              "stem": {
+                "type": "string",
+                "description": "The photo's stem."
+              },
+              "matchKind": {
+                "type": "string",
+                "description": "How it matched: stem, archive-url or published-thumbnail."
+              },
+              "matchedTier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The thumbnail tier that matched (a AVIF, j JPEG, s small), or null."
+              },
+              "full": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Site path of the full-size original."
+              },
+              "thumb": {
+                "type": "object",
+                "properties": {
+                  "avif": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path of the AVIF thumbnail."
+                  },
+                  "jpg": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path of the JPEG thumbnail."
+                  },
+                  "small": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path of the 400 px AVIF."
+                  },
+                  "xs": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Path of the 200 px AVIF."
+                  }
+                },
+                "description": "Content-addressed thumbnail paths."
+              },
+              "alt": {
+                "type": "string",
+                "description": "The photo's alt text."
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "camera": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "lens": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "aperture": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As written, for example f/2.8."
+                  },
+                  "shutter": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As written, for example 1/60."
+                  },
+                  "iso": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "focal": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ev": {
+                    "type": [
+                      "number",
+                      "string",
+                      "null"
+                    ],
+                    "description": "Exposure compensation: a number, or a signed string such as +0.33."
+                  },
+                  "date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "As EXIF writes it, YYYY:MM:DD HH:MM:SS, with no timezone."
+                  },
+                  "width": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "height": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "color_space": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "white_balance": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "color_temp": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "wb_shift": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "flash": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "exposure_mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "meter": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "focus_mode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "drive": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sharpness": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "noise_reduction": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "clarity": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "film": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Fuji film simulation."
+                  },
+                  "dr": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "dr_value": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "chrome": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "chrome_blue": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "grain": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "grain_size": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "highlight_tone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "shadow_tone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "saturation": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "recipe": {
+                    "type": "object",
+                    "description": "The frame's film recipe card, keyed the way a recipe is written down. Absent on frames with no recipe.",
+                    "properties": {
+                      "Film Simulation": {
+                        "type": "string"
+                      },
+                      "Dynamic Range": {
+                        "type": "string"
+                      },
+                      "Grain Effect": {
+                        "type": "string"
+                      },
+                      "Color Chrome Effect": {
+                        "type": "string"
+                      },
+                      "Color Chrome FX Blue": {
+                        "type": "string"
+                      },
+                      "White Balance": {
+                        "type": "string"
+                      },
+                      "Highlight": {
+                        "type": "string"
+                      },
+                      "Shadow": {
+                        "type": "string"
+                      },
+                      "Color": {
+                        "type": "string"
+                      },
+                      "Sharpness": {
+                        "type": "string"
+                      },
+                      "High ISO NR": {
+                        "type": "string"
+                      },
+                      "Clarity": {
+                        "type": "string"
+                      },
+                      "ISO": {
+                        "type": "string"
+                      },
+                      "Exposure Compensation": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "description": "Public-safe EXIF and Fuji fields, read from the file. A field the camera did not record is null and a field the extractor never read is absent: nothing is guessed."
+              }
+            },
+            "required": [
+              "stem",
+              "matchKind",
+              "thumb",
+              "alt",
+              "metadata"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "What a match requires."
+          }
+        },
+        "required": [
+          "matched"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1564,7 +3289,197 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL fetched."
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The profiles fetched, in order."
+          },
+          "persistence": {
+            "type": "string",
+            "description": "What the vault keeps: normalized headers, metadata, and body digests only."
+          },
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The snapshot id, for representation_read and representation_compare."
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "The URL requested."
+                    },
+                    "profile": {
+                      "type": "string",
+                      "description": "The request profile used: browser, bot, markdown or identity."
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When it was fetched."
+                    },
+                    "finalUrl": {
+                      "type": "string",
+                      "description": "The URL after redirects."
+                    },
+                    "status": {
+                      "type": "integer",
+                      "description": "HTTP status."
+                    },
+                    "contentType": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Content-Type without parameters."
+                    },
+                    "contentEncoding": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Content-Encoding header."
+                    },
+                    "contentLength": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "Content-Length header, as a number."
+                    },
+                    "cacheControl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Cache-Control header."
+                    },
+                    "vary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Vary header."
+                    },
+                    "etag": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "ETag header."
+                    },
+                    "lastModified": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Last-Modified header."
+                    },
+                    "server": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Server header."
+                    },
+                    "age": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Age header."
+                    },
+                    "cfCacheStatus": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "CF-Cache-Status header."
+                    },
+                    "bodyBytes": {
+                      "type": "integer",
+                      "description": "Body bytes read, up to the cap."
+                    },
+                    "bodyHash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Hex SHA-256 of the body bytes read."
+                    },
+                    "truncated": {
+                      "type": "boolean",
+                      "description": "True when the body passed the read cap."
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The HTML title, for an HTML body."
+                    },
+                    "wordCount": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "Words in a text body; null for a binary one."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "profile",
+                    "observedAt",
+                    "status"
+                  ],
+                  "description": "A stored snapshot."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "description": "The URL requested."
+                    },
+                    "profile": {
+                      "type": "string",
+                      "description": "The profile that failed."
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Why the fetch failed."
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "profile",
+                    "error"
+                  ],
+                  "description": "A profile that failed; nothing was stored for it."
+                }
+              ]
+            },
+            "description": "One entry per profile, in order."
+          }
+        },
+        "required": [
+          "url",
+          "profiles",
+          "persistence",
+          "snapshots"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -1577,7 +3492,7 @@
     {
       "name": "representation_read",
       "title": "Representation Read",
-      "description": "Read one normalized HTTP representation snapshot from the vault. Raw response bodies are never returned because they are never stored.",
+      "description": "Read one stored HTTP representation snapshot from the vault by id, as representation_capture or representation_compare returned it. Returns its status, normalized headers, body size and digest, title and word count. Raw response bodies are never returned because they are never stored.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1592,7 +3507,153 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "snapshot": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The snapshot id, for representation_read and representation_compare."
+              },
+              "url": {
+                "type": "string",
+                "description": "The URL requested."
+              },
+              "profile": {
+                "type": "string",
+                "description": "The request profile used: browser, bot, markdown or identity."
+              },
+              "observedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was fetched."
+              },
+              "finalUrl": {
+                "type": "string",
+                "description": "The URL after redirects."
+              },
+              "status": {
+                "type": "integer",
+                "description": "HTTP status."
+              },
+              "contentType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Type without parameters."
+              },
+              "contentEncoding": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Encoding header."
+              },
+              "contentLength": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Content-Length header, as a number."
+              },
+              "cacheControl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Cache-Control header."
+              },
+              "vary": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Vary header."
+              },
+              "etag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "ETag header."
+              },
+              "lastModified": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Last-Modified header."
+              },
+              "server": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Server header."
+              },
+              "age": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Age header."
+              },
+              "cfCacheStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "CF-Cache-Status header."
+              },
+              "bodyBytes": {
+                "type": "integer",
+                "description": "Body bytes read, up to the cap."
+              },
+              "bodyHash": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Hex SHA-256 of the body bytes read."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "True when the body passed the read cap."
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The HTML title, for an HTML body."
+              },
+              "wordCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Words in a text body; null for a binary one."
+              }
+            },
+            "required": [
+              "id",
+              "url",
+              "profile",
+              "observedAt",
+              "status"
+            ],
+            "description": "The stored snapshot."
+          },
+          "persistence": {
+            "type": "string",
+            "description": "What the vault keeps: normalized headers, metadata, and body digests only."
+          }
+        },
+        "required": [
+          "snapshot",
+          "persistence"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -1624,7 +3685,346 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL refetched."
+          },
+          "profile": {
+            "type": "string",
+            "description": "The stored snapshot's profile, reused for the refetch."
+          },
+          "previousSnapshotId": {
+            "type": "string",
+            "description": "The snapshot compared against."
+          },
+          "snapshotId": {
+            "type": "string",
+            "description": "The new snapshot's id."
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "True when any compared field differs."
+          },
+          "changes": {
+            "type": "object",
+            "description": "Each field that differs, keyed by its stored column name, with its before and after values.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "before": {
+                  "type": [
+                    "string",
+                    "integer",
+                    "null"
+                  ],
+                  "description": "The stored value."
+                },
+                "after": {
+                  "type": [
+                    "string",
+                    "integer",
+                    "null"
+                  ],
+                  "description": "The refetched value."
+                }
+              },
+              "required": [
+                "before",
+                "after"
+              ]
+            }
+          },
+          "before": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The snapshot id, for representation_read and representation_compare."
+              },
+              "url": {
+                "type": "string",
+                "description": "The URL requested."
+              },
+              "profile": {
+                "type": "string",
+                "description": "The request profile used: browser, bot, markdown or identity."
+              },
+              "observedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was fetched."
+              },
+              "finalUrl": {
+                "type": "string",
+                "description": "The URL after redirects."
+              },
+              "status": {
+                "type": "integer",
+                "description": "HTTP status."
+              },
+              "contentType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Type without parameters."
+              },
+              "contentEncoding": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Encoding header."
+              },
+              "contentLength": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Content-Length header, as a number."
+              },
+              "cacheControl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Cache-Control header."
+              },
+              "vary": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Vary header."
+              },
+              "etag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "ETag header."
+              },
+              "lastModified": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Last-Modified header."
+              },
+              "server": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Server header."
+              },
+              "age": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Age header."
+              },
+              "cfCacheStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "CF-Cache-Status header."
+              },
+              "bodyBytes": {
+                "type": "integer",
+                "description": "Body bytes read, up to the cap."
+              },
+              "bodyHash": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Hex SHA-256 of the body bytes read."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "True when the body passed the read cap."
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The HTML title, for an HTML body."
+              },
+              "wordCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Words in a text body; null for a binary one."
+              }
+            },
+            "required": [
+              "id",
+              "url",
+              "profile",
+              "observedAt",
+              "status"
+            ],
+            "description": "The stored snapshot."
+          },
+          "after": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The snapshot id, for representation_read and representation_compare."
+              },
+              "url": {
+                "type": "string",
+                "description": "The URL requested."
+              },
+              "profile": {
+                "type": "string",
+                "description": "The request profile used: browser, bot, markdown or identity."
+              },
+              "observedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was fetched."
+              },
+              "finalUrl": {
+                "type": "string",
+                "description": "The URL after redirects."
+              },
+              "status": {
+                "type": "integer",
+                "description": "HTTP status."
+              },
+              "contentType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Type without parameters."
+              },
+              "contentEncoding": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Content-Encoding header."
+              },
+              "contentLength": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Content-Length header, as a number."
+              },
+              "cacheControl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Cache-Control header."
+              },
+              "vary": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Vary header."
+              },
+              "etag": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "ETag header."
+              },
+              "lastModified": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Last-Modified header."
+              },
+              "server": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Server header."
+              },
+              "age": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Age header."
+              },
+              "cfCacheStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "CF-Cache-Status header."
+              },
+              "bodyBytes": {
+                "type": "integer",
+                "description": "Body bytes read, up to the cap."
+              },
+              "bodyHash": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Hex SHA-256 of the body bytes read."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "True when the body passed the read cap."
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The HTML title, for an HTML body."
+              },
+              "wordCount": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Words in a text body; null for a binary one."
+              }
+            },
+            "required": [
+              "id",
+              "url",
+              "profile",
+              "observedAt",
+              "status"
+            ],
+            "description": "The new snapshot."
+          },
+          "persistence": {
+            "type": "string",
+            "description": "What the vault keeps: normalized headers, metadata, and body digests only."
+          }
+        },
+        "required": [
+          "url",
+          "profile",
+          "previousSnapshotId",
+          "snapshotId",
+          "changed",
+          "changes",
+          "before",
+          "after",
+          "persistence"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
