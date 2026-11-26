@@ -102,7 +102,7 @@
 
 <h2>What it costs</h2>
 <p>Each control plants into its own copy-on-write clone of the worktree: one <code>clonefile(2)</code> call, about 130 ms on 2026-10-29. Other sessions work in the same tree, so a planted conflict marker must never land where one of them could commit it. In CI the checkout is private, so the runner plants in place and puts every touched file back.</p>
-<p>The registry went from 11 controls on 2026-10-30 to 25 the next day and 44 on 2026-11-09, covering 11 gotchas. On 2026-11-09 all 44 read CAUGHT across 28 distinct checks in 94.1 s on a 12-core M3 running four clones at a time. CI ran the 42 then on main in 81.3 s. The job reports beside <code>validate</code> with <code>continue-on-error</code>. A blind check is a finding about the checks, so it never holds up a release.</p>
+<p>The registry went from 11 controls on 2026-10-30 to 25 the next day, 44 on 2026-11-09 and 78 on 2026-11-26, covering 16 gotchas. On 2026-11-26 all 78 read CAUGHT across 45 distinct checks in 626.1 s on a 14-core M3 Max running four clones at a time. CI ran the same 78 in place in 427.3 s. The job reports beside <code>validate</code> with <code>continue-on-error</code>. A blind check is a finding about the checks, so it never holds up a release.</p>
 
 <h2>What it can&apos;t see</h2>
 <p>A control proves a check catches the one defect someone wrote down. A defect nobody planted stays invisible. The deploy-pin gap had no check at all, and the harness found it only because writing that control sent someone looking. Coverage is still a list a person keeps, so gotcha 90 asks every new check to arrive with its control in the same PR, quoting the line the check prints when it catches.</p>
