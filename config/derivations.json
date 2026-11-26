@@ -230,7 +230,7 @@
       },
       "regenerate": "bun tools/gen-tool-schemas.ts",
       "recorded": {
-        "inputs": "12a21e12464140a55f1da2c56cae734473008d8f18ee8ae8bce98e466707d248",
+        "inputs": "7e690ae4f48e80b8bd76cdc94b23a9ce1f3db1481d0d53d82658c95f61ac6af6",
         "count": 4
       }
     },

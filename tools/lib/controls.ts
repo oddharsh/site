@@ -938,6 +938,26 @@ export const CONTROLS: Control[] = [
     expect: /contract-run-opens-any-page\.test\.ts: [\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
   },
   {
+    id: "mcp-parameter-loses-its-description",
+    plants: "an /mcp tool parameter ships with no description, so an agent has to guess what to send",
+    mutations: [
+      {
+        file: "src/worker/lib/tools.ts",
+        find: 'limit: { type: "integer", minimum: 1, maximum: 200, description: "most events to return; defaults to 50" },',
+        replace: 'limit: { type: "integer", minimum: 1, maximum: 200 },',
+      },
+    ],
+    run: contract("contract-mcp-schemas-are-complete"),
+    expect: /find_events input\.limit: no description/,
+  },
+  {
+    id: "mcp-tool-output-goes-untyped",
+    plants: "a hosted /mcp tool drops its outputSchema and falls back to an object with no fields",
+    mutations: [{ file: "src/worker/mcp.ts", find: '    outputSchema: imageReceiptSchema("inspect", {}),\n', replace: "" }],
+    run: contract("contract-mcp-schemas-are-complete"),
+    expect: /image_inspect output: an object with no fields/,
+  },
+  {
     id: "inbox-mail-prints-the-author-unescaped",
     plants: "the /inbox mail island prints a webmention's author without escaping it, so a sender's name can carry markup",
     gotcha: 111,
