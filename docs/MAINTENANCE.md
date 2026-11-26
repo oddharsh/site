@@ -193,6 +193,23 @@ For a routine rotation, send one throwaway booking after the change and verify
 that the new approval link works. For an emergency rotation, prioritize the
 rotation and treat all previously emailed links as compromised.
 
+### Rotate or extend AadharshBot's signing keys
+
+Each key in `public/.well-known/http-message-signatures-directory` carries `nbf`
+and `exp` in seconds, with `exp` at most a year out.
+`contract-web-bot-auth-keys-expire-60-days-out` fails every PR from 60 days
+before the soonest `exp`. Either answer clears it:
+
+- **Extend.** Move that key's `exp` forward, under a year out, and deploy.
+- **Rotate.** Put the new secret in with
+  `bun run wrangler:site versions secret put RN_SIGNING_KEY_JWK` (or
+  `RN_SIGNING_KEY_MLDSA_JWK` for sig2), and in the same change replace the
+  public key in the directory, with `kid` set to its RFC 7638 thumbprint, `nbf`
+  set to the deploy time and a new `exp`. The handler 503s whenever a secret
+  and its published key disagree, so both land in one version. Then promote.
+  The handler also allows exactly one Ed25519 key, so this is a hard cut rather
+  than the draft's overlap of old and new keys.
+
 ## CI/CD release path
 
 1. [CI](../.github/workflows/ci.yml) runs one required job, `validate`: lint,
