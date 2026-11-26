@@ -337,6 +337,16 @@
       ],
       "unverifiable": "The inputs are source images held outside this repository and SEVEN external encoders at whatever version the machine has. config/tools.json records those versions and is the right place to ask whether they moved; a digest here would restate that without adding anything, because the source images can never be hashed from a checkout. The jx-* crops encode nothing: they decode two R2 objects for XT509890, the repack it had until 2026-10-16 (only reencode-hif-archives.ts --backup still holds it) and the HIF-born file R2 serves now.",
       "regenerate": "bash tools/photos/gen-encoding-grids.sh && bash tools/photos/gen-encoding-samples.sh && bun tools/photos/gen-jxl-source-crops.ts <XT509890.HIF> <repack.jxl> <direct.jxl>"
+    },
+    {
+      "id": "dict/measured",
+      "tier": "unverifiable",
+      "why": "The dcb vs dcz measurement every copy quotes: the MEASURED rows in src/worker/dict.ts, the figures table on /garage/compression (written by the same run, between its markers), and that page's prose and quiz, which contract-dict-measured-matches-the-page holds to the record.",
+      "outputs": [
+        "src/worker/dict-measured.json"
+      ],
+      "unverifiable": "Half of it is decode timing on the machine that ran it, through Homebrew's libbrotlidec and libzstd, so no checkout reproduces it. The size half is deterministic over src/dict, but that history grows with every dictionary roll, so a digest would read stale nightly while the figures stayed right to the tenth of a percent.",
+      "regenerate": "bun tools/measure-dict-encodings.ts"
     }
   ],
   "writers": {

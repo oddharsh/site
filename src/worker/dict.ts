@@ -28,6 +28,12 @@
 //
 // This encodes them, measured on this site rather than inferred from the spec.
 import { lensProbe } from "./lens.ts";
+import { dictFacts, parseDictMeasured } from "./dict-measured.ts";
+import dictMeasuredRecord from "./dict-measured.json" with { type: "json" };
+
+// The dcb vs dcz figures, from their one record (dict-measured.ts says why).
+export const DICT_MEASURED = parseDictMeasured(dictMeasuredRecord);
+export const DICT_FACTS = dictFacts(DICT_MEASURED);
 
 // The verdicts a single rule can return. `veto` means the dictionary is dead;
 // `warn` means it works but not the way you probably intended.
@@ -193,8 +199,11 @@ export const MEASURED = [
   ["shell assets (js/css)", "93-97% off, per-asset dictionaries"],
   ["pages, family corpus", "~26% off q11 (298,933 B vs 405,909 B across 38 pages)"],
   ["a dictionary 11 days stale", "still 87-93% — freshness matters far less than people fear"],
-  ["dcz vs dcb, size", "dcb wins by 7.7% across 443 shipped pairs (2026-11-26)"],
-  ["dcz vs dcb, decode", "dcz 13.4us vs dcb 27.1us per rebuild in C, 2.0x"],
-  ["why dcz anyway", "close call: dcb's 97 B saved beats its extra decode only below ~57 Mbps on a laptop, ~19 Mbps on a phone"],
+  ["dcz vs dcb, size", `dcb wins by ${DICT_FACTS.dcbSmaller} across ${DICT_FACTS.pairs} (${DICT_MEASURED.measured})`],
+  ["dcz vs dcb, decode", `dcz ${DICT_FACTS.dczUs} vs dcb ${DICT_FACTS.dcbUs} per rebuild in C, ${DICT_FACTS.decodeRatio}`],
+  [
+    "why dcz anyway",
+    `close call: dcb's ${DICT_FACTS.savedBytes} saved beats its extra decode only below ~${DICT_FACTS.breakEvenMbps} on a laptop, ~${DICT_FACTS.phoneBreakEvenMbps} on a phone`,
+  ],
   ["zstd level 19 vs 22", "byte-identical on every asset here; above 19 is dead weight"],
 ];

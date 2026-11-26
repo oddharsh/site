@@ -159,32 +159,37 @@
     <table class="cmp">
       <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
       <tbody>
-        <tr><td>all 12 shipping <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">516,978 bytes</td><td>559,969 bytes</td></tr>
-        <tr><td>widest single gap (pretext-lib.js)</td><td class="y">33,688 bytes</td><td>35,664 bytes</td></tr>
-        <tr><td>decode, average 39,821 B rebuilt</td><td>27.1 µs</td><td class="y">13.4 µs</td></tr>
-        <tr><td>throughput</td><td>1,403 MiB/s</td><td class="y">2,839 MiB/s</td></tr>
+        <!-- dict-measured:table, written by tools/measure-dict-encodings.ts -->
+        <tr><td>835 <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">534,515 bytes</td><td>580,596 bytes</td></tr>
+        <tr><td>widest single gap (pretext-lib.js)</td><td class="y">33,748 bytes</td><td>35,661 bytes</td></tr>
+        <tr><td>decode, average 40,169 B rebuilt</td><td>7.3 µs</td><td class="y">3.5 µs</td></tr>
+        <tr><td>throughput</td><td>5,219 MiB/s</td><td class="y">11,104 MiB/s</td></tr>
+        <!-- /dict-measured:table -->
       </tbody>
     </table>
+    <!-- dict-measured:prose, figures checked by contract-dict-measured-matches-the-page -->
     <p>
       I argued for brotli on bytes and got talked out of it, correctly, and then the numbers I
       argued from turned out to be wrong in <em>both</em> directions. Re-measured against real
       dictionaries rather than stand-ins, brotli's size edge grew from the one byte I had to 245
       bytes across the set (6.8%, winning 11 of 12). zstd's decode edge grew from the 2x I had to
-      8.3x. A third pass on 2026-11-26 put both encoders on the build's exact settings, took 443
-      deltas from the committed dictionary history, and decoded them straight through the C libraries. Brotli's
-      edge held at 7.7%. The 8.3x didn't reproduce: zstd decodes 2.0x faster.
+      8.3x. A third pass on 2026-11-26 put both encoders on the build's exact settings, took all
+      835 deltas in the committed dictionary history, and decoded them straight through the C
+      libraries. Brotli's edge held at 7.9%. The 8.3x didn't reproduce: zstd decodes 2.1x faster.
     </p>
     <p>
       <strong>Decode still scales with the size of the file it rebuilds,</strong> so making the
-      delta smaller never makes the decode gap smaller. At 2.0x, though, the gap is small. dcb
-      saves 97 bytes per response and costs 13.7 µs more to decode, which breaks even at about
-      57 Mbps on a laptop. Below that dcb wins. On a phone that decodes 3x slower, the line
-      drops to about 19 Mbps. dcz still ships, and on these numbers that's a close call.
+      delta smaller never makes the decode gap smaller. At 2.1x, though, the gap is a few
+      microseconds. dcb saves 55 bytes per response and costs 3.9 µs more to decode, which breaks
+      even at about 113 Mbps on a laptop. Below that dcb wins. On a phone that decodes 3x slower,
+      the line drops to about 38 Mbps. dcz still ships, and on these numbers dcb would edge it on
+      most connections, by microseconds a response.
     </p>
+    <!-- /dict-measured:prose -->
     <p>
-      On the old numbers this was a coin flip, and on these it's lopsided. The
-      size table now favours brotli by more than it ever did, and that table is the wrong axis to
-      decide on.
+      On July's numbers this looked lopsided toward dcz, and on these it tips slightly toward dcb.
+      The size table favours brotli by more than it ever did, and the decode gap no longer
+      outweighs it.
     </p>
     <p>
       dcz's framing is the tidier of the two as a bonus. The dictionary hash rides in a Zstandard
@@ -310,7 +315,7 @@
         {
           "t": "zstd rebuilds the file about twice as fast, which offsets brotli's smaller delta on fast connections.",
           "ok": true,
-          "why": "Right, though it's close. Across 443 deltas dcb is 7.7% smaller and zstd decodes 2.0x faster, 13.4 µs against 27.1 µs per rebuild. dcb's 97 saved bytes beat the extra decode below about 57 Mbps on a laptop, and below about 19 Mbps on a phone that decodes 3x slower."
+          "why": "Right, though only on fast ones. Across 835 deltas dcb is 7.9% smaller and zstd decodes 2.1x faster, 3.5 µs against 7.3 µs per rebuild. dcb's 55 saved bytes beat the extra decode below about 113 Mbps on a laptop, and below about 38 Mbps on a phone that decodes 3x slower."
         },
         {
           "t": "Cloudflare's edge passes dcz through to browsers, and dcb responses get stripped back to plain brotli.",
