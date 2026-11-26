@@ -35,6 +35,7 @@ test("the figures table is exactly what the record renders", () => {
 
 test("the prose quotes every figure its argument rests on", () => {
   quotes("prose", between(PROSE_START, PROSE_END), [
+    "measured",
     "pairs",
     "dcbSmaller",
     "decodeRatio",

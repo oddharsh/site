@@ -345,7 +345,7 @@
       "outputs": [
         "src/worker/dict-measured.json"
       ],
-      "unverifiable": "Half of it is decode timing on the machine that ran it, through Homebrew's libbrotlidec and libzstd, so no checkout reproduces it. The size half is deterministic over src/dict, but that history grows with every dictionary roll, so a digest would read stale nightly while the figures stayed right to the tenth of a percent.",
+      "unverifiable": "Half of it is decode timing on the machine that ran it, through Homebrew's libbrotlidec and libzstd, so no checkout reproduces it. The size half is deterministic over src/dict, but that history grows with every dictionary roll, and a pinned digest would fail validate on each nightly roll that CI can't re-measure. So the record is a dated measurement of what src/dict held on its `measured` date, and contract-dict-measured-matches-the-page makes the page's prose quote that date beside the pair count. Re-measure with the command below when the figures should describe a newer history.",
       "regenerate": "bun tools/measure-dict-encodings.ts"
     }
   ],

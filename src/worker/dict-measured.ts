@@ -103,6 +103,10 @@ export function dictFacts(m: DictMeasured) {
   // microsecond, which is Mbps: below that link speed the smaller delta wins.
   const breakEvenMbps = (savedBytes * 8) / extraDecodeUs;
   return {
+    // The corpus is whatever src/dict held on this date, so prose that quotes
+    // the pair count has to say when; a later roll grows the history without
+    // making a dated figure wrong.
+    measured: m.measured,
     pairs: `${m.pairs.total} deltas`,
     dcbSmaller: `${((1 - m.size.dcbBytes / m.size.dczBytes) * 100).toFixed(1)}%`,
     decodeRatio: `${(m.decode.dcbUs / m.decode.dczUs).toFixed(1)}x`,

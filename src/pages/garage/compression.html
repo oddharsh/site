@@ -173,8 +173,8 @@
       argued from turned out to be wrong in <em>both</em> directions. Re-measured against real
       dictionaries rather than stand-ins, brotli's size edge grew from the one byte I had to 245
       bytes across the set (6.8%, winning 11 of 12). zstd's decode edge grew from the 2x I had to
-      8.3x. A third pass on 2026-11-26 put both encoders on the build's exact settings, took all
-      835 deltas in the committed dictionary history, and decoded them straight through the C
+      8.3x. A third pass on 2026-11-26 put both encoders on the build's exact settings, took the
+      835 deltas the committed dictionary history held that day, and decoded them straight through the C
       libraries. Brotli's edge held at 7.9%. The 8.3x didn't reproduce: zstd decodes 2.1x faster.
     </p>
     <p>
