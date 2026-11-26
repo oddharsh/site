@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/htmx: Break-even at three submits</title>
+<title>aadhar.sh/garage/htmx: htmx 4.0 pays for itself after three form submits</title>
 <meta name="description" content="htmx 4.0 costs this site 11.46 KiB and saves 3,968 bytes per form submit, measured on the one page built for it. That page is submitted once.">
 <link rel="canonical" href="https://aadhar.sh/garage/htmx">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/garage/htmx: Break-even at three submits">
+<meta property="og:title" content="aadhar.sh/garage/htmx: htmx 4.0 pays for itself after three form submits">
 <meta property="og:description" content="htmx 4.0 costs this site 11.46 KiB and saves 3,968 bytes per form submit, measured on the one page built for it. That page is submitted once.">
 <meta property="og:url" content="https://aadhar.sh/garage/htmx">
 <meta name="twitter:card" content="summary_large_image">
@@ -64,7 +64,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-<h1>Break-even at three submits</h1>
+<h1>htmx 4.0 pays for itself after three form submits</h1>
 <p class="garage-intro"><a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped <a href="https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released" rel="external">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes <a class="term" data-t="minification" href="https://en.wikipedia.org/wiki/Minification_(programming)" title="Stripping spaces, comments and long names out of code so it downloads smaller and still runs the same." rel="external">minified</a> against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by <data value="2.96x (11,735 bytes of library vs 3,968 saved per submit)">a factor of three</data>.</p>
 
 <h2>The library is priced per visitor</h2>

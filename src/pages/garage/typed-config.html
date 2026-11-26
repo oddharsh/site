@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/typed-config: The config that types itself</title>
+<title>aadhar.sh/garage/typed-config: A TypeScript Wrangler config types every binding it declares</title>
 <meta name="description" content="Wrangler&#39;s TypeScript config, re-measured on wrangler 4.147.0 and cf: a byte-identical upload and a Durable Object type that now threads across Workers.">
 <link rel="canonical" href="https://aadhar.sh/garage/typed-config">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/garage/typed-config: The config that types itself">
+<meta property="og:title" content="aadhar.sh/garage/typed-config: A TypeScript Wrangler config types every binding it declares">
 <meta property="og:description" content="Wrangler&#39;s TypeScript config, re-measured on wrangler 4.147.0 and cf: a byte-identical upload and a Durable Object type that now threads across Workers.">
 <meta property="og:url" content="https://aadhar.sh/garage/typed-config">
 <meta name="twitter:card" content="summary_large_image">
@@ -66,7 +66,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-<h1>The config that types itself</h1>
+<h1>A TypeScript Wrangler config types every binding it declares</h1>
 <p class="garage-intro">A Worker config is data, so every <a class="term" data-t="binding" href="https://developers.cloudflare.com/workers/runtime-apis/bindings/" title="A named handle in a Worker's environment that connects its code to a resource, such as a database, a storage bucket or another Worker." rel="external">binding</a> name in it is a string that nothing checks. <a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> can load a config that is a <a class="term" data-t="typescript" href="https://en.wikipedia.org/wiki/TypeScript" title="JavaScript with type annotations, checked by a compiler that catches mismatched types before the code runs." rel="external">TypeScript</a> program instead, behind a flag it still hides, and Cloudflare's new <code>cf</code> CLI loads the same file with no flag at all. Both infer the Worker's <code>Env</code> from it. This page measured that twice, in August and again on 2026-10-05. The upload still comes out byte-identical. The <a class="term" data-t="durable-object" href="https://developers.cloudflare.com/durable-objects/" title="A Cloudflare Workers object with its own built-in storage, where each named instance lives in one place so every request to it is coordinated." rel="external">Durable Object</a> type still degrades for a Worker that binds its own class, and now carries the class through when the binding names a second Worker. And one August claim was wrong: <code>wrangler types</code> already wrote a plain-text variable's value into the type.</p>
 
 <h2>Two runs, two toolchains</h2>

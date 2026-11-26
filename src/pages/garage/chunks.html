@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/content-addressed chunking</title>
+<title>aadhar.sh/garage/chunks: FastCDC splits files into content-addressed chunks in the browser</title>
 <meta name="description" content="Live FastCDC chunking in the browser: why a one-byte edit re-sends the whole file under fixed chunks and almost nothing under content-defined ones.">
 <link rel="canonical" href="https://aadhar.sh/garage/chunks">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/content-addressed chunking">
+<meta property="og:title" content="aadhar.sh/garage/chunks: FastCDC splits files into content-addressed chunks in the browser">
 <meta property="og:description" content="Live FastCDC content-defined chunking + content-addressing in the browser: pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
 <meta property="og:url" content="https://aadhar.sh/garage/chunks">
 <meta name="twitter:card" content="summary_large_image">
@@ -64,7 +64,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-    <h1>Chunking &amp; content-addressing <span class="badge review">in review</span></h1>
+    <h1>FastCDC splits files into content-addressed chunks in the browser <span class="badge review">in review</span></h1>
     <p class="lede">
       How systems store and sync big files by their <em>content</em>, and why a one-byte edit re-sends the whole file under
       naïve chunking, but almost nothing under <a class="term" data-t="content-defined-chunking" href="https://en.wikipedia.org/wiki/Rolling_hash#Content-based_slicing_using_a_rolling_hash" title="Splitting a file wherever its own bytes match a pattern, so an insertion only moves the boundaries near it and the other chunks stay identical." rel="external">content-defined chunking</a>.
