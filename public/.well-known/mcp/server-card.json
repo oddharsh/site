@@ -1271,7 +1271,8 @@
           "limit": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 200
+            "maximum": 200,
+            "description": "maximum events to return; defaults to 50"
           }
         }
       },
@@ -1296,14 +1297,15 @@
         "properties": {
           "image_data": {
             "type": "string",
-            "description": "base64 image bytes, optionally as a data URL"
+            "description": "base64 image bytes, optionally as a data URL, up to 8 MiB. Takes precedence over source_url."
           },
           "mime_type": {
-            "type": "string"
+            "type": "string",
+            "description": "image MIME type of image_data, such as image/png; read from the data URL when omitted"
           },
           "source_url": {
             "type": "string",
-            "description": "public HTTPS image URL"
+            "description": "public HTTP(S) image URL to fetch when image_data is not given, up to 8 MiB"
           }
         }
       },
@@ -1327,13 +1329,16 @@
         "type": "object",
         "properties": {
           "image_data": {
-            "type": "string"
+            "type": "string",
+            "description": "base64 image bytes, optionally as a data URL, up to 8 MiB. Takes precedence over source_url."
           },
           "mime_type": {
-            "type": "string"
+            "type": "string",
+            "description": "image MIME type of image_data, such as image/png; read from the data URL when omitted"
           },
           "source_url": {
-            "type": "string"
+            "type": "string",
+            "description": "public HTTP(S) image URL to fetch when image_data is not given, up to 8 MiB"
           },
           "preset": {
             "type": "string",
@@ -1342,17 +1347,20 @@
               "thumbnail",
               "universal",
               "og"
-            ]
+            ],
+            "description": "explicit fields override it: web 1600w AVIF q82, thumbnail 600x600 cover AVIF q84, universal 1600w JPEG q84, og 1200x630 cover JPEG q82"
           },
           "width": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 2400
+            "maximum": 2400,
+            "description": "output width in pixels"
           },
           "height": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 2400
+            "maximum": 2400,
+            "description": "output height in pixels"
           },
           "fit": {
             "type": "string",
@@ -1363,7 +1371,8 @@
               "scale-down",
               "pad",
               "squeeze"
-            ]
+            ],
+            "description": "how the image fills width x height, with Cloudflare Images' fit semantics"
           },
           "format": {
             "type": "string",
@@ -1371,12 +1380,14 @@
               "avif",
               "webp",
               "jpeg"
-            ]
+            ],
+            "description": "output format; defaults to the preset's, else avif"
           },
           "quality": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 100,
+            "description": "encoder quality; defaults to the preset's, else 84"
           },
           "rotate": {
             "type": "integer",
@@ -1385,7 +1396,8 @@
               90,
               180,
               270
-            ]
+            ],
+            "description": "clockwise rotation in degrees"
           }
         }
       },
@@ -1409,13 +1421,16 @@
         "type": "object",
         "properties": {
           "image_data": {
-            "type": "string"
+            "type": "string",
+            "description": "base64 image bytes, optionally as a data URL, up to 8 MiB. Takes precedence over source_url."
           },
           "mime_type": {
-            "type": "string"
+            "type": "string",
+            "description": "image MIME type of image_data, such as image/png; read from the data URL when omitted"
           },
           "source_url": {
-            "type": "string"
+            "type": "string",
+            "description": "public HTTP(S) image URL to fetch when image_data is not given, up to 8 MiB"
           },
           "formats": {
             "type": "array",
@@ -1427,7 +1442,8 @@
                 "webp",
                 "jpeg"
               ]
-            }
+            },
+            "description": "output formats to encode, one variant each; defaults to all three"
           },
           "preset": {
             "type": "string",
@@ -1436,25 +1452,38 @@
               "thumbnail",
               "universal",
               "og"
-            ]
+            ],
+            "description": "sets size, fit, and quality; each variant keeps its format: web 1600w q82, thumbnail 600x600 cover q84, universal 1600w q84, og 1200x630 cover q82"
           },
           "width": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 2400
+            "maximum": 2400,
+            "description": "output width in pixels, applied to every variant"
           },
           "height": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 2400
+            "maximum": 2400,
+            "description": "output height in pixels, applied to every variant"
           },
           "fit": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "cover",
+              "contain",
+              "crop",
+              "scale-down",
+              "pad",
+              "squeeze"
+            ],
+            "description": "how the image fills width x height, with Cloudflare Images' fit semantics"
           },
           "quality": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 100,
+            "description": "encoder quality for every variant; defaults to the preset's, else 84"
           }
         }
       },
@@ -1478,10 +1507,12 @@
         "type": "object",
         "properties": {
           "stem": {
-            "type": "string"
+            "type": "string",
+            "description": "published photo stem, the archive's id for a photo, as photo_query returns it"
           },
           "source_url": {
-            "type": "string"
+            "type": "string",
+            "description": "an aadhar.sh archive URL: /images/full/<file>, /i/<stem>.<hash>.avif or .jpg, or /i/<stem>-400.<hash>.avif"
           },
           "image_data": {
             "type": "string",
@@ -1509,7 +1540,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "public HTTP(S) URL to capture"
           },
           "profiles": {
             "type": "array",
@@ -1522,7 +1554,8 @@
                 "markdown",
                 "identity"
               ]
-            }
+            },
+            "description": "request profiles to capture, one snapshot each; defaults to browser, markdown, and identity"
           }
         },
         "required": [
@@ -1549,7 +1582,8 @@
         "type": "object",
         "properties": {
           "snapshot_id": {
-            "type": "string"
+            "type": "string",
+            "description": "snapshot id that representation_capture returned"
           }
         },
         "required": [
@@ -1576,7 +1610,8 @@
         "type": "object",
         "properties": {
           "snapshot_id": {
-            "type": "string"
+            "type": "string",
+            "description": "stored snapshot id to compare against"
           },
           "url": {
             "type": "string",
@@ -1746,6 +1781,7 @@
           "samples": {
             "type": "array",
             "maxItems": 40,
+            "description": "signal readings you measured, one per source",
             "items": {
               "type": "object",
               "properties": {
@@ -1818,7 +1854,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "public URL of a JPEG or AVIF to read; omit it for the intro frame"
           }
         }
       },
@@ -1855,7 +1892,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "origin or page URL to grade; omit it to audit aadhar.sh"
           }
         }
       },
@@ -1892,7 +1930,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "URL serving the compression dictionary to grade; omit it for the intro frame"
           }
         }
       },
@@ -1929,7 +1968,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "public URL to probe for ETag and 304 behavior; omit it for the intro frame"
           }
         }
       },
@@ -1966,7 +2006,8 @@
         "type": "object",
         "properties": {
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "public HTTP(S) URL to inspect"
           },
           "doors": {
             "type": "boolean",

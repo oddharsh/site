@@ -57,17 +57,31 @@ const terminalOutputSchema = {
   required: ["frame", "url"],
 };
 
+// The three image tools read their input through one function
+// (resolveImageInput in image-tools.ts), so they share one description of it.
+const imageInputProperties = {
+  image_data: { type: "string", description: "base64 image bytes, optionally as a data URL, up to 8 MiB. Takes precedence over source_url." },
+  mime_type: { type: "string", description: "image MIME type of image_data, such as image/png; read from the data URL when omitted" },
+  source_url: { type: "string", description: "public HTTP(S) image URL to fetch when image_data is not given, up to 8 MiB" },
+};
+const imagePresetSchema = {
+  type: "string",
+  enum: ["web", "thumbnail", "universal", "og"],
+  description: "explicit fields override it: web 1600w AVIF q82, thumbnail 600x600 cover AVIF q84, universal 1600w JPEG q84, og 1200x630 cover JPEG q82",
+};
+const imageFitSchema = {
+  type: "string",
+  enum: ["cover", "contain", "crop", "scale-down", "pad", "squeeze"],
+  description: "how the image fills width x height, with Cloudflare Images' fit semantics",
+};
+
 const HOSTED_TOOLS = [
   {
     name: "image_inspect",
     description: "Inspect an image's dimensions, format, and animation/frame information. Image bytes are processed ephemerally and are not stored.",
     inputSchema: {
       type: "object",
-      properties: {
-        image_data: { type: "string", description: "base64 image bytes, optionally as a data URL" },
-        mime_type: { type: "string" },
-        source_url: { type: "string", description: "public HTTPS image URL" },
-      },
+      properties: imageInputProperties,
     },
   },
   {
@@ -77,16 +91,14 @@ const HOSTED_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        image_data: { type: "string" },
-        mime_type: { type: "string" },
-        source_url: { type: "string" },
-        preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
-        width: { type: "integer", minimum: 1, maximum: 2400 },
-        height: { type: "integer", minimum: 1, maximum: 2400 },
-        fit: { type: "string", enum: ["cover", "contain", "crop", "scale-down", "pad", "squeeze"] },
-        format: { type: "string", enum: ["avif", "webp", "jpeg"] },
-        quality: { type: "integer", minimum: 1, maximum: 100 },
-        rotate: { type: "integer", enum: [0, 90, 180, 270] },
+        ...imageInputProperties,
+        preset: imagePresetSchema,
+        width: { type: "integer", minimum: 1, maximum: 2400, description: "output width in pixels" },
+        height: { type: "integer", minimum: 1, maximum: 2400, description: "output height in pixels" },
+        fit: imageFitSchema,
+        format: { type: "string", enum: ["avif", "webp", "jpeg"], description: "output format; defaults to the preset's, else avif" },
+        quality: { type: "integer", minimum: 1, maximum: 100, description: "encoder quality; defaults to the preset's, else 84" },
+        rotate: { type: "integer", enum: [0, 90, 180, 270], description: "clockwise rotation in degrees" },
       },
     },
   },
@@ -97,15 +109,22 @@ const HOSTED_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        image_data: { type: "string" },
-        mime_type: { type: "string" },
-        source_url: { type: "string" },
-        formats: { type: "array", maxItems: 3, items: { type: "string", enum: ["avif", "webp", "jpeg"] } },
-        preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
-        width: { type: "integer", minimum: 1, maximum: 2400 },
-        height: { type: "integer", minimum: 1, maximum: 2400 },
-        fit: { type: "string" },
-        quality: { type: "integer", minimum: 1, maximum: 100 },
+        ...imageInputProperties,
+        formats: {
+          type: "array",
+          maxItems: 3,
+          items: { type: "string", enum: ["avif", "webp", "jpeg"] },
+          description: "output formats to encode, one variant each; defaults to all three",
+        },
+        preset: {
+          ...imagePresetSchema,
+          description:
+            "sets size, fit, and quality; each variant keeps its format: web 1600w q82, thumbnail 600x600 cover q84, universal 1600w q84, og 1200x630 cover q82",
+        },
+        width: { type: "integer", minimum: 1, maximum: 2400, description: "output width in pixels, applied to every variant" },
+        height: { type: "integer", minimum: 1, maximum: 2400, description: "output height in pixels, applied to every variant" },
+        fit: imageFitSchema,
+        quality: { type: "integer", minimum: 1, maximum: 100, description: "encoder quality for every variant; defaults to the preset's, else 84" },
       },
     },
   },
@@ -116,8 +135,11 @@ const HOSTED_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        stem: { type: "string" },
-        source_url: { type: "string" },
+        stem: { type: "string", description: "published photo stem, the archive's id for a photo, as photo_query returns it" },
+        source_url: {
+          type: "string",
+          description: "an aadhar.sh archive URL: /images/full/<file>, /i/<stem>.<hash>.avif or .jpg, or /i/<stem>-400.<hash>.avif",
+        },
         image_data: { type: "string", description: "base64 bytes from a published thumbnail" },
       },
     },
@@ -148,8 +170,13 @@ const HOSTED_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        url: { type: "string" },
-        profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
+        url: { type: "string", description: "public HTTP(S) URL to capture" },
+        profiles: {
+          type: "array",
+          maxItems: 4,
+          items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] },
+          description: "request profiles to capture, one snapshot each; defaults to browser, markdown, and identity",
+        },
       },
       required: ["url"],
     },
@@ -157,7 +184,11 @@ const HOSTED_TOOLS = [
   {
     name: "representation_read",
     description: "Read one normalized HTTP representation snapshot from the vault. Raw response bodies are never returned because they are never stored.",
-    inputSchema: { type: "object", properties: { snapshot_id: { type: "string" } }, required: ["snapshot_id"] },
+    inputSchema: {
+      type: "object",
+      properties: { snapshot_id: { type: "string", description: "snapshot id that representation_capture returned" } },
+      required: ["snapshot_id"],
+    },
   },
   {
     name: "representation_compare",
@@ -167,7 +198,7 @@ const HOSTED_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        snapshot_id: { type: "string" },
+        snapshot_id: { type: "string", description: "stored snapshot id to compare against" },
         url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },
       },
       required: ["snapshot_id"],
@@ -250,6 +281,7 @@ const MCP_TOOL_DEFINITIONS = [
         samples: {
           type: "array",
           maxItems: 40,
+          description: "signal readings you measured, one per source",
           items: {
             type: "object",
             properties: {
@@ -271,28 +303,34 @@ const MCP_TOOL_DEFINITIONS = [
     outputSchema: terminalOutputSchema,
     description:
       "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+    inputSchema: { type: "object", properties: { url: { type: "string", description: "public URL of a JPEG or AVIF to read; omit it for the intro frame" } } },
   },
   {
     name: "agent_ready",
     outputSchema: terminalOutputSchema,
     description:
       "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+    inputSchema: { type: "object", properties: { url: { type: "string", description: "origin or page URL to grade; omit it to audit aadhar.sh" } } },
   },
   {
     name: "dict",
     outputSchema: terminalOutputSchema,
     description:
       "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+    inputSchema: {
+      type: "object",
+      properties: { url: { type: "string", description: "URL serving the compression dictionary to grade; omit it for the intro frame" } },
+    },
   },
   {
     name: "cache",
     outputSchema: terminalOutputSchema,
     description:
       "Does a URL's ETag ever actually 304? A BEHAVIORAL probe rather than a header read: fetches twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin did. Also checks Accept negotiation against Vary. Returns a rendered frame. Same route as /cache.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+    inputSchema: {
+      type: "object",
+      properties: { url: { type: "string", description: "public URL to probe for ETag and 304 behavior; omit it for the intro frame" } },
+    },
   },
   {
     name: "lens",
@@ -302,7 +340,7 @@ const MCP_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        url: { type: "string" },
+        url: { type: "string", description: "public HTTP(S) URL to inspect" },
         doors: {
           type: "boolean",
           description:
