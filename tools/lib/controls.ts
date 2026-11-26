@@ -943,7 +943,7 @@ export const CONTROLS: Control[] = [
     mutations: [
       {
         file: "src/worker/lib/tools.ts",
-        find: 'limit: { type: "integer", minimum: 1, maximum: 200, description: "most events to return; defaults to 50" },',
+        find: 'limit: { type: "integer", minimum: 1, maximum: 200, description: "maximum events to return; defaults to 50" },',
         replace: 'limit: { type: "integer", minimum: 1, maximum: 200 },',
       },
     ],

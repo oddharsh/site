@@ -997,7 +997,7 @@
     "src/worker/lib/api-limits.ts": "48c457553d7ba4f2ea8e31c544656ad9cefa1a71ab32f4da3c956ebdca9f3247",
     "src/worker/lib/openapi.ts": "6d823c649764fdac6da81fcab357d253412973d016f745e1bd2b1b09f45a1e94",
     "src/worker/lib/public-api.ts": "8571b4d2045c95b1ac4de49664e2c3f9ba6c68da3556ea58eca7eb3a0f26ebae",
-    "src/worker/lib/tools.ts": "fee458063dc179da52ca4586707e1e9d3d4a0cbabecb5c2c9be31c3888750557",
+    "src/worker/lib/tools.ts": "ded281a921c2193b24be269e302bbf31facd1f381d4faf43a5740987ffec724a",
     "tools/photos/shell-data.ts": "760a57ab85e36ce64b88d9a69416dc1998072e374c7ef4669b8f4f69e46fd856"
   }
 }
