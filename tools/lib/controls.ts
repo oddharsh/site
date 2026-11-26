@@ -95,6 +95,19 @@ const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.js
 
 export const CONTROLS: Control[] = [
   {
+    id: "dict-measured-stale-prose",
+    plants: "a dcb vs dcz figure moves and the page prose keeps the old one",
+    mutations: [
+      {
+        file: "src/worker/dict-measured.ts",
+        find: "breakEvenMbps / m.assumed.phoneDecodeSlowdown",
+        replace: "breakEvenMbps * m.assumed.phoneDecodeSlowdown",
+      },
+    ],
+    run: contract("contract-dict-measured-matches-the-page"),
+    expect: /the prose no longer quotes \d+ Mbps \(phoneBreakEvenMbps\)/,
+  },
+  {
     id: "dictionary-shell-fallback-encoding",
     plants: "the shell identity fallback double-encodes an already compressed response",
     mutations: [{ file: "src/worker/lib/assets.ts", find: 'if (response.headers.has("content-encoding")) init.encodeBody = "manual";', replace: "" }],

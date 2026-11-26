@@ -1,0 +1,55 @@
+{
+  "$comment": "Written by tools/measure-dict-encodings.ts; edit the tool, not this file. src/worker/dict-measured.ts reads it.",
+  "measured": "2026-11-26",
+  "machine": "Apple M3 Max, darwin",
+  "decoders": {
+    "brotli": "1.2.1",
+    "zstd": "1.5.7"
+  },
+  "pairs": {
+    "total": 835,
+    "shell": 203,
+    "pages": 632,
+    "rawBytes": 33541222
+  },
+  "size": {
+    "dcbBytes": 534515,
+    "dczBytes": 580596,
+    "dcbSmallerOn": 789,
+    "widest": {
+      "file": "pretext-lib.js",
+      "dcbBytes": 33748,
+      "dczBytes": 35661
+    }
+  },
+  "decode": {
+    "dcbUs": 7.34,
+    "dczUs": 3.45,
+    "runs": [
+      {
+        "dcbUs": 6.83,
+        "dczUs": 3.18
+      },
+      {
+        "dcbUs": 11.32,
+        "dczUs": 5
+      },
+      {
+        "dcbUs": 6.89,
+        "dczUs": 3.21
+      },
+      {
+        "dcbUs": 7.82,
+        "dczUs": 3.64
+      },
+      {
+        "dcbUs": 7.34,
+        "dczUs": 3.45
+      }
+    ]
+  },
+  "assumed": {
+    "linkMbps": 50,
+    "phoneDecodeSlowdown": 3
+  }
+}
