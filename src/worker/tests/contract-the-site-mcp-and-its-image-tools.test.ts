@@ -103,6 +103,12 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
         ? `${tool.name} writes, so its description must carry the "Writes:" clause the WebMCP bridge can actually see`
         : `${tool.name} is read-only but its description claims it writes`,
     );
+    // An agent fills arguments from these descriptions alone. ora's WebMCP audit
+    // (webmcp.ora.ai, read 2026-11-26) flagged 14 of 25 tools for undescribed
+    // parameters, 10 of them on image_transform.
+    for (const [param, schema] of Object.entries(tool.inputSchema.properties ?? {})) {
+      assert.ok((schema as { description?: string }).description?.trim(), `${tool.name}.${param} needs a description an agent can fill it from`);
+    }
   }
   assert.equal(listed.find((tool) => tool.name === "lens_inspect").annotations.openWorldHint, true);
   assert.equal(listed.find((tool) => tool.name === "search_site").annotations.openWorldHint, false);

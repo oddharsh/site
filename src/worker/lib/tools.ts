@@ -194,7 +194,7 @@ const DATA_TOOL_DEFINITIONS = [
           description: "optional: only events classified as this topic; unclassified events are counted in `untagged`",
         },
         format: { type: "string", enum: [...EVENT_FORMATS], description: "optional: only events classified as this format (talks, meal, social, ...)" },
-        limit: { type: "integer", minimum: 1, maximum: 200 },
+        limit: { type: "integer", minimum: 1, maximum: 200, description: "maximum events to return; defaults to 50" },
       },
     },
   },
