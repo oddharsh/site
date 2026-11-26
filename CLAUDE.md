@@ -23,7 +23,8 @@ comes back (its `Checked by:` line names it). Take its number from
 | `cal/`, `serendipity/` | modules the site Worker serves at `/coffee` and `/serendipity` |
 | `counter/` | `aadhar-counter`, which owns the `Counter` Durable Object |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | separately deployed auxiliary Workers (TypeScript config, gotcha 41) |
-| `tools/` | the build, the contract tests (`tests/contract-*.test.ts`), checks, generators, `photos/` |
+| `tools/` | the build, the cross-cutting contract tests (`tests/contract-*.test.ts`), checks, generators, `photos/` |
+| `src/**/tests/` | tests that cover one module directory, beside it (gotcha 105) |
 | `pipelines/` | page generators for `garage/` and `lwe/` |
 | `config/` | `infra.json`, `site-manifest.json`, `derivations.json`, `tools.json`, tsconfigs, `dev/` |
 | `design/` | the Luna design system; `tokens/` and `DESIGN.md` are canonical |
@@ -48,7 +49,9 @@ bun run routes:check        # route oracle against an in-process Worker
 bun run derive:check        # derived artifacts still match their inputs (gotcha 46)
 bun run pages:check         # house-voice lint on page text (gotcha 32)
 bun run browser:check       # every page in Chrome: sideways scroll, layout shift, early Intl, errors (gotcha 98)
+bun run act:check           # every control on every page, operated once: errors, dead, slow, scroll, keyboard reach (gotchas 108, 110)
 bun run controls            # plant each guard's defect; fails if a guard misses it (gotcha 90)
+bun run minify:pick         # re-pick a client script's minifier after its source or an engine moves
 bun run wrangler:site <cmd> # wrangler against the site config (gotcha 48)
 bun run photos <paths>      # add photos: encode, upload to R2, index, caption
 ```
@@ -75,8 +78,8 @@ probes) is in `package.json` and [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
   format, typecheck, lint, `pages:check` and `derive:check` pass, about 7 s. A test that reads source text must
   tolerate the formatter rewrapping it.
 - `validate` is the one required check: lint, format, typecheck, build under the perf
-  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite and
-  cal's tests.
+  budget, `derive:check`, `pages:check`, `routes:check`, the contract suite,
+  cal's tests and photo-metrics' cargo tests.
 - Measure before you claim, and run the control that would show your
   instrument can fail. Most gotchas are an instrument that couldn't. When
   the instrument is a check, write the control into `tools/lib/controls.ts`

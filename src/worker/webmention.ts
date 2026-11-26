@@ -32,7 +32,7 @@
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
 import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
-import { esc, extractMeta, extractTitle } from "./lib/http.ts";
+import { cappedRequestBody, esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { mf2All, mf2First, mf2Strings, mf2Values, parseMf2 } from "./lib/mf2.ts";
 import { overBudget, rateLimitedHeaders } from "./lib/ratelimit.ts";
 import { sign, verify } from "./lib/sign.ts";
@@ -108,12 +108,15 @@ export async function handleWebmention(request, env, ctx) {
     return text(
       "This is the Webmention endpoint for aadhar.sh. POST source= and target= (application/x-www-form-urlencoded). See https://www.w3.org/TR/webmention/",
       405,
+      { allow: "POST, OPTIONS" },
     );
   }
 
+  const capped = await cappedRequestBody(request);
+  if (!capped) return text("That body is too large for a source and a target.", 413);
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return text("Send application/x-www-form-urlencoded with source and target.", 400);
   }
@@ -164,7 +167,9 @@ export async function handleWebmention(request, env, ctx) {
   // Accepted: everything past here is slow (a third-party fetch, D1, email), and
   // the spec is explicit that verification may be async. The sender gets 202
   // immediately and never waits on my moderation.
-  const job = processMention(checked.url, origin + targetPath, request, env).catch((e) => console.error("webmention processing failed", e?.message || e));
+  const job = processMention(checked.url, origin + targetPath, request, env).catch((e: unknown) =>
+    console.error("webmention processing failed", e instanceof Error && e.message ? e.message : e),
+  );
   if (ctx?.waitUntil) ctx.waitUntil(job);
   else await job;
 
@@ -455,10 +460,10 @@ function representativeCard(doc, pageUrl) {
   const page = sameUrl(pageUrl);
   const top = doc.items.filter((i) => i.type.includes("h-card"));
   const urls = (c, p) => mf2Strings(c, p).map(sameUrl);
-  const me = (doc.rels.me || []).map(sameUrl);
+  const me = new Set((doc.rels.me || []).map(sameUrl));
   const byUid = top.find((c) => urls(c, "uid").includes(page) && urls(c, "url").includes(page));
   if (byUid) return byUid;
-  const byMe = top.find((c) => urls(c, "url").some((u) => me.includes(u)));
+  const byMe = top.find((c) => urls(c, "url").some((u) => me.has(u)));
   if (byMe) return byMe;
   const byUrl = top.filter((c) => urls(c, "url").includes(page));
   return byUrl.length === 1 ? byUrl[0] : null;
@@ -692,7 +697,7 @@ function sameOriginPath(raw, origin) {
   try {
     const u = new URL(raw);
     if (u.origin !== origin) return null;
-    return u.pathname.replace(/\/+$/, "") || "/";
+    return u.pathname.replace(/(?<!\/)\/+$/, "") || "/";
   } catch {
     return null;
   }

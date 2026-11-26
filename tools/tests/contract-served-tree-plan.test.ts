@@ -53,11 +53,14 @@ async function fixture(extra: Record<string, any> = {}) {
   return cwd;
 }
 
-// Every file reachable under `dir`, following symlinks, as served path -> bytes.
+// Every file reachable under `dir`, following symlinks, as served path -> bytes,
+// keyed in path order. readdir returns whatever order the filesystem keeps, and
+// a Mac and the Linux runner disagree: unsorted, validate failed on 2026-11-15
+// with ["vendor/lib.js", "nav.js"] where the test wanted the reverse.
 async function servedBytes(dir) {
   const out: Record<string, any> = {};
   const walk = async (rel) => {
-    for (const name of await readdir(path.join(dir, rel))) {
+    for (const name of (await readdir(path.join(dir, rel))).sort()) {
       const child = rel ? `${rel}/${name}` : name;
       if ((await stat(path.join(dir, child))).isDirectory()) await walk(child);
       else out[child] = await readFile(path.join(dir, child), "utf8");
@@ -135,7 +138,7 @@ test("a served path two roots author is refused once, by the planner, with the p
   try {
     const refused = await planServedTree({ cwd, roots: ROOTS, derived: DERIVED }).then(
       () => null,
-      (error) => error,
+      (error: unknown) => error,
     );
     assert.ok(refused instanceof ServedTreeCollision, "the planner must refuse, and say which kind of refusal it is");
     assert.deepEqual(refused.paths.sort(), ["_headers", "garage"], "file against file, and file against directory");
@@ -280,7 +283,7 @@ test("tsconfig.browser.json resolves absolute imports across the plan's browser 
 test("neither consumer restates the roots or the skip list", async () => {
   const build = await readFile(path.join(ROOT, "tools/build.ts"), "utf8");
   const dev = await readFile(path.join(ROOT, "tools/dev-stage.ts"), "utf8");
-  assert.match(build, /copyServedTree\(servedPlan, `\$\{OUT\}\/public`\)/, "build.ts step 1 must copy the plan");
+  assert.match(build, /copyServedTree\(servedPlan, `\$\{OUT\}\/public`, \{ erase \}\)/, "build.ts step 1 must copy the plan");
   assert.doesNotMatch(build, /\bcp\("[^"]+",\s*`\$\{OUT\}\/public`/, "build.ts must not copy a root into the served tree by hand");
   assert.match(dev, /linkServedTree\(plan, FARM\)/, "dev-stage.ts must link the plan");
   for (const [name, source] of [

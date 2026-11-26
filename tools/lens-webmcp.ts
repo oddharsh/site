@@ -68,7 +68,9 @@ async function probePage(wsUrl, targetUrl) {
     const load = waitForEvent(cdp, "Page.loadEventFired", 12000);
     await cdp.send("Page.navigate", { url: targetUrl });
     await load;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1500);
+    });
     const evaluated: Record<string, any> = await cdp.send("Runtime.evaluate", {
       awaitPromise: true,
       returnByValue: true,

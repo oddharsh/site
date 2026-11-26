@@ -4,14 +4,17 @@
 
 import { cachedRender, shouldUseWorkersCache } from "./lib/cache.ts";
 import { PHOTO_QUERY_LIMITS, clampParam } from "./lib/api-limits.ts";
-import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, esc, publicJsonResponse } from "./lib/http.ts";
 import { compareCodepoints, queryTerms } from "./lib/text.ts";
-import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf, type PhotoSearchIndex } from "./lib/photo-search.ts";
-import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { buildPhotoSearchIndex, decodePhotoSearchIndex, rankPhotoRows, rowsOf } from "./lib/photo-search.ts";
+import type { PhotoSearchIndex } from "./lib/photo-search.ts";
+import { ALBUMS, albumPath } from "./albums.ts";
+import type { Album } from "./albums.ts";
 import { CACHEABLE_PATHS } from "./routes.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
@@ -236,8 +239,8 @@ export async function servePhotoFromR2(request, env, ctx) {
 //   thumb_xs     200px AVIF, the DPR-1 candidate
 //   thumb_small  400px AVIF, DPR-2, and the plain src every tile carries
 //   thumb_avif   600px AVIF, DPR-3
-//   thumb_jpg    600px JPG, which the grid never emits — it is what /photos
-//                renders, and the target of index.html's AVIF decode repair
+//   thumb_jpg    600px JPG, the gallery's no-script fallback and the target
+//                of both grids' AVIF decode repair
 //
 // AVIF decode failures are still real (Kitesurf, 2026-08-12) and are handled by
 // the recovery listener in index.html rather than by a second candidate here.
@@ -681,7 +684,7 @@ export async function handlePhotoQuery(request, env, ctx, url = new URL(request.
 
 // /images/manifest.json is BUILD OUTPUT since 2026-09-26: build.ts step 1e stages
 // these bytes and the text-twin step writes their q11 twin, so the route serves
-// them through servePrecompressedText. Rendered per request, the edge compressed
+// them through servePrecompressedAsset. Rendered per request, the edge compressed
 // them on the fly: 13,082 B on the wire against 9,803 at q11 (+33.4%), measured
 // in production the day this moved. The inputs are the bundled pool alone, which
 // only a deploy can change, so nothing about the body was ever per-request.
@@ -759,62 +762,41 @@ export function handleImagesManifest() {
 // has; derivePhotoPool never emits a row without one.
 const fullUrl = (key: string | undefined) => `/images/full/${encodeURIComponent(key ?? "").replace(/%2F/g, "/")}`;
 
-// One tile: the 400px AVIF over the 600px JPG, opening the SOOC JPEG. `extra`
-// is the album page's per-tile format links; it sits OUTSIDE the anchor because
-// an <a> inside an <a> is invalid HTML and the parser hoists it out (gotcha 8).
-// Built with the `html` tag, so every interpolation is escaped by construction
-// and the album page below opens no unescaped door at all.
-//
-// The first EAGER_TILES load with the page. Every later tile names its URLs in
-// data-srcset and data-src, so the browser has nothing to fetch until
-// GALLERY_DEFER swaps them in as the tile nears the screen. Both halves of the
-// <picture> are deferred: with only the <img> deferred, the browser still picks
-// the AVIF <source> and fetches it at once. A <noscript> twin keeps every photo
-// for a reader without JavaScript.
-//
-// This replaced loading="lazy" on 2026-10-07. Chrome resolves lazy images
-// within about 1,250 px of the screen on a fast link, so a desktop visit to
-// /photos fetched 47 tiles (563 KB) where 12 were meant to be eager.
-const EAGER_TILES = 12;
+// The first twelve expose URLs at parse time. Later tiles remain URL-deferred
+// until the scroller observer reaches them; native lazy loading alone fetched
+// 47 tiles on a desktop visit (2026-10-07). The first image stays eager with
+// its existing 400px candidate. The others use automatic sizes, which requires
+// lazy loading, inside that explicit URL boundary. All reuse the existing
+// 200/400/600px tiers in both the fluid sheet and the filmstrip.
+const INITIAL_TILES = 12;
 function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
   const alt = (altMap && altMap[p.stem]) || p.stem;
-  const picture =
-    i < EAGER_TILES
-      ? html`<picture>
-<source type="image/avif" srcset="${p.thumb_small}">
-<img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
-</picture>`
-      : html`<picture data-defer>
-<source type="image/avif" data-srcset="${p.thumb_small}">
-<img data-src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" decoding="async">
-</picture><noscript><picture>
+  const candidates = [p.thumb_xs ? `${p.thumb_xs} 200w` : "", `${p.thumb_small} 400w`, `${p.thumb_avif} 600w`].filter(Boolean).join(", ");
+  const priority = i === 0 ? html` fetchpriority="high"` : i < 6 ? EMPTY : html` fetchpriority="low"`;
+  const image =
+    i < INITIAL_TILES
+      ? html`<img data-gallery src="${p.thumb_small}" srcset="${i === 0 ? `${p.thumb_small} 400w` : candidates}" sizes="${i === 0 ? "400px" : "auto, 400px"}" data-photo-jpg="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="${i === 0 ? "eager" : "lazy"}"${priority} decoding="async">`
+      : html`<img data-gallery data-defer data-src="${p.thumb_small}" data-srcset="${candidates}" sizes="auto, 400px" data-photo-jpg="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy"${priority} decoding="async">`;
+  const noScript = html`<noscript><picture>
 <source type="image/avif" srcset="${p.thumb_small}">
 <img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400" loading="lazy" decoding="async">
 </picture></noscript>`;
   return html`<div class="ph">
 <a class="ph-open" href="${fullUrl(p.full)}">
-${picture}
+${image}${noScript}
 </a>
 <span class="ph-name">${p.stem}</span>${extra}
 </div>`;
 }
 
-// Swaps a deferred tile's URLs in once it comes within a quarter of a screen of
-// view. It starts one frame after first paint, so it never delays it.
-//
-// The root is the sheet's scrolling ancestor. Luna pages scroll inside
-// `.window > .content`, and a rootMargin only enlarges the root: with the
-// viewport as root, the scroller still clips each tile to its visible area, and
-// the quarter-screen lead would shrink to nothing. `body` and `html` are skipped,
-// because their overflow can propagate to the viewport, and observing against
-// them would count every tile as in view.
-//
-// Without JavaScript the deferred <picture> is hidden and its <noscript> twin
-// shows. The 25% margin is the cheapest that left no tile empty while scrolling
-// at 1,000 and 2,000 px/s, measured across 0, 25, 50 and 100% in the build-off
-// merge (buildoff/merge, 44e6c344) and again on this sheet.
-// A static `html` literal: it interpolates nothing, so it opens no unescaped door.
-const GALLERY_DEFER = html`<noscript><style>picture[data-defer]{display:none}</style></noscript><script>requestAnimationFrame(()=>setTimeout(()=>{let r=document.querySelector(".sheet");while((r=r.parentElement)&&r!==document.body&&!/auto|scroll/.test(getComputedStyle(r).overflowY));if(r===document.body)r=null;const o=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const p=e.target;for(const s of p.querySelectorAll("[data-srcset]"))s.srcset=s.dataset.srcset;const i=p.querySelector("img");i.src=i.dataset.src;o.unobserve(p)}},{root:r,rootMargin:"25%"});for(const p of document.querySelectorAll("picture[data-defer]"))o.observe(p)}))</script>`;
+// Installed in the head so a failed initial image cannot beat its recovery
+// listener. A failed JPEG cannot loop because the recovery target is consumed.
+const GALLERY_RECOVERY = html`<script>document.addEventListener("error",e=>{const i=e.target;if(!(i instanceof HTMLImageElement)||!i.dataset.photoJpg)return;const jpg=i.dataset.photoJpg;delete i.dataset.photoJpg;i.removeAttribute("srcset");i.removeAttribute("data-srcset");i.src=jpg},true)</script>`;
+
+// The observer follows the internal window scroller and gives the next tiles
+// a quarter-screen lead, the margin measured in the gallery build-off.
+// A viewport root cannot enlarge the scroller's clip, so its lead was zero.
+const GALLERY_DEFER = html`<noscript><style>img[data-gallery]{display:none}</style></noscript><script>requestAnimationFrame(()=>setTimeout(()=>{let r=document.querySelector(".sheet");while((r=r.parentElement)&&r!==document.body&&!/auto|scroll/.test(getComputedStyle(r).overflowY));if(r===document.body)r=null;const o=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const i=e.target;if(i.dataset.srcset)i.srcset=i.dataset.srcset;i.src=i.dataset.src;o.unobserve(i)}},{root:r,rootMargin:"25%"});for(const i of document.querySelectorAll("img[data-defer]"))o.observe(i)}))</script>`;
 
 const SHEET_CSS = `/*min*/
   h1 { font-size: 18pt; }
@@ -825,6 +807,8 @@ const SHEET_CSS = `/*min*/
   }
   .ph {
   display: block; text-align: center;
+  }
+  .ph:nth-child(n+13) {
   content-visibility: auto; contain-intrinsic-size: auto 190px;
   }
   .ph-open { display: block; text-decoration: none; }
@@ -883,7 +867,8 @@ const VIEW_CSS = `/*min*/
   .window:has(>.axp-tasks):has(>.ph-menubar) > .content,
   .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-resize { grid-row: 4; }
   #ph-view { border: 0; background: none; font: inherit; color: var(--ink); padding: 1px 7px; cursor: default; }
-  #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 0; }
+  /* the transparent outline shows only in High Contrast, which strips the selection background */
+  #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 1px solid transparent; outline-offset: -1px; }
   .ph-drop { position: fixed; inset: auto; margin: 0; padding: 2px; min-width: 140px; background: var(--face-light); border: 1px solid var(--darkshadow); box-shadow: var(--shadow-tip); font: 11px/1.5 var(--font-ui); }
   .ph-drop button { display: flex; align-items: center; width: 100%; padding: 2px 20px 2px 0; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: default; }
   .ph-drop button::before { content: ""; flex: 0 0 20px; text-align: center; font-size: 7px; }
@@ -917,13 +902,12 @@ const VIEW_CSS = `/*min*/
   @media (max-width: 640px) { .ph-film { grid-template-columns: minmax(0, 1fr); } }
 
   .ph-list { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--slate-80); background: var(--paper); }
+  .ph-list caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ph-list table { width: 100%; border-collapse: collapse; font: 11px/1.4 var(--font-ui); white-space: nowrap; }
   .ph-list th { padding: 0; font-weight: 400; text-align: left; }
   .ph-list th button { display: block; width: 100%; box-sizing: border-box; padding: 3px 6px 1px; border: 0; border-right: 1px solid var(--shadow); border-bottom: 3px solid var(--face); background: var(--grad-button); font: inherit; color: var(--ink); text-align: inherit; cursor: default; }
   .ph-list th button:hover { border-bottom-color: var(--amber-70); }
   .ph-list th button:focus-visible { outline: 1px dotted var(--ink); outline-offset: -3px; }
-  .ph-list th[aria-sort="ascending"] button::after { content: " ▴"; }
-  .ph-list th[aria-sort="descending"] button::after { content: " ▾"; }
   .ph-list th.num, .ph-list td.num { text-align: right; }
   .ph-list td { padding: 2px 6px; color: var(--ink); }
   .ph-list td.sorted { background: var(--row-alt); }
@@ -968,6 +952,7 @@ export function renderPhotosPage(photos, altMap) {
     ogImage: curated[0].thumb_jpg,
     ogImageAlt: (altMap && altMap[curated[0].stem]) || curated[0].stem,
     css: SHEET_CSS + VIEW_CSS,
+    head: GALLERY_RECOVERY,
     body: unsafeHtml(`
   <h1>Photos</h1>
   <p class="lede">
@@ -1034,6 +1019,7 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     ogImage: members[0].thumb_jpg,
     ogImageAlt: (altMap && altMap[members[0].stem]) || members[0].stem,
     css: SHEET_CSS,
+    head: GALLERY_RECOVERY,
     body: html`
   <h1>${album.title}</h1>
   <p class="lede">

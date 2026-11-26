@@ -15,7 +15,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { readManifest } from "../../tools/gen-manifest.ts";
-import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
+import { DESKTOP, PROFILES, SECTION_ICONS, SOUND_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 import { titleBar } from "../../src/worker/lib/window.ts";
 
@@ -71,7 +71,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     TASKBAR.map((item) => [item.path, surfaces.filter((surface) => surface.path.startsWith(item.path + "/") && surface.flags.run).length]),
   );
 
-  const cells = [];
+  const cells: { name: string; inner: string; dy: number; view: string; right: number; bottom: number }[] = [];
   let spriteY = 0;
   const gutter = 16;
   const spriteRef = (name, svg) => {
@@ -113,8 +113,13 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     );
   }).join("");
 
+  // Register both speaker states in icons.svg; the button starts muted and
+  // hidden (its space reserved by luna.css), and nav.js swaps the fragment.
+  spriteRef("tray-sound-on", SOUND_ICONS.on);
+  const soundOffImg = spriteRef("tray-sound-off", SOUND_ICONS.off);
+
   const trayHtml =
-    '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>' +
+    `<div id="axp-tray"><button id="axp-sound" type="button" hidden>${soundOffImg}</button>` +
     TRAY_ITEMS.map(
       (item) =>
         `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`,

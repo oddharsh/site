@@ -1,5 +1,6 @@
 // ── the Env type matches cloudflare.config.ts ─────────────────────────────
-import { configText, assert, readFileSync, test } from "./contract-shared.ts";
+import { assert, readFileSync, test } from "./contract-shared.ts";
+import { configText } from "./contract-config.ts";
 
 // src/worker/lib/env.ts is a DECLARATION of the Worker's binding surface, and a
 // declaration nothing diffs is a comment with extra syntax. This is the diff.
@@ -113,7 +114,7 @@ function bodyMembers(body) {
 async function members() {
   const src = stripComments(readFileSync(ENV_TS, "utf8"));
   const byInterface = new Map();
-  const re = /\binterface\s+([A-Za-z0-9_$]+)[^{]*\{/g;
+  const re = /\binterface\s+([A-Za-z0-9_$]+)(?:[^{A-Za-z0-9_$][^{]*)?\{/g;
   for (let m; (m = re.exec(src));) {
     const open = m.index + m[0].length;
     let depth = 1,

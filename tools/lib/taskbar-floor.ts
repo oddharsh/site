@@ -74,7 +74,7 @@ function canonical(expr: string): string {
   let px = 0;
   const rest: string[] = [];
   for (const [sign, term] of terms) {
-    const n = term.match(/^(-?\d*\.?\d+)px$/);
+    const n = term.match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))px$/);
     if (n) px += sign * Number(n[1]);
     else rest.push(`${sign < 0 ? "-" : "+"} ${term}`);
   }

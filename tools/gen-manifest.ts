@@ -125,7 +125,7 @@ function main() {
   const { surfaces } = readManifest();
 
   let nav = readFileSync(NAV, "utf8");
-  let counts = [];
+  let counts: string[] = [];
   for (const [section, marker] of FENCE_SECTIONS) {
     const body = navFenceBody(surfaces, section);
     nav = writeFenceBody(nav, marker, body);

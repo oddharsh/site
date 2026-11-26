@@ -2,6 +2,8 @@
 // answers at once. The sweep has to read the first as over its 8 ms gate and
 // the second as under it, or it can't tell a slow route from a fast one. /icu
 // is a route's first date format and collation, which a warm process makes cheap.
+// /digest is a route's first SHA-256, which node loads per isolate and workerd
+// binds natively, so the sweep warms it before timing.
 // /copy answers 500 unless a declared binding survives a copy of env, as cal's
 // { ...env, BASE_PATH } needs.
 export default {
@@ -15,6 +17,7 @@ export default {
       new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric" }).format(0);
       "b".localeCompare("a");
     }
+    if (new URL(request.url).pathname === "/digest") await crypto.subtle.digest("SHA-256", new Uint8Array(64));
     if (new URL(request.url).pathname === "/spin") {
       const start = process.cpuUsage();
       for (;;) {

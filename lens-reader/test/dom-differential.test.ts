@@ -210,7 +210,11 @@ test("the cached element-child view invalidates on every mutation path", () => {
 
   const other = document.createElement("aside");
   document.appendChild(other);
+  // Reading `children` builds each parent's cached view, which the move below
+  // must invalidate; the read is the point, so the value is discarded.
+  // oxlint-disable-next-line @typescript-eslint/no-meaningless-void-operator
   void main.children;
+  // oxlint-disable-next-line @typescript-eslint/no-meaningless-void-operator
   void other.children;
   other.appendChild(c);
   assert.deepEqual(

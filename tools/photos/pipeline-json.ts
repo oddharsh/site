@@ -172,7 +172,7 @@ export function mergeIndex(index: Record<string, IndexEntry>, entries: Record<st
     if (old?.jpeg && old.full === entry.full) row.jpeg = old.jpeg;
     merged[stem] = row;
   }
-  return sortKeysDeep(merged as Json) as Record<string, IndexEntry>;
+  return sortKeysDeep(merged) as Record<string, IndexEntry>;
 }
 
 /** Python's json.dumps(v, sort_keys=True, separators=(",", ":")), byte for
@@ -303,7 +303,7 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
     if (Object.keys(entry).length) hashes[stem] = { ...hashes[stem], ...entry };
   }
 
-  fs.writeFileSync(mapPath, pyCompactJson(hashes as Json));
+  fs.writeFileSync(mapPath, pyCompactJson(hashes));
 
   // Clean up so the tree matches the map: drop the un-hashed source tiers just
   // addressed (they live in /i/ now; metadata.json, alt.json, hashes.json and
@@ -383,7 +383,7 @@ export function main(argv: string[]): number {
       const index = fs.existsSync(indexFile) ? (readJson(indexFile) as Record<string, IndexEntry>) : {};
       // Write beside and rename, so a failure part-way leaves the committed file
       // exactly as it was; the shell used the same .tmp then mv shape.
-      fs.writeFileSync(`${indexFile}.tmp`, pretty(mergeIndex(index, entries, need(args, "--now")) as Json));
+      fs.writeFileSync(`${indexFile}.tmp`, pretty(mergeIndex(index, entries, need(args, "--now"))));
       fs.renameSync(`${indexFile}.tmp`, indexFile);
       return 0;
     }
@@ -441,7 +441,7 @@ export function main(argv: string[]): number {
     case "checkpoint-add": {
       const [file] = positional;
       const { rows, entry } = addCheckpoint(readJson(file) as Checkpoint[], need(args, "--slug"), need(args, "--title"), need(args, "--ymd"));
-      fs.writeFileSync(file, pyPrettyJson(rows as Json));
+      fs.writeFileSync(file, pyPrettyJson(rows));
       process.stdout.write(`staged: v${entry.vnum} (${entry.ymd}) as ${entry.version}\n        ${entry.title}\n`);
       return 0;
     }

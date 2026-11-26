@@ -1,5 +1,6 @@
 import { foreignMcpTools } from "./lib/doors.ts";
 import { defineLens } from "./lens-pipeline.ts";
+import { asRecord } from "./lib/parse.ts";
 
 // A catalogue read is one POST that a foreign server answers from memory, so
 // this is cached to be POLITE rather than to be fast. A public button pointed at
@@ -39,7 +40,7 @@ const LENS_TOOLS = defineLens({
       };
     }
 
-    const withSchema = probe.tools.filter((t) => t.inputSchema && t.inputSchema.properties).length;
+    const withSchema = probe.tools.filter((t) => asRecord(t.inputSchema)?.properties).length;
     s.setAttribute("lens.tool_count", probe.count);
     s.setAttribute("lens.tools_with_schema", withSchema);
     return {
@@ -49,7 +50,7 @@ const LENS_TOOLS = defineLens({
         ok: true,
         origin,
         host,
-        endpoint: origin.replace(/\/+$/, "") + "/mcp",
+        endpoint: origin.replace(/(?<!\/)\/+$/, "") + "/mcp",
         count: probe.count,
         shown: probe.tools.length,
         withSchema,

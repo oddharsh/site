@@ -45,7 +45,7 @@
 // you have, name what it is, never fabricate the thing you do not.
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { ASK_LIMITS } from "./lib/api-limits.ts";
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 import { span } from "./lib/trace.ts";
 import { SEARCH_TERM_MAX, searchCorpusFor, searchSiteRanked } from "./search.ts";
@@ -116,7 +116,7 @@ export function askRelevance(raw, termCount) {
 /**
  * Read the NLWeb parameter set out of whichever dialect arrived.
  */
-export function parseAskRequest(url, body): { ok: true; params: any } | { ok: false; status: number; error: any } {
+export function parseAskRequest(url, body) {
   const q = url.searchParams;
   const flat = asRecord(body) || {};
   let structured = false;
@@ -153,15 +153,19 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
 
   const text = String(query ?? "").trim();
   if (!text) {
-    return { ok: false, status: 400, error: { error: "query is required", parameter: "query", endpoint: "/ask" } };
+    return { ok: false as const, status: 400, error: { code: "INVALID_QUERY", message: "query is required", parameter: "query", endpoint: "/ask" } };
   }
 
   const siteToken = String(site ?? "")
     .trim()
     .toLowerCase()
-    .replace(/\/+$/, "");
+    .replace(/(?<!\/)\/+$/, "");
   if (!SITE_TOKENS.has(siteToken)) {
-    return { ok: false, status: 400, error: { error: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] } };
+    return {
+      ok: false as const,
+      status: 400,
+      error: { code: "INVALID_QUERY", message: `unknown site token "${siteToken}"`, parameter: "site", available_sites: [CANONICAL_HOST, "all"] },
+    };
   }
 
   const modeToken =
@@ -171,10 +175,11 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
   if (!NLWEB_MODES.supported.includes(modeToken)) {
     const known = NLWEB_MODES.known.includes(modeToken);
     return {
-      ok: false,
+      ok: false as const,
       status: known ? 501 : 400,
       error: {
-        error: known
+        code: "UNSUPPORTED_MODE",
+        message: known
           ? `mode "${modeToken}" needs a generative model and this origin runs none (Clef, which ranks the list, can only choose, never write). It is refused rather than answered as "list", because a summary you did not get is worse than a summary you were told you cannot have.`
           : `unknown mode "${modeToken}"`,
         parameter: "mode",
@@ -204,7 +209,7 @@ export function parseAskRequest(url, body): { ok: true; params: any } | { ok: fa
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(MAX_RESULTS, Math.trunc(limitRaw)) : DEFAULT_RESULTS;
 
   return {
-    ok: true,
+    ok: true as const,
     params: {
       query: text,
       searched,
@@ -283,6 +288,7 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
   // payload after inference.
   const responseMeta: {
     version: string;
+    response_type: "answer";
     dialect: string;
     retrieval: string;
     ranking: string;
@@ -292,6 +298,9 @@ export async function nlwebAsk(env, params, request: Request | null = null) {
     decontextualization?: string;
   } = {
     version: NLWEB_VERSION,
+    // NLWeb 0.55 names what a response is (answer, elicitation, promise,
+    // failure) in _meta.response_type; this origin only ever answers.
+    response_type: "answer",
     dialect: params.structured ? "0.55" : "legacy",
     retrieval: byClef ? "every page, chosen by Clef" : "lexical",
     ranking,
@@ -342,7 +351,7 @@ function sseHeaders() {
  */
 function streamAnswer(payload, structured) {
   const encoder = new TextEncoder();
-  const frames = [];
+  const frames: string[] = [];
   const named = (event, data) => frames.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   const plain = (data) => frames.push(`data: ${JSON.stringify(data)}\n\n`);
 
@@ -371,16 +380,28 @@ function streamAnswer(payload, structured) {
   );
 }
 
-export async function handleAsk(request, env, _ctx?, url = new URL(request.url)) {
-  const refused = methodGuard(request, ["GET", "POST"]);
-  if (refused) return refused;
+// NLWeb 0.55 section 4.1.4: a failure is _meta.response_type "failure" plus an
+// error OBJECT with a spec code. What this origin adds to say which field was
+// wrong (parameter, known_modes, available_sites) sits beside it, at the top
+// level where it was before. query_id and results stay so a list-reading
+// client finds an empty list rather than a missing key.
+function askFailure(status: number, { code, message, ...detail }: { code: string; message: string; [field: string]: unknown }) {
+  return jsonResponse(
+    { _meta: { version: NLWEB_VERSION, response_type: "failure" }, error: { code, message }, ...detail, query_id: null, results: [] },
+    status,
+    { "x-robots-tag": "noindex" },
+  );
+}
 
+export async function handleAsk(request, env, _ctx?, url = new URL(request.url)) {
   let body = null;
   if (request.method === "POST") {
+    const capped = await cappedRequestBody(request);
+    if (!capped) return askFailure(413, { code: "TOKEN_LIMIT", message: "POST body too large" });
     try {
-      body = await request.json();
+      body = await capped.json();
     } catch {
-      return jsonResponse({ error: "POST body must be JSON" }, 400);
+      return askFailure(400, { code: "INVALID_QUERY", message: "POST body must be JSON" });
     }
   }
 
@@ -388,7 +409,7 @@ export async function handleAsk(request, env, _ctx?, url = new URL(request.url))
   if (!parsed.ok) {
     // An SSE client asking a malformed question still gets JSON: the error is
     // about the request never becoming a query, so there is no stream to open.
-    return jsonResponse({ ...parsed.error, query_id: null, results: [] }, parsed.status, { "x-robots-tag": "noindex" });
+    return askFailure(parsed.status, parsed.error);
   }
 
   return span("nlweb.ask", async (s) => {

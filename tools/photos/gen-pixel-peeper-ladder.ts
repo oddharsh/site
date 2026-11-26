@@ -295,7 +295,9 @@ async function main(): Promise<number> {
       child.stdout.on("data", (d) => {
         out += d;
       });
-      const code: number = await new Promise((resolve) => child.on("close", resolve));
+      const code: number = await new Promise((resolve) => {
+        child.on("close", resolve);
+      });
       if (code !== 0) {
         log(`  x ${s}: exit ${code}`);
         continue;

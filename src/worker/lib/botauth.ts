@@ -42,7 +42,6 @@
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
 import { lensParseRobots, lensRobotsVerdict } from "./robots.ts";
 import { isSubrequestLimit } from "./budget.ts";
-import { methodGuard } from "./http.ts";
 import { isolateMemo } from "./isolate-memo.ts";
 import type { Env } from "./env.ts";
 
@@ -173,8 +172,6 @@ async function signLabels(signers: Signer[], components: string, tag: string, ba
 // 503 here also blinds every verifier of sig1, and sig2 must never cost sig1
 // anything. Only real drift, a usable key that is not the published one, 503s.
 export async function handleSignatureDirectory(request: Request, env: Pick<Env, "ASSETS"> & SigningEnv) {
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   const headers = new Headers({ "cache-control": "no-store" });
   try {
     if (!env.RN_SIGNING_KEY_JWK) throw new Error("Signing key unavailable");

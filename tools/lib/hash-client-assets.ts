@@ -22,17 +22,8 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import {
-  CLIENT_ASSETS,
-  assetBase,
-  assetExt,
-  hashOrder,
-  loaderNeedles,
-  loaderRewrites,
-  registryProblems,
-  stagedPath,
-  type ClientAsset,
-} from "./client-assets.ts";
+import { CLIENT_ASSETS, assetBase, assetExt, hashOrder, loaderNeedles, loaderRewrites, registryProblems, stagedPath } from "./client-assets.ts";
+import type { ClientAsset } from "./client-assets.ts";
 
 const hash8 = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 
@@ -52,8 +43,8 @@ export async function hashClientAssets(root: string, opts: { assets?: readonly C
   const registered = new Map(assets.map((a) => [stagedPath(a), a]));
 
   await mkdir(`${root}/public/a`, { recursive: true });
-  const publicFiles = (await readdir(`${root}/public`, { recursive: true })) as string[];
-  const under = async (dir: string, recursive: boolean): Promise<string[]> => (await readdir(`${root}/${dir}`, { recursive }).catch(() => [])) as string[];
+  const publicFiles = await readdir(`${root}/public`, { recursive: true });
+  const under = async (dir: string, recursive: boolean): Promise<string[]> => await readdir(`${root}/${dir}`, { recursive }).catch(() => []);
 
   // Targets for the JS-STRING loaders (import(), from, script.src, fetch, a
   // keyed path): every staged surface that can carry one. HTML pages, the

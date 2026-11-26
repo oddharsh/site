@@ -30,6 +30,7 @@ import { signedFetch } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
+import { compareCodepoints } from "./lib/text.ts";
 
 export const GITHUB_USER = "oddharsh";
 export const GITHUB_CACHE_KEY = "github:activity:v1";
@@ -75,18 +76,18 @@ const repoOf = (repositoryUrl: unknown) => (text(repositoryUrl).startsWith(REPO_
 // Only a github.com URL reaches the payload. Nothing renders these as links
 // today, but an agent reading /github.json might follow one.
 const ghUrl = (u: unknown) => (text(u).startsWith("https://github.com/") ? text(u) : "");
-const items = (body: unknown): any[] => asList(asRecord(body)?.items);
+const items = (body: unknown) => asList(asRecord(body)?.items).map((it) => asRecord(it) ?? {});
 const totalOf = (body: unknown) => Math.max(0, Math.trunc(asNumber(asRecord(body)?.total_count) ?? 0));
 
 /** Pull requests, newest first, grouped by repository and ranked by volume. */
 export function normalizePrs(body: unknown): GithubActivity["prs"] {
   const prs: Pr[] = items(body)
-    .map((it) => ({
-      repo: repoOf(it?.repository_url),
-      title: clip(it?.title, 140),
-      url: ghUrl(it?.html_url),
-      state: (it?.pull_request?.merged_at ? "merged" : it?.state === "open" ? "open" : "closed") as PrState,
-      at: text(it?.created_at),
+    .map((it): Pr => ({
+      repo: repoOf(it.repository_url),
+      title: clip(it.title, 140),
+      url: ghUrl(it.html_url),
+      state: asRecord(it.pull_request)?.merged_at ? "merged" : it.state === "open" ? "open" : "closed",
+      at: text(it.created_at),
     }))
     .filter((p) => p.repo && p.title);
   const byRepo = new Map<string, { repo: string; count: number; merged: number; open: number; latest: Pr }>();
@@ -98,7 +99,7 @@ export function normalizePrs(body: unknown): GithubActivity["prs"] {
     if (p.at > g.latest.at) g.latest = p;
     byRepo.set(p.repo, g);
   }
-  const repos = [...byRepo.values()].sort((a, b) => b.count - a.count || b.latest.at.localeCompare(a.latest.at));
+  const repos = [...byRepo.values()].sort((a, b) => b.count - a.count || compareCodepoints(b.latest.at, a.latest.at));
   return {
     total: totalOf(body),
     merged: prs.filter((p) => p.state === "merged").length,
@@ -110,15 +111,15 @@ export function normalizePrs(body: unknown): GithubActivity["prs"] {
 /** Issues, newest first. Titles carry the content here, so they stay a list. */
 export function normalizeIssues(body: unknown): GithubActivity["issues"] {
   const list: Issue[] = items(body)
-    .map((it) => ({
-      repo: repoOf(it?.repository_url),
-      title: clip(it?.title, 140),
-      url: ghUrl(it?.html_url),
-      state: (it?.state === "open" ? "open" : "closed") as Issue["state"],
-      at: text(it?.created_at),
+    .map((it): Issue => ({
+      repo: repoOf(it.repository_url),
+      title: clip(it.title, 140),
+      url: ghUrl(it.html_url),
+      state: it.state === "open" ? "open" : "closed",
+      at: text(it.created_at),
     }))
     .filter((i) => i.repo && i.title)
-    .sort((a, b) => b.at.localeCompare(a.at));
+    .sort((a, b) => compareCodepoints(b.at, a.at));
   return { total: totalOf(body), repoCount: new Set(list.map((i) => i.repo)).size, items: list };
 }
 
@@ -127,12 +128,12 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
   const list: Commit[] = items(body)
     // Belt and braces under `is:public`: commit results DO carry the flag, so a
     // private repository that slipped the query still never reaches the payload.
-    .filter((it) => it?.repository?.private === false)
+    .filter((it) => asRecord(it.repository)?.private === false)
     .map((it) => ({
-      repo: text(it?.repository?.full_name),
-      message: clip(text(it?.commit?.message).split("\n")[0], 140),
-      url: ghUrl(it?.html_url),
-      at: text(it?.commit?.author?.date),
+      repo: text(asRecord(it.repository)?.full_name),
+      message: clip(text(asRecord(it.commit)?.message).split("\n")[0], 140),
+      url: ghUrl(it.html_url),
+      at: text(asRecord(asRecord(it.commit)?.author)?.date),
     }))
     .filter((c) => c.repo && c.message);
   const byRepo = new Map<string, { repo: string; count: number; latest: Commit }>();
@@ -147,7 +148,7 @@ export function normalizeCommits(body: unknown, since: string): GithubActivity["
   return {
     total,
     coveredSince: total > list.length && list.length ? day(oldest) : since,
-    repos: [...byRepo.values()].sort((a, b) => b.count - a.count || b.latest.at.localeCompare(a.latest.at)),
+    repos: [...byRepo.values()].sort((a, b) => b.count - a.count || compareCodepoints(b.latest.at, a.latest.at)),
   };
 }
 

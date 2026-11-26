@@ -3,9 +3,9 @@
    shell: design tokens + the desktop (Bliss wallpaper, taskbar, Start, icons,
    the HyperCam watermark), the OS-window model, native XP scrollbars, the
    window kit (gel caption buttons, back/forward cluster, command button,
-   field, status bar), accessory windows, Explorer's address bar and task pane,
-   and the homepage's below-the-fold islands. Run, the tray balloon and the
-   infotips style themselves in nav-run.css, nav-tray.css and infotip.css.
+   field, status bar), and Explorer's address bar and task pane. Run and its
+   accessories, tray balloons, hover surfaces and the homepage track list
+   load their own stylesheets beside their UI.
    ----------------------------------------------------------------------------
    Extracted from nav.js's injected <style> on 2026-07-03 (shell rewrite,
    phase A): the same rules, now readable, cacheable, and present at parse
@@ -327,14 +327,17 @@
    Native-availability order: Tahoma isn't reliably on macOS, so --font-ui falls
    through to Verdana (mac-native, metrically close); Trebuchet MS IS on macOS so
    captions render true on both. Every stack ends generic so it never lands on
-   Arial/Helvetica.
+   Arial/Helvetica. Menlo sits behind Courier New for the glyphs Courier New
+   lacks (block elements like U+2582, the /lens/census sparkline): Chrome's system
+   fallback finds a 0.6em mono face there, but Ladybird 2026.47.7 drew a 1em one
+   and widened the column 168px to 246px (measured 2026-11-23, macOS 27.3).
    ============================================================================ */
 
 :root {
   /* ── FAMILIES ────────────────────────────────────────────────────────────*/
   --font-caption: "Trebuchet MS", Verdana, Geneva, sans-serif; /* title bars, h1–h3      */
   --font-ui:      Tahoma, Verdana, Geneva, sans-serif;         /* body, controls, labels */
-  --font-mono:    "Courier New", Courier, monospace;           /* numerics, EXIF, /source*/
+  --font-mono:    "Courier New", Menlo, Courier, monospace;    /* numerics, EXIF, /source*/
 
   /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
      The site sets body at 10.5pt and scales headings up; control text is 10pt.
@@ -380,6 +383,13 @@
    layout cost. The homepage also sets it inline, since luna lands after its
    first paint. */
 html{text-wrap:pretty}
+/* Luna has one theme, and it's light. Without a declared color scheme, Chrome's
+   forced dark ("darken websites" on Android) repaints every window charcoal
+   with purple links; `only` is the keyword that opts out of that, measured
+   2026-11-18 on /writing with --blink-settings=forceDarkModeEnabled=true.
+   Inherited, so a demo that sets its own scheme on an element (horizon's
+   light-dark panels) keeps it. */
+html{color-scheme:only light}
 /* Touch. iOS draws a grey rounded flash over whatever a finger taps, which
    reads as a modern overlay on a square XP bevel, so it's off and each control's
    own :active state is the pressed feedback. Below 16px, iOS zooms the page when
@@ -572,15 +582,10 @@ body:has(.window),body:has(.np-window){overflow:hidden !important;display:flex !
 @media (color-gamut: p3){@supports (color: oklch(0% 0 0)){#axp-desktop{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='s' x2='0' y2='1'%3E%3Cstop stop-color='oklch(59.1%25 0.172 254.5)'/%3E%3Cstop offset='.42' stop-color='oklch(70.2%25 0.117 251.5)'/%3E%3Cstop offset='.62' stop-color='oklch(87.9%25 0.052 240.5)'/%3E%3Cstop offset='.67' stop-color='oklch(94.2%25 0.026 244.1)'/%3E%3C/linearGradient%3E%3ClinearGradient id='g' x2='0' y2='1'%3E%3Cstop stop-color='oklch(76.1%25 0.197 126.8)'/%3E%3Cstop offset='.35' stop-color='oklch(68.9%25 0.198 131.2)'/%3E%3Cstop offset='1' stop-color='oklch(52.7%25 0.171 137.4)'/%3E%3C/linearGradient%3E%3CradialGradient id='sn' cy='.64' r='.55'%3E%3Cstop stop-color='%23fffbe6' stop-opacity='.5'/%3E%3Cstop offset='1' stop-color='%23fffbe6' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='bl' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeGaussianBlur stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='200' height='120' fill='url(%23s)'/%3E%3Crect width='200' height='120' fill='url(%23sn)'/%3E%3Cg fill='%23fff' filter='url(%23bl)'%3E%3Cg opacity='.92'%3E%3Cellipse cx='34' cy='25' rx='18' ry='4.6'/%3E%3Cellipse cx='41' cy='20' rx='11' ry='4.2'/%3E%3Cellipse cx='25' cy='22' rx='8' ry='3.6'/%3E%3C/g%3E%3Cg opacity='.8'%3E%3Cellipse cx='151' cy='18' rx='14' ry='3.8'/%3E%3Cellipse cx='158' cy='14' rx='7' ry='3.2'/%3E%3C/g%3E%3Cellipse opacity='.6' cx='98' cy='31' rx='22' ry='3'/%3E%3Cellipse opacity='.75' cx='123' cy='42' rx='11' ry='2.6'/%3E%3C/g%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4V120H0z' fill='url(%23g)'/%3E%3Cpath d='M0 79c36-10 70 6 104-3 36-9 68 2 96-4' fill='none' stroke='oklch(85.1%25 0.177 122.8)' stroke-width='1.1' opacity='.5'/%3E%3C/svg%3E")}}}
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
-.axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid var(--luna-44);border-right-color:var(--luna-34);border-bottom-color:var(--luna-34);border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 var(--luna-56),inset -1px -1px 0 var(--luna-31),3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
-.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-ui);text-shadow:1px 1px var(--luna-30);background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
-.axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.axp-acc>.tb .x{box-sizing:content-box;width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;margin:0;padding:0;border:1px solid var(--red-59);border-radius:3px;background:linear-gradient(180deg,var(--red-70),var(--red-50));font:inherit;font-size:9px;color:inherit;cursor:pointer}@media (hover: hover) and (pointer: fine) {.axp-acc>.tb .x:hover{filter:brightness(1.12)}}
-.axp-acc>.bd{padding:8px;background:var(--face)}
-.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:var(--slate-26);letter-spacing:1px}.clk-d{font-size:var(--text-micro);color:var(--slate-45);margin-top:3px;white-space:nowrap}
+
 /* windows drag by their title bar */
 .title-bar,.np-titlebar{cursor:move}
-.axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-acc.axp-dragging>.tb{cursor:grabbing}
+.axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar{cursor:grabbing}
 /* background-color under the gradient is what Safari's bottom edge reads (see SAFARI'S EDGE TINT). */
 /* the bar's 30px row sits above the home indicator: the gradient is sized to that row and */
 /* the solid colour fills the inset strip under it (see SAFE AREAS). */
@@ -684,9 +689,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .axp-trayico svg,.axp-trayico img{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* mute/unmute speaker, sits just left of System Properties; matches its tray styling */
 #axp-sound{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:.88}
+#axp-sound[hidden]{display:flex;visibility:hidden;pointer-events:none}
 @media (hover: hover) and (pointer: fine) {#axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}}
 #axp-sound.muted{opacity:.5}
-#axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
+#axp-sound img,#axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* First-interaction surfaces live beside their islands now: nav-run.css,
    nav-tray.css and infotip.css. Their loaders await CSS + JS together, so no
    unstyled surface can be inserted on a cold interaction. */
@@ -950,283 +956,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 :where(.title-bar .icon.play) { background: var(--amber-88); }
 :where(.title-bar .icon.play)::before { inset: 3px; background: var(--amber-70); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
 
-/* ───────────────── homepage music island (below the fold) ─────────────────
-   Kept in the immutable shared sheet so a dynamic homepage reload does not
-   retransmit these rules. The visible photo grid keeps its geometry inline. */
-.now-playing { margin: 32px 0 4px; }
-.now-playing h2 {
-  font-family: var(--font-caption);
-  font-size: var(--text-h2);
-  color: var(--blue-40);
-  text-wrap: balance;
-  margin: 0 0 32px;
-  font-weight: bold;
-  line-height: 1.3;
-}
-.now-playing h2::after {
-  content: "";
-  display: block;
-  height: 1px;
-  background: var(--rule);
-  margin-top: 8px;
-}
-.now-playing h2 a {
-  color: inherit;
-  text-decoration: none;
-}
-.now-playing h2 .np-open {
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
-  font-weight: normal;
-  color: var(--slate-52);
-  white-space: nowrap;
-}
-.now-playing h2 a:hover {
-  color: var(--link-hover);
-  text-decoration: underline;
-}
-.np-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  border: 1px solid var(--frame);
-  border-top-color: var(--blue-45);
-  border-left-color: var(--blue-45);
-  background: oklch(100.00% 0 0);
-  position: relative;
-}
-.np-list::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  box-shadow: inset 1px 1px 0 var(--blue-45),
-              inset -1px -1px 0 oklch(100.00% 0 0);
-}
-.np-list li {
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--surface-desktop);
-  font-size: var(--text-ui);
-  line-height: 1.35;
-}
-/* The li padding is part of the track's rich-hover target but sits outside its
-   inner link. Keep one cursor across both so a vertical sweep does not alternate
-   arrow/hand twice per row. Empty/error rows remain ordinary. */
-.np-list li[data-track-title] { cursor: pointer; }
-.np-list li:nth-child(even) { background: var(--row-alt); }
-.np-list li:last-child { border-bottom: none; }
-.np-list .np-empty {
-  color: var(--ink-dim);
-  font-style: italic;
-  text-align: center;
-  padding: 12px;
-}
-.np-list a {
-  text-decoration: none;
-  color: var(--ink);
-  display: block;
-}
-.np-list a:hover { background: var(--row-hover); }
-.np-list a:hover .np-title { color: var(--link-hover); }
-/* Scoped to the tracklist on purpose. The Notepad caption on /writing is also
-   a .np-title, inside a white title bar, and a bare selector painted it navy. */
-.np-list .np-title {
-  font-weight: bold;
-  color: var(--blue-40);
-}
-.np-sep {
-  color: var(--ink-dim);
-  margin: 0 4px;
-}
-.np-artist { color: var(--ink-soft); }
-.np-artist-link { cursor: pointer; }
-.np-artist-link:hover,
-.np-artist-link:focus-visible {
-  color: var(--link);
-  text-decoration: underline;
-}
-.np-explicit {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: bold;
-  color: var(--ink-dim);
-  background: var(--grey-95);
-  border: 1px solid oklch(84.52% 0 0);
-  padding: 0 3px;
-  margin-left: 4px;
-  vertical-align: middle;
-}
-.np-duration {
-  font-family: var(--font-mono);
-  font-size: var(--text-mono);
-  color: var(--ink-dim);
-  float: right;
-  margin-left: 8px;
-}
-
-/* ───────────────── homepage hover island (non-critical) ─────────────────
-   This UI is first used on hover/focus, so keep it out of the homepage's
-   render-blocking inline CSS. luna.css is immutable and dictionary-compressed. */
+/* Cursor coordinates shared by the rich tooltip and shell infotip islands. */
 @property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
-.xp-tooltip {
-  position: fixed;
-  inset: auto;
-  top: 0;
-  left: 0;
-  margin: 0;
-  transform: translate(
-    clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
-    clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
-  );
-  background: var(--row-hover);
-  color: var(--ink);
-  border: 1px solid oklch(15.00% 0 0);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  padding: 4px 8px;
-  box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
-  pointer-events: none;
-  z-index: 10000;
-  display: none;
-  max-width: 280px;
-  line-height: 1.45;
-}
-.xp-tooltip.anchored {
-  position-anchor: --xp-tip;
-  position-area: bottom span-right;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin: 6px 0 0;
-  position-try-fallbacks: flip-block, flip-inline;
-}
-@supports selector(:popover-open) {
-  .xp-tooltip:popover-open { display: block; }
-  .xp-tooltip.anchored:popover-open { transition: opacity var(--xp-transition-fade); }
-  @starting-style {
-    .xp-tooltip.anchored:popover-open { opacity: 0; }
-  }
-}
-.xp-tooltip .filename {
-  font-weight: bold;
-  color: oklch(15.00% 0 0);
-  padding-right: 14px;
-}
-.xp-tooltip .row {
-  color: var(--ink-soft);
-  font-size: 10.5px;
-}
-.xp-tooltip .row + .row { margin-top: 1px; }
-
-.xp-tooltip .flash-bolt {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  color: oklch(58% 0.2 75);
-  filter: drop-shadow(0 0 1.5px oklch(58% 0.2 75 / 0.4));
-}
-.xp-tooltip .flash-bolt svg { display: block; }
-
-.xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
-.xp-tooltip .cam { margin: -4px -8px; }
-.xp-tooltip .cam .header {
-  background: linear-gradient(180deg, var(--surface-desktop), oklch(85.04% 0.0283 248.16));
-  border-bottom: 1px solid var(--frame);
-  padding: 3px 8px;
-  font-weight: bold;
-  color: var(--blue-40);
-  font-family: var(--font-caption);
-  font-size: 10.5px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-.xp-tooltip .cam .header span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.xp-tooltip .cam .flash-bolt { position: static; top: auto; right: auto; flex-shrink: 0; color: oklch(58% 0.18 75); filter: none; }
-.xp-tooltip .cam .histogram-frame {
-  margin: 6px 8px 0;
-  height: 36px;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--frame);
-  border-top-color: var(--blue-45);
-  border-left-color: var(--blue-45);
-  background: oklch(100% 0 0);
-}
-.xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.xp-tooltip .cam .hist-svg .luma { fill: var(--grey-35); opacity: 0.35; }
-.xp-tooltip .cam .hist-svg polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
-.xp-tooltip .cam .hist-svg .r { stroke: oklch(45% 0.22 25); }
-.xp-tooltip .cam .hist-svg .g { stroke: oklch(50% 0.20 145); }
-.xp-tooltip .cam .hist-svg .b { stroke: oklch(45% 0.22 260); }
-.xp-tooltip .cam .body { padding: 6px 9px 4px; }
-.xp-tooltip .cam .exposure { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: bold; color: oklch(15% 0 0); letter-spacing: 0.02em; }
-.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: var(--grey-48); margin: 1px 0 5px; }
-.xp-tooltip .cam .recipe-rows { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; margin: 0; font-size: 10.5px; }
-.xp-tooltip .cam .recipe-rows dt { color: var(--grey-48); white-space: nowrap; }
-.xp-tooltip .cam .recipe-rows dd { margin: 0; color: oklch(18% 0 0); text-align: right; }
-.xp-tooltip .cam .footer {
-  display: flex;
-  justify-content: space-between;
-  padding: 3px 9px 4px;
-  border-top: 1px solid var(--rule);
-  margin-top: 5px;
-  font-size: 9px;
-  color: var(--ink-dim);
-  font-family: var(--font-mono);
-}
-
-.xp-tooltip .album-pop {
-  padding: 0;
-  margin: -4px -8px;
-}
-.xp-tooltip .cover.album {
-  display: block;
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  background: oklch(94% 0.005 240);
-  border: 3px solid oklch(100% 0 0);
-  outline: 1px solid var(--frame);
-  outline-offset: -1px;
-}
-.xp-tooltip .car-pop {
-  padding: 0;
-  margin: -4px -8px;
-}
-.xp-tooltip .car-pop img {
-  display: block;
-  width: 240px;
-  height: 160px;
-  object-fit: cover;
-  background: oklch(94% 0.005 240);
-  border: 3px solid oklch(100% 0 0);
-  outline: 1px solid var(--frame);
-  outline-offset: -1px;
-}
-.xp-tooltip .car-cap {
-  width: 240px;
-  margin: 0 3px 3px;
-  padding: 3px 5px;
-  font-size: var(--text-micro);
-  color: var(--ink-soft);
-  background: oklch(96% 0.004 240);
-  border: 1px solid var(--frame);
-  border-top: none;
-  box-sizing: border-box;
-}
-.xp-tooltip .car-credit {
-  display: block;
-  margin-top: 1px;
-  font-size: var(--text-3xs);
-  color: var(--ink-dim);
-}
 a.car-link:link,
 a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 /* A glossary term in an essay (docs/TERMS.md): the same dotted promise the car

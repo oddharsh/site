@@ -6,6 +6,7 @@ import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, isOwnerBust, jsonResponse } from "./lib/http.ts";
+import { compareCodepoints } from "./lib/text.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, meteredTransport, recordBudget } from "./lib/budget.ts";
 import { span } from "./lib/trace.ts";
 import { AROUND_SNAPSHOT_URL } from "./routes.ts";
@@ -251,7 +252,7 @@ export async function readAroundChanges(env, requestedLimit: string | number | n
       changes: fields,
     });
   }
-  changes.sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)));
+  changes.sort((a, b) => compareCodepoints(b.observedAt, a.observedAt));
   return {
     ok: true,
     available: true,
@@ -505,16 +506,17 @@ const SNAPSHOT_CACHE = "public, max-age=60, s-maxage=300";
 
 /** The island: the crawl's meta line and its rows, or the not-built-yet panel. */
 export function renderAroundSnapshot(read) {
-  const pending = isPending(read);
+  // failure honesty: no snapshot keeps the placeholder's unnamed rows and says
+  // so in the crawl line, never a fabricated row. Only ever visible before the
+  // first cron run (or after an owner bust that failed to rebuild). Keeping the
+  // rows is island rule 4 applied to an empty read: the note that replaced them
+  // was 122px where the rows are 1,197px at 390px, and the swap pulled the
+  // footer up into view, layout shift 0.068 (gotcha 98, 2026-11-16).
+  const empty = !read;
+  const pending = empty || isPending(read);
   const report = pending ? PENDING_REPORT : read;
-  // failure honesty: no snapshot means a greyed, period-correct empty panel,
-  // never a fabricated table. only ever visible before the first cron run
-  // (or after an owner bust that failed to rebuild).
-  if (!report) {
-    return unsafeHtml(`<div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
-    The crawl runs on a schedule, not on your visit; check back tomorrow.</div>`);
-  }
   const dots = "…";
+  const lastCrawl = empty ? "none yet, check back tomorrow" : (report.crawledAt ?? dots);
 
   const rows = report.results
     .map((r) => {
@@ -556,7 +558,7 @@ export function renderAroundSnapshot(read) {
     .join("");
 
   return unsafeHtml(`<div class="meta">
-      <strong>Last crawl:</strong> ${esc(report.crawledAt ?? dots)} &middot;
+      <strong>Last crawl:</strong> ${esc(lastCrawl)} &middot;
       <strong>UA:</strong> <code>${esc(BOT_UA)}</code> &middot;
       <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
       <strong>Refreshed:</strong> once a day by cron (your visit triggers nothing)
@@ -659,8 +661,6 @@ export function renderAroundPage() {
   a { color: var(--link); }
   .dim { color: var(--ink-faint); }
   hr { border: 0; border-top: 2px groove var(--rule); margin: 12px 0; height: 0; }
-  .pending { border: 1px solid var(--frame); background: oklch(96.72% 0 0);
-    color: var(--ink-dim); padding: 18px 16px; margin: 16px 0; cursor: progress; }
   /* the island's failure note, shown only if the snapshot request failed */
   .ar-fail { display: none; color: var(--ink-faint); font-size: var(--text-xs); margin: 0 0 12px; }
   #ar-snapshot[data-state="failed"] + .ar-fail { display: block; }

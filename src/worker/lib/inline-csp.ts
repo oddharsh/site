@@ -44,7 +44,7 @@ const RAW_TEXT = /<(script|style)\b[^>]*>[\s\S]*?<\/\1[\s/>]/gi;
 // page keeps the loose policy.
 const UNHASHABLE = [
   /<[a-z][^>]*\son[a-z]+\s*=/i, // an inline event handler
-  /=\s*["']?\s*javascript:/i, // a javascript: URL
+  /=\s*(?:["']\s*)?javascript:/i, // a javascript: URL
   /<[a-z][^>]*\ssrcdoc\s*=/i, // a document that inherits this policy
 ];
 

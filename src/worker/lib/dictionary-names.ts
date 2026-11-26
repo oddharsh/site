@@ -13,13 +13,13 @@
 //
 //   /a/<base>.<hash8>.<ext>             a content-hashed shell asset
 //   /a/page-family.<hash8>.dict         the site-page family dictionary
-//   /ad/<base>.<hash8>.<tag16>.dcz      a shell asset's delta against one dictionary
-//   /pd/<slug>.<tag16>.dcz              a page's delta against one dictionary
+//   /ad/<base>.<hash8>.<tag64>.dcz      a shell asset's delta against one dictionary
+//   /pd/<slug>.<tag64>.dcz              a page's delta against one dictionary
 //   <slug>.<tag16>.html.br              a committed page snapshot (src/dict/p-dict)
 //
-// hash8 is the first 8 hex of a SHA-256 over the asset's own bytes. tag16 is
-// the first 16 hex of a SHA-256 over the DICTIONARY's bytes, which is what a
-// browser sends back in Available-Dictionary. slug is the page's asset path
+// hash8 is the first 8 hex of a SHA-256 over the asset's own bytes. Delta names
+// use the full dictionary SHA-256 sent in Available-Dictionary. Committed page
+// snapshots retain their historical 16-hex names. slug is the page's asset path
 // with `.html` dropped and every `/` folded to `__`, so it stays one filename
 // segment.
 //
@@ -27,7 +27,7 @@
 // build and the contract suite all load the same file (docs/GOTCHAS.md gotcha 16).
 // The zstd ENCODER needs node:zlib and lives in tools/lib/dcz.ts.
 
-export const TAG_HEX = 16;
+export const TAG_HEX = 64;
 
 const hexOf = (bytes: Uint8Array, count: number): string => {
   let out = "";
@@ -84,7 +84,7 @@ export function parseFamilyDictionary(name: string): string | null {
   return name.match(FAMILY_DICTIONARY)?.[1] ?? null;
 }
 
-const SHELL_DELTA = /^(.+)\.([0-9a-f]{8})\.([0-9a-f]{16})\.dcz$/;
+const SHELL_DELTA = /^(.+)\.([0-9a-f]{8})\.([0-9a-f]{64})\.dcz$/;
 
 // The file under /ad/ holding `asset` encoded against the dictionary `tag` names.
 // The extension is deliberately absent: a base never ships under two types.
@@ -108,7 +108,7 @@ export function shellDeltaPath(pathname: string, tag: string): string | null {
 // (`garage/index`) gives the same answer, which is what lets the Worker call it.
 export const pageSlug = (assetPath: string): string => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
-const PAGE_DELTA = /^(.+)\.([0-9a-f]{16})\.dcz$/;
+const PAGE_DELTA = /^(.+)\.([0-9a-f]{64})\.dcz$/;
 const PAGE_SNAPSHOT = /^(.+)\.([0-9a-f]{16})\.html\.br$/;
 
 export const pageDeltaName = (slug: string, tag: string): string => `${slug}.${tag}.dcz`;
@@ -120,7 +120,7 @@ export function parsePageDelta(name: string): { slug: string; tag: string } | nu
 
 // A page snapshot in src/dict/p-dict: the bytes production served, brotli'd,
 // named by the tag a browser holding them would send.
-export const pageSnapshotName = (slug: string, tag: string): string => `${slug}.${tag}.html.br`;
+export const pageSnapshotName = (slug: string, tag: string): string => `${slug}.${tag.slice(0, 16)}.html.br`;
 
 export function parsePageSnapshot(name: string): { slug: string; tag: string; name: string } | null {
   const m = name.match(PAGE_SNAPSHOT);

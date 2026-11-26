@@ -19,6 +19,7 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { assert, test, ROOT } from "./contract-shared.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const root = fileURLToPath(ROOT);
 const PAGES = join(root, "src/pages");
@@ -78,7 +79,7 @@ test("every card a Worker renderer names is a file in public/", () => {
   const dir = join(root, "src/worker");
   const named: any[] = [];
   for (const rel of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
-    if (!rel.endsWith(".ts")) continue;
+    if (!rel.endsWith(".ts") || inTestsDir(rel)) continue;
     const src = readFileSync(join(dir, rel), "utf8");
     for (const m of src.matchAll(/\/og\/([\w.-]+\.(?:jpg|jpeg|png|webp|avif))\b/g)) named.push([rel, m[1]]);
   }

@@ -65,7 +65,7 @@ async function profiler(type) {
 
 async function wifi() {
   const data = await profiler("SPAirPortDataType");
-  const out = [];
+  const out: { name: string; rssi: number; kind: string }[] = [];
   // Deduped on NAME + STRENGTH, not name alone. A mesh broadcasts one SSID from
   // several access points, and macOS reports each separately at its own dBm —
   // which is exactly the reading a radar wants ("the near node is the one in the
@@ -98,7 +98,7 @@ async function wifi() {
 
 async function bluetooth() {
   const data = await profiler("SPBluetoothDataType");
-  const out = [];
+  const out: { name: string; rssi: number; kind: string }[] = [];
   // The shape here is a list of single-key objects ({ "Device Name": {...} })
   // nested under connected/not-connected groups, and it has moved between OS
   // versions. Walk for `device_rssi` rather than pinning a path.
@@ -158,7 +158,9 @@ if (has("--json")) {
   for (;;) {
     const frame = await draw(base, await sample());
     process.stdout.write("\x1b[H\x1b[2J" + frame);
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => {
+      setTimeout(r, 2000);
+    });
   }
 } else {
   console.log(await draw(base, await sample()));

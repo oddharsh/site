@@ -22,6 +22,8 @@
 // How a dependent NAMES the asset, which decides the pattern step 6 rewrites.
 // Each shape is exact syntax on purpose: the garage pages mention /nav.js and
 // /hoist.js in prose and in <code>, and a bare-path match would rewrite them.
+import { inTestsDir } from "./test-roots.ts";
+
 export type Loader =
   // src="/x.js" or href="/x.css" in markup, quoted, backslash-quoted or unquoted
   // (the HTML minifier unquotes). `fragment` keeps a #fragment (the icon sprite).
@@ -79,6 +81,22 @@ export type ClientAsset = {
 // contract-client-asset-registry proves a shuffled registry hashes to the same
 // bytes. Keeping the old order means hashOrder() reproduces it exactly.
 export const CLIENT_ASSETS: readonly ClientAsset[] = [
+  {
+    file: "home-music.css",
+    kind: "style",
+    scope: "page",
+    budget: { role: "homepage track list", gzipKiB: 1, brotliKiB: 0.75 },
+    load: [{ via: "attr", attr: "href" }],
+    loadedBy: ["public/index.html"],
+  },
+  {
+    file: "tooltip.css",
+    kind: "style",
+    scope: "shell",
+    budget: { role: "rich hover styles", gzipKiB: 1.5, brotliKiB: 1.25 },
+    load: [{ via: "after", prefix: "\\.href\\s*=\\s*" }],
+    loadedBy: ["public/index.html"],
+  },
   // Three first-interaction sheets, each extracted byte-for-byte from luna.css
   // and loaded by nav.js beside its matching island.
   {
@@ -181,6 +199,16 @@ export const CLIENT_ASSETS: readonly ClientAsset[] = [
     marker: "axp-tips",
     scope: "shell",
     budget: { role: "once-a-day tips island", gzipKiB: 3, brotliKiB: 2.5 },
+    load: [IMPORT],
+    loadedBy: ["public/nav.js"],
+  },
+  // Web Audio chime synthesizer, loaded lazily once sounds are turned on.
+  {
+    file: "nav-sound.js",
+    kind: "module",
+    marker: "createOscillator",
+    scope: "shell",
+    budget: { role: "optional sound synthesizer", gzipKiB: 1, brotliKiB: 1 },
     load: [IMPORT],
     loadedBy: ["public/nav.js"],
   },
@@ -510,7 +538,7 @@ export const twinOracleRows = (assets: readonly ClientAsset[] = CLIENT_ASSETS): 
 export function clientScriptProblems(srcClientFiles: readonly string[], assets: readonly ClientAsset[] = CLIENT_ASSETS): string[] {
   const rows = new Map(minifiedScripts(assets).map((r) => [clientSourceFile(r.file).slice("src/client/".length), r.marker]));
   const problems: string[] = [];
-  const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !rows.has(f));
+  const missing = srcClientFiles.filter((f) => /\.(?:js|ts)$/.test(f) && !f.endsWith(".d.ts") && f !== "sw.ts" && !inTestsDir(f) && !rows.has(f));
   if (missing.length)
     problems.push(`${missing.join(", ")} in src/client but not in the client asset registry, so it would ship unminified with no twin and no marker tripwire`);
   const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);

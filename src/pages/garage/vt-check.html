@@ -12,6 +12,9 @@
      browser lacks (or disables) cross-document View Transitions. -->
 <style>
 @view-transition { navigation: auto; }
+/* Chrome doesn't turn these off for reduced motion on its own; the readout
+   on vt-check promises "transitions off", so the pair keeps that promise. */
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }
 html { background: linear-gradient(180deg, #2D78BD, #6ba3e0); min-height: 100%; }
 body { font: 14px/1.6 var(--font-ui); color: #fff; max-width: 560px; margin: 8vh auto; padding: 0 16px; }
 /* viewport-fit=cover runs this page under the status bar, notch and home indicator;

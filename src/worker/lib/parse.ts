@@ -7,13 +7,14 @@
 // question ("is this actually a string?") was asked in a dozen places and
 // answered slightly differently in each.
 //
-// The rule that forced this is anti-slop/no-runtime-typeof, and its argument is
+// The rule that forced this is anti-slop's no-runtime-typeof (a
+// `no-restricted-syntax` selector in bunfig.toml), and its argument is
 // the right one: parse input where it enters, then branch on a value you can
 // trust. This repo declares ZERO runtime dependencies and watches the Worker
 // bundle's size (tools/perf-budget.ts), so a schema library was not the way to
 // get there. These are the primitives instead, and they are deliberately dull.
 //
-// The rule is OFF for this file alone, in .oxlintrc.json. That is not a
+// The rule is OFF for this file alone, in bunfig.toml. That is not a
 // loophole: a hand-rolled parser is made of `typeof` by construction, so the
 // only thing the rule can buy here is that the checks live in ONE named place
 // rather than scattered across the call sites. Suppressing it anywhere else

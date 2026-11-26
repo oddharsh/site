@@ -34,7 +34,8 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { linksTo, parseSource } from "../src/worker/webmention.ts";
-import { SORT_LABELS, SORT_MODEL, buildSortRequest, type SortLabel } from "../src/worker/webmention-sort.ts";
+import { SORT_LABELS, SORT_MODEL, buildSortRequest } from "../src/worker/webmention-sort.ts";
+import type { SortLabel } from "../src/worker/webmention-sort.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 

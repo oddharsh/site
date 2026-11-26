@@ -167,11 +167,13 @@ export function variesOnAccept(vary) {
 // freshness. Read as tokens for the same reason Vary is: "private" inside a
 // quoted no-cache field list is not the directive.
 export function sharedStorable(cacheControl) {
-  const directives = String(cacheControl || "")
-    .toLowerCase()
-    .split(",")
-    .map((d) => d.trim().split("=")[0].trim());
-  return !directives.includes("no-store") && !directives.includes("private");
+  const directives = new Set(
+    String(cacheControl || "")
+      .toLowerCase()
+      .split(",")
+      .map((d) => d.trim().split("=")[0].trim()),
+  );
+  return !directives.has("no-store") && !directives.has("private");
 }
 
 // Vary is a claim every variant has to make, and the public checklist reads it
@@ -185,7 +187,7 @@ export function sharedStorable(cacheControl) {
 // Only 2xx responses count, since those are the representations a cache keeps,
 // and only ones a shared cache may store, since a no-store copy with a bare Vary
 // is never anybody else's answer. One representation in total owes Vary nothing.
-type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
+export type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
 export function varyEveryVariant(rows: ProbeRow[]): Check {
   const variants = rows.filter(([, r]) => r?.ok && (r.status ?? 0) >= 200 && (r.status ?? 0) < 300);
   const types = new Set<string>(variants.map(([, r]) => mediaType(r.contentType)));
@@ -225,9 +227,9 @@ export function markdownAlternate(linkHeader, html) {
   const fromHeader = String(linkHeader || "")
     .split(/,(?=\s*<)/)
     .map((part) => {
-      const url = part.match(/<([^>]*)>/);
+      const url = part.match(/^[^<]*<([^>]*)>/);
       if (!url) return null;
-      if (!/rel\s*=\s*"?[^";]*\balternate\b/i.test(part)) return null;
+      if (!/rel\s*=(?:\s*")?[^";]*\balternate\b/i.test(part)) return null;
       if (!/type\s*=\s*"?text\/(x-)?markdown/i.test(part)) return null;
       return url[1];
     })
@@ -236,7 +238,7 @@ export function markdownAlternate(linkHeader, html) {
 
   const tag = String(html || "").match(/<link\b[^>]*>/gi) || [];
   for (const t of tag) {
-    if (!/rel\s*=\s*["']?[^"';>]*\balternate\b/i.test(t)) continue;
+    if (!/rel\s*=(?:\s*["'])?[^"';>]*\balternate\b/i.test(t)) continue;
     if (!/type\s*=\s*["']?text\/(x-)?markdown/i.test(t)) continue;
     const href = t.match(/href\s*=\s*["']([^"']+)["']/i) || t.match(/href\s*=\s*([^\s>]+)/i);
     if (href) return { href: href[1], where: "<link> element" };

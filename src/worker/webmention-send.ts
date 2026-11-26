@@ -390,7 +390,7 @@ function attr(tag, name: keyof typeof ATTR_RE) {
 export function findEndpointIn(html, linkHeader, baseUrl) {
   if (linkHeader) {
     for (const part of String(linkHeader).split(/,(?![^<]*>)/)) {
-      const href = (part.match(/<([^>]*)>/) || [])[1];
+      const href = (part.match(/^[^<]*<([^>]*)>/) || [])[1];
       const rel = (part.match(/rel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;,\s]+))/i) || []).slice(1).find((v) => v != null);
       if (href !== undefined && rel && relHasWebmention(rel)) return abs(href, baseUrl);
     }

@@ -312,6 +312,23 @@ const variantEtag = (etag, suffix) => {
 // module the build names those files with.
 const dictionaryTag = (request) => tagFromAvailableDictionary(request.headers.get("available-dictionary"));
 
+// A miss must vary just like a hit, but caching one Brotli copy for each
+// unrecognized hash lets arbitrary hashes fill the edge cache. Keep the browser
+// policy while forbidding shared caches from storing those fallback variants.
+function dictionaryFallback(headers: Headers, request: Request) {
+  if (
+    !headers
+      .get("vary")
+      ?.split(",")
+      .some((name) => name.trim().toLowerCase() === "available-dictionary")
+  )
+    headers.append("vary", "available-dictionary");
+  if (request.headers.has("available-dictionary")) headers.set("cdn-cache-control", "no-store");
+}
+
+const usableDictionaryDelta = (response: Response) =>
+  response.ok && response.body !== null && response.headers.get("content-length") !== "0" && !response.headers.has("content-encoding");
+
 // serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
 // says it holds, or null to let the caller fall through.
 async function serveDictionaryDelta(url, ext, request, env) {
@@ -331,7 +348,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   } catch {
     return null;
   }
-  if (!res.ok) {
+  if (!usableDictionaryDelta(res)) {
     try {
       await res.body?.cancel();
     } catch {}
@@ -406,6 +423,15 @@ export async function servePrecompressedShell(request, env, url: URL) {
   // DICTIONARY_TYPES gates this: the family dictionary (.dict) sits it out, since it is
   // the dictionary rather than something a dictionary compresses.
   const onDictionaryPath = Boolean(DICTIONARY_TYPES[ext]);
+  const plainShell = async () => {
+    const response = await serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    if (!onDictionaryPath) return response;
+    const headers = new Headers(response.headers);
+    dictionaryFallback(headers, request);
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers };
+    if (response.headers.has("content-encoding")) init.encodeBody = "manual";
+    return new Response(response.body, init);
+  };
   if (onDictionaryPath) {
     const delta = await serveDictionaryDelta(url, ext, request, env);
     if (delta) return delta;
@@ -424,14 +450,14 @@ export async function servePrecompressedShell(request, env, url: URL) {
     });
     br = await env.ASSETS.fetch(sub);
   } catch {
-    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    return plainShell();
   }
 
   if (!br.ok || br.headers.get("content-encoding")) {
     try {
       await br.body?.cancel();
     } catch {}
-    return serveAssetWith404Clamp(request, env, identityOpts(url.pathname));
+    return plainShell();
   }
 
   // Carry the asset layer's headers (so the _headers `/a/*` immutable rule still
@@ -466,6 +492,7 @@ export async function servePrecompressedShell(request, env, url: URL) {
   // on the request, and a shared cache must not serve one to a client that asked for
   // the other.
   headers.append("vary", "accept-encoding");
+  if (onDictionaryPath) dictionaryFallback(headers, request);
   // The asset layer's ETag describes the .br file. Two encodings of one resource
   // must not share a strong validator, so weaken it and mark the encoding.
   const etag = headers.get("etag");
@@ -478,7 +505,7 @@ export async function servePrecompressedShell(request, env, url: URL) {
   });
 }
 
-// servePrecompressedText: the brotli q11 twin for a static TEXT asset that is
+// servePrecompressedAsset: the brotli q11 twin for a static asset that is
 // neither a page nor part of the /a/ shell: the Markdown twins, the photo data
 // indexes, llms.txt, the sitemap, the feeds.
 //
@@ -521,18 +548,20 @@ export async function servePrecompressedShell(request, env, url: URL) {
 // deliberately NOT a member: `/garage/horizon.html` reaches serveStaticPage's
 // extension branch too, and a twin lookup there would answer the page at a
 // second URL with a 200 where the asset layer redirects it to the canonical one.
-// Only the `.src.html` readable twin is admitted, by name, through hasTextTwin.
-const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css"]);
+// Only the `.src.html` readable twin is admitted, by name, through hasStaticTwin.
+// WASM shares this path so streaming compilation keeps the plain asset's
+// application/wasm type while the body comes from its q11 twin.
+const STATIC_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css", "wasm"]);
 const SOURCE_TWIN = /\.src\.html$/i;
 
 /** Does the build write a q11 twin beside this path, if the Worker claims it? */
-export function hasTextTwin(pathname: string): boolean {
+export function hasStaticTwin(pathname: string): boolean {
   const ext = (pathname.split(".").pop() ?? "").toLowerCase();
-  return TEXT_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
+  return STATIC_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
 }
 
-export async function servePrecompressedText(request, env, url: URL, opts: AssetOptions = {}) {
-  if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY) {
+export async function servePrecompressedAsset(request, env, url: URL, opts: AssetOptions = {}) {
+  if (request.method !== "GET" || request.headers.has("range") || !hasStaticTwin(url.pathname) || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, opts);
   }
 
@@ -658,18 +687,18 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
   // index.html, which build.ts bakes into a deterministic document precisely so
   // it can take this path. Has to come before the guard below, which would
   // otherwise hand `/` to the asset layer and skip the twin entirely.
-  const rel = url.pathname === "/" ? "index" : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  const rel = url.pathname === "/" ? "index" : url.pathname.replace(/^\/+/, "").replace(/(?<!\/)\/+$/, "");
   if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
     // Sub-resources under these prefixes are not pages. The TEXT ones (a page's
     // .md twin, a section's llms.txt or feed.xml, and since 2026-09-16 its
     // scripts and its readable .src.html twin) have a q11 twin of their own and
-    // take servePrecompressedText, which falls through to the plain asset on any
+    // take servePrecompressedAsset, which falls through to the plain asset on any
     // miss; everything else (the garage's images) goes straight to the asset
     // layer untouched, as it always did.
-    if (!rel.includes("..") && hasTextTwin(rel)) {
-      return servePrecompressedText(request, env, url);
+    if (!rel.includes("..") && hasStaticTwin(rel)) {
+      return servePrecompressedAsset(request, env, url);
     }
     return serveAssetWith404Clamp(request, env);
   }
@@ -718,7 +747,7 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
             headers: { "accept-encoding": "identity" },
           }),
         );
-        if (d.ok) {
+        if (usableDictionaryDelta(d)) {
           const h = new Headers(d.headers);
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
@@ -783,6 +812,7 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
   // is a compression of the very asset `plain` returns, so the document is the
   // same one, and the two lookups it avoids are pure cost on this path.
   const [br, delta] = env.IDENTITY_BODY ? [null, null] : await Promise.all([findBrotli(), findDelta()]);
+  if (br && !delta) dictionaryFallback(br.headers, request);
   if (br) {
     const fresh = notModifiedIfFresh(request, br);
     if (fresh.status === 304) {
@@ -824,5 +854,6 @@ export async function serveStaticPage(request, env, url: URL, opts: AssetOptions
     },
   });
   plain.headers.delete("use-as-dictionary");
+  if (!env.IDENTITY_BODY) dictionaryFallback(plain.headers, request);
   return notModifiedIfFresh(request, plain);
 }

@@ -131,7 +131,7 @@ async function probeDeclared() {
 
 /** Evidence one engine produces for one URL. */
 async function renderOnce(page, url) {
-  const errs = [];
+  const errs: string[] = [];
   const onConsole = (m) => {
     if (m.type() === "error") errs.push(m.text().slice(0, 160));
   };
@@ -265,11 +265,9 @@ async function main() {
     rows.push({ route, checks, kitesurf: k, control: c, notes, bad, legible, twin: twinOk, declared });
 
     if (!WANT_JSON) {
-      const status = [checks.agentScripts, checks.agentMedia].map((x) => x.status[0].toUpperCase()).join("");
       console.log(
         `${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} scripts:${checks.agentScripts.status.padEnd(7)} media:${checks.agentMedia.status.padEnd(7)} legible:${legible === null ? "?" : legible + "%"}${twinOk ? "" : "  no-twin"}`,
       );
-      void status;
       for (const n of notes) console.log(`        ${n}`);
       if (k.brokenSrc?.length) console.log(`        first broken: ${k.brokenSrc.join(", ")}`);
       for (const e of k.errors || []) console.log(`        ${e}`);
@@ -301,8 +299,8 @@ async function main() {
 // of this stripper passed a source-shape assertion while still leaking script
 // bodies into the word count.
 if (import.meta.main) {
-  main().catch((e) => {
-    console.error(e && e.stack ? e.stack : String(e));
+  main().catch((e: unknown) => {
+    console.error(e instanceof Error && e.stack ? e.stack : String(e));
     process.exit(2);
   });
 }

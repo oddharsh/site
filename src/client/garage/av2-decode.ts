@@ -157,11 +157,10 @@ function load(wasm: string | BufferSource = WASM_URL) {
         },
       },
     };
-    const { instance } = (
+    const { instance } =
       ArrayBuffer.isView(wasm) || wasm instanceof ArrayBuffer
-        ? await WebAssembly.instantiate(wasm as BufferSource, imports)
-        : await WebAssembly.instantiateStreaming(fetch(wasm), imports)
-    ) as WebAssembly.WebAssemblyInstantiatedSource;
+        ? await WebAssembly.instantiate(wasm, imports)
+        : await WebAssembly.instantiateStreaming(fetch(wasm), imports);
     const x = instance.exports as unknown as Av2Exports;
     memory = x.memory;
     x._initialize();
@@ -236,7 +235,7 @@ if ("WorkerGlobalScope" in globalThis) {
   scope.onmessage = ({ data: { id, buf } }) => {
     decode(buf).then(
       (r) => scope.postMessage({ id, ...r }, [r.rgba]),
-      (e) => scope.postMessage({ id, error: String(e instanceof Error ? e.message : e) }),
+      (e: unknown) => scope.postMessage({ id, error: String(e instanceof Error ? e.message : e) }),
     );
   };
 }

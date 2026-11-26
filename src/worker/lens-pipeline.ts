@@ -33,7 +33,8 @@
 // thing. The guarded read lives HERE rather than in an adapter, so a fake KV
 // that throws or returns garbage exercises the guard itself.
 import { sha256Hex, validateLensTarget } from "./lib/public-fetch.ts";
-import { overBudget, rateLimitedHeaders, rateLimitPolicy, type NamedBudget } from "./lib/ratelimit.ts";
+import { overBudget, rateLimitedHeaders, rateLimitPolicy } from "./lib/ratelimit.ts";
+import type { NamedBudget } from "./lib/ratelimit.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
@@ -57,7 +58,7 @@ type LensBudgetDecl = NamedBudget & {
 // account's minute and the next visitor got a failure that read like a bug.
 //
 // Every 429 the lens doors send is DERIVED from this table by budgetMessage().
-// tools/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
+// src/worker/tests/contract-lens-per-ip-crawl-budgets.test.ts fails on a literal "N/min"
 // in a lens door, so the ceiling is never typed twice.
 export const LENS_BUDGETS = {
   inspect: { name: "inspect", binding: "LENS_RL_INSPECT", max: 30, label: "Lens lookups", shares: "/lens/fetch, /mcp and the terminal tools" },

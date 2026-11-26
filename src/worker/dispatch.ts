@@ -18,22 +18,25 @@
 // which reaches `cloudflare:workers` too), so it binds one per route id and
 // this module never imports a page.
 import type { Env, SiteRequest } from "./lib/env.ts";
-import { ALBUMS, albumPath, type Album } from "./albums.ts";
+import { ALBUMS, albumPath } from "./albums.ts";
+import type { Album } from "./albums.ts";
 import { withBotPolicyCache } from "./lib/botauth.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { CANONICAL_HOST, isCanonicalHost } from "./lib/const.ts";
-import { apiPreflight, withApiContract } from "./lib/api-contract.ts";
+import { apiMethods, apiPreflight, withApiContract } from "./lib/api-contract.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
+import { methodGuard } from "./lib/http.ts";
 import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { canonicalPage, countMiss, recoverNotFound, sitemapPaths } from "./lib/not-found.ts";
 import { isCallable } from "./lib/parse.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
-import { withSecurityHeaders } from "./lib/security.ts";
+import { offersDictionary, withSecurityHeaders } from "./lib/security.ts";
 import { serverError } from "./lib/server-error.ts";
 import { span } from "./lib/trace.ts";
 import { countCrawlerHit } from "./ledger.ts";
 import { countSpeculativeLoad } from "./speculation.ts";
-import { CACHEABLE_PATHS, CAL_HOST, EXACT_ROUTES, PREFIX_ROUTES, SELF_FETCH_PATHS, type ExactPath, type PrefixLabel } from "./routes.ts";
+import { CACHEABLE_PATHS, CAL_HOST, EXACT_METHODS, EXACT_ROUTES, PREFIX_METHODS, PREFIX_ROUTES, SELF_FETCH_PATHS } from "./routes.ts";
+import type { ExactPath, Methods, PrefixLabel } from "./routes.ts";
 
 // A worker-owned route handler, as dispatchTraced() calls one. A real type
 // because a `@typedef` in a .ts file is inert (gotcha 42). index.ts's handler
@@ -115,18 +118,33 @@ export function createDispatch(handlers: DispatchHandlers) {
     return handle;
   };
 
+  // A wrong method is refused here, before the handler runs, from routes.ts's
+  // `methods` (or the API contract's, for a documented API path).
+  const guarded = (declared: Methods | undefined, path: string | null, handle: RouteHandler): RouteHandler => {
+    if (declared === "handler") return handle;
+    const allow = (path === null ? null : apiMethods(path)) ?? declared ?? ["GET"];
+    return (request, env, ctx, url) => methodGuard(request, allow) ?? handle(request, env, ctx, url);
+  };
+
   const exactRoutes = new Map<string, RouteHandler>();
   for (const { path } of EXACT_ROUTES) {
     const handle = need(handlers.exact[path], path);
-    exactRoutes.set(path, SELF_FETCH_PATHS.has(path) ? withSelfFetchHandler(handle) : handle);
+    exactRoutes.set(path, guarded(EXACT_METHODS.get(path), path, SELF_FETCH_PATHS.has(path) ? withSelfFetchHandler(handle) : handle));
   }
   // one page per album (albums.ts), generated at deploy like /photos, with the
   // dynamic handler as the 404 fallback
   for (const album of Object.values(ALBUMS)) {
-    exactRoutes.set(albumPath(album), (request, env, ctx, url) => handlers.album(album, request, env, ctx, url));
+    exactRoutes.set(
+      albumPath(album),
+      guarded(undefined, null, (request, env, ctx, url) => handlers.album(album, request, env, ctx, url)),
+    );
   }
   // Walked in routes.ts's order, which is load-bearing (its PREFIX_ROUTES header).
-  const prefixRoutes = PREFIX_ROUTES.map((r) => ({ label: r.label, match: r.match, handle: need(handlers.prefix[r.label], r.label) }));
+  const prefixRoutes = PREFIX_ROUTES.map((r) => ({
+    label: r.label,
+    match: r.match,
+    handle: guarded(PREFIX_METHODS.get(r.label), null, need(handlers.prefix[r.label], r.label)),
+  }));
 
   // The self-dispatcher itself, factored out because the CRON needs it too and a
   // second copy is how the two drift. `scheduled()` has no request to build one
@@ -288,7 +306,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
     // rather than listing the hosts that are not means the next alias is covered by
     // arriving, which is the same argument the preview guard's default-deny wins on.
-    return withSecurityHeaders(response, pathname, { noindex: !isCanonicalHost(hostname) });
+    return withSecurityHeaders(response, pathname, { noindex: !isCanonicalHost(hostname), offerDictionary: offersDictionary(request) });
   }
 
   // SELF_FETCH and the cron arrive without a parsed URL; serveWorkerRequest
@@ -331,7 +349,7 @@ export function createDispatch(handlers: DispatchHandlers) {
     // rather than a 301 to a second 404. Other methods fall through too: a
     // 301 lets a client turn a POST into a GET.
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname.length > 1 && url.pathname.endsWith("/")) {
-      const bare = url.pathname.replace(/\/+$/, "") || "/";
+      const bare = url.pathname.replace(/(?<!\/)\/+$/, "") || "/";
       const twin = canonicalPage(url.pathname, await sitemapPaths(env)) ?? (exactRoutes.has(bare) || prefixRoutes.some((r) => r.match(bare)) ? bare : null);
       if (twin)
         return dispatchTraced("/<path>/", "slash", (_request, _env, _ctx, u) => Response.redirect(u.origin + twin + u.search, 301), request, env, ctx, url);

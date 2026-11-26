@@ -31,17 +31,21 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { brotliCompress, brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { siteConfig } from "./lib/site-config.ts";
-import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision, type ServedTreePlan } from "./lib/served-tree.ts";
+import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision } from "./lib/served-tree.ts";
+import type { ServedTreePlan } from "./lib/served-tree.ts";
 import { transform as transformCss } from "lightningcss";
-import { minifySync, type MinifyOptions } from "oxc-minify";
+import { minifySync } from "oxc-minify";
+import type { MinifyOptions } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
+import { engineVersions } from "spokeshave";
+import { freshness, readPicks, replayPick } from "./lib/minify-picks.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { spliceMinLiterals } from "./lib/css-literal.ts";
@@ -49,7 +53,7 @@ import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { buildPhotoSearchIndex, encodePhotoSearchIndex } from "../src/worker/lib/photo-search.ts";
-import { dczEncode, dictionaryTag, frameDcz } from "./lib/dcz.ts";
+import { dictionaryTag, frameDcz } from "./lib/dcz.ts";
 import {
   DCZ_ZSTD_LEVEL,
   familyDictionaryName,
@@ -59,21 +63,26 @@ import {
   parseShellAsset,
   shellDeltaName,
 } from "../src/worker/lib/dictionary-names.ts";
-import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_DICT_SIZE, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { trainFamilyDictionary } from "./lib/family-trainer.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { clientScriptProblems, minifiedScripts, minifiedStyles, shellRankedFiles } from "./lib/client-assets.ts";
+import { inTestsDir } from "./lib/test-roots.ts";
 import { hashClientAssets } from "./lib/hash-client-assets.ts";
 import { foldLongProse } from "./lib/prose-fold.ts";
-import { pauseBelowFirstScreen } from "./lib/parser-pause.ts";
-import { NON_BLOCKING_PAGES } from "./lib/critical-css.ts";
+import { pauseBelowFirstScreen, repauseAfterFirstFold } from "./lib/parser-pause.ts";
+import { NON_BLOCKING_PAGES, nonBlocking } from "./lib/critical-css.ts";
 import { taskbarFloors } from "./lib/taskbar-floor.ts";
 import { minifyHtml } from "./lib/html-minify.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 import { phaseClock, phaseSummary } from "./lib/build-phases.ts";
 import { cloneTree } from "./lib/clone-tree.ts";
+import { browserJavaScripts } from "./lib/browser-source.ts";
 import { repoPathTokens } from "./lib/repo-path-tokens.ts";
-import { buildCache, buildCacheEnabled } from "./lib/build-cache.ts";
+import { buildCache, buildCacheEnabled, sourceDigest } from "./lib/build-cache.ts";
+import { readDocument } from "./lib/html-to-md.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import type * as albumsModule from "../src/worker/albums.ts";
 
 const { phase, finish: finishPhases } = phaseClock();
 
@@ -121,8 +130,8 @@ const brotliQ11 = async (bytes: Buffer): Promise<Buffer> => (await cache.many([b
 // it runs on a pool thread through steps 2 to 8, and the text-twin step asks
 // for the same bytes, gets the same key and joins it. A later step that changed
 // the file would change the key, and the twin would compress afresh.
-const twinHeadStart = (body: string) => {
-  brotliQ11(Buffer.from(body)).catch(() => {});
+const twinHeadStart = (body: string | Buffer) => {
+  brotliQ11(Buffer.isBuffer(body) ? body : Buffer.from(body)).catch(() => {});
 };
 // A dictionary is keyed by its digest, computed once per buffer: the family
 // dictionaries recur in every page's job.
@@ -195,7 +204,9 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // prose.css built clean, and the flat readdirs elsewhere missed both subtrees
 // (gotcha 55).
 const shellFiles = async (): Promise<string[]> => [
-  ...(await readdir("src/client", { recursive: true })).filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts")).map((r) => `src/client/${r}`),
+  ...(await readdir("src/client", { recursive: true }))
+    .filter((r) => /\.(?:js|ts)$/.test(r) && !r.endsWith(".d.ts") && !inTestsDir(r))
+    .map((r) => `src/client/${r}`),
   ...(await readdir("src/styles", { recursive: true })).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
 ];
 
@@ -539,7 +550,7 @@ async function checkInvariants() {
     // both directions so neither the registry nor the surface can drift alone.
     const want = (f) => surfaces.filter((s) => s.flags[f]).map((s) => s.path);
     const bidi = (label, wantPaths, have, opts: { subsetOnly?: boolean } = {}) => {
-      const w = new Set(wantPaths) as Set<string>;
+      const w = new Set<string>(wantPaths);
       for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
       if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
     };
@@ -599,7 +610,7 @@ async function checkInvariants() {
   // NOT from the font law: /garage and /lwe exist to show the platform off, so
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0,
-    tasteOk = [];
+    tasteOk: string[] = [];
   try {
     // Taste rules can execute only from text a browser parses or from a program
     // that emits that text. So the walk keeps active textual assets, the client
@@ -608,7 +619,7 @@ async function checkInvariants() {
     // the AVIF/JPEG tiers or OG PNGs as UTF-8.
     const activeText = (rel: string): boolean => rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
     const programFiles = async (root: string): Promise<string[]> =>
-      (await readdir(root, { recursive: true })).filter((rel) => /\.(?:[cm]?[jt]sx?)$/i.test(rel)).map((rel) => `${root}/${rel}`);
+      (await readdir(root, { recursive: true })).filter((rel) => /\.(?:[cm]?[jt]sx?)$/i.test(rel) && !inTestsDir(rel)).map((rel) => `${root}/${rel}`);
     const served = [
       ...(await servedFiles(activeText)),
       ...(await shellFiles()),
@@ -717,7 +728,7 @@ async function checkInvariants() {
   // which is exactly how a guard on the one deploy path ends up commented out.
   let conflictScanned = 0;
   try {
-    const collect = async (dir, match, skip = /^$/, out = []) => {
+    const collect = async (dir, match, skip = /^$/, out: string[] = []) => {
       for (const e of await readdir(dir, { withFileTypes: true })) {
         const p = `${dir}/${e.name}`;
         if (e.isDirectory()) {
@@ -731,7 +742,7 @@ async function checkInvariants() {
     const files = [
       ...(await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/)),
       ...(await shellFiles()),
-      ...(await collect("src/worker", /\.ts$/)),
+      ...(await collect("src/worker", /\.ts$/, /^tests$/)),
       ...(await flat("cal/src", /\.ts$/)),
       // .ts since #523 (2026-08-23). It matched /\.js$/ until 2026-10-17 and
       // scanned 0 of serendipity's 3 files, so each root now has to yield one
@@ -908,16 +919,41 @@ await Promise.all([
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
+// Erasing client TypeScript spawns node, 182 ms of every build on 2026-11-21,
+// so each island's erased text is memoized on the node binary that erases it,
+// both halves of the eraser's source, and the island's path and text.
+const nodeBinary = realpathSync(Bun.which("node") ?? "node");
+const { size: nodeSize, mtimeMs: nodeMtime } = statSync(nodeBinary);
+const eraserSource = ["tools/lib/browser-source.ts", "tools/lib/browser-source-node.ts"].map((p) => createHash("sha256").update(readFileSync(p)).digest("hex"));
+const ERASE = `browser-source ${eraserSource.join(" ")} node ${nodeBinary} ${nodeSize} ${nodeMtime}`;
+const erase = async (sources: ReadonlyMap<string, string>): Promise<Map<string, string>> => {
+  const islands = [...sources];
+  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {
+    const erased = browserJavaScripts(new Map(missed.map((i) => islands[i])));
+    return missed.map((i) => {
+      const text = erased.get(islands[i][0]);
+      if (text === undefined) throw new Error(`browser-source: no output for ${islands[i][0]}`);
+      return text;
+    });
+  });
+  return new Map(islands.map(([file], i) => [file, texts[i]]));
+};
 await Promise.all([
-  copyServedTree(servedPlan, `${OUT}/public`),
+  copyServedTree(servedPlan, `${OUT}/public`, { erase }),
   // The Worker is a PROGRAM, not a document, so its source lives in src/worker
   // beside cal/ and serendipity/ rather than inside the tree of things a browser
   // can fetch. Its STAGED position is unchanged: cloudflare.config.ts still points its entrypoint
   // at .build/src/worker/index.ts, and every deploy path and content hash
   // downstream is therefore untouched by the move.
   // a whole tree, so one clonefile(2) where it can (tools/lib/clone-tree.ts)
+  // Its tests/ directories are suite code, so they leave the staged tree before
+  // any pass over it: the Worker never imports them, and nothing here ships them.
   cloneTree(resolve("src/worker"), resolve(`${OUT}/src/worker`)).then(async (cloned) => {
     if (!cloned) await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
+    const staged = await readdir(`${OUT}/src/worker`, { recursive: true, withFileTypes: true });
+    await Promise.all(
+      staged.filter((e) => e.isDirectory() && e.name === "tests").map((e) => rm(`${e.parentPath}/${e.name}`, { recursive: true, force: true })),
+    );
   }),
   cloneTree(resolve("cal/src"), resolve(`${OUT}/cal/src`)).then(async (cloned) => {
     if (!cloned) await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
@@ -931,6 +967,13 @@ await Promise.all([
     filter: (source) => !source.includes(`${sep}migrations`) && (!/\.\w+$/.test(source) || source.endsWith(".ts")),
   }),
 ]);
+
+// Start large static binary twins early (e.g. the 1.76 MB AV2 WASM decoder) so
+// their single-stream q11 encode overlaps with steps 1–8 instead of stalling
+// the text-twins phase at the end of a cold/CI build.
+for (const rel of (await readdir(`${OUT}/public`, { recursive: true })).filter((r) => /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.wasm$/.test(r))) {
+  readFile(`${OUT}/public/${rel}`).then(twinHeadStart, () => {});
+}
 
 // 1-svg) the icon sprite and the section favicons ship without their generator
 // comment. gen-desktop-partial.ts writes a "GENERATED by ... Do not hand-edit"
@@ -1078,7 +1121,7 @@ phase("1a photo indexes");
   const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
   const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  const entries = Object.entries(exif) as [string, Record<string, any>][];
+  const entries = Object.entries<Record<string, any>>(exif);
   await Promise.all(
     entries.map(async ([stem, record]) => {
       const out = { ...record };
@@ -1189,6 +1232,12 @@ const digestFile = (path: string): string => createHash("sha256").update(readFil
 const INLINE_CSS = `${toolVersion("lightningcss")} css-parse ${digestFile("tools/lib/css-parse.ts")} custom-media ${digestFile("src/styles/custom-media.css")} ${minifyCss.toString()}`;
 const INLINE_JS = `${toolVersion("oxc-minify")} ${JSON.stringify(OXC_MINIFY_OPTIONS)} ${minifyJavaScript.toString()}`;
 const DOCUMENT = `html-minify ${digestFile("tools/lib/html-minify.ts")}`;
+// html-to-md parses every page twice a build, for the twins at 1g and the
+// search index at 1i. Its output is a pure function of the page, the options
+// and its own code, which sourceDigest walks import by import.
+const HTML_TO_MD = `html-to-md ${sourceDigest("tools/lib/html-to-md.ts")}`;
+const readDocumentMemo: typeof readDocument = (html, options) =>
+  JSON.parse(cache.memo(HTML_TO_MD, [JSON.stringify(options ?? {}), html], () => JSON.stringify(readDocument(html, options))));
 
 const findHtmlTagEnd = (source, start) => {
   let quote = "";
@@ -1243,7 +1292,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
     out += token;
     cursor = gt + 1;
 
-    const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
+    const match = token.match(/^<\s*(?:(\/)\s*)?([A-Za-z][^\s/>]*)/);
     if (!match || match[1] || !RAW_HTML_TAGS.has(match[2].toLowerCase())) continue;
 
     const tag = match[2].toLowerCase();
@@ -1274,11 +1323,7 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   return out;
 };
 
-// The exact transform step 7b writes for every non-homepage HTML document. Kept
-// here as one function because the page-family dictionary samples the bytes the
-// browser will actually receive, before step 7b reaches the files themselves.
-// A dictionary sampled from the readable pre-minification source still works, but
-// wastes its scarce 64KB on whitespace and comments absent from every target.
+// The exact transform step 7b writes for every non-homepage HTML document.
 const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
@@ -1400,7 +1445,7 @@ phase("1e photos + bot");
   // with no members is a registry entry nobody ran the pipeline for, and a page
   // that renders 503 at deploy is a page whose route would 503 in production,
   // so it fails the build by name rather than shipping the fallback.
-  const albums: typeof import("../src/worker/albums.ts") = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
+  const albums: typeof albumsModule = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
   const { ALBUMS, albumPath } = albums;
   const albumSizes: string[] = [];
   for (const album of Object.values(ALBUMS)) {
@@ -1525,7 +1570,7 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
-  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT });
+  const { files, skipped, generated, committed } = buildTwins(".", { generatedRoot: OUT, read: readDocumentMemo });
   // The registry advertises every agents:true surface to agents (MCP
   // resources/list), so each one owes a Markdown twin unless it declares the
   // representation its route renders live (`mimeType`, as /rn and the terminal
@@ -1907,7 +1952,7 @@ phase("1i search index");
 // because nobody set its flag, never because this step ran too early.
 {
   const { buildSearchIndex } = await import("./generate-search-index.ts");
-  const index = await buildSearchIndex(".");
+  const index = await buildSearchIndex(".", { read: readDocumentMemo });
   // Both floors guard a SILENT failure, which is the only kind this artifact
   // has. getSearchIndex() in search.ts falls back to an empty list on a
   // missing or unreadable file, so a collapsed index renders /search perfectly
@@ -1990,6 +2035,15 @@ phase("2 homepage");
 }
 
 phase("3 shells");
+// Each script ships the pipeline config/minify-picks.json names for its exact
+// bytes (tools/lib/minify-picks.ts has why the build replays a pick instead of
+// choosing). A stale pick ships oxc output. MINIFY_PICKS=off ships oxc for
+// every script, which is the baseline build tools/check-minify-diff.ts compares
+// a pick against.
+const picks = process.env.MINIFY_PICKS === "off" ? null : readPicks();
+const pickVersions = await engineVersions();
+const stalePicks: string[] = [];
+
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   const src = await readFile(`${OUT}/public/${file}`, "utf8");
@@ -1998,9 +2052,16 @@ for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
   // An ES module parses as one (a script parse refuses `export`), and its
   // top-level names are module-scoped rather than globals, so mangling them is
   // safe and is where most of such a file's saving comes from.
-  const code = module
-    ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
-    : minifyJavaScript(`src/client/${file}`, src);
+  const state = picks === null ? null : freshness(picks[file], src, pickVersions);
+  let code: string;
+  if (state?.kind === "fresh") {
+    code = await replayPick(state.pick, src, { filename: file, module });
+  } else {
+    if (state?.kind === "stale") stalePicks.push(`${file} (${state.reason})`);
+    code = module
+      ? minifyJavaScript(`src/client/${file}`, src, { ...OXC_MINIFY_OPTIONS, module: true, mangle: { toplevel: true } })
+      : minifyJavaScript(`src/client/${file}`, src);
+  }
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -2011,6 +2072,12 @@ for (const { file, twin: srcPath, marker, module } of minifiedScripts()) {
 
   await writeFile(`${OUT}/public/${file}`, min);
   console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
+}
+
+if (stalePicks.length) {
+  console.log(
+    `minify picks: ${stalePicks.length} script(s) shipped oxc output, since their pick is stale: ${stalePicks.join(", ")}. Run \`bun run minify:pick\` to re-pick.`,
+  );
 }
 
 phase("4 luna.css");
@@ -2202,6 +2269,96 @@ phase("5c custom properties");
   );
 }
 
+phase("5e class names");
+// 5e) shorten CSS class names across the whole staged tree: stylesheets, page
+// markup, client scripts and the Worker source that builds markup, at once.
+//
+// spokeshave's census (spokeshave/src/classes.ts) records every class position
+// with its offset and decides which names nothing else in the tree could
+// become; lib/class-names.ts names them in the shell and hashed tiers 5c uses.
+// It runs after 5c for the same reasons 5c runs where it does: every document
+// and Worker literal is staged, and step 6 has not hashed anything yet, so the
+// content hashes, CSP hashes and deltas all see final bytes.
+//
+// The `.src.*` twins keep the authored names, as they keep the custom property
+// names: they are the readable copy.
+//
+// CLASS_NAMES=off skips the step, which is the baseline check-minify-diff.ts
+// --classes records a rename against.
+//
+// A later step that reads a class out of a staged page asks servedClass for
+// the name it ships as (gotcha 113).
+let servedClass = (name: string): string => name;
+// The class-name proof, running on its own thread; awaited before the build reports.
+let classNamesProven: Promise<void> = Promise.resolve();
+if (process.env.CLASS_NAMES === "off") console.log("class names: skipped (CLASS_NAMES=off)");
+else {
+  const { censusFile, planRename, proveRename } = await import("./lib/class-names.ts");
+  const staged = (await readdir(OUT, { recursive: true })).filter(censusFile).sort();
+  const texts = await Promise.all(
+    staged.map(async (rel) => {
+      const full = `${OUT}/${rel}`;
+      return (await stat(full)).isFile() ? readFile(full, "utf8") : null;
+    }),
+  );
+  const before = new Map<string, string>();
+  staged.forEach((rel, i) => {
+    const text = texts[i];
+    if (text !== null) before.set(rel, text);
+  });
+  // The floor is 600 of the 1,151 names renameable on 2026-11-22, so a census
+  // that quietly stops matching fails here instead of shipping a no-op.
+  const FLOOR = 600;
+  // Memoized: the rename is a pure function of the staged files it reads, the
+  // shell set and the code below, so a build whose inputs match the last one
+  // skips both censuses (3.7 s of a 6.5 s warm build on 2026-11-23). The key
+  // names the step's own code by digest and spokeshave by its installed
+  // classes.ts and package.json, which pins terser and amaro exactly.
+  const resolveHere = (spec: string) => Bun.resolveSync(spec, import.meta.dir);
+  const CLASS_NAMES_STEP = `class-names floor ${FLOOR} ${digestFile("tools/lib/class-names.ts")} spokeshave ${digestFile(resolveHere("spokeshave/classes"))} ${digestFile(resolveHere("spokeshave/package.json"))}`;
+  const parts = [JSON.stringify([...SHELL_RANKED].sort()), ...[...before].flatMap(([rel, text]) => [rel, text])];
+  type Renamed = { map: Array<[string, string]>; changed: Array<[string, string]>; names: number; tainted: number };
+  // On a miss the plan is ready after one census and the proof runs on a worker
+  // thread through the rest of the build; classNamesProven is awaited before the
+  // build reports its staged tree, and an entry is written only once its proof
+  // has passed. On a hit both are done.
+  const planned = Promise.withResolvers<Renamed>();
+  classNamesProven = cache
+    .memoBatch(CLASS_NAMES_STEP, [parts], async () => {
+      const plan = planRename(before, SHELL_RANKED);
+      const renamed: Renamed = {
+        map: [...plan.map],
+        changed: [...plan.after].filter(([rel, text]) => text !== before.get(rel)),
+        names: plan.before.counts.size,
+        tainted: plan.before.tainted.size,
+      };
+      planned.resolve(renamed);
+      const proofStarted = performance.now();
+      await proveRename(plan, FLOOR);
+      console.log(`class names: the rename is proven, by a second census on its own thread (${Math.round(performance.now() - proofStarted)} ms)`);
+      return [JSON.stringify(renamed)];
+    })
+    .then(
+      ([text]) => planned.resolve(JSON.parse(text)),
+      (error: unknown) => {
+        planned.reject(error);
+        throw error;
+      },
+    );
+  const result = await planned.promise;
+  const map = new Map(result.map);
+  const changed = result.changed;
+  const census = { counts: { size: result.names }, tainted: { size: result.tainted } };
+  await Promise.all(changed.map(([rel, text]) => writeFile(`${OUT}/${rel}`, text)));
+  servedClass = (name) => map.get(name) ?? name;
+  // Beside the staged tree, never served: what a test reading a built page
+  // needs to find a class under the name it ships as.
+  await writeFile(`${OUT}/class-names.json`, JSON.stringify(Object.fromEntries([...map].sort(([a], [b]) => (a < b ? -1 : 1))), null, 1) + "\n");
+  console.log(
+    `class names: ${map.size} of ${census.counts.size} renamed across ${changed.length} staged files (${census.tainted.size} files with an untraced class sink)`,
+  );
+}
+
 phase("5d quiz data");
 // 5d) the understanding check's payload leaves the document.
 //
@@ -2215,8 +2372,8 @@ phase("5d quiz data");
 // shape and why the element stays.
 //
 // HERE, after 5c renamed custom properties (so the file holds exactly the bytes
-// the page used to ship) and before step 6, whose family corpus samples four of
-// these pages and should sample what is served. Step 7 then gives each file its
+// the page used to ship) and before step 6. The family dictionary is trained in
+// step 8 on the served pages, which no longer carry these blocks. Step 7 then gives each file its
 // q11 twin like every other /a/ asset. It stays off the dictionary path
 // (DICTIONARY_TYPES in lib/assets.ts): the name is per page, so there is no
 // earlier version of the same URL family for a delta to start from.
@@ -2231,7 +2388,7 @@ phase("5d quiz data");
   // Which pages carry a quiz in SOURCE. The staged set is checked against this,
   // so a page whose block a later edit made unmatchable fails here by name
   // instead of shipping its answer key inline or shipping no quiz at all.
-  const sources = ((await readdir("src/pages", { recursive: true })) as string[]).filter((rel) => rel.endsWith(".html"));
+  const sources = (await readdir("src/pages", { recursive: true })).filter((rel) => rel.endsWith(".html"));
   const authored = new Set<string>();
   await Promise.all(
     sources.map(async (rel) => {
@@ -2239,7 +2396,7 @@ phase("5d quiz data");
     }),
   );
 
-  const staged = ((await readdir(`${OUT}/public`, { recursive: true })) as string[])
+  const staged = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && !rel.startsWith("a/"))
     .sort();
   let files = 0,
@@ -2281,13 +2438,11 @@ phase("5e build info");
   console.log(info ? `build-info: ${info.commit.slice(0, 12)} on ${info.branch ?? "?"}` : "build-info: not a Workers Builds build, BUILD_INFO stays null");
 }
 
-// The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
-// against the final page bytes and the committed src/dict/f-dict dictionary.
-let freshFamily: Buffer | null = null;
-
 phase("5f non-blocking shell css");
-// 5f) the pages lib/critical-css.ts lists load luna.css and prose.css without
-// blocking first paint, behind the subset of each that can apply to the page.
+// 5f) pages load luna.css and prose.css without blocking first paint, behind
+// the subset of each that can apply to the page: every page that links
+// luna.css and still fits the first round trip once it carries the subset,
+// plus the ones lib/critical-css.ts names.
 // It runs after 5c so the subset carries the same short custom-property names
 // as the stylesheet it came from, and before 6 so the swapped links get hashed
 // like any other. The subset is derived here on every build and never
@@ -2295,17 +2450,49 @@ phase("5f non-blocking shell css");
 // Step 7b gives the page's readable twin the same swap, so the twin stays the
 // same program as the page it twins.
 const { nonBlockingPage } = await import("./lib/critical-css.ts");
-const toNonBlocking = async (page: string) => {
+const toNonBlocking = async (page: string, paneClass = servedClass("axp-tasks"), matchingHtml = page) => {
   const sheets = await Promise.all(["/luna.css", "/prose.css"].map(async (href) => ({ href, css: await readFile(`${OUT}/public${href}`, "utf8") })));
   const srcs = [...page.matchAll(/<script\b[^>]*\bsrc="(\/[^"]+\.js)"/g)].map((m) => m[1]);
   const scripts = await Promise.all(srcs.map((src) => readFile(`${OUT}/public${src}`, "utf8")));
-  return nonBlockingPage(page, sheets, scripts);
+  return nonBlockingPage(page, sheets, scripts, { taskPane: `<div class="${paneClass}"`, matchingHtml });
 };
-for (const rel of NON_BLOCKING_PAGES) {
-  const page = await readFile(`${OUT}/public/${rel}`, "utf8");
-  const out = await toNonBlocking(page);
-  await writeFile(`${OUT}/public/${rel}`, out);
-  console.log(`non-blocking shell css: ${rel} inlines ${out.length - page.length} B for luna.css and prose.css`);
+// Only a page that still fits the first round trip once it carries the subset
+// gains anything: a cold connection sends about 14,600 B before its first ack
+// (10 packets, RFC 6928), and a page past that waits a round trip for its own
+// HTML anyway, so it would only carry the subset's bytes. Measured with
+// `bun run user-bytes` on 2026-11-23: swapping every page cut first paint 7.0 ms
+// a view and added 3,348 B; pages at 15 to 26 KB of brotli kept their 34 to 36
+// ms. The budget leaves 1,100 B of the window to the response's headers and
+// TLS framing, and it's read on the page before 7b minifies it, which can only
+// overstate the size.
+const FIRST_WINDOW_BODY_BYTES = 13_500;
+const swappedPages = new Set<string>();
+{
+  const pages = (await readdir(`${OUT}/public`, { recursive: true })).filter((f) => f.endsWith(".html") && !f.endsWith(".src.html")).sort();
+  let inlined = 0,
+    tooBig = 0;
+  for (const rel of pages) {
+    const page = await readFile(`${OUT}/public/${rel}`, "utf8");
+    if (!nonBlocking(rel, page)) continue;
+    // The pause 1g placed has to move past the first fold, or it would hold the
+    // first paint that rel=expect releases there (parser-pause.ts).
+    const out = await toNonBlocking(repauseAfterFirstFold(page));
+    // /garage measured its own win in a lab run (critical-css.ts), so it stays swapped.
+    // q9 runs in milliseconds where q11 took 5.2 s over 75 pages. On the 78
+    // built pages (2026-11-23) q9 ran 8.0 to 13.5% over q11 and never under, so
+    // a page q9 puts within 1.08 of the budget also fits once step 8 encodes it.
+    const brotli9 = brotliCompressSync(Buffer.from(out), { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 9 } }).length;
+    if (!NON_BLOCKING_PAGES.includes(rel) && brotli9 > FIRST_WINDOW_BODY_BYTES * 1.08) {
+      tooBig++;
+      continue;
+    }
+    await writeFile(`${OUT}/public/${rel}`, out);
+    swappedPages.add(rel);
+    inlined += out.length - page.length;
+  }
+  console.log(
+    `non-blocking shell css: ${swappedPages.size} pages inline ${inlined} B of luna.css and prose.css subsets; ${tooBig} would pass the first window and stay blocking`,
+  );
 }
 
 phase("6 hash shell assets");
@@ -2330,83 +2517,6 @@ phase("6 hash shell assets");
   // dependent's hash covers its final bytes (nav.js imports hoist; lens.js
   // loads its six feature modules; lens-boot.js imports lens.js).
   const { urls: hashedFor, filesTouched } = await hashClientAssets(OUT, { log: console.log });
-
-  // RFC 9842 requires dcz to treat the supplied bytes as a RAW dictionary. A zstd
-  // --train artifact is self-describing, so a server library recognizes its tables
-  // while Chrome treats those same response bytes as raw content; the decoders
-  // disagree and the navigation fails. Build one site-wide corpus from the final,
-  // repointed bytes of two complementary pages: the compact LWE shell plus the
-  // Garage compression explainer, with 4 KB of vigenere filling the window.
-  //
-  // The corpus is a LIST rather than a fixed pair, and it is read in order until the
-  // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
-  // meant an ordinary edit trimming either page by ~2% would have hard-failed the
-  // deploy under a message naming the wrong cause. The trailing entries are slack:
-  // they contribute nothing while the leading pages are long enough, and they keep a
-  // content edit from becoming a release incident.
-  //
-  // THERE ARE NO REPRESENTATIVE TAILS, since 2026-09-28. Tails of four outlier
-  // pages (horizon, vt-b, vt-check, access/index) sat at the start of the corpus
-  // from 2026-08-11, tuned against IN-SAMPLE measurements: the pages the tails
-  // were cut from were among the pages scored, and a page whose bytes sit in the
-  // dictionary compresses to almost nothing.
-  //
-  // tools/family-holdout.ts (in git history) asked the production question: rebuild
-  // this dictionary from the pages served at each dictionary roll, and score it
-  // on the pages served k rolls LATER, with every corpus page left out of the
-  // score. Over 34 rolls (2026-07-27 to 2026-09-28), no tails beat the 11/4/4/12
-  // set in every window: +1.80 points of plain q11 at k=1 (33 of 33), +1.78 at k=3
-  // (31 of 31), +1.64 at k=8 (26 of 26). The gain is the LWE shell drivers brings
-  // back, worth 300-740 B on each /lwe page. A delta that fails to beat q11 is
-  // skipped in step 8, so a losing page costs nothing past its q11 twin. Re-run
-  // the holdout before re-adding a tail, and read it with the corpus pages
-  // excluded.
-  {
-    const BASE_CORPUS = [
-      "lwe/drivers.html", // the LWE shell every /lwe page shares
-      "garage/compression.html", // the Garage explainer: the shell every other page shares
-      "lwe/vigenere.html", // fills the last ~4 KB
-      "garage/chunks.html", // slack, in corpus order
-    ];
-    const SIZE = 65_536;
-    const parts = [];
-    let total = 0;
-    // THROUGH minifiedPage(). This block runs before step 7b reaches the staged
-    // files, so a bare read here returns the READABLE source: indentation,
-    // comments, none of it in any target. The note on minifiedPage already says a
-    // dictionary sampled that way "wastes its scarce 64KB on whitespace and
-    // comments absent from every target". Measured 2026-08-31 over the 55 staged
-    // pages, family deltas against plain q11: 510,803 B from the readable corpus,
-    // 480,187 B from this one, 55/55 pages still beating brotli either way. 30,616
-    // B for reading the right bytes.
-    for (const rel of BASE_CORPUS) {
-      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
-      const bytes = Buffer.from(minifiedPage(staged, rel));
-      parts.push(bytes);
-      total += bytes.length;
-      if (total >= SIZE) break;
-    }
-    if (total < SIZE) {
-      throw new Error(
-        `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
-          `Add another staged page to BASE_CORPUS in build.ts (order is load-bearing; append, do not reorder).`,
-      );
-    }
-    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
-    if (dictionary.readUInt32LE(0) === 0xec30a437) {
-      throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
-    }
-    // NOT written to /a/ here, and not the dictionary that necessarily ships. The
-    // URL is the hash of these bytes, and these bytes sample pages that carry every
-    // /a/<name>.<hash8> shell reference, so shipping the derivation as-is re-minted
-    // the dictionary on most deploys and cost every returning visitor a 17 KB
-    // re-fetch for a 0.1-point gain (measured 2026-09-02). Step 8 decides between
-    // this derivation and the committed src/dict/f-dict copy against the FINAL page
-    // bytes, which do not exist yet: step 7b has not minified them. The rule and
-    // its arithmetic live in tools/lib/page-family.ts.
-    freshFamily = dictionary;
-    console.log(`site-page corpus: fresh candidate ${hash8(dictionary)} (${dictionary.length} raw bytes); step 8 chooses between it and ${FAMILY_DICT_DIR}`);
-  }
 
   // Point the worker's Early-Hints header at the exact same content-addressed
   // assets as the staged documents. Its HTML dictionary Link header is patched in
@@ -2487,7 +2597,9 @@ phase("6 hash shell assets");
       .split("</nav.js>")
       .join(`<${hashedFor["nav.js"]}>`)
       .split("</lwe-base.css>")
-      .join(`<${hashedFor["lwe-base.css"]}>`);
+      .join(`<${hashedFor["lwe-base.css"]}>`)
+      .split("</prose.css>")
+      .join(`<${hashedFor["prose.css"]}>`);
     if (out === src) throw new Error("_headers: no shell Link target found to hash — did the Early-Hints rule move?");
     await writeFile(p, out);
     console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
@@ -2510,7 +2622,7 @@ phase("7 shell q11 + deltas");
 // This block precompresses /a/ alone: content-addressed, immutable, on the render
 // path. The pages get their twins at step 8, and the static TEXT assets (the
 // Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds) at
-// the text-twins block near the end of this file; servePrecompressedText says
+// the text-twins block near the end of this file; servePrecompressedAsset says
 // why those headers come from the plain asset rather than the twin. Three tiers,
 // three blocks, one brotliQ11.
 //
@@ -2624,6 +2736,7 @@ phase("7 shell q11 + deltas");
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0,
       deltaBytes = 0;
+    const pairs: Array<{ asset: (typeof shell)[number]; d: (typeof cands)[number]; bytes: Buffer; dictionary: Buffer }> = [];
     for (const asset of shell) {
       // An svg delta is built like any other and served like any other, since
       // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
@@ -2634,22 +2747,27 @@ phase("7 shell q11 + deltas");
         // Identical bytes mean the content-hashed URL did not change, so no client will
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
-
-        const { out, tag } = dczEncode(targetBytes, dictBytes);
-
-        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
-        // serve more bytes AND cost the client a dictionary lookup.
-        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
-        if (out.length >= plainTwin) {
-          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
-          continue;
-        }
-        const deltaName = shellDeltaName(asset, tag);
-        await writeFile(`${OUT}/public/ad/${deltaName}`, out);
-        n++;
-        deltaBytes += out.length;
-        console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
+        pairs.push({ asset, d, bytes: targetBytes, dictionary: dictBytes });
       }
+    }
+    // Through the zstd cache with the page deltas: encoded one by one outside
+    // it, these cost a no-op build 339 ms of level-19 CPU (2026-11-21 profile).
+    const frames = await zstdBatch(pairs);
+    for (const [i, { asset, d, dictionary: dictBytes }] of pairs.entries()) {
+      const { out, tag } = frameDcz(frames[i], dictBytes);
+
+      // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+      // serve more bytes AND cost the client a dictionary lookup.
+      const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+      if (out.length >= plainTwin) {
+        console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+        continue;
+      }
+      const deltaName = shellDeltaName(asset, tag);
+      await writeFile(`${OUT}/public/ad/${deltaName}`, out);
+      n++;
+      deltaBytes += out.length;
+      console.log(`delta: /ad/${deltaName} ${out.length} bytes (vs ${plainTwin} plain br)`);
     }
     // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
     // expected. "Candidates exist but none produced a delta" means every pair lost to plain
@@ -2739,7 +2857,7 @@ phase("7b minify pages");
         // chrome the build injects at 1g2, and a twin missing markup the page
         // carries stops being the same program — which is the entire argument for
         // minifying these pages at all. Dress the twin from the same builder.
-        if (staged.includes('class="axp-tasks"') && !twin.includes('class="axp-tasks"')) {
+        if (staged.includes(`class="${servedClass("axp-tasks")}"`) && !twin.includes('class="axp-tasks"')) {
           twin = dressPage(twin, rel).html;
         }
       } catch {
@@ -2747,7 +2865,10 @@ phase("7b minify pages");
       }
       // outside the try, so a page that can't take the swap fails the build
       // instead of reading as "no authored source"
-      if (NON_BLOCKING_PAGES.includes(rel)) twin = await toNonBlocking(twin);
+      // A twin read from the staged copy (a page with no authored source) is already swapped.
+      // The sheet carries served class names. Match the same served markup for
+      // both representations, even while the readable twin keeps authored names.
+      if (swappedPages.has(rel) && nonBlocking(rel, twin)) twin = await toNonBlocking(repauseAfterFirstFold(twin), "axp-tasks", staged);
       await writeFile(`${OUT}/public/${twinRel}`, twin);
       await writeFile(`${OUT}/public/${rel}`, min);
       before += staged.length;
@@ -2989,7 +3110,7 @@ phase("7c csp");
   if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");
   await writeFile(target, source.replace(marker, `export const PAGE_SCRIPT_HASHES = ${JSON.stringify(map)}; // build:csp-hashes`));
 
-  const bytes = (Object.values(map) as string[][]).reduce((n, h) => n + h.length * 72, 0);
+  const bytes = Object.values<string[]>(map).reduce((n, h) => n + h.length * 72, 0);
   console.log(
     `csp-hash: ${blocks} inline blocks across ${covered} documents, ${Object.values(map).flat().length} hashes (~${Math.round(bytes / covered)} B/page of header)`,
   );
@@ -3041,13 +3162,26 @@ phase("8 page q11 + deltas");
   //
   // These are the final bytes, so this is the one place the comparison is honest.
   // The committed dictionary is what browsers already hold (the roll adopts it from
-  // production); the fresh one is what step 6 just derived. Shipping the committed
+  // production); the fresh one is what the trainer derives below. Shipping the committed
   // copy keeps /a/page-family.<hash8>.dict stable across deploys, which is the whole
   // point: a re-mint costs every returning visitor a 17 KB fetch, and the fresh
   // corpus was measured 0.1 point better than the one they held. The rule, the
   // threshold and its arithmetic are in tools/lib/page-family.ts; this block only
   // applies it and writes down what it did, for the roll and for the log.
-  if (!freshFamily) throw new Error("page-family: step 6 derived no fresh corpus, so there is nothing to choose from");
+  //
+  // The fresh candidate: tools/lib/family-trainer.ts picks the 1 KiB segments
+  // the most pages share, from these final bytes in path order so the
+  // derivation is a pure function of the tree. RFC 9842 needs RAW bytes, which
+  // is why zstd's own trainer output can't ship; the trainer's header has the
+  // measurements against it and against the four-page concat this replaced.
+  const freshFamily = trainFamilyDictionary(
+    compressedPages.toSorted((x, y) => (x.page < y.page ? -1 : x.page > y.page ? 1 : 0)).map(({ bytes }) => bytes),
+    FAMILY_DICT_SIZE,
+  );
+  if (freshFamily.readUInt32LE(0) === 0xec30a437) {
+    throw new Error("page-family dictionary starts with the zstd --train magic; dcz needs RAW bytes");
+  }
+  console.log(`site-page corpus: fresh candidate ${hash8(freshFamily)} (${freshFamily.length} raw bytes, trained on ${compressedPages.length} pages)`);
   const committedFamily = await readCommittedFamily();
   const family = await chooseFamilyDictionary({
     fresh: freshFamily,
@@ -3232,7 +3366,7 @@ phase("compact data");
 }
 
 phase("text twins");
-// ── brotli q11 twins for the static TEXT assets outside /a/ and outside the pages ──
+// ── brotli q11 twins for the static assets outside /a/ and outside the pages ──
 //
 // The Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds.
 // Until 2026-08-31 none of these had a twin, so every one shipped through the
@@ -3246,7 +3380,7 @@ phase("text twins");
 // directly is dead weight in the upload and a false claim in this log, which is
 // the failure the contract test refuses: every twin written here must match a
 // run_worker_first rule. The globs below are therefore a declaration of what
-// servePrecompressedText can reach, kept beside the rules that make it true,
+// servePrecompressedAsset can reach, kept beside the rules that make it true,
 // rather than "every text file". robots.txt is deliberately absent: it is
 // q11:check's live control precisely BECAUSE it has no twin, and 311 B to
 // crawlers is not worth giving that up. /.well-known/* joined on 2026-09-16 when
@@ -3264,8 +3398,8 @@ phase("text twins");
   const TWINNED = [
     // section prefixes, worker-first for the pages. Text, data, the section's own
     // scripts (/lwe/ask.js, the vendored /garage/pretext.lib.js) and the readable
-    // .src.html twins, all through serveStaticPage's extension branch (hasTextTwin).
-    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.(?:md|txt|xml|json|js|css)$/,
+    // .src.html twins, all through serveStaticPage's extension branch (hasStaticTwin).
+    /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.(?:md|txt|xml|json|js|css|wasm)$/,
     /^(?:garage|lwe|pixel-peeper|access|dotfiles)\/.+\.src\.html$/, // dotfiles joined 2026-10-01: served:check found its twin 307ing
     /^writing\/[^/]+\.(?:json|txt|xml)$/, // /writing/* is worker-first for the slug route
     /^images\/(?:meta\/)?[^/]+\.json$/, // the data indexes and the per-photo meta
@@ -3313,6 +3447,11 @@ phase("text twins");
   console.log(`text-twins: ${wins.length} brotli q11 twins for static text assets, ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB`);
 }
 
+// The class-name proof (step 5e) ran on its own thread through steps 6 to 8.
+// A rename that changed more than names fails the build here, before it
+// reports a staged tree, so nothing it built is deployed.
+phase("5e class-name proof");
+await classNamesProven;
 phase("sweep old build");
 await sweep;
 phase("cache prune");

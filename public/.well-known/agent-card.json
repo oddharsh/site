@@ -241,6 +241,7 @@
       "apiCatalog": "https://aadhar.sh/.well-known/api-catalog",
     "openapi": "https://aadhar.sh/openapi.json",
     "ard": "https://aadhar.sh/.well-known/ard.json",
+    "poppy": "https://aadhar.sh/.well-known/poppy.json",
       "skillsIndex": "https://aadhar.sh/.well-known/agent-skills/index.json"
     },
     "outboundIdentity": {

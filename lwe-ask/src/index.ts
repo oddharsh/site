@@ -16,7 +16,7 @@
 
 import { PASSAGES, SOURCE_URL, SOURCE_TITLE, CORPUS_VERSION } from "./passages.ts";
 import { CAR_STEMS, NONCAR_STEMS } from "./captcha-data.ts";
-import { jsonResponse } from "../../src/worker/lib/http.ts";
+import { cappedRequestBody, jsonResponse } from "../../src/worker/lib/http.ts";
 
 const json = (o, s = 200) => jsonResponse(o, s, { "x-content-type-options": "nosniff" }, { pretty: false });
 const enc = new TextEncoder();
@@ -59,7 +59,7 @@ function timingSafeEq(a, b) {
   // "" as absent, which is right at a boundary and wrong for a constant-time
   // compare where two empty secrets must still compare equal. A precondition on
   // an internal call, not a parse.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let d = 0;
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -97,9 +97,11 @@ async function challenge(env) {
 
 // ── CAPTCHA: verify selection, mint askToken ──────────────────────────────────
 async function verifyCaptcha(req, env) {
+  const capped = await cappedRequestBody(req);
+  if (!capped) return json({ error: "too large" }, 413);
   let b;
   try {
-    b = await req.json();
+    b = await capped.json();
   } catch {
     return json({ ok: false, error: "bad request" }, 400);
   }
@@ -132,9 +134,11 @@ async function embed(env, text) {
 
 // ── /lwe/ask — gated RAG, grounded only in retrieved passages ─────────────────
 async function ask(req, env) {
+  const capped = await cappedRequestBody(req);
+  if (!capped) return json({ error: "too large" }, 413);
   let b;
   try {
-    b = await req.json();
+    b = await capped.json();
   } catch {
     return json({ error: "expected JSON" }, 400);
   }
@@ -207,9 +211,11 @@ async function ask(req, env) {
 // Returns the best-matching concept page per query. One cached embed + one Vectorize
 // query, no generation, so it is cheap enough to leave ungated.
 async function search(req, env) {
+  const capped = await cappedRequestBody(req);
+  if (!capped) return json({ error: "too large" }, 413);
   let b;
   try {
-    b = await req.json();
+    b = await capped.json();
   } catch {
     return json({ error: "expected JSON" }, 400);
   }

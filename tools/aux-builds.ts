@@ -33,7 +33,7 @@ async function tagOf(name: string): Promise<string> {
   return hit.id ?? hit.tag;
 }
 
-const triggersOf = async (tag: string): Promise<any[]> => (await cf(["builds", "triggers", "list", "--external-script-id", tag])) ?? [];
+const triggersOf = async (tag: string) => (await cf(["builds", "triggers", "list", "--external-script-id", tag])) ?? [];
 
 const site = (await triggersOf(await tagOf("aadhar-sh"))).find((t) => t.branch_includes?.includes("production"));
 const repoConnection = site?.repo_connection_uuid ?? site?.repo_connection?.repo_connection_uuid;

@@ -152,9 +152,7 @@ async function record(outPath, label) {
   // gzip total alone can only pose as a question.
   try {
     const meta = JSON.parse(await readFile(`${DRYRUN_OUT}/bundle-meta.json`, "utf8"));
-    const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][]).find(
-      ([n]) => n.endsWith(".js") && !n.endsWith(".map"),
-    );
+    const entry = Object.entries<{ inputs?: Record<string, { bytesInOutput?: number }> }>(meta.outputs).find(([n]) => n.endsWith(".js") && !n.endsWith(".map"));
     for (const [name, v] of Object.entries(entry?.[1]?.inputs ?? {})) {
       snapshot.worker.modules[name] = v.bytesInOutput ?? 0;
     }
@@ -430,8 +428,8 @@ async function row(snapshotPath, date) {
   // what actually leaves the edge, and fall back to the computed brotli.
   const assets: Record<string, number | undefined> = {};
   type Sized = { raw?: number; brotli?: number; br?: number };
-  for (const [name, v] of Object.entries(snap.assets) as [string, Sized][]) assets[name] = v.brotli;
-  for (const [name, v] of Object.entries(snap.wire) as [string, Sized][]) assets[name] = v.br ?? v.raw;
+  for (const [name, v] of Object.entries<Sized>(snap.assets)) assets[name] = v.brotli;
+  for (const [name, v] of Object.entries<Sized>(snap.wire)) assets[name] = v.br ?? v.raw;
 
   const line = {
     ts: date || new Date().toISOString().slice(0, 10),

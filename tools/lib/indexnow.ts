@@ -30,7 +30,7 @@ export const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
  */
 export function sitemapPaths(xml: string, host: string): string[] {
   const paths: string[] = [];
-  for (const [, loc] of xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)) {
+  for (const [, loc] of xml.matchAll(/<loc>\s*([^<\s](?:[^<]*[^<\s])?)\s*<\/loc>/g)) {
     let url: URL;
     try {
       url = new URL(loc);

@@ -5,18 +5,20 @@
 // below. The KV binding, the Workflow binding and the working-hours vars come
 // from wrangler.test.toml through the harness (see harness.ts).
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test";
-import { bootCal, createExecutionContext, waitOnExecutionContext, stubFetch } from "./harness.ts";
+import { bootCal, createExecutionContext, waitOnExecutionContext } from "./harness.ts";
+import { routeFetch } from "../../tools/lib/fetch-routes.ts";
 import worker from "../src/index.ts";
 import { sign } from "../../src/worker/lib/sign.ts";
 import { getBooking, listHeld } from "../src/booking.ts";
 import { reserveSlot } from "../src/reservation.ts";
 import { expireIfStillPending } from "../src/workflow.ts";
+import type { CalEnv } from "./harness.ts";
 
 const SECRET = "integration-signing-secret";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
-let env: import("./harness.ts").CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
+let env: CalEnv & { SIGNING_SECRET: string; RESEND_API_KEY: string; ICAL_URL: string };
 // Booting miniflare took over 5 s, bun's default, on a loaded CI runner on 2026-10-18.
 beforeAll(async () => {
   cal = await bootCal();
@@ -38,7 +40,7 @@ let mailCalls;
 const guestMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee.ics");
 const hostMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee-host.ics");
 let bookingWf;
-let restoreFetch = () => {};
+let fetchRoutes: ReturnType<typeof routeFetch>;
 beforeEach(async () => {
   // An empty booking pool per test; clearBookings in harness.ts says why.
   await cal.clearBookings();
@@ -56,22 +58,23 @@ beforeEach(async () => {
   });
 
   mailCalls = [];
-  restoreFetch = stubFetch(async (url, init) => {
-    if (String(url as string | URL) === env.ICAL_URL) {
-      return new Response(EMPTY_ICS, {
+  fetchRoutes = routeFetch({
+    [env.ICAL_URL]: () =>
+      new Response(EMPTY_ICS, {
         status: 200,
         headers: { "content-type": "text/calendar" },
+      }),
+    "https://api.resend.com/emails": async (request) => {
+      mailCalls.push({ url: request.url, body: await request.json() });
+      return new Response(JSON.stringify({ id: "m" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
       });
-    }
-    mailCalls.push({ url: String(url as string | URL), body: JSON.parse(String(init?.body as string)) });
-    return new Response(JSON.stringify({ id: "m" }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    },
   });
 });
 afterEach(async () => {
-  restoreFetch();
+  fetchRoutes[Symbol.dispose]();
   await bookingWf.dispose(); // tear down any booking expiry timers this test created
 });
 
@@ -104,7 +107,9 @@ async function postBook(fields, overrides: Record<string, any> = {}) {
 function readBeforeEitherWrites(kv, parties = 2) {
   let arrived = 0;
   let release = () => {};
-  const allRead = new Promise<void>((r) => (release = r));
+  const allRead = new Promise<void>((r) => {
+    release = r;
+  });
   return new Proxy(kv, {
     get(target, prop) {
       const value = Reflect.get(target, prop);

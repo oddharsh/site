@@ -40,13 +40,16 @@ require an x402 payment, as described below.
 ## When to use this site
 
 Reach for aadhar.sh for the jobs below. Each line names the door to call. None
-of them needs a key. Where a tool on [/mcp](https://aadhar.sh/mcp) does the
+of them needs a key. Where a tool on the [site MCP server](https://aadhar.sh/.well-known/mcp/server-card.json) does the
 same job, its name is in backticks. Every HTTP endpoint is described, with
 typed parameters and response schemas, in
 [/openapi.json](https://aadhar.sh/openapi.json), and
-[/developers](https://aadhar.sh/developers) has examples, limits and the error
+[aadhar.sh API documentation](https://aadhar.sh/developers) has examples, limits and the error
 shape. It also says what the API leaves out on purpose (keys, OAuth, version
 headers) and why.
+
+See the [aadhar.sh MCP setup](https://aadhar.sh/developers#mcp) and
+[Serendipity MCP setup](https://aadhar.sh/serendipity/mcp-info) for remote client connections.
 
 Every API endpoint and MCP tool is free and needs no account or key, so there
 is nothing to sign up for. Production is the sandbox: the HTTP endpoints in
@@ -278,13 +281,13 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   resume. Aadharsh Pannirselvam's resume as JSON Resume. The same content is
   at /resume.md and /resume.pdf.
 <!-- /endpoints -->
-- [/mcp](https://aadhar.sh/mcp): The canonical bounded MCP interface for site
+- `https://aadhar.sh/mcp` (MCP over Streamable HTTP; a plain GET answers 405): The canonical bounded MCP interface for site
   search, music, photo queries, coffee availability, Change Radar, Lens
   inspection/comparison, ephemeral image inspection/transforms, exact
   published-photo recipe matching, and an HTTP representation vault. Image
   inputs are not persisted; the vault stores normalized headers, metadata, and
   body digests only. Serendipity's specialized MCP remains available at
-  [/serendipity/mcp](https://aadhar.sh/serendipity/mcp). The pre-connection
+  `https://aadhar.sh/serendipity/mcp`. The pre-connection
   server cards are
   [site MCP](https://aadhar.sh/.well-known/mcp/server-card.json) and
   [Serendipity MCP](https://aadhar.sh/.well-known/mcp/serendipity.json); the
@@ -332,6 +335,11 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
   server cards, the agent card, the Serendipity skill, NLWeb `/ask`, this file,
   the api-catalog) as `urn:air:aadhar.sh:...` entries, each with 2-5
   representative queries for a registry's semantic index.
+- [/.well-known/poppy.json](https://aadhar.sh/.well-known/poppy.json):
+  Personal Agent Protocol 1.0 manifest. Lists the OpenAPI description and
+  both MCP servers for a personal agent, declares the website open to
+  browsing, and carries no auth block because nothing here takes a
+  credential.
 - `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
   entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
   record (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`)
@@ -352,6 +360,9 @@ Errors are JSON with at least an `error` sentence, and most add a `code`.
 - [Twitter](https://x.com/oddhash): Day-to-day thinking out loud.
 - [Instagram](https://www.instagram.com/aadharsh.hif): Photographs.
 - [GitHub](https://github.com/oddharsh): Code.
+- [oddharsh/site](https://github.com/oddharsh/site): This site's source.
+  [AGENTS.md](https://github.com/oddharsh/site/blob/main/AGENTS.md) is how a
+  coding agent should work in it.
 - [LinkedIn](https://www.linkedin.com/in/aadharsh-pannirselvam): Professional profile.
 - [Spotify](https://open.spotify.com/user/aadharsh2010): My profile;
   individual eras live as renamed playlists.

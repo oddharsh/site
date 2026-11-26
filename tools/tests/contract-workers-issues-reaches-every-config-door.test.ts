@@ -8,10 +8,11 @@
 // block added to the TS config reached `--x-new-config` commands and nothing
 // else. And a later edit to the observability block can drop `issues` the way
 // #961 did on purpose, which reads in a diff as tidying.
-import { assert, configText, test } from "./contract-shared.ts";
+import { assert, test } from "./contract-shared.ts";
 import { project, REPO } from "../lib/site-config.ts";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { configText } from "./contract-config.ts";
 
 const raw = async (file) => (await import(pathToFileURL(join(REPO, file)).href)).default;
 const withObservability = (top, observability) => ({ ...top, worker: { ...top.worker, observability } });

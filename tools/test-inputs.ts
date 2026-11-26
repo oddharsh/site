@@ -27,6 +27,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { splitTestScript, suiteFiles } from "./lib/test-roots.ts";
 
 const ROOT = process.cwd();
 
@@ -133,7 +134,10 @@ export function accesses(log: string, cwd: string): Access[] {
     const strings = [...args.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1].replace(/\\(.)/g, "$1"));
     const [raw] = strings;
     if (raw === undefined) continue;
-    const dirfd = /^\d+<([^>]+)>,/.exec(args);
+    // -y prints the kernel's cwd after AT_FDCWD. Trust it over the cwd map: a
+    // vfork child's call can print before its parent's clone returns, while
+    // the map still gives the child the starting directory.
+    const dirfd = /^(?:\d+|AT_FDCWD)<([^>]+)>,/.exec(args);
     const path = isAbsolute(raw) ? raw : join(dirfd ? dirfd[1] : cwdOf(pid).dir, raw);
     if (name === "execve" && path.endsWith("/git")) {
       // argv after argv[0]; `-C dir` moves where it runs, `-c k=v` doesn't.
@@ -222,11 +226,12 @@ export function entry(found: Access[], tracked: Set<string>, root: string): Entr
 export type Selection = { run: string[]; skip: string[]; why: Record<string, string> };
 
 /**
- * `paths`: every path the change touches (a rename names both). `filesMoved`:
- * it adds, removes or renames one. `packages`: the packages its bun.lock lines
- * name; without it, a bun.lock change runs everything.
+ * `paths`: every path the change touches (a rename names both). `moved`: the
+ * ones it adds, removes or renames, which are all a directory listing can see.
+ * `packages`: the packages its bun.lock lines name; without it, a bun.lock
+ * change runs everything.
  */
-export type Change = { paths: string[]; filesMoved?: boolean; packages?: string[] };
+export type Change = { paths: string[]; moved?: string[]; packages?: string[] };
 
 /** Package names on the added and removed lines of a bun.lock diff. */
 export function lockPackages(diff: string): string[] {
@@ -236,20 +241,25 @@ export function lockPackages(diff: string): string[] {
 }
 
 /** The test files a change can reach. A test file missing from the map runs. */
-export function select(map: InputMap | null, tests: string[], { paths: changed, filesMoved = false, packages }: Change): Selection {
+export function select(map: InputMap | null, tests: string[], { paths: changed, moved: entries = [], packages }: Change): Selection {
   const why: Record<string, string> = {};
   const all = (reason: string) => ({ run: tests, skip: [], why: Object.fromEntries(tests.map((t) => [t, reason])) });
   if (!map) return all("no input map");
   const global = changed.find((c) => GLOBAL.some((g) => g.test(c)) || (c === "bun.lock" && !packages));
   if (global) return all(`${global} changed`);
   const moved = new Set(packages ?? []);
+  // A listing returns names, so only an added, removed or renamed entry changes
+  // it; an edit in place reaches a test through the file it read. Until
+  // 2026-11-22 any changed path matched, and since `bun test`'s discovery walk
+  // lists every directory for every file (306 of 306 on 2026-11-22), any edit
+  // anywhere selected the whole suite (gotcha 111).
   const touched = new Set(changed),
-    dirs = new Set(changed.map(dirname));
+    dirs = new Set(entries.map(dirname));
   for (const test of tests) {
     const e = map.files[test];
     if (!e) why[test] = "not in the map";
     else if (e.always) why[test] = e.always;
-    else if (e.tree && filesMoved) why[test] = "lists tracked files, and the change adds or removes one";
+    else if (e.tree && entries.length) why[test] = "lists tracked files, and the change adds or removes one";
     else {
       const used = e.uses.map((u) => map.files[u]);
       if (used.some((u) => !u || u.always)) why[test] = `uses ${e.uses.join(", ")}, which can't be mapped`;
@@ -269,7 +279,7 @@ export function select(map: InputMap | null, tests: string[], { paths: changed, 
 }
 
 const git = (...args: string[]) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
-const testFiles = () => [...new Bun.Glob("tools/tests/**/*.test.ts").scanSync(ROOT)].sort();
+const testFiles = () => suiteFiles(ROOT);
 
 function trackedSet(): Set<string> {
   const set = new Set<string>();
@@ -296,10 +306,8 @@ function traced(command: string[], dir: string, name: string): Promise<{ code: n
  * null. Bun reads a bare argument as a path filter, so each file is ./-anchored.
  */
 export function suiteCommand(script: string, files: string[] | null): string[] {
-  const argv = script.trim().split(/\s+/);
-  if (argv[0] !== "bun" || argv[1] !== "test" || argv.at(-1) !== "tools/tests/")
-    throw new Error(`package.json's test script no longer ends in tools/tests/, so it can't be narrowed: ${script}`);
-  return files ? [...argv.slice(0, -1), ...files.map((f) => `./${f}`)] : argv;
+  const { argv } = splitTestScript(script);
+  return files ? [...argv, ...files.map((f) => `./${f}`)] : script.trim().split(/\s+/);
 }
 
 /** The map at `path` and what changed since its commit, in the working tree; null with a reason when it can't be read. */
@@ -323,7 +331,7 @@ function sinceMap(path: string | undefined): { map: InputMap; change: Change } |
     map,
     change: {
       paths: [...status.flatMap((line) => line.split("\t").slice(1)), ...untracked],
-      filesMoved: untracked.length > 0 || status.some((line) => /^[ADRC]/.test(line)),
+      moved: [...status.filter((line) => /^[ADRC]/.test(line)).flatMap((line) => line.split("\t").slice(1)), ...untracked],
       packages: lockPackages(git("diff", map.commit, "--", "bun.lock")),
     },
   };

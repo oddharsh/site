@@ -153,10 +153,30 @@ export async function renderSystemRestore(cp) {
     // what en-US printed for all 131 points; a visitor in another locale reads
     // English dates on an English page now.
     const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dfmtServer = (d: string) => {
+      const [y, m, day] = d.split("-");
+      return `${DAYS[new Date(Date.UTC(+y, +m - 1, +day)).getUTCDay()]}, ${MONTHS[+m - 1]} ${+day}, ${y}`;
+    };
+    const lastIdx = data.length - 1;
+    const lastPt = data[lastIdx];
+    let initialRecent = "";
+    for (let j = lastIdx; j >= 0 && j > lastIdx - 6; j--) {
+      initialRecent += `<li><span class="rv">v${data[j].v}</span>${esc(data[j].t)}</li>`;
+    }
+    const initialDetail = lastPt
+      ? `<div class="sr-dt">Restore point</div><div class="sr-date">${dfmtServer(lastPt.d)}</div>` +
+        `<div class="sr-ver"><span class="mono">${esc(lastPt.ver)}</span></div>` +
+        `<div class="sr-meta">point ${lastIdx + 1} of ${data.length} &middot; ${esc(lastPt.t)}</div>` +
+        `<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">${initialRecent}</ul>` +
+        `<button class="sr-btn" type="button" id="srGo">Restore to this point</button>` +
+        `<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>`
+      : "";
     main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point.</p>
     <div class="sr-stage">
       <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
-      <div class="sr-detail" id="srDetail"></div>
+      <div class="sr-detail" id="srDetail">${initialDetail}</div>
     </div>
     <div class="sr-scrub">
       <span class="sr-scrub-end">${esc(points[0].ymd)}</span>
@@ -181,27 +201,33 @@ var POINTS = ${JSON.stringify(data)};
     html += '<button class="sr-pt" type="button" data-i="' + i + '"><span class="rv">v' + POINTS[i].v + '</span><span class="rt">' + esc(POINTS[i].t) + '</span><span class="rd">' + POINTS[i].d.slice(5) + '</span></button>';
   }
   L.innerHTML = html;
-  function render(i){
-    var p = POINTS[i], recent = '';
-    for (var j = i; j >= 0 && j > i - 6; j--) recent += '<li><span class="rv">v' + POINTS[j].v + '</span>' + esc(POINTS[j].t) + '</li>';
-    D.innerHTML = '<div class="sr-dt">Restore point</div><div class="sr-date">' + dfmt(p.d) + '</div>' +
-      '<div class="sr-ver"><span class="mono">' + esc(p.ver) + '</span></div>' +
-      '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
-      '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
-      '<button class="sr-btn" type="button" id="srGo">Restore to this point</button>' +
-      '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>';
+  function bindGo(){
     var go = document.getElementById('srGo'), note = document.getElementById('srNote');
     if (go) go.onclick = function(){ if (note) note.hidden = !note.hidden; };
+  }
+  function render(i, initial){
+    if (!initial) {
+      var p = POINTS[i], recent = '';
+      for (var j = i; j >= 0 && j > i - 6; j--) recent += '<li><span class="rv">v' + POINTS[j].v + '</span>' + esc(POINTS[j].t) + '</li>';
+      D.innerHTML = '<div class="sr-dt">Restore point</div><div class="sr-date">' + dfmt(p.d) + '</div>' +
+        '<div class="sr-ver"><span class="mono">' + esc(p.ver) + '</span></div>' +
+        '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
+        '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
+        '<button class="sr-btn" type="button" id="srGo">Restore to this point</button>' +
+        '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>';
+    }
+    bindGo();
     var items = L.querySelectorAll('.sr-pt');
     for (var k = 0; k < items.length; k++) items[k].setAttribute('aria-current', k == i ? 'true' : 'false');
-    if (items[i] && items[i].scrollIntoView) items[i].scrollIntoView({block:'nearest'});
+    if (initial) L.scrollTop = L.scrollHeight;
+    else if (items[i] && items[i].scrollIntoView) items[i].scrollIntoView({block:'nearest'});
   }
   L.addEventListener('click', function(e){
     var b = e.target.closest ? e.target.closest('.sr-pt') : null;
-    if (!b) return; var i = +b.getAttribute('data-i'); R.value = i; render(i);
+    if (!b) return; var i = +b.getAttribute('data-i'); R.value = i; render(i, false);
   });
-  R.addEventListener('input', function(){ render(+R.value); });
-  render(POINTS.length - 1);
+  R.addEventListener('input', function(){ render(+R.value, false); });
+  render(POINTS.length - 1, true);
 })();
     </script>`;
   } else {
@@ -234,7 +260,7 @@ var POINTS = ${JSON.stringify(data)};
 .sr-stage{display:flex;gap:11px;align-items:stretch}
 .sr-listwrap{flex:0 0 220px;border:1px solid #b7c0d0;border-radius:4px;overflow:hidden;display:flex;flex-direction:column;background:#fff}
 .sr-listhead{padding:5px 10px;font-family:var(--font-caption);font-size:var(--text-xs);font-weight:bold;color:#fff;background:linear-gradient(180deg,#4f8bd8,#2f6fd0)}
-.sr-list{overflow-y:auto;max-height:308px}
+.sr-list{overflow-y:auto;height:308px;max-height:308px}
 .sr-mon{position:sticky;top:0;background:var(--mist-96);color:#5a6b85;font-size:var(--text-2xs);font-weight:bold;padding:3px 10px;border-bottom:1px solid var(--slate-92);text-transform:uppercase;letter-spacing:.04em}
 .sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:var(--text-micro);color:var(--slate-38);cursor:pointer;border-bottom:1px solid var(--row-alt)}
 @media (hover: hover) and (pointer: fine) {.sr-pt:hover{background:var(--row-alt)}}
@@ -265,7 +291,7 @@ var POINTS = ${JSON.stringify(data)};
 @media (prefers-reduced-motion:reduce){.sr-gear{animation:none}}
 .sr-pending b{font-family:var(--font-caption);font-size:var(--text-lede);color:#7a5c12}
 .sr-pending .sub{font-size:var(--text-micro);color:#8a7430}
-@media (max-width:560px){.sr-stage{flex-direction:column}.sr-listwrap{flex:none}.sr-list{max-height:170px}}
+@media (max-width:560px){.sr-stage{flex-direction:column}.sr-listwrap{flex:none}.sr-list{height:170px;max-height:170px}}
 `,
     body: unsafeHtml(`
     <h1>System Restore</h1>

@@ -89,7 +89,7 @@ try {
   fail(`${PROJECTION} is missing or unparseable: run bun run checkpoints:sync`);
 }
 
-const byVnum = (rows): Map<number, any> => new Map(rows.map((r) => [r.vnum, r]));
+const byVnum = <R extends { vnum: number }>(rows: R[]) => new Map(rows.map((r) => [r.vnum, r] as const));
 const c = byVnum(committed),
   l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;

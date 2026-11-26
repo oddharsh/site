@@ -69,13 +69,13 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
 /**
  * The verdict, as a pure function of the three observations (plus the optional
  * negotiation pair). Pure so the rules are testable without a network
- * (tools/tests/contract-cache-the-behavioral-revalidation-lint.test.ts).
+ * (src/worker/tests/contract-cache-the-behavioral-revalidation-lint.test.ts).
  */
 // negotiated is OPTIONAL: it marks a response that varied on Accept, which most
 // callers have no opinion about. The body reads it behind a guard, and the lint's
 // own tests pass three of the four fields.
 export function judgeRevalidation({ first, second, conditional, negotiated }: { first?: any; second?: any; conditional?: any; negotiated?: any }) {
-  const findings = [];
+  const findings: { id: string; verdict: string; detail: string }[] = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
 
   const etag1 = first.headers?.etag;
@@ -120,11 +120,13 @@ export function judgeRevalidation({ first, second, conditional, negotiated }: { 
     // TOKENS, not substring. "accept-encoding".includes("accept") is true, so a
     // substring test waves through the exact header combination #195 shipped
     // with. The contract test above pins that case.
-    const varyTokens = (first.headers?.vary || "")
-      .toLowerCase()
-      .split(",")
-      .map((t) => t.trim());
-    const variesOnAccept = varyTokens.includes("accept") || varyTokens.includes("*");
+    const varyTokens = new Set(
+      (first.headers?.vary || "")
+        .toLowerCase()
+        .split(",")
+        .map((t) => t.trim()),
+    );
+    const variesOnAccept = varyTokens.has("accept") || varyTokens.has("*");
     const differs = negotiated.headers?.["content-type"] !== first.headers?.["content-type"];
     if (differs && !variesOnAccept) {
       add(

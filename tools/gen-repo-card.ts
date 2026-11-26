@@ -41,7 +41,10 @@ const OUT = outIdx === -1 ? path.join(ROOT, ".github") : path.resolve(argv[outId
 const want = argv.filter((a, i) => !a.startsWith("--") && i !== outIdx + 1);
 const VARIANTS = want.length ? want : ["desktop", "card"];
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 async function navigate(view, url, timeout = 30_000) {
   let timer;
@@ -211,7 +214,7 @@ async function main() {
   console.log(`\nchips: ${chips.join(" · ")}`);
 }
 
-main().catch((e) => {
+main().catch((e: unknown) => {
   console.error(e);
   process.exit(1);
 });

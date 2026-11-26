@@ -116,7 +116,13 @@ export function decodeEntities(s: string): string {
   });
 }
 
-const TOKEN = /<!--[\s\S]*?(?:-->|$)|<![^>]*>?|<\?[^>]*>?|<\/([a-zA-Z][^\s/>]*)[^>]*>|<([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+// Every tag branch also accepts the end of input, so a tag that never closes
+// consumes the rest of the input instead of failing. A failing branch made exec
+// retry at every later "<": "<a" repeated 1,000 times took 1.5 s in Node 26
+// (2026-11-18), and the input cap is 1 MB. A tag cut off by the end of input
+// is dropped, as a browser drops it.
+const TOKEN =
+  /<!--[\s\S]*?(?:-->|$)|<![^>]*>?|<\?[^>]*>?|<\/(?<close>[a-zA-Z][^\s/>]*)[^>]*(?<closeEnd>>|$)|<(?<open>[a-zA-Z][^\s/>]*)(?<attrs>(?:[^>"']|"[^"]*(?:"|$)|'[^']*(?:'|$))*)(?<openEnd>>|$)/g;
 const ATTR = /([^\s"'>/=]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g;
 
 function parseAttrs(raw: string): Record<string, string> {
@@ -149,8 +155,13 @@ function buildTree(input: string): El {
   for (let m = TOKEN.exec(src); m; m = TOKEN.exec(src)) {
     pushText(src.slice(last, m.index));
     last = TOKEN.lastIndex;
-    if (m[1]) {
-      const tag = m[1].toLowerCase();
+    const { close: closeTag, closeEnd, open, attrs: rawAttrs = "", openEnd } = m.groups ?? {};
+    if ((closeTag && !closeEnd) || (open && !openEnd)) {
+      last = src.length;
+      break;
+    }
+    if (closeTag) {
+      const tag = closeTag.toLowerCase();
       for (let i = stack.length - 1; i > 0; i--) {
         if (stack[i].tag === tag) {
           close(i, m.index);
@@ -159,17 +170,16 @@ function buildTree(input: string): El {
       }
       continue;
     }
-    if (!m[2]) continue; // comment, doctype, processing instruction
+    if (!open) continue; // comment, doctype, processing instruction
     if (++nodes > MAX_NODES) {
       last = src.length;
       break;
     }
 
-    const tag = m[2].toLowerCase();
+    const tag = open.toLowerCase();
     const closers = AUTO_CLOSE[tag];
     if (closers && stack.length > 1 && closers.has(top().tag)) close(stack.length - 1, m.index);
 
-    const rawAttrs = m[3] || "";
     const attrs = parseAttrs(rawAttrs);
     const classes = [...new Set((attrs.class || "").split(/\s+/).filter(Boolean))];
     const el: El = { tag, attrs, classes, children: [], innerStart: TOKEN.lastIndex, innerEnd: TOKEN.lastIndex };

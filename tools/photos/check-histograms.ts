@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     if (bake.status !== 0) die(`zenc histogram exited ${bake.status}:\n${bake.stderr.trim()}`);
 
     const { index: baked } = await buildHistogramIndex(path.join(scratch, "images/meta"));
-    const r = compareIndexes(committed, baked as Index);
+    const r = compareIndexes(committed, baked);
     const who = version.stdout.trim();
 
     if (reproduces(r)) {

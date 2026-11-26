@@ -72,7 +72,8 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 
-import { type Browser, type Page, chromium, firefox, webkit } from "playwright-core";
+import { chromium, firefox, webkit } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -129,7 +130,7 @@ export function shippedCaps(html: string): string[] {
 }
 
 /** The page's honest-false convention: a probe whose whole body returns false. */
-export const HONEST_FALSE = /\{\s*return\s*\(?\s*false\s*\)?\s*;?\s*\}\s*$/;
+export const HONEST_FALSE = /\{\s*return\s*(?:\(\s*)?false\s*(?:\)\s*)?(?:;\s*)?\}\s*$/;
 
 /** A 2x2 JPEG XL, 190 bytes: `cjxl -d 0 -e 1` (libjxl 0.11) on a 2x2 RGB PNG, decoded back by djxl to the same pixels. Starts with the ff0a codestream signature. */
 export const JXL_2X2 =

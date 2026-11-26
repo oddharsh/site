@@ -14,6 +14,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import { WINDOW_CLOSE, WINDOW_OPEN, bakeTitleBar, staticShellPages } from "../photos/gen-desktop-partial.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const occurrences = (haystack, needle) => haystack.split(needle).length - 1;
 
@@ -76,7 +77,7 @@ test("no renderer outside lib/window.ts authors a title bar", () => {
   for (const dir of ["src/worker", "serendipity", "cal/src", "pipelines"] as const) {
     for (const rel of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
       const file = `${dir}/${rel}`;
-      if (!/\.(ts|mjs|js)$/.test(file)) continue;
+      if (!/\.(ts|mjs|js)$/.test(file) || inTestsDir(file)) continue;
       scanned++;
       if (/<div class=\\?"title-bar\\?">/.test(readFileSync(file, "utf8")) && !allowed.has(file)) offenders.push(file);
     }

@@ -340,6 +340,16 @@ export function createHoist(o: {
       { capture: true, passive: true },
     );
 
+    // Escape dismisses an open surface without moving the pointer or focus
+    // (WCAG 1.4.13, per Modern Web Guidance's interest-triggered-tooltips,
+    // 2026-11-15). popover="manual" gets no Escape handling of its own, and
+    // "hint" isn't Baseline. Not prevented, so a dialog under it still closes.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !isOpen()) return;
+      cancelOpen();
+      hide();
+    });
+
     // Keyboard-focus path: same content, tethered to the focused element. Only
     // for :focus-visible, so a mouse click that happens to focus a link doesn't
     // double-trigger on top of the cursor-following one.

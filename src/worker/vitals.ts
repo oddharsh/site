@@ -21,7 +21,7 @@
 //
 // A metric must never break a page, so every failure answers 204.
 import type { Env } from "./lib/env.ts";
-import { methodGuard } from "./lib/http.ts";
+import { cappedRequestBody } from "./lib/http.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
 
 /** The pages whose inline observer posts here. Anything else is dropped. */
@@ -58,10 +58,9 @@ export function parseVitals(body: string): VitalsReport | null {
 }
 
 export async function handleVitals(request: Request, env: Pick<Env, "VITALS" | "CF_VERSION_METADATA">): Promise<Response> {
-  const refused = methodGuard(request, ["POST"]);
-  if (refused) return refused;
   try {
-    const report = parseVitals(await request.text());
+    const body = await cappedRequestBody(request, MAX_BODY);
+    const report = body && parseVitals(await body.text());
     if (report) {
       const version = env.CF_VERSION_METADATA?.id?.slice(0, 8) || "dev";
       for (const metric of METRICS) {

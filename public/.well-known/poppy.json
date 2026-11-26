@@ -1,0 +1,39 @@
+{
+  "protocol_version": "1.0",
+  "organization": {
+    "name": "Aadharsh Pannirselvam",
+    "domain": "aadhar.sh"
+  },
+  "apis": [
+    {
+      "type": "openapi",
+      "url": "https://aadhar.sh/openapi.json",
+      "description": "Every public HTTP JSON endpoint on aadhar.sh: site search, the photo archive, the current playlist, coffee availability, the neighborhood Change Radar and Lens. Free, keyless and read-only."
+    },
+    {
+      "type": "mcp",
+      "url": "https://aadhar.sh/mcp",
+      "description": "The site MCP server: search and NLWeb ask, music, photos and their Fuji recipes, coffee availability, Change Radar, Lens, image inspection and transforms, and an HTTP representation vault. Keyless; read-only except the vault's capture and compare tools."
+    },
+    {
+      "type": "mcp",
+      "url": "https://aadhar.sh/serendipity/mcp",
+      "description": "The Serendipity MCP server: community-curated events, who is going, and who keeps crossing paths. Keyless, read-only, public data only."
+    }
+  ],
+  "web": {},
+  "extensions": {
+    "aadhar.sh/discovery": [
+      {
+        "version": "1",
+        "llms": "https://aadhar.sh/llms.txt",
+        "markdown": "Pages answer Accept: text/markdown at their own URL with a Markdown twin.",
+        "sitemap": "https://aadhar.sh/sitemap.xml",
+        "ard": "https://aadhar.sh/.well-known/ard.json",
+        "api_catalog": "https://aadhar.sh/.well-known/api-catalog",
+        "agent_card": "https://aadhar.sh/.well-known/agent-card.json",
+        "skills_index": "https://aadhar.sh/.well-known/agent-skills/index.json"
+      }
+    ]
+  }
+}

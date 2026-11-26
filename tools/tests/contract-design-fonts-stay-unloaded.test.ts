@@ -13,7 +13,9 @@ const FONTS = "design/tokens/fonts.css";
 const SELF = "tools/tests/contract-design-fonts-stay-unloaded.test.ts";
 
 const families = (): string[] =>
-  [...readFileSync(new URL(FONTS, ROOT), "utf8").matchAll(/@font-face\s*\{[^}]*?font-family:\s*["']?([^"';]+?)["']?\s*;/g)].map((m) => m[1]);
+  [
+    ...readFileSync(new URL(FONTS, ROOT), "utf8").matchAll(/@font-face\s*\{[^}]*?font-family:\s*(?:["']\s*)?([^"';\s](?:[^"';]*[^"';\s])?)(?:\s*["'])?\s*;/g),
+  ].map((m) => m[1]);
 
 // Block comments go first: luna.css and styles.css explain in prose why they
 // leave fonts.css out, and that prose must not read as an import.
@@ -22,11 +24,11 @@ const blank = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, " ");
 function findings(text: string, house: string[]): string[] {
   const src = blank(text);
   const out: string[] = [];
-  if (/@import\s+(?:url\()?\s*["']?[^"';)]*tokens\/fonts\.css/i.test(src)) out.push("@import of tokens/fonts.css");
+  if (/@import\s(?:\s*url\()?(?:\s*["'])?[^"';)]*tokens\/fonts\.css/i.test(src)) out.push("@import of tokens/fonts.css");
   if (/<link\b[^>]*href=["'][^"']*tokens\/fonts\.css/i.test(src)) out.push("<link> to tokens/fonts.css");
   // a list entry, as in the design skill's globalCssPaths
   if (/[[,]\s*["'][^"']*tokens\/fonts\.css["']/.test(src)) out.push("tokens/fonts.css named as a path to load");
-  for (const m of src.matchAll(/@font-face\s*\{[^}]*?font-family:\s*["']?([^"';]+?)["']?\s*;/gi)) {
+  for (const m of src.matchAll(/@font-face\s*\{[^}]*?font-family:\s*(?:["']\s*)?([^"';\s](?:[^"';]*[^"';\s])?)(?:\s*["'])?\s*;/gi)) {
     if (house.some((f) => f.toLowerCase() === m[1].trim().toLowerCase())) out.push(`@font-face reuses the installed family "${m[1].trim()}"`);
   }
   return out;
@@ -34,7 +36,7 @@ function findings(text: string, house: string[]): string[] {
 
 test("the matcher finds every way to load fonts.css, and only those", () => {
   const house = families();
-  assert.deepEqual(house, ["Trebuchet MS", "Tahoma", "Verdana", "Geneva", "Courier New"], `${FONTS} declares ${house.join(", ")}`);
+  assert.deepEqual(house, ["Trebuchet MS", "Tahoma", "Verdana", "Geneva", "Courier New", "Menlo"], `${FONTS} declares ${house.join(", ")}`);
   // Each fixture IS found, so an empty report below means clean and not blind.
   assert.deepEqual(findings('@import "tokens/fonts.css";', house), ["@import of tokens/fonts.css"]);
   assert.deepEqual(findings('@import url("../design/tokens/fonts.css");', house), ["@import of tokens/fonts.css"]);

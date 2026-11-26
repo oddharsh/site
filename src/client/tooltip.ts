@@ -12,7 +12,7 @@ import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 // The local parse layer. Client scripts here have no shared module graph, so
 // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
 // coercions is the same trade these files already make for esc().
-/* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+/* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
    of typeof; keeping the checks here rather than at each use is the point. */
 function asNumber(v) {
   return typeof v === "number" && isFinite(v) ? v : null;
@@ -20,7 +20,7 @@ function asNumber(v) {
 function asRecord(v) {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
 }
-/* oxlint-enable anti-slop/no-runtime-typeof */
+/* oxlint-enable no-restricted-syntax */
 
 export function start(initial) {
   const tip = document.getElementById("xp-tooltip");
@@ -73,7 +73,7 @@ export function start(initial) {
     if (isInstant) {
       try {
         // Bare global, only typeof can ask.
-        // oxlint-disable-next-line anti-slop/no-runtime-typeof
+        // oxlint-disable-next-line no-restricted-syntax
         if (typeof Temporal !== "undefined") {
           const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
           return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
@@ -85,7 +85,7 @@ export function start(initial) {
     }
     try {
       // Bare global, only typeof can ask.
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // oxlint-disable-next-line no-restricted-syntax
       if (typeof Temporal !== "undefined") {
         const t = Temporal.PlainDateTime.from(s);
         return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
@@ -219,11 +219,11 @@ export function start(initial) {
       .then((r) => {
         // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
         // failure and fall to .catch (which frees the stem so we can retry).
-        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw new Error(`photo meta ${stem}: no JSON (${r.status})`);
         return r.json();
       })
       .then((m) => {
-        if (!asRecord(m)) throw 0;
+        if (!asRecord(m)) throw new Error(`photo meta ${stem}: not an object`);
         metaMap[stem] = m; // superset of the index entry: EXIF plus .hi
         // re-render if this photo's tip is still the open one. `hoist` is
         // declared below but always initialized by the time this fetch
@@ -251,11 +251,11 @@ export function start(initial) {
     indexRequested = true;
     fetch(`/images/exif.json?${META_V}`, { priority: "low" })
       .then((r) => {
-        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+        if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw new Error(`exif index: no JSON (${r.status})`);
         return r.json();
       })
       .then((all) => {
-        if (!asRecord(all)) throw 0;
+        if (!asRecord(all)) throw new Error("exif index: not an object");
         for (const stem of Object.keys(all)) {
           // never clobber a per-photo record already in hand: that one has .hi
           if (!metaMap[stem]) metaMap[stem] = all[stem];
@@ -289,7 +289,7 @@ export function start(initial) {
     };
     const idle = () => {
       // Capability probe on the browser, not a wire value: nothing to parse.
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      // oxlint-disable-next-line no-restricted-syntax
       if (typeof window.requestIdleCallback === "function") {
         window.requestIdleCallback(run, { timeout: 2000 });
       } else {

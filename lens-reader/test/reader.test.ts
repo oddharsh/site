@@ -7,7 +7,7 @@
 // first run).
 //
 // The split by capability:
-//   tools/tests/contract-the-reader-lens-lens-read-lens-reader.test.ts: everything
+//   src/worker/tests/contract-the-reader-lens-lens-read-lens-reader.test.ts: everything
 //     provable from SOURCE TEXT or the configs: the rate limit against
 //     cloudflare.config.ts, minify and source maps, the shared SSRF guard, the
 //     Markdown walk's shape, the dropped tally, the tab labels, the 429 headers.
@@ -18,6 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { parseHTML as parseLinkedom } from "linkedom";
 import { parseHTML } from "../src/dom.ts";
 import { collectControlLabels, countControls, countWords, FETCH_TIMEOUT_MS, read, ReaderError, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
+import { routeFetch } from "../../tools/lib/fetch-routes.ts";
 
 // The override buys no shipped bytes since the Worker stopped bundling linkedom
 // on 2026-08-23. What it buys is that the parity oracle in
@@ -126,67 +127,54 @@ test("the extracted article node preserves the string path byte for byte", () =>
 });
 
 test("read publishes Markdown from Readability's finished article node", async () => {
-  const originalFetch = globalThis.fetch;
   const html = `<!doctype html><html><head><title>Direct Article</title></head><body>
     <nav>Navigation that should lose.</nav><article><h1>Direct Article</h1>
     ${"<p>Article prose with <strong>structure</strong> that the extractor should retain.</p>".repeat(12)}
     </article></body></html>`;
-  try {
-    // The cast is the stub's honesty note. node's `fetch` carries a `preconnect`
-    // property this one does not, and `read()` never calls it, so the two do not
-    // overlap enough for a direct assertion and the hop through `unknown` is what
-    // TypeScript asks for. Widening the stub to satisfy the type would be adding
-    // a method to a test double for the compiler's benefit.
-    globalThis.fetch = (async () =>
+  using _fetch = routeFetch({
+    "https://example.com/article": () =>
       new Response(html, {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
-      })) as unknown as typeof fetch;
-    const result = await read("https://example.com/article");
-    const baseline = new (await import("@mozilla/readability")).Readability(parseHTML(html).document, { charThreshold: 500 }).parse();
-    // `parse()` answers null on a document it cannot extract. The old
-    // `baseline.content` would have thrown a bare TypeError there, blaming the
-    // assertion rather than the fixture.
-    if (!baseline) throw new Error("Readability extracted nothing from the fixture");
-    assert.equal(result.title, "Direct Article");
-    assert.equal(result.markdown, toMarkdown(baseline.content));
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+      }),
+  });
+  const result = await read("https://example.com/article");
+  const baseline = new (await import("@mozilla/readability")).Readability(parseHTML(html).document, { charThreshold: 500 }).parse();
+  // `parse()` answers null on a document it cannot extract. The old
+  // `baseline.content` would have thrown a bare TypeError there, blaming the
+  // assertion rather than the fixture.
+  if (!baseline) throw new Error("Readability extracted nothing from the fixture");
+  assert.equal(result.title, "Direct Article");
+  assert.equal(result.markdown, toMarkdown(baseline.content));
 });
 
 test("Reader validates redirect hops before fetching and preserves the final URL", async () => {
-  const original = globalThis.fetch;
-  try {
-    for (const target of ["http://169.254.169.254/private", "https://example.org/article"]) {
-      const seen: any[] = [];
-      globalThis.fetch = (async (url, init) => {
-        seen.push(String(url));
-        if (String(url) === "https://example.com/start") {
-          if (init.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
-          seen.push(target); // model the request automatic following makes
-        }
-        const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
-        Object.defineProperty(response, "url", { value: target });
-        return response;
-      }) as unknown as typeof fetch;
-      if (target.startsWith("http:")) {
-        await assert.rejects(read("https://example.com/start"), (error) => error instanceof ReaderError && /will not follow/.test(error.message));
-        assert.deepEqual(seen, ["https://example.com/start"], "refusal must precede the private request");
-      } else {
-        const result = await read("https://example.com/start");
-        assert.equal(result.finalUrl, target);
-        assert.equal(result.skipped, "not-html");
-        assert.deepEqual(seen, ["https://example.com/start", target]);
+  for (const target of ["http://169.254.169.254/private", "https://example.org/article"]) {
+    const seen: any[] = [];
+    const hop = (request: Request) => {
+      seen.push(request.url);
+      if (request.url === "https://example.com/start") {
+        if (request.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
+        seen.push(target); // model the request automatic following makes
       }
+      const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
+      Object.defineProperty(response, "url", { value: target });
+      return response;
+    };
+    using _fetch = routeFetch({ "https://example.com/start": hop, "https://example.org/article": hop });
+    if (target.startsWith("http:")) {
+      await assert.rejects(read("https://example.com/start"), (error) => error instanceof ReaderError && /will not follow/.test(error.message));
+      assert.deepEqual(seen, ["https://example.com/start"], "refusal must precede the private request");
+    } else {
+      const result = await read("https://example.com/start");
+      assert.equal(result.finalUrl, target);
+      assert.equal(result.skipped, "not-html");
+      assert.deepEqual(seen, ["https://example.com/start", target]);
     }
-  } finally {
-    globalThis.fetch = original;
   }
 });
 
 test("the network deadline aborts a body that stalls after successful headers", async () => {
-  const originalFetch = globalThis.fetch;
   const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
   let aborted = false;
   let deadlineScheduled = false;
@@ -201,24 +189,26 @@ test("the network deadline aborts a body that stalls after successful headers", 
       if (ms === FETCH_TIMEOUT_MS) deadlineScheduled = true;
       return originalTimeout.call(AbortSignal, ms === FETCH_TIMEOUT_MS ? 10 : ms);
     };
-    globalThis.fetch = (async (_url, { signal }) =>
-      new Response(
-        new ReadableStream({
-          start(controller) {
-            body = controller;
-            controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
-            signal.addEventListener(
-              "abort",
-              () => {
-                aborted = true;
-                controller.error(signal.reason);
-              },
-              { once: true },
-            );
-          },
-        }),
-        { headers: { "content-type": "text/html" } },
-      ) as unknown) as typeof fetch;
+    using _fetch = routeFetch({
+      "https://example.com/slow-body": ({ signal }) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              body = controller;
+              controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
+              signal.addEventListener(
+                "abort",
+                () => {
+                  aborted = true;
+                  controller.error(signal.reason);
+                },
+                { once: true },
+              );
+            },
+          }),
+          { headers: { "content-type": "text/html" } },
+        ),
+    });
     // A watchdog fails the regression instead of leaving the suite hung when
     // the application clears its timer too early.
     let watchdog;
@@ -240,7 +230,6 @@ test("the network deadline aborts a body that stalls after successful headers", 
   } finally {
     if (!aborted) body?.error(new Error("test cleanup"));
     AbortSignal.timeout = originalTimeout;
-    globalThis.fetch = originalFetch;
   }
 });
 

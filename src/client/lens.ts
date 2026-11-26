@@ -12,7 +12,7 @@
   // The local parse layer. Client scripts here have no shared module graph, so
   // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
   // coercions is the same trade these files already make for esc().
-  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+  /* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
      of typeof; keeping the checks here rather than at each use is the point. */
   function asRecord(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
@@ -20,7 +20,7 @@
   function asText(v) {
     return typeof v === "string" && v !== "" ? v : null;
   }
-  /* oxlint-enable anti-slop/no-runtime-typeof */
+  /* oxlint-enable no-restricted-syntax */
   var form = document.getElementById("lx-form");
   if (!form) return; // not the /lens page
 
@@ -555,9 +555,9 @@
         renderStatus();
         maybeAutoRunBrowser();
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         busy = false;
-        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -736,9 +736,9 @@
               '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
             : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         vsBusy = false;
-        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc((e && e.message) || e) + "</div>";
+        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e instanceof Error && e.message ? e.message : String(e)) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
   }
@@ -1899,20 +1899,28 @@
     };
   }
 
+  // Copy feedback changes the button's own text, which a screen reader doesn't
+  // reliably announce (a button's children are presentational). This region,
+  // in the DOM before any copy, says it again for them. lens-tools.js writes
+  // here too. A repeat gets a no-break space, since VoiceOver skips a message
+  // identical to the last (Modern Web Guidance, copy-button, 2026-11-20).
+  var copyStatus = document.createElement("span");
+  copyStatus.id = "lx-copy-status";
+  copyStatus.setAttribute("role", "status");
+  Object.assign(copyStatus.style, { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" });
+  document.body.appendChild(copyStatus);
   function copyText(text, button) {
-    var done = () => {
+    var say = (msg) => {
+      copyStatus.textContent = copyStatus.textContent === msg ? msg + "\u00A0" : msg;
       if (!button) return;
       var old = button.textContent;
-      button.textContent = "Copied";
+      button.textContent = msg;
       setTimeout(() => {
         button.textContent = old;
       }, 1400);
     };
-    if (navigator.clipboard && navigator.clipboard.writeText)
-      navigator.clipboard
-        .writeText(text)
-        .then(done)
-        .catch(() => {});
+    var done = () => say("Copied");
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => say("Copy failed"));
     else {
       var ta = document.createElement("textarea");
       ta.value = text;
@@ -2203,7 +2211,7 @@
     var checkHtml =
       '<div class="lx-readiness-checks">' +
       checks
-        .map((item) => {
+        .map((item, i) => {
           var state = readinessStatus(item);
           var copy = readinessCopy(item);
           var fix = copy.fix;
@@ -2235,7 +2243,9 @@
             esc(copy.label) +
             '" data-fix="' +
             esc(fix) +
-            '"><div class="lx-readiness-check-top"><b>' +
+            '"><div class="lx-readiness-check-top"><b id="lx-check-' +
+            i +
+            '">' +
             glossify(esc(copy.label)) +
             "</b>" +
             badge(state.text, state.kind) +
@@ -2246,7 +2256,17 @@
             (item.status === "fail"
               ? '<div class="lx-readiness-fix"><span>' +
                 glossify(esc(fix)) +
-                '</span><button class="lx-copy-fix" type="button" data-fix="' +
+                // Every failing check renders one, so "Copy fix" alone named a dozen
+                // identical buttons for a screen reader. aria-labelledby joins the
+                // button's own visible text to its row's heading ("Copy fix
+                // robots.txt"), and still reads "Copied robots.txt" while confirming.
+                '</span><button class="lx-copy-fix" type="button" id="lx-fix-' +
+                i +
+                '" aria-labelledby="lx-fix-' +
+                i +
+                " lx-check-" +
+                i +
+                '" data-fix="' +
                 esc(fix) +
                 '">Copy fix</button></div>'
               : "") +
@@ -2423,7 +2443,7 @@
     LENS_FN.markdown = lensMarkdownTab;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
     // Capability probe on a caller-supplied callback, not a parsed value.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    // oxlint-disable-next-line no-restricted-syntax
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
     var body = view === "machine" ? lensFocus() + fn() : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
@@ -3443,7 +3463,13 @@
       ? '<div class="lx-tags">' +
         feeds
           .map((f) => {
-            return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>";
+            var label = esc(f.type || "feed") + " &middot; " + esc(f.href);
+            // f.href is the scanned page's own <link href>, and esc() keeps a
+            // javascript: or data: URL intact, so only http(s) becomes a link
+            // (the same guard as the TDM policy link above).
+            return /^https?:\/\//i.test(f.href)
+              ? '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + label + "</a>"
+              : '<span class="lx-tag">' + label + "</span>";
           })
           .join("") +
         "</div>"
@@ -3738,9 +3764,8 @@
   var lensGroup = document.querySelector(".lx-lenses");
   if (lensGroup) lensGroup.addEventListener("keydown", arrowKeys(".lx-tab"));
 
-  // "state of the machine web" dialog: close button, backdrop light-dismiss, and
-  // every [data-sow-open] trigger (the rail's "?" and the footer link). The
-  // backdrop listener is the fallback for browsers without dialog closedby="any".
+  // "state of the machine web" dialog: close button and every [data-sow-open]
+  // trigger (the rail's "?" and the footer link).
   var sowDialog = document.getElementById("lx-sow-dialog") as HTMLDialogElement;
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
@@ -3748,9 +3773,6 @@
       sowClose.addEventListener("click", () => {
         sowDialog.close();
       });
-    sowDialog.addEventListener("click", (e) => {
-      if (e.target === sowDialog) sowDialog.close();
-    });
   }
   [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
     b.addEventListener("click", openStateWeb);
@@ -3767,8 +3789,26 @@
       abtClose.addEventListener("click", () => {
         abtDialog.close();
       });
-    abtDialog.addEventListener("click", (e) => {
-      if (e.target === abtDialog) abtDialog.close();
+  }
+
+  // Light dismiss for both dialogs where closedby="any" is missing (Safari, per
+  // Modern Web Guidance's dialog guide, 2026-11-14). It runs only there: an
+  // unguarded click listener closed the dialog in Chrome when a text selection
+  // dragged out onto the backdrop, because that click lands on the <dialog>.
+  // Press and release must both fall outside the box for the same reason.
+  if (!("closedBy" in HTMLDialogElement.prototype)) {
+    var outside = (e: PointerEvent, d: HTMLDialogElement) => {
+      var r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    [].forEach.call(document.querySelectorAll('dialog[closedby="any"]'), (d: HTMLDialogElement) => {
+      var pressedOutside = false;
+      d.addEventListener("pointerdown", (e) => {
+        pressedOutside = outside(e, d);
+      });
+      d.addEventListener("pointerup", (e) => {
+        if (pressedOutside && outside(e, d)) d.close();
+      });
     });
   }
   [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
@@ -4010,7 +4050,7 @@
         // the person last typed. Write both, and let the box win if it holds
         // something a human put there.
         nlwebQuery = String(args.query).slice(0, 200);
-        var box = machineBody.querySelector("#lx-nlweb-q") as HTMLInputElement | null;
+        var box = machineBody.querySelector<HTMLInputElement>("#lx-nlweb-q");
         if (box) box.value = nlwebQuery;
       }
       setLens(tab);

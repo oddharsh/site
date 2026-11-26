@@ -65,5 +65,93 @@ test("the page swaps each link once and waits for the first fold", needsParser, 
       '<noscript><link rel="stylesheet" href="/luna.css"></noscript></head>' +
       '<body><div class="window"><main class="content"><section class="fold" id="first-fold" style="x"></section><section class="fold"></section></main></div></body>',
   );
-  await assert.rejects(nonBlockingPage(page.replace('class="fold"', 'class="x"').replace('class="fold"', 'class="x"'), [], []), /no prose fold/);
+});
+
+test("a page with no fold waits for its task pane, and one with neither paints as it arrives", needsParser, async () => {
+  const sheet = [{ href: "/luna.css", css: ".window{gap:0}" }];
+  const page =
+    '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head>' +
+    '<body><div class="window"><main class="content"><p>x</p></main><div class="h2l"><aside></aside></div></div></body>';
+  const held = await nonBlockingPage(page, sheet, [], { taskPane: '<div class="h2l"' });
+  assert.match(held, /<meta charset="utf-8">\n<link rel="expect" href="#first-pane" blocking="render">/);
+  assert.match(held, /<div class="h2l" id="first-pane"><aside>/);
+  // No fold and no pane: swapped, with no expect, rather than refused.
+  const bare = await nonBlockingPage(page.replace('<div class="h2l"><aside></aside></div>', ""), sheet, [], { taskPane: '<div class="h2l"' });
+  assert.match(bare, /<style>\.window\{gap:0\}<\/style>/);
+  assert.doesNotMatch(bare, /rel="expect"/);
+});
+
+test("a sheet the page never links is skipped, and luna.css is always required", needsParser, async () => {
+  const page = '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head><body><div class="window"></div></body>';
+  const out = await nonBlockingPage(
+    page,
+    [
+      { href: "/luna.css", css: ".window{gap:0}" },
+      { href: "/prose.css", css: ".p{gap:0}" },
+    ],
+    [],
+  );
+  assert.doesNotMatch(out, /prose/);
+  await assert.rejects(nonBlockingPage("<head></head>", [{ href: "/luna.css", css: ".window{gap:0}" }], []), /expected exactly one/);
+});
+
+// Gotcha 116: authored names cannot match selectors after the class rename.
+test("a readable twin derives the same subset from served markup while retaining authored class names", needsParser, async () => {
+  const source = '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"></head><div class="authored"></div>';
+  const served = source.replace('class="authored"', 'class="a"');
+  const sheets = [{ href: "/luna.css", css: ".a{height:20px}.absent{height:30px}" }];
+  const twin = await nonBlockingPage(source, sheets, [], { matchingHtml: served });
+  const page = await nonBlockingPage(served, sheets, []);
+  const inline = (html: string) => /<style>(.*?)<\/style>/.exec(html)?.[1];
+  assert.equal(inline(twin), inline(page), "the readable twin must carry the served page's critical rules");
+  assert.equal(inline(twin), ".a{height:20px}");
+  assert.match(twin, /class="authored"/);
+  assert.notEqual(inline(await nonBlockingPage(source, sheets, [])), inline(page), "control: matching authored names against renamed CSS loses the rule");
+});
+
+test("matches inside :where() and :is() and drops @media print", needsParser, async () => {
+  const sheet =
+    ":where(.window){display:block}:where(.xp-tabs){display:flex}" +
+    ":where(.title-bar :is(.min,.absent):focus-visible){outline:1px solid}" +
+    ":is(input,textarea){font-size:16px}" +
+    ":where(.axp-acc){position:fixed}" +
+    "@media print{.window{box-shadow:none}}";
+  const doc = '<html><body><div class="window"><div class="title-bar"><button class="min"></button></div></div></body></html>';
+  const subset = await criticalCss(sheet, doc, ['el("<div class=axp-acc>")']);
+  assert.ok(!subset.includes(".xp-tabs"), "unused :where() rule must be dropped");
+  assert.ok(!subset.includes("textarea"), "unused :is() rule must be dropped");
+  assert.ok(!subset.includes("@media print"), "@media print rules must not be inlined for screen first paint");
+  assert.equal(
+    subset,
+    ":where(.window){display:block}" + ":where(.title-bar :is(.min,.absent):focus-visible){outline:1px solid}" + ":where(.axp-acc){position:fixed}",
+  );
+  assert.equal(isOrderedSubset(subset, sheet), true);
+});
+
+test("prunes unreferenced :root custom properties while keeping transitive, script, and sibling-sheet refs", needsParser, async () => {
+  const sheet =
+    ":root{--used:var(--chain);--chain:#111;--dead:#222;--sa-t:0px;--prose-ink:#333}" +
+    "@media (color-gamut:p3){:root{--used:color(display-p3 0 0 0);--dead:color(display-p3 1 0 0)}}" +
+    ".window{color:var(--used)}";
+  const page =
+    '<head><meta charset="utf-8"><link rel="stylesheet" href="/luna.css"><link rel="stylesheet" href="/prose.css"></head>' +
+    '<body><div class="window"></div></body>';
+  const out = await nonBlockingPage(
+    page,
+    [
+      { href: "/luna.css", css: sheet },
+      { href: "/prose.css", css: ".window{border-color:var(--prose-ink)}" },
+    ],
+    ['getComputedStyle(root).getPropertyValue("--" + "sa-t")'],
+  );
+  const lunaInline = /<style>(.*?)<\/style>/.exec(out)?.[1] ?? "";
+  assert.equal(
+    lunaInline,
+    ":root{--used:var(--chain);--chain:#111;--sa-t:0px;--prose-ink:#333}" +
+      "@media (color-gamut:p3){:root{--used:color(display-p3 0 0 0)}}" +
+      ".window{color:var(--used)}",
+  );
+  assert.equal(isOrderedSubset(lunaInline, sheet), true);
+  assert.equal(isOrderedSubset(":root{--chain:#111;--used:var(--chain)}", sheet), false, "reordered :root declarations are not an ordered subset");
+  assert.equal(isOrderedSubset(":root{--used:#999}", sheet), false, "mutated :root declarations are not an ordered subset");
 });

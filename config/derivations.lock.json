@@ -995,7 +995,9 @@
     "public/images/alt.json": "d7b22babe37bf87eab5ebe3ed0d7852797b3cdf02d04d7d64e2b9e6778b2e666",
     "public/images/metadata.json": "1bdcd007583755255510c7a8887f2ace3f9711eff4e9d5456b55fd0cad2e2d0d",
     "src/worker/lib/api-limits.ts": "48c457553d7ba4f2ea8e31c544656ad9cefa1a71ab32f4da3c956ebdca9f3247",
-    "src/worker/lib/public-api.ts": "b82be3226e396084777f5a52cd888a76b7e9b8ad42db207923f7e9531a920c3e",
-    "tools/photos/shell-data.ts": "f99344cb233bae43cb9800da2e7a2759d55fd40374529934c37cc6a09cd9f346"
+    "src/worker/lib/openapi.ts": "de27b71faf7f3a1b606b3f54f6d9c52a51e34de47ee74e75eaba56d21410d092",
+    "src/worker/lib/public-api.ts": "8571b4d2045c95b1ac4de49664e2c3f9ba6c68da3556ea58eca7eb3a0f26ebae",
+    "src/worker/lib/tools.ts": "d7e0cead3660d74024cc1690cba883cf58521c051ea5c623c11e63ef061f9a1e",
+    "tools/photos/shell-data.ts": "760a57ab85e36ce64b88d9a69416dc1998072e374c7ef4669b8f4f69e46fd856"
   }
 }

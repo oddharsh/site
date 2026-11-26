@@ -8,8 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { digestOf, hashInputs, project, record, relock, resolveInputs, verify } from "../lib/derive.ts";
 import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "../lib/derive-writers.ts";
-
-type Derivation = import("../lib/derive.ts").Derivation;
+import type { Derivation } from "../lib/derive.ts";
 
 const root = fileURLToPath(ROOT);
 const decl = JSON.parse(await readFile(new URL("config/derivations.json", ROOT), "utf8"));

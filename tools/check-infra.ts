@@ -57,6 +57,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile, access } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { siteConfig } from "./lib/site-config.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
 import { agentSurfaces } from "./lib/agent-representation.ts";
@@ -160,19 +161,22 @@ async function probeEarlyData(host: string): Promise<EarlyDataResult> {
     // that run used to report "rejected on 3 spaced resumptions" as drift.
     let resumptions = 0;
     for (let attempt = 0; attempt < BACKOFF_MS.length; attempt++) {
-      if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+      if (BACKOFF_MS[attempt])
+        await new Promise((r) => {
+          setTimeout(r, BACKOFF_MS[attempt]);
+        });
       const first = await execFileP(
         "sh",
         ["-c", `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" 2>&1`],
         { timeout: 20000 },
-      ).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      ).catch((e: unknown) => ({ stdout: `${asText(asRecord(e)?.stdout, "")}${asText(asRecord(e)?.stderr, "")}` }));
       if (!/^New, TLS/m.test(first.stdout || "")) continue;
       resumptions++;
       const out = await execFileP(
         "sh",
         ["-c", `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`],
         { timeout: 20000 },
-      ).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      ).catch((e: unknown) => ({ stdout: `${asText(asRecord(e)?.stdout, "")}${asText(asRecord(e)?.stderr, "")}` }));
       if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true, attempts: attempt + 1 };
     }
     if (!resumptions) return { skip: `no TLS handshake with ${host}:443 completed in ${BACKOFF_MS.length} attempts, so there was no session to resume` };
@@ -482,7 +486,7 @@ async function checkTriageDeclaration(repo) {
   let dbLabels = 0;
   for (let i = 0; i < dbLines.length; i++) {
     if (/^\s*-\s*package-ecosystem:/.test(dbLines[i])) ecosystems++;
-    const head = /^(\s*)labels:\s*(.*)$/.exec(dbLines[i]);
+    const head = /^(\s*)labels:\s*(\S.*|)$/.exec(dbLines[i]);
     if (!head) continue;
 
     const listed: { name: string; line: number }[] = [];
@@ -497,7 +501,7 @@ async function checkTriageDeclaration(repo) {
     } else {
       for (let j = i + 1; j < dbLines.length; j++) {
         if (/^\s*(#|$)/.test(dbLines[j])) continue;
-        const item = /^(\s*)-\s*(.+)$/.exec(dbLines[j]);
+        const item = /^(\s*)-\s*(\S.*|[^\S\n\r\u2028\u2029])$/.exec(dbLines[j]);
         if (!item || item[1].length <= head[1].length) break;
         listed.push({ name: scalar(item[2]), line: j + 1 });
       }
@@ -562,7 +566,7 @@ async function checkCodeqlWorkflow(repo) {
   if (got.join(",") !== declared.join(",")) {
     const added = got.filter((l) => !declared.includes(l));
     const dropped = declared.filter((l) => !got.includes(l));
-    const parts = [];
+    const parts: string[] = [];
     if (added.length) parts.push(`gained ${added.join(", ")}`);
     if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
     fail(

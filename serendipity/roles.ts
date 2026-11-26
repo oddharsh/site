@@ -23,7 +23,8 @@
 // askRole and stores one answer per bio, which attendeeScore ranks by.
 
 import { readChoice } from "./event-tags.ts";
-import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
+import { runClef } from "../src/worker/lib/clef.ts";
+import type { ClefEnv, ClefModel } from "../src/worker/lib/clef.ts";
 
 // "clef" for the reason event-tags.ts gives: classification quality over
 // latency, and this runs on a cron. A bio is short enough that flash's speed

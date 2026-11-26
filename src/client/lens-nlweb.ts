@@ -269,7 +269,7 @@
       // the kind of small lie this site tries not to tell.
       if (input && button) {
         input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" && !event.isComposing) {
+          if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             button.click();
           }

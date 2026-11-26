@@ -36,7 +36,8 @@
   // demos under specs/ belong to the DOM program instead.
   "include": [
     "../tools/**/*.ts",
-    "../pipelines/**/*.ts"
+    "../pipelines/**/*.ts",
+    "../src/**/tests/**/*.ts"
   ],
   // The two vendored encoder builds are gitignored third-party checkouts, and
   // the AV2 one fetches FlatBuffers' own TypeScript under build/, which the glob

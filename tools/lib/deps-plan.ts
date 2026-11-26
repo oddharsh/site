@@ -71,8 +71,8 @@ export type Group = { name: string; patterns: string[] };
 export const GROUPS: Group[] = [
   // The oxlint and tsgolint groups left on 2026-10-15 with the packages: the
   // linter is Bun's now (`bun lint`), pinned with the runtime in
-  // config/bun-pin.json. `@oxlint/plugins` stays as the adapter the vendored
-  // anti-slop rules import, and moves on its own.
+  // config/bun-pin.json. `@oxlint/plugins` followed on 2026-11-17, when the
+  // anti-slop rules it adapted became native selectors.
   { name: "typescript", patterns: ["typescript"] },
   // One resolved Cloudflare stack: one miniflare, one workerd, one undici. A
   // @cloudflare/* package carrying its own wrangler, bumped apart, splits that

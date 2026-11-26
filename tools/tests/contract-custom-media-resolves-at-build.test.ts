@@ -20,7 +20,7 @@ import { parseCss } from "../lib/css-parse.ts";
 
 const DEFS_PATH = new URL("src/styles/custom-media.css", ROOT);
 const defs = readFileSync(DEFS_PATH, "utf8");
-const declared = [...defs.matchAll(/^@custom-media\s+(--[a-z0-9-]+)\s+([^;]+);/gm)].map((m) => [m[1], m[2].trim()]);
+const declared = [...defs.matchAll(/^@custom-media\s+(--[a-z0-9-]+)\s+([^;\s][^;]*|\s);/gm)].map((m) => [m[1], m[2].trim()]);
 
 test("the definitions file declares at least the names the tree repeats, once each", () => {
   const names = declared.map(([n]) => n);

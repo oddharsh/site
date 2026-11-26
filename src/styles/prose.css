@@ -19,9 +19,22 @@ body { font-family: var(--font-ui); font-size: var(--text-body); line-height: 1.
 :where(.prose) .note { color: var(--ink-quiet); font-size: var(--text-ui); margin: 0 0 14px; }
 :where(.prose) .note code, :where(.prose) p code, :where(.prose) li code { background: oklch(96.72% 0 0); border: 1px solid var(--grey-88); padding: 0 4px; font-family: var(--font-mono); font-size: var(--text-sm); }
 :where(.prose) pre { overflow-x: auto; }
+/* On a phone a table scrolls in its own box. How wide one is depends on the
+ * fonts the device has, so a table tuned to fit one engine by a few px ran
+ * past the next: /garage/pqc's fit WebKit in one Linux image and was 7px out
+ * in CI's at 320px (2026-11-20, gotcha 109). */
+@media (max-width: 540px) { :where(.prose) table { display: block; overflow-x: auto; } }
 :where(.prose) hr { border: 0; border-top: 2px groove var(--rule); margin: 14px 0; }
 :where(.prose) a { color: var(--blue-40); }
 :where(.prose) .callout { font-size: var(--text-ui); background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+/* Footnotes preview in the browser's link-hover bubble: the marker's href is
+ * the note's text, and the click lands on the <li> with that id. Shape and
+ * check: tools/lib/footnotes.ts. line-height 0 keeps the raised marker from
+ * opening a gap above its line. */
+:where(.prose) a.note-ref { font-size: var(--text-micro); vertical-align: super; line-height: 0; text-decoration: none; padding: 0 1px; }
+:where(.prose) ol.footnotes { font-size: var(--text-ui); color: var(--ink-soft); margin: 26px 0 0; padding: 12px 0 0 24px; border-top: 2px groove var(--rule); }
+:where(.prose) ol.footnotes li { scroll-margin-top: 12px; }
+:where(.prose) ol.footnotes li:target { outline: 1px dotted var(--blue-65); outline-offset: 2px; }
 :where(.prose) footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove var(--rule); font-size: var(--text-sm); color: var(--ink-quiet); }
 /* Long essays fold below the first screen: the build wraps their later blocks
  * in <section class="fold"> (tools/lib/prose-fold.ts), and the browser skips
