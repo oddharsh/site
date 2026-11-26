@@ -617,6 +617,24 @@ export const CONTROLS: Control[] = [
     expect: /package\.json scripts\.deploy:direct publishes without --x-provision=false/,
   },
   {
+    id: "origin-trial-stamped-on-the-wrong-type",
+    plants: "withSecurityHeaders stamps the origin trial tokens on JSON instead of HTML, so no page turns WebMCP on and a JSON route carries a token",
+    // One plant, both directions: the nav.js rows lose the header and the
+    // /rn/tracks row gains it. routes:check, because only the real router shows
+    // what a page is served; the contract test hands withSecurityHeaders a
+    // Response it built itself.
+    mutations: [
+      {
+        file: "src/worker/lib/security.ts",
+        find: '  if (ct.startsWith("text/html")) {\n    const served = (headers.get("origin-trial")',
+        replace: '  if (ct.startsWith("application/json")) {\n    const served = (headers.get("origin-trial")',
+      },
+    ],
+    run: ["bun", "run", "routes:check"],
+    expect:
+      /\/rn\/tracks +<- origin-trial is present on a response that should carry none[\s\S]*\/garage\/horizon +<- origin-trial is missing a token from ORIGIN_TRIALS|\/garage\/horizon +<- origin-trial is missing a token from ORIGIN_TRIALS[\s\S]*\/rn\/tracks +<- origin-trial is present/,
+  },
+  {
     id: "served-shell-unminified",
     plants: "build.ts ships a shell script's readable source under the deploy banner, the bypass #1392's size tripwire exists for",
     // One shell, and the banner and marker survive, so only the size row can

@@ -1,13 +1,16 @@
-// ── WebMCP origin trial: every page that loads webmcp.js carries a live token ──
+// ── Origin trials: every token is live, and they merge instead of colliding ──
 // Chrome turns document.modelContext on for a visitor only when the document
 // carries a valid trial token, and it ignores an expired one without a console
 // line, so a lapsed token looks exactly like a site with no tools. This test is
-// the watch: it reads the expiry out of the token itself (a date typed beside it
+// the watch: it reads each expiry out of the token itself (a date typed beside it
 // would survive a trial extension that left the served token stale) and fails
 // from 30 days before it, on every PR. It reads the clock on purpose, like
-// contract-security-txt-expires-60-days-out.
-import { ROOT, assert, readFile, readdir, test } from "../../../../tools/tests/contract-shared.ts";
-import { WEBMCP_ORIGIN_TRIAL, withSecurityHeaders } from "../security.ts";
+// contract-security-txt-expires-60-days-out. That every nav.js page is SERVED the
+// tokens is routes:check's job (verify-routes.ts, ORIGIN_TRIAL_ROWS), because only
+// the real router can show a route that skips withSecurityHeaders.
+import { ROOT, assert, test } from "../../../../tools/tests/contract-shared.ts";
+import { pagesLoadingWebmcp } from "../../../../tools/lib/webmcp-pages.ts";
+import { ORIGIN_TRIALS, WEBMCP_ORIGIN_TRIAL, withSecurityHeaders } from "../security.ts";
 
 const DAY_MS = 86_400_000;
 const LEAD_DAYS = 30;
@@ -22,40 +25,41 @@ function payloadOf(token: string): { origin: string; feature: string; expiry: nu
   return JSON.parse(bytes.subarray(69).toString("utf8"));
 }
 
-test(`the WebMCP token names this origin and expires at least ${LEAD_DAYS} days out`, () => {
-  const payload = payloadOf(WEBMCP_ORIGIN_TRIAL);
-  assert.equal(payload.origin, "https://aadhar.sh:443");
-  assert.equal(payload.feature, "WebMCP");
-  assert.equal(payload.isSubdomain, undefined, "registered for aadhar.sh alone");
-  assert.equal(payload.isThirdParty, undefined, "a first-party token, served by this origin");
-  const days = (payload.expiry * 1000 - Date.now()) / DAY_MS;
-  assert.ok(
-    days >= LEAD_DAYS,
-    `WEBMCP_ORIGIN_TRIAL expires ${new Date(payload.expiry * 1000).toISOString()}, ${Math.floor(days)} day(s) from now. Renew it at developer.chrome.com/origintrials (or drop it if the trial ended) and replace the constant in src/worker/lib/security.ts`,
-  );
+test(`every origin trial token names this origin and expires at least ${LEAD_DAYS} days out`, () => {
+  assert.ok(ORIGIN_TRIALS.includes(WEBMCP_ORIGIN_TRIAL), "the WebMCP token is served");
+  for (const token of ORIGIN_TRIALS) {
+    const payload = payloadOf(token);
+    assert.equal(payload.origin, "https://aadhar.sh:443", payload.feature);
+    const days = (payload.expiry * 1000 - Date.now()) / DAY_MS;
+    assert.ok(
+      days >= LEAD_DAYS,
+      `the ${payload.feature} origin trial token expires ${new Date(payload.expiry * 1000).toISOString()}, ${Math.floor(days)} day(s) from now. Renew it at developer.chrome.com/origintrials (or drop it if the trial ended) and replace it in ORIGIN_TRIALS in src/worker/lib/security.ts`,
+    );
+  }
+  const webmcp = payloadOf(WEBMCP_ORIGIN_TRIAL);
+  assert.equal(webmcp.feature, "WebMCP");
+  assert.equal(webmcp.isSubdomain, undefined, "registered for aadhar.sh alone");
+  assert.equal(webmcp.isThirdParty, undefined, "a first-party token, served by this origin");
 });
 
-// nav.js imports webmcp.js on idle, so a page loads WebMCP exactly when it loads
-// nav.js. Derived from the pages themselves, so a new page is covered on arrival.
-async function pagesLoadingWebmcp(): Promise<string[]> {
-  const root = new URL("src/pages/", ROOT);
-  const files = (await readdir(root, { recursive: true })).filter((f) => f.endsWith(".html"));
-  const paths: string[] = [];
-  for (const file of files) {
-    const html = await readFile(new URL(file, root), "utf8");
-    if (!/\/nav(?:\.[0-9a-f]{8})?\.js/.test(html)) continue;
-    paths.push("/" + file.replace(/(?:^|\/)index\.html$/, "").replace(/\.html$/, ""));
-  }
-  return paths.sort();
-}
+const html = (headers: Record<string, string> = {}) => new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8", ...headers } });
 
-test("every page that loads webmcp.js is served the token, and a JSON response is not", async () => {
-  const paths = await pagesLoadingWebmcp();
-  assert.ok(paths.includes("/") && paths.includes("/garage/horizon"), `found ${paths.length} pages, including / and /garage/horizon`);
-  for (const path of paths) {
-    const response = withSecurityHeaders(new Response("<p>hi</p>", { headers: { "content-type": "text/html; charset=utf-8" } }), path);
-    assert.equal(response.headers.get("origin-trial"), WEBMCP_ORIGIN_TRIAL, path);
-  }
+test("HTML carries every token, merged into a token a route already set, and JSON carries none", () => {
+  assert.equal(withSecurityHeaders(html(), "/").headers.get("origin-trial"), ORIGIN_TRIALS.join(", "));
+  const other = "AnotherTrialToken==";
+  assert.equal(withSecurityHeaders(html({ "origin-trial": other }), "/").headers.get("origin-trial"), [other, ...ORIGIN_TRIALS].join(", "));
+  // Already present: no second copy.
+  assert.equal(
+    withSecurityHeaders(html({ "origin-trial": `${WEBMCP_ORIGIN_TRIAL}, ${other}` }), "/").headers.get("origin-trial"),
+    `${WEBMCP_ORIGIN_TRIAL}, ${other}`,
+  );
   const json = withSecurityHeaders(new Response("{}", { headers: { "content-type": "application/json" } }), "/rn/tracks");
   assert.equal(json.headers.get("origin-trial"), null, "a non-HTML response never carries it");
+});
+
+test("the WebMCP page list routes:check sweeps finds the shell pages", () => {
+  const paths = pagesLoadingWebmcp(ROOT);
+  assert.ok(paths.length >= 40, `found ${paths.length} pages`);
+  assert.ok(paths.includes("/"), "/");
+  assert.ok(paths.includes("/garage/horizon"), "/garage/horizon");
 });

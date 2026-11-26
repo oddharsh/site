@@ -92,9 +92,15 @@ export const SECURITY_HEADERS = {
 // sitemap pages all reach this function (each carries speculation-rules,
 // checked 2026-11-26), so _headers needs no copy. A lapsed or renewed trial
 // needs a new token from developer.chrome.com/origintrials; the test
-// contract-webmcp-origin-trial fails 30 days before this one expires.
+// contract-webmcp-origin-trial fails 30 days before any token in
+// ORIGIN_TRIALS expires, and routes:check asserts every nav.js page serves them.
 export const WEBMCP_ORIGIN_TRIAL =
   "AgpCVjtSAP60jY6U9Y1zAu530HvFYuRHKMPbAg6vWN9PYED17DigmDPA6q9xp1EBJouUQRRDJfAdicT8Mi5jTw8AAABJeyJvcmlnaW4iOiJodHRwczovL2FhZGhhci5zaDo0NDMiLCJmZWF0dXJlIjoiV2ViTUNQIiwiZXhwaXJ5IjoxODA2MzY0ODAwfQ==";
+
+// Every trial token an HTML response carries, merged into one comma-separated
+// Origin-Trial header so a second trial (speculation.ts names the
+// prefetch-activation beacon as waiting on one) appends instead of colliding.
+export const ORIGIN_TRIALS: readonly string[] = [WEBMCP_ORIGIN_TRIAL];
 
 const HOMEPAGE_DISCOVERY_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
@@ -229,8 +235,13 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   if (SPECULATION_RULES && ct.startsWith("text/html") && !headers.has("speculation-rules")) {
     headers.set("speculation-rules", `"${SPECULATION_RULES}"`);
   }
-  if (ct.startsWith("text/html") && !headers.has("origin-trial")) {
-    headers.set("origin-trial", WEBMCP_ORIGIN_TRIAL);
+  if (ct.startsWith("text/html")) {
+    const served = (headers.get("origin-trial") ?? "")
+      .split(",")
+      .map((token) => token.trim())
+      .filter(Boolean);
+    const missing = ORIGIN_TRIALS.filter((token) => !served.includes(token));
+    if (missing.length > 0) headers.set("origin-trial", [...served, ...missing].join(", "));
   }
   // Every HTML surface—static, deterministically rendered, or live—teaches the
   // browser the same immutable page dictionary. Static/deterministic routes can

@@ -21,6 +21,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { agentRepresentation, agentSurfaces, needsBuiltTwin } from "./lib/agent-representation.ts";
 import { twinOracleRows } from "./lib/client-assets.ts";
+import { pagesLoadingWebmcp } from "./lib/webmcp-pages.ts";
+import { ORIGIN_TRIALS } from "../src/worker/lib/security.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
 const ROOT = new URL("../", import.meta.url);
@@ -101,6 +103,8 @@ try {
 // marker: a substring that must appear in the body (text routes only).
 // location: the path a redirect's Location must name, query aside (the probe
 //     adds a cache-buster). Status alone passes a redirect to the wrong place.
+// originTrial: true = the Origin-Trial header carries every token in ORIGIN_TRIALS
+//     (src/worker/lib/security.ts); false = the response carries no such header.
 // cors: the exact Access-Control-Allow-Origin the response must carry. For a
 //     document whose spec requires it: a missing header fails no other column.
 // flaky: true = record the result but never fail the run (external/rate-limited).
@@ -540,7 +544,7 @@ const ROUTES = [
   { path: "/rn", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "https://aadhar.sh/rn/tracks" },
   // 503 with no playlist set (an empty local KV), 200 with one; the
   // .html fragment below keeps its 200 either way
-  { path: "/rn/tracks", status: [200, 503], ct: "application/json", headers: { accept: "text/html" } },
+  { path: "/rn/tracks", status: [200, 503], ct: "application/json", headers: { accept: "text/html" }, originTrial: false },
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
@@ -731,6 +735,14 @@ const AGENT_ROWS = (() => {
   return rows;
 })();
 
+// One row per page that loads nav.js, and so WebMCP, DERIVED from src/pages
+// like AGENT_ROWS is from the registry. Through the real router rather than a
+// synthetic Response handed to withSecurityHeaders, so a route that answers
+// around that function fails here (Chrome then leaves document.modelContext
+// undefined and the page registers no tools).
+const ORIGIN_TRIAL_ROWS = pagesLoadingWebmcp(ROOT).map((path) => ({ path, status: 200, ct: "text/html", originTrial: true, remote: false }));
+if (ORIGIN_TRIAL_ROWS.length < 40) throw new Error("verify-routes: found fewer than 40 pages that load nav.js");
+
 function cacheBust(path) {
   const sep = path.includes("?") ? "&" : "?";
   return base + path + sep + "cb=" + Math.floor(Math.random() * 1e9);
@@ -786,6 +798,9 @@ async function probe(r) {
     const okMarker = !r.marker || body.includes(servedMarker(r.path, r.marker));
     const cors = res.headers.get("access-control-allow-origin");
     const okCors = !r.cors || cors === r.cors;
+    const trial = res.headers.get("origin-trial");
+    const trials = new Set((trial ?? "").split(",").map((token) => token.trim()));
+    const okTrial = r.originTrial === undefined || (r.originTrial ? ORIGIN_TRIALS.every((token) => trials.has(token)) : trial === null);
     const location = res.headers.get("location");
     const okLocation = !r.location || (location !== null && new URL(location, base).pathname === r.location);
     const maxBytes = r.readable ? Math.floor(statSync(new URL(r.readable, ROOT)).size * MINIFIED_MAX_RATIO) : null;
@@ -813,7 +828,7 @@ async function probe(r) {
     const okFullPage =
       !r.fullPage || (/^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) && /<html\b/i.test(body) && /<head\b/i.test(body) && /<body\b/i.test(body));
     const okFragment = !r.fragment || (!/<(?:!doctype|html|head|body)\b/i.test(body) && (!r.fragmentRoot || body.includes(r.fragmentRoot)));
-    const pass = okStatus && okCt && okEnc && okMarker && okCors && okLocation && okBytes && okFullPage && okFragment;
+    const pass = okStatus && okCt && okEnc && okMarker && okCors && okTrial && okLocation && okBytes && okFullPage && okFragment;
     return {
       path: r.path,
       status: res.status,
@@ -832,6 +847,8 @@ async function probe(r) {
       okEnc,
       okMarker,
       okCors,
+      okTrial,
+      wantTrial: r.originTrial,
       okBytes,
       okFullPage,
       okFragment,
@@ -848,7 +865,7 @@ async function probe(r) {
 }
 
 async function main() {
-  const all = [...ROUTES, ...AGENT_ROWS];
+  const all = [...ROUTES, ...AGENT_ROWS, ...ORIGIN_TRIAL_ROWS];
   const routes = all.filter((r) => !(r.remote && !remoteRows));
   const skipped = all.length - routes.length;
   console.log(
@@ -882,6 +899,11 @@ async function main() {
           r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
           r.okMarker === false ? `missing marker "${r.marker}"` : "",
           r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
+          r.okTrial === false
+            ? r.wantTrial
+              ? "origin-trial is missing a token from ORIGIN_TRIALS"
+              : "origin-trial is present on a response that should carry none"
+            : "",
           r.okLocation === false ? `location "${r.location || "none"}" does not name ${r.wantLocation}` : "",
           r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B, ${MINIFIED_MAX_RATIO} of ${r.readable} (unminified? build bypassed?)` : "",
           r.okFullPage === false ? "full-page contract missing document wrapper" : "",
