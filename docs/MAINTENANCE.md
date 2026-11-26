@@ -1396,6 +1396,29 @@ OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 ---
 
+## Republish to the MCP Registry
+
+Both MCP servers are listed in the official MCP Registry as `sh.aadhar/site`
+and `sh.aadhar/serendipity` (first published 2026-11-24). The registry keeps
+the last version it was sent, so after a server's version, title, description,
+icon or URL changes, run `bun run gen:mcp-cards`, merge, and republish from a
+workstation. The contract suite holds each `config/mcp-registry/*.json` equal
+to its server card, but nothing compares it with the live registry.
+
+The registry checks ownership of `sh.aadhar` against the public key served at
+`/.well-known/mcp-registry-auth` (#1855). The Ed25519 private key stays
+outside the repository; set `MCP_PRIVATE_KEY` to its hex form, then:
+
+```bash
+mcp-publisher login http --domain aadhar.sh
+mcp-publisher publish config/mcp-registry/site.json
+mcp-publisher publish config/mcp-registry/serendipity.json
+```
+
+Each publish needs a version the registry hasn't seen for that name.
+
+---
+
 ## Route map (where each URL's code lives)
 
 Start with [`src/worker/routes.ts`](../src/worker/routes.ts), the one route
