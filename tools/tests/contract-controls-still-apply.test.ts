@@ -32,6 +32,12 @@ test("every control names a check that exists and words specific to it", () => {
     // which is the WRONG REASON verdict this harness exists to separate.
     for (const generic of ["error", "failed", "FAILED", "exit 1", ""])
       assert.ok(!c.expect.test(generic), `${c.id}: expect ${c.expect} matches the generic output ${JSON.stringify(generic)}`);
+    // test-inputs lists `  <file>.test.ts: <why>` on stdout and bun prints
+    // `(fail)` on stderr, and the harness joins the two pipes as they arrive.
+    // An expect spanning both read WRONG REASON in 2 of 2 full local runs on
+    // 2026-11-26, so it anchors on bun's own `<file>.test.ts:` header line.
+    if (c.run.includes("tools/test-inputs.ts"))
+      assert.ok(!/\.test\\\.ts: /.test(c.expect.source), `${c.id}: expect ${c.expect} anchors on test-inputs' stdout list`);
   }
 });
 
