@@ -83,6 +83,19 @@ export const SECURITY_HEADERS = {
   "referrer-policy": "strict-origin-when-cross-origin",
 };
 
+// Chrome leaves `document.modelContext` undefined for an ordinary visitor
+// unless the document carries this token, so without it webmcp.js registers
+// nothing (nav.js skips the import when there's no ModelContext). Chromestatus
+// lists the trial as Chrome 149 to 156, extended to 162; this token's payload
+// reads origin https://aadhar.sh:443, feature WebMCP, expiry 2027-03-30. It's a
+// header on every HTML response because every page loads nav.js, and the 65
+// sitemap pages all reach this function (each carries speculation-rules,
+// checked 2026-11-26), so _headers needs no copy. A lapsed or renewed trial
+// needs a new token from developer.chrome.com/origintrials; the test
+// contract-webmcp-origin-trial fails 30 days before this one expires.
+export const WEBMCP_ORIGIN_TRIAL =
+  "AgpCVjtSAP60jY6U9Y1zAu530HvFYuRHKMPbAg6vWN9PYED17DigmDPA6q9xp1EBJouUQRRDJfAdicT8Mi5jTw8AAABJeyJvcmlnaW4iOiJodHRwczovL2FhZGhhci5zaDo0NDMiLCJmZWF0dXJlIjoiV2ViTUNQIiwiZXhwaXJ5IjoxODA2MzY0ODAwfQ==";
+
 const HOMEPAGE_DISCOVERY_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
   '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
@@ -215,6 +228,9 @@ export function withSecurityHeaders(response, pathname?, opts?) {
   // HTML: the header means nothing on any other response. Empty in readable dev.
   if (SPECULATION_RULES && ct.startsWith("text/html") && !headers.has("speculation-rules")) {
     headers.set("speculation-rules", `"${SPECULATION_RULES}"`);
+  }
+  if (ct.startsWith("text/html") && !headers.has("origin-trial")) {
+    headers.set("origin-trial", WEBMCP_ORIGIN_TRIAL);
   }
   // Every HTML surface—static, deterministically rendered, or live—teaches the
   // browser the same immutable page dictionary. Static/deterministic routes can

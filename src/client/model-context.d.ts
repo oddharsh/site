@@ -13,8 +13,9 @@
 // notes below are the record of that, so the next person to touch this does not
 // re-derive them one exception at a time.
 //
-// The origin trial runs Chrome 149 through 156, so this interface has a
-// finite shelf life. Re-probe before trusting it in 157.
+// The origin trial runs Chrome 149 through 162 (extended from 156 on
+// 2026-09-28) and ends 2027-03-30, so this interface has a finite shelf life.
+// The token that turns it on is WEBMCP_ORIGIN_TRIAL in worker/lib/security.ts.
 
 /** A tool as it reads back out of `getTools()`. */
 interface RegisteredModelContextTool {
