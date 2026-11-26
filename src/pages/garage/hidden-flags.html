@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list</title>
+<title>aadhar.sh/garage/hidden-flags: Wrangler accepts 19 hidden flags whether they do anything</title>
 <meta name="description" content="Nineteen hidden flags in one CLI, and the control that tells an option being accepted apart from an option doing anything.">
 <link rel="canonical" href="https://aadhar.sh/garage/hidden-flags">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list">
+<meta property="og:title" content="aadhar.sh/garage/hidden-flags: Wrangler accepts 19 hidden flags whether they do anything">
 <meta property="og:description" content="Nineteen hidden flags in one CLI, and the control that tells an option being accepted apart from an option doing anything.">
 <meta property="og:url" content="https://aadhar.sh/garage/hidden-flags">
 <meta name="twitter:card" content="summary_large_image">
@@ -63,7 +63,7 @@
     <span class="controls"><span class="min" aria-hidden="true"></span><button type="button" class="max" title="maximize" aria-label="maximize"></button><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div><!-- /axp:window -->
   <main id="main" class="content prose">
-<h1>Flags the docs don't list</h1>
+<h1>Wrangler accepts 19 hidden flags whether they do anything</h1>
 <p class="garage-intro"><a class="term" data-t="wrangler" href="https://developers.cloudflare.com/workers/wrangler/" title="Cloudflare's command-line tool for developing, configuring and deploying Workers." rel="external">Wrangler</a> 4.125.0 carries nineteen flags marked hidden, so they appear in no help output and no documentation page. Reading them is easy. The hard part is that an option a tool silently ignores and an option it honours produce the same <a class="term" data-t="exit-code" href="https://en.wikipedia.org/wiki/Exit_status" title="The number a program reports when it finishes; 0 means success and anything else signals an error." rel="external">exit code</a>, the same output, and the same success. This page is about the control that separates those two, why it usually costs nothing, and four times the difference decided something real on this site.</p>
 
 <h2>The inventory</h2>

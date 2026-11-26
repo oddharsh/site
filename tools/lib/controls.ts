@@ -363,6 +363,32 @@ export const CONTROLS: Control[] = [
     expect: /contains em dashes/,
   },
   {
+    id: "garage-title-goes-back-to-a-fragment",
+    plants: "a Garage title in site-manifest.json goes back to a comma fragment",
+    mutations: [
+      {
+        file: "config/site-manifest.json",
+        find: `"title": "Cloudflare's cache fetches only the chunks a range read touches",`,
+        replace: `"title": "Ranges, chunk by chunk",`,
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /\/garage\/ranges: the title has a comma: Ranges, chunk by chunk/,
+  },
+  {
+    id: "garage-h1-drifts-from-its-title",
+    plants: "a hand-written Garage page's h1 says something other than its manifest title",
+    mutations: [
+      {
+        file: "src/pages/garage/wire.html",
+        find: "<h1>Brotli at q11 earned the site its first build step</h1>",
+        replace: "<h1>Bytes on the wire</h1>",
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /\/garage\/wire: the h1 says "Bytes on the wire" where site-manifest\.json says/,
+  },
+  {
     id: "footnote-href-drift",
     plants: "a footnote whose marker href no longer matches its note, so the hover bubble shows stale text",
     mutations: [
@@ -940,7 +966,7 @@ export const CONTROLS: Control[] = [
     mutations: [{ file: "src/worker/coffee.ts", find: "const status = payload.available ? 200 : 503;", replace: "const status = 503;" }],
     run: NARROWED,
     expect:
-      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts: [\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
+      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts:\n[\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
   },
   {
     id: "run-error-echoes-the-command-unescaped",
@@ -948,7 +974,7 @@ export const CONTROLS: Control[] = [
     gotcha: 111,
     mutations: [{ file: "src/worker/run.ts", find: "<b>Windows cannot find '${esc(cmd)}'.</b>", replace: "<b>Windows cannot find '${cmd}'.</b>" }],
     run: NARROWED,
-    expect: /contract-run-opens-any-page\.test\.ts: [\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
+    expect: /contract-run-opens-any-page\.test\.ts:\n[\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
   },
   {
     id: "mcp-parameter-loses-its-description",
@@ -982,6 +1008,6 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: NARROWED,
-    expect: /contract-inbox-and-census-are-built-documents\.test\.ts: [\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
+    expect: /contract-inbox-and-census-are-built-documents\.test\.ts:\n[\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
   },
 ];
