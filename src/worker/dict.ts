@@ -193,8 +193,8 @@ export const MEASURED = [
   ["shell assets (js/css)", "93-97% off, per-asset dictionaries"],
   ["pages, family corpus", "~26% off q11 (298,933 B vs 405,909 B across 38 pages)"],
   ["a dictionary 11 days stale", "still 87-93% — freshness matters far less than people fear"],
-  ["dcz vs dcb, size", "dcb wins by ~6.8% across 12 pairs"],
-  ["dcz vs dcb, decode", "dcz 0.0165ms vs brotli 0.1368ms on a 47KB rebuild — 8.3x"],
-  ["why dcz anyway", "decode scales with the REBUILD, not the delta, so a smaller dcb never closes it"],
+  ["dcz vs dcb, size", "dcb wins by 7.7% across 443 shipped pairs (2026-11-26)"],
+  ["dcz vs dcb, decode", "dcz 13.4us vs dcb 27.1us per rebuild in C, 2.0x"],
+  ["why dcz anyway", "close call: dcb's 97 B saved beats its extra decode only below ~57 Mbps on a laptop, ~19 Mbps on a phone"],
   ["zstd level 19 vs 22", "byte-identical on every asset here; above 19 is dead weight"],
 ];
