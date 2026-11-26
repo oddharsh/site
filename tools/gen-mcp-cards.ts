@@ -84,10 +84,34 @@ const serendipityCard = card({
   tools: SERENDIPITY_TOOLS,
 });
 
+// Each server's official MCP Registry entry, the file `mcp-publisher publish`
+// sends. Every field comes from the card, so a version bump moves both; the
+// registry keeps the last published entry until someone republishes. remotes[]
+// drops supportedProtocolVersions, which the registry's RemoteTransport has no
+// field for (2025-12-11 schema, read 2026-11-26).
+const REGISTRY_SCHEMA = "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json";
+
+function registryEntry({ name, title, description, version, websiteUrl, icons, remotes }) {
+  return {
+    $schema: REGISTRY_SCHEMA,
+    name,
+    title,
+    description,
+    version,
+    websiteUrl,
+    repository: { url: "https://github.com/oddharsh/site", source: "github" },
+    icons,
+    remotes: remotes.map(({ type, url }) => ({ type, url })),
+  };
+}
+
 await mkdir("public/.well-known/mcp", { recursive: true });
-const outputs = new Map([
+await mkdir("config/mcp-registry", { recursive: true });
+const outputs = new Map<string, object>([
   ["public/.well-known/mcp/server-card.json", siteCard],
   ["public/.well-known/mcp/serendipity.json", serendipityCard],
+  ["config/mcp-registry/site.json", registryEntry(siteCard)],
+  ["config/mcp-registry/serendipity.json", registryEntry(serendipityCard)],
 ]);
 for (const [file, value] of outputs) {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`);
