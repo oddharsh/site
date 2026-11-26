@@ -67,8 +67,7 @@ const imageInputProperties = {
 const imagePresetSchema = {
   type: "string",
   enum: ["web", "thumbnail", "universal", "og"],
-  description:
-    "explicit fields override it: web 1600w AVIF q82, thumbnail 600x600 cover AVIF q84, universal 1600w JPEG q84, og 1200x630 cover JPEG q82",
+  description: "explicit fields override it: web 1600w AVIF q82, thumbnail 600x600 cover AVIF q84, universal 1600w JPEG q84, og 1200x630 cover JPEG q82",
 };
 const imageFitSchema = {
   type: "string",
@@ -117,7 +116,11 @@ const HOSTED_TOOLS = [
           items: { type: "string", enum: ["avif", "webp", "jpeg"] },
           description: "output formats to encode, one variant each; defaults to all three",
         },
-        preset: imagePresetSchema,
+        preset: {
+          ...imagePresetSchema,
+          description:
+            "sets size, fit, and quality; each variant keeps its format: web 1600w q82, thumbnail 600x600 cover q84, universal 1600w q84, og 1200x630 cover q82",
+        },
         width: { type: "integer", minimum: 1, maximum: 2400, description: "output width in pixels, applied to every variant" },
         height: { type: "integer", minimum: 1, maximum: 2400, description: "output height in pixels, applied to every variant" },
         fit: imageFitSchema,
@@ -133,7 +136,10 @@ const HOSTED_TOOLS = [
       type: "object",
       properties: {
         stem: { type: "string", description: "published photo stem, the archive's id for a photo, as photo_query returns it" },
-        source_url: { type: "string", description: "an aadhar.sh archive URL: /images/full/ or a hashed /i/ tier" },
+        source_url: {
+          type: "string",
+          description: "an aadhar.sh archive URL: /images/full/<file>, /i/<stem>.<hash>.avif or .jpg, or /i/<stem>-400.<hash>.avif",
+        },
         image_data: { type: "string", description: "base64 bytes from a published thumbnail" },
       },
     },

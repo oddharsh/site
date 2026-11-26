@@ -1453,7 +1453,7 @@
               "universal",
               "og"
             ],
-            "description": "explicit fields override it: web 1600w AVIF q82, thumbnail 600x600 cover AVIF q84, universal 1600w JPEG q84, og 1200x630 cover JPEG q82"
+            "description": "sets size, fit, and quality; each variant keeps its format: web 1600w q82, thumbnail 600x600 cover q84, universal 1600w q84, og 1200x630 cover q82"
           },
           "width": {
             "type": "integer",
@@ -1512,7 +1512,7 @@
           },
           "source_url": {
             "type": "string",
-            "description": "an aadhar.sh archive URL: /images/full/ or a hashed /i/ tier"
+            "description": "an aadhar.sh archive URL: /images/full/<file>, /i/<stem>.<hash>.avif or .jpg, or /i/<stem>-400.<hash>.avif"
           },
           "image_data": {
             "type": "string",
