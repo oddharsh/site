@@ -368,6 +368,9 @@ export function renderDevelopersPage() {
     <p>In a client that supports Streamable HTTP, add <a href="/mcp">https://aadhar.sh/mcp</a> as a remote
       server. The <a href="/.well-known/mcp/server-card.json">server card</a> lists its tools and their
       schemas. Use <code>resources/list</code> to find published pages and <code>resources/read</code> to read them.</p>
+    <p>Both servers are listed in the official MCP Registry as
+      <a href="https://registry.modelcontextprotocol.io/v0.1/servers/sh.aadhar%2Fsite/versions/latest">sh.aadhar/site</a> and
+      <a href="https://registry.modelcontextprotocol.io/v0.1/servers/sh.aadhar%2Fserendipity/versions/latest">sh.aadhar/serendipity</a>.</p>
     <p>For event and attendee searches, see the <a href="/serendipity/mcp-info">Serendipity MCP setup guide</a>.</p>
 
     <h2>Endpoints</h2>
