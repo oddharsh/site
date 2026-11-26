@@ -210,6 +210,14 @@ skips it.
     `dispatchFetch` needs fetch to honour `{ dispatcher }`, which bun doesn't
     (oven-sh/bun#39247). Bun tests that dispatch through the harness wrap
     their body in `underNode()`. Check support per command, never per tool.
+    Wrangler's `createTestHarness()` hits the same bug: under bun it answers
+    every path 503 with a 219-byte note naming #39247 (measured 2026-11-26,
+    bun 1.4.4, node 26.13.1). That holds `routes:check`, `routes:check:remote`,
+    `browser:check`, `act:check` and `test:workerd` on node; under bun,
+    `browser:check` reads the 503 as an unstyled page and exits 2 (BLIND).
+    When the `fetch-honours-dispatcher` watch in
+    `tools/lib/upstream-watches.ts` reads landed, rerun those five under bun.
+    `cpu:sweep` (V8, like workerd) and `test:node` stay on node regardless.
     Checked by: nothing (judgment).
 
 39. **A dev server on your port may belong to another checkout.** Check the
