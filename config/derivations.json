@@ -230,7 +230,7 @@
       },
       "regenerate": "bun tools/gen-tool-schemas.ts",
       "recorded": {
-        "inputs": "12a21e12464140a55f1da2c56cae734473008d8f18ee8ae8bce98e466707d248",
+        "inputs": "b95d25cc898c72503969bcd11d74b0c724373d0a8e5153a4a458b2e8607a71d2",
         "count": 4
       }
     },
@@ -388,7 +388,7 @@
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
       "tools/gen-runtime-types.ts": "writes only gitignored files: config/.generated/ (the shared runtime declarations and cf-garage's cache key) and, through `wrangler build --x-new-config --x-cf-build-output` in cf-garage/, cf-garage/.cloudflare/ (its generated Env plus runtime types, and the build output tree that comes with them, keyed on the wrangler version and cloudflare.config.ts). For config/.generated/workers-runtime.d.ts: the Workers runtime declarations, a pure function of the wrangler pin (which pins workerd) and the config bytes, both of which its first line keys on so a stale file regenerates itself. Nothing committed can fall behind it, which is the same argument as the two build steps above, run at typecheck time instead of deploy time",
-      "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
+      "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list, and each config/mcp-registry/ entry against its card. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
       "tools/tests/photo-pipeline-fixture.ts": "the photo-pipeline contract tests' fixture: it writes stub encoders, shell copies and photos into a mkdtemp directory it deletes after each test, and nothing under the repository. Test files are outside this census; this module only moved out of contract-photo-pipeline-failures.test.ts so three files can share it.",
       "tools/dev-stage.ts": "writes and refreshes erased browser JavaScript in the ignored .dev-assets directory during local development. The source stays in src/client; contract-browser-typescript.test.ts checks edits and deletions through the watcher.",
       "tools/lib/served-tree.ts": "stages the declared served-tree plan into .build/public or .dev-assets, both ignored. Browser TypeScript is erased there; no committed artifact is generated. contract-served-tree-plan.test.ts checks both adapters and the authored-to-served mapping.",

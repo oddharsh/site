@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "sh.aadhar/serendipity",
+  "title": "Serendipity",
+  "description": "Community-curated events and who is going, from the Serendipity event pool. Read-only.",
+  "version": "2.0.0",
+  "websiteUrl": "https://aadhar.sh/serendipity/mcp-info",
+  "repository": {
+    "url": "https://github.com/oddharsh/site",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://aadhar.sh/section-icons/serendipity.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/serendipity/mcp"
+    }
+  ]
+}

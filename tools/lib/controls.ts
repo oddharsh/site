@@ -953,7 +953,7 @@ export const CONTROLS: Control[] = [
     mutations: [{ file: "src/worker/coffee.ts", find: "const status = payload.available ? 200 : 503;", replace: "const status = 503;" }],
     run: NARROWED,
     expect:
-      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts: [\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
+      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts:\n[\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
   },
   {
     id: "run-error-echoes-the-command-unescaped",
@@ -961,7 +961,27 @@ export const CONTROLS: Control[] = [
     gotcha: 111,
     mutations: [{ file: "src/worker/run.ts", find: "<b>Windows cannot find '${esc(cmd)}'.</b>", replace: "<b>Windows cannot find '${cmd}'.</b>" }],
     run: NARROWED,
-    expect: /contract-run-opens-any-page\.test\.ts: [\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
+    expect: /contract-run-opens-any-page\.test\.ts:\n[\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
+  },
+  {
+    id: "mcp-parameter-loses-its-description",
+    plants: "an /mcp tool parameter ships with no description, so an agent has to guess what to send",
+    mutations: [
+      {
+        file: "src/worker/lib/tools.ts",
+        find: 'limit: { type: "integer", minimum: 1, maximum: 200, description: "maximum events to return; defaults to 50" },',
+        replace: 'limit: { type: "integer", minimum: 1, maximum: 200 },',
+      },
+    ],
+    run: contract("contract-mcp-schemas-are-complete"),
+    expect: /find_events input\.limit: no description/,
+  },
+  {
+    id: "mcp-tool-output-goes-untyped",
+    plants: "a hosted /mcp tool drops its outputSchema and falls back to an object with no fields",
+    mutations: [{ file: "src/worker/mcp.ts", find: '    outputSchema: imageReceiptSchema("inspect", {}),\n', replace: "" }],
+    run: contract("contract-mcp-schemas-are-complete"),
+    expect: /image_inspect output: an object with no fields/,
   },
   {
     id: "inbox-mail-prints-the-author-unescaped",
@@ -975,6 +995,6 @@ export const CONTROLS: Control[] = [
       },
     ],
     run: NARROWED,
-    expect: /contract-inbox-and-census-are-built-documents\.test\.ts: [\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
+    expect: /contract-inbox-and-census-are-built-documents\.test\.ts:\n[\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
   },
 ];

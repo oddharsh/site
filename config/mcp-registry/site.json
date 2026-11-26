@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "sh.aadhar/site",
+  "title": "Aadharsh Site",
+  "description": "Search, photos, music, coffee availability, Lens and image tools for aadhar.sh. Keyless.",
+  "version": "2.1.0",
+  "websiteUrl": "https://aadhar.sh/developers#mcp",
+  "repository": {
+    "url": "https://github.com/oddharsh/site",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://aadhar.sh/bimi.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/mcp"
+    }
+  ]
+}

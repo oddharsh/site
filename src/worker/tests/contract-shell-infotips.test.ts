@@ -727,6 +727,7 @@ test("published MCP server cards and discovery files stay aligned with both live
       info: { name: SITE_MCP_SERVER_INFO.name, title: SITE_MCP_SERVER_INFO.title, version: SITE_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: true, prompts: false },
       icon: "/bimi.svg",
+      registry: "config/mcp-registry/site.json",
     },
     {
       file: "public/.well-known/mcp/serendipity.json",
@@ -735,9 +736,10 @@ test("published MCP server cards and discovery files stay aligned with both live
       info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: false, prompts: false },
       icon: "/section-icons/serendipity.svg",
+      registry: "config/mcp-registry/serendipity.json",
     },
   ];
-  for (const { file, endpoint, live, info, capabilities, icon } of cards) {
+  for (const { file, endpoint, live, info, capabilities, icon, registry } of cards) {
     const card = JSON.parse(await readFile(new URL(file, ROOT), "utf8"));
     assert.equal(card.protocolVersion, "2026-07-28", `${file} must advertise the current MCP revision`);
     assert.deepEqual(card.serverInfo, { ...info, description: card.serverInfo.description }, `${file} server identity drifted`);
@@ -760,6 +762,23 @@ test("published MCP server cards and discovery files stay aligned with both live
     // at a 404.
     assert.deepEqual(card.icons, [{ src: `https://aadhar.sh${icon}`, mimeType: "image/svg+xml", sizes: ["any"] }], `${file} icons`);
     assert.match(await readFile(new URL(`public${icon}`, ROOT), "utf8"), /^<svg[\s>]/, `${file} icon must be an SVG in public/`);
+    // The registry entry `mcp-publisher publish` sends carries the card's own
+    // identity, so a version bump can't reach one file and miss the other.
+    assert.deepEqual(
+      JSON.parse(await readFile(new URL(registry, ROOT), "utf8")),
+      {
+        $schema: "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        name: card.name,
+        title: card.title,
+        description: card.description,
+        version: info.version,
+        websiteUrl: card.websiteUrl,
+        repository: { url: "https://github.com/oddharsh/site", source: "github" },
+        icons: card.icons,
+        remotes: [{ type: "streamable-http", url: endpoint }],
+      },
+      `${registry} drifted from ${file}`,
+    );
   }
 
   const agentCard = JSON.parse(await readFile(new URL("public/.well-known/agent-card.json", ROOT), "utf8"));
