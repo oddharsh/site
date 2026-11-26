@@ -403,6 +403,12 @@ export const AGENT_SURFACES = [
     "description": "Five ways to start a page before the click, run over the same 65 cursor paths: how much head start each buys, and what each wrong guess costs."
   },
   {
+    "path": "/garage/controls",
+    "title": "Every check here proves it can still fail on each push",
+    "mimeType": "text/html",
+    "description": "A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one's defect in the browser and see which go blind."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -510,6 +516,7 @@ export const WEBMENTION_PATHS = [
   "/garage/round-trip",
   "/garage/ranges",
   "/garage/speculation",
+  "/garage/controls",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [
