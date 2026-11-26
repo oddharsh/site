@@ -190,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "2b2f9c936a96e3905468eb130680a3a3893439eaeb80b8e1f2168401c928e1f9",
+        "inputs": "81436726169ce728f9f236c04580e1a87f61f0e2ff53fb84ee2d2760129409af",
         "count": 2
       }
     },
@@ -209,8 +209,29 @@
       },
       "regenerate": "bun tools/gen-llms-api.ts",
       "recorded": {
-        "inputs": "77919979774706d2c0d05fbde9ce4bb5cd19c25e2e4adcfaa526b096ef3618d1",
+        "inputs": "5c1351701772c39d9e80b9df5b884dcfaec82fd41409c5fdffa7f17abd835518",
         "count": 2
+      }
+    },
+    {
+      "id": "mcp/tool-schemas",
+      "tier": "pinned",
+      "why": "gen-tool-schemas.ts inlines the REST schemas the MCP data tools reuse (their 200 bodies and parameter descriptions) from src/worker/lib/openapi.ts into src/worker/lib/tool-schemas.json, so the Worker imports a few KB of JSON instead of the OpenAPI registry, which cost 7.01 KiB gzip and evaluated all 30 components in every isolate (PR 1835, 2026-11-23). The inputs are the schema registry, the operations and limits it reads, and tools.ts, which names the operations. contract-mcp-tools-share-their-rest-schemas holds the committed file equal to toolSchemas().",
+      "outputs": [
+        "src/worker/lib/tool-schemas.json"
+      ],
+      "inputs": {
+        "paths": [
+          "src/worker/lib/openapi.ts",
+          "src/worker/lib/public-api.ts",
+          "src/worker/lib/api-limits.ts",
+          "src/worker/lib/tools.ts"
+        ]
+      },
+      "regenerate": "bun tools/gen-tool-schemas.ts",
+      "recorded": {
+        "inputs": "12a21e12464140a55f1da2c56cae734473008d8f18ee8ae8bce98e466707d248",
+        "count": 4
       }
     },
     {
@@ -345,9 +366,17 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/minify-pick.ts": "writes config/minify-picks.json, whose inputs are the build's readable twins (in .build, never committed) and spokeshave's engine versions, so no checkout can hash them here. Each pick records its own source sha256 and engine versions instead: the build ships oxc for a pick whose record no longer matches, and contract-minify-picks-behave-like-their-source runs the oracle on every pick that does.",
+      "tools/check-minify-diff.ts": "writes Chrome records into the directory it is handed, plus a seeded Worker entry under .build and the gitignored .wrangler.minify-diff.json. Nothing it writes is committed or served.",
+      "tools/user-bytes.ts": "writes only the file --save-traffic names: Workers Logs rows (UAs and network names, never an address) for a later --traffic replay. The caller picks the path, which belongs outside the repo; nothing is committed or served.",
+      "tools/paint-diff.ts": "writes only the Markdown report --out names, and copies tools/paint-serve.ts to tools/.paint-serve.ts in each checkout it boots, deleting both copies when it ends. perf-diff.yml posts the report as a PR comment; nothing is committed or served.",
       "tools/push-gate.ts": "writes only push-gate-passed in the worktree's git dir (git rev-parse --git-path), the tree ids that passed its gates, so a re-push of the same tree skips them. Never inside the tree, never committed or served.",
       "tools/test-inputs.ts": "trace writes the map of which repo paths each contract test file opened (--out, test-inputs.json by default) and per-file strace logs under a mkdtemp it deletes. The nightly workflow saves the map to the Actions cache; nothing is committed or served.",
+      "tools/served-pages.ts": "writes only the hash file named by its first argument, one hash per page this checkout's Worker serves. check-browser.ts passes a path beside the mkdtemp base worktree it builds and deletes both after reading it; nothing is committed or served.",
+      "tools/build-equivalence.ts": "edits and builds two copies of the tree (copy-on-write clones, or rsync copies under CI=true) inside a mkdtemp it deletes on exit, and compares their .build directories. It never writes the tree it runs from; nothing is committed or served.",
       "tools/controls.ts": "plants each guard's defect in a copy-on-write clone under a mkdtemp it deletes on exit, and writes the tree itself only under CI=true, where the checkout is private and every touched file is restored after its control. Nothing it writes is committed or served.",
+      "tools/sim.ts": "writes each shrunk or replayed event list under os.tmpdir()/aadhar-sim, and a run's trace only to the path SIM_TRACE names. Nothing it writes is committed or served.",
+      "tools/test-workerd.ts": "bundles the contract suite and writes bun's JUnit report under a mkdtemp it deletes before exiting, plus the --json report only when handed a path. Nothing it writes lands in the tree, and nothing is committed or served.",
       "tools/lib/controls.ts": "plant() writes the mutations of one control under the root its caller hands it, which tools/controls.ts makes a disposable clone (or the CI checkout, restored after); the contract suite calls it with dryRun, which writes nothing.",
       "tools/photos/og-video/record.ts": "writes recorded frames only under the scratch directory its caller names (bake.ts passes a mkdtemp it deletes after encoding), never into the tree. The shipped clips are bake.ts's job, which og/video declares.",
       "tools/photos/og-video/compare.ts": "writes its trial encodes, decoded frames and compare-<target>.json only under the scratch directory it is handed. It is the instrument that picked the knobs bake.ts ships with, and nothing it writes is committed or served.",
@@ -360,6 +389,7 @@
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
       "tools/gen-runtime-types.ts": "writes only gitignored files: config/.generated/ (the shared runtime declarations and cf-garage's cache key) and, through `wrangler build --x-new-config --x-cf-build-output` in cf-garage/, cf-garage/.cloudflare/ (its generated Env plus runtime types, and the build output tree that comes with them, keyed on the wrangler version and cloudflare.config.ts). For config/.generated/workers-runtime.d.ts: the Workers runtime declarations, a pure function of the wrangler pin (which pins workerd) and the config bytes, both of which its first line keys on so a stale file regenerates itself. Nothing committed can fall behind it, which is the same argument as the two build steps above, run at typecheck time instead of deploy time",
       "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
+      "tools/tests/photo-pipeline-fixture.ts": "the photo-pipeline contract tests' fixture: it writes stub encoders, shell copies and photos into a mkdtemp directory it deletes after each test, and nothing under the repository. Test files are outside this census; this module only moved out of contract-photo-pipeline-failures.test.ts so three files can share it.",
       "tools/dev-stage.ts": "writes and refreshes erased browser JavaScript in the ignored .dev-assets directory during local development. The source stays in src/client; contract-browser-typescript.test.ts checks edits and deletions through the watcher.",
       "tools/lib/served-tree.ts": "stages the declared served-tree plan into .build/public or .dev-assets, both ignored. Browser TypeScript is erased there; no committed artifact is generated. contract-served-tree-plan.test.ts checks both adapters and the authored-to-served mapping.",
       "tools/gen-dotfiles.ts": "public/dotfiles/macos.sh IS committed, and contract-dotfiles-script-matches-the-page.test.ts holds it byte-equal to the page data through the same renderer, the mcp-cards argument: a test over the artifact is stronger than a digest over its inputs",

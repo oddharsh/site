@@ -5,8 +5,8 @@
 // as a whole and are kept here, so no handler can forget one:
 //
 //   - the methods. A path in OPERATIONS answers the methods listed for it, plus
-//     HEAD where it has GET, plus OPTIONS. Anything else is a JSON 405 with an
-//     Allow header (RFC 9110 section 15.5.6), before the handler runs. Most of
+//     HEAD where it has GET, plus OPTIONS, which this answers itself with a 204
+//     naming the methods. Anything else is a JSON 405 with an Allow header (RFC 9110 section 15.5.6), before the handler runs. Most of
 //     these handlers never looked at the method, so a POST to /search.json used
 //     to read like a GET.
 //   - the rate. An operation with no limiter of its own (sharesReadBudget)
@@ -22,7 +22,8 @@
 // dispatch.ts calls apiPreflight before routing and withApiContract on every
 // answer from an API path, the preflight's refusals included.
 // Node-safe (gotcha 16).
-import { OPENAPI_PATH, OPERATIONS, sharesReadBudget, type Operation } from "./public-api.ts";
+import { OPENAPI_PATH, OPERATIONS, sharesReadBudget } from "./public-api.ts";
+import type { Operation } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { jsonResponse } from "./http.ts";
 import { overBudget, rateLimitPolicy, rateLimitedHeaders } from "./ratelimit.ts";
@@ -39,6 +40,12 @@ export function allowedMethods(ops: readonly Operation[]): string[] {
   if (methods.has("GET")) methods.add("HEAD");
   methods.add("OPTIONS");
   return ["GET", "HEAD", "POST", "OPTIONS"].filter((m) => methods.has(m));
+}
+
+/** The methods a documented API path answers, or null off the API. */
+export function apiMethods(pathname: string): string[] | null {
+  const ops = BY_PATH.get(pathname);
+  return ops ? allowedMethods(ops) : null;
 }
 
 const READ_BUDGETED: ReadonlySet<string> = new Set([...BY_PATH].filter(([, ops]) => ops.every(sharesReadBudget)).map(([path]) => path));
@@ -58,8 +65,13 @@ export async function apiPreflight(request: Request, pathname: string, env: unkn
       { allow: allow.join(", ") },
     );
   }
-  // OPTIONS is a question about the API rather than a read of it, so it is free.
-  if (request.method !== "OPTIONS" && READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
+  // OPTIONS is a question about the API rather than a read of it: free, and
+  // answered here, since 9 of the 13 handlers read it as a GET and 4 refused
+  // it (measured 2026-11-22). No CORS headers: only 5 of the 13 paths send
+  // access-control-allow-origin on their reads, so a preflight that granted
+  // more would promise what the read then withholds.
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { allow: allow.join(", ") } });
+  if (READ_BUDGETED.has(pathname) && (await overBudget(API_READ_BUDGET, request, env))) {
     return contractError(
       429,
       "rate_limited",

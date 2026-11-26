@@ -24,20 +24,22 @@ function instants() {
 }
 
 describe("slotLabels", () => {
-  it("formats exactly what toLocaleDateString and toLocaleTimeString did", () => {
-    const ts = instants();
-    let compared = 0;
-    for (const tz of ZONES) {
+  // One test per zone, because each toLocale call builds a formatter and all
+  // five zones in one test took 2.2 s of cal's 5 s clock (2026-11-18).
+  const ts = instants();
+  for (const tz of ZONES) {
+    it(`formats exactly what toLocaleDateString and toLocaleTimeString did in ${tz ?? "the default zone"}`, () => {
       const l = slotLabels(tz);
+      let compared = 0;
       for (const t of ts) {
         const d = new Date(t);
         if (l.day.format(t) !== d.toLocaleDateString("en-US", { timeZone: tz, ...DAY })) throw new Error(`day label differs at ${d.toISOString()} in ${tz}`);
         if (l.time.format(t) !== d.toLocaleTimeString("en-US", { timeZone: tz, ...TIME })) throw new Error(`time label differs at ${d.toISOString()} in ${tz}`);
         compared++;
       }
-    }
-    expect(compared).toBeGreaterThan(30_000);
-  }, 30_000);
+      expect(compared).toBe(6141);
+    });
+  }
 
   it("hands back the same formatters for a zone", () => {
     expect(slotLabels("America/New_York")).toBe(slotLabels("America/New_York"));

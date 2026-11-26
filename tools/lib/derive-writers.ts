@@ -65,7 +65,7 @@ const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", 
  */
 const VENDORED = new Set(["tools/photos/libavif/src", "tools/photos/libavif/build"]);
 
-const SCANNED = [".ts", ".mjs", ".js", ".py"];
+const SCANNED = new Set([".ts", ".mjs", ".js", ".py"]);
 
 /** A write, per language. Exact calls, never a loose path match. */
 const WRITES = [
@@ -97,7 +97,7 @@ export async function findWriters(root: string, roots: string[]): Promise<string
       }
       // A test that writes a fixture is not a generator of anything committed.
       if (entry.name.includes(".test.")) continue;
-      if (!SCANNED.includes(path.extname(entry.name))) continue;
+      if (!SCANNED.has(path.extname(entry.name))) continue;
       const src = await readFile(path.join(root, child), "utf8");
       if (WRITES.some((re) => re.test(src))) out.push(child);
     }

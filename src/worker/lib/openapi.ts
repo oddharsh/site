@@ -7,23 +7,8 @@
 // tests import it, so none of it ships in the Worker bundle.
 //
 // Node-safe (gotcha 16).
-import {
-  LEAVES_OUT,
-  OPERATIONS,
-  arr,
-  bool,
-  budgeted,
-  int,
-  limited,
-  nullStr,
-  num,
-  obj,
-  ref,
-  sharesReadBudget,
-  str,
-  type Operation,
-  type Schema,
-} from "./public-api.ts";
+import { LEAVES_OUT, OPERATIONS, arr, bool, budgeted, int, limited, nullStr, num, obj, ref, sharesReadBudget, str } from "./public-api.ts";
+import type { Operation, Schema } from "./public-api.ts";
 import { API_READ_BUDGET } from "./api-limits.ts";
 import { allowedMethods } from "./api-contract.ts";
 import { READINESS_STATUSES } from "./readiness-status.ts";
@@ -108,6 +93,7 @@ export const SCHEMAS: Record<string, Schema> = {
       results: arr(ref("AskResult")),
       _meta: obj({
         version: str(),
+        response_type: str(undefined, { const: "answer" }),
         dialect: str(undefined, { enum: ["legacy", "0.55"] }),
         retrieval: str(),
         ranking: str("Which ranker ran: Clef, or lexical with the reason."),
@@ -117,6 +103,22 @@ export const SCHEMAS: Record<string, Schema> = {
     },
     ["query_id", "results"],
     "NLWeb /ask answer, returned as one JSON body when streaming=0.",
+  ),
+  AskFailure: obj(
+    {
+      _meta: obj({ version: str(), response_type: str(undefined, { const: "failure" }) }, ["version", "response_type"]),
+      error: obj(
+        {
+          code: str("An NLWeb 0.55 failure code.", { enum: ["INVALID_QUERY", "UNSUPPORTED_MODE", "TOKEN_LIMIT"] }),
+          message: str("A sentence describing what went wrong."),
+        },
+        ["code", "message"],
+      ),
+      parameter: str("The request field that was wrong, where one was."),
+      results: arr(ref("AskResult"), "Always empty on a failure."),
+    },
+    ["_meta", "error"],
+    "NLWeb /ask failure (section 4.1.4). It replaces the site Error shape on /ask only.",
   ),
   PhotoMetadata: obj(
     {

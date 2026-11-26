@@ -1,0 +1,12 @@
+# A crate version published in the last 24 hours is skipped when Cargo
+# resolves (`cargo update`, `cargo generate-lockfile`, a new dependency): the
+# same window `bunfig.toml`'s `minimumReleaseAge = 86400` holds for npm.
+# Versions already in a Cargo.lock still build, so this never breaks a locked
+# build; it only stops a fresh resolution from taking a day-old release.
+#
+# Cargo reads this file from the directory it runs in and every parent, so it
+# covers each crate under tools/ whether cargo runs from the root with
+# --manifest-path (CI) or from inside the crate. Needs Rust 1.100 or later.
+# `cargo install` and git sources ignore it.
+[registry]
+global-min-publish-age = "1 day"

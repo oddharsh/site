@@ -35,7 +35,8 @@ import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "../lib/jsonc.ts";
 import { underNode } from "../lib/harness-dispatch.ts";
-import { configText, ROOT, assert, test } from "./contract-shared.ts";
+import { ROOT, assert, test } from "./contract-shared.ts";
+import { configText } from "./contract-config.ts";
 
 // Every shape the walker has an opinion about, plus production's own wrapper
 // down each of its three exits.
@@ -50,8 +51,9 @@ import { configText, ROOT, assert, test } from "./contract-shared.ts";
 // built: withSecurityHeaders stamps those in place and rebuilds nothing after
 // the noindex rebuild. So deleting that carry now fails the html noindex row
 // first; the svg row still isolates it on the image bail.
-const workerSource = (security) => `
+const workerSource = (security, assets) => `
 import { withSecurityHeaders } from ${JSON.stringify(security)};
+import { servePrecompressedShell } from ${JSON.stringify(assets)};
 
 const encoded = (bytes, type) => new Response(bytes, {
   encodeBody: "manual",
@@ -70,6 +72,12 @@ const SHAPES = {
 
 export default {
   async fetch(request) {
+    if (new URL(request.url).pathname === "/shell-fallback") {
+      const bytes = await request.arrayBuffer();
+      const target = new Request("https://example.test/a/nav.12345678.js", { headers: { "available-dictionary": "invalid" } });
+      const env = { ASSETS: { fetch: async (r) => new URL(r.url).pathname.endsWith(".br") ? new Response(null, { status: 404 }) : encoded(bytes, "text/javascript") } };
+      return servePrecompressedShell(target, env, new URL(target.url));
+    }
     const row = SHAPES[new URL(request.url).pathname];
     if (!row) return new Response("unknown shape", { status: 404 });
     const [type, shape] = row;
@@ -100,7 +108,10 @@ test(
     // flags would be a measurement of a different runtime.
     const site = parseJsonc(await configText("cloudflare.config.ts"));
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "encodebody-")));
-    writeFileSync(join(dir, "worker.js"), workerSource(fileURLToPath(new URL("src/worker/lib/security.ts", ROOT))));
+    writeFileSync(
+      join(dir, "worker.js"),
+      workerSource(fileURLToPath(new URL("src/worker/lib/security.ts", ROOT)), fileURLToPath(new URL("src/worker/lib/assets.ts", ROOT))),
+    );
     writeFileSync(
       join(dir, "wrangler.jsonc"),
       JSON.stringify({
@@ -140,6 +151,10 @@ test(
       for (const path of ["/untouched", "/response-init"]) {
         assert.deepEqual(await decodedOnce(await send(path)), PAGE, `${path}: a client decoding once did not get the page back`);
       }
+
+      const shell = await send("/shell-fallback");
+      assert.equal(shell.headers.get("cdn-cache-control"), "no-store");
+      assert.deepEqual(await decodedOnce(shell), PAGE, "shell identity fallback double-encoded an already compressed response");
 
       // Production's wrapper. The header assertions are what stop these rows
       // passing vacuously: a withSecurityHeaders that bailed before its rebuild

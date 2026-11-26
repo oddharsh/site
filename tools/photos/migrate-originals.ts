@@ -54,7 +54,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { type IndexEntry, pretty, sortKeysDeep } from "./pipeline-json.ts";
+import { pretty, sortKeysDeep } from "./pipeline-json.ts";
+import type { IndexEntry } from "./pipeline-json.ts";
 
 const ROOT = path.resolve(import.meta.dir, "../..");
 const INDEX = path.join(ROOT, "src/worker/photo-index.json");
@@ -133,7 +134,7 @@ let writing = Promise.resolve();
 const record = (stem: string, row: IndexEntry) => {
   index[stem] = row;
   writing = writing.then(() => {
-    fs.writeFileSync(`${INDEX}.tmp`, pretty(sortKeysDeep(index as never)));
+    fs.writeFileSync(`${INDEX}.tmp`, pretty(sortKeysDeep(index)));
     fs.renameSync(`${INDEX}.tmp`, INDEX);
   });
   return writing;

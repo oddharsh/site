@@ -50,7 +50,7 @@ type PlannedField = {
   // header gives (no module graph on /lens), and the same constraint applies
   // here: it cannot import _worker.js/lib/parse.js. Every value below arrives
   // from a stranger's MCP server, so it is parsed once, by name, at the top.
-  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+  /* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
      of typeof; keeping those checks in these three lines is the whole point. */
   function asText(v) {
     return typeof v === "string" && v !== "" ? v : null;
@@ -61,7 +61,7 @@ type PlannedField = {
   function asRecord(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
   }
-  /* oxlint-enable anti-slop/no-runtime-typeof */
+  /* oxlint-enable no-restricted-syntax */
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -862,15 +862,25 @@ type PlannedField = {
         copy.addEventListener("click", function () {
           // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
           var btn = this;
+          // lens.js owns the live region; it exists before this module loads
+          var live = document.getElementById("lx-copy-status");
+          var announce = (msg) => {
+            if (live) live.textContent = live.textContent === msg ? msg + "\u00A0" : msg;
+          };
           navigator.clipboard.writeText(curlPre.textContent).then(
             () => {
+              announce("Copied");
               btn.textContent = "Copied";
               setTimeout(() => {
                 btn.textContent = "Copy curl";
               }, 1200);
             },
             () => {
+              announce("Copy failed");
               btn.textContent = "Copy failed";
+              setTimeout(() => {
+                btn.textContent = "Copy curl";
+              }, 1200);
             },
           );
         });

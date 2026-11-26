@@ -64,7 +64,7 @@ skips it.
     real workerd. Also: the Worker sees a rewritten `Accept-Encoding`, and the
     edge down-converts br for clients that don't take it, so don't negotiate
     compression in the Worker.
-    Checked by: `tools/tests/contract-encodebody-survives-a-rebuild-in-workerd.test.ts`, `tools/tests/contract-the-speculation-ledger.test.ts`.
+    Checked by: `tools/tests/contract-encodebody-survives-a-rebuild-in-workerd.test.ts`, `src/worker/tests/contract-the-speculation-ledger.test.ts`.
 
 14. **Deltas are dcz (zstd), plain responses are brotli q11.** dcz wins on
     decode time, which scales with the reconstruction rather than the delta.
@@ -86,7 +86,7 @@ skips it.
     else is also imported by the contract suite outside workerd. Tracing is
     injected (`installTracing`) instead. Nothing cal imports may reach
     `cloudflare:workers`, directly or transitively.
-    Checked by: `tools/tests/contract-census-never-publishes-a-refused-check.test.ts`.
+    Checked by: `src/worker/tests/contract-census-never-publishes-a-refused-check.test.ts`.
 
 17. **`script-src` is per-document sha256 hashes, computed at build.**
     `lib/csp-hashes.ts` ships empty and build step 7c fills it; a path with no
@@ -96,7 +96,7 @@ skips it.
     (`islandResponse`, cal's slot list) send `script-src 'self'` with no
     hashes, since `innerHTML` never runs their scripts. `bun run csp:sweep` is
     the browser check; perturb one script as its control.
-    Checked by: `tools/tests/contract-worker-pages-hash-their-inline-scripts.test.ts`.
+    Checked by: `src/worker/tests/contract-worker-pages-hash-their-inline-scripts.test.ts`.
 
 18. **`scrollbar-color` inherits and disables `::-webkit-scrollbar` rules.**
     So does a non-auto `scrollbar-width` on the element itself. Reset to
@@ -121,12 +121,12 @@ skips it.
     rather than falling back, so it comes from config, never a literal.
     Gateway caching stays off where a repeated request should get a fresh
     answer.
-    Checked by: `tools/tests/contract-serendipity-event-tags.test.ts`.
+    Checked by: `src/worker/lib/tests/contract-serendipity-event-tags.test.ts`.
 
 24. **`deploy:promote` reads `checkpoints.json` from your working tree.** Ramp
     from a fresh worktree at `origin/main`, or the changelog row is silently
     skipped.
-    Checked by: `tools/deploy-promote.ts`, `tools/tests/contract-encode-read-the-container-decode-nothing.test.ts`.
+    Checked by: `tools/deploy-promote.ts`, `src/worker/tests/contract-encode-read-the-container-decode-nothing.test.ts`.
 
 25. **After changing a secret, don't ramp a version built before the change.**
     Secret versions carry no alias, so the ramp skips them; a version built
@@ -137,7 +137,7 @@ skips it.
 26. **`run_worker_first` caps at 100 RAW rows.** Duplicates count. The list is
     derived from `src/worker/routes.ts`; check for a covering wildcard before
     adding a row. `wrangler deploy --dry-run` catches an over-cap config.
-    Checked by: `tools/tests/contract-the-route-list-derives-every-route-list.test.ts`.
+    Checked by: `src/worker/tests/contract-the-route-list-derives-every-route-list.test.ts`.
 
 27. **A red `github-advanced-security` check is usually Copilot's agent
     failing, not your diff.** The tell is `CAPIError: 400` in the job log
@@ -197,7 +197,7 @@ skips it.
     off `cpuTime`, never status codes. Pin a version with the FULL UUID in
     `Cloudflare-Workers-Version-Overrides`. A workflow's conclusion doesn't
     say whether a release shipped: ask `bun run deploy:promote --status`.
-    Checked by: `tools/tests/contract-lens-compare-stays-under-the-subrequest-cap.test.ts`, `tools/tests/contract-no-cron-tick-outspends-the-subrequest-cap.test.ts`.
+    Checked by: `src/worker/tests/contract-lens-compare-stays-under-the-subrequest-cap.test.ts`, `src/worker/tests/contract-no-cron-tick-outspends-the-subrequest-cap.test.ts`.
 
 37. **`Bun.Image` is the OS imaging stack.** It's fine for a throwaway
     thumbnail and wrong for a served tier: fatter output, no 16-bit HEIF
@@ -371,9 +371,13 @@ skips it.
     changed no Worker byte. Refitting the factor wouldn't have saved it: a
     factor is a model's usual runner, and this runner was unusual. The control's
     spread (its IQR) missed it too, at 0.30 ms, because a host that's slow all
-    over reads tight. Its median caught it, 33% over the reference where
-    ordinary runs stay within 16%, so `config/cpu-budget.json` `control` now
-    makes such a run inconclusive.
+    over reads tight. Its median caught that runner, 33% over its reference,
+    and missed the next ones: a slow 9V74 slows a 2 ms route less than a 15 ms
+    one, so on #1771's run the control read +6.5% while every heavy route read
+    1.24 to 1.40x and `/radar` failed. Now the heavy routes judge the host:
+    `config/cpu-budget.json` `reference` holds each one's usual median, and
+    a run whose routes read more than 15% off it, at the median ratio, is
+    inconclusive. The median keeps the route a PR slows from excusing itself.
     Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
 
 58. **Cloudflare's on-demand CPU profile reads wall time on a quiet Worker.**
@@ -469,7 +473,7 @@ skips it.
     invocation, one subrequest) or `withSelfFetch` (in-process, the same
     budget). The workerd cron test couldn't see it because the harness
     has no AI binding or secrets, so the dispatch skipped before it fetched.
-    Checked by: `tools/tests/contract-every-cron-fires-in-workerd.test.ts`, `tools/tests/contract-the-luma-session-jar.test.ts`.
+    Checked by: `src/worker/tests/contract-every-cron-fires-in-workerd.test.ts`, `src/worker/lib/tests/contract-the-luma-session-jar.test.ts`.
 
 65. **A catch on the promise you await doesn't clear the one you handed
     `ctx.waitUntil`.** index.ts's cron helper passes the same promise to
@@ -762,7 +766,7 @@ skips it.
     asset layer ignores `Range` (a `bytes=0-99` on `/og/home.jpg` came back
     200 with all 105,441 bytes), so anything a player streams goes through
     the Worker.
-    Checked by: `tools/tests/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
+    Checked by: `src/worker/tests/contract-og-video-plays-for-the-bots-that-play-it.test.ts`, `tools/verify-routes.ts`.
 
 84. **libavif 1.3.x's avifenc mis-scales gray PNGs whenever depth or range
     changes.** 1.3.0 stopped routing gray PNGs through RGB, and its new gray
@@ -970,7 +974,7 @@ skips it.
     production only when its rows say so: `aadhar_misses` carries the
     hostname as blob5, and old versions write none, so `blob5 = 'aadhar.sh'`
     drops them as well.
-    Checked by: `tools/tests/contract-a-404-says-where-the-pages-are.test.ts`.
+    Checked by: `src/worker/tests/contract-a-404-says-where-the-pages-are.test.ts`.
 
 97. **A flex row with a text input, or a wide `<pre>` or table, scrolls the
     whole window sideways on a phone.** An `<input>` keeps its 20-character
@@ -989,7 +993,9 @@ skips it.
     real rows widened them, so a data table scrolls in its own box.
     `bun run browser:check` opens every manifest page in Chrome at 320, 360
     and 390px, plants a 600px block first to prove it can fail, and takes
-    `--base https://aadhar.sh` to read the deployment.
+    `--base https://aadhar.sh` to read the deployment, which
+    `production-browser.yml` does every night, since the rows change without
+    a deploy.
     Checked by: `tools/check-browser.ts`.
 
 98. **A script that builds what the reader is looking at moves the page
@@ -1038,4 +1044,302 @@ skips it.
     `shouldUseWorkersCache` refuses the request, so audit the inner tier with
     a query string (`?probe=1`), which skips the front tier and keeps the same
     Cache API key.
-    Checked by: `tools/tests/contract-photo-jxl-originals.test.ts`.
+    Checked by: `src/worker/tests/contract-photo-jxl-originals.test.ts`.
+
+101. **Every PNG djxl writes carries gAMA and cHRM, so a scorer that refuses
+    those chunks refuses all of hif-archive.ts.** photo-metrics decodes
+    every PNG as plain sRGB, while libjxl's `ssimulacra2` and
+    `butteraugli_main` honour the file's colour chunks, so photo-metrics
+    refuses the ones that would split them. The obvious list (iCCP, cICP,
+    gAMA, cHRM) is wrong: djxl 0.13.0 tags every decode with sRGB (intent
+    1), gAMA 45455 and cHRM, and sips and ImageIO write a bare sRGB. libjxl
+    lets sRGB outrank gAMA and cHRM whatever their values. On 2026-11-14,
+    same pixels with only the tag spliced in, sRGB alone or beside any
+    gAMA and cHRM scored exactly as untagged, and gAMA alone moved
+    libjxl's ssimulacra2 by 4.15 to 6.08. So the rule is: refuse iCCP and
+    cICP always, gAMA and cHRM only without sRGB. The crate's cargo tests
+    `scores_srgb_tags_exactly_as_untagged` and
+    `refuses_a_colour_chunk_libjxl_would_honour` run in `validate`.
+    Checked by: `tools/photos/photo-metrics/src/main.rs`.
+
+102. **Under Playwright's `isMobile`, Chrome marks every layout shift
+    `hadRecentInput`, so a reading that skips those reads 0 on a phone.**
+    browser:check skipped input-driven shifts the way CLS does, and its
+    phone load used `isMobile: true`. On 2026-11-16 a 300px block pushed in
+    above /search's content read 0.0696 with `hadRecentInput: true` at
+    390px, and 0.025 with it false at 1280px; `hasTouch` alone left it
+    false. The shift plant only ran at 1280px, so the 390px reading had read
+    0 on every page since 2026-11-10 and nothing said so. The harness sends
+    no input, so it counts every shift, and `controls()` plants a shift in
+    each viewport the run reads.
+    Checked by: `tools/check-browser.ts`.
+
+103. **`content-visibility: auto` paints its placeholder size first, and
+    its paint containment hides what overflows.** `.msg` in
+    `src/styles/lwe-base.css` carried it with `contain-intrinsic-size: auto
+    90px`. On 2026-11-16, under 4x CPU throttle at 390px, Chrome's first
+    frame drew every message at 90px, messages in view included, and the
+    next laid out their real heights: /lwe/knots read 0.050, /lwe/smoothing
+    0.064. With it removed, /lwe/vigenere scrolled sideways at 320 to 390px,
+    because the containment had been clipping a 40-letter `<code>` key out
+    of sight rather than wrapping it. It bought nothing measurable: /lwe/dac,
+    7,138px of messages, read first paint 252 vs 256 ms and style plus
+    layout 216.6 vs 215.4 ms with and without, 10 loads each.
+    Checked by: `tools/check-browser.ts`.
+
+104. **`bun lint` reads an oxlint or ESLint config from any directory above
+    the repo, and one there rules bunfig.toml's `[lint]`.** The search runs
+    to the filesystem root, past `.git`, on purpose (oven-sh/bun#49225). A
+    worktree under `.claude/worktrees/` sits inside the main checkout, which
+    has an `.oxlintrc.json` whenever its branch predates 2026-11-17. On that
+    day, with the rules moved into `[lint]`, every nested worktree's lint
+    refused to run: oxlint's schema rejected `[lint]`'s Bun-only options and
+    the error named the main checkout's file (oven-sh/bun#49224). An empty
+    `.oxlintrc.json` or `eslint.config.js` in the repo doesn't stop the
+    search, and `configLookup = false` lints 0 files and exits 0. `flavor =
+    "eslint"` under `[lint]` ignores oxlint configs and kept the same 28
+    findings; an `eslint.config.js` above still applies. The lint script
+    runs `tools/check-bun-lint.ts` first, which fails unless `bun lint
+    --doctor` reads bunfig.toml alone; the controls
+    `lint-reads-an-eslint-config` and `lint-flavor-key-dropped` plant both
+    defects.
+    Checked by: `tools/check-bun-lint.ts`.
+
+105. **A test beside its module is suite code, and everything that walks `src/`
+    for the program has to skip it.** Since 2026-11-18, a test covering one
+    `src/` directory lives in that directory's `tests/`. The first build of
+    that layout staged 5 client tests into `.build/public/` as
+    `/garage/tests/*.test.js` with Brotli twins, because the served tree
+    transpiles every `.ts` under `src/client/`. 9 contract tests that scan
+    "every Worker module" (gotcha 16's `cloudflare:workers` check, the
+    encodeBody walk, the lazy-import census) failed on fixtures the moved
+    tests quote. `inTestsDir` in `tools/lib/test-roots.ts` is the one
+    definition: the served tree, the build's source walkers, the Worker
+    staging, the typecheck's program split and each scanner use it. A new
+    walker over `src/` needs it too; the control
+    `served-tree-takes-in-client-tests` plants the served-tree half.
+    Checked by: `tools/tests/contract-tests-live-beside-what-they-cover.test.ts`.
+
+106. **The speculation ledger never sees a speculation that Workers Cache
+    answers.** `countSpeculativeLoad` runs in the dispatcher, and a cache hit
+    returns before the dispatcher runs. `Sec-Purpose` doesn't bail a request
+    out of the cache, so every speculation of a `CACHEABLE_PATHS` path (`/`,
+    `/writing`, `/about` and 26 more) or a `/writing/` post counts only on a
+    miss. The activation beacon goes to `/ledger/prefetch`, which is never
+    cached, so it counts every activation. On a cacheable page `rate` reads
+    high; read it as an upper bound. The `reached` split counts activations
+    alone and carries no bias. Measured on production 2026-11-19: a prerender
+    request to `/writing` came back `cf-cache-status: HIT` with no Worker log
+    line and no ledger row, while one to `/garage/ranges`, which isn't
+    cacheable, wrote its row within a second.
+    The check fails once a speculation stops riding Workers Cache, and this
+    entry can retire then.
+    Checked by: `src/worker/tests/contract-the-speculation-ledger.test.ts`.
+
+107. **The CPU sweep charges a route for node's platform code.** Each sample
+    is a fresh node process, and node implements `crypto.subtle` and body
+    streams in JS it loads and compiles per isolate, where workerd binds them
+    natively. #1746 put every POST body through `getReader()` and a SHA-256
+    (`readResponseCapped`), and from 2026-11-20 `POST /mcp search_site` read
+    14 to 22 ms against 9 to 12 before, failing 20 runs in a day on all three
+    CI models. The sweep now warms both in the timed isolate before timing,
+    as it does ICU (in a throwaway one, since ICU is per process), and
+    `--cold-platform` skips that, as the control. A warm-up also moves GC:
+    every byte allocated before the timed request decides whether a
+    scavenge lands inside it, and on CI three warm-up passes took
+    `/photos/query.json` from 13.9 to 17.4 ms. So the sample runs a minor
+    GC right before timing, as a fresh workerd isolate starts near empty.
+    A route that reaches another node-only lazy path pays it the same way:
+    compare its reading under node against workerd before trusting a jump.
+    Checked by: `tools/tests/contract-cpu-sweep-can-tell-slow-from-fast.test.ts`.
+108. **A check that stops when the page has loaded has read none of what
+    the page does.** `browser:check` reads 77 pages while they load; 44 of
+    them carry about 880 controls between them (sliders, filters, pickers,
+    demo buttons), and until 2026-11-20 nothing had operated one. `bun run
+    act:check` presses, slides, picks and types into each at 390px and reads
+    four things after: a thrown error, a press that caused nothing, one
+    task over 300 ms under 4x CPU throttle, a page left wider than the
+    phone. The first sweeps flagged 132 controls and then none: 519
+    operated, no error, no page widened, and nothing dead or slow that was
+    not built to be. Everything it flagged was the instrument, and each
+    fix is a rule it keeps: scroll a control to mid-screen and wait
+    before pressing it, since a lazy demo starts only when it nears the
+    screen and a `content-visibility` section moves the control as it
+    lands; close whatever the last press opened; give a press that has
+    caused nothing a second look 750 ms later; and call only a BUTTON dead,
+    since a field, slider, select or radio holds its value whether or not a
+    script answers; leave the shell's own DOM changes out, which made the
+    inert plant read alive in 1 run of 7; and make a slow press repeat on a
+    fresh page, since /garage/horizon's "Pop out" read 338 ms once and 136
+    to 187 ms in six presses alone. It plants four buttons in /search first (one throws, one
+    is inert, one spins 400 ms, one widens the page), and
+    `config/interaction-budget.json` holds the buttons that are inert or
+    slow on purpose. It runs against the local Worker only: it presses
+    everything, and a deployment has real writes behind some of it.
+    Checked by: `tools/check-interactions.ts`.
+
+109. **Chrome at 390px is not an iPhone.** Every phone reading
+    `browser:check` took until 2026-11-20 came from Chrome with a narrow
+    window, and every browser on an iPhone runs WebKit. WebKit draws text,
+    emoji and `<select>`s at other widths: 15 pages that passed in Chrome
+    scrolled sideways in WebKit at 320px (13 /lwe pages by 11px, on one
+    `nowrap` button labelled with an emoji; /access by 19px, on a select as
+    wide as its longest option; /garage/compression by 17px). `--engine
+    webkit` reads the phone widths there, in CI and in the nightly
+    production sweep. Three traps on the way: WebKit applies
+    `upgrade-insecure-requests` to http://127.0.0.1 where Chrome exempts
+    loopback, so every stylesheet failed a TLS handshake and the first
+    sweep read 77 UNSTYLED pages as 255 sideways scrolls, which is why the
+    check now refuses a control page whose taskbar is not `position:
+    fixed`; WebKit on Linux honours `::-webkit-scrollbar` where iOS
+    overlays, which read 16px of overflow no phone has; and WebKit has no
+    layout-shift entries and reports an inline handler's CSP violation only
+    when it fires, so those two readings are named as NOT READ there rather
+    than passed. Its fonts are still Linux's, so a pass is the conservative
+    reading here too.
+    Checked by: `tools/check-browser.ts`.
+
+110. **A control can work for a mouse and not exist for a keyboard or a
+    screen reader, and reading that from a script goes wrong three ways.**
+    `act:check` asks of every control whether Chrome's accessibility tree
+    names it, whether Tab can land on it, whether landing there draws
+    anything, and, for a control that is not a native one, whether Enter or
+    Space works it. All 519 controls passed on 2026-11-21, after three
+    wrong readings on the way. A scripted `focus()` after a press draws no
+    ring, since `:focus-visible` follows the last input: 406 of 519 read
+    ringless until the check forced the pseudo-class through the DevTools
+    protocol and compared what was drawn. A `content-visibility` section
+    that has not been scrolled to has no accessibility nodes: 27 buttons
+    with plain text labels on /garage/horizon read nameless from the top of
+    the page. And a modal the last press opened makes the rest of the page
+    inert, which reads as no name and no focus. So it scrolls to a control,
+    closes what is open, then reads. Parsing a name out of an ARIA
+    snapshot's YAML also failed, on every label holding a colon or an
+    apostrophe; the tree's own `name.value` does not. Four planted controls
+    prove each reading can fail, and three plain ones prove it can pass.
+    Checked by: `tools/check-interactions.ts`.
+
+111. **A helper every test imports makes its imports an input of every
+    test, and a directory listing is an input only of its names.** Traced
+    selection (`tools/test-inputs.ts`) reruns a test file when the diff
+    touches a path its trace opened, and bun opens every module a test
+    loads. Until 2026-11-22 `tools/tests/contract-shared.ts` re-exported 107
+    Worker and tool names beside `test` and `assert`, and all 263 tests that
+    import it loaded the Worker. It now imports node builtins and nothing
+    from the repo: a test imports a Worker name from the module that owns
+    it, and a shared helper that needs a repo module gets its own file
+    (`contract-config.ts`, `contract-terminal.ts`). That alone moved
+    nothing, because `bun test`'s discovery walk lists all 306 directories
+    for every file, and `select` matched any changed path against a listed
+    directory. A listing returns names, so it now matches only paths the
+    change adds, removes or renames. Replayed over the 40 merges to
+    39715522: 11,949 of 12,240 file runs before, 7,742 of 12,280 after; a
+    one-file edit to a route handler selects 45 to 158 files (median 49)
+    where it selected 306. The floor under a handler is real: 31
+    whole-tree scanners read every Worker file as text, 11 tests read the
+    build, and 7 always run. The control
+    `contract-shared-imports-a-worker-module` plants a re-export.
+    Checked by: `tools/tests/contract-the-shared-test-helpers-import-nothing-from-the-repo.test.ts`, `tools/tests/contract-test-inputs-select-what-a-diff-can-reach.test.ts`.
+112. **A precompressed body is not what ships if a zone feature rewrites
+    HTML.** Cloudflare Fonts decodes an encoded response to look for
+    Google Fonts links, then re-encodes at the edge's own level and drops
+    the ETag. Rocket Loader, Automatic HTTPS Rewrites, Email Obfuscation,
+    Polish, JavaScript detections and RUM are on the same decompress list. Nothing on this
+    site's pages matches what they rewrite, so the bytes come back
+    identical and only the encoding changes, which is why it hid behind
+    `encodeBody: "manual"` (gotcha 13) doing its job in the Worker. On
+    2026-11-22 every built page with a q11 twin shipped 15 to 20% over it
+    (/garage/horizon 138,635 B against 113,173 B) with no validator
+    until Fonts went off at 03:09 UTC,
+    while the same version's workers.dev preview served the twin
+    exactly. dcz deltas pass through, because the edge cannot decode
+    them. Compare a page against its preview rather than against a local
+    q11, since the preview runs the same Worker without the zone. A
+    `-br` etag on `/` is the cheap tell: only the twin path mints one, and the edge check `html-twin-reaches-the-wire` (`bun run infra:check`) reads it.
+    Checked by: `config/infra.json`, `tools/tests/contract-infra-check-compares-declared-against-observed.test.ts`.
+113. **A built page ships short class names, so a check that greps one for an
+    authored class finds nothing.** Build step 5e renames 1,121 of the site's
+    1,724 class names across the staged tree (`tools/lib/class-names.ts`,
+    through spokeshave's census). `.window` stays `.window` only because
+    the census couldn't rule it out. `.title-bar` ships as a one- or
+    two-letter name. On 2026-11-22 two contract tests and two route-oracle
+    markers matched `axp-address`, `axp-here`, `xp-day-label` and
+    `tool-out` in built output, and all four failed on the first renamed
+    build. The build writes its map to `.build/class-names.json`, outside
+    the served tree. A check reading built pages, the built Worker's
+    responses or `/a/` assets looks a class up there first. A readable
+    `.src.*` twin keeps the authored names. A check that greps built output
+    for any other class name also needs a floor, the way the Explorer-chrome
+    test counts its matches, or it passes on zero. A build step after 5e
+    asks `servedClass`, and a browser tool that can't read the map names
+    its classes in `TOOLING_RESERVED` (`tools/lib/class-names.ts`), which
+    the rename leaves alone. The Explorer-chrome test's floor fails when
+    its lookup is dropped, and the route oracle's `/dict` and
+    `/coffee/slots.html` markers fail the same way.
+    Checked by: `src/worker/lib/tests/contract-explorer-chrome-escapes-a-heading-once.test.ts`, `tools/verify-routes.ts`.
+
+114. **In Workers Logs, a request's `accept-encoding` header is the edge's,
+    so every visitor seems to refuse dcz.** The Worker sees Accept-Encoding
+    after Cloudflare rewrites it (`src/worker/lib/assets.ts`, "A WORKER
+    CANNOT NEGOTIATE COMPRESSION"), and the log records that copy: in the week to
+    2026-11-22, no document row carried `dcz` there, while 109
+    of the same 474 rows carried the client's own `dcz` in
+    `cf.clientAcceptEncoding`. A traffic weight built on the header says no
+    visitor ever takes a dictionary delta. Read `cf.clientAcceptEncoding`,
+    and read `available-dictionary` beside it, since Chromium offers dcz only
+    with a dictionary to name. Two more traps sit in the same rows: the logs
+    are head-sampled (each row has `sampleInterval` 10, so weight by it,
+    never count rows), and of the 109 rows that held a dictionary that week,
+    93 were headless tools (browser:check, runtime-dcz-probe, curl), so a
+    dictionary is no proof of a person.
+    Checked by: `tools/tests/contract-user-bytes-prices-a-visit-by-what-the-visitor-holds.test.ts`.
+115. **A Bun worker whose module statically imports a top-level `await` drops
+    a message posted while that await settles.** Build step 5e proves its class
+    rename on a worker thread (`tools/lib/class-names-proof.ts`). The first
+    version imported `spokeshave/classes` at the top, and that module awaits
+    terser's files when it loads. A static import holds the worker's body
+    until the await settles, and the event loop runs in the meantime, so the
+    job the build posted was delivered with no `onmessage` set and was
+    dropped. No error, no close event: the proof never answered, and a
+    script waiting on it exited without printing. The handler is now set
+    first and imports the census inside it, and `proveRename` fails after 60
+    s with no answer rather than waiting forever. A worker that loads
+    anything asynchronous sets its handler before it loads.
+    Checked by: `tools/tests/contract-class-names-keep-page-edits-out-of-the-shell.test.ts`.
+116. **A readable twin keeps authored class names while its critical sheet
+    carries renamed selectors.** Deriving the twin's subset from its own
+    markup drops rules the served page keeps. CSS extraction exposed this on
+    2026-11-23 when `/lwe` first fit the non-blocking CSS budget: its served
+    document was 54,742 characters against a 54,610-character readable twin,
+    and the performance gate refused it. Match the served markup for both
+    derivations while preserving the twin's authored names. The served page
+    remains the source of truth for which critical rules apply.
+    Checked by: `tools/tests/contract-a-non-blocking-page-paints-from-a-subset-of-luna.test.ts`.
+117. **A control must supply the input its plant depends on.** Once `/search`
+    qualified for non-blocking CSS, holding its stylesheets no longer delayed
+    first paint, and the paint comparison correctly reported a blind control.
+    The control now serves a dedicated fixture with one blocking stylesheet;
+    real-page measurements still use their own markup. A serving control also
+    needs its own input: the WASM mutation previously passed without a build
+    because its only serving test skipped with the build-output test.
+    Checked by: `tools/paint-diff.ts`, `src/worker/tests/contract-static-text-assets-ship-their-q11-twin.test.ts`.
+119. **A gate's failure detail keeps the end of stdout, not the error.** The
+    canary gates joined stderr, then stdout, and kept the last lines, so a
+    tool that prints a banner to stdout after failing hid its own error.
+    wrangler does: from 2026-11-16 to 2026-11-23 every red wrangler canary,
+    and issue #1718, gave `⛅️ wrangler 4.16x.0 (main)` as the reason, while
+    stderr said `Invalid discriminator value ... at worker.env.ANALYTICS.type`.
+    The pin sat a week behind (#1847). `tools/lib/output-tail.ts` now owns the
+    tail for both canaries: stderr's last visible lines, stdout only when
+    stderr is empty.
+    Checked by: `tools/tests/contract-a-failed-gate-reports-the-error-not-the-banner.test.ts`.
+120. **A dictionary delta needs the full advertised digest, including on a cache miss.**
+    Delta filenames once used only the first 16 hex digits of the SHA-256. Two
+    request headers can share those digits while naming different dictionaries,
+    so the second request selected a frame its browser could not decode. Delta
+    names now use all 64 digits; committed page snapshot names stay at 16. A
+    Brotli fallback also varies on `Available-Dictionary`, and a fallback for
+    an advertised hash sends `CDN-Cache-Control: no-store` so arbitrary hashes
+    do not each store a duplicate response at the edge. Browser cache policy
+    stays unchanged. Empty or already-encoded asset-layer deltas fall back too.
+    Checked by: `src/worker/lib/tests/contract-dictionary-names-agree-between-build-and-worker.test.ts`, `src/worker/lib/tests/contract-dictionary-fallbacks-keep-caches-safe.test.ts`.

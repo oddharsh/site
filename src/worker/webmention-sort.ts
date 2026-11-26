@@ -37,7 +37,8 @@
 //
 // Pure apart from the runClef call, and node-safe (gotcha 16).
 
-import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";
+import { runClef } from "./lib/clef.ts";
+import type { ClefEnv, ClefModel } from "./lib/clef.ts";
 
 export const SORT_MODEL: ClefModel = "clef";
 // The sort runs inside the POST's waitUntil, after the source fetch, so nobody

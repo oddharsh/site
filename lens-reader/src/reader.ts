@@ -20,6 +20,7 @@ import Readability from "@mozilla/readability/Readability.js";
 // and test/dom-differential.test.ts for the parity gate that keeps it honest.
 import { parseHTML } from "./dom.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
+import { stripTags } from "../../src/worker/lib/text.ts";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:
@@ -258,7 +259,7 @@ const attr = (node, name) => String((node && node.getAttribute && node.getAttrib
 function tidyMarkdown(value) {
   return String(value)
     .replace(/\u00a0/g, " ")
-    .replace(/[ \t]+\n/g, "\n")
+    .replace(/(?<![ \t])[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n");
 }
 
@@ -363,7 +364,7 @@ function markdownNode(node) {
     case "pre": {
       const value = String(node.textContent || "")
         .replace(/^\n/, "")
-        .replace(/\s+$/, "");
+        .trimEnd();
       if (!value) return "";
       const fence = "`".repeat(Math.max(3, longestRun(value, "`") + 1));
       const code = childrenOf(node).find((child) => nodeName(child) === "code");
@@ -416,10 +417,7 @@ export function tally(html) {
 }
 
 export function textOf(html) {
-  return String(html)
-    .replace(/<(script|style|noscript|template)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&[a-z#0-9]+;/gi, " ");
+  return stripTags(String(html).replace(/<(script|style|noscript|template)[\s\S]*?<\/\1>/gi, " "), " ").replace(/&[a-z#0-9]+;/gi, " ");
 }
 
 export function countWords(text) {

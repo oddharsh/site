@@ -5,7 +5,7 @@
 // mode lists it as over 8 ms and still exits 0, --gate fails on it, and the
 // allowlist and this CPU model's factor in the budget file each change that
 // verdict. With no factor for the CPU model, --gate judges nothing, and on a
-// runner whose control reads off its model it judges nothing either. A ceiling
+// runner whose routes read off its model it judges nothing either. A ceiling
 // re-fitted from CI runs has to clear the highest of them (gotcha 81).
 //
 // Two live sweeps, and every verdict about a budget is a --replay of the first.
@@ -58,11 +58,11 @@ const row = (report, route) => report.rows.find((r) => r.route === route);
 // The one live sweep the budget verdicts share, at this model's factor of 1 with
 // no allowlist, so /spin is re-sampled and the rest are not.
 let live;
-const recording = () => (live ??= sweep("/spin,/still,/icu,/copy", atFactor(1)));
+const recording = () => (live ??= sweep("/spin,/still,/icu,/digest,/copy", atFactor(1)));
 const replay = (budget, ...flags) => sweep({ replay: recording().report }, budget, ...flags);
 const replayIn = (env, budget, ...flags) => sweepIn(env, { replay: recording().report }, budget, ...flags);
 
-test("a 12 ms route reads over the gate, and report mode still passes", { timeout: 90_000 }, () => {
+test("a 12 ms route reads over the gate, and report mode still passes", () => {
   const { code, report } = recording();
   assert.equal(code, 0, "without --gate nothing fails");
   const spin = row(report, "/spin"),
@@ -76,7 +76,7 @@ test("a 12 ms route reads over the gate, and report mode still passes", { timeou
 // A replay that judged its own readings differently from the live run, or took
 // fewer re-samples than this budget asks for, would make every test after this
 // one prove the replay rather than the gate.
-test("a replay against the run's own budget reproduces its report, and refuses a budget that wants samples it never took", { timeout: 90_000 }, () => {
+test("a replay against the run's own budget reproduces its report, and refuses a budget that wants samples it never took", () => {
   const again = replay(atFactor(1));
   assert.equal(again.code, 0);
   assert.deepEqual(again.report, recording().report);
@@ -85,7 +85,7 @@ test("a replay against the run's own budget reproduces its report, and refuses a
   assert.match(short.stderr, /re-samples \/still, which .* took once/);
 });
 
-test("--gate fails on the slow route with an annotation, and passes once the allowlist gives it a ceiling", { timeout: 90_000 }, () => {
+test("--gate fails on the slow route with an annotation, and passes once the allowlist gives it a ceiling", () => {
   const failed = replayIn({ GITHUB_ACTIONS: "true" }, atFactor(1), "--gate");
   assert.equal(failed.code, 1);
   assert.match(failed.stdout, /^::error title=CPU per route::\/spin read [\d.]+ ms, over the 8 ms gate$/m, "on CI the failure is an annotation");
@@ -94,7 +94,7 @@ test("--gate fails on the slow route with an annotation, and passes once the all
   assert.equal(row(allowed.report, "/spin").ceilingMs, 1000);
 });
 
-test("this CPU model's factor scales every reading, and an unknown allowlist entry still fails", { timeout: 90_000 }, () => {
+test("this CPU model's factor scales every reading, and an unknown allowlist entry still fails", () => {
   // A factor of a hundredth: a model 100x faster, so /spin's 12 ms here is about
   // 0.12 reference ms, and only the stray entry fails.
   const { code, report } = replay(atFactor(0.01, { "/nope": { ceilingMs: 20, why: "a route that doesn't exist" } }), "--gate");
@@ -106,7 +106,7 @@ test("this CPU model's factor scales every reading, and an unknown allowlist ent
   assert.equal(code, 1, "an entry for a route the sweep doesn't know fails the gate");
 });
 
-test("--gate judges nothing on a CPU model with no factor, and says so", { timeout: 90_000 }, () => {
+test("--gate judges nothing on a CPU model with no factor, and says so", () => {
   const { code, stdout, report } = replayIn({ GITHUB_ACTIONS: "true" }, UNCALIBRATED, "--gate");
   assert.equal(report.calibration.calibrated, false);
   assert.ok(row(report, "/spin").ms > report.gateMs, "the raw reading is still over 8 ms");
@@ -114,29 +114,45 @@ test("--gate judges nothing on a CPU model with no factor, and says so", { timeo
   assert.match(stdout, /^::warning title=CPU per route::--gate judged nothing: config\/cpu-budget\.json has no factor for /m);
 });
 
-// A factor fits a model's usual runner. One runner, slow all over, read 33% high
-// on its control and failed six routes on a PR that changed no Worker byte
-// (#1273, gotcha 57). A control reference of 0.01 ms makes this machine that
-// runner. A band too wide to cross is the control: the same run is judged again.
-test("--gate judges nothing on a runner whose control reads off its model, and judges once the band allows it", { timeout: 90_000 }, () => {
-  const off = replayIn({ GITHUB_ACTIONS: "true" }, { ...atFactor(1), control: { ms: 0.01, drift: 0.2 } }, "--gate");
-  assert.ok(off.report.control.drift > 0.2, `drift read ${off.report.control.drift}`);
+// A factor fits a model's usual runner. One runner, slow all over, failed six
+// routes on a PR that changed no Worker byte (#1273, gotcha 57), and the routes
+// themselves show it: their median ratio to their usual readings. References of
+// 0.01 ms make this machine that runner. A band too wide to cross is the
+// control: the same run is judged again.
+const everyRoute = (ms: (route: string, recorded: number) => number) => Object.fromEntries(recording().report.rows.map((r) => [r.route, ms(r.route, r.ms)]));
+test("--gate judges nothing on a runner whose routes read off their model, and judges once the band allows it", () => {
+  const routes = everyRoute(() => 0.01);
+  const off = replayIn({ GITHUB_ACTIONS: "true" }, { ...atFactor(1), reference: { drift: 0.15, routes } }, "--gate");
+  assert.ok(off.report.reference.drift > 0.15, `drift read ${off.report.reference.drift}`);
+  assert.equal(off.report.reference.routes, off.report.rows.length, "every swept route has a reference here");
   assert.equal(off.report.inconclusive, true);
   assert.ok(row(off.report, "/spin").ms > off.report.gateMs, "the reading is still over 8 ms");
   assert.equal(off.code, 0, "a runner off its model can't fail the gate");
   assert.match(
     off.stdout,
-    /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: the control read [\d.]+ ms, \+\d+% off the 0\.01 ms this model's factor expects/m,
+    /^::warning title=CPU per route::--gate judged nothing, because the run was inconclusive: its \d+ reference routes read a median \+\d+% off their usual EPYC 7763 ms \(over ±15%\)/m,
   );
-  const within = replay({ ...atFactor(1), control: { ms: 0.01, drift: 1e9 } }, "--gate");
+  const within = replay({ ...atFactor(1), reference: { drift: 1e9, routes } }, "--gate");
   assert.equal(within.report.inconclusive, false);
   assert.equal(within.code, 1, "inside the band, the slow route fails");
 });
 
-test("the committed budget names a control reference, so the drift check can't go missing", () => {
-  const { control } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
-  assert.ok(control?.ms > 0, "config/cpu-budget.json needs control.ms");
-  assert.ok(control.drift > 0 && control.drift < 1, `control.drift is ${control?.drift}`);
+// The statistic is a median so that the route a PR slows can't excuse itself:
+// /spin reads 1000x its reference here, the others read theirs exactly,
+// and /spin still fails.
+test("one route far over its reference can't make the run inconclusive", () => {
+  const routes = everyRoute((route, ms) => (route === "/spin" ? ms / 1000 : ms));
+  const { code, report } = replay({ ...atFactor(1), reference: { drift: 0.15, routes } }, "--gate");
+  assert.equal(report.reference.drift, 0);
+  assert.equal(report.inconclusive, false);
+  assert.equal(code, 1, "/spin fails on its own");
+});
+
+test("the committed budget names enough reference routes that one can't move their median", () => {
+  const { reference } = JSON.parse(readFileSync(new URL("config/cpu-budget.json", ROOT), "utf8"));
+  assert.ok(Object.keys(reference?.routes ?? {}).length >= 10, "config/cpu-budget.json needs 10 or more reference.routes");
+  for (const [route, ms] of Object.entries<any>(reference.routes)) assert.ok(ms > 0, `${route}: reference ${ms}`);
+  assert.ok(reference.drift > 0 && reference.drift < 1, `reference.drift is ${reference?.drift}`);
 });
 
 // A ceiling inside its route's own spread fails PRs that changed no Worker
@@ -159,16 +175,30 @@ test("a re-fitted ceiling stays 20% over the highest CI run it was fit on", () =
 
 // The warm-up has to be what makes /icu cheap, so --cold-icu, which skips it,
 // must read it heavy again. Raw milliseconds: this model's factor is 1.
-test("a route's first date format is cheap in a warm process, and --cold-icu shows the cold one", { timeout: 90_000 }, () => {
+test("a route's first date format is cheap in a warm process, and --cold-icu shows the cold one", () => {
   const warm = row(recording().report, "/icu"),
     cold = row(sweep("/icu", UNCALIBRATED, "--cold-icu").report, "/icu");
   assert.ok(warm.ms < 2, `warm process: /icu read ${warm.ms} ms`);
   assert.ok(cold.ms > 5, `cold process: /icu read ${cold.ms} ms, so the warm-up proves nothing`);
 });
 
+// node loads crypto.subtle per isolate on first use, which workerd never pays,
+// and after #1746 put a SHA-256 on every POST body, MCP routes read 4 to 6 ms
+// over their old cost on every CI model. The warm-up has to be what makes /digest
+// cheap, so --cold-platform must read it heavy again (gotcha 107), and /spin, timed in the same
+// warmed run, still reads over the gate. A ratio, since CI reads about 2.5x a
+// laptop's raw ms: on an M3 Max cold read 2.27 to 3.91 ms and warm 0.29 to 0.67
+// (2026-11-20), and without the warm-up the two are the same reading.
+test("a route's first SHA-256 is cheap after the platform warm-up, and --cold-platform shows the cold one", () => {
+  const warm = row(recording().report, "/digest"),
+    cold = row(sweep("/digest", UNCALIBRATED, "--cold-platform").report, "/digest");
+  assert.ok(cold.ms > 2 * warm.ms, `/digest read ${cold.ms} ms cold and ${warm.ms} ms warmed, so the warm-up proves nothing`);
+  assert.ok(row(recording().report, "/spin").ms > recording().report.gateMs, "the warm-up hid a slow route");
+});
+
 // A route measured without its bindings measures a crash: cal copies env, and a
 // binding that lived only behind the env proxy was gone from the copy, so
 // /coffee/slots.html threw on BOOKINGS. Every declared binding is an own property.
-test("a declared binding survives a copy of env", { timeout: 90_000 }, () => {
+test("a declared binding survives a copy of env", () => {
   assert.equal(row(recording().report, "/copy").status, 200, "/copy lost BOOKINGS or HOST_TIMEZONE");
 });

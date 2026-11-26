@@ -39,7 +39,8 @@
 //
 // Pure apart from the one runClef call, and node-safe (gotcha 16).
 
-import { runClef, type ClefEnv, type ClefModel } from "./lib/clef.ts";
+import { runClef } from "./lib/clef.ts";
+import type { ClefEnv, ClefModel } from "./lib/clef.ts";
 import { asNumber, asText } from "./lib/parse.ts";
 
 export const WALL_MODEL: ClefModel = "clef";
@@ -70,7 +71,14 @@ export function wallDedupeKey(sample: string): string {
     .trim();
 }
 
-type View = { status?: number | null; blocked?: boolean; challenge?: boolean; error?: string; wall?: unknown; [VIEW_SAMPLE]?: string };
+export type View = {
+  status?: number | null;
+  blocked?: boolean;
+  challenge?: boolean;
+  error?: string;
+  wall?: { p: number | null; model: string; error?: string };
+  [VIEW_SAMPLE]?: string;
+};
 
 export function wallCandidates<V extends View>(views: readonly V[]): V[] {
   return views.filter((v) => {

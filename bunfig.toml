@@ -18,6 +18,17 @@
 # isolated linker there is no single such position. The floors still hold.
 linker = "isolated"
 
+# Isolated packages become symlinks into a store under bun's install cache,
+# shared by every checkout and worktree on the machine. Packages with native
+# binaries or lifecycle scripts (workerd, esbuild, sharp, lightningcss) and
+# their dependents stay as real directories. Measured 2026-11-22 on the pinned
+# bun 1.4.5-canary.20261120.1, from empty caches: 29 of 50 packages linked,
+# node_modules 349 MB to 298 MB, and `bun run build` byte-identical (3053 of
+# 3054 files; the other is phases.json, which differs between any two builds).
+# The cargo target for timbrado's engine now lands inside the shared store, so
+# CI's timbrado cache key (ci.yml) resolves a path under the cache, not .bun/.
+globalStore = true
+
 # A package published in the last 24 hours is REFUSED — the window in which a
 # compromised release is most dangerous and least likely to have been noticed.
 # Stated explicitly rather than left to a default, so the number stays a
@@ -115,10 +126,13 @@ minimumReleaseAgeExcludes = [
 # fetched FlatBuffers, whose own tests import a package nothing here installs;
 # it now builds inside node_modules/av2-tone, which bun test never walks.
 
+# Bare `bun test` collects what package.json's test script does: tools/tests/
+# and the tests/ directories under src/. cal, cf-garage and lens-reader run their
+# own suites with their own config, and .claude/ holds other worktrees.
 [test]
-root = "tools/tests"
+root = "."
 preload = ["./tools/lib/no-network.ts"]
-pathIgnorePatterns = ["tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
+pathIgnorePatterns = [".claude/**", ".build/**", "cal/**", "cf-garage/**", "lens-reader/**", "tools/photos/libavif/src/**", "tools/photos/libavif/build/**"]
 
 # bun fmt (in the pinned canary since 1.4.3-canary.20261013.1) formats the tree:
 # `bun run format` writes, `bun run format:check` is a validate step, and
@@ -159,7 +173,6 @@ ignorePatterns = [
   "**/*.json",
   "pipelines/*/specs/**",
   "**/pretext.lib.*",
-  "tools/oxlint/anti-slop/**",
   "src/worker/lib/desktop.*",
   "src/worker/lib/site-manifest.*",
   "src/client/nav-run.ts",
@@ -167,3 +180,461 @@ ignorePatterns = [
   "lwe-ask/src/passages.ts",
   "**/bun.lock",
 ]
+
+[lint]
+
+# `bun lint` reads this section, and `bun lint --doctor` says "Using bunfig.toml".
+# The rules lived in .oxlintrc.json, oxlint's format, until 2026-11-17.
+
+# Two directories hold committed JavaScript that nobody here authored.
+# `a-dict` is the shell dictionary snapshots, which are minified BUILD INPUT
+# captured off the wire, and `pretext.lib.js` is @chenglou/pretext, bundled by
+# tools/vendor-pretext.ts and vendored same-origin so /garage/pretext can load it
+# under `script-src 'self'`. Linting either one reports on somebody else's
+# minifier.
+ignorePatterns = ["src/dict/a-dict/**", "src/client/garage/pretext.lib.js", ".build/**"]
+
+# A suppression that no longer suppresses anything is a claim about the code that
+# has quietly stopped being true, and every one in this tree carries a reason
+# next to it (gotcha 35's three are the sharpest: they say a fix would re-mint a
+# content-addressed URL). When the underlying finding goes away the reason goes
+# stale, and nothing else here would notice.
+#
+# An error rather than a warning, deliberately, so an unused one fails the run
+# without promoting every warning-severity rule to an error. One narrow gate
+# beats one broad one.
+#
+# 0 findings on this tree, measured 2026-08-27. It has teeth: a planted
+# `// oxlint-disable-next-line no-sparse-arrays` above a clean line reports.
+reportUnusedDisableDirectives = "error"
+
+# Ignore any .oxlintrc.json above this directory. `bun lint` searches every
+# directory up to the filesystem root for an oxlint or ESLint config, past the
+# git root, and an oxlint config it finds would rule this section: oxlint's
+# schema, which rejects the Bun-only options below, and oxlint's report format
+# (gotcha 104). A worktree under .claude/worktrees/ sits inside the main
+# checkout, which has an .oxlintrc.json whenever its branch predates
+# 2026-11-17. Bun keeps the search on purpose and named this key as the way out
+# (oven-sh/bun#49225). The name reads like a format, but the key only picks
+# which kind of config file Bun looks for: the rules, options and output stay
+# this section's, the same 28 findings by file, line and rule with the key and
+# without it (2026-11-17). Its one other value, "oxlint", runs this section the
+# way an .oxlintrc.json beside it would, under oxlint's schema and report format,
+# so the Bun-only options below fail there too. It doesn't stop an
+# eslint.config.js above, so tools/check-bun-lint.ts fails a run that reads any
+# config but this file.
+flavor = "eslint"
+
+[lint.categories]
+correctness = "error"
+
+[lint.rules]
+# Three rules fire only on idioms this codebase uses deliberately and
+# consistently. Each is relaxed rather than suppressed per-site, because a rule
+# that needs 96 inline disables is a rule that disagrees with the house style,
+# and the disables would be the noise instead.
+
+# 96 sites, all `catch { }` or `catch (e) { }` swallowing a failure the caller is
+# designed to survive: a disallowing robots.txt, an absent KV entry, a third
+# party that will not parse. The deliberate quiet degradation those sites
+# implement is documented all over CLAUDE.md, and `cron.*` / `around.neighbor`
+# spans exist precisely because it is quiet.
+#
+# `args = "none"` is the same argument at a different address. Worker, Durable
+# Object and cron signatures are POSITIONAL and fixed by the platform:
+# `fetch(request, env, ctx)` must accept `ctx` whether or not it uses it, so an
+# unused trailing parameter here is a contract rather than an oversight. 15
+# sites, 11 of them `ctx`.
+#
+# `const { [HISTOGRAM_KEY]: _hist, ...exif } = ...` is how three files here drop
+# one key while keeping the rest, which is what the last two options allow. Both
+# are ESLint's own defaults for that idiom; oxlint ships them off.
+"no-unused-vars" = ["error", { caughtErrors = "none", args = "none", ignoreRestSiblings = true, varsIgnorePattern = "^_" }]
+
+# 9 sites, every one the match-fallback idiom:
+#     (html.match(/<title>(.*?)<\/title>/) || [, ""])[1]
+# The hole at index 0 stands for the full match, which is discarded on purpose.
+# Writing it out as `[undefined, ""]` says less, not more.
+"no-sparse-arrays" = "off"
+
+# 11 sites, 9 of them in check-infra.ts, all one reporting form:
+#     same ? pass(`nameservers match`) : drift(`...`)
+# A ternary used as a statement for its side effects is the house form for every
+# tier of that script. allowShortCircuit covers the `x && f()` twin.
+"no-unused-expressions" = ["error", { allowTernary = true, allowShortCircuit = true }]
+
+# OFF because its AUTOFIX introduced a real regression here, measured
+# 2026-08-14. In webmention.js the spread is load-bearing:
+#
+#   [...new Uint8Array(d).slice(0, 12)].map((b) => b.toString(16)...)
+#
+# `--fix` rewrote it to `new Uint8Array(d).slice(0, 12).map(...)`, and
+# TypedArray.prototype.map returns a TYPED ARRAY, so every hex string it produced
+# was coerced straight back to a number. The id for a fixed digest went from
+# `deadbeef0102030405060708` to `000012345678`, which is not an error, not a test
+# failure, and not visible in a diff review that trusts the fixer. It would
+# simply have changed every webmention id and broken dedup against the rows
+# already in D1.
+#
+# The rule is right about plain arrays and cannot tell the two apart here, so it
+# is off rather than disabled per-site: one silent wrong autofix is enough to
+# stop trusting the family on a codebase this full of typed arrays and crypto
+# digests.
+"unicorn/no-useless-spread" = "off"
+
+# `new Array(values.length)` in crawl.js pre-sizes the output of
+# mapWithConcurrency, which writes results back BY INDEX out of order. The rule
+# exists to catch `new Array(5)` where `[5]` was meant, and cannot see the
+# difference; every alternative it would accept (Array.from({length}), a fill, a
+# push loop) allocates or walks the array a second time to reach the same place.
+# Off rather than autofixed, for the same reason as above.
+"unicorn/no-new-array" = "off"
+
+# Three rules from dmmulroy/anti-slop, written as selectors so Bun runs them
+# natively. They were vendored JavaScript rules until 2026-11-17; on that tree
+# the selectors reported the same 23 findings by file, line and rule. With no
+# JavaScript rule left, Bun starts no JS engines, and `bun lint --type-aware`
+# went from a 351 ms median to 295 ms (10 runs each, 340-373 against 286-312). A
+# rule that needs scope or comments can't be a selector, and any one JavaScript
+# rule brings the engines back.
+#
+# An override REPLACES this whole list, so the override that exempts `typeof`
+# restates the other three selectors. A suppression names `no-restricted-syntax`,
+# so it silences all four on its lines. tools/tests/contract-lint-selectors.test.ts
+# lints a planted file at an ordinary path and at an exempt one.
+#
+# The empty-object spread. The absent-rather-than-zero discipline that
+# `...(cond ? { k } : {})` implements is RIGHT and is kept: a `score: 0` on a
+# filter-only query reads as "scored and found wanting" when nothing was scored,
+# and the photo pipeline, the span attributes and the /lens payloads all omit
+# rather than fabricate. What the rule objects to is spelling it as a spread,
+# which hides the omission inside an expression. Building the object and adding
+# the key under an `if` says the same thing where a reader can see it. 12 sites,
+# none of them in a content-hashed client asset, so this cost no page rebuild and
+# no dictionary roll (gotcha 35).
+#
+# The name. Bans the term outright and takes no options, which is why the rename
+# rather than a config was the work. The three lens counters are `documentTally`
+# / `plainTally` now, the two probe classifiers are `lensSitemapVerdict` /
+# `lensJsonVerdict`, and the /lens/browser payload key is `tally`. Every one of
+# those names says what the value IS, where "shape" only said that it had
+# structure. `anatomy` was the obvious target and is WRONG: it is already a lens
+# tab name and already a payload key, so the rename would have collided with live
+# vocabulary rather than replaced dead vocabulary.
+#
+# The `typeof`. Wants input parsed where it ENTERS, then branched on a trusted
+# value, rather than `typeof`-checked at each use. The argument is right and this
+# Worker had the failure it describes: the same "is this really a string?" was
+# asked in a dozen places and answered slightly differently in each.
+# src/worker/lib/parse.ts owns the Worker's boundary primitives. The browser
+# modules keep local coercions within their existing load paths. Boundary
+# parsers and tests have an exemption below.
+#
+# The `any` return. The fourth selector is the narrow half of
+# interfere-inc/landmines' no-explicit-return-types, which bans every return
+# annotation. That rule's target is the annotation that lies, and `any` is the
+# lie a selector can see: it erases whatever the body returns, so callers read
+# fields nobody checked. A wider-than-inferred annotation needs the checker, and
+# no lint rule here has one. The 2026-11-18 tree had 23; deleting 21 of them
+# outright surfaced 100 type errors, among them GitHub search items read unparsed
+# and an MCP probe read for `count` before `ok`. A parameter's `any` doesn't count: it's the caller's
+# input, not this function's promise.
+"no-restricted-syntax" = [
+  "error",
+  { selector = "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))", message = "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present." },
+  { selector = ":function > TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },
+  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },
+  { selector = "UnaryExpression[operator='typeof']", message = "A `typeof` check narrows a representation without establishing its contract. Parse input at its I/O boundary, then branch on the domain value." },
+]
+
+# The complement of no-floating-promises, which stays ON for one reason: this
+# runtime cancels "a promise nobody awaited" at request teardown. An async
+# function handed to a caller that expects a void return is the same promise,
+# dropped one step earlier, so the same argument covers it. 0 findings, measured
+# 2026-08-27; it fires on a planted `list.filter(async ...)` and on `if (work())`.
+# `attributes = true` is typescript-eslint's default, which Bun's own default turns
+# off; an oxlint config kept it on.
+"@typescript-eslint/no-misused-promises" = ["error", { checksVoidReturn = { attributes = true } }]
+
+# A switch over a union that stops matching every member is how a new variant
+# reaches production silently. This repo dispatches on string unions all over the
+# Worker, and `noFallthroughCasesInSwitch` catches the other half of the same
+# failure. 0 findings, measured 2026-08-27; it fires on a two-member union
+# missing a case.
+"typescript/switch-exhaustiveness-check" = "error"
+
+# An assertion that changes nothing still reads as a claim someone checked, and
+# `querySelector(s) as T | null` is a cast where `querySelector<T>(s)` asks the
+# overload. Taken from @cloudflare/oxlint-config 0.1.0, and one of the Bun
+# defaults held back below until now. 74 findings, measured 2026-11-20: 53
+# removed by --fix, 21 moved into the call's type argument. --fix also removed
+# 5 the checker still needed (two literal-union ternaries in github.ts, three
+# `new Set(...) as Set<string>` in apply-infra.ts); the linter's type engine read
+# those as redundant and bun check didn't. They now say it with a return type
+# and `new Set<string>(...)`. Read a --fix diff against typecheck before
+# trusting it. It fires on a planted `("a" as string)`.
+"@typescript-eslint/no-unnecessary-type-assertion" = "error"
+
+# One way to import a type: `import type { T }` on its own line, never
+# `import { a, type T }`. Under verbatimModuleSyntax the top-level form is the
+# one that says the whole statement erases. Taken from @cloudflare/oxlint-config
+# 0.1.0. 96 findings in 57 files, measured 2026-11-20, all mixed imports that
+# --fix split into a value import and a type import. None imported types alone,
+# so no runtime import moved. It fires on a planted `import { a, type B }`.
+"import/consistent-type-specifier-style" = ["error", "prefer-top-level"]
+# A value returned from a Promise executor goes nowhere: `return reject(e)` or
+# `(r) => setTimeout(r, ms)` reads as if the return settled something. Taken
+# from @cloudflare/oxlint-config 0.1.0. 30 findings, measured 2026-11-20: 27
+# concise arrows now have block bodies, and lens-wire.ts's three early exits
+# call reject or resolve, then return. It fires on a planted
+# `new Promise((r) => setTimeout(r, 1))`.
+"no-promise-executor-return" = "error"
+# A type reaches a file through `import type`, so a reader sees at the top what
+# the file depends on and the build can drop it without asking. Taken from
+# @cloudflare/oxlint-config 0.1.0. 28 findings, measured 2026-11-20: 3 value
+# imports of `Html` that only typed something, now `import type` by --fix, and
+# 25 inline `import("...").T` annotations, now named in a top-level
+# `import type`. It fires on a planted `let x: import("./a.ts").A`.
+"typescript/consistent-type-imports" = "error"
+# A rejection callback's parameter is `any` unless it says otherwise, so
+# `.catch((e) => e.message)` type-checks and prints `undefined` when the
+# rejection isn't an Error. Taken from @cloudflare/oxlint-config 0.1.0. 26
+# findings, measured 2026-11-20. 25 now say `: unknown`, and the 12 that read a
+# field narrow first, keeping their output; the 26th is in a frozen fixture,
+# exempt below.
+"typescript/use-unknown-in-catch-callback-variable" = "error"
+# An array built only to answer `.includes()` is a Set that pays a linear scan
+# on every lookup. Taken from @cloudflare/oxlint-config 0.1.0. 15 findings,
+# measured 2026-11-20, all fixed. The rule can't see types: it reads any
+# `.slice()` as an array, so its autofix turned a string in check-tools.ts into
+# a Set of characters, and that site's guard scan then matched 0 loops. Read
+# every `--fix` diff for a string before trusting it.
+"unicorn/prefer-set-has" = "error"
+
+# A thrown non-Error has no stack and no message, so whatever catches it can
+# only log `0`. Taken from @cloudflare/oxlint-config 0.1.0, and one of the
+# Bun defaults held back below until now. 5 findings, measured 2026-11-20: four
+# `throw 0` sentinels in tooltip.ts, now Errors, and one rethrow in
+# serendipity.ts that keeps its suppression because it rethrows the caught
+# value unchanged. It fires on a planted `throw 0`.
+"@typescript-eslint/only-throw-error" = "error"
+# `n! == 1` reads as `n !== 1` at a glance and means the opposite. Taken from
+# @cloudflare/oxlint-config 0.1.0. 0 findings, measured 2026-11-20; it fires on
+# a planted `n! == 1`.
+#
+# The same day's counts for the rest of that preset's additions, so nobody has
+# to re-run them. no-eval and unbound-method already run here. The others need
+# their own PR because each has sites to fix: eqeqeq 206, no-unsafe-type-assertion
+# 330, no-non-null-assertion 114, consistent-type-specifier-style 96,
+# no-unnecessary-type-assertion 73, no-promise-executor-return 30,
+# consistent-type-imports 28, use-unknown-in-catch-callback-variable 26,
+# prefer-set-has 15 and only-throw-error 5 (4 of those 5 are in tooltip.ts, a
+# hashed client asset, gotcha 35).
+"typescript/no-confusing-non-null-assertion" = "error"
+
+# FOUR IMPORT RULES, each measured at 0 on this tree on 2026-08-27 and each proven
+# to fire on a planted violation, because a rule that reports nothing looks
+# identical to a rule that is not running. no-cycle earns the most here. The
+# tools import Worker modules by their real `.ts` filename across three
+# resolution trees (tsconfig.tools.json's header has the reason), which is
+# precisely the form a cycle hides in.
+"import/no-cycle" = "error"
+"import/export" = "error"
+# Skips `.ts` files by design, upstream and here: type-only re-exports are not
+# resolvable this way. It has teeth on the .js/.mjs half of the tree, including
+# the client islands and tools' .mjs tests.
+"import/named" = "error"
+"import/no-self-import" = "error"
+
+# Reject vi.mock/vi.doMock in favour of real dependency seams. This rule does not
+# cover Bun's mock.module. cal/test/preload.ts uses that API only to supply the
+# cloudflare:workers virtual module; review other uses.
+"vitest/no-restricted-vi-methods" = [
+  "error",
+  { mock = "Use a real dependency seam. A module mock asserts against a fake.", doMock = "Use a real dependency seam. A module mock asserts against a fake." },
+]
+
+# BUN'S DEFAULTS, held back. With rules in bunfig.toml, `bun lint` layers them
+# on top of its own defaults (ESLint's and typescript-eslint's recommended sets,
+# the bun:test and promise rules), which an oxlint config never did. On the
+# 2026-11-17 tree those defaults added 44 rules (41 on TypeScript files, 3 more on
+# JavaScript) and 31,686 findings, nearly all
+# no-unsafe-* warnings on `any`. They're off here so the move from
+# .oxlintrc.json changed no rule; adopting one is its own change, with its own
+# count. A Bun bump that adds a default shows up in a pin PR's lint run, as a
+# new correctness rule always has. The wildcards ("unicorn/*" = "off") can't do
+# this job, because they also switch off what `categories` turned on.
+"no-fallthrough" = "off"
+"no-dupe-args" = "off"
+"no-redeclare" = "off"
+"no-undef" = "off"
+"no-case-declarations" = "off"
+"no-empty" = "off"
+"no-octal" = "off"
+"no-prototype-builtins" = "off"
+"no-regex-spaces" = "off"
+"no-unexpected-multiline" = "off"
+"no-useless-assignment" = "off"
+"preserve-caught-error" = "off"
+"no-var" = "off"
+"prefer-const" = "off"
+"prefer-rest-params" = "off"
+"prefer-spread" = "off"
+"@typescript-eslint/ban-ts-comment" = "off"
+"@typescript-eslint/no-array-constructor" = "off"
+"@typescript-eslint/no-empty-object-type" = "off"
+"@typescript-eslint/no-explicit-any" = "off"
+"@typescript-eslint/no-namespace" = "off"
+"@typescript-eslint/no-unnecessary-type-constraint" = "off"
+"@typescript-eslint/no-unsafe-argument" = "off"
+"@typescript-eslint/no-unsafe-assignment" = "off"
+"@typescript-eslint/no-unsafe-call" = "off"
+"@typescript-eslint/no-unsafe-enum-comparison" = "off"
+"@typescript-eslint/no-unsafe-function-type" = "off"
+"@typescript-eslint/no-unsafe-member-access" = "off"
+"@typescript-eslint/no-unsafe-return" = "off"
+"@typescript-eslint/prefer-promise-reject-errors" = "off"
+"@typescript-eslint/require-await" = "off"
+"@typescript-eslint/restrict-plus-operands" = "off"
+"bun:test/no-disabled-tests" = "off"
+"bun:test/no-export" = "off"
+"bun:test/no-focused-tests" = "off"
+"bun:test/valid-describe-callback" = "off"
+"bun:test/valid-expect" = "off"
+"bun:test/valid-expect-in-promise" = "off"
+"react/jsx-uses-react" = "off"
+"promise/no-callback-in-promise" = "off"
+"promise/no-new-statics" = "off"
+"promise/valid-params" = "off"
+
+# Bun's defaults also relax options on rules this config does want, where an
+# oxlint config kept oxlint's. Each is pinned back to what .oxlintrc.json ran,
+# read off a planted file linted under both configs on 2026-11-17.
+#
+# Three behaviors have no option and are stricter here than under oxlint.
+# no-meaningless-void-operator reports `void` before any non-call, not only
+# before a call that returns nothing; no-control-regex reports a raw control
+# character inside a regex literal; no-unused-vars reports a value used only in a
+# `typeof` type. The move found 7 such sites: 4 were rewritten and 2 carry a
+# suppression with the reason.
+"no-empty-pattern" = ["error", { allowObjectPatternsAsParameters = false }]
+"no-constant-binary-expression" = ["error", { allowLiteralToggle = false }]
+"no-irregular-whitespace" = ["error", { skipStrings = true, skipComments = false, skipRegExps = true, skipTemplates = true, skipJSXText = true }]
+"no-loss-of-precision" = ["error", { ignoreDecimals = false }]
+"@typescript-eslint/no-loss-of-precision" = ["error", { ignoreDecimals = false }]
+
+# The vitest correctness rules. A category includes them only when package.json
+# lists vitest, which it doesn't; .oxlintrc.json named the plugin, so they ran.
+"vitest/expect-expect" = "error"
+"vitest/hoisted-apis-on-top" = "error"
+"vitest/no-conditional-expect" = "error"
+"vitest/no-conditional-tests" = "error"
+"vitest/no-disabled-tests" = "error"
+"vitest/no-focused-tests" = "error"
+"vitest/no-standalone-expect" = "error"
+"vitest/prefer-snapshot-hint" = "error"
+"vitest/require-awaited-expect-poll" = "error"
+"vitest/require-local-test-context-for-concurrent-snapshots" = "error"
+"vitest/require-mock-type-parameters" = "error"
+"vitest/require-to-throw-message" = "error"
+"vitest/valid-describe-callback" = "error"
+"vitest/valid-expect" = "error"
+"vitest/valid-expect-in-promise" = "error"
+"vitest/valid-title" = "error"
+"vitest/warn-todo" = "error"
+
+# Where `typeof` is the point, in three kinds of file. This list is the base
+# `no-restricted-syntax` list minus its `typeof` entry, because an override
+# replaces the whole list; keep the two copies equal.
+#
+# The parse layer itself. A hand-rolled parser is MADE of `typeof`, so the only
+# thing this rule can buy is that the checks live in one named place instead of
+# at every call site. Turning it off here is what makes turning it on everywhere
+# else mean something; the file's own header says the same thing from the other
+# side.
+#
+# The AUTHORING contract, which is the same argument one layer out:
+# page-contract.ts and garage/generate.ts are the boundary parser for page
+# content, and `requireText` is literally "parse it where it enters, then branch
+# on a value you can trust". A validator is made of `typeof`; the rule cannot be
+# satisfied inside the thing it is asking you to build.
+#
+# A test that asserts `typeof x === "boolean"` is CHECKING the contract, which is
+# the rule's goal rather than a violation of it. Rewriting these through the
+# parse layer would assert that the parse layer works, not that the surface under
+# test returns the right type. Same scoping as the no-floating-promises override
+# below, and for a related reason.
+#
+# The same list carries four selectors only tests need, from interfere-inc/
+# landmines' no-fixed-sleep and no-flake-masking. Each matches only inside a
+# test() or hook call, so the parser files above can't trip them. The first is
+# an awaited sleep (setTimeout in a Promise, Bun.sleep, scheduler.wait) whose
+# nearest function is the test or hook, as upstream scopes it: a fake that
+# sleeps to hold a request open, or a helper polling a condition, stays legal.
+# The other three are a timeout, retry or repeats option, a bare-number third
+# argument, and setDefaultTimeout. On the 2026-11-18 tree they found 4 sleeps
+# and 10 timeouts, the same sites upstream's rules did. Three sleeps now await
+# their event; the SSR deadline's waits on a real timer's expiry order and says
+# so. Nine timeouts were slack (cpu-sweep's whole file runs in 5.5 s) or one
+# test doing five tests' work; the canary's covers a cold cargo build.
+#
+# One more is landmines' strict-msw, ported without MSW (measured and left out
+# on 2026-11-18; tools/lib/fetch-routes.ts says why). It flags any assignment to
+# `<name>.fetch`, which catches `globalThis.fetch`, `testGlobals.fetch` and any
+# other alias of the global, while binding doubles like `env.ASSETS.fetch` are
+# member chains and stay legal. A hand-assigned double usually answered every
+# URL (the webmention sort test served its spam page to anything not Resend);
+# `routeFetch` answers only the prefixes a test lists and records a miss for
+# the tripwire.
+[[lint.overrides]]
+files = [
+  "src/worker/lib/parse.ts",
+  "pipelines/content/page-contract.ts",
+  "pipelines/garage/generate.ts",
+  "**/test/**",
+  "**/*.test.*",
+  "tools/tests/contract-shared.ts",
+]
+[lint.overrides.rules]
+"no-restricted-syntax" = [
+  "error",
+  { selector = "CallExpression:matches([callee.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/], [callee.object.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/]) > :function AwaitExpression:not(CallExpression:matches([callee.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/], [callee.object.name=/^(test|it|before|after|beforeEach|afterEach|beforeAll|afterAll)$/]) > :function :function AwaitExpression) > :matches(NewExpression[callee.name='Promise']:has(CallExpression[callee.name='setTimeout']), CallExpression:matches([callee.object.name='Bun'][callee.property.name='sleep'], [callee.object.name='scheduler'][callee.property.name='wait'], [callee.name='setTimeout']))", message = "This test sleeps for a fixed time, which guesses how long the work takes and fails under CPU load. Await the operation, or a promise its handler resolves." },
+  { selector = "CallExpression:matches([callee.name=/^(test|it|describe)$/], [callee.object.name=/^(test|it|describe)$/]) > ObjectExpression > Property[key.name=/^(timeout|retry|repeats)$/]", message = "A raised timeout or a retry hides a slow or flaky test. Wait on the event the test depends on, or split the work so each test fits the suite's clock." },
+  { selector = "CallExpression:matches([callee.name=/^(test|it)$/], [callee.object.name=/^(test|it)$/]) > :not(:function, ObjectExpression):nth-child(3)", message = "A raised timeout hides a slow test. Wait on the event the test depends on, or split the work so each test fits the suite's clock." },
+  { selector = "CallExpression[callee.name='setDefaultTimeout']", message = "A raised default timeout hides slow tests. Wait on the events they depend on, or split the work so each test fits the suite's clock." },
+  { selector = "AssignmentExpression > MemberExpression.left[property.name='fetch'][object.type='Identifier']", message = "This test replaces fetch by hand, so the double answers URLs nobody planned for. Use routeFetch from tools/lib/fetch-routes.ts, which answers the prefixes you list and records a miss for the network tripwire." },
+  { selector = "ObjectExpression > SpreadElement:has(> ConditionalExpression:matches([consequent.type='ObjectExpression'][consequent.properties.length=0], [alternate.type='ObjectExpression'][alternate.properties.length=0]))", message = "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present." },
+  { selector = ":function > TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },
+  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },
+]
+
+# The test runner owns top-level test registrations; they are not application
+# promises that need a caller to await them. Suppression stays scoped to tests so
+# Worker promises remain checked: an unawaited promise can be cancelled at
+# request teardown.
+[[lint.overrides]]
+files = ["**/test/**", "**/*.test.*", "tools/tests/contract-shared.ts"]
+[lint.overrides.rules]
+"typescript/no-floating-promises" = "off"
+
+# bun-types declares every matcher as returning `void`, including the ones behind
+# `.resolves` and `.rejects`, while at runtime those return a promise the test
+# MUST await or the assertion never runs. So `await expect(p).rejects.toThrow()`
+# is the documented bun usage and reads to this rule as an await of a
+# non-thenable. 2 sites (email.test.js), both correct; measured 2026-09-02, the
+# day the type-aware pass first saw this program. Scoped to cal's suite, which is
+# the only bun:test suite that awaits matchers; tools/ asserts with node:assert
+# and is untouched.
+[[lint.overrides]]
+files = ["cal/test/**"]
+[lint.overrides.rules]
+"typescript/await-thenable" = "off"
+
+# The minifier fixtures are frozen bytes: tools/lib/upstream-watches.ts measures
+# oxc-minify's brotli output on exactly these files against SWC's 5,786 B, so an
+# edit would move the number it compares. They're also JavaScript, where the
+# `: unknown` this rule asks for can't be written.
+[[lint.overrides]]
+files = ["tools/fixtures/minify-parity/**"]
+[lint.overrides.rules]
+"typescript/use-unknown-in-catch-callback-variable" = "off"

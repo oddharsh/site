@@ -16,7 +16,7 @@
 //    harness's workerd, so an empty base class is the whole shim. This is the
 //    one `mock.module` in the repository, and it is a virtual module standing
 //    in for a runtime scheme rather than a dependency seam being faked, which
-//    is the exception .oxlintrc.json names beside its vi.mock ban
+//    is the exception bunfig.toml's [lint] names beside its vi.mock ban
 //    (vitest/no-restricted-vi-methods, which does not reach mock.module).
 //
 // 2. `caches`. cal/src/index.ts edge-caches the slot list (/slots.html) for

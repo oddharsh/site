@@ -145,7 +145,7 @@ async function refreshBusy(env, ctx) {
     const write = Promise.resolve(env.BOOKINGS.put(BUSY_KEY, JSON.stringify(snap))).catch(() => {});
     // cal MUST stay independently testable, so keep the narrow capability check
     // local instead of importing the site Worker's context helpers.
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    // oxlint-disable-next-line no-restricted-syntax
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
     else await write;
   }
@@ -369,7 +369,7 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
   const slotMs = slotMin * 60_000;
   const workStart = +env.WORKING_HOURS_START;
   const workEnd = +env.WORKING_HOURS_END;
-  const workDays = env.WORKING_DAYS.split(",").map((n) => +n);
+  const workDays = new Set(env.WORKING_DAYS.split(",").map((n) => +n));
 
   const now = Date.now();
   const earliest = now + minNotice;
@@ -396,7 +396,7 @@ export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) 
   for (let d = 0; d < +env.MAX_LOOKAHEAD_DAYS + 1; d++) {
     const dayStart = localDayAfter(cursorDay, d, tz);
     const dow = dayOfWeek(dayStart, tz);
-    if (!workDays.includes(dow)) continue;
+    if (!workDays.has(dow)) continue;
 
     const dayKey = ymd(dayStart, tz);
     const weekKey = yw(dayStart, tz);

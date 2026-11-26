@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { assert, ROOT, test } from "./contract-shared.ts";
 import { repoFiles } from "../lib/repo-files.ts";
+import { inTestsDir } from "../lib/test-roots.ts";
 
 const bun = process.versions.bun ? process.execPath : "bun";
 const CLOUDFLARE_WORKERS = /^import[^;]*from\s*["']cloudflare:workers["']/m;
@@ -39,7 +40,7 @@ console.log(JSON.stringify({ control, failed, made }));
 
 test("importing every Worker module builds no Intl object", () => {
   const files = repoFiles(["src/worker", "serendipity", "cal/src"]).filter(
-    (f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && !CLOUDFLARE_WORKERS.test(readFileSync(new URL(f, ROOT), "utf8")),
+    (f) => f.endsWith(".ts") && !f.endsWith(".d.ts") && !inTestsDir(f) && !CLOUDFLARE_WORKERS.test(readFileSync(new URL(f, ROOT), "utf8")),
   );
   assert.ok(files.length > 100, `only ${files.length} modules to import; the census lost the Worker`);
   const run = spawnSync(bun, ["-e", probe(files)], { cwd: new URL(".", ROOT), encoding: "utf8" });

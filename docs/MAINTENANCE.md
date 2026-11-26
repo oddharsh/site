@@ -200,7 +200,7 @@ rotation and treat all previously emailed links as compromised.
    route oracle, the bun contract suite, and Cal's tests. Cal and Serendipity
    ship inside the site Worker. [Photos](../.github/workflows/photos.yml) runs
    zenc's tests and the histogram reproduction only on PRs that touch photo
-   code or tiers. `infra:check`, `checkpoints:check`, the osv scan and the
+   code, tiers, `rust-toolchain.toml` or `.cargo/`. `infra:check`, `checkpoints:check`, the osv scan and the
    auxiliary Worker dry-runs are workstation commands now.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
@@ -306,6 +306,10 @@ and `repository.code_scanning` in `config/infra.json`. Change both together.
 The check requires the declared languages, pinned actions, and CodeQL's default
 query suite and threat model. Rust and Python currently serve build tooling;
 revisit the scan coverage if either language starts serving requests.
+A push that changes only paths CodeQL never reads (lockfiles, the Bun pin,
+Markdown, photo tiers, `src/dict`) skips the scan. Before adding a path to
+that `paths-ignore` list, check it against the extraction log of a recent
+run; `contract-codeql-skips-only-what-it-never-reads` holds the list to it.
 
 Default CodeQL setup must remain off alongside the committed workflow. That API
 check needs a workstation credential with repository Administration access;
@@ -899,13 +903,14 @@ annotation on the run. The job has `continue-on-error`, so the run stays green:
 never hold up a release. It isn't a required check; making it one is a ruleset
 change in `config/infra.json`, applied with `infra:apply`. On a model with no
 factor, a run whose `/robots.txt` control spread over 1 ms, or a run whose
-control's median, scaled, reads more than 20% off `control.ms`, it judges
-nothing and leaves a warning annotation. That last case is a runner slower or
-faster all over than its model's factor says (gotcha 57).
+heavy routes, scaled, read more than 15% off `reference.routes` at their
+median ratio, it judges nothing and leaves a warning annotation. That last
+case is a runner slower or faster all over than its model's factor says (gotcha 57).
 
 **When the warning says a runner is off its model:** rerun the job. One such
-run is a slow host. If every run says it, on every model, the dispatcher's own
-cost moved: set `control.ms` to the median control of a few EPYC 7763 runs.
+run is a slow host. If every run says it, on every model, the routes' own
+cost moved: refit `reference.routes` to each route's median over 20 or more
+calibrated CI runs.
 
 **When a route gets cheaper:** the sweep prints its entry as stale once it reads
 under 4 ms, half the gate. Delete the entry.
@@ -931,9 +936,12 @@ after it and record them in the row's `measured`.
 
 **When the warning names a CPU model with no factor:** collect two runs on it
 (rerun the job until it lands there twice; the units line names the model) and
-two or more on an EPYC 7763. Take each route confirmed in all of them (5
-samples), divide its 7763 median by its median on the new model, and record the
-median of those ratios with the run count. On one model a typical route moves
+two or more on an EPYC 7763. Take each route that reads over 8 ms on the 7763
+and appears in every run, divide its 7763 median by its median on the new
+model, and record the median of those ratios with the run count. Use the
+screening samples: a model with no factor reads raw, so few of its routes reach
+the 75% of a ceiling that confirms them, and on 2026-11-20 no route was
+confirmed in every run of any Intel model. On one model a typical route moves
 ±6% between runs and the worst ±17%, so a factor from one run can be off by that
 much; that's why a model waits for its second.
 
@@ -1290,6 +1298,37 @@ GITHUB token with `issues: write`.
 (`csp:sweep`, `lens-seed`, the OG cards, ...):
 `CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary, and unset means the stable Chrome it always meant.
 
+## Re-pick a client script's minifier (`bun run minify:pick`)
+
+Each client script ships the pipeline `config/minify-picks.json` names for its
+exact bytes: oxc, SWC or terser alone, or oxc then terser, or SWC then oxc,
+whichever spokeshave found smallest in brotli that still behaves like the
+source, followed by the renames its compression-aware renamer found
+(`tools/lib/minify-picks.ts` has the reasoning). The build replays the renames
+from their recorded map and re-proves them alpha-equivalent, so a map that
+stops fitting fails the build rather than shipping a different program. A pick goes stale when
+its script's source changes, or when spokeshave bumps an engine the pick runs.
+The build then ships oxc output for that script and prints
+`minify picks: N script(s) shipped oxc output`, and the contract suite skips it.
+Nothing fails, so a client edit never waits on a re-pick.
+
+To re-pick, after a build:
+
+```bash
+bun run minify:pick          # stale picks only; --all re-picks every script
+```
+
+That takes about 30 s, mostly pretext.lib.js. A changed pick re-mints that
+script's `/a/` URL, so the PR takes the `hashed-asset` label. Before merging a
+changed pick, run the Chrome page differential that `tools/minify-pick.ts`'s
+header spells out: 3 records of the `MINIFY_PICKS=off` build, 1 of the pick
+build, then `diff`. Expect about 1 timing false alarm in 77 pages per sweep;
+re-record that page alone with `--only` before believing it.
+
+Engine upgrades arrive through spokeshave's pins (github.com/oddharsh/spokeshave).
+Bump the spokeshave commit in package.json, rebuild, and `minify:pick --all`:
+every file is re-judged against the new engines.
+
 ## Re-run the user-agent survey (`/garage/useragent`)
 
 ```bash
@@ -1397,8 +1436,9 @@ them as detritus. Both have real consumers. Leave them, and re-run the checks
 below whenever they look unreferenced again:
 
 - **`public/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
-  because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
-  deleting the file breaks mail rather than the site.
+  because inboxes circle-crop it). Its consumers are a Cloudflare DNS record and
+  the site MCP server card's `icons[]`, so deleting the file breaks mail and
+  the card's icon rather than a page.
 
   **This one now goes red.** The BIMI record in [`infra.json`](../config/infra.json)
   carries a `consumer` field naming this path, and `bun run infra:check` fails
@@ -2188,8 +2228,12 @@ when the tab first hides. A view that loaded in a background tab has no LCP
 row. Each metric is
 its own row in `aadhar_vitals`: `blob1` is the metric, `blob2` the path, `blob3`
 the Worker version, `double1` the value (milliseconds for LCP and INP, unitless
-for CLS). A view with no interaction has no INP row. The p75 per metric over
-the last 28 days, the window Chrome's field data uses:
+for CLS). A view with no interaction has no INP row. `bun run vitals:report` prints the p75 per page and metric over the last 28
+days beside Core Web Vitals' own lines (LCP 2.5 s, INP 200 ms, CLS 0.1) and
+exits 1 when a page with at least 20 views is past one; `--versions` splits it
+by release and `--days N` moves the window. It needs a token with Account
+Analytics: Read (`CLOUDFLARE_API_TOKEN`, else wrangler's login). The query it
+runs, for when you want it by hand:
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \

@@ -91,7 +91,7 @@ export function hnKey(link: string): string | null {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
-  const path = url.pathname.replace(/\/+$/, "");
+  const path = url.pathname.replace(/(?<!\/)\/+$/, "");
   const kept = [...url.searchParams].filter(([k]) => !TRACKING.test(k));
   const query = kept.length ? "?" + new URLSearchParams(kept).toString() : "";
   return host + path + query;

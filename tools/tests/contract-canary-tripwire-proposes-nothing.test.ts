@@ -44,7 +44,7 @@ test("no canary leg can write the pin, and none knows the bumper's write flag", 
   for (const file of LEGS) {
     const code = strip(await readFile(new URL(file, ROOT), "utf8"));
     assert.doesNotMatch(code, /writePin|--write/, `${file} reaches for the pin writer`);
-    assert.doesNotMatch(code, /package\.json"\)\s*,\s*[^)]*\)\s*;?\s*$/m, `${file} looks like it writes package.json`);
+    assert.doesNotMatch(code, /package\.json"\)\s*,[^)]*\)\s*(?:;\s*)?$/m, `${file} looks like it writes package.json`);
     // The bun pin lives in config/bun-pin.json now, so a write is any writer
     // naming either file, whatever the call looks like.
     assert.doesNotMatch(code, PIN_WRITE, `${file} looks like it writes the pin`);
@@ -199,6 +199,10 @@ test("the honest-false detector matches the page's own convention, and finds the
 // and it timed out there (run 36294774979). CI builds the engine in its own
 // step first; this budget is for a fresh local checkout, where the build is
 // 11.5s cold on 14 cores. Node honours the option too, and runs unclocked.
+// A before() hook can't hold the build instead: bun ignores a node:test hook's
+// own timeout and clocks it at the suite's 30s (measured 2026-11-18, bun
+// 1.4.4-canary.1).
+// oxlint-disable-next-line no-restricted-syntax
 test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", { timeout: 180_000 }, () => {
   const names = new Set();
   for (const w of [...BUN_WATCHES, ...VERDICT_WATCHES, ...WRANGLER_WATCHES]) {

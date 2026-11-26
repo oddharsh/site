@@ -1,12 +1,14 @@
 import { signedFetch } from "./lib/botauth.ts";
-import { SUBREQUEST_CAP_FREE, createBudget, recordBudget, type Budget } from "./lib/budget.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
+import type { Budget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { mapWithConcurrency } from "./lib/crawl.ts";
-import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml } from "./lib/html.ts";
+import type { Html } from "./lib/html.ts";
 import { islandResponse } from "./lib/island.ts";
 import { asList, asNumber, asRecord, asText } from "./lib/parse.ts";
-import { esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
+import { cappedRequestBody, esc, isOwnerBust, publicCacheControl, publicJsonResponse, secretMatches, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -459,7 +461,7 @@ export async function warmArtCache(payload, request, env, ctx) {
   // an undeclared identifier to hand it to a parser throws ReferenceError, so
   // `typeof` is the only operator that can ask the question. This is the one
   // class lib/parse.ts cannot cover.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
   if (!ctx || typeof caches === "undefined") return none;
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return none;
@@ -1386,15 +1388,17 @@ export async function readParams(request, url) {
   const out = new URLSearchParams(url.searchParams);
   if (request.method === "POST") {
     const ct = (request.headers.get("content-type") || "").toLowerCase();
+    const capped = await cappedRequestBody(request);
+    if (!capped) return out;
     try {
       if (ct.startsWith("application/x-www-form-urlencoded")) {
-        const body = await request.text();
+        const body = await capped.text();
         for (const [k, v] of new URLSearchParams(body)) {
           if (!out.has(k)) out.set(k, v);
         }
       } else if (ct.startsWith("application/json")) {
-        const data = await request.json();
-        for (const k of Object.keys(data || {})) {
+        const data = asRecord(await capped.json()) ?? {};
+        for (const k of Object.keys(data)) {
           if (!out.has(k)) out.set(k, String(data[k]));
         }
       }

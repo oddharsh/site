@@ -21,7 +21,8 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { html, unsafeHtml } from "./lib/html.ts";
-import { PENDING, isPending, island, islandResponse, islandScript, type Pending } from "./lib/island.ts";
+import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
+import type { Pending } from "./lib/island.ts";
 import { esc, publicJsonResponse } from "./lib/http.ts";
 import { groupThousands } from "./lib/text.ts";
 import { LEDGER_LINES_URL } from "./routes.ts";
@@ -349,18 +350,23 @@ export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | 
   const pending = isPending(q);
   const { items, totalHits, totalUsd } = priced(!pending && q.ok ? q.rows : []);
 
-  let tableRows;
-  if (pending) {
-    tableRows = CRAWLERS.map(
-      () => `
+  // A meter this page can't read keeps the placeholder's unread lines and
+  // gives its reason after them. A lone note row in their place pulled the
+  // terms below up into view, layout shift 0.091 at 390px on CI (gotcha 98,
+  // 2026-11-16). An empty window is a read, so it still says so on its own.
+  const unread = CRAWLERS.map(
+    () => `
       <tr>
         <td class="mono">${dots}</td>
         <td>${dots}<br><span class="dim">${dots}</span></td>
         <td class="num">${dots}</td>
-        <td class="num">$${RATE_USD.toFixed(2)}</td>
+        <td class="num">${RATE_USD.toFixed(2)}</td>
         <td class="num">${dots}</td>
       </tr>`,
-    ).join("");
+  ).join("");
+  let tableRows;
+  if (pending) {
+    tableRows = unread;
   } else if (q.ok && items.length) {
     tableRows = items
       .map(
@@ -377,9 +383,9 @@ export function renderLedgerLines(q: LedgerRead | Pending, cost: BillableRead | 
   } else if (q.ok) {
     tableRows = `<tr><td colspan="5" class="empty">No identified AI-crawler visits landed on worker-served routes in the last ${WINDOW_DAYS} days. The meter is new; give it time.</td></tr>`;
   } else if (q.reason === "unconfigured") {
-    tableRows = `<tr><td colspan="5" class="empty">The meter is counting, but this page can't read it back yet (Analytics Engine needs a read token). Line items will appear once the bookkeeper gets API access.</td></tr>`;
+    tableRows = `${unread}<tr><td colspan="5" class="empty">The meter is counting, but this page can't read it back yet (Analytics Engine needs a read token). Line items will appear once the bookkeeper gets API access.</td></tr>`;
   } else {
-    tableRows = `<tr><td colspan="5" class="empty">The bookkeeper is unreachable right now (${esc(q.reason)}). The meter keeps counting regardless.</td></tr>`;
+    tableRows = `${unread}<tr><td colspan="5" class="empty">The bookkeeper is unreachable right now (${esc(q.reason)}). The meter keeps counting regardless.</td></tr>`;
   }
 
   let costLine;

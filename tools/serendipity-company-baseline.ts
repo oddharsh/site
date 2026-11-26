@@ -37,9 +37,11 @@
 import { readFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPANY_MODEL, buildCompanyRequest, companyAt, parseCompanyAnswer, type CompanyPrediction } from "../serendipity/companies.ts";
+import { COMPANY_MODEL, buildCompanyRequest, companyAt, parseCompanyAnswer } from "../serendipity/companies.ts";
+import type { CompanyPrediction } from "../serendipity/companies.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
-import { readBios, workersAiAuth, type Bio } from "./serendipity-role-baseline.ts";
+import { readBios, workersAiAuth } from "./serendipity-role-baseline.ts";
+import type { Bio } from "./serendipity-role-baseline.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -78,7 +80,7 @@ export function companyMatches(label: CompanyLabel, predicted: string | null): b
 // a binding call.
 const NAME = String.raw`([A-Za-z0-9$][\w.$&'-]*(?:[ \t]+[A-Z0-9][\w.&'-]*)*)`;
 const MARKERS = [
-  new RegExp(String.raw`^\s*[Bb]uilding[ \t]+@?[ \t]*` + NAME),
+  new RegExp(String.raw`^\s*[Bb]uilding[ \t]+(?:@[ \t]*)?` + NAME),
   new RegExp(String.raw`@[ \t]*` + NAME),
   new RegExp(String.raw`\bat[ \t]+` + NAME),
   new RegExp(String.raw`\b(?:of|for)[ \t]+` + NAME),

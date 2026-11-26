@@ -52,5 +52,5 @@ export async function dczEncodeBatch(jobs: Array<{ bytes: Uint8Array; dictBytes:
   return jobs.map(({ dictBytes }, index) => frameDcz(frames[index], dictBytes));
 }
 
-// The 16-hex tag for a dictionary's bytes.
+// The full SHA-256 tag for a dictionary's bytes.
 export const dictionaryTag = (dictBytes: Uint8Array): string => tagOfDigest(createHash("sha256").update(dictBytes).digest());

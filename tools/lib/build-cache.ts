@@ -22,8 +22,33 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 export const BUILD_CACHE_DIR = "node_modules/.cache/aadhar-build";
+
+// The digest of a module and of every relative module it imports, for a memo
+// key named by its code: a helper the module imports later changes the key
+// without anyone remembering to add it. A package import throws, since its
+// bytes live outside the repo; key on the package version instead (toolVersion
+// in build.ts).
+export function sourceDigest(entry: string): string {
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const h = createHash("sha256");
+  const seen = new Set<string>();
+  const visit = (path: string) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const text = readFileSync(path, "utf8");
+    h.update(path).update("\0").update(text).update("\0");
+    for (const { path: spec } of transpiler.scanImports(text)) {
+      if (spec.startsWith("node:")) continue;
+      if (!spec.startsWith(".")) throw new Error(`sourceDigest: ${path} imports the package ${spec}; key on its version instead`);
+      visit(resolve(dirname(path), spec));
+    }
+  };
+  visit(resolve(entry));
+  return h.digest("hex");
+}
 
 export function buildCacheEnabled(env: Record<string, string | undefined> = process.env): boolean {
   if (env.BUILD_CACHE === "0") return false;
@@ -133,10 +158,12 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
   // an entry carries the digest of its own text, so a damaged file is a miss.
   // A transform that throws is never cached, so a failure always repeats.
   const memos = new Map<string, string>();
-  function memo(name: string, parts: Array<string | Uint8Array>, produce: () => string): string {
+  function memoKey(name: string, parts: Array<string | Uint8Array>): string {
     const h = createHash("sha256").update(name);
     for (const part of parts) h.update("\0").update(part);
-    const key = h.digest("hex");
+    return h.digest("hex");
+  }
+  function memoRead(key: string): string | undefined {
     const known = memos.get(key);
     if (known !== undefined) {
       hits++;
@@ -158,8 +185,10 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
         /* a miss */
       }
     }
+    return undefined;
+  }
+  function memoWrite(key: string, text: string) {
     misses++;
-    const text = produce();
     memos.set(key, text);
     if (enabled) {
       mkdirSync(dir, { recursive: true });
@@ -168,7 +197,32 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
       writeFileSync(tmp, `${createHash("sha256").update(text).digest("hex")}\n${text}`);
       renameSync(tmp, `${dir}/${key}`);
     }
+  }
+  function memo(name: string, parts: Array<string | Uint8Array>, produce: () => string): string {
+    const key = memoKey(name, parts);
+    const known = memoRead(key);
+    if (known !== undefined) return known;
+    const text = produce();
+    memoWrite(key, text);
     return text;
+  }
+
+  // The batched form, for a transform with a fixed cost per call (a child
+  // process): every miss goes to one `produce` call, in input order, which
+  // returns one text per miss.
+  async function memoBatch(name: string, items: Array<Array<string | Uint8Array>>, produce: (missed: number[]) => Promise<string[]>): Promise<string[]> {
+    const keys = items.map((parts) => memoKey(name, parts));
+    const out = keys.map(memoRead);
+    const missed = out.flatMap((text, i) => (text === undefined ? [i] : []));
+    if (missed.length) {
+      const made = await produce(missed);
+      if (made.length !== missed.length) throw new Error(`build cache: ${name} produced ${made.length} texts for ${missed.length} misses`);
+      missed.forEach((i, j) => {
+        memoWrite(keys[i], made[j]);
+        out[i] = made[j];
+      });
+    }
+    return out as string[];
   }
 
   // At most once a day, remove every entry this build did not use that was
@@ -196,5 +250,5 @@ export function buildCache({ dir = BUILD_CACHE_DIR, enabled }: { dir?: string; e
     return gone.filter(Boolean).length;
   }
 
-  return { many, memo, prune, stats: () => ({ hits, misses }) };
+  return { many, memo, memoBatch, prune, stats: () => ({ hits, misses }) };
 }

@@ -164,7 +164,7 @@
 # pages it renders (lib/security.js homepage, lib/chrome.js luna pages).
 /garage/*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
-  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </luna.css>; rel=preload; as=style, </prose.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
 # The AV2 decoder, which /garage/av2 and /pixel-peeper start as a worker. Two
@@ -244,6 +244,14 @@
 /pixel-peeper/index.html*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+
+# Match the document and its compressed twin without changing section assets.
+/access/index.html*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+/dotfiles/index.html*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 /pixel-peeper/tiles/*
@@ -319,12 +327,16 @@
 # per the merge note at the top of this file, a wildcard Cache-Control would
 # clobber the explicit per-file rules.
 /.well-known/api-catalog
-  Content-Type: application/linkset+json
+  Content-Type: application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
 
 /.well-known/agent-card.json
   Content-Type: application/json; charset=utf-8
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
+
+/.well-known/mcp-registry-auth
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-store
 
 # MCP server cards are static discovery metadata. Cache them at the edge long
 # enough to keep pre-connection discovery cheap; a deploy purges the old bytes.
@@ -352,6 +364,15 @@
   Access-Control-Allow-Origin: *
   Cache-Control: public, max-age=3600, s-maxage=86400
   Link: </.well-known/ard.json>; rel="ard"; type="application/json"
+
+# The Personal Agent Protocol (Poppy) 1.0 manifest: the site's APIs for a
+# personal agent, and web {} with no auth block, since nothing here takes a
+# credential (LEAVES_OUT in lib/public-api.ts). CORS and the day-long cache
+# follow ard.json's reasons.
+/.well-known/poppy.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600, s-maxage=86400
 
 # The W3C TDM Reservation Protocol file (Community Group Final Report,
 # 2024-05-10). One site-wide rule, location "/" with tdm-reservation 0, which

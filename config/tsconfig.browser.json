@@ -25,7 +25,7 @@
   // worker has its own program. Vendored pretext is not in it: its minified
   // bytes are not ours to check, and pretext.lib.d.ts beside it carries
   // upstream's declaration for any TypeScript that imports it.
-  "exclude": ["../src/client/sw.ts"],
+  "exclude": ["../src/client/sw.ts", "../src/client/**/tests/**"],
   "include": [
     "../src/client/**/*.ts",
     "../pipelines/**/specs/**/*.ts"

@@ -56,6 +56,8 @@ for (const scenario of cases) {
     try {
       mkdirSync(join(root, "tools/lib"), { recursive: true });
       copyFileSync(new URL("tools/lib/wrangler-provenance.ts", ROOT), join(root, "tools/lib/wrangler-provenance.ts"));
+      copyFileSync(new URL("tools/lib/fetch-routes.ts", ROOT), join(root, "tools/lib/fetch-routes.ts"));
+      copyFileSync(new URL("tools/lib/no-network.ts", ROOT), join(root, "tools/lib/no-network.ts"));
       mkdirSync(join(root, "temp"));
       mkdirSync(join(root, "src/worker/lib"), { recursive: true });
       copyFileSync(new URL("src/worker/lib/parse.ts", ROOT), join(root, "src/worker/lib/parse.ts"));
@@ -68,10 +70,13 @@ for (const scenario of cases) {
       writeFileSync(
         join(root, "fetch.ts"),
         `
-        globalThis.fetch = async () => {
-          if (process.env.MODE === "resolve-failure") throw new Error("offline control");
-          return new Response(null, {headers: {"x-commit-key": "cloudflare:workers-sdk:${SHA}"}});
-        };
+        import { routeFetch } from "./tools/lib/fetch-routes.ts";
+        routeFetch({
+          "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@": () => {
+            if (process.env.MODE === "resolve-failure") throw new Error("offline control");
+            return new Response(null, {headers: {"x-commit-key": "cloudflare:workers-sdk:${SHA}"}});
+          },
+        });
       `,
       );
       writeFileSync(

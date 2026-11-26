@@ -15,7 +15,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
-import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
+import { FAMILY_DICT_DIR, readCommittedFamily } from "./lib/page-family.ts";
+import type { CommittedFamily } from "./lib/page-family.ts";
 import { SHELL_DISCOVERY_ROOTS, shellAssetRefs } from "./lib/shell-roots.ts";
 import { parseFamilyDictionary, parseShellAsset } from "../src/worker/lib/dictionary-names.ts";
 
@@ -126,7 +127,7 @@ const report = (name, ok, detail) => {
   }
 
   const tracked = [...refs].filter(([, base]) => bases.has(base));
-  const missing = [];
+  const missing: string[] = [];
   for (const [name] of tracked) {
     if (!committed.includes(name)) {
       missing.push(name);
@@ -240,7 +241,7 @@ const report = (name, ok, detail) => {
     // deploy has no delta built against it yet (deltas are build output). Both read
     // as a broken tier when the tier is fine. "At least one committed snapshot is
     // usable against production right now" is the property worth asserting.
-    const tried = [];
+    const tried: string[] = [];
     for (const name of candidates) {
       const raw = brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`));
       const ce = (await get("https://aadhar.sh/garage/pretext", b64(raw))).headers.get("content-encoding");
@@ -426,7 +427,7 @@ const report = (name, ok, detail) => {
   const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
   const url = `https://aadhar.sh/a/nav.${live}.js`;
 
-  const deltas = [];
+  const deltas: { name: string; sha: string; bytes: number }[] = [];
   for (const name of (await readdir("src/dict/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
     const r = await get(url, b64(await readFile(`src/dict/a-dict/${name}`)));
     const body = Buffer.from(await r.arrayBuffer());

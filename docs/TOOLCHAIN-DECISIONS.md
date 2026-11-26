@@ -6,7 +6,7 @@ Version numbers below describe past measurements; manifests and pin files declar
 
 ## lint
 
-`bun lint` here is Bun's built-in linter, reading .oxlintrc.json. A script named lint shadows the built-in for every flag but --doctor, and Bun runs the built-in only when the script body itself says `bun lint` (gotcha 67). gen-runtime-types runs FIRST because the type-aware pass reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.
+`bun lint` here is Bun's built-in linter, reading bunfig.toml's [lint] (oxlint's .oxlintrc.json format until 2026-11-17). A script named lint shadows the built-in for every flag but --doctor, and Bun runs the built-in only when the script body itself says `bun lint` (gotcha 67). gen-runtime-types runs FIRST because the type-aware pass reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.
 
 ## format
 

@@ -244,7 +244,7 @@
         var pick = opts[+b.dataset.i],
           hit = !!pick.ok;
         if (hit) score++;
-        var btns = m.querySelectorAll(".luq-opt") as NodeListOf<HTMLButtonElement>;
+        var btns = m.querySelectorAll<HTMLButtonElement>(".luq-opt");
         for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
         b.classList.add("was-pick");
         msg("you", "<p>" + esc(pick.t) + "</p>");

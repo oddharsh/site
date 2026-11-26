@@ -8,12 +8,14 @@
 // so they are resampled to a fixed FPS by time instead of being taken as fast
 // as screenshot() returns (that came out at 10 to 20 uneven fps and stuttered).
 // Frame 0 is the page before any step runs, which is the still card's state.
-import { chromium, type Browser } from "playwright-core";
+import { chromium } from "playwright-core";
+import type { Browser } from "playwright-core";
 import { chromeChannel } from "../../lib/browser-channel.ts";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { CLIPS, type Clip } from "./clips.ts";
+import { CLIPS } from "./clips.ts";
+import type { Clip } from "./clips.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..");
 const BASE = (process.env.OG_BASE || "https://aadhar.sh").replace(/\/$/, "");
@@ -260,7 +262,9 @@ async function record(browser, cardPage, luna, c: Clip, out) {
         im.src = url;
         await im.decode();
         (document.getElementById("s") as HTMLElement).style.backgroundImage = `url(${url})`;
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        await new Promise((r) => {
+          requestAnimationFrame(() => requestAnimationFrame(r));
+        });
       }, raw[j].data);
       last = j;
     }

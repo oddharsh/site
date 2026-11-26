@@ -1,0 +1,394 @@
+{
+ "GET https://example.com/": {
+  "status": 200,
+  "headers": {
+   "age": "4",
+   "allow": "GET, HEAD",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec533288b3d92a-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:49 GMT",
+   "last-modified": "Thu, 19 Nov 2026 22:11:52 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/acp.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d17ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/agent-card.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cfeccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/agent-skills/index.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d14ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/ai-plugin.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d02ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/ap2": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d18ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/api-catalog": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d06ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/http-message-signatures-directory": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d0bccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/mcp/server-card.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d12ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/oauth-authorization-server": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d0eccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/oauth-protected-resource": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d10ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/openid-configuration": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d0dccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/security.txt": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cfcccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/tdmrep.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cfdccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/.well-known/ucp": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d16ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/AGENTS.md": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb7d4eccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/agents.md": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d19ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/ai.txt": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cfbccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/ask": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d0accf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/auth.md": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d11ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/llms-full.txt": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cf7ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/llms.txt": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cf5ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/mcp": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4d07ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/openapi.json": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cffccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/robots.txt": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cefccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ },
+ "GET https://example.com/sitemap.xml": {
+  "status": 404,
+  "headers": {
+   "age": "0",
+   "alt-svc": "h3=\":443\"; ma=86400",
+   "cf-cache-status": "HIT",
+   "cf-ray": "a5ec52bb4cf3ccf1-EWR",
+   "connection": "keep-alive",
+   "content-type": "text/html; charset=utf-8",
+   "date": "Mon, 23 Nov 2026 01:15:30 GMT",
+   "server": "cloudflare",
+   "transfer-encoding": "chunked"
+  },
+  "body": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme:light dark;background:light-dark(#eee,#222)}body{font:16px/1.6 system-ui,sans-serif;max-width:26em;margin:auto;padding:25vh 2em 2em;text-align:center}</style></head><body><p>This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.</p><script src=/s.js></script></body></html>\n"
+ }
+}

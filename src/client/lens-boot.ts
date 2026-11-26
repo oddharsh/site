@@ -40,7 +40,7 @@
         () => {
           ready = true;
         },
-        (error) => {
+        (error: unknown) => {
           app = null;
           throw error;
         },

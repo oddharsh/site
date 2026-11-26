@@ -56,6 +56,8 @@ import {
   readZoneSetting,
 } from "../lib/infra-ports.ts";
 import { createReport } from "../lib/infra-report.ts";
+import type { AgentSurface } from "../lib/agent-representation.ts";
+import type { AgentAnswer, EdgeObservation, Finding } from "../lib/infra-compare.ts";
 
 const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
 const repo = infra.repository;
@@ -278,7 +280,7 @@ test("tree tier: a declared deploy command that lost a provisioning pin fails, f
 // deploy command those Workers' builds run. Nothing read any of them until the
 // deploy-direct-loses-provision-pin control dropped --x-provision=false from
 // deploy:direct and the whole suite stayed green.
-const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s+(?:[^&|;]*?\s)?(?:deploy|versions\s+upload)\b/;
+const PUBLISHES = /\b(?:wrangler(?:\.js)?|deploy-wrangler\.sh)\s(?:[^&|;]*\s)?(?:deploy|versions\s+upload)\b/;
 test("tree tier: every committed command that publishes a Worker pins provisioning off", () => {
   const commands: [string, string][] = [];
   const manifests = repoFiles(["package.json", "*/package.json"]);
@@ -432,7 +434,7 @@ test("edge: Markdown for Agents converting a page with no twin is a drift; the p
 test("early data: a rejection is advisory on a hosted runner and a drift on a workstation", () => {
   const check = edgeCheck("tls-0rtt-on");
 
-  const rejected: import("../lib/infra-compare.ts").EdgeObservation = { kind: "early-data", result: { accepted: false, attempts: 3 } };
+  const rejected: EdgeObservation = { kind: "early-data", result: { accepted: false, attempts: 3 } };
 
   const hosted = compareEdgeCheck(check, rejected, { hostedRunner: true });
   assert.equal(hosted.length, 1);
@@ -448,14 +450,42 @@ test("early data: a rejection is advisory on a hosted runner and a drift on a wo
   assert.equal(compareEdgeCheck(check, { kind: "early-data", result: { skip: "no openssl" } }, { hostedRunner: false })[0].level, "warn");
 });
 
+// gotcha 112. The two etags are the ones measured on 2026-11-22: production
+// answered / with no etag at all while Cloudflare Fonts re-encoded the twin,
+// and the workers.dev preview of the same
+// version answered with the twin's own validator.
+test("edge: html-twin-reaches-the-wire passes on the twin's -br etag and fails when the edge re-encoded it", () => {
+  const check = edgeCheck("html-twin-reaches-the-wire");
+  assert.deepEqual(check.request, { "accept-encoding": "br" });
+
+  const twin = compareEdgeCheck(
+    check,
+    { kind: "response", headers: { "content-encoding": "br", "etag": 'W/"1e59175172b699000a54210f217055b8-br"' } },
+    { hostedRunner: false },
+  );
+  assert.deepEqual(twin, [{ level: "pass", message: "edge html-twin-reaches-the-wire holds" }]);
+
+  const reencoded = compareEdgeCheck(check, { kind: "response", headers: { "content-encoding": "br" } }, { hostedRunner: false });
+  assert.equal(reencoded.length, 1);
+  assert.equal(reencoded[0].level, "fail");
+  assert.ok(
+    reencoded[0].message.startsWith('production edge: html-twin-reaches-the-wire: etag does not contain "-br\\"" (got "(absent)")'),
+    reencoded[0].message,
+  );
+
+  // The dcz delta's validator is the Worker's too, and still not the twin.
+  const delta = compareEdgeCheck(
+    check,
+    { kind: "response", headers: { "content-encoding": "dcz", "etag": 'W/"1e59175172b699000a54210f217055b8-dcz"' } },
+    { hostedRunner: false },
+  );
+  assert.equal(delta[0].level, "fail");
+});
+
 test("edge: an observation of the wrong kind, a missing body and a missing check are advisories", () => {
   const body = edgeCheck("rocket-loader-off");
 
-  const unusable: (import("../lib/infra-compare.ts").EdgeObservation | undefined)[] = [
-    { kind: "response", headers: {} },
-    { kind: "prefers", got: "br" },
-    undefined,
-  ];
+  const unusable: (EdgeObservation | undefined)[] = [{ kind: "response", headers: {} }, { kind: "prefers", got: "br" }, undefined];
   for (const seen of unusable) {
     const findings = compareEdgeCheck(body, seen, { hostedRunner: false });
     assert.equal(findings.length, 1);
@@ -468,10 +498,6 @@ test("edge: an observation of the wrong kind, a missing body and a missing check
 
 // The registry these tests judge is the real one, so a surface added tomorrow
 // is covered by them without an edit.
-
-type AgentSurface = import("../lib/agent-representation.ts").AgentSurface;
-
-type AgentAnswer = import("../lib/infra-compare.ts").AgentAnswer;
 
 const agentPages: AgentSurface[] = agentSurfaces(JSON.parse(readFileSync("config/site-manifest.json", "utf8")).surfaces);
 
@@ -704,7 +730,7 @@ for (const [how, respond] of Object.entries(refusals)) {
     const cf = cloudflareReader("unused-token-value", fetchImpl);
     const zone = infra.zone.name;
 
-    const sections: [string, string, import("../lib/infra-compare.ts").Finding[]][] = [
+    const sections: [string, string, Finding[]][] = [
       ["KV namespaces", "Workers KV Storage:Read", compareKvNamespaces(bindings, await readKvNamespaces(cf, "acct"))],
       ["R2 buckets", "Workers R2 Storage:Read", compareR2Buckets(bindings, await readR2Buckets(cf, "acct"))],
       ["D1 databases", "D1:Read", compareD1Databases(bindings, await readD1Databases(cf, "acct"))],

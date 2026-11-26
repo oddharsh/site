@@ -130,7 +130,7 @@ export function createRun(options) {
     // trap, Esc handling, inert page, and focus restore — the hand-rolled
     // backdrop div, lastFocus juggling, and aria-modal claims all retire.
     run = el(
-      '<dialog id="axp-run" aria-label="Run">' +
+      '<dialog id="axp-run" aria-label="Run" closedby="any">' +
         '<div class="tb"><span>Run</span><span class="axp-kbd" aria-hidden="true">' + kbd + '</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
         '<div class="body"><div class="ico" aria-hidden="true"><div class="doc"></div><div class="sw"></div></div>' +
           '<div class="prompt">Type the name of a page, photo, or profile, and <b>aadhar.sh</b> will open it for you.</div></div>' +
@@ -145,9 +145,21 @@ export function createRun(options) {
     // after the modal opens, so it stacks above it.
     preview = el('<div id="axp-run-preview" popover="manual" aria-hidden="true"></div>');
     D.body.appendChild(preview);
-    // ::backdrop click = light dismiss: a click landing on the dialog element
-    // itself (not its children) can only be the backdrop-covered margin area
-    run.addEventListener("click", (e) => { if (e.target === run) closeRun(); });
+    // Light dismiss: closedby="any" where the engine has it. Elsewhere (Safari,
+    // per Modern Web Guidance's dialog guide, 2026-11-15) a pointer test stands
+    // in. A bare e.target === run check closed the palette on a click in the
+    // 13px strips beside the list (the dialog's own box) and on a text drag
+    // from the Open field that ended on the backdrop, so press and release
+    // must both fall outside the box.
+    if (!("closedBy" in HTMLDialogElement.prototype)) {
+      var outside = (e: PointerEvent) => {
+        var r = run.getBoundingClientRect();
+        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      };
+      var pressedOutside = false;
+      run.addEventListener("pointerdown", (e) => { pressedOutside = outside(e); });
+      run.addEventListener("pointerup", (e) => { if (pressedOutside && outside(e)) closeRun(); });
+    }
     // native close (Esc/cancel, or run.close()): one place for the side effects
     // native Esc fires cancel (then close) WITHOUT routing through closeRun, so
     // the card needs its own hook on that path too.
@@ -297,6 +309,11 @@ export function createRun(options) {
   }
 
   function onKey(e) {
+    // While an IME composes (Japanese, Chinese, Korean), Enter confirms the
+    // candidate, the arrows walk the candidate list and Escape cancels it, so
+    // none of them is meant for the palette. Safari reports isComposing false on
+    // the confirming Enter (WebKit bug 165004) but still sends keyCode 229.
+    if (e.isComposing || (e.key === "Enter" && e.keyCode === 229)) return;
     if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
     else if (e.key === "Enter") { e.preventDefault(); go(results[sel] || results[0]); }

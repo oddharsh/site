@@ -3,6 +3,8 @@
 // crawled titles, and the constant-time owner-secret check.
 
 import { escape } from "./html.ts";
+import { readBytesCapped } from "./public-fetch.ts";
+import { forwardSearch } from "./text.ts";
 
 // The one JSON response every route builds. Defaults to a private reply: never
 // cached, pretty-printed for a person reading it with curl. A route changes the
@@ -13,6 +15,22 @@ export function jsonResponse(body, status = 200, extraHeaders = {}, { pretty = t
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders };
   for (const key of Object.keys(headers)) if (headers[key] === null) delete headers[key];
   return new Response(pretty ? JSON.stringify(body, null, 2) + "\n" : JSON.stringify(body), { status, headers });
+}
+
+// Every inbound request body goes through here. Cloudflare accepts a body of
+// up to 100 MB on Workers Free and the isolate has 128 MB, so buffering
+// whatever anyone POSTs could take down every request sharing the isolate.
+// This stops reading at maxBytes and returns null; under the cap it hands back
+// the same bytes as a Body, so callers keep their .json(), .formData() or .text().
+// contract-request-bodies-stop-at-their-cap fails on a raw read anywhere public.
+export const REQUEST_BODY_CAP = 64 * 1024;
+export async function cappedRequestBody(request: Request, maxBytes = REQUEST_BODY_CAP): Promise<Response | null> {
+  if (Number(request.headers.get("content-length")) > maxBytes) return null;
+  const read = await readBytesCapped(request, maxBytes);
+  if (read?.truncated) return null;
+  const text = read ? new TextDecoder("utf-8").decode(read.bytes) : "";
+  const type = request.headers.get("content-type");
+  return new Response(text, type ? { headers: { "content-type": type } } : {});
 }
 
 // The headers Response.json() sends, for an internal hop (a Durable Object
@@ -165,15 +183,53 @@ export function publicJsonResponse(body: unknown, status = 200, { noindex = fals
   return jsonResponse(body, status, headers, { pretty: false });
 }
 
+// extractTitle and extractMeta read pages whoever runs the other origin wrote,
+// and until 2026-11-20 each was one regex that rescanned to the end of the page
+// from every opener that could not match: 256 KB of "<meta " took 6.5 s and of
+// "<title " 4.2 s in Node 26. Both now scan forward once and find what the
+// regex found; contract-lazy-tag-scans-stay-linear fuzzes each against it.
+
+// /<title[^>]*>([\s\S]*?)<\/title>/i. The first "<title" decides: when it has no
+// ">" or no closer after it, no later one has either.
 export function extractTitle(html) {
-  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return m ? decodeEntities(m[1].trim()).slice(0, 200) : "";
+  const open = /<title/gi.exec(html);
+  const body = open ? html.indexOf(">", open.index + 6) + 1 : 0;
+  const close = /<\/title>/gi;
+  close.lastIndex = body;
+  const end = body ? close.exec(html) : null;
+  return end ? decodeEntities(html.slice(body, end.index).trim()).slice(0, 200) : "";
 }
 
+// <meta[^>]+(?:name|property)=["']NAME["'][^>]*content=["']([^"']+)["'], case
+// blind. Every "<meta" before the same ">" can match only what the first of them
+// can, so each tag is tried once. Inside it the regex keeps the LAST content=
+// after the first NAME attribute whose value is nonempty and closed by a quote,
+// and that value may run past the ">".
 export function extractMeta(html, name) {
-  const re = new RegExp(`<meta[^>]+(?:name|property)=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']+)["']`, "i");
-  const m = html.match(re);
-  return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
+  const attr = forwardSearch(new RegExp(`(?:name|property)=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`, "gi"), html);
+  const content = forwardSearch(/content=["']/gi, html);
+  const lastQuote = Math.max(html.lastIndexOf('"'), html.lastIndexOf("'"));
+  const open = /<meta/gi;
+  for (let m; (m = open.exec(html));) {
+    const gt = html.indexOf(">", m.index + 5);
+    const tagEnd = gt < 0 ? html.length : gt;
+    const a = attr(m.index + 6);
+    let value = -1;
+    if (a && a.index + a[0].length <= tagEnd) {
+      for (let c = content(a.index + a[0].length); c && c.index + c[0].length <= tagEnd; c = content(c.index + 1)) {
+        const at = c.index + c[0].length;
+        if (at < lastQuote && html[at] !== '"' && html[at] !== "'") value = at;
+      }
+    }
+    if (value >= 0) {
+      const end = /["']/g;
+      end.lastIndex = value;
+      return decodeEntities(html.slice(value, end.exec(html)?.index).trim()).slice(0, 240);
+    }
+    if (gt < 0) break;
+    open.lastIndex = gt;
+  }
+  return "";
 }
 
 // &amp; is decoded LAST, and the order is the whole correctness of this function.

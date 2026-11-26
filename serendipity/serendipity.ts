@@ -12,7 +12,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { BOT_UA } from "../src/worker/lib/botauth.ts";
-import { esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
+import { cappedRequestBody, esc, jsonResponse, secretMatches } from "../src/worker/lib/http.ts";
 import { shareMeta } from "../src/worker/lib/chrome.ts";
 import { sign, verify } from "../src/worker/lib/sign.ts";
 import { twinFor } from "../src/worker/lib/twins.ts";
@@ -23,7 +23,7 @@ import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit, recordBudget } fr
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { setAttributes, span } from "../src/worker/lib/trace.ts";
 import type { SpanAttrs } from "../src/worker/lib/span-vocabulary.ts";
-import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpBatchRefusal, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asList, asRecord, asText } from "../src/worker/lib/parse.ts";
@@ -285,7 +285,7 @@ export type CompanySource = typeof EXA_ONLY;
  *  absent. That one error reruns the read without it, which is what the roster
  *  showed before; any other error throws. Nested calls each own one table, so
  *  either can be missing without hiding the other. */
-async function withTable<S>(table: string, present: S, absent: S, read: (s: S) => Promise<any>): Promise<any> {
+async function withTable<S>(table: string, present: S, absent: S, read: (s: S) => Promise<any>) {
   try {
     return await read(present);
   } catch (err) {
@@ -852,9 +852,11 @@ export function parseCookies(raw) {
 async function handleCookies(request, env, d, uid) {
   const back = (msg, toDash?) =>
     new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const capped = await cappedRequestBody(request);
+  if (!capped) return back("That form was too large");
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return back("Couldn't read the form");
   }
@@ -1218,7 +1220,7 @@ async function fetchEventDescription(eventId, auth) {
   let txt = data.description_md || data.description || e.description_md || e.description || "";
   if (!txt && data.description_mirror) txt = pmToText(data.description_mirror);
   txt = String(txt || "")
-    .replace(/[ \t]+\n/g, "\n")
+    .replace(/(?<![ \t])[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return txt || null;
@@ -1271,7 +1273,7 @@ async function fetchEventByLink(input) {
   if (!desc && data.description_mirror) desc = pmToText(data.description_mirror);
   desc =
     String(desc || "")
-      .replace(/[ \t]+\n/g, "\n")
+      .replace(/(?<![ \t])[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim() || null;
   const hosts = (data.hosts || []).map((h) => parseGuest(h.api_id, h)).filter((g) => g.id);
@@ -1633,9 +1635,11 @@ async function addEventsByLink(d, uid, raw) {
 async function handleAddEvent(request, env, d, uid) {
   const back = (msg, toDash?) =>
     new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const capped = await cappedRequestBody(request);
+  if (!capped) return back("That form was too large");
   let form;
   try {
-    form = await request.formData();
+    form = await capped.formData();
   } catch {
     return back("Couldn't read the form");
   }
@@ -2062,7 +2066,7 @@ async function handleBioPass(request, env, d, run: (d, env, limit: number) => Pr
 // join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
 // whole cost and stays untouched, and a database where event_tags does not exist
 // yet degrades to "no tags" here instead of failing every read of the pool.
-async function queryEventTags(d): Promise<Map<string, any>> {
+async function queryEventTags(d) {
   try {
     const rows = await d.prepare(`SELECT event_id, topic, topic_confidence, format, format_confidence FROM event_tags`).all();
     return new Map(rows.map((r) => [r.event_id, r]));
@@ -2618,6 +2622,7 @@ export async function cronSerendipity(env, selfFetch: EnrichFetch | null = null)
     } catch (err) {
       console.log(JSON.stringify({ cron: "serendipity", record_write_failed: errorText(err) }));
     }
+    // oxlint-disable-next-line typescript/only-throw-error -- rethrows what the catch above caught, unchanged, so the cron's error keeps its own stack
     if (thrown) throw thrown;
     return record;
   });
@@ -3762,9 +3767,11 @@ export async function handleMcp(request, env, d) {
     // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
     return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
   }
+  const capped = await cappedRequestBody(request);
+  if (!capped) return respond(mcpError(null, -32600, "Request body too large"), 413);
   let payload;
   try {
-    payload = await request.json();
+    payload = await capped.json();
   } catch {
     return respond(mcpError(null, -32700, "Parse error"));
   }
@@ -3811,6 +3818,10 @@ export async function handleMcp(request, env, d) {
 
   if (Array.isArray(payload)) {
     if (payload.length === 0) return respond(mcpError(null, -32600, "Invalid Request"));
+    // This server has no per-call rate limit, so the batch cap is the only
+    // bound on how many D1 queries one POST starts.
+    const refused = mcpBatchRefusal(payload);
+    if (refused) return respond(refused, 413);
     const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
     return out.length ? respond(out) : respond(null, 202);
   }
@@ -3821,7 +3832,7 @@ export async function handleMcp(request, env, d) {
 }
 
 export async function handleSerendipity(request, env, ctx, url = new URL(request.url)) {
-  let path = url.pathname.replace(/\/+$/, "") || PREFIX;
+  let path = url.pathname.replace(/(?<!\/)\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent
   let uid = readUid(request),

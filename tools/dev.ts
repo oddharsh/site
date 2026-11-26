@@ -27,7 +27,8 @@
 // docs/DEPENDENCIES.md has why (it pins a second workerd). It finds the dev
 // server through config/dev/package.json, which names the root's exact wrangler
 // so check-wrangler holds the two byte for byte.
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";

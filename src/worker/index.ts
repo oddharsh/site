@@ -22,7 +22,7 @@ import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedAsset, serveStaticPage } from "./lib/assets.ts";
 import { serveBuiltPage } from "./lib/built-page.ts";
 import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
@@ -36,7 +36,8 @@ import { cronJob } from "./lib/cron.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import type { Album } from "./albums.ts";
-import { createDispatch, isEdgeCacheable, type RouteHandler } from "./dispatch.ts";
+import { createDispatch, isEdgeCacheable } from "./dispatch.ts";
+import type { RouteHandler } from "./dispatch.ts";
 import {
   AROUND_SNAPSHOT_URL,
   CAL_HOST,
@@ -47,9 +48,8 @@ import {
   LEDGER_LINES_URL,
   READING_LIST_URL,
   WHOAREYOU_VALUES_URL,
-  type ExactPath,
-  type PrefixLabel,
 } from "./routes.ts";
+import type { ExactPath, PrefixLabel } from "./routes.ts";
 import { handleReading, handleReadingList } from "./reading.ts";
 import { handleGithubJson } from "./github.ts";
 import { cronEnrichReadingHn } from "./reading-hn.ts";
@@ -461,7 +461,7 @@ async function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext
 }
 
 async function routeCalHost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
-  const path = url.pathname.replace(/\/+$/, "") || "/";
+  const path = url.pathname.replace(/(?<!\/)\/+$/, "") || "/";
   if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
 
   if (env.WORK_CALENDAR_SLUG && path === `/${env.WORK_CALENDAR_SLUG}`) {
@@ -616,7 +616,7 @@ async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionCo
   // which that page's own first line names as its View Source. This prefix wins
   // before the generic "/<path>.src.<ext>" row, and handleSerendipity has no
   // such file, so it answered 404 until 2026-09-26.
-  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedText(request, env, url);
+  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedAsset(request, env, url);
   // The dashboard's plain GET and the agents page, both built at deploy; a
   // flash ?msg= belongs to the dashboard only.
   const built = (url.pathname === "/serendipity" && !url.searchParams.has("msg")) || url.pathname === SERENDIPITY_MCP_INFO;
@@ -647,8 +647,11 @@ function routeFavicon() {
 }
 
 // Agent-discovery docs: extensionless files need the Worker to name their type.
+// RFC 9727 section 7.4 registers the profile parameter that marks a linkset as
+// an API catalog; public/_headers carries the same value.
+const API_CATALOG_TYPE = 'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"';
 function routeApiCatalog(request: SiteRequest, env: Env) {
-  return serveFreshAsset(request, env, "application/linkset+json");
+  return serveFreshAsset(request, env, API_CATALOG_TYPE);
 }
 
 function routeAgentCard(request: SiteRequest, env: Env) {
@@ -881,7 +884,7 @@ const WRITING_PAGE_HEADERS = {
 // IMAGES_MANIFEST_HEADERS overrides the one-year immutable cache _headers puts on
 // /images/*; photos.ts carries the measurement and the reason.
 async function routeImagesManifest(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
-  const response = await servePrecompressedText(request, env, url, { headers: IMAGES_MANIFEST_HEADERS });
+  const response = await servePrecompressedAsset(request, env, url, { headers: IMAGES_MANIFEST_HEADERS });
   if (response.status !== 404) return response;
   try {
     await response.body?.cancel();
@@ -890,7 +893,7 @@ async function routeImagesManifest(request: SiteRequest, env: Env, _ctx: Executi
 }
 
 function routeImagesMetadata(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
-  return servePrecompressedText(request, env, url, {
+  return servePrecompressedAsset(request, env, url, {
     headers: { "cache-control": "public, max-age=60, s-maxage=60, must-revalidate" },
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
@@ -898,7 +901,7 @@ function routeImagesMetadata(request: SiteRequest, env: Env, _ctx: ExecutionCont
 }
 
 function routeImagesMeta(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
-  return servePrecompressedText(request, env, url, {
+  return servePrecompressedAsset(request, env, url, {
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
   });
@@ -927,9 +930,9 @@ function routeShellAsset(request: SiteRequest, env: Env, _ctx: ExecutionContext,
 
 // The q11 twin for a static text asset outside /a/ and outside any page
 // prefix. The reasoning, and the measurement that put these behind the
-// Worker, is on servePrecompressedText.
+// Worker, is on servePrecompressedAsset.
 function routeTextTwin(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
-  return servePrecompressedText(request, env, url);
+  return servePrecompressedAsset(request, env, url);
 }
 
 // legacy thumbnail URLs (/images/<stem>.<ext>[?v=N]) 301 into their content-

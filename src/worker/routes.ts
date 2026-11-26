@@ -37,8 +37,26 @@ export const INBOX_MAIL_URL = "/inbox/mail.html";
 export const AROUND_SNAPSHOT_URL = "/around/snapshot.html";
 export const GUESTBOOK_ENTRIES_URL = "/guestbook/entries.html";
 
+// The methods a route answers, which dispatch.ts enforces before its handler
+// runs (lib/http.ts methodGuard: a JSON 405 whose Allow matches its body). GET
+// implies HEAD. Omitted means GET alone, so a route that forgets to declare a
+// write refuses it instead of serving it. "handler" means the module behind
+// the route answers every method itself: cal's and serendipity's own routers,
+// and MCP's JSON-RPC 405 with the CORS a browser client needs. The documented
+// API paths take theirs from lib/public-api.ts and declare none here, so the
+// two can't disagree (contract-every-route-declares-its-methods).
+//
+// Before 2026-11-22 each handler guarded itself. Measured that day on an
+// in-process Worker, 5 mechanisms answered a wrong method: the API preflight
+// (13 paths), methodGuard (17), the asset layer's bare 405 with no Allow
+// header (41, against RFC 9110 section 15.5.6), 2 hand-written checks, and
+// nothing at all on 19 paths, which answered DELETE with a 200.
+export type Method = "GET" | "POST" | "OPTIONS";
+export type Methods = readonly Method[] | "handler";
+
 type ExactRoute = {
   path: string;
+  methods?: Methods;
   // The run_worker_first rows this route needs. Omitted means the path itself.
   // A FOLD names a wildcard instead, and several routes naming one wildcard is
   // how 104 exact routes fit under wrangler's cap of 100 rows (gotcha 26).
@@ -59,6 +77,7 @@ type ExactRoute = {
 
 type PrefixRoute = {
   label: string;
+  methods?: Methods;
   match: (pathname: string) => boolean;
   // A real path this route answers, for checks that need one: claim coverage
   // today, the route oracle's presence row later.
@@ -129,18 +148,18 @@ export const EXACT_ROUTES = [
   { path: CENSUS_TABLE_URL, claim: ["/lens/*"] },
   { path: "/lens/census.json", claim: ["/lens/*"] },
 
-  { path: "/mcp", writes: "per-tool", selfFetch: true },
+  { path: "/mcp", methods: "handler", writes: "per-tool", selfFetch: true },
 
   // The retired console: one wildcard for the 410 at /terminal and under it.
-  { path: "/terminal", claim: ["/terminal*"] },
-  { path: "/terminal/", claim: ["/terminal*"] },
+  { path: "/terminal", methods: "handler", claim: ["/terminal*"] },
+  { path: "/terminal/", methods: "handler", claim: ["/terminal*"] },
 
   // One wildcard per tool covers the bare route and its .txt frame. NOT
   // cosmetic: twelve exact rows put the config at 102 of 100.
   { path: "/finger", claim: ["/finger*"] },
   { path: "/finger.txt", claim: ["/finger*"] },
-  { path: "/radar", claim: ["/radar*"] },
-  { path: "/radar.txt", claim: ["/radar*"] },
+  { path: "/radar", methods: ["GET", "POST"], claim: ["/radar*"] },
+  { path: "/radar.txt", methods: ["GET", "POST"], claim: ["/radar*"] },
   { path: "/dict", claim: ["/dict*"] },
   { path: "/dict.txt", claim: ["/dict*"] },
   { path: "/cache", claim: ["/cache*"] },
@@ -170,12 +189,13 @@ export const EXACT_ROUTES = [
   { path: "/ledger/speculation.json", claim: ["/ledger/*"] },
   // field vitals from /garage/horizon (vitals.ts). A POST, which preview.ts
   // and early-data.ts already refuse on a preview and on 0-RTT.
-  { path: "/ledger/vitals", claim: ["/ledger/*"] },
+  { path: "/ledger/vitals", methods: ["POST"], claim: ["/ledger/*"] },
 
   { path: "/writing", cacheable: true },
 
+  // its GET 405 explains the endpoint in plain text to a person poking at it
+  { path: "/webmention", methods: "handler" },
   // HMAC-signed host actions, the same construction as cal's booking approvals
-  { path: "/webmention" },
   { path: "/webmention/approve", claim: ["/webmention/*"], writes: "get" },
   { path: "/webmention/decline", claim: ["/webmention/*"], writes: "get" },
   // the page and its island; nothing static lives under /inbox
@@ -188,18 +208,18 @@ export const EXACT_ROUTES = [
   { path: "/rn/tracks", cacheable: true },
   { path: "/rn/tracks.html", cacheable: true },
   { path: "/rn/admin" },
-  { path: "/rn/set" },
+  { path: "/rn/set", methods: ["GET", "POST"] },
 
   // Pixel Peeper's pooled picks (pixel-peeper-crowd.ts). Both sit under the
   // section's own "/pixel-peeper/*" claim, so they cost no allowlist row. The
   // POST is an unsafe method, which preview.ts and early-data.ts already refuse
   // on a preview and on 0-RTT without a `writes` flag.
-  { path: "/pixel-peeper/runs", claim: ["/pixel-peeper/*"] },
+  { path: "/pixel-peeper/runs", methods: ["POST"], claim: ["/pixel-peeper/*"] },
   { path: "/pixel-peeper/crowd.json", claim: ["/pixel-peeper/*"] },
   // The guestbook (guestbook.ts): the page, which also takes the POST that
   // signs it, its island, and its JSON, folded under one row. The POST is an
   // unsafe method, so preview.ts and early-data.ts refuse it with no flag.
-  { path: "/guestbook", claim: ["/guestbook*"] },
+  { path: "/guestbook", methods: ["GET", "POST"], claim: ["/guestbook*"] },
   { path: GUESTBOOK_ENTRIES_URL, claim: ["/guestbook*"] },
   { path: "/guestbook.json", claim: ["/guestbook*"] },
 
@@ -260,6 +280,7 @@ export const ALBUM_ROUTES: readonly ExactRoute[] = Object.values(ALBUMS).map((al
 export const PREFIX_ROUTES = [
   {
     label: "/coffee/<path>",
+    methods: "handler",
     match: (pathname: string) => pathname === "/coffee" || pathname.startsWith("/coffee/"),
     probe: "/coffee",
     claim: ["/coffee", "/coffee/*"],
@@ -270,6 +291,7 @@ export const PREFIX_ROUTES = [
   },
   {
     label: "/serendipity/<path>",
+    methods: "handler",
     match: (pathname: string) => pathname === "/serendipity" || pathname.startsWith("/serendipity/"),
     probe: "/serendipity",
     claim: ["/serendipity", "/serendipity/*"],
@@ -302,6 +324,7 @@ export const PREFIX_ROUTES = [
   },
   {
     label: "/terminal/<anything>",
+    methods: "handler",
     match: (pathname: string) => pathname.startsWith("/terminal/"),
     probe: "/terminal/finger",
     claim: ["/terminal*"],
@@ -470,6 +493,14 @@ export const GET_WRITES: ReadonlySet<string> = new Set([
   ...(EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.writes === "get").map((r) => r.path),
   ...(PREFIX_ROUTES as readonly PrefixRoute[]).flatMap((r) => r.getWrites ?? []),
 ]);
+
+/** Declared methods by exact path, then by prefix label (dispatch.ts guards with them). */
+export const EXACT_METHODS: ReadonlyMap<string, Methods> = new Map(
+  (EXACT_ROUTES as readonly ExactRoute[]).flatMap((r) => (r.methods ? [[r.path, r.methods] as const] : [])),
+);
+export const PREFIX_METHODS: ReadonlyMap<string, Methods> = new Map(
+  (PREFIX_ROUTES as readonly PrefixRoute[]).flatMap((r) => (r.methods ? [[r.label, r.methods] as const] : [])),
+);
 
 /** Paths a preview admits unsafe methods on, refusing writes per tool instead. */
 export const PER_TOOL_WRITES: ReadonlySet<string> = new Set((EXACT_ROUTES as readonly ExactRoute[]).filter((r) => r.writes === "per-tool").map((r) => r.path));

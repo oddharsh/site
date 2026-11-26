@@ -9,6 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCss } from "./lib/css-parse.ts";
+import { footnoteProblems } from "./lib/footnotes.ts";
 import { closeTagSource } from "./lib/html-raw-text.ts";
 import { readManifest } from "./gen-manifest.ts";
 import { validateUnderstanding } from "../pipelines/content/page-contract.ts";
@@ -236,6 +237,13 @@ for (const file of pageFiles) {
     .flatMap((m) => [...m[1].matchAll(/(--[a-z0-9-]+)\s*:/g)].map((d) => d[1]))
     .filter((t) => lunaTokens.has(t));
   assert.deepEqual(shadowed, [], `src/pages/${file}: :root redeclares luna.css tokens; use luna's or give the page color its own name`);
+}
+// A footnote's text lives in 3 places (marker href, <li> id, <li> body), and
+// a mismatch fails silently: the hover bubble shows stale text and the click
+// goes nowhere. tools/lib/footnotes.ts has the shape.
+for (const file of pageFiles) {
+  const page = await readFile(join(ROOT, "src/pages", file), "utf8");
+  assert.deepEqual(footnoteProblems(page), [], `src/pages/${file}: footnotes out of step`);
 }
 assert.doesNotMatch(await readFile(join(ROOT, "src/styles/lwe-base.css"), "utf8"), restatesDefaults, "lwe-base.css restates page defaults luna.css owns");
 

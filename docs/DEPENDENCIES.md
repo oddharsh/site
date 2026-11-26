@@ -440,10 +440,14 @@ does not make a failed write safe to ignore.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- @cloudflare/config 0.32.0 is the exact root pin for the helpers
+- @cloudflare/config 1.0.0-rc.4 is the exact root pin for the helpers
   `cloudflare.config.ts` and `cf-garage/cloudflare.config.ts` author with. It
   moved from 0.20.0 on 2026-10-05 for `bindings.analyticsSQL()` (new in
-  0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding. workers-sdk#15914 moved them
+  0.22.0, renamed `bindings.analytics()` in 0.24.0), which declares the site's `ANALYTICS` binding.
+  It moved from 0.32.1 on 2026-11-24 because wrangler 4.164.0 and later
+  accept only the type `analytics-sql`, which 1.0.0-rc.3 emits from
+  `bindings.analyticsSql()`; 0.32.1 emitted `analytics`, and every nightly
+  wrangler candidate from 4.164.0 to 4.167.0 failed the dry-run on it. workers-sdk#15914 moved them
   out of `wrangler/experimental-config` and into the `cf` CLI as `cf/config`,
   which is a one-line re-export of `@cloudflare/config/public`. Depending on
   `cf` instead would break the one-Miniflare, one-Workerd property above: it
@@ -452,14 +456,34 @@ does not make a failed write safe to ignore.
   `cf/config`, so `config/tsconfig.cf-garage.json` maps that specifier to this
   package. Bump it with the wrangler pin when a new wrangler commit's generated
   types need a newer version; `cf`'s own dependency on it shows which.
-- Oxc Minify 0.158.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.160.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. A bump PR's review should read their release notes for output,
   target-browser, and native-install changes.
+- **spokeshave is pinned by commit, as of 2026-11-21** (github.com/oddharsh/spokeshave,
+  the owner's own package, the way timbrado and av2-tone are). It brings
+  @swc/wasm 1.16.22 and terser 5.51.2, exact-pinned in its own package.json,
+  so the build can replay each client script's pick from
+  `config/minify-picks.json`. Measured that day: 2,035 B brotli (1.55%) under
+  Oxc alone across the 27 scripts, and 0 of 77 pages different in Chrome.
+  Oxc Minify stays a root pin, because inline `<script>` blocks, the Worker's
+  `/*min*/` CSS literals and any stale pick still go through it directly.
+  Bumping spokeshave is how an SWC, terser or Oxc release reaches the picks;
+  MAINTENANCE.md's "Re-pick a client script's minifier" has the steps.
+  Its renamer (`spokeshave/rename`) loads terser's parser and scope analysis
+  from files outside terser's package exports, so a terser bump inside
+  spokeshave needs spokeshave's own conformance run, which fails if they move.
+  Since 2026-11-22 it also runs build step 5e's class census
+  (`spokeshave/classes`). That brings amaro 1.3.0, Node's own TypeScript
+  stripper, in strip-only mode: it blanks types to spaces, so a class position
+  found in the Worker's TypeScript is the source's own offset.
+  SWC is the WebAssembly build on purpose: the native @swc/core binding
+  failed to load in Workers Builds on 2026-11-21 while it loaded on GitHub's
+  runner, and @swc/wasm wrote byte-identical output on all 27 scripts.
 - **The linter is Bun's, as of 2026-10-15.** `bun run lint`, a required step
-  in `validate`, runs `bun lint --type-aware`, which reads `.oxlintrc.json` as
-  it stands and runs the type-aware rules against the same programs Bun's
+  in `validate`, runs `bun lint --type-aware`, which read `.oxlintrc.json` as
+  it stood and runs the type-aware rules against the same programs Bun's
   checker uses. Oxlint 1.88.0 and oxlint-tsgolint 7.0.2004 left with it, and
   56 lockfile lines with them. Measured on an unchanged tree the day it moved,
   identical by file, line and rule: the same 4 findings without types (0.35 s
@@ -471,19 +495,26 @@ does not make a failed write safe to ignore.
   `anti-slop(no-runtime-typeof)`, one from each kind of rule. The linter now moves with the
   Bun pin, so a pin bump PR's review should read Bun's lint changes for NEW
   rules, since a new rule in an enabled category fails CI on unchanged code.
-  Every rule this repo turns off is turned off in `.oxlintrc.json` beside the
-  measurement that decided it. `bun lint --doctor` says which rules run
-  natively and which run in JavaScript (117 and 3 on 2026-10-15).
-- @oxlint/plugins 1.93.0 is the adapter the three rules vendored from
-  anti-slop at `tools/oxlint/anti-slop` import (`eslintCompatPlugin`,
-  `defineRule`). Bun's linter loads them through it as JavaScript rules. It was
-  the ABI between oxlint and a JS plugin and moved in lockstep with oxlint;
-  with oxlint gone it moves on its own, and a bump PR should run `bun run lint`
-  and confirm `--doctor` still counts 3 JavaScript rules. It carries no
-  transitive dependencies. Since the rules themselves
-  are vendored rather than depended on, an anti-slop release is NOT a Dependabot
-  event here; re-syncing is a deliberate copy, and the section at the end of this
-  file says which three files it covers.
+  Every rule this repo turns off is turned off in bunfig.toml's `[lint]` beside
+  the measurement that decided it. `bun lint --doctor` says which rules run
+  natively and which run in JavaScript (117 and 3 on 2026-10-15; 118 and 0
+  since 2026-11-17).
+- **The lint config moved into bunfig.toml's `[lint]` on 2026-11-17**, and
+  `.oxlintrc.json` left. Every file's effective rules were diffed against the
+  oxlint config with its overrides resolved (691 files), and the tree's
+  findings matched by file, line and rule. In this format Bun layers its own
+  defaults on top, 44 rules and 31,686 findings that day, so `[lint]` turns
+  each one off by name, pins 6 rules' options back to what oxlint ran, and
+  names the 17 vitest correctness rules a category no longer brings in. Three
+  behaviors have no switch and are stricter here (the `[lint]` comment above
+  its option pins lists them); they found 7 sites, fixed or suppressed with a
+  reason. The 3 JavaScript files under `tools/fixtures/` no longer get the
+  typescript-eslint rules. `flavor = "eslint"` keeps an ancestor
+  `.oxlintrc.json` from taking over (gotcha 104).
+- **@oxlint/plugins left on 2026-11-17.** It was the adapter three vendored
+  anti-slop rules imported, and Bun ran them as JavaScript. They are
+  `no-restricted-syntax` selectors now; the section at the end of this file
+  has the measurement.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
   `tools/check-page-contracts.ts` parsed the garage scaffold's inline CSS with
@@ -580,7 +611,7 @@ does not make a failed write safe to ignore.
   moves its port to a newer TypeScript, both read the move as disagreement
   and the pin holds until `TSC_REFERENCE` is bumped to match, which makes
   that bump the review of the new checker.
-- @types/bun 1.4.4 is the exact type pin for host tools and tests. It supplies
+- @types/bun 1.4.5 is the exact type pin for host tools and tests. It supplies
   Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
   one `types` entry. It adds no runtime dependency or served byte.
 
@@ -588,7 +619,7 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core 1.65.0 is the exact root pin for the browser probes. It was
+- playwright-core 1.65.1 is the exact root pin for the browser probes. It was
   caret-ranged until 2026-09-10, on the reasoning that it drives the locally
   installed Google Chrome rather than a bundled browser, so there was no exact
   pin worth stating. That argument is about the BROWSER, and it left the half a
@@ -819,11 +850,10 @@ the reason, rather than written here with the caret quietly dropped.
 
 <a id="evaluated-and-declined-dmmulroyanti-slop"></a>
 
-## Vendored rules: dmmulroy/anti-slop
+## Rules from dmmulroy/anti-slop
 
 The repository adopts three [anti-slop](https://github.com/dmmulroy/anti-slop)
-rules through `tools/oxlint/anti-slop/index.ts` and enables them in
-`.oxlintrc.json`:
+rules as `no-restricted-syntax` selectors in bunfig.toml's `[lint]`:
 
 | rule | purpose |
 |---|---|
@@ -831,10 +861,35 @@ rules through `tools/oxlint/anti-slop/index.ts` and enables them in
 | `no-shape-in-symbol-names` | Require a name for the domain value rather than a generic structure label. |
 | `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
-The three rule files and their MIT license are vendored; `@oxlint/plugins`
-provides the adapter Bun's linter loads them through. Re-sync the upstream rule
-files deliberately, review their behavior against this tree, and keep local
-policy in the wrapper and `.oxlintrc.json`.
+Until 2026-11-17 the three upstream rule files were vendored under
+`tools/oxlint/anti-slop/` and loaded through `@oxlint/plugins`, so Bun ran
+them in JavaScript. Each one only matches syntax, so a selector says the same
+thing and runs natively. On that day's tree, with inline suppressions off,
+both versions reported the same 23 findings by file, line and rule, and a
+planted file drew the same 13. `bun lint --type-aware` fell from a 351 ms
+median to 295 ms over 10 runs each, because no JavaScript rule means no JS
+engine starts. Three things were given up: upstream's `allowInTypeGuards`
+option (never enabled here), a re-sync by plain copy (a new upstream rule is a
+selector rewrite, or a JavaScript rule that brings the engines back), and
+per-rule suppressions (a `no-restricted-syntax` suppression covers all three
+on its lines). `tools/tests/contract-lint-selectors.test.ts` holds the
+selectors and the exemption override.
+
+A fourth selector in the same list comes from a different set:
+[interfere-inc/landmines](https://github.com/interfere-inc/landmines)'
+`no-explicit-return-types`, narrowed. Upstream bans every return annotation
+on an implementation. This repo bans only an annotation that contains `any`,
+because that's the part of the lie a selector can see. Catching an annotation
+wider than what the body returns would need the type checker, and lint rules
+here have none. Its rationale and the 2026-11-18 counts are in bunfig.toml's
+comment above the list. Two more, `no-fixed-sleep` and `no-flake-masking`,
+are selectors in the override that covers test files, extended to Bun's
+`retry`, `repeats` and `setDefaultTimeout`; their comment sits above that
+override. `strict-msw` is a third selector there, ported without MSW: it
+flags a test that assigns `fetch` on the global and points at
+`tools/lib/fetch-routes.ts`, whose header says why MSW stayed out. The other
+six landmines rules were measured against the tree that day; adopting any of
+them is its own change.
 
 The original 2026-08-15 evaluation rejected these rules and found several
 others inapplicable because the source was JavaScript. Adoption and the
@@ -846,9 +901,8 @@ The linter's built-in `vitest` plugin supplies `vitest/no-restricted-vi-methods`
 match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
 `cloudflare:workers` virtual module, and other uses require review of the seam.
 
-The plugin array in `.oxlintrc.json` preserves the default plugins because an
-explicit array replaces them. Its comments record the planted control that
-caught a rule disappearing when only `vitest` was listed.
+`[lint]` names no plugins: Bun's built-in ones need no loading, and a
+`plugins` list there loads ESLint plugin packages, which run in JavaScript.
 
 ## Vendored bundle: @chenglou/pretext
 

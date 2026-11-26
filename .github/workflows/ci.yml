@@ -149,6 +149,17 @@ jobs:
         run: bun run --filter cal-aadhar-sh test
         background: true
 
+      # perf-budget owns the build and the Worker dry-run; the route oracle
+      # below loads that exact bundle. It starts in the background, right
+      # after install, so the Rust cache restores below overlap it instead of
+      # holding it back: they ran first, about 10 s at p50 over 65 PR runs
+      # (2026-11-14 to 11-20), and nothing they write is read by the build,
+      # which calls no cargo or rustc. Every reader of .build/ waits for it.
+      - name: Build, with the performance budget
+        id: build
+        run: bun run perf-budget
+        background: true
+
       # rust-toolchain.toml pins the compiler, and the runner image doesn't
       # ship that version: the first rustc or cargo call made rustup download
       # it, about 8.5s a run. Read the pin from the file, never from
@@ -199,12 +210,27 @@ jobs:
         run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
         background: true
 
-      # perf-budget owns the build and the Worker dry-run; the route oracle
-      # below loads that exact bundle. It stays in the foreground: the
-      # manifest is cut from what it leaves, and every step after it reads
-      # .build/.
-      - name: Build, with the performance budget
-        run: bun run perf-budget
+      # photo-metrics scores every photo tool, and its tests pin which PNG
+      # colour chunks it refuses and which it reads as sRGB, djxl's among them
+      # (gotcha 101). Keyed like timbrado's engine: rustc and the lock decide
+      # the dependencies, and cargo's fingerprint rebuilds the crate itself.
+      - name: Key photo-metrics' build cache
+        id: metrics
+        run: echo "key=photo-metrics-${RUNNER_OS}-$( { rustc -V; cat tools/photos/photo-metrics/Cargo.lock; } | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore photo-metrics' build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/photos/photo-metrics/target
+          key: ${{ steps.metrics.outputs.key }}
+
+      - name: Test the photo scorer
+        id: metrics-test
+        run: cargo test --locked --quiet --manifest-path tools/photos/photo-metrics/Cargo.toml
+        background: true
+
+      - name: Wait for the build
+        wait: build
 
       # What this build stages, URL by URL, for tools/check-served.ts to compare
       # against production. Cut right after the build, before any later step can
@@ -234,7 +260,7 @@ jobs:
         wait: types
 
       # Read-only checks: nothing below writes what they read. The linter ignores
-      # .build/** (.oxlintrc.json), and typecheck writes only under --update.
+      # .build/** (bunfig.toml's [lint]), and typecheck writes only under --update.
       - name: Lint
         id: lint
         run: bun run lint
@@ -257,9 +283,11 @@ jobs:
       # A pull request runs the test files its diff can reach, from the map
       # test-inputs.yml traces nightly on main (a PR's cache scope falls back to
       # main). Only a pull request restores one, so a push to main, the commit
-      # promote-production ships, runs the whole suite. Replayed over 40 merged
-      # PRs on 2026-10-31: 7,383 of 10,600 file runs; docs and design PRs ran
-      # 14 to 52 of 265 files, worker changes all of them.
+      # promote-production ships, runs the whole suite. Replayed over the 40
+      # merges to 39715522 on 2026-11-22: 7,742 of 12,280 file runs, where it
+      # had crept to 11,949 of 12,240; an edit to one route handler runs 45 to
+      # 158 of 307 files, and a PR that adds or removes a file still runs all
+      # of them (gotcha 111).
       - name: Restore the test input map
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -345,7 +373,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The route-handler controls run the suite narrowed the way validate
+      # does on a pull request, so they need the same map (gotcha 111).
+      - name: Restore the test input map for the controls
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: test-inputs.json
+          key: test-inputs-${{ github.sha }}
+          restore-keys: test-inputs-
+
+      # One worker per vCPU; tools/controls.ts gives each its own tree.
       - name: Plant each guard's defect
+        env:
+          CONTROLS_JOBS: 4
         run: bun run controls
 
   # Opens every manifest page in Chrome and reads what a visitor's browser
@@ -355,15 +396,32 @@ jobs:
   # launch fails by name. Its own runner because it builds and boots its own
   # Worker, about two minutes on top of the install, and continue-on-error
   # because a page that shifts is a finding to fix, never a reason to hold up a
-  # release.
+  # release. One job per viewport: the two load each page apart, so splitting
+  # halves the sweep and a failure names phone or desktop. A third leg reads
+  # the phone widths in WebKit, the engine every browser on an iPhone runs: it
+  # draws text and selects wider than Chrome does, and 15 pages that passed in
+  # Chrome scrolled sideways in it at 320px (gotcha 109). WebKit comes from the
+  # pinned playwright-core, so its build moves only when that pin does.
   browser-check:
-    name: browser check
+    name: browser check (${{ matrix.viewport }}${{ matrix.engine == 'webkit' && ', WebKit' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { viewport: phone, engine: chromium }
+          - { viewport: desktop, engine: chromium }
+          - { viewport: phone, engine: webkit }
     steps:
+      # Depth 2: a pull request checks out its merge commit, whose first
+      # parent is the base tip, so `HEAD^1` diffs exactly what the PR changes.
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -376,8 +434,52 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Read every page in a browser
-        run: bun run browser:check
+      # A pull request reads the pages its diff reaches and 1 in 5 of the
+      # rest; a push to main, the commit that ships, reads every page. When
+      # the file map can't place a change, the base is built beside HEAD and
+      # only pages served differently are read. Replayed over 60 merges on
+      # 2026-11-17: 3,320 page reads by the map alone, 626 with the diff.
+      - name: Install WebKit
+        if: matrix.engine == 'webkit'
+        run: bun node_modules/playwright-core/cli.js install --with-deps webkit
+
+      - name: Read the pages in a browser
+        env:
+          PICK: ${{ github.event_name == 'pull_request' && '--changed HEAD^1 --sample 5' || '' }}
+        run: bun run browser:check -- --viewport ${{ matrix.viewport }} --engine ${{ matrix.engine }} $PICK
+
+  # Operates every control on every page once, at 390px, and reads what each
+  # press caused: a thrown error, nothing at all, a task that blocks past
+  # 300 ms under throttle, a page left wider than the phone
+  # (tools/check-interactions.ts, gotcha 108). browser:check stops when a page
+  # has loaded; this is everything after. Its own runner for the same reason
+  # (it builds and boots its own Worker, about three minutes on top of the
+  # install) and continue-on-error on the same terms: a dead button is a
+  # finding to fix, never a reason to hold up a release.
+  act-check:
+    name: act check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Operate every control
+        run: bun run act:check
 
   # Signs the served manifest: a SLSA build-provenance attestation saying ci.yml,
   # on main, at this commit, produced these URL hashes. tools/check-served.ts

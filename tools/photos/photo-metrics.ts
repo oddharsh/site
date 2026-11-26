@@ -8,7 +8,8 @@
 // (2026-10-14) and keeps its async copy of the build below, with a test stub.
 // photo-metrics-parity.ts still runs libjxl on purpose: it is the oracle.
 //
-// Inputs are PNG or PNM, 8 or 16 bits. A JPEG goes through djpeg first, the
+// Inputs are PNG or PNM, 8 or 16 bits. A PNG with an iCCP or cICP chunk, or gAMA
+// or cHRM without sRGB, is refused (gotcha 101). A JPEG goes through djpeg first, the
 // libjpeg-turbo decode libjxl's tools read JPEG with (export-for-instagram.sh).
 import { spawnSync } from "node:child_process";
 import path from "node:path";

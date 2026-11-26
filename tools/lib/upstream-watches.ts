@@ -64,7 +64,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Reading, runWatch as measureWatch, type Watch } from "timbrado/watch";
+import { runWatch as measureWatch } from "timbrado/watch";
+import type { Reading, Watch } from "timbrado/watch";
 
 import { asNumber, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
@@ -184,13 +185,20 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/39247",
     landed:
       "`fetch(url, { dispatcher })` calls the dispatcher's `dispatch()` under bun, which is what miniflare's `dispatchFetch()` relies on and the reason wrangler's harness hangs under bun (robobun's fix is oven-sh/bun#39250; this is the issue that decides whether node can leave `engines`)",
-    measured: "2026-09-15, bun 1.4.2: dispatch() never called, the fetch went to the network and failed to connect",
+    measured:
+      "2026-11-23, bun 1.4.5-canary.20261121.1+b15f513 (the pin) and 1.4.5-canary.20261122.1+25c4fca: dispatch() never called, ECONNREFUSED. Control: node 22.23.5 and 26.13.1 read landed: true",
     runtime: "bun",
+    // Two fixes from 2026-11-23, when node, which honours dispatcher, read
+    // false on this probe. The Fetch spec blocks port 1, so node rejected
+    // "bad port" before dispatch(); hence 59999. And the handler node 26
+    // passes has no onError, so an onError-only fake never settled the fetch
+    // and the script printed nothing. A bun matching undici would have read
+    // null, which never moves a verdict.
     script: `
       let called = 0;
-      const dispatcher = { dispatch(opts, h) { called++; if (h && typeof h.onError === "function") h.onError(new Error("watch")); return true; } };
+      const dispatcher = { dispatch(opts, h) { called++; const e = new Error("watch"); if (typeof h?.onResponseError === "function") h.onResponseError(null, e); else if (typeof h?.onError === "function") h.onError(e); return true; } };
       let err = "";
-      try { await fetch("http://127.0.0.1:1/", { dispatcher }); } catch (e) { err = String(e && e.message || e).split("\\n")[0].slice(0, 60); }
+      try { await fetch("http://127.0.0.1:59999/", { dispatcher }); } catch (e) { err = String(e && e.message || e).split("\\n")[0].slice(0, 60); }
       ${out('{ landed: called > 0, detail: called > 0 ? "dispatch() called " + called + "x" : "dispatch() never called; fetch went to the network: " + err }')}
     `,
   },

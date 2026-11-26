@@ -11,10 +11,12 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { bootCal } from "./harness.ts";
 import { createBooking, getBooking, setStatus, holdSlot, releaseSlot, listHeld } from "../src/booking.ts";
+import type { Booking } from "../src/booking.ts";
+import type { CalEnv } from "./harness.ts";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
-let env: import("./harness.ts").CalEnv;
+let env: CalEnv;
 beforeAll(async () => {
   cal = await bootCal();
   env = cal.env;
@@ -40,8 +42,6 @@ const soon = (offsetH = 48) => {
   const start = Date.now() + offsetH * HOUR;
   return { start, end: start + 30 * 60_000 };
 };
-
-type Booking = import("../src/booking.ts").Booking;
 
 // name/email/topic are REQUIRED on Omit<Booking, "id">, and this helper omitted
 // all three until the suite joined a tsc program (2026-08-23). Nothing failed:

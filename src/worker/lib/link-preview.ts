@@ -17,7 +17,8 @@
 // is matched whole, so an in-app browser that carries the vendor's name (the
 // "LinkedInApp", "Twitter for iPhone" and "FBAN" browsers) is still a person
 // and still gets the redirect.
-import { html, type Html } from "./html.ts";
+import { html } from "./html.ts";
+import type { Html } from "./html.ts";
 
 const PREVIEW_BOT = new RegExp(
   "\\b(?:" +

@@ -91,6 +91,9 @@ small,.meta{font-size:var(--text-mono);color:var(--ink-dim);font-family:var(--fo
 /* a caption and the control it names wrap as one item, so a narrow toolbar
    cannot leave the word ZOOM stranded on a row above its own buttons */
 .bar-grp{display:flex;gap:8px;align-items:center}
+/* A select is as wide as its longest option, and WebKit draws "Unknown device"
+   24px past a 320px phone. The group may shrink and the select with it. */
+.bar-grp{min-width:0}.bar-grp select{min-width:0;flex:0 1 auto}
 .seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--darkshadow);background:var(--grad-button)}
 .seg button{font:inherit;font-size:calc(var(--text-sm) * var(--sc));color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--shadow)}
@@ -306,9 +309,14 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
   /* Stacked, so the split's height is now shared rather than spent on one pane,
      and the tree gives most of it back to the board. Fill scales the graph down
      to whatever width is left, which is what finally retires the horizontal
-     scroll a phone used to get from a 1002px board in a 360px canvas. */
-  .mmc-split{flex-direction:column;height:clamp(380px,calc(100vh - 250px),760px)}
-  .mmc-tree{flex:0 0 auto;max-height:132px;border-right:0;border-bottom:1px solid var(--shadow)}
+     scroll a phone used to get from a 1002px board in a 360px canvas. The
+     tree holds its 132px before the script fills it (1,308px of rows), or the
+     board below dropped 121px after first paint, layout shift 0.106 at 390px
+     (gotcha 98, 2026-11-16). The split's clamp tracks what fitSplit() measures,
+     since first paint lands before that script runs: 300, 343, 518 and 732px
+     at 390x844, 430x932, 768x1024 and 820x1180 (it read 594px at 390x844). */
+  .mmc-split{flex-direction:column;height:clamp(300px,calc(100vh - 700px + 26vw),760px)}
+  .mmc-tree{flex:0 0 auto;height:132px;border-right:0;border-bottom:1px solid var(--shadow)}
 }
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -339,13 +347,13 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     <span aria-hidden="true">File</span><span aria-hidden="true">Action</span><button type="button" id="m-view" aria-haspopup="true" aria-expanded="false" aria-controls="view-menu">View</button><span aria-hidden="true">Help</span>
   </div>
   <div class="menu-pop" id="view-menu" role="menu" hidden>
-    <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
+    <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false" tabindex="-1"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
     <!-- MMC keeps the console tree under View, and here it buys the board 234px
          it has nowhere else to get. At 1280, which is what a shared browser
          window usually is, that is the difference between a node label rendering
          at 9.9px and at 11.7px. Shown by default, because a reader who is not
          presenting wants the tree. -->
-    <button type="button" role="menuitemcheckbox" id="m-tree" aria-checked="true"><span class="tick" aria-hidden="true">✓</span>Console tree</button>
+    <button type="button" role="menuitemcheckbox" id="m-tree" aria-checked="true" tabindex="-1"><span class="tick" aria-hidden="true">✓</span>Console tree</button>
   </div>
   <div class="mmc-bar">
     <!-- The three toolbar captions are decorative: each group and the select
@@ -1527,13 +1535,31 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     tab(0);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
   }
+  // The tab pattern: one Tab stop for the strip (roving tabindex), arrows and
+  // Home/End to move along it, and a panel that takes focus itself when it
+  // holds nothing focusable, so Tab from the strip lands on the text.
+  // focusgroup would do the roving natively but isn't Baseline (2026-11-15).
   function tab(i){
     TABS.forEach(function(t, j){
-      document.getElementById(t[0]).setAttribute("aria-selected", j === i ? "true" : "false");
-      document.getElementById(t[1]).hidden = j !== i;
+      var b = document.getElementById(t[0]), pane = document.getElementById(t[1]);
+      b.setAttribute("aria-selected", j === i ? "true" : "false");
+      b.tabIndex = j === i ? 0 : -1;
+      pane.hidden = j !== i;
+      if (j === i && !pane.querySelector("a[href],button,input")) pane.tabIndex = 0;
+      else pane.removeAttribute("tabindex");
     });
   }
   TABS.forEach(function(t, i){ document.getElementById(t[0]).addEventListener("click", function(){ tab(i); }); });
+  document.querySelector("#props .tabs").addEventListener("keydown", function(e){
+    var i = TABS.findIndex(function(t){ return t[0] === document.activeElement.id; });
+    if (i < 0) return;
+    var n = TABS.length, k = e.key;
+    var next = k === "ArrowRight" ? (i + 1) % n : k === "ArrowLeft" ? (i - 1 + n) % n : k === "Home" ? 0 : k === "End" ? n - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    tab(next);
+    document.getElementById(TABS[next][0]).focus();
+  });
   document.getElementById("props-x").addEventListener("click", function(){ dlg.close(); });
   document.getElementById("props-ok").addEventListener("click", function(){ dlg.close(); });
 
@@ -1676,16 +1702,36 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     } else if (open) viewMenu.showPopover({ source: viewBtn });
     else if (menuOpen()) viewMenu.hidePopover();
   }
+  // The menu keyboard model photos-view.js and notepad.js follow: a keyboard
+  // open (Enter/Space, or ArrowDown/ArrowUp on View) lands on an item, the
+  // arrows and Home/End move inside, and Escape or Tab hands focus back to View.
+  var menuItems = [hiddenItem, document.getElementById("m-tree")];
   viewBtn.addEventListener("click", function(ev){
     ev.stopPropagation();
     var wasOpen = pressedOpen || menuOpen();
     pressedOpen = false;
     openMenu(!wasOpen);
+    if (!wasOpen && ev.detail === 0) menuItems[0].focus();
+  });
+  viewBtn.addEventListener("keydown", function(ev){
+    if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+    ev.preventDefault();
+    if (!menuOpen()) openMenu(true);
+    menuItems[ev.key === "ArrowUp" ? menuItems.length - 1 : 0].focus();
   });
   viewMenu.addEventListener("keydown", function(ev){
-    if (ev.key !== "Escape") return;
+    var k = ev.key, at = menuItems.indexOf(document.activeElement), n = menuItems.length, to = -1;
+    if (k === "Escape" || k === "Tab") {
+      // Tab is not prevented: focus returns to View first, then Tab moves on from there.
+      if (k === "Escape") ev.preventDefault();
+      openMenu(false, true);
+      return;
+    }
+    if (k === "ArrowDown" || k === "ArrowUp") to = (at + (k === "ArrowDown" ? 1 : -1) + n) % n;
+    else if (k === "Home" || k === "End") to = k === "Home" ? 0 : n - 1;
+    if (to < 0) return;
     ev.preventDefault();
-    openMenu(false, true);
+    menuItems[to].focus();
   });
   var treeItem = document.getElementById("m-tree");
   function setTree(on){
@@ -1737,6 +1783,6 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
 })();
 </script>
 <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="30"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="13"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="folder options for a mac: tick the defaults you want, get the script" href="/dotfiles" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-dotfiles" alt=""></span><span class="lbl">dotfiles</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden><img src="/icons.svg#tray-sound-off" alt=""></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

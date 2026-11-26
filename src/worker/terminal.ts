@@ -41,10 +41,11 @@ import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.ts";
 import { readAroundChanges } from "./around.ts";
 import { getPublicAvailability } from "../../cal/src/slots.ts";
 import { LENS_BUDGETS, LENS_INSPECT, lensFetch, lensObservationSummary } from "./lens.ts";
-import { defineLens, type LensOutcome } from "./lens-pipeline.ts";
+import { defineLens } from "./lens-pipeline.ts";
+import type { LensOutcome } from "./lens-pipeline.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { esc, methodGuard } from "./lib/http.ts";
+import { cappedRequestBody, esc } from "./lib/http.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
@@ -72,7 +73,7 @@ const NAMED = { cr: "\r", enter: "\r", esc: "\x1b", tab: "\t", sp: " ", up: "k",
 const MAX_KEYS = 32;
 
 export function tokenizeKeys(input) {
-  const out = [];
+  const out: string[] = [];
   const text = String(input ?? "").slice(0, 256);
   let i = 0;
   while (i < text.length && out.length < MAX_KEYS) {
@@ -100,7 +101,7 @@ const FINGER_PANES = ["overview", "writing", "reading", "listening", "photos", "
 // FINGER_PANES. That is the accurate behavior — the original protocol had no
 // menu either, you fingered a name and got whatever was in the file. Reachable
 // only by already knowing to ask: ?pane=plan.
-const HIDDEN_PANES = ["plan"];
+const HIDDEN_PANES = new Set(["plan"]);
 
 const clampInt = (raw, min, max, fallback) => {
   const n = Number.parseInt(raw ?? "", 10);
@@ -113,7 +114,7 @@ export function readState(url, app) {
   const pane = str(params.get("pane"), 24);
   return {
     app,
-    pane: FINGER_PANES.includes(pane) || HIDDEN_PANES.includes(pane) ? pane : FINGER_PANES[0],
+    pane: FINGER_PANES.includes(pane) || HIDDEN_PANES.has(pane) ? pane : FINGER_PANES[0],
     cursor: clampInt(params.get("cursor"), 0, 4999, 0),
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),
@@ -1243,9 +1244,11 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
   // antenna. Everything else stays GET-only, so the surface does not quietly
   // become writable.
   if (request.method === "POST" && name === "radar") {
+    const capped = await cappedRequestBody(request);
+    if (!capped) return new Response("radar: that body is too large for its samples.\n", { status: 413 });
     let payload = null;
     try {
-      payload = await request.json();
+      payload = await capped.json();
     } catch {
       payload = null;
     }
@@ -1255,8 +1258,6 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
     });
   }
-  const refused = methodGuard(request, name === "radar" ? ["GET", "POST"] : ["GET"]);
-  if (refused) return refused;
 
   const frame = await buildFrame(name, request, env, ctx, url);
   const wantsHtml = !explicitText && (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain");
@@ -1280,7 +1281,7 @@ async function serveFrame(name, request, env, ctx, url: URL, { explicitText = fa
 
 /** Every tool in TOOL_NAMES, and its .txt representation. */
 export async function handleTool(request, env, ctx, url = new URL(request.url)) {
-  const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
+  const raw = url.pathname.replace(/^\//, "").replace(/(?<!\/)\/+$/, "");
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
   if (!TOOL_NAMES.has(name)) {

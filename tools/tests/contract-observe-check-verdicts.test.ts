@@ -4,7 +4,8 @@
 // BROKEN case sits beside the same reading one step healthier, so a rule that
 // cannot fire fails the healthy control rather than passing.
 import { assert, test } from "./contract-shared.ts";
-import { verdicts, type Automation, type Policy, type Reading, type Readings, type Route, type Webhook } from "../lib/observe-signals.ts";
+import { verdicts } from "../lib/observe-signals.ts";
+import type { Automation, Policy, Reading, Readings, Route, Webhook } from "../lib/observe-signals.ts";
 
 const read = (count: number, last: string | null = null): Reading => ({ kind: "read", count, last });
 const canary = (count: number, recent: number): Reading => ({ kind: "read", count, last: null, recent });

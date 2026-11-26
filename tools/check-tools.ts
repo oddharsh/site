@@ -51,7 +51,7 @@ if (tools.length === 0) {
 
 const byBin = new Map(tools.map((t) => [t.bin, t]));
 const declaredBins = new Set(byBin.keys());
-const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean)) as Set<string>;
+const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean));
 
 // These prerequisites already have canonical repository pins and checks:
 // .node-version (contract-the-node-pin-is-declared-once) and package.json
@@ -95,12 +95,14 @@ for (const tool of tools) {
 // cannot see these, because the name only exists as a loop word. That blind spot
 // is gotcha 29's, in a different costume.
 let guardLists = 0;
-const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n]+);?[ \t]*(?:do)?[ \t]*$/gm;
+const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n \t][^;\n]*|[ \t])(?:;[ \t]*(?:do[ \t]*)?)?$/gm;
 for (const [rel, text] of source) {
   for (const match of text.matchAll(guardPattern)) {
     const [, variable, wordsRaw] = match;
     // Only a loop whose body probes the loop variable is a precondition guard.
-    const after = text.slice(match.index, match.index + 400);
+    // `substring`, because unicorn/prefer-set-has reads `.slice()` as an array
+    // and its autofix turned this string into a Set of characters (2026-11-20).
+    const after = text.substring(match.index, match.index + 400);
     if (!after.includes(`command -v "$${variable}"`) && !after.includes(`-x "$${variable}"`)) continue;
     guardLists += 1;
     for (const word of wordsRaw.trim().split(/\s+/)) {

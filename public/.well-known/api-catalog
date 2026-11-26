@@ -1,12 +1,28 @@
 {
   "linkset": [
     {
+      "anchor": "https://aadhar.sh/.well-known/api-catalog",
+      "item": [
+        { "href": "https://aadhar.sh/mcp" },
+        { "href": "https://aadhar.sh/ask" },
+        { "href": "https://aadhar.sh/serendipity/mcp" },
+        { "href": "https://aadhar.sh/rn/tracks" },
+        { "href": "https://aadhar.sh/images/manifest.json" },
+        { "href": "https://aadhar.sh/around/json" },
+        { "href": "https://aadhar.sh/around/changes.json" },
+        { "href": "https://aadhar.sh/search.json" },
+        { "href": "https://aadhar.sh/photos/query.json" },
+        { "href": "https://aadhar.sh/coffee/availability.json" },
+        { "href": "https://aadhar.sh/lens/compare.json" }
+      ]
+    },
+    {
       "anchor": "https://aadhar.sh/mcp",
       "service-desc": [
         { "href": "https://aadhar.sh/.well-known/mcp/server-card.json", "type": "application/json", "title": "Aadharsh site MCP server card" }
       ],
       "service-doc": [
-        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "Aadharsh site MCP and utility catalog" }
+        { "href": "https://aadhar.sh/developers#mcp", "type": "text/html", "title": "aadhar.sh MCP server setup" }
       ]
     },
     {

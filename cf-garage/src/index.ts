@@ -19,7 +19,7 @@ const json = (obj, status = 200) => jsonResponse(obj, status, { "access-control-
 async function inSpan(tr, name, fn) {
   // Capability probe on the injected tracer (gotcha 16's seam). This Worker is
   // deployed on its own and imports only leaf helpers from src/worker/lib.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  // oxlint-disable-next-line no-restricted-syntax
   if (tr && typeof tr.enterSpan === "function") return tr.enterSpan(name, fn);
   return fn({ setAttribute() {}, isTraced: false });
 }
@@ -246,7 +246,7 @@ export default {
       if (path === "/garage/cf/trace") {
         const tr = ctx && ctx.tracing; // present when the runtime supports it
         // Capability probe on the injected tracer; separate Worker, own bundle.
-        // oxlint-disable-next-line anti-slop/no-runtime-typeof
+        // oxlint-disable-next-line no-restricted-syntax
         const available = !!(tr && typeof tr.enterSpan === "function");
         const tt = Date.now();
         const spans = [];

@@ -108,7 +108,7 @@ jobs:
           # answer. The suite's exit code is data here, read after the tee-free
           # redirect, so `set -e` steps aside for exactly this line.
           set +e
-          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed="$seed" tools/tests/ > suite.txt 2>&1
+          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed="$seed" ./tools/tests/ ./src/ > suite.txt 2>&1
           verdict=$?
           set -e
           cat suite.txt
@@ -139,7 +139,7 @@ jobs:
           Reproduce:
 
           \`\`\`bash
-          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed=$SEED tools/tests/
+          bun test --timeout=30000 --preload ./tools/lib/no-network.ts --randomize --seed=$SEED ./tools/tests/ ./src/
           \`\`\`
 
           Then confirm the order is the cause: the same files pass under \`bun run test\`, and a failing file passes when run alone (\`bun test --preload ./tools/lib/no-network.ts tools/tests/<file>\`). The usual culprit is an earlier file that sets a global, fills a module-level cache, or stubs \`fetch\` without restoring it.

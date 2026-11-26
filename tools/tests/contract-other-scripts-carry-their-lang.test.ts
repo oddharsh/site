@@ -26,7 +26,7 @@ function unmarked(html) {
   const out: any[] = [];
   const stack: any[] = [];
   const src = stripUnrendered(html);
-  const token = /<(\/?)([a-zA-Z][\w-]*)([^>]*)>|([^<]+)/g;
+  const token = /<(\/?)([a-zA-Z][\w-]*)((?:[^>\w-][^>]*)?)>|([^<]+)/g;
 
   let raw: string | null = null;
   for (const m of src.matchAll(token)) {

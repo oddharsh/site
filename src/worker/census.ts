@@ -3,8 +3,10 @@ import { html, unsafeHtml } from "./lib/html.ts";
 import { PENDING, isPending, island, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, jsonResponse, secretMatches } from "./lib/http.ts";
 import { subrequestLimitIn } from "./lib/budget.ts";
+import { compareCodepoints } from "./lib/text.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
+import { BotPolicyError } from "./lib/botauth.ts";
 import { CENSUS_TABLE_URL } from "./routes.ts";
 import { SPARK } from "./lib/tui.ts";
 
@@ -78,6 +80,7 @@ export const CENSUS_RUN_STAGE = {
   duplicate: "dispatch",
   dispatch_failed: "dispatch",
   written: "scan",
+  refused: "scan",
   cap: "scan",
   failed: "scan",
 } as const;
@@ -89,6 +92,9 @@ const isCensusRunOutcome = (o: string): o is CensusRunOutcome => Object.hasOwn(C
 function censusRunState(outcome: CensusRunOutcome): "done" | "unfinished" | "problem" {
   switch (outcome) {
     case "written":
+    // robots.txt said no, and the row says so. It is the site's answer, so
+    // nothing is left to retry or report.
+    case "refused":
       return "done";
     // Dispatched and never heard from: the instance is still running, still
     // retrying, or died without reaching its catch.
@@ -209,6 +215,15 @@ export function censusCapHit(result: unknown, maxDepth = 6): boolean {
  *
  * `ts` and `ymd` come from the dispatcher (census-workflow.ts says why).
  */
+// One row per host per census day; a same-day re-scan overwrites it.
+const CENSUS_ROW_UPSERT =
+  "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
+  "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces";
+
+// The tier a robots.txt refusal stores, in place of the spectrum tier a scan
+// would have measured. Score, level and doors stay null: nothing was read.
+export const REFUSED = "refused";
+
 export async function censusScanOne(env, site, ts, ymd) {
   return span("census.host", async (s) => {
     s.setAttribute("census.host", site.label || site.url);
@@ -228,10 +243,7 @@ export async function censusScanOne(env, site, ts, ymd) {
       // One batch, so the row and its record land together and cost one
       // subrequest between them.
       await env.RESTORE_DB.batch([
-        env.RESTORE_DB.prepare(
-          "INSERT INTO lens_census (ts, ymd, host, url, tier, score, level, doors, verdict, surfaces) VALUES (?,?,?,?,?,?,?,?,?,?) " +
-            "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces",
-        ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
+        env.RESTORE_DB.prepare(CENSUS_ROW_UPSERT).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces),
         env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), CENSUS_RUN_STAGE.written, "written", null),
       ]);
 
@@ -241,6 +253,19 @@ export async function censusScanOne(env, site, ts, ymd) {
       s.setAttribute("census.doors", m.doors);
       return { ok: true, host: site.label, score: m.score, doors: m.doors };
     } catch (e) {
+      // A robots.txt Disallow is the site's standing answer to AadharshBot, so
+      // it is published as a row and not retried. reddit.com and wsj.com gave
+      // it on every sweep from 2026-07-16 to 2026-11-15, three attempts a
+      // week, and the page showed 14 of its 16 sites with no word about the 2.
+      // Crawl-delay is our choice to skip, not a refusal, so it stays a failure.
+      if (e instanceof BotPolicyError && e.policy.kind === "disallow" && e.policy.rule.startsWith("Disallow")) {
+        await env.RESTORE_DB.batch([
+          env.RESTORE_DB.prepare(CENSUS_ROW_UPSERT).bind(ts, ymd, site.label, site.url, REFUSED, null, null, null, REFUSED, "{}"),
+          env.RESTORE_DB.prepare(CENSUS_RUN_UPSERT).bind(ymd, site.label, Date.now(), CENSUS_RUN_STAGE.refused, "refused", detailOf(e)),
+        ]);
+        s.setAttribute("census.outcome", "refused");
+        return { ok: true, host: site.label, refused: e.policy.rule };
+      }
       s.setAttribute("census.outcome", "failed");
       s.setAttribute("census.error", (e && e.message) || String(e));
       // Recorded per attempt, so a retry that succeeds overwrites it and one
@@ -410,7 +435,8 @@ export async function fetchCensusGrouped(env) {
         first,
         last,
         series,
-        scoreSeries: series.map((s) => (s.score == null ? 0 : s.score)),
+        // A refused week drew no score, so it draws no mark.
+        scoreSeries: series.filter((s) => s.tier !== REFUSED).map((s) => (s.score == null ? 0 : s.score)),
         delta: last.score != null && first.score != null ? last.score - first.score : 0,
       };
     })
@@ -430,7 +456,7 @@ export async function fetchCensusGrouped(env) {
 export function summarizeCensusRuns(rows) {
   if (!rows || !rows.length) return null;
   const ymd = rows.reduce((max, r) => (r.ymd > max ? r.ymd : max), rows[0].ymd);
-  const day = rows.filter((r) => r.ymd === ymd).sort((a, b) => a.host.localeCompare(b.host));
+  const day = rows.filter((r) => r.ymd === ymd).sort((a, b) => compareCodepoints(a.host, b.host));
   const outcomes: Record<string, number> = {};
   for (const r of day) outcomes[r.outcome] = (outcomes[r.outcome] || 0) + 1;
   return {
@@ -461,54 +487,67 @@ function sparkline(series) {
   return series.map((v) => SPARK[Math.max(0, Math.min(7, Math.round(((v || 0) / 100) * 7)))]).join("");
 }
 
-const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", unknown: "off" };
+const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", [REFUSED]: "warn", unknown: "off" };
+
+// The roster-shaped table both the placeholder and the empty state draw, so the
+// swap between them can't change the page's height (island rule 1).
+function rosterShell(meta, site, cell) {
+  const rows = CENSUS_ROSTER.map(
+    (r) =>
+      '<tr aria-hidden="true"><td class="cx-site">' +
+      site(r) +
+      "</td><td>" +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-num">' +
+      cell +
+      '</td><td class="cx-spark">' +
+      cell +
+      '</td><td class="cx-surfs">' +
+      cell +
+      "</td></tr>",
+  ).join("");
+  return (
+    '<div class="cx-meta">' +
+    meta +
+    "</div>" +
+    '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
+    "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
+    "</tr></thead><tbody>" +
+    rows +
+    "</tbody></table></div>"
+  );
+}
 
 // The shared exhibit renderer: the full per-site trend table. Used by the
 // standalone /lens/census page.
 export function censusExhibitHtml(grouped) {
   // The placeholder model: one unnamed row per roster host, since the roster is
   // what a sweep reports on. Nothing in it is a claim about any site.
-  if (isPending(grouped)) {
-    const cell = "…";
-    const rows = CENSUS_ROSTER.map(
-      () =>
-        '<tr aria-hidden="true"><td class="cx-site">' +
-        cell +
-        "</td><td>" +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-num">' +
-        cell +
-        '</td><td class="cx-spark">' +
-        cell +
-        '</td><td class="cx-surfs">' +
-        cell +
-        "</td></tr>",
-    ).join("");
-    return (
-      '<div class="cx-meta">' +
-      cell +
-      "</div>" +
-      '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
-      "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
-      "</tr></thead><tbody>" +
-      rows +
-      "</tbody></table></div>"
-    );
-  }
+  if (isPending(grouped)) return rosterShell("…", () => "…", "…");
+  // No rows yet keeps the placeholder's shape: the same 16 rows, named but
+  // blank. A short note here moved the footer on the island swap, and when that
+  // landed in the frame the taskbar pins nudged, Chrome scored the pair 0.022
+  // (4 of 6 loads at 1280px, 2026-11-15), over browser:check's 0.02.
   if (!grouped || !grouped.hosts.length) {
-    return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run.</div>';
+    return rosterShell(
+      '<span class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run.</span>',
+      (site) => esc(site.label),
+      "—",
+    );
   }
   const rows = grouped.hosts
     .map((h) => {
       const last = h.last;
       const tier = last.tier || "unknown";
       const scoreTxt = last.score == null ? "—" : last.score;
-      const arrow =
-        h.delta > 0
+      const refused = tier === REFUSED;
+      const arrow = refused
+        ? ""
+        : h.delta > 0
           ? '<span class="cx-up">▲' + h.delta + "</span>"
           : h.delta < 0
             ? '<span class="cx-down">▼' + Math.abs(h.delta) + "</span>"
@@ -555,7 +594,7 @@ export function censusExhibitHtml(grouped) {
         (last.level == null ? "—" : "L" + last.level) +
         "</td>" +
         '<td class="cx-num">' +
-        last.doors +
+        (last.doors == null ? "—" : last.doors) +
         "</td>" +
         '<td class="cx-spark" title="' +
         esc(h.scoreSeries.join(" → ")) +
@@ -563,7 +602,7 @@ export function censusExhibitHtml(grouped) {
         esc(sparkline(h.scoreSeries)) +
         "</td>" +
         '<td class="cx-surfs">' +
-        (chips || '<span class="cx-none">none</span>') +
+        (refused ? '<span class="cx-none">robots.txt refuses AadharshBot</span>' : chips || '<span class="cx-none">none</span>') +
         "</td>" +
         "</tr>"
       );
@@ -584,7 +623,7 @@ export function censusExhibitHtml(grouped) {
     "</tr></thead><tbody>" +
     rows +
     "</tbody></table></div>" +
-    '<div class="cx-foot">Readiness is the same transparent rubric the <a href="/lens">Readiness lens</a> runs, minus bot-view sampling. Score trend is one mark per weekly snapshot. Machine-readable twin: <a href="/lens/census.json">/lens/census.json</a>.</div>'
+    '<div class="cx-foot">Readiness is the same transparent rubric the <a href="/lens">Readiness lens</a> runs, minus bot-view sampling. Score trend is one mark per weekly snapshot. A site whose robots.txt refuses AadharshBot is listed as refused and not scanned. Machine-readable twin: <a href="/lens/census.json">/lens/census.json</a>.</div>'
   );
 }
 
@@ -607,7 +646,6 @@ export const CENSUS_CSS = `/*min*/
 .cx-none { color:var(--ink-faint); font-size:var(--text-2xs); }
 .cx-foot { margin-top:10px; padding-top:8px; border-top:1px solid var(--slate-88); font-size:var(--text-micro); color:oklch(42% 0.02 255); line-height:1.5; }
 .cx-foot a { color:var(--link); }
-.cx-empty { padding:22px 10px; text-align:center; color:var(--ink-dim); font-size:var(--text-sm); }
 `;
 
 // GET /lens/census?refresh=<CENSUS_KEY>: the owner-only view that triggers a
@@ -721,7 +759,7 @@ export async function handleCensusJson(request, env) {
   // Read beside the series: `lastYmd` says when a
   // row last landed, and `lastSweep` says what the latest sweep did, including
   // a sweep that landed nothing.
-  const lastSweep = await fetchCensusLastSweep(env).catch((e) => ({ error: detailOf(e) }));
+  const lastSweep = await fetchCensusLastSweep(env).catch((e: unknown) => ({ error: detailOf(e) }));
   return jsonResponse(
     {
       ok: true,

@@ -3,7 +3,8 @@
 
 import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.ts";
 import { addressBar, taskPane } from "./explorer.ts";
-import { EMPTY, Html, html, unsafeHtml } from "./html.ts";
+import type { Html } from "./html.ts";
+import { EMPTY, html, unsafeHtml } from "./html.ts";
 import { inlineScriptPolicy } from "./inline-csp.ts";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { twinFor } from "./twins.ts";

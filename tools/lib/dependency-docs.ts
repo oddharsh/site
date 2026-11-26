@@ -27,7 +27,6 @@ export const DOC_ALIASES = [
   // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
-  { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
@@ -46,6 +45,10 @@ export const VERSIONLESS = new Map<string, string>([
   [
     "av2-tone",
     "a git dependency pinned to a full commit sha of github.com/oddharsh/av2-tone since 2026-10-14: the AV2 tooling that moved out of tools/photos (the pinned libavif + AVM build, the tuned encoder patches, the WebAssembly decoder, GDF on Metal), unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0 by design until the Rust decoder publishes to crates.io, and the prose names the shape rather than a number",
+  ],
+  [
+    "spokeshave",
+    "a git dependency pinned to a full commit sha of github.com/oddharsh/spokeshave since 2026-11-21: the minifier portfolio (Oxc, SWC, terser and two chains, judged by brotli bytes and an effect-trace oracle) whose picks config/minify-picks.json records. Unpublished on npm (its package.json is private), so the sha in package.json is the identity and bun.lock records the tarball's sha512. It is version 0.0.0, and the prose names the shape and the engine pins it carries rather than its own number",
   ],
   [
     "timbrado",
@@ -175,8 +178,9 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
 
 // A scanner that stops matching must not report a clean pass over no claims.
 // Each alias is also required individually; change the floor with the policy.
-// 13 until 2026-10-15, when Oxlint and oxlint-tsgolint left with their claims.
-export const FLOOR_CLAIMS = 11;
+// 13 until 2026-10-15, when Oxlint and oxlint-tsgolint left with their claims,
+// and 11 until 2026-11-17, when @oxlint/plugins left with its claim.
+export const FLOOR_CLAIMS = 10;
 
 // ONE manifest's worth of checking, in all four directions. Extracted from the
 // root path on 2026-08-14 so the manifests outside package.json get the

@@ -24,7 +24,8 @@
 // suite imports it outside workerd (gotcha 16).
 
 import { asNumber, asText } from "../src/worker/lib/parse.ts";
-import { runClef, type ClefEnv, type ClefModel } from "../src/worker/lib/clef.ts";
+import { runClef } from "../src/worker/lib/clef.ts";
+import type { ClefEnv, ClefModel } from "../src/worker/lib/clef.ts";
 
 // "clef" rather than "clef-flash", on the benchmarks closest to this job.
 // Topic and format are intent classification over short text, and on the two

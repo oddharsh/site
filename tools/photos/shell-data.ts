@@ -213,6 +213,13 @@ export const TRAY_ITEMS = [
   },
 ];
 
+// Speaker states for #axp-sound; cropped into icons.svg so nav.js swaps a
+// sprite fragment instead of shipping inline SVG markup on every page.
+export const SOUND_ICONS = {
+  on: '<svg viewBox="0 0 24 24"><defs><filter id="sdSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="sdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbfb"></stop><stop offset=".5" stop-color="#cfcfcf"></stop><stop offset="1" stop-color="#9c9c9c"></stop></linearGradient></defs><g filter="url(#sdSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#sdC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><path d="M3.9 9.4 H6.1 L9.6 6 V8.6 Z" fill="#ffffff" opacity=".4"></path><g fill="none" stroke="#2e8fd6" stroke-linecap="round"><path d="M13.4 8 Q15.4 11 13.4 14" stroke-width="1.6"></path><path d="M15.7 6 Q19.2 11 15.7 16" stroke-width="1.5" opacity=".82"></path><path d="M18 4.3 Q22.4 11 18 17.7" stroke-width="1.4" opacity=".62"></path></g></g></svg>',
+  off: '<svg viewBox="0 0 24 24"><defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g></svg>',
+};
+
 export const DESKTOP = [
   { label: "Notepad", path: "/writing", kind: "note", hint: "writing, in flux" },
   ...PROFILES.map((profile) => ({ ...profile, path: profile.url, kind: "profile" })),

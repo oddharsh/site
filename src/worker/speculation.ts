@@ -123,8 +123,6 @@ export function countSpeculativeLoad(env, request, response, pathname) {
 export function handlePrefetchActivation(request, env) {
   // GET is accepted alongside HEAD purely so this is curl-able while the
   // origin trial is pending; the browser itself only ever sends HEAD.
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   try {
     if (env.SPECULATION) {
       const params = new URL(request.url).searchParams;
@@ -161,12 +159,15 @@ export function handlePrefetchActivation(request, env) {
 // `rate` is activations over speculations. It is NOT a conversion rate in the
 // strict sense: an activation beacon fires when a speculated document is used,
 // while the denominator counts speculations that reached the origin, and a
-// prefetch that later upgraded to a prerender counts twice there. Read it as an
-// ordering, which is what tools/speculation-report.ts does with it. The report
+// prefetch that later upgraded to a prerender counts twice there. A speculation
+// that Workers Cache answers never reaches the counter at all, so a cacheable
+// page's rate reads high (gotcha 106). Read it as an ordering, which is what tools/speculation-report.ts does with it. The report
 // is also where any promotion to a more eager rule is decided; this route only
 // answers.
-import { analyticsReadError, analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
-import { jsonResponse, methodGuard } from "./lib/http.ts";
+import { analyticsReadError, analyticsSql, text } from "./ledger.ts";
+import type { AnalyticsRow } from "./ledger.ts";
+import { jsonResponse } from "./lib/http.ts";
+import { compareCodepoints } from "./lib/text.ts";
 
 export const SPECULATION_DATASET = "aadhar_speculation";
 export const SPECULATION_WINDOW_DAYS = 30;
@@ -224,12 +225,10 @@ export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
     row.speculated = row.prefetch + row.prerender;
     row.rate = row.speculated ? Math.min(1, row.activated / row.speculated) : null;
   }
-  return out.sort((a, b) => b.speculated - a.speculated || a.path.localeCompare(b.path));
+  return out.sort((a, b) => b.speculated - a.speculated || compareCodepoints(a.path, b.path));
 }
 
 export async function handleSpeculationJson(request, env) {
-  const refused = methodGuard(request, ["GET"]);
-  if (refused) return refused;
   const read = await analyticsSql(
     env,
     SPECULATION_DATASET,
@@ -250,7 +249,7 @@ export async function handleSpeculationJson(request, env) {
       binding_fallback: read.binding_fallback,
       window_days: SPECULATION_WINDOW_DAYS,
       dataset: SPECULATION_DATASET,
-      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate; reached splits client activations by how far the speculation got before the click (recorded since 2026-11-13, earlier ones read unrecorded)",
+      note: "speculations are Sec-Purpose prefetch/prerender DOCUMENT requests that reached the origin (sub-resources excluded since 2026-09-29); activations are the larger of the on-prefetch-activation beacon and nav.js's prerenderingchange beacon (recorded since 2026-09-29; before that the numerator had no working instrument); rate orders paths and is not a strict conversion rate, and on a page Workers Cache serves it reads high, since a cache hit never reaches the counter; reached splits client activations by how far the speculation got before the click (recorded since 2026-11-13, earlier ones read unrecorded)",
       rows,
     },
     200,

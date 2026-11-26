@@ -125,15 +125,3 @@ export function createExecutionContext(): TestContext {
 export async function waitOnExecutionContext(ctx: TestContext) {
   await Promise.all(ctx[TASKS]);
 }
-
-// Replace `globalThis.fetch` for one test and hand back the restore. What it
-// puts back is whatever was installed before, which under this suite is the
-// network tripwire, so the tripwire stays armed for the next test.
-export function stubFetch(impl: (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>) {
-  const g = globalThis as { fetch: unknown };
-  const previous = g.fetch;
-  g.fetch = impl;
-  return () => {
-    g.fetch = previous;
-  };
-}

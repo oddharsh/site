@@ -1,7 +1,8 @@
 // ── test-inputs: a diff selects the test files that opened what it changed ──
 import { assert, test } from "./contract-shared.ts";
 import { readFileSync } from "node:fs";
-import { accesses, entry, lockPackages, packageOf, select, suiteCommand, type InputMap } from "../test-inputs.ts";
+import { accesses, entry, lockPackages, packageOf, select, suiteCommand } from "../test-inputs.ts";
+import type { InputMap } from "../test-inputs.ts";
 
 // tools/test-inputs.ts reads `strace -f -y` logs. These lines are that format,
 // trimmed: pid, syscall, args, and the result.
@@ -79,6 +80,20 @@ test("test-inputs: a child keeps its parent's directory until it changes its own
   assert.deepEqual(entry(accesses(log, ROOT), TRACKED, ROOT).reads, ["docs/GOTCHAS.md"], "the fixture outside the repo isn't an input");
 });
 
+test("test-inputs: a vfork child's relative open resolves to the parent's chdir, even when it prints before the clone returns", () => {
+  const log = [
+    `300 chdir("/repo/docs") = 0`,
+    `300 clone(child_stack=0xffffe51a6030, flags=CLONE_VM|CLONE_VFORK|SIGCHLD <unfinished ...>`,
+    `301 openat(AT_FDCWD</repo/docs>, "GOTCHAS.md", O_RDONLY) = 3</repo/docs/GOTCHAS.md>`,
+    `300 <... clone resumed>) = 301`,
+    `301 openat(AT_FDCWD</repo/docs>, "missing.md", O_RDONLY) = -1 ENOENT (No such file or directory)`,
+  ].join("\n");
+  assert.deepEqual(accesses(log, ROOT), [
+    { path: "/repo/docs/GOTCHAS.md", listed: false, missing: false, byGit: false },
+    { path: "/repo/docs/missing.md", listed: false, missing: true, byGit: false },
+  ]);
+});
+
 test("test-inputs: git is judged by the call and the repo it ran in", () => {
   const git = (cwd: string, ...argv: string[]) =>
     [
@@ -109,13 +124,25 @@ test("test-inputs: a file a test reads but never imports selects it, and nothing
 });
 
 test("test-inputs: a new file in a listed directory, and a source the build read, each select their readers", () => {
-  assert.ok(select(MAP, TESTS, { paths: ["src/pages/b.html"] }).run.includes("tools/tests/pages.test.ts"));
-  assert.ok(!select(MAP, TESTS, { paths: ["src/pages/deep/b.html"] }).run.includes("tools/tests/pages.test.ts"), "only the directory it listed");
+  assert.equal(select(MAP, TESTS, { paths: ["src/pages/b.html"], moved: ["src/pages/b.html"] }).why["tools/tests/pages.test.ts"], "lists src/pages");
+  assert.ok(
+    !select(MAP, TESTS, { paths: ["src/pages/deep/b.html"], moved: ["src/pages/deep/b.html"] }).run.includes("tools/tests/pages.test.ts"),
+    "only the directory it listed",
+  );
   assert.equal(select(MAP, TESTS, { paths: ["src/worker/index.ts"] }).why["tools/tests/built.test.ts"], "reads src/worker/index.ts");
 });
 
+// A listing returns names, so an edit in place leaves it as it was; the file's
+// readers are what rerun. Every test lists every directory through bun test's
+// own discovery walk, so this is the difference between 1 file and the suite
+// (gotcha 111).
+test("test-inputs: an edit in place in a listed directory selects its readers, not its listers", () => {
+  assert.ok(!select(MAP, TESTS, { paths: ["src/pages/a.html"] }).run.includes("tools/tests/pages.test.ts"));
+  assert.equal(select(MAP, TESTS, { paths: ["src/pages/a.html"], moved: ["src/pages/a.html"] }).why["tools/tests/pages.test.ts"], "lists src/pages");
+});
+
 test("test-inputs: a test that lists tracked files reruns when the change adds or removes one", () => {
-  assert.ok(select(MAP, TESTS, { paths: ["src/new.ts"], filesMoved: true }).run.includes("tools/tests/ls.test.ts"));
+  assert.ok(select(MAP, TESTS, { paths: ["src/new.ts"], moved: ["src/new.ts"] }).run.includes("tools/tests/ls.test.ts"));
   assert.ok(!select(MAP, TESTS, { paths: ["src/old.ts"] }).run.includes("tools/tests/ls.test.ts"), "an edit in place doesn't");
 });
 
@@ -154,7 +181,7 @@ test("test-inputs: run is package.json's test script, narrowed to ./-anchored fi
   const { test: script } = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts;
   assert.deepEqual(suiteCommand(script, null), script.split(" "), "unnarrowed, it is bun run test");
   const narrowed = suiteCommand(script, ["tools/tests/a.test.ts"]);
-  assert.deepEqual(narrowed.slice(0, -1), script.split(" ").slice(0, -1), "the same flags");
+  assert.deepEqual(narrowed.slice(0, -1), script.split(" ").slice(0, -2), "the same flags, without the two roots");
   assert.equal(narrowed.at(-1), "./tools/tests/a.test.ts", "a bare path would be a substring filter");
-  assert.throws(() => suiteCommand("bun test --parallel=4 tools/", ["tools/tests/a.test.ts"]), /can't be narrowed/);
+  assert.throws(() => suiteCommand("bun test --parallel=4 tools/", ["tools/tests/a.test.ts"]), /doesn't end in \.\/-anchored roots/);
 });

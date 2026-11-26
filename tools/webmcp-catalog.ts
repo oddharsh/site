@@ -34,7 +34,8 @@
 // same reasons check-agent.ts and csp-sweep.ts run by hand. Registration
 // happens on idle (nav.js loads webmcp.js then), so each page is polled until
 // its catalog stops growing rather than read once.
-import { chromium, type Page } from "playwright-core";
+import { chromium } from "playwright-core";
+import type { Page } from "playwright-core";
 import { readFileSync } from "node:fs";
 import { chromeChannel } from "./lib/browser-channel.ts";
 import { diffCatalog, expectedCatalog, lensPageToolNames } from "./lib/webmcp-catalog.ts";
@@ -95,7 +96,7 @@ if (controlFailure) {
   process.exit(2);
 }
 
-const site = await siteTools().catch((error) => {
+const site = await siteTools().catch((error: unknown) => {
   console.error(`webmcp:check: ${ORIGIN}/mcp tools/list failed: ${String(error).split("\n")[0]}`);
   process.exit(2);
 });

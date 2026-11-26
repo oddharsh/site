@@ -12,10 +12,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { bootCal } from "./harness.ts";
 import { createBooking, getBooking, holdSlot, setStatus, listHeld } from "../src/booking.ts";
+import type { CalEnv } from "./harness.ts";
 
 let cal: Awaited<ReturnType<typeof bootCal>>;
 
-let env: import("./harness.ts").CalEnv;
+let env: CalEnv;
 beforeAll(async () => {
   cal = await bootCal();
   env = cal.env;

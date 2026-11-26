@@ -25,6 +25,8 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { suiteFiles } from "./test-roots.ts";
 
 export type Mutation =
   /** Replace `find` with `replace`. `find` must occur exactly once. */
@@ -79,9 +81,133 @@ export function plant(root: string, c: Control, dryRun = false): string[] {
 }
 
 export const BUILD = ["bun", "tools/build.ts"];
-const contract = (name: string) => ["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=30000", `tools/tests/${name}.test.ts`];
+// By name, wherever in the suite the file lives (tools/tests/ or a tests/ beside its module).
+const SUITE = suiteFiles(fileURLToPath(new URL("../../", import.meta.url)));
+const contract = (name: string) => {
+  const file = SUITE.find((rel) => rel.endsWith(`/${name}.test.ts`));
+  if (!file) throw new Error(`no contract test named ${name}`);
+  return ["bun", "test", "--preload", "./tools/lib/no-network.ts", "--timeout=30000", `./${file}`];
+};
+
+// The suite as validate runs it on a pull request: narrowed by the traced input
+// map at test-inputs.json (gotcha 111), or whole when there is none.
+const NARROWED = ["bun", "tools/test-inputs.ts", "run", "--map", "test-inputs.json"];
 
 export const CONTROLS: Control[] = [
+  {
+    id: "dictionary-shell-fallback-encoding",
+    plants: "the shell identity fallback double-encodes an already compressed response",
+    mutations: [{ file: "src/worker/lib/assets.ts", find: 'if (response.headers.has("content-encoding")) init.encodeBody = "manual";', replace: "" }],
+    run: contract("contract-encodebody-survives-a-rebuild-in-workerd"),
+    expect: /shell identity fallback double-encoded an already compressed response/,
+  },
+  {
+    id: "dictionary-full-digest",
+    plants: "two dictionary hashes with the same prefix select the same delta",
+    gotcha: 120,
+    mutations: [{ file: "src/worker/lib/dictionary-names.ts", find: "export const TAG_HEX = 64;", replace: "export const TAG_HEX = 16;" }],
+    run: contract("contract-dictionary-names-agree-between-build-and-worker"),
+    expect: /different full digests must not select the same delta/,
+  },
+  {
+    id: "dictionary-fallback-cache",
+    plants: "an unknown dictionary fallback can fill the CDN cache with duplicate variants",
+    gotcha: 120,
+    mutations: [
+      { file: "src/worker/lib/assets.ts", find: 'headers.set("cdn-cache-control", "no-store")', replace: 'headers.set("cdn-cache-control", "public")' },
+    ],
+    run: contract("contract-dictionary-fallbacks-keep-caches-safe"),
+    expect: /unknown dictionary must not create a CDN cache variant/,
+  },
+  {
+    id: "dictionary-empty-delta",
+    plants: "an empty delta response is labeled dcz",
+    gotcha: 120,
+    mutations: [
+      {
+        file: "src/worker/lib/assets.ts",
+        find: 'response.ok && response.body !== null && response.headers.get("content-length") !== "0" && !response.headers.has("content-encoding")',
+        replace: 'response.ok && !response.headers.has("content-encoding")',
+      },
+    ],
+    run: contract("contract-dictionary-fallbacks-keep-caches-safe"),
+    expect: /empty delta must fall back/,
+  },
+  {
+    id: "readable-twin-critical-classes",
+    plants: "critical CSS for a readable twin matches authored classes against renamed selectors",
+    gotcha: 116,
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "const subset = await criticalCss(css, matchingHtml, scripts, siblingCss);",
+        replace: "const subset = await criticalCss(css, html, scripts, siblingCss);",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /the readable twin must carry the served page's critical rules/,
+  },
+  {
+    id: "critical-css-where-is-matching",
+    plants: "critical CSS stops expanding :where() and :is() so unused widget rules leak into every subset",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: 'if (!isElement && (name === "where" || name === "is")) {',
+        replace: "if (false) {",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /unused :where\(\) rule must be dropped/,
+  },
+  {
+    id: "critical-css-root-pruning",
+    plants: "critical CSS stops pruning unreferenced :root custom properties",
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords);",
+        replace: "return keep(luna);",
+      },
+    ],
+    run: contract("contract-a-non-blocking-page-paints-from-a-subset-of-luna"),
+    expect: /--dead:#222/,
+  },
+  {
+    id: "static-page-twin-cache-policy",
+    plants: "the Access page rule stops matching its precompressed document",
+    mutations: [{ file: "public/_headers", find: "/access/index.html*", replace: "/access/never-index.html*" }],
+    run: contract("contract-the-speculation-ledger"),
+    expect: /access\/index\.html\.br: no _headers rule matches the twin/,
+  },
+  {
+    id: "wasm-twin-serving",
+    gotcha: 117,
+    plants: "the decoder twin is built but the static asset path no longer admits WASM",
+    mutations: [{ file: "src/worker/lib/assets.ts", find: '"js", "css", "wasm"', replace: '"js", "css"' }],
+    run: contract("contract-static-text-assets-ship-their-q11-twin"),
+    expect: /decoder must use its q11 twin/,
+  },
+  {
+    id: "gallery-url-deferral",
+    plants: "every gallery tile exposes its URL to the preload scanner",
+    mutations: [{ file: "src/worker/photos.ts", find: "const INITIAL_TILES = 12;", replace: "const INITIAL_TILES = Infinity;" }],
+    run: contract("contract-gallery-images-select-existing-tiers"),
+    expect: /offscreen tiles must expose no URL to the preload scanner/,
+  },
+  {
+    id: "restore-stage-height",
+    plants: "System Restore drops its explicit mobile list height so #srList shifts the page on hydration",
+    mutations: [
+      {
+        file: "src/worker/updates.ts",
+        find: ".sr-list{height:170px;max-height:170px}",
+        replace: ".sr-list{max-height:170px}",
+      },
+    ],
+    run: contract("contract-restore-reserves-stage-height"),
+    expect: /phone \.sr-list must reserve explicit height before hydration/,
+  },
   {
     id: "conflict-marker-in-garage-page",
     plants: "a rebase leaves a conflict marker in a served page (the 2026-07-27 compression.html residue)",
@@ -248,6 +374,18 @@ export const CONTROLS: Control[] = [
     ],
     run: ["bun", "tools/check-page-contracts.ts"],
     expect: /\/garage\/wire: the h1 says "Bytes on the wire" where site-manifest\.json says/,
+  },
+  {
+    id: "footnote-href-drift",
+    plants: "a footnote whose marker href no longer matches its note, so the hover bubble shows stale text",
+    mutations: [
+      {
+        file: "src/pages/control-footnote.html",
+        create: '<p>Body<a class="note-ref" href="#Old note.">1</a>.</p><ol class="footnotes"><li id="New note.">New note.</li></ol>\n',
+      },
+    ],
+    run: ["bun", "tools/check-page-contracts.ts"],
+    expect: /footnote marker 1's href "#Old note\." doesn't match footnote 1's id "New note\."/,
   },
   {
     id: "new-type-error",
@@ -466,6 +604,19 @@ export const CONTROLS: Control[] = [
     expect: /a replayable GET-shaped write is refused in early data/,
   },
   {
+    id: "serendipity-mcp-batch-cap-dropped",
+    plants: "the Serendipity MCP server stops capping a JSON-RPC batch, so one POST starts as many D1 queries as fit in 64 KiB",
+    mutations: [
+      {
+        file: "serendipity/serendipity.ts",
+        find: "    const refused = mcpBatchRefusal(payload);\n    if (refused) return respond(refused, 413);\n",
+        replace: "",
+      },
+    ],
+    run: contract("contract-both-mcp-servers-speak-one-protocol"),
+    expect: /serendipity MCP answers a 16-message batch and refuses a 17-message one/,
+  },
+  {
     id: "declared-deploy-loses-auto-create-pin",
     plants: "infra.json's production deploy_command drops --x-auto-create=false, so a deploy may create Cloudflare resources",
     mutations: [
@@ -594,12 +745,25 @@ export const CONTROLS: Control[] = [
     expect: /a push to main must find no map and run the whole suite/,
   },
   {
+    id: "codeql-skips-a-push-to-tools",
+    plants: "CodeQL's push trigger ignores tools/**, so a change to analyzed code ships unscanned",
+    mutations: [
+      {
+        file: ".github/workflows/codeql.yml",
+        find: '      - "public/og/**"\n',
+        replace: '      - "public/og/**"\n      - "tools/**"\n',
+      },
+    ],
+    run: contract("contract-codeql-skips-only-what-it-never-reads"),
+    expect: /tools\/\*\* would skip a push that changes code CodeQL analyzes/,
+  },
+  {
     id: "critical-css-drops-script-built-rules",
     plants: "the critical-CSS subset stops keeping rules for elements nav.js builds, so /garage shifts when luna.css lands",
     mutations: [
       {
         file: "tools/lib/critical-css.ts",
-        find: " || namedInScripts(stripPseudos(s), scriptWords)",
+        find: " || namedInScripts(branch, scriptWords)",
         replace: "",
       },
     ],
@@ -609,8 +773,208 @@ export const CONTROLS: Control[] = [
   {
     id: "critical-css-adds-a-rule",
     plants: "the critical-CSS subset carries a rule luna.css doesn't, which would change /garage's settled render",
-    mutations: [{ file: "tools/lib/critical-css.ts", find: "  return keep(luna);", replace: '  return keep(luna) + ".planted{color:red}";' }],
+    mutations: [
+      {
+        file: "tools/lib/critical-css.ts",
+        find: "  return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords);",
+        replace: '  return pruneRootVars(keep(luna), `${html}\\n${scriptSrc}\\n${extraRefs}`, scriptWords) + ".planted{color:red}";',
+      },
+    ],
     run: BUILD,
     expect: /critical-css: the \/luna\.css subset is not an ordered subset of it/,
+  },
+  {
+    id: "lint-selector-stops-matching",
+    plants: "the no-runtime-typeof selector in bunfig.toml matches `void` instead, so typeof checks lint clean",
+    mutations: [{ file: "bunfig.toml", find: `selector = "UnaryExpression[operator='typeof']"`, replace: `selector = "UnaryExpression[operator='void']"` }],
+    run: contract("contract-lint-selectors"),
+    expect: /an anti-slop selector stopped matching at an ordinary path/,
+  },
+  {
+    id: "lint-typeof-override-drops-a-selector",
+    plants: "the typeof exemption's copy of the shape selector drifts from the base list, so exempt files may use the name",
+    mutations: [
+      {
+        // The override's copy is the shape selector that closes its list; the base list's is followed by the typeof one.
+        file: "bunfig.toml",
+        find: '[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n]',
+        replace: '[name=/shapeless/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n]',
+      },
+    ],
+    run: contract("contract-lint-selectors"),
+    expect: /the typeof override no longer restates the other three selectors/,
+  },
+  {
+    id: "lint-any-return-selector-stops-matching",
+    plants: "the any-return selector looks for `never` instead, so a return annotation holding `any` lints clean",
+    mutations: [
+      {
+        // The base list's copy is the one followed by the typeof selector two lines down.
+        file: "bunfig.toml",
+        find: 'TSTypeAnnotation:has(TSAnyKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },\n  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n  { selector = "UnaryExpression',
+        replace:
+          'TSTypeAnnotation:has(TSNeverKeyword)", message = "This return annotation contains `any`, which erases what the body returns. Name the real type, or delete the annotation and let it be inferred." },\n  { selector = ":matches(Identifier, PrivateIdentifier, JSXIdentifier)[name=/shape/i]", message = "Rename this symbol for its domain role; `shape` describes structure rather than ownership." },\n  { selector = "UnaryExpression',
+      },
+    ],
+    run: contract("contract-lint-selectors"),
+    expect: /an anti-slop selector stopped matching at an ordinary path/,
+  },
+  {
+    id: "lint-test-sleep-selector-stops-matching",
+    plants: "the sleep selector looks for a Promis constructor, so an awaited setTimeout in a test lints clean",
+    mutations: [{ file: "bunfig.toml", find: "> :matches(NewExpression[callee.name='Promise']", replace: "> :matches(NewExpression[callee.name='Promis']" }],
+    run: contract("contract-lint-selectors"),
+    expect: /a sleep or timeout selector stopped matching in a test file/,
+  },
+  {
+    id: "lint-test-timeout-selector-stops-matching",
+    plants: "the timeout selector looks for a misspelled key, so a test's raised timeout lints clean",
+    mutations: [{ file: "bunfig.toml", find: "Property[key.name=/^(timeout|retry|repeats)$/]", replace: "Property[key.name=/^(timeoutx|retry|repeats)$/]" }],
+    run: contract("contract-lint-selectors"),
+    expect: /a sleep or timeout selector stopped matching in a test file/,
+  },
+  {
+    id: "test-placed-away-from-what-it-covers",
+    plants: "a new tools/tests/ file that imports only src/worker/lib, which belongs in src/worker/lib/tests/",
+    mutations: [
+      {
+        file: "tools/tests/contract-planted-away-from-its-module.test.ts",
+        create:
+          'import { test } from "./contract-shared.ts";\nimport { asRecord } from "../../src/worker/lib/parse.ts";\ntest("planted", () => void asRecord({}));\n',
+      },
+    ],
+    run: contract("contract-tests-live-beside-what-they-cover"),
+    expect: /contract-planted-away-from-its-module\.test\.ts covers src\/worker\/lib\/ alone, so it belongs in src\/worker\/lib\/tests\//,
+  },
+  {
+    id: "served-tree-takes-in-client-tests",
+    plants: "the served tree stops skipping src/ tests/ directories, so client tests would ship from the site root",
+    mutations: [{ file: "tools/lib/served-tree.ts", find: '(entry.isDirectory() && entry.name === "tests" && root.startsWith("src/"))', replace: "false" }],
+    run: contract("contract-tests-live-beside-what-they-cover"),
+    expect: /a colocated test would be served/,
+  },
+  {
+    id: "lint-test-fetch-selector-stops-matching",
+    plants: "the hand-assigned fetch selector looks for a misspelled property, so a test that replaces globalThis.fetch lints clean",
+    mutations: [{ file: "bunfig.toml", find: "MemberExpression.left[property.name='fetch']", replace: "MemberExpression.left[property.name='fetchx']" }],
+    run: contract("contract-lint-selectors"),
+    expect: /the hand-assigned fetch selector stopped matching in a test file/,
+  },
+  {
+    id: "route-fetch-miss-goes-unrecorded",
+    plants: "routeFetch throws on a miss without recording it, so a probe that swallows the throw passes",
+    mutations: [{ file: "tools/lib/fetch-routes.ts", find: "      escaped.push(request.url);\n", replace: "" }],
+    run: contract("contract-the-network-tripwire"),
+    expect: /the miss was thrown but never recorded/,
+  },
+  {
+    id: "lint-reads-an-eslint-config",
+    plants: 'an eslint.config.js beside bunfig.toml, which flavor = "eslint" lets apply on top of [lint]',
+    gotcha: 104,
+    mutations: [{ file: "eslint.config.js", create: "export default [];\n" }],
+    run: ["bun", "tools/check-bun-lint.ts"],
+    expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 2: error: Key "rules"/,
+  },
+  {
+    id: "lint-flavor-key-dropped",
+    plants: 'bunfig.toml loses flavor = "eslint" while an .oxlintrc.json sits above it, as the main checkout\'s does',
+    gotcha: 104,
+    mutations: [
+      { file: "bunfig.toml", find: '\nflavor = "eslint"\n', replace: "\n" },
+      { file: ".oxlintrc.json", create: "{}\n" },
+    ],
+    run: ["bun", "tools/check-bun-lint.ts"],
+    expect: /bun lint should read bunfig\.toml's \[lint\] alone \(gotcha 104\), and `bun lint --doctor` exited 1: error: Cannot use the configuration file/,
+  },
+  {
+    id: "hit-retries-a-lost-do-reply",
+    plants: "handleHit retries the Counter fetch when its reply is lost, so a visit the DO already counted counts twice",
+    mutations: [
+      {
+        file: "src/worker/counter.ts",
+        find: '      return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n    } catch {\n      return null;\n',
+        replace:
+          '      return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n    } catch {\n      try {\n        const again = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));\n        return (await (await again.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;\n      } catch {\n        return null;\n      }\n',
+      },
+    ],
+    // Seeds 1 to 60 inside a 120 s cap; seed 11 caught it in 1.1 s on
+    // 2026-11-21 and shrank to 2 events, a counting visit and the lost reply.
+    run: ["bun", "tools/sim.ts", "--seed", "1", "--seeds", "60", "--budget", "120", "--stop-on-fail"],
+    expect: /FAIL counter: counter double-counted: GET \/hit\S* moved the count by 2/,
+  },
+  {
+    id: "build-memo-key-forgets-an-input",
+    plants: "the client-island eraser's cache key drops the island's text, so a warm build ships last build's tooltip.js after an edit",
+    mutations: [
+      {
+        file: "tools/build.ts",
+        find: "  const texts = await cache.memoBatch(ERASE, islands, async (missed) => {",
+        replace: "  const texts = await cache.memoBatch(ERASE, islands.map(([file]) => [file]), async (missed) => {",
+      },
+    ],
+    run: ["bun", "tools/build-equivalence.ts", "--seed", "1", "--plan", "island"],
+    expect: /build-equivalence: step 1 \(island\): the warm \.build differs from a clean build in \d+ files/,
+  },
+  {
+    id: "minify-diff-walks-an-empty-event-pool",
+    plants: "the page differential boots serendipity with no events again, so a planted bug in its week filter ships unseen",
+    // serendipity:3 flips the week chip's `===` (`l===\`week\``); before the
+    // seed, all 4 of serendipity's mutants were missed because events.html
+    // answered 503 and the filter had no cards. About 2 minutes: an oxc build
+    // and 4 one-page records.
+    mutations: [{ file: "tools/check-minify-diff.ts", find: "    await seedSerendipity(await server.getWorker<SeedEnv>().getEnv());\n", replace: "" }],
+    run: ["node", "tools/check-minify-diff.ts", "catch", "serendipity:3", "--only", "/serendipity", "--build"],
+    expect: /catch: missed serendipity:3 on \/serendipity/,
+  },
+  {
+    id: "contract-shared-imports-a-worker-module",
+    plants: "contract-shared.ts re-exports a Worker module again, so every test's trace reads it and a change there reruns the suite",
+    gotcha: 111,
+    mutations: [
+      {
+        file: "tools/tests/contract-shared.ts",
+        find: 'import test from "node:test";\n',
+        replace: 'import test from "node:test";\nexport { handleTool } from "../../src/worker/terminal.ts";\n',
+      },
+    ],
+    run: contract("contract-the-shared-test-helpers-import-nothing-from-the-repo"),
+    expect: /contract-shared\.ts imports \.\.\/\.\.\/src\/worker\/terminal\.ts, which makes every test an input of it \(gotcha 111\)/,
+  },
+  // The next three plant a defect in one route handler each and run the suite
+  // the way validate does on a PR: narrowed by the traced input map. Each
+  // handler reaches 1 to 6 test files since gotcha 111, so a selection that
+  // dropped the one test pinning it would pass here. In the controls job the
+  // map is the nightly one; with no map, `run` falls back to the whole suite,
+  // which proves only that the test catches the defect.
+  {
+    id: "coffee-availability-answers-503-with-slots",
+    plants: "the /coffee/availability.json handler answers 503 when slots are open, so the booking widget reads the calendar as down",
+    gotcha: 111,
+    mutations: [{ file: "src/worker/coffee.ts", find: "const status = payload.available ? 200 : 503;", replace: "const status = 503;" }],
+    run: NARROWED,
+    expect:
+      /contract-site-search-photo-query-and-the-utility-shells\.test\.ts: [\s\S]*\(fail\) coffee availability reuses the booking slot calculation and returns a safe shape/,
+  },
+  {
+    id: "run-error-echoes-the-command-unescaped",
+    plants: "the /run handler prints an unknown command into its error without escaping it, so ?cmd=<script> runs",
+    gotcha: 111,
+    mutations: [{ file: "src/worker/run.ts", find: "<b>Windows cannot find '${esc(cmd)}'.</b>", replace: "<b>Windows cannot find '${cmd}'.</b>" }],
+    run: NARROWED,
+    expect: /contract-run-opens-any-page\.test\.ts: [\s\S]*\(fail\) a miss keeps the Run error and offers a filled-in search/,
+  },
+  {
+    id: "inbox-mail-prints-the-author-unescaped",
+    plants: "the /inbox mail island prints a webmention's author without escaping it, so a sender's name can carry markup",
+    gotcha: 111,
+    mutations: [
+      {
+        file: "src/worker/inbox.ts",
+        find: '<span class="oe-from">${esc(m.author || "someone")}</span>',
+        replace: '<span class="oe-from">${m.author || "someone"}</span>',
+      },
+    ],
+    run: NARROWED,
+    expect: /contract-inbox-and-census-are-built-documents\.test\.ts: [\s\S]*\(fail\) the two islands carry the marker and their cache policies/,
   },
 ];

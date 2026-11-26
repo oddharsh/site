@@ -24,7 +24,8 @@
 // POST body that lensFetch cannot express, so it re-states each of those bounds
 // itself rather than inheriting them, per-hop redirect validation included.
 // This module adds no new way to reach the network.
-import { outboundRead, type OutboundRefusal } from "./outbound.ts";
+import { outboundRead } from "./outbound.ts";
+import type { OutboundRefusal } from "./outbound.ts";
 import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";
@@ -165,13 +166,24 @@ function refusedDoor(refusal: OutboundRefusal): { ok: false; unreadable: true; d
  * catalogue as prose and a schema would be dead weight in a terminal frame. The
  * Tools lens turns it on: a schema is the only thing a form can be built from.
  */
-// The result is one of several shapes: a tool list, an unreadable door with a
-// reason, or a GATED one carrying `gated: true` and the scheme. Declaring the
-// open record is what lets a caller read `gated` without tsc picking one arm of
-// the union and calling the others typos. The probe's whole job is reporting
-// WHICH of those happened, so every caller reads a field some arm lacks.
-export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}): Promise<Record<string, any>> {
-  const url = origin.replace(/\/+$/, "") + "/mcp";
+// The probe's whole job is reporting WHICH of these happened: a tool list, a
+// shut door, an unreadable one, or a GATED one with the scheme it wants. Each
+// arm spells out the other's fields as absent, so a caller can read `count` or
+// `gated` before checking `ok`.
+type McpToolRow = {
+  name: string;
+  description: string;
+  inputSchema?: unknown;
+  schemaOversize?: number;
+  title?: string;
+  annotations?: Record<string, unknown>;
+};
+type McpDoorReading =
+  | { ok: true; count: number; tools: McpToolRow[]; unreadable?: undefined; gated?: undefined; detail?: undefined }
+  | { ok: false; unreadable?: true; gated?: true; detail?: string; count?: undefined; tools?: undefined };
+
+export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}): Promise<McpDoorReading> {
+  const url = origin.replace(/(?<!\/)\/+$/, "") + "/mcp";
   // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
   // empty because this probe reads a catalogue and offers the server nothing:
   // no roots, no sampling, no elicitation. Sending it matters twice over — a
@@ -287,14 +299,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       count: tools.length,
       tools: tools.slice(0, DOOR_LIMITS.tools).map((tool) => {
         const toolRecord = asRecord(tool) || {};
-        const row: {
-          name: string;
-          description: string;
-          inputSchema?: unknown;
-          schemaOversize?: number;
-          title?: string;
-          annotations?: Record<string, unknown>;
-        } = {
+        const row: McpToolRow = {
           name: asScalarText(toolRecord.name || "").slice(0, 60),
           description: trim(toolRecord.description, DOOR_LIMITS.toolDesc),
         };
@@ -359,7 +364,7 @@ export type ForeignNlwebProbe =
  * shut (there is no endpoint), unreadable (we never got to look), or ok.
  */
 export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}): Promise<ForeignNlwebProbe> {
-  const base = origin.replace(/\/+$/, "") + "/ask";
+  const base = origin.replace(/(?<!\/)\/+$/, "") + "/ask";
   const query =
     String(opts.query || "")
       .trim()
@@ -397,7 +402,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
     const got = await readResponseCapped(res, ASK_CAP);
     if (got.truncated) return { ok: false, unreadable: true, detail: `answer over ${ASK_CAP / 1024} KB — not read` };
 
-    const framing = /event-stream/.test(contentType) || /^\s*(event|data):/m.test(got.text) ? "sse" : "json";
+    const framing = /event-stream/.test(contentType) || /^[^\S\n\r\u2028\u2029]*(event|data):/m.test(got.text) ? "sse" : "json";
     const parsed = framing === "sse" ? parseAskStream(got.text) : parseAskJson(got.text);
     if (!parsed.ok) {
       // A non-2xx that also failed to parse is reported by STATUS, because "not

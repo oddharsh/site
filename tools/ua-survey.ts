@@ -208,10 +208,12 @@ async function main() {
   for (const target of targets) {
     const results: Record<string, any> = {};
     for (const identity of IDENTITIES) {
-      const runs = [];
+      const runs: Sample[] = [];
       for (let i = 0; i < trials; i++) {
         runs.push(await sample(target, identity));
-        await new Promise((r) => setTimeout(r, 400)); // one request at a time, deliberately slow
+        await new Promise((r) => {
+          setTimeout(r, 400);
+        }); // one request at a time, deliberately slow
       }
       const ok = runs.filter((r) => r.status !== null);
       results[identity.key] = {
@@ -261,9 +263,9 @@ async function main() {
 // `words` directly, and a bare import that made 500 outbound requests would be
 // a memorable way to find that out.
 if (import.meta.main)
-  main().catch((e) => {
+  main().catch((e: unknown) => {
     // A survey that dies half way must not leave a truncated JSON body looking
     // like a complete result. Fail loudly and write nothing usable.
-    process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
+    process.stderr.write(`ua-survey failed: ${e instanceof Error && e.stack ? e.stack : String(e)}\n`);
     process.exitCode = 1;
   });

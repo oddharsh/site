@@ -40,9 +40,12 @@
 // tests for equality. `cf deploy --dry-run` needs no credential: measured on cf
 // 1.0.0-beta.5 with no token or login, plain and `--prebuilt` both print 8.84
 // KiB / 3.07 KiB gzip and exit 0. For a JavaScript Worker cf delegates to
-// wrangler, so `cf build` writes the same three files under
+// wrangler, so on beta.5 `cf build` wrote the same files under
 // .cloudflare/output/v0/ as `wrangler build --x-new-config --x-cf-build-output`,
-// sha256 for sha256. cf is a workstation global (`bun add -g cf`), never a tree
+// sha256 for sha256. cf 1.0.0-rc.1 moves Build Output to v1/ and refuses any
+// wrangler below 4.163.0: on 2026-11-21 `cf build` here exited 1 against the
+// 4.162.0 pin, while that wrangler still wrote v0/. Rerun the comparison once
+// the pin passes 4.163.0. cf is a workstation global (`bun add -g cf`), never a tree
 // dependency, because its CLI half pins a second Miniflare and workerd. Deploys
 // stay on wrangler (gotcha 50), and a leftover .cloudflare/output/ makes
 // wrangler refuse to deploy from here (gotcha 59).

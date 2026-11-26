@@ -14,10 +14,32 @@
 name: "CodeQL"
 
 on:
+  # No pull_request trigger since 2026-11-14. CodeQL is not a required check,
+  # so a PR scan could warn but never block, and from 2026-11-07 to 11-14 its
+  # 136 PR runs (about 270 runner-minutes) found nothing. A finding now surfaces
+  # on the push to main that follows the merge.
+  #
+  # A push that changes nothing CodeQL reads is skipped, from 2026-11-17. The
+  # analyzed set was read off run 44145367917's extraction log: no .lock, .md
+  # or image file, and no JSON beyond package.json, tsconfig*.json and one
+  # manifest.json, so bun.lock and config/bun-pin.json are never extracted.
+  # src/dict holds dictionary copies of served bytes, never served itself, and
+  # the init step below drops it from the analysis, so a dictionary roll moves
+  # nothing either. 73 of 286 main commits from 2026-10-18 to 11-17 touched
+  # only these paths. contract-codeql-skips-only-what-it-never-reads holds the
+  # list to that rule; the weekly schedule still re-reads everything.
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+    paths-ignore:
+      - "src/dict/**"
+      - "bun.lock"
+      - "**/bun.lock"
+      - "config/bun-pin.json"
+      - "**.md"
+      - "public/i/**"
+      - "public/images/**"
+      - "public/cars/**"
+      - "public/og/**"
   schedule:
     # Weekly, matching what default setup ran. Offset off the hour because
     # GitHub queues everything scheduled on :00.
@@ -36,9 +58,8 @@ permissions:
   actions: read
 
 concurrency:
-  # Keyed by PR for a pull_request, and by EVENT PLUS SHA for everything else.
-  # `github.event.pull_request.number` is null on both a push to main and the
-  # Wednesday schedule, so `github.ref` put the two into one
+  # Keyed by EVENT PLUS SHA. Keying on `github.ref` put a push to main and the
+  # Wednesday schedule into one
   # `codeql-refs/heads/main` group with cancellation on. Any merge landing in
   # the schedule's window killed the weekly scan, and the next one is seven days
   # out. That scan is the only thing that re-reads UNCHANGED code against
@@ -54,7 +75,7 @@ concurrency:
   # 2026-08-26 scheduled run finished 4m09s before the next merge fired. That
   # run started at 19:24 UTC against a cron of 17:28, so the window it has to
   # survive is not predictable from the schedule.
-  group: codeql-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+  group: codeql-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -87,18 +108,33 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           # The `default` suite, matching what config/infra.json declares.
           # `security-extended` is a large cost change and would need that
           # declaration updated in the same commit.
+          #
+          # src/dict holds compression dictionaries cut from earlier served
+          # bytes, and the build reads them without serving them. CodeQL
+          # skipped 116 of its 118 files as minified on 2026-11-17 and analyzed
+          # the other two, so an alert in src/client could file once more per
+          # stale copy.
+          config: |
+            paths-ignore:
+              - src/dict
 
       # No manual build step: every language here is `build-mode: none`, so the
       # generator's `exit 1` placeholder would only ever be dead weight.
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           category: "/language:${{ matrix.language }}"
+          # The database upload feeds GitHub's variant analysis, which nothing
+          # here uses. It zipped and uploaded the javascript database on every
+          # push: 37 s of that job's 150 s analyze step (run 44145367917,
+          # 2026-11-17; 1.4 s for actions). The SARIF upload, which files the
+          # alerts, still runs.
+          upload-database: false

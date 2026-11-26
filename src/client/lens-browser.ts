@@ -7,12 +7,12 @@
   // The local parse layer. Client scripts here have no shared module graph, so
   // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
   // coercions is the same trade these files already make for esc().
-  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+  /* oxlint-disable no-restricted-syntax -- a hand-rolled parser is made
      of typeof; keeping the checks here rather than at each use is the point. */
   function asRecord(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
   }
-  /* oxlint-enable anti-slop/no-runtime-typeof */
+  /* oxlint-enable no-restricted-syntax */
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -455,7 +455,7 @@
         });
       })
       .then(done)
-      .catch((error) => {
+      .catch((error: unknown) => {
         // The shell answers false when this run belongs to a scan it has moved
         // past, and the pane already shows the newer one.
         if (onError(error) === false) return;

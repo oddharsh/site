@@ -139,8 +139,8 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error(`error: ${error.message}`);
+  main().catch((error: unknown) => {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   });
 }

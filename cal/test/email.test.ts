@@ -8,7 +8,7 @@
 //   - DESCRIPTION newlines are single ICS escapes, not double-escaped literals
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { guestMail, hostCopy, sendApprovalRequest, sendDecline } from "../src/email.ts";
-import { stubFetch } from "./harness.ts";
+import { routeFetch } from "../../tools/lib/fetch-routes.ts";
 
 const env = {
   HOST_TIMEZONE: "America/New_York",
@@ -31,28 +31,30 @@ const booking = {
 const b64ToUtf8 = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 
 let calls;
-let restoreFetch = () => {};
+let fetchRoutes: ReturnType<typeof routeFetch>;
 beforeEach(() => {
   calls = [];
-  restoreFetch = stubFetch(async (url, init) => {
-    calls.push({ url: String(url as string | URL), init, body: JSON.parse(String(init?.body as string)) });
-    return new Response(JSON.stringify({ id: "resend-msg-id" }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+  fetchRoutes = routeFetch({
+    "https://api.resend.com/emails": async (request) => {
+      calls.push({ url: request.url, request, body: await request.json() });
+      return new Response(JSON.stringify({ id: "resend-msg-id" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
   });
 });
-afterEach(() => restoreFetch());
+afterEach(() => fetchRoutes[Symbol.dispose]());
 
 describe("sendApprovalRequest → Resend", () => {
   it("POSTs to Resend with auth, host recipient, and reply-to the requester", async () => {
     const res = await sendApprovalRequest(env, booking, "https://c/approve?t=1&sig=A", "https://c/decline?t=1&sig=B");
     expect(calls).toHaveLength(1);
-    const { url, init, body } = calls[0];
+    const { url, request, body } = calls[0];
     expect(url).toBe("https://api.resend.com/emails");
-    expect(init.method).toBe("POST");
-    expect(init.headers.authorization).toBe("Bearer test-resend-key");
-    expect(init.headers["content-type"]).toBe("application/json");
+    expect(request.method).toBe("POST");
+    expect(request.headers.get("authorization")).toBe("Bearer test-resend-key");
+    expect(request.headers.get("content-type")).toBe("application/json");
     expect(body.to).toEqual(["coffee@aadhar.sh"]);
     expect(body.reply_to).toBe("jordan@example.com"); // hit Reply → goes to requester
     expect(body.html).toContain("https://c/approve?t=1&sig=A");
@@ -276,8 +278,8 @@ describe("sendDecline + error handling", () => {
   });
 
   it("throws when Resend returns a non-2xx (so callers/log see the failure)", async () => {
-    restoreFetch();
-    restoreFetch = stubFetch(async () => new Response("rate limited", { status: 429 }));
+    fetchRoutes[Symbol.dispose]();
+    fetchRoutes = routeFetch({ "https://api.resend.com/emails": () => new Response("rate limited", { status: 429 }) });
     await expect(sendDecline(env, booking)).rejects.toThrow(/resend 429/);
   });
 });
