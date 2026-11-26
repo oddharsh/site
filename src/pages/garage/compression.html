@@ -159,7 +159,7 @@
     <table class="cmp">
       <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
       <tbody>
-        <tr><td>all 12 shipping <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">516,978 bytes</td><td>559,969 bytes</td></tr>
+        <tr><td>443 <a class="term" data-t="delta-encoding" href="https://en.wikipedia.org/wiki/Delta_encoding" title="Storing or sending only the differences between two versions of data, instead of the whole new version." rel="external">deltas</a>, total</td><td class="y">516,978 bytes</td><td>559,969 bytes</td></tr>
         <tr><td>widest single gap (pretext-lib.js)</td><td class="y">33,688 bytes</td><td>35,664 bytes</td></tr>
         <tr><td>decode, average 39,821 B rebuilt</td><td>27.1 µs</td><td class="y">13.4 µs</td></tr>
         <tr><td>throughput</td><td>1,403 MiB/s</td><td class="y">2,839 MiB/s</td></tr>
@@ -182,9 +182,8 @@
       drops to about 19 Mbps. dcz still ships, and on these numbers that's a close call.
     </p>
     <p>
-      On the old numbers this was a coin flip, and on these it's lopsided. The
-      size table now favours brotli by more than it ever did, and that table is the wrong axis to
-      decide on.
+      On July's numbers this looked lopsided, and on these it's close again. The size table
+      favours brotli by more than it ever did, and the decode gap no longer outweighs it by much.
     </p>
     <p>
       dcz's framing is the tidier of the two as a bonus. The dictionary hash rides in a Zstandard
