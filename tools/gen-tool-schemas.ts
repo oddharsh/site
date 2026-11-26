@@ -5,17 +5,19 @@
 // descriptions (TOOL_OPERATIONS in src/worker/lib/tools.ts). Those schemas live
 // in src/worker/lib/openapi.ts, which stays out of the Worker bundle, so this
 // projects only the ones the tools name into src/worker/lib/tool-schemas.json.
-// MCP has no components to resolve a $ref in, so each schema is inlined.
+// TOOL_COMPONENTS names the component schemas a tool returns without a REST
+// operation of its own. MCP has no components to resolve a $ref in, so each
+// schema is inlined.
 // contract-mcp-tools-share-their-rest-schemas holds the committed file equal to
 // toolSchemas(). Edit the schemas in openapi.ts or public-api.ts and run this.
 //
 //     bun tools/gen-tool-schemas.ts
 
 import { writeFileSync } from "node:fs";
-import { SCHEMAS } from "../src/worker/lib/openapi.ts";
+import { SCHEMAS, TOOL_ONLY_SCHEMAS } from "../src/worker/lib/openapi.ts";
 import { operation } from "../src/worker/lib/public-api.ts";
 import type { Schema } from "../src/worker/lib/public-api.ts";
-import { TOOL_OPERATIONS } from "../src/worker/lib/tools.ts";
+import { TOOL_COMPONENTS, TOOL_OPERATIONS } from "../src/worker/lib/tools.ts";
 
 export const TOOL_SCHEMAS_PATH = "src/worker/lib/tool-schemas.json";
 
@@ -45,7 +47,13 @@ export function toolSchemas() {
     if (!body) throw new Error(`gen-tool-schemas: ${operationId} has no JSON 200 body for a tool to declare`);
     outputs[operationId] = inlined(body);
   }
-  return { outputs, parameters };
+  const components: Record<string, Schema> = {};
+  for (const name of TOOL_COMPONENTS) {
+    const schema = SCHEMAS[name] ?? TOOL_ONLY_SCHEMAS[name];
+    if (!schema) throw new Error(`gen-tool-schemas: no schema named ${name}`);
+    components[name] = inlined(schema);
+  }
+  return { outputs, parameters, components };
 }
 
 if (import.meta.main) {

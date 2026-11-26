@@ -193,6 +193,23 @@ For a routine rotation, send one throwaway booking after the change and verify
 that the new approval link works. For an emergency rotation, prioritize the
 rotation and treat all previously emailed links as compromised.
 
+### Rotate or extend AadharshBot's signing keys
+
+Each key in `public/.well-known/http-message-signatures-directory` carries `nbf`
+and `exp` in seconds, with `exp` at most a year out.
+`contract-web-bot-auth-keys-expire-60-days-out` fails every PR from 60 days
+before the soonest `exp`. Either answer clears it:
+
+- **Extend.** Move that key's `exp` forward, under a year out, and deploy.
+- **Rotate.** Put the new secret in with
+  `bun run wrangler:site versions secret put RN_SIGNING_KEY_JWK` (or
+  `RN_SIGNING_KEY_MLDSA_JWK` for sig2), and in the same change replace the
+  public key in the directory, with `kid` set to its RFC 7638 thumbprint, `nbf`
+  set to the deploy time and a new `exp`. The handler 503s whenever a secret
+  and its published key disagree, so both land in one version. Then promote.
+  The handler also allows exactly one Ed25519 key, so this is a hard cut rather
+  than the draft's overlap of old and new keys.
+
 ## CI/CD release path
 
 1. [CI](../.github/workflows/ci.yml) runs one required job, `validate`: lint,
@@ -1393,6 +1410,29 @@ Garage's retired `wire` command refuses to write.
 
 Run `bun run pages:check` and review the generated diff before release. Bake the
 OG/Twitter card once the page is live with `bun run og-cards` (see below).
+
+---
+
+## Republish to the MCP Registry
+
+Both MCP servers are listed in the official MCP Registry as `sh.aadhar/site`
+and `sh.aadhar/serendipity` (first published 2026-11-24). The registry keeps
+the last version it was sent, so after a server's version, title, description,
+icon or URL changes, run `bun run gen:mcp-cards`, merge, and republish from a
+workstation. The contract suite holds each `config/mcp-registry/*.json` equal
+to its server card, but nothing compares it with the live registry.
+
+The registry checks ownership of `sh.aadhar` against the public key served at
+`/.well-known/mcp-registry-auth` (#1855). The Ed25519 private key stays
+outside the repository; set `MCP_PRIVATE_KEY` to its hex form, then:
+
+```bash
+mcp-publisher login http --domain aadhar.sh
+mcp-publisher publish config/mcp-registry/site.json
+mcp-publisher publish config/mcp-registry/serendipity.json
+```
+
+Each publish needs a version the registry hasn't seen for that name.
 
 ---
 

@@ -50,6 +50,9 @@ headers) and why.
 
 See the [aadhar.sh MCP setup](https://aadhar.sh/developers#mcp) and
 [Serendipity MCP setup](https://aadhar.sh/serendipity/mcp-info) for remote client connections.
+Both servers are listed in the official MCP Registry as
+[sh.aadhar/site](https://registry.modelcontextprotocol.io/v0.1/servers/sh.aadhar%2Fsite/versions/latest) and
+[sh.aadhar/serendipity](https://registry.modelcontextprotocol.io/v0.1/servers/sh.aadhar%2Fserendipity/versions/latest).
 
 Every API endpoint and MCP tool is free and needs no account or key, so there
 is nothing to sign up for. Production is the sandbox: the HTTP endpoints in

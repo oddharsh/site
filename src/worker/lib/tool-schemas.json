@@ -916,5 +916,876 @@
       "left": "The first URL, validated like /lens/fetch.",
       "right": "The second URL."
     }
+  },
+  "components": {
+    "LensSummary": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "finalUrl": {
+          "type": "string"
+        },
+        "redirected": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "elapsedMs": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "wordCount": {
+          "type": "integer"
+        },
+        "bytes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "parsedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "parseTruncated": {
+          "type": "boolean"
+        },
+        "readiness": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fieldScore": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "level": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "levelName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "levelNote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tier": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+        },
+        "doors": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "cost": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "tokens": {
+              "type": "integer"
+            },
+            "usdPerRead": {
+              "type": "number"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        },
+        "phases": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "type": "boolean"
+            },
+            "discovery": {
+              "type": "boolean"
+            },
+            "botViews": {
+              "type": "boolean"
+            },
+            "discoveryDeferred": {
+              "type": "boolean"
+            },
+            "discoveryCached": {
+              "type": "boolean"
+            },
+            "discoveryShared": {
+              "type": "boolean"
+            },
+            "subrequestCap": {
+              "type": "boolean"
+            },
+            "wallCheck": {
+              "type": "string",
+              "description": "ok, none, no AI binding, or the error the wall check hit."
+            }
+          },
+          "required": [
+            "page",
+            "discovery",
+            "botViews"
+          ],
+          "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+        },
+        "surfaces": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Null when discovery did not run.",
+          "properties": {
+            "llms": {
+              "type": "boolean"
+            },
+            "markdown": {
+              "type": "boolean"
+            },
+            "mcp": {
+              "type": "boolean"
+            },
+            "agentCard": {
+              "type": "boolean"
+            },
+            "apiCatalog": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "url",
+        "finalUrl",
+        "status",
+        "phases"
+      ]
+    },
+    "LensComparisonValue": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "finalUrl": {
+              "type": "string"
+            },
+            "redirected": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "elapsedMs": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "wordCount": {
+              "type": "integer"
+            },
+            "bytes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "parsedBytes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "parseTruncated": {
+              "type": "boolean"
+            },
+            "readiness": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "fieldScore": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "level": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "levelName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "levelNote": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tier": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+            },
+            "doors": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cost": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "tokens": {
+                  "type": "integer"
+                },
+                "usdPerRead": {
+                  "type": "number"
+                },
+                "model": {
+                  "type": "string"
+                }
+              }
+            },
+            "phases": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "boolean"
+                },
+                "discovery": {
+                  "type": "boolean"
+                },
+                "botViews": {
+                  "type": "boolean"
+                },
+                "discoveryDeferred": {
+                  "type": "boolean"
+                },
+                "discoveryCached": {
+                  "type": "boolean"
+                },
+                "discoveryShared": {
+                  "type": "boolean"
+                },
+                "subrequestCap": {
+                  "type": "boolean"
+                },
+                "wallCheck": {
+                  "type": "string",
+                  "description": "ok, none, no AI binding, or the error the wall check hit."
+                }
+              },
+              "required": [
+                "page",
+                "discovery",
+                "botViews"
+              ],
+              "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+            },
+            "surfaces": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Null when discovery did not run.",
+              "properties": {
+                "llms": {
+                  "type": "boolean"
+                },
+                "markdown": {
+                  "type": "boolean"
+                },
+                "mcp": {
+                  "type": "boolean"
+                },
+                "agentCard": {
+                  "type": "boolean"
+                },
+                "apiCatalog": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "required": [
+            "url",
+            "finalUrl",
+            "status",
+            "phases"
+          ]
+        },
+        "right": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "finalUrl": {
+              "type": "string"
+            },
+            "redirected": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "elapsedMs": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "wordCount": {
+              "type": "integer"
+            },
+            "bytes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "parsedBytes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "parseTruncated": {
+              "type": "boolean"
+            },
+            "readiness": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "fieldScore": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "level": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "levelName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "levelNote": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tier": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "unknown or a spectrum tier when measured; null when discovery did not run."
+            },
+            "doors": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cost": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "tokens": {
+                  "type": "integer"
+                },
+                "usdPerRead": {
+                  "type": "number"
+                },
+                "model": {
+                  "type": "string"
+                }
+              }
+            },
+            "phases": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "boolean"
+                },
+                "discovery": {
+                  "type": "boolean"
+                },
+                "botViews": {
+                  "type": "boolean"
+                },
+                "discoveryDeferred": {
+                  "type": "boolean"
+                },
+                "discoveryCached": {
+                  "type": "boolean"
+                },
+                "discoveryShared": {
+                  "type": "boolean"
+                },
+                "subrequestCap": {
+                  "type": "boolean"
+                },
+                "wallCheck": {
+                  "type": "string",
+                  "description": "ok, none, no AI binding, or the error the wall check hit."
+                }
+              },
+              "required": [
+                "page",
+                "discovery",
+                "botViews"
+              ],
+              "description": "Which passes ran. A field from a pass that did not run is absent, never zero."
+            },
+            "surfaces": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Null when discovery did not run.",
+              "properties": {
+                "llms": {
+                  "type": "boolean"
+                },
+                "markdown": {
+                  "type": "boolean"
+                },
+                "mcp": {
+                  "type": "boolean"
+                },
+                "agentCard": {
+                  "type": "boolean"
+                },
+                "apiCatalog": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "required": [
+            "url",
+            "finalUrl",
+            "status",
+            "phases"
+          ]
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "before": {
+                "type": [
+                  "string",
+                  "integer",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "after": {
+                "type": [
+                  "string",
+                  "integer",
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "field",
+              "before",
+              "after"
+            ]
+          }
+        },
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "left": {
+              "type": "string",
+              "enum": [
+                "none",
+                "deferred",
+                "cached",
+                "shared",
+                "refused",
+                "live"
+              ]
+            },
+            "right": {
+              "type": "string",
+              "enum": [
+                "none",
+                "deferred",
+                "cached",
+                "shared",
+                "refused",
+                "live"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "left",
+        "right",
+        "changes"
+      ]
+    },
+    "PhotoMetadata": {
+      "type": "object",
+      "properties": {
+        "camera": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lens": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aperture": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As written, for example f/2.8."
+        },
+        "shutter": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As written, for example 1/60."
+        },
+        "iso": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "focal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ev": {
+          "type": [
+            "number",
+            "string",
+            "null"
+          ],
+          "description": "Exposure compensation: a number, or a signed string such as +0.33."
+        },
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As EXIF writes it, YYYY:MM:DD HH:MM:SS, with no timezone."
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "color_space": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "white_balance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_temp": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "wb_shift": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exposure_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "focus_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "drive": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sharpness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "noise_reduction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clarity": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "film": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Fuji film simulation."
+        },
+        "dr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dr_value": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "chrome": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chrome_blue": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grain_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "highlight_tone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shadow_tone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "saturation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipe": {
+          "type": "object",
+          "description": "The frame's film recipe card, keyed the way a recipe is written down. Absent on frames with no recipe.",
+          "properties": {
+            "Film Simulation": {
+              "type": "string"
+            },
+            "Dynamic Range": {
+              "type": "string"
+            },
+            "Grain Effect": {
+              "type": "string"
+            },
+            "Color Chrome Effect": {
+              "type": "string"
+            },
+            "Color Chrome FX Blue": {
+              "type": "string"
+            },
+            "White Balance": {
+              "type": "string"
+            },
+            "Highlight": {
+              "type": "string"
+            },
+            "Shadow": {
+              "type": "string"
+            },
+            "Color": {
+              "type": "string"
+            },
+            "Sharpness": {
+              "type": "string"
+            },
+            "High ISO NR": {
+              "type": "string"
+            },
+            "Clarity": {
+              "type": "string"
+            },
+            "ISO": {
+              "type": "string"
+            },
+            "Exposure Compensation": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "description": "Public-safe EXIF and Fuji fields, read from the file. A field the camera did not record is null and a field the extractor never read is absent: nothing is guessed."
+    }
   }
 }

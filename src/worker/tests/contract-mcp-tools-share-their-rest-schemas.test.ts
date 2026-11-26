@@ -78,9 +78,16 @@ test("a mapped tool's schemas are its REST operation's, and the Lens summaries k
   // No $ref survives, since an MCP client has no components to resolve it in.
   for (const tool of DATA_TOOLS) assert.ok(!JSON.stringify(tool.outputSchema).includes("$ref"), `${tool.name} carries a $ref`);
   // The Lens tools return lensObservationSummary, a different shape from
-  // /lens/fetch, so they take parameter descriptions and keep the open schema.
-  assert.deepEqual(byName.get("lens_inspect")!.outputSchema, { type: "object", additionalProperties: true });
+  // /lens/fetch, so they take /lens/fetch's parameter descriptions and the
+  // LensSummary component as their output.
+  const { SCHEMAS } = await import("../lib/openapi.ts");
+  assert.deepEqual(Object.keys(byName.get("lens_inspect")!.outputSchema.properties), Object.keys(SCHEMAS.LensSummary.properties!));
   assert.ok(byName.get("lens_inspect")!.inputSchema.properties.url.description);
+  // lens_compare returns compareLensTargets' value, without the ok and
+  // comparedAt fields /lens/compare.json wraps around it.
+  const compare = byName.get("lens_compare")!.outputSchema;
+  assert.deepEqual(Object.keys(compare.properties), ["left", "right", "changes", "discovery"]);
+  assert.deepEqual(compare.required, ["left", "right", "changes"]);
 });
 
 test("the live tools/list carries the derived schemas", async () => {
