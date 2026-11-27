@@ -18,7 +18,7 @@
 // network tripwire's record, then refused. The record is the part that holds,
 // for the reason no-network.ts gives: lens probes catch fetch errors, so a
 // refusal alone can be swallowed by a test that then passes. A recorded miss
-// fails the run at exit whatever the caller did with the throw.
+// fails the run whatever the caller did with the throw.
 //
 // Importing no-network.ts arms the tripwire in runners that don't preload it
 // (cal, lens-reader, cf-garage), so the guarantee holds there too. `using`

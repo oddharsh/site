@@ -23,8 +23,17 @@
 // needed" and says nothing whatsoever about "no network attempted".
 //
 // So the record is what actually holds the line. `escaped` is appended before
-// the throw, and the exit hook reads it no matter what the caller did with the
-// error. A caught refusal still fails the run.
+// the throw, and an end-of-run check reads it no matter what the caller did
+// with the error. A caught refusal still fails the run.
+//
+// The check differs by runtime because bun's parallel runner drops the exit
+// hook's verdict. Measured 2026-11-27 on bun 1.4.4-canary.1+5c6d4e24c with a
+// probe test that catches a refused fetch: serial `bun test` and `node --test`
+// exit 1 from the exit hook, but `bun test --parallel=4 --no-isolate` (the `test`
+// script) prints the tripwire report from the worker and still exits 0, because
+// the coordinator ignores a worker's `process.exitCode`. A global `afterAll`
+// registered here fails as a test failure instead, which the coordinator
+// counts. Node has no `bun:test`, so it keeps the exit hook.
 //
 // There is deliberately NO opt-out env var. A list of allowed exceptions is an
 // invitation to add an entry rather than a stub, which is the same reasoning
@@ -88,49 +97,76 @@ const arm = () => {
         `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
     );
   };
+};
 
+const report = () => {
+  const counts = new Map<string, number>();
+  for (const url of escaped) {
+    let host = "(unparseable)";
+    try {
+      host = new URL(url).host;
+    } catch {
+      /* keep the placeholder */
+    }
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+
+  return [
+    "",
+    `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
+    "",
+    ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
+    "",
+    "  first few:",
+    ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
+    "",
+    "  Every one was REFUSED, so nothing left the machine, and a test that",
+    "  caught the refusal may well have passed. That is why this fails at the",
+    "  end of the run rather than trusting the throw to be noticed.",
+    "  Stub globalThis.fetch in the offending test; the header here says how.",
+    "",
+  ].join("\n");
+};
+
+const failAtExit = () => {
   process.on("exit", () => {
     if (escaped.length === 0) return;
-
-    const counts = new Map<string, number>();
-    for (const url of escaped) {
-      let host = "(unparseable)";
-      try {
-        host = new URL(url).host;
-      } catch {
-        /* keep the placeholder */
-      }
-      counts.set(host, (counts.get(host) ?? 0) + 1);
-    }
-
-    process.stderr.write(
-      [
-        "",
-        `NETWORK TRIPWIRE: the suite attempted ${escaped.length} outbound request(s).`,
-        "",
-        ...[...counts].sort((a, b) => b[1] - a[1]).map(([host, n]) => `  ${String(n).padStart(4)}  ${host}`),
-        "",
-        "  first few:",
-        ...[...new Set(escaped)].slice(0, 5).map((u) => `    ${u}`),
-        "",
-        "  Every one was REFUSED, so nothing left the machine, and a test that",
-        "  caught the refusal may well have passed. That is why this fails at exit",
-        "  rather than trusting the throw to be noticed.",
-        "  Stub globalThis.fetch in the offending test; the header here says how.",
-        "",
-      ].join("\n") + "\n",
-    );
-
+    process.stderr.write(report() + "\n");
     // Set rather than thrown: an exception raised in an exit hook is reported
-    // as a crash in the harness instead of as this message, and the message is
-    // the whole point.
+    // as a crash in the harness instead of as this message, and the message
+    // is the whole point.
     process.exitCode = 1;
   });
 };
 
+// A preloaded `afterAll` runs after every file in a worker, so the record is
+// emptied once reported: one escape fails once, against its own file.
+const failAfterEachFile = (afterAll: (fn: () => void) => void) =>
+  afterAll(() => {
+    if (escaped.length === 0) return;
+    const message = report();
+    escaped.length = 0;
+    throw new Error(message);
+  });
+
 if (!state.armed) {
   state.armed = true;
   arm();
+
+  if (process.versions.bun) {
+    const { afterAll } = await import("bun:test");
+    try {
+      failAfterEachFile(afterAll);
+    } catch (error) {
+      // A plain `bun` script that imports this (through fetch-routes.ts) runs
+      // outside the test runner, where `afterAll` throws and the exit hook
+      // still works, as it did before 2026-11-27.
+      if (!/outside of the test runner/.test(String(error))) throw error;
+      failAtExit();
+    }
+  } else {
+    failAtExit();
+  }
 }
 
 export { escaped };
