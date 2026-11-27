@@ -145,43 +145,50 @@ export async function renderSystemRestore(cp) {
 
   let main;
   if (state === "ok") {
-    // The inline script names months and weekdays itself. toLocaleDateString
-    // with options builds an Intl formatter on every call, and the first Intl
-    // object in a renderer process loads ICU data (gotcha 92): 131 calls took
-    // 60 to 76 ms before first paint under 4x CPU throttle, and one per month
-    // still took a median of 40 (7 runs each, 2026-11-10). The text matches
-    // what en-US printed for all 131 points; a visitor in another locale reads
-    // English dates on an English page now.
-    const data = points.map((p) => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    // Format dates on the server so the client carries no Intl calls (gotcha 92)
+    // and both the restore-point list and initial detail render with zero JS.
     const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const dfmtServer = (d: string) => {
+    const dfmt = (d: string) => {
       const [y, m, day] = d.split("-");
       return `${DAYS[new Date(Date.UTC(+y, +m - 1, +day)).getUTCDay()]}, ${MONTHS[+m - 1]} ${+day}, ${y}`;
     };
-    const lastIdx = data.length - 1;
-    const lastPt = data[lastIdx];
-    let initialRecent = "";
-    for (let j = lastIdx; j >= 0 && j > lastIdx - 6; j--) {
-      initialRecent += `<li><span class="rv">v${data[j].v}</span>${esc(data[j].t)}</li>`;
+    const mfmt = (d: string) => `${MONTHS[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`;
+    const data = points.map((p) => ({ v: p.vnum, df: dfmt(p.ymd), ver: p.version, t: p.title }));
+    const lastIdx = points.length - 1;
+    let listHtml = "";
+    let lastM = "";
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const m = mfmt(p.ymd);
+      if (m !== lastM) {
+        listHtml += `<div class="sr-mon">${esc(m)}</div>`;
+        lastM = m;
+      }
+      listHtml += `<button class="sr-pt" type="button" data-i="${i}" aria-current="${i === lastIdx ? "true" : "false"}"><span class="rv">v${p.vnum}</span><span class="rt">${esc(p.title)}</span><span class="rd">${esc(p.ymd.slice(5))}</span></button>`;
     }
-    const initialDetail = lastPt
-      ? `<div class="sr-dt">Restore point</div><div class="sr-date">${dfmtServer(lastPt.d)}</div>` +
-        `<div class="sr-ver"><span class="mono">${esc(lastPt.ver)}</span></div>` +
-        `<div class="sr-meta">point ${lastIdx + 1} of ${data.length} &middot; ${esc(lastPt.t)}</div>` +
-        `<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">${initialRecent}</ul>` +
-        `<button class="sr-btn" type="button" id="srGo">Restore to this point</button>` +
-        `<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>`
+    let initRecent = "";
+    for (let j = lastIdx; j >= 0 && j > lastIdx - 6; j--) {
+      initRecent += `<li><span class="rv">v${points[j].vnum}</span>${esc(points[j].title)}</li>`;
+    }
+    const lastP = data[lastIdx];
+    const initDetail = lastP
+      ? `<div class="sr-dt">Restore point</div><div class="sr-date">${esc(lastP.df)}</div>` +
+        `<div class="sr-ver"><span class="mono">${esc(lastP.ver)}</span></div>` +
+        `<div class="sr-meta">point ${lastIdx + 1} of ${data.length} &middot; ${esc(lastP.t)}</div>` +
+        `<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">${initRecent}</ul>` +
+        `<details class="sr-restore"><summary class="sr-btn" id="srGo">Restore to this point</summary>` +
+        `<div class="sr-note">Preview only. A real rollback runs from the CLI.</div></details>`
       : "";
     main = `    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point.</p>
     <div class="sr-stage">
-      <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
-      <div class="sr-detail" id="srDetail">${initialDetail}</div>
+      <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList">${listHtml}</div></div>
+      <div class="sr-detail" id="srDetail">${initDetail}</div>
     </div>
     <div class="sr-scrub">
       <span class="sr-scrub-end">${esc(points[0].ymd)}</span>
-      <input type="range" id="srRange" min="0" max="${points.length - 1}" value="${points.length - 1}" step="1" aria-label="restore point">
-      <span class="sr-scrub-end">${esc(points[points.length - 1].ymd)}</span>
+      <input type="range" id="srRange" min="0" max="${lastIdx}" value="${lastIdx}" step="1" aria-label="restore point">
+      <span class="sr-scrub-end">${esc(points[lastIdx].ymd)}</span>
     </div>
     <p class="sr-foot">Restoring for real is a destructive <b>D1 Time Travel</b> operation: a point-in-time restore run from the CLI, with a 7-day window on the free plan. See what shipped at each point in <a href="/updates">Windows Update</a>.</p>
     <script>
@@ -190,44 +197,25 @@ var POINTS = ${JSON.stringify(data)};
   var R = document.getElementById('srRange'), L = document.getElementById('srList'), D = document.getElementById('srDetail');
   if (!R || !L || !D) return;
   function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return c=='&'?'&amp;':c=='<'?'&lt;':'&gt;'; }); }
-  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  function dfmt(d){ var p = d.split('-'); return DAYS[new Date(Date.UTC(+p[0], p[1] - 1, +p[2])).getUTCDay()] + ', ' + MONTHS[p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0]; }
-  function mfmt(d){ return MONTHS[d.slice(5,7) - 1] + ' ' + d.slice(0,4); }
-  var html = '', lastM = '';
-  for (var i = 0; i < POINTS.length; i++) {
-    var m = mfmt(POINTS[i].d);
-    if (m !== lastM) { html += '<div class="sr-mon">' + esc(m) + '</div>'; lastM = m; }
-    html += '<button class="sr-pt" type="button" data-i="' + i + '"><span class="rv">v' + POINTS[i].v + '</span><span class="rt">' + esc(POINTS[i].t) + '</span><span class="rd">' + POINTS[i].d.slice(5) + '</span></button>';
-  }
-  L.innerHTML = html;
-  function bindGo(){
-    var go = document.getElementById('srGo'), note = document.getElementById('srNote');
-    if (go) go.onclick = function(){ if (note) note.hidden = !note.hidden; };
-  }
-  function render(i, initial){
-    if (!initial) {
-      var p = POINTS[i], recent = '';
-      for (var j = i; j >= 0 && j > i - 6; j--) recent += '<li><span class="rv">v' + POINTS[j].v + '</span>' + esc(POINTS[j].t) + '</li>';
-      D.innerHTML = '<div class="sr-dt">Restore point</div><div class="sr-date">' + dfmt(p.d) + '</div>' +
-        '<div class="sr-ver"><span class="mono">' + esc(p.ver) + '</span></div>' +
-        '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
-        '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
-        '<button class="sr-btn" type="button" id="srGo">Restore to this point</button>' +
-        '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback runs from the CLI.</div>';
-    }
-    bindGo();
-    var items = L.querySelectorAll('.sr-pt');
+  var items = L.querySelectorAll('.sr-pt');
+  function render(i){
+    var p = POINTS[i], recent = '';
+    for (var j = i; j >= 0 && j > i - 6; j--) recent += '<li><span class="rv">v' + POINTS[j].v + '</span>' + esc(POINTS[j].t) + '</li>';
+    D.innerHTML = '<div class="sr-dt">Restore point</div><div class="sr-date">' + esc(p.df) + '</div>' +
+      '<div class="sr-ver"><span class="mono">' + esc(p.ver) + '</span></div>' +
+      '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
+      '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
+      '<details class="sr-restore"><summary class="sr-btn" id="srGo">Restore to this point</summary>' +
+      '<div class="sr-note">Preview only. A real rollback runs from the CLI.</div></details>';
     for (var k = 0; k < items.length; k++) items[k].setAttribute('aria-current', k == i ? 'true' : 'false');
-    if (initial) L.scrollTop = L.scrollHeight;
-    else if (items[i] && items[i].scrollIntoView) items[i].scrollIntoView({block:'nearest'});
+    if (items[i] && items[i].scrollIntoView) items[i].scrollIntoView({block:'nearest'});
   }
   L.addEventListener('click', function(e){
     var b = e.target.closest ? e.target.closest('.sr-pt') : null;
-    if (!b) return; var i = +b.getAttribute('data-i'); R.value = i; render(i, false);
+    if (!b) return; var i = +b.getAttribute('data-i'); R.value = i; render(i);
   });
-  R.addEventListener('input', function(){ render(+R.value, false); });
-  render(POINTS.length - 1, true);
+  R.addEventListener('input', function(){ render(+R.value); });
+  L.scrollTop = L.scrollHeight;
 })();
     </script>`;
   } else {
@@ -277,7 +265,8 @@ var POINTS = ${JSON.stringify(data)};
 .sr-changes{list-style:none;margin:0;padding:0}
 .sr-changes li{font-size:var(--text-xs);color:var(--slate-38);padding:3px 0;border-bottom:1px solid var(--mist-96)}
 .sr-changes .rv{font-family:var(--font-mono);font-size:var(--text-3xs);color:#7a4eb0;margin-right:6px}
-.sr-btn{margin-top:11px;font:inherit;font-size:var(--text-xs);padding:4px 14px;cursor:pointer;border:1px solid #7c93b8;border-radius:3px;background:linear-gradient(180deg,#fdfefe,var(--slate-92));box-shadow:inset 0 1px 0 #fff}
+.sr-btn{display:inline-block;list-style:none;margin-top:11px;font:inherit;font-size:var(--text-xs);padding:4px 14px;cursor:pointer;border:1px solid #7c93b8;border-radius:3px;background:linear-gradient(180deg,#fdfefe,var(--slate-92));box-shadow:inset 0 1px 0 #fff}
+.sr-btn::-webkit-details-marker{display:none}
 @media (hover: hover) and (pointer: fine) {.sr-btn:hover{background:linear-gradient(180deg,#fff,#e8f0fb)}}
 .sr-note{margin-top:8px;font-size:var(--text-micro);color:var(--slate-55);background:#fffbe6;border:1px solid #f0e3a8;border-radius:3px;padding:6px 9px;line-height:1.5}
 .sr-scrub{display:flex;align-items:center;gap:10px;margin:14px 0 4px}

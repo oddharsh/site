@@ -71,7 +71,12 @@
 
 <h2>What the chroma choice costs</h2>
 <p>Instagram re-encodes to <a class="term" data-t="chroma-subsampling" href="https://en.wikipedia.org/wiki/Chroma_subsampling" title="Storing colour at lower resolution than brightness, since eyes notice brightness detail more. 4:4:4 keeps full colour and 4:2:0 keeps a quarter." rel="external">4:2:0</a> regardless, so the question is what its encoder is handed. Full-resolution chroma means its subsampling step averages real detail rather than detail already halved once, and two successive halvings visibly smear saturated edges. The cost is bytes on an upload nobody sees. On one 1440x2160 frame:</p>
-<div class="ig-table" id="ig-chroma"></div>
+<div class="ig-table" id="ig-chroma">
+  <div class="row head"><span>chroma</span><span class="n">KB</span><span>what it is</span></div>
+  <div class="row"><span>4:4:4</span><span class="n">1885</span><span>chroma at luma resolution, what this ships by default</span></div>
+  <div class="row"><span>4:2:2</span><span class="n">1699</span><span>halved horizontally, what the camera shot</span></div>
+  <div class="row"><span>4:2:0</span><span class="n">1585</span><span>halved on both axes, what Instagram stores anyway</span></div>
+</div>
 <p>A Fujifilm HIF halves chroma horizontally in its own landscape orientation, so held vertically the halved axis lands on the long edge of the portrait. Against a 1440x2160 output that is still 3.58x horizontally and 1.79x vertically of real chroma to average down, which is why the chroma in a 4:4:4 output is measured. Somebody delivering at or near native size has a source that cannot fill it, and should say <code>--422</code> and mean it.</p>
 
 <h2>Three constants are guesses, and they are marked as guesses</h2>
@@ -87,25 +92,6 @@
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
 </div>
 
-<script>
-(function(){
-  // The bytes are the measurement, so they are written here once and rendered
-  // rather than restated in prose where the two copies could drift.
-  var rows = [
-    ["4:4:4", 1885, "chroma at luma resolution, what this ships by default"],
-    ["4:2:2", 1699, "halved horizontally, what the camera shot"],
-    ["4:2:0", 1585, "halved on both axes, what Instagram stores anyway"]
-  ];
-  var el = document.getElementById("ig-chroma");
-  if (!el) return;
-  var html = '<div class="row head"><span>chroma</span><span class="n">KB</span><span>what it is</span></div>';
-  for (var i = 0; i < rows.length; i++) {
-    html += '<div class="row"><span>' + rows[i][0] + '</span><span class="n">' +
-            rows[i][1] + '</span><span>' + rows[i][2] + '</span></div>';
-  }
-  el.innerHTML = html;
-})();
-</script>
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",

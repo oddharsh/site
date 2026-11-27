@@ -70,7 +70,7 @@ test('the audited tables say scope="col" outright', () => {
 });
 
 test("a page script that draws a table puts its header cells in a <thead> with scope", () => {
-  const drawn = ["src/pages/garage/typed-config.html", "src/pages/garage/hidden-flags.html"];
+  const drawn = ["src/pages/garage/hidden-flags.html"];
   for (const file of drawn) {
     const page = readFileSync(file, "utf8");
     const headers = [...page.matchAll(/var th = document\.createElement\("th"\);\n(\s*)(.*)/g)];

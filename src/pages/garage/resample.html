@@ -81,7 +81,15 @@
 
 <h2>Six wrong answers, and the control that caught each one</h2>
 <p>The <a class="term" data-t="gamma-correction" href="https://en.wikipedia.org/wiki/Gamma_correction" title="The curve that maps stored pixel values to light. Files use it to spend more of their levels on dark tones, where eyes are most sensitive." rel="external">gamma</a> defect is the easy part of this story. The hard part is that it survived years of measurement, and so did five other things, because in each case the instrument could not see the defect it was pointed at.</p>
-<div id="hl-table" class="hl-table"></div>
+<div id="hl-table" class="hl-table">
+  <div class="row head"><span>what looked fine</span><span>the instrument</span><span>what it could not see</span></div>
+  <div class="row"><span>the shipped resize</span><span>score against its own reference</span><span>a defective reference scores itself perfectly</span></div>
+  <div class="row"><span>the quality target</span><span>the same ssimulacra2 number</span><span>a clean reference is easier to match, so 70 bought a worse file</span></div>
+  <div class="row"><span>dropping a resize step</span><span>mean linear luminance</span><span>insensitive here; ssimulacra2 against ground truth said +27.5</span></div>
+  <div class="row"><span>jpegtran rotation</span><span>the exit code</span><span>off the block grid it degrades and still exits 0</span></div>
+  <div class="row"><span>a claim about image-rs</span><span>resize to the current size</span><span>both entry points short circuit, so the kernel never ran</span></div>
+  <div class="row"><span>a container contract test</span><span>the first 12 files on disk</span><span>readdir order differs by filesystem, so CI and the laptop sampled different files</span></div>
+</div>
 <p>The pattern that connects them: a measurement that compares a thing against itself always agrees. Scoring an encode against the reference it came from cannot see a bad reference. Resizing to the size you already are cannot test a kernel that short circuits equal dimensions. Reading a metric you invented cannot tell you the metric is insensitive.</p>
 <p>What worked every time was cheaper than it sounds. Build the control that would fail if the thing were broken, then break the thing on purpose and watch the control go red. The regression test for the rotation fix was written that way, and so was the probe column that finally caught <code>sips</code> leaving noise on a flat field.</p>
 
@@ -143,23 +151,6 @@
       '<div class="cell" style="text-align:left;max-width:16em"><span class="lbl">The correct answer is 187.5. ' +
       'Your browser reports ' + canvasMean.toFixed(2) + ', which is the average of the codes rather than of the light.</span></div>';
   }
-
-  // The six rows are the page's argument, so they live in one place and render
-  // rather than being restated in prose where the copies could drift.
-  var t = document.getElementById("hl-table");
-  if (!t) return;
-  var rows = [
-    ["the shipped resize", "score against its own reference", "a defective reference scores itself perfectly"],
-    ["the quality target", "the same ssimulacra2 number", "a clean reference is easier to match, so 70 bought a worse file"],
-    ["dropping a resize step", "mean linear luminance", "insensitive here; ssimulacra2 against ground truth said +27.5"],
-    ["jpegtran rotation", "the exit code", "off the block grid it degrades and still exits 0"],
-    ["a claim about image-rs", "resize to the current size", "both entry points short circuit, so the kernel never ran"],
-    ["a container contract test", "the first 12 files on disk", "readdir order differs by filesystem, so CI and the laptop sampled different files"]
-  ];
-  var html = '<div class="row head"><span>what looked fine</span><span>the instrument</span><span>what it could not see</span></div>';
-  for (var i = 0; i < rows.length; i++)
-    html += '<div class="row"><span>' + rows[i][0] + '</span><span>' + rows[i][1] + '</span><span>' + rows[i][2] + '</span></div>';
-  t.innerHTML = html;
 })();
 </script>
 <script type="application/json" id="luq-data">
