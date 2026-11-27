@@ -1,3 +1,6 @@
+import { minifySync } from "oxc-minify";
+import type { MinifyOptions } from "oxc-minify";
+
 // The oxc-minify options every served client script is minified with, in ONE
 // place so that the build and the parity watch (lib/upstream-watches.ts) cannot
 // measure two different minifiers and call the difference oxc.
@@ -44,3 +47,13 @@ export const OXC_MINIFY_OPTIONS = {
   mangle: { toplevel: false },
   codegen: { removeWhitespace: true, legalComments: "none" },
 } as const;
+
+// The one Oxc call behind every client script and inline <script> the build
+// ships (tools/build.ts steps 3 and 7b). A parse error fails the build by label.
+export const minifyJavaScript = (filename: string, sourceText: string, options: MinifyOptions = OXC_MINIFY_OPTIONS) => {
+  const result = minifySync(filename, sourceText, options);
+  if (result.errors.length) {
+    throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
+  }
+  return result.code;
+};

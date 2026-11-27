@@ -42,8 +42,7 @@ import { AUTHORED_ROOTS, copyServedTree, planServedTree, ServedTreeCollision } f
 import type { ServedTreePlan } from "./lib/served-tree.ts";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
-import type { MinifyOptions } from "oxc-minify";
-import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
+import { minifyJavaScript, OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
 import { engineVersions } from "spokeshave";
 import { freshness, readPicks, replayPick } from "./lib/minify-picks.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
@@ -1186,14 +1185,6 @@ phase("1b client edge");
 }
 
 phase("1c minifier setup");
-
-const minifyJavaScript = (filename, sourceText, options: MinifyOptions = OXC_MINIFY_OPTIONS) => {
-  const result = minifySync(filename, sourceText, options);
-  if (result.errors.length) {
-    throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
-  }
-  return result.code;
-};
 
 // The tolerated-warning family and the pass-through re-proof live in
 // tools/lib/css-parse.ts, shared with check-page-contracts.ts so a stylesheet
