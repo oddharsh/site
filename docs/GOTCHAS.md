@@ -1351,3 +1351,18 @@ skips it.
     do not each store a duplicate response at the edge. Browser cache policy
     stays unchanged. Empty or already-encoded asset-layer deltas fall back too.
     Checked by: `src/worker/lib/tests/contract-dictionary-names-agree-between-build-and-worker.test.ts`, `src/worker/lib/tests/contract-dictionary-fallbacks-keep-caches-safe.test.ts`.
+121. **Oxc reads the source type from the filename, and `module: false` does not override it.**
+    oxc-minify 0.160.0 parses a module when `module` is true and otherwise
+    asks the filename, and a name without a JS extension falls back to a
+    module (`napi/minify/src/lib.rs`, `SourceType::default()`). The inline
+    label `public/x.html inline <script>` has none, so from the start of step
+    7b's Oxc pass every inline script parsed as a strict module: block-level
+    functions lost Annex B hoisting, the mangler gave a block function the
+    name of an outer var, and in the browser the hoisted function overwrote
+    it. /lwe/fuse's "flash this build" threw `e.appendChild is not a function`
+    on 2026-11-27. Unread top-level vars were also deleted, since a module's
+    are private. `minifyJavaScript` now ends any other name in `.js`, which
+    Oxc parses as a script unless the source has `import` or `export`.
+    act:check missed it: it moved the slider to 0 before pressing flash, and
+    flash returns early below the floor without calling `draw()`.
+    Checked by: `tools/tests/contract-inline-scripts-minify-as-classic-scripts.test.ts`.
