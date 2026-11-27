@@ -46,8 +46,7 @@ try {
   const tgz = new Uint8Array(await res.arrayBuffer());
   const got = `sha512-${new Bun.CryptoHasher("sha512").update(tgz).digest("base64")}`;
   if (got !== INTEGRITY) throw new Error(`${TARBALL}: integrity ${got}, expected ${INTEGRITY}`);
-  await writeFile(join(work, "pretext.tgz"), tgz);
-  await run(["tar", "-xzf", join(work, "pretext.tgz"), "-C", work]);
+  await new Bun.Archive(tgz).extract(work);
   const dist = join(work, "package", "dist");
 
   await run([process.execPath, "build", join(dist, "layout.js"), "--format=esm", "--minify", `--banner=${BANNER}`, `--outfile=${OUT_JS}`]);

@@ -43,12 +43,15 @@ const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) =>
 export async function downloadBun(url: string, work: string, integrity?: string): Promise<string> {
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
-  const isTgz = url.endsWith(".tgz");
-  const archive = join(work, isTgz ? "bun.tgz" : "bun.zip");
-  writeFileSync(archive, await fetchVerified(url, integrity));
-
-  const unpack = isTgz ? run("tar", ["-xzf", archive, "-C", work]) : run("unzip", ["-qo", archive, "-d", work]);
-  if (unpack.status !== 0) throw new Error(`${isTgz ? "tar" : "unzip"} failed: ${(unpack.stderr || "").trim()}`);
+  const bytes = await fetchVerified(url, integrity);
+  // Bun.Archive reads tar and tgz only ("Unrecognized archive format" on a ZIP, bun 1.4.4), so the release ZIP keeps unzip.
+  if (url.endsWith(".tgz")) await new Bun.Archive(bytes).extract(work);
+  else {
+    const archive = join(work, "bun.zip");
+    writeFileSync(archive, bytes);
+    const unpack = run("unzip", ["-qo", archive, "-d", work]);
+    if (unpack.status !== 0) throw new Error(`unzip failed: ${(unpack.stderr || "").trim()}`);
+  }
 
   const findBun = (dir: string): string | null => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -377,10 +380,7 @@ export async function downloadTsc(work: string, version: string = TSC_REFERENCE)
 
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
-  const archive = join(work, "tsc.tgz");
-  writeFileSync(archive, await fetchVerified(tarball, integrity));
-  const unpack = run("tar", ["-xzf", archive, "-C", work]);
-  if (unpack.status !== 0) throw new Error(`tar failed: ${(unpack.stderr || "").trim()}`);
+  await new Bun.Archive(await fetchVerified(tarball, integrity)).extract(work);
   const exe = join(work, "package", "lib", process.platform === "win32" ? "tsc.exe" : "tsc");
   if (!existsSync(exe)) throw new Error(`no tsc binary inside ${tarball}`);
   chmodSync(exe, 0o755);
