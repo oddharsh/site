@@ -33,7 +33,9 @@
 // script) prints the tripwire report from the worker and still exits 0, because
 // the coordinator ignores a worker's `process.exitCode`. A global `afterAll`
 // registered here fails as a test failure instead, which the coordinator
-// counts. Node has no `bun:test`, so it keeps the exit hook.
+// counts. Node has no `bun:test`, so it keeps the exit hook. Serial `bun test`
+// runs exit hooks at all only because these tests register through
+// `node:test`: a file that imports `test` from `bun:test` gets none.
 //
 // There is deliberately NO opt-out env var. A list of allowed exceptions is an
 // invitation to add an entry rather than a stub, which is the same reasoning
