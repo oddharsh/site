@@ -43,10 +43,12 @@
     ".lwe-dlg-bd{padding:11px 12px 13px}" +
     ".lwe-dlg-lead{font-size:9pt;color:#3a4255;margin:0 0 9px}.lwe-dlg-lead b{color:#15243f}" +
     ".lwe-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}" +
-    ".lwe-tile{position:relative;padding:0;border:2px solid #b9c2d4;cursor:pointer;background:#fff;line-height:0;overflow:hidden;border-radius:3px}" +
+    ".lwe-tile{position:relative;display:block;padding:0;border:2px solid #b9c2d4;cursor:pointer;background:#fff;line-height:0;overflow:hidden;border-radius:3px}" +
+    ".lwe-tile input{position:absolute;width:1px;height:1px;margin:0;opacity:0;pointer-events:none}" +
     ".lwe-tile img{width:100%;aspect-ratio:1;object-fit:cover;display:block}" +
-    ".lwe-tile.on{border-color:#1f5fd0;box-shadow:0 0 0 2px rgba(31,95,208,.45)}" +
-    ".lwe-tile.on::after{content:'✓';position:absolute;top:2px;right:4px;color:#fff;font-weight:bold;font-size:13px;text-shadow:0 0 3px #1f5fd0,0 1px 2px #000}" +
+    ".lwe-tile:has(input:focus-visible){outline:2px solid #1f5fd0;outline-offset:1px}" +
+    ".lwe-tile:has(input:checked){border-color:#1f5fd0;box-shadow:0 0 0 2px rgba(31,95,208,.45)}" +
+    ".lwe-tile:has(input:checked)::after{content:'✓';position:absolute;top:2px;right:4px;color:#fff;font-weight:bold;font-size:13px;text-shadow:0 0 3px #1f5fd0,0 1px 2px #000}" +
     ".lwe-dlg-foot{display:flex;align-items:center;gap:8px;margin-top:10px}" +
     ".lwe-dlg-foot .lwe-status{flex:1}" +
     // ── answer styling ──────────────────────────────────────────────────────
@@ -59,12 +61,13 @@
 
   compose.innerHTML =
     '<div class="lwe-ask">' +
-      '<div class="lwe-row"><input class="lwe-q" type="text" maxlength="400" placeholder="ask ' + esc(BOT) + ' a follow-up…" disabled>' +
-      '<button class="lwe-btn lwe-go" disabled>ask</button></div>' +
-      '<div class="lwe-gate"><button class="lwe-btn lwe-verify">🚗 verify you\'re human to ask: click the cars</button></div>' +
+      '<form class="lwe-row"><input class="lwe-q" type="text" required minlength="3" maxlength="400" placeholder="ask ' + esc(BOT) + ' a follow-up…" disabled>' +
+      '<button class="lwe-btn lwe-go" type="submit" disabled>ask</button></form>' +
+      '<div class="lwe-gate"><button class="lwe-btn lwe-verify" type="button">🚗 verify you\'re human to ask: click the cars</button></div>' +
       '<div class="lwe-status" role="status"></div>' +
     '</div>';
-  var q = (compose.querySelector(".lwe-q") as HTMLTextAreaElement),
+  var form = (compose.querySelector("form.lwe-row") as HTMLFormElement),
+      q = (compose.querySelector(".lwe-q") as HTMLInputElement),
       go = (compose.querySelector(".lwe-go") as HTMLButtonElement),
       verifyBtn = (compose.querySelector(".lwe-verify") as HTMLButtonElement),
       barStatus = compose.querySelector(".lwe-ask > .lwe-status");
@@ -73,6 +76,7 @@
   // the pop-out CAPTCHA dialog (built once, repopulated per challenge)
   var dlg = D.createElement("dialog");
   dlg.className = "lwe-dlg";
+  dlg.setAttribute("closedby", "any");
   dlg.innerHTML =
     '<form method="dialog" class="lwe-dlg-tt"><span class="ico" aria-hidden="true">🚗</span><span class="t">Verify you\'re human</span><button class="lwe-dlg-x" value="cancel" aria-label="close">✕</button></form>' +
     '<div class="lwe-dlg-bd">' +
@@ -104,19 +108,15 @@
   function loadChallenge() {
     setBar("loading photos…");
     fetch("/lwe/ask/challenge").then(function (r) { return r.json(); }).then(function (ch) {
-      var sel: Record<string, any> = {};
       tilesEl.innerHTML = ch.stems.map(function (s, i) {
-        return '<button type="button" class="lwe-tile" data-i="' + i + '"><img loading="lazy" decoding="async" src="/images/' + esc(s) + '.jpg" alt=""></button>';
+        return '<label class="lwe-tile"><input type="checkbox" value="' + i + '"><img loading="lazy" decoding="async" src="/images/' + esc(s) + '.jpg" alt=""></label>';
       }).join("");
       setBar(""); setDlg("");
-      tilesEl.onclick = function (e) {
-        var t = ((e.target as Element).closest(".lwe-tile") as HTMLElement); if (!t) return;
-        var i = t.dataset.i!; if (sel[i]) { delete sel[i]; t.classList.remove("on"); } else { sel[i] = 1; t.classList.add("on"); }
-      };
        (dlg.querySelector(".lwe-submit") as HTMLButtonElement).onclick = function () {
         setDlg("checking…");
+        var selected = Array.from(tilesEl.querySelectorAll("input:checked"), function (el) { return Number((el as HTMLInputElement).value); });
         fetch("/lwe/ask/verify", { method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ stems: ch.stems, exp: ch.exp, token: ch.token, selected: Object.keys(sel).map(Number) }) })
+          body: JSON.stringify({ stems: ch.stems, exp: ch.exp, token: ch.token, selected: selected }) })
           .then(function (r) { return r.json(); }).then(function (v) {
             if (v.ok) { askToken = v.askToken; askExp = v.askExp; dlg.close(); q.disabled = false; go.disabled = false; q.focus(); setBar("verified ✓ · ask away", "ok"); }
             else if (v.expired) { setDlg("that set expired, fetching a fresh one…", "no"); loadChallenge(); }
@@ -130,8 +130,7 @@
   }
 
   // ── ask ──────────────────────────────────────────────────────────────────
-  go.addEventListener("click", doAsk);
-  q.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) doAsk(); });
+  form.addEventListener("submit", function (e) { e.preventDefault(); doAsk(); });
   function doAsk() {
     var question = q.value.trim(); if (question.length < 3) return;
     if (!askToken || Date.now() > askExp) { q.disabled = true; go.disabled = true; setBar("verify again to keep asking", "no"); loadChallenge(); return; }

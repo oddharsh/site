@@ -50,14 +50,14 @@
               inset -1px -1px 0 oklch(100.00% 0 0);
 }
 .np-list li {
+  position: relative;
   padding: 5px 8px;
   border-bottom: 1px solid var(--surface-desktop);
   font-size: var(--text-ui);
   line-height: 1.35;
 }
-/* The li padding is part of the track's rich-hover target but sits outside its
-   inner link. Keep one cursor across both so a vertical sweep does not alternate
-   arrow/hand twice per row. Empty/error rows remain ordinary. */
+/* The li padding is part of the track's rich-hover target and covered by the
+   row's stretched link (::after). Empty/error rows remain ordinary. */
 .np-list li[data-track-title] { cursor: pointer; }
 .np-list li:nth-child(even) { background: var(--row-alt); }
 .np-list li:last-child { border-bottom: none; }
@@ -67,13 +67,17 @@
   text-align: center;
   padding: 12px;
 }
-.np-list a {
+.np-list li[data-track-title]:hover { background: var(--row-hover); }
+.np-list li[data-track-title]:hover .np-title { color: var(--link-hover); }
+.np-list a.np-track-link {
   text-decoration: none;
   color: var(--ink);
-  display: block;
 }
-.np-list a:hover { background: var(--row-hover); }
-.np-list a:hover .np-title { color: var(--link-hover); }
+.np-list a.np-track-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
 /* Scoped to the tracklist on purpose. The Notepad caption on /writing is also
    a .np-title, inside a white title bar, and a bare selector painted it navy. */
 .np-list .np-title {
@@ -85,9 +89,15 @@
   margin: 0 4px;
 }
 .np-artist { color: var(--ink-soft); }
-.np-artist-link { cursor: pointer; }
-.np-artist-link:hover,
-.np-artist-link:focus-visible {
+.np-list a.np-artist-link {
+  position: relative;
+  z-index: 1;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.np-list a.np-artist-link:hover,
+.np-list a.np-artist-link:focus-visible {
   color: var(--link);
   text-decoration: underline;
 }
