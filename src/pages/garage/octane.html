@@ -31,14 +31,20 @@
 @media(max-width:340px){.oct-table th,.oct-table td{padding-inline:5px}}
 .oct-table td:not(:first-child){text-align:right;font-family:var(--font-mono)}
 .oct-table tr.mine td{background:#fffbe8}
-.oct-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
+.oct-demo{border:1px solid var(--slate-73);background:var(--row-alt);box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px;position:relative}
+.oct-rev-in{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.oct-rev-in:focus-visible+.oct-demo-head .oct-ask{outline:1px dotted var(--ink,#000);outline-offset:-3px}
 .oct-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface-desktop),var(--slate-92));border-bottom:1px solid var(--slate-81);padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:var(--text-sm);color:#20406e}
+.oct-done,.oct-a,.oct-after{display:none}
+.oct-demo:has(#oct-rev:checked) .oct-rev-in,.oct-demo:has(#oct-rev:checked) .oct-ask,.oct-demo:has(#oct-rev:checked) .oct-q,.oct-demo:has(#oct-rev:checked) .oct-before{display:none}
+.oct-demo:has(#oct-rev:checked) .oct-done,.oct-demo:has(#oct-rev:checked) .oct-a{display:inline}
+.oct-demo:has(#oct-rev:checked) .oct-after{display:block}
 .oct-bars{list-style:none;margin:0;padding:10px 12px 4px}
 .oct-bars li{display:grid;grid-template-columns:11em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:var(--text-xs)}
 .oct-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.oct-bars .t{height:15px;background:linear-gradient(180deg,#7fb0e8,#3f7fd0);border:1px solid #2f5f9e;min-width:2px;transition:width var(--xp-transition-move)}
+.oct-bars .t{height:15px;width:var(--w);background:linear-gradient(180deg,#7fb0e8,#3f7fd0);border:1px solid #2f5f9e;min-width:2px;transition:width var(--xp-transition-move)}
 .oct-bars li.mine .t{background:linear-gradient(180deg,#8fd98f,#3ea23e);border-color:#2c7a2c}
-.oct-bars li.hidden .t{background:repeating-linear-gradient(135deg,var(--surface-desktop),var(--surface-desktop) 5px,var(--slate-88) 5px,var(--slate-88) 10px);border-style:dashed;border-color:var(--slate-73);width:14%}
+.oct-demo:not(:has(#oct-rev:checked)) .oct-bars li.oct-hid .t{background:repeating-linear-gradient(135deg,var(--surface-desktop),var(--surface-desktop) 5px,var(--slate-88) 5px,var(--slate-88) 10px);border-style:dashed;border-color:var(--slate-73);width:14%}
 .oct-bars .v{font-family:var(--font-mono);font-size:var(--text-micro);color:#4a5870;white-space:nowrap}
 .oct-read{margin:0;padding:2px 12px 10px;font-size:var(--text-micro);color:var(--slate-52)}
 .oct-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}
@@ -84,12 +90,21 @@
 <h2>Where the baseline lands</h2>
 <p>Predict before you reveal. The three framework rows are drawn below. This site's homepage and its heaviest page are hidden. Guess where they fall relative to the 43.0 KiB row that won the benchmark.</p>
 <div class="oct-demo" id="oct-demo">
+  <input type="checkbox" id="oct-rev" class="oct-rev-in">
   <div class="oct-demo-head">
     <span>Client JavaScript per page load, gzip</span>
-    <button type="button" class="xp-button compact oct-reveal">reveal the baseline</button>
+    <label for="oct-rev" class="xp-button compact oct-reveal oct-ask">reveal the baseline</label>
+    <button type="button" class="xp-button compact oct-reveal oct-done" disabled>revealed</button>
   </div>
-  <ol class="oct-bars"></ol>
-  <p class="oct-read"></p>
+  <ol class="oct-bars">
+    <li><span class="n">Next.js 16.2.12</span><span class="t" style="--w:100%"></span><span class="v">110.0 KiB</span></li>
+    <li><span class="n">Vinext 1.0.0-b4</span><span class="t" style="--w:70.727%"></span><span class="v">77.8 KiB</span></li>
+    <li><span class="n">Nextane + Octane</span><span class="t" style="--w:39.091%"></span><span class="v">43.0 KiB</span></li>
+    <li class="mine oct-hid"><span class="n">aadhar.sh /lens</span><span class="t" style="--w:33.273%"></span><span class="v"><span class="oct-q">?</span><span class="oct-a">36.6 KiB</span></span></li>
+    <li class="mine oct-hid"><span class="n">aadhar.sh home</span><span class="t" style="--w:13.545%"></span><span class="v"><span class="oct-q">?</span><span class="oct-a">14.9 KiB</span></span></li>
+  </ol>
+  <p class="oct-read oct-before">Three frameworks, ranked. The two hidden rows are this site's heaviest page and its homepage. Where do they land?</p>
+  <p class="oct-read oct-after">The homepage is 14.9 KiB against the winning framework's 43.0, so roughly a third. The heaviest page here still sits under that row. Read it as a scale rather than a verdict: 43.0 KiB is a real win against React and a large number against no framework.</p>
 </div>
 <p>The homepage loads one script, <code>nav.js</code>, at 14.9 KiB gzip. That script builds the wallpaper, the draggable desktop icons, the taskbar, the clock, the Start orb, and the Run palette that filters 158 photos plus every page on the site. The heaviest page here is <a href="/lens">/lens</a> at 36.6 KiB, and it still lands under the framework row that won.</p>
 <p>Now the complication I would rather state than bury. Every script this site serves, summed across all 43 pages, is 49.0 KiB gzip, which is <em>more</em> than Nextane's 43.0. A visitor never downloads that sum, and a Nextane visitor pays 43.0 on their first page, so per page load the gap is real and roughly 3x. As a whole-site total the comparison reverses. Both numbers are true, they answer different questions, and only the per-page one describes what a browser does.</p>
@@ -125,63 +140,6 @@
   <div class="xp-statusbar"><span>garage</span><span>shipped</span><span>2026-07-31</span></div>
 </div>
 
-<script>
-(function(){
-  // Framework rows are the Nextane README's published benchmark (one small
-  // hydrated getServerSideProps page, gzip). The two site rows are measured
-  // from this repo's own build output at the same compression, 2026-07-31.
-  var ROWS = [
-    { n: "Next.js 16.2.12",  kib: 110.0 },
-    { n: "Vinext 1.0.0-b4",  kib: 77.8 },
-    { n: "Nextane + Octane", kib: 43.0 },
-    { n: "aadhar.sh /lens",  kib: 36.6, mine: true, hide: true },
-    { n: "aadhar.sh home",   kib: 14.9, mine: true, hide: true }
-  ];
-  var BEFORE = "Three frameworks, ranked. The two hidden rows are this site's heaviest page and its homepage. Where do they land?";
-  var AFTER = "The homepage is 14.9 KiB against the winning framework's 43.0, so roughly a third. The heaviest page here still sits under that row. Read it as a scale rather than a verdict: 43.0 KiB is a real win against React and a large number against no framework.";
-
-  var host = document.getElementById("oct-demo");
-  if (!host) return;
-  var list = host.querySelector(".oct-bars");
-  var read = host.querySelector(".oct-read");
-  var button = host.querySelector(".oct-reveal");
-  var max = 0, i;
-  for (i = 0; i < ROWS.length; i++) if (ROWS[i].kib > max) max = ROWS[i].kib;
-  var revealed = false;
-
-  function draw() {
-    list.textContent = "";
-    for (var j = 0; j < ROWS.length; j++) {
-      var row = ROWS[j];
-      var covered = row.hide && !revealed;
-      var li = document.createElement("li");
-      li.className = (row.mine ? "mine" : "") + (covered ? " hidden" : "");
-      var n = document.createElement("span");
-      n.className = "n";
-      n.textContent = row.n;
-      var t = document.createElement("span");
-      t.className = "t";
-      if (!covered) t.style.width = (row.kib / max) * 100 + "%";
-      var v = document.createElement("span");
-      v.className = "v";
-      v.textContent = covered ? "?" : row.kib.toFixed(1) + " KiB";
-      li.appendChild(n);
-      li.appendChild(t);
-      li.appendChild(v);
-      list.appendChild(li);
-    }
-    read.textContent = revealed ? AFTER : BEFORE;
-  }
-
-  button.addEventListener("click", function(){
-    revealed = true;
-    button.disabled = true;
-    button.textContent = "revealed";
-    draw();
-  });
-  draw();
-})();
-</script>
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",

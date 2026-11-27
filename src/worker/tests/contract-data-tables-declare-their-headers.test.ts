@@ -61,26 +61,11 @@ test("no static page ships a data table without a declared header row", () => {
 });
 
 test('the audited tables say scope="col" outright', () => {
-  const audited = ["octane", "pqc", "typed-config", "hidden-flags", "teardown"].map((p) => `src/pages/garage/${p}.html`);
+  const audited = ["octane", "pqc", "typed-config", "hidden-flags", "teardown", "useragent"].map((p) => `src/pages/garage/${p}.html`);
   for (const file of audited) {
     const html = readFileSync(file, "utf8");
     assert.ok(/<thead>/.test(strip(html)), `${file}: no static <thead>; did its tables move?`);
     assert.deepEqual(headerless(html, { scoped: true }), [], file);
-  }
-});
-
-test("a page script that draws a table puts its header cells in a <thead> with scope", () => {
-  const drawn = ["src/pages/garage/hidden-flags.html"];
-  for (const file of drawn) {
-    const page = readFileSync(file, "utf8");
-    const headers = [...page.matchAll(/var th = document\.createElement\("th"\);\n(\s*)(.*)/g)];
-    assert.ok(headers.length >= 1, `${file}: found no createElement("th"); point this test at the new builder`);
-    for (const [, , next] of headers) assert.equal(next, 'th.scope = "col";', `${file}: a drawn <th> must set scope before anything else`);
-    // the header row lands in createTHead(), never straight on the table
-    assert.doesNotMatch(page, /\b(?:table|tbl)\.appendChild\(head\)/, `${file}: the header row is appended to the table body`);
-    assert.equal((page.match(/\.createTHead\(\)\.appendChild\(head\)/g) ?? []).length, headers.length, `${file}: one <thead> per drawn header`);
-    // the stripe follows the rows, not the header
-    assert.doesNotMatch(page, /table tr:nth-child\(even\)/, `${file}: the stripe still counts the header row`);
   }
 });
 

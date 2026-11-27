@@ -95,20 +95,14 @@ test("a slot is a native radio that names the form, so booking needs no script",
   assert.doesNotMatch(shell, /id="start"/, "the hidden start input the button script filled is gone");
   assert.match(
     shell,
-    /<button type="submit" class="xp-button primary" id="submit" data-tz="America\/New_York">send request<\/button>/,
+    /<button type="submit" class="xp-button primary" id="submit"><span class="idle">send request<\/span><\/button>/,
     "the submit is enabled from the start, since only a script could enable a disabled one",
   );
-  // The relabel script is a constant: nothing caller-supplied reaches script text.
+  // Submit relabeling runs in CSS :has() from the slot fragment, so the page
+  // ships no inline relabel script and interpolates nothing into script text.
   const scripts = [...shell.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
-  const relabel = scripts.find((s) => s.includes('addEventListener("change"'));
-  assert.ok(relabel, "the relabel script is still shipped");
-  assert.equal(
-    relabel,
-    [...bookingPage({ ...env, HOST_TIMEZONE: "</script>" }).matchAll(/<script>([\s\S]*?)<\/script>/gi)]
-      .map((m) => m[1])
-      .find((s) => s.includes('addEventListener("change"')),
-    "the script text moved with the env",
-  );
+  assert.equal(scripts.length, 1, "only the island loader script runs inline on /coffee");
+  assert.match(live, /:root:has\(input\[name="start"\]\[value="\d+"\]:checked\)\{--picked:"/, "slot fragment carries CSS :has() relabel rules");
   assert.equal(PICK_PATH, "/pick");
 });
 

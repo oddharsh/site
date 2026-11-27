@@ -40,6 +40,32 @@
 .trace .t-title { color: #9fb6cf; margin-bottom: 4px; } .trace .t-title b { color:#fff }
 .trace .bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
 .trace .bars i { display: block; width: 6px; background: #4fd1a0; }
+.trace .t-leak { margin-top: 5px; color: #ff9d6e; }
+.tee-r { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.tee-leaked, .tee-tr { display: none; }
+#demo-tee:has(#tee-reset:checked) .tee-tr-reset { display: block; }
+#demo-tee:not(:has(#tee-reset:checked)) .tee-sealed { display: none; }
+#demo-tee:not(:has(#tee-reset:checked)) .tee-leaked { display: block; }
+#demo-tee:has(#tee-timing:checked) .tee-tr-timing,
+#demo-tee:has(#tee-cache:checked) .tee-tr-cache,
+#demo-tee:has(#tee-power:checked) .tee-tr-power,
+#demo-tee:has(#tee-thermal:checked) .tee-tr-thermal { display: block; }
+#demo-tee:has(#tee-timing:checked) label[for="tee-timing"],
+#demo-tee:has(#tee-cache:checked) label[for="tee-cache"],
+#demo-tee:has(#tee-power:checked) label[for="tee-power"],
+#demo-tee:has(#tee-thermal:checked) label[for="tee-thermal"] {
+  background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
+  border-color: #7b9ebd;
+  box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
+}
+#demo-tee:has(#tee-timing:focus-visible) label[for="tee-timing"],
+#demo-tee:has(#tee-cache:focus-visible) label[for="tee-cache"],
+#demo-tee:has(#tee-power:focus-visible) label[for="tee-power"],
+#demo-tee:has(#tee-thermal:focus-visible) label[for="tee-thermal"],
+#demo-tee:has(#tee-reset:focus-visible) label[for="tee-reset"] {
+  border-color: #003c74; outline: 1px dotted #000; outline-offset: -4px;
+  box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #2c628b, 0 0 3px 1px rgba(44,98,139,.45);
+}
 .note { font-size: var(--text-micro); color: var(--slate-45); margin-top: 8px; } .note b { color:var(--slate-26) }
 
 </style>
@@ -97,19 +123,32 @@
             <div class="bar">TEEs shared a demo: watch the enclave leak</div>
             <div class="pad">
               <p class="lead">A secret PIN lives inside the enclave, and you <b>can't read it directly</b>. But running it leaks physical side effects. Pick an attack and watch the secret fall out:</p>
+              <input class="tee-r" type="radio" name="tee-atk" id="tee-reset" checked>
+              <input class="tee-r" type="radio" name="tee-atk" id="tee-timing">
+              <input class="tee-r" type="radio" name="tee-atk" id="tee-cache">
+              <input class="tee-r" type="radio" name="tee-atk" id="tee-power">
+              <input class="tee-r" type="radio" name="tee-atk" id="tee-thermal">
               <div class="enclave">
                 <div class="lockline">🔒 <b>SGX enclave</b>, root of trust sealed</div>
-                <div class="secret" id="tee-secret">• • • •</div>
-                <div class="lockline" id="tee-status">memory reads as encrypted ciphertext</div>
+                <div class="secret tee-sealed">• • • •</div>
+                <div class="secret leaked tee-leaked">4 8 2 7</div>
+                <div class="lockline tee-sealed">memory reads as encrypted ciphertext</div>
+                <div class="lockline tee-leaked">side-channel recovered the PIN: <b>no decryption key needed</b></div>
               </div>
               <div class="atk">
-                <button class="xp-button compact" data-atk="timing">⏱ timing</button>
-                <button class="xp-button compact" data-atk="cache">🗄 cache</button>
-                <button class="xp-button compact" data-atk="power">⚡ power</button>
-                <button class="xp-button compact" data-atk="thermal">🌡 thermal</button>
-                <button class="xp-button compact" id="tee-reset" style="margin-left:auto">re-seal</button>
+                <label class="xp-button compact" for="tee-timing">⏱ timing</label>
+                <label class="xp-button compact" for="tee-cache">🗄 cache</label>
+                <label class="xp-button compact" for="tee-power">⚡ power</label>
+                <label class="xp-button compact" for="tee-thermal">🌡 thermal</label>
+                <label class="xp-button compact" for="tee-reset" style="margin-left:auto">re-seal</label>
               </div>
-              <div class="trace" id="tee-trace"><div class="t-title">no probe running, the enclave looks opaque.</div></div>
+              <div class="trace" id="tee-trace">
+                <div class="tee-tr tee-tr-reset"><div class="t-title">no probe running, the enclave looks opaque.</div></div>
+                <div class="tee-tr tee-tr-timing"><div class="t-title"><b>⏱ TIMING probe</b>: branch timings per digit (µs):</div><div class="bars"><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:19px"></i><i style="height:14px"></i><i style="height:21px"></i><i style="height:4px"></i><i style="height:17px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i></div><div class="t-leak">longer branch on each secret digit → PIN = 4827</div></div>
+                <div class="tee-tr tee-tr-cache"><div class="t-title"><b>🗄 CACHE probe</b>: cache hit/miss pattern (Flush+Reload):</div><div class="bars"><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:19px"></i><i style="height:14px"></i><i style="height:21px"></i><i style="height:4px"></i><i style="height:17px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i></div><div class="t-leak">touched cache lines map to → PIN = 4827</div></div>
+                <div class="tee-tr tee-tr-power"><div class="t-title"><b>⚡ POWER probe</b>: current draw trace (mA), DPA:</div><div class="bars"><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:19px"></i><i style="height:14px"></i><i style="height:21px"></i><i style="height:4px"></i><i style="height:17px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:19px"></i></div><div class="t-leak">spikes align with each digit → PIN = 4827</div></div>
+                <div class="tee-tr tee-tr-thermal"><div class="t-title"><b>🌡 THERMAL/EM probe</b>: radiated heat + EM over the core:</div><div class="bars"><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:19px"></i><i style="height:14px"></i><i style="height:21px"></i><i style="height:4px"></i><i style="height:17px"></i><i style="height:6px"></i><i style="height:7px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:13px"></i><i style="height:8px"></i><i style="height:15px"></i><i style="height:16px"></i><i style="height:11px"></i></div><div class="t-leak">emission envelope decodes to → PIN = 4827</div></div>
+              </div>
             </div>
           </div></div></div>
 
@@ -140,35 +179,6 @@
     </div>
   </main>
 </div>
-
-<script>
-(function () {
-  var root = document.getElementById("demo-tee"); if (!root) return;
-  var PIN = "4827";
-  var secret = document.getElementById("tee-secret"), status = document.getElementById("tee-status"), trace = document.getElementById("tee-trace");
-  var copy = {
-    timing: { t: "⏱ TIMING probe", d: "branch timings per digit (µs):", leak: "longer branch on each secret digit → " },
-    cache:  { t: "🗄 CACHE probe",  d: "cache hit/miss pattern (Flush+Reload):", leak: "touched cache lines map to → " },
-    power:  { t: "⚡ POWER probe",  d: "current draw trace (mA), DPA:", leak: "spikes align with each digit → " },
-    thermal:{ t: "🌡 THERMAL/EM probe", d: "radiated heat + EM over the core:", leak: "emission envelope decodes to → " }
-  };
-  function bars(seed) {
-    var h = "", s = seed;
-    for (var i = 0; i < 28; i++) { s = (s * 9301 + 49297) % 233280; var v = 4 + (s % 18); h += '<i style="height:' + v + 'px"></i>'; }
-    return '<div class="bars">' + h + '</div>';
-  }
-  root.addEventListener("click", function (e) {
-    var b = e.target.closest("[data-atk]");
-    if (e.target.id === "tee-reset") { secret.textContent = "• • • •"; secret.className = "secret"; status.textContent = "memory reads as encrypted ciphertext"; trace.innerHTML = '<div class="t-title">no probe running, the enclave looks opaque.</div>'; return; }
-    if (!b) return;
-    var k = b.dataset.atk, c = copy[k], seed = k.charCodeAt(0) * 31 + 7;
-    secret.textContent = PIN.split("").join(" "); secret.className = "secret leaked";
-    status.innerHTML = "side-channel recovered the PIN: <b>no decryption key needed</b>";
-    trace.innerHTML = '<div class="t-title"><b>' + c.t + '</b>: ' + c.d + '</div>' + bars(seed) +
-      '<div style="margin-top:5px;color:#ff9d6e">' + c.leak + 'PIN = ' + PIN + '</div>';
-  });
-})();
-</script>
 
 <script type="application/json" id="luq-data">
 {

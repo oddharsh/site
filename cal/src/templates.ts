@@ -272,6 +272,8 @@ button.xp-button.primary {
   background: linear-gradient(to bottom, oklch(95% 0.06 100) 0%, oklch(86% 0.08 95) 100%);
   border-color: oklch(50% 0.10 95);
 }
+:root:has(input[name="start"]:checked) #submit .idle { display: none; }
+:root:has(input[name="start"]:checked) #submit::after { content: "request " var(--picked); }
 button.xp-button.primary:disabled,
 button.xp-button:disabled {
   color: var(--ink-faint);
@@ -485,20 +487,10 @@ export const SLOTS_PATH = "/slots.html";
 // a reader without scripts never gets the island swapped in.
 export const PICK_PATH = "/pick";
 
-// Optional sugar, and the page books without it: relabel the submit button
-// "request Tue, Oct 6, 10:00 AM" when a slot is picked. Delegated on document,
-// so it reaches radios the island injects after this script ran, and re-read on
-// pageshow, so a back-navigation that restores a checked radio relabels too.
-//
-// It stays a CONSTANT. The timezone arrives as `data-tz` on the submit button,
-// escaped by esc(), and the script reads it from there, so nothing is ever
-// interpolated into script text. It used to be `timeZone: ${JSON.stringify(tz)}`,
-// which CodeQL flags (js/bad-code-sanitization) and rightly: JSON.stringify
-// escapes neither `</script>` nor U+2028, so it is not a sanitizer for a script
-// context. It is written compact because the cal.aadhar.sh fallback and the
-// no-script page ship it unbuilt; the baked page is minified again anyway. No
-// backticks inside, because one would end this template literal (gotcha 19).
-const RELABEL_SCRIPT = `(function(){function u(t){var b=document.getElementById("submit");if(!b||!t||t.name!=="start"||t.type!=="radio"||!t.checked)return;b.textContent="request "+new Date(parseInt(t.value,10)).toLocaleString("en-US",{timeZone:b.dataset.tz,weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}document.addEventListener("change",function(e){u(e.target)});addEventListener("pageshow",function(){u(document.querySelector('input[name="start"]:checked'))})})()`;
+// Escape a string for inclusion inside a double-quoted CSS string inside <style>.
+function cssStr(s: string) {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/</g, "\\3c ").replace(/\r?\n/g, "\\a ");
+}
 
 // The placeholder model (island rule 1): the SAME renderer draws it, so the
 // swap changes values rather than markup. Five days of eight is about what a
@@ -514,13 +506,14 @@ const PENDING_PER_DAY = 8;
 // same string by spec, since both shapes name their own fields and so take no
 // defaults; cal/test/templates.test.ts holds the two together across both
 // 2026 New York transitions.
-const SLOT_LABELS = new Map<string | undefined, { day: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
+const SLOT_LABELS = new Map<string | undefined, { day: Intl.DateTimeFormat; time: Intl.DateTimeFormat; short: Intl.DateTimeFormat }>();
 export function slotLabels(tz: string | undefined) {
   let l = SLOT_LABELS.get(tz);
   if (!l) {
     l = {
       day: new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }),
       time: new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }),
+      short: new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
     };
     SLOT_LABELS.set(tz, l);
   }
@@ -551,13 +544,17 @@ export function renderSlotList(model: SlotModel, env) {
   // A refused slot puts focus on the first radio, the way autofocus lands on
   // the first refused field in the form.
   let focus = "invalid" in model && model.invalid;
-  return Object.entries(groups)
+  // Relabel #submit via CSS :has() when a slot is checked — works with JS off,
+  // survives back-navigation bfcache, and injects zero inline script.
+  const rules: string[] = [];
+  const listHtml = Object.entries(groups)
     .map(
       ([day, list]) => `
         <div class="xp-day-label">${esc(day)}</div>
         <ul class="slots">${list
           .map((s) => {
             const t = labels.time.format(s.start);
+            rules.push(`:root:has(input[name="start"][value="${esc(s.start)}"]:checked){--picked:"${cssStr(labels.short.format(s.start))}"}`);
             // `required` on the group is what the browser checks on submit; the
             // aria-label names the day too, since the visible label is only the time.
             const picked = "picked" in model && model.picked === s.start ? " checked" : "";
@@ -568,6 +565,7 @@ export function renderSlotList(model: SlotModel, env) {
           .join("")}</ul>`,
     )
     .join("");
+  return `${listHtml}<style>${rules.join("")}</style>`;
 }
 
 /** The island body at SLOTS_PATH: a fragment, never a document. */
@@ -697,12 +695,11 @@ export function bookingPage(env, opts: { slots?: { start: number; end: number }[
         <input type="text" name="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
 
         <div class="actions">
-          <button type="submit" class="xp-button primary" id="submit" data-tz="${esc(env.HOST_TIMEZONE || "UTC")}">send request</button>
+          <button type="submit" class="xp-button primary" id="submit"><span class="idle">send request</span></button>
         </div>
       </div>
     </form>
 
-    <script>${RELABEL_SCRIPT}</script>
     ${inline ? "" : islandScript().html}
   `;
 

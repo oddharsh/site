@@ -29,8 +29,6 @@
 .hf-demo{border:1px solid var(--slate-73);background:var(--row-alt);margin:14px 0 16px;box-shadow:inset 1px 1px 0 #fff}
 .hf-bar{background:var(--surface-desktop);border-bottom:1px solid #c8d2e2;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .hf-filters{display:inline-flex;gap:4px;flex-wrap:wrap}
-.hf-filters button{font:inherit;font-size:var(--text-2xs);padding:2px 8px;border:1px solid #a9b4c6;background:linear-gradient(180deg,#fff,var(--surface-desktop));border-radius:3px;cursor:pointer;color:var(--slate-38)}
-.hf-filters button.on{background:linear-gradient(180deg,#cfe0fb,#a8c6f4);border-color:#5f86c8;color:#12305e;font-weight:bold}
 .hf-count{font-size:var(--text-micro);color:var(--slate-52)}
 .hf-scroll{overflow-x:auto;background:#fff}
 .hf-table{border-collapse:collapse;font-size:var(--text-micro);width:100%;min-width:560px}
@@ -44,7 +42,7 @@
 .hf-ok{color:#1c6b32;font-weight:bold}
 .hf-no{color:#a3261a;font-weight:bold}
 .hf-case{padding:10px 12px;background:#fff;font-size:var(--text-xs);line-height:1.55}
-.hf-case h4{font-family:var(--font-caption);color:var(--luna-44);font-size:var(--text-body);margin:0 0 5px}
+.hf-case h3{font-family:var(--font-caption);color:var(--luna-44);font-size:var(--text-body);margin:0 0 5px}
 .hf-case pre{background:var(--row-alt);border:1px solid #c8d2e2;padding:7px 9px;margin:0 0 8px;overflow-x:auto;font-size:var(--text-micro)}
 .hf-case pre code{white-space:pre;font-family:var(--font-mono)}
 .hf-case table{border-collapse:collapse;font-size:var(--text-micro);width:100%;margin:0 0 6px}
@@ -52,6 +50,31 @@
 .hf-case td{border:1px solid var(--slate-90);padding:3px 7px;vertical-align:top}
 .hf-cost{font-size:var(--text-micro);color:var(--slate-52);margin:0}
 @media(max-width:620px){.hf-table{min-width:460px}}
+.hf-rad{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.hf-filters label{font:inherit;font-size:var(--text-2xs);padding:2px 8px;border:1px solid #a9b4c6;background:linear-gradient(180deg,#fff,var(--surface-desktop));border-radius:3px;cursor:pointer;color:var(--slate-38);user-select:none}
+.hf-rad:focus-visible+label{outline:1px dotted var(--ink,#000);outline-offset:-3px}
+.hf-rad:checked+label{background:linear-gradient(180deg,#cfe0fb,#a8c6f4);border-color:#5f86c8;color:#12305e;font-weight:bold}
+.hf-c{display:none}
+.hf-inv:has(#hf-f-all:checked) .hf-c[data-f="all"]{display:inline}
+.hf-inv:has(#hf-f-here:checked) .hf-c[data-f="here"]{display:inline}
+.hf-inv:has(#hf-f-release:checked) .hf-c[data-f="release"]{display:inline}
+.hf-inv:has(#hf-f-config:checked) .hf-c[data-f="config"]{display:inline}
+.hf-inv:has(#hf-f-containers:checked) .hf-c[data-f="containers"]{display:inline}
+.hf-inv:has(#hf-f-setup:checked) .hf-c[data-f="setup"]{display:inline}
+.hf-inv:has(#hf-f-legacy:checked) .hf-c[data-f="legacy"]{display:inline}
+.hf-inv:has(#hf-f-types:checked) .hf-c[data-f="types"]{display:inline}
+.hf-inv:has(#hf-f-here:checked) .hf-table tbody tr:not(.hf-here){display:none}
+.hf-inv:has(#hf-f-release:checked) .hf-table tbody tr:not([data-g="release"]){display:none}
+.hf-inv:has(#hf-f-config:checked) .hf-table tbody tr:not([data-g="config"]){display:none}
+.hf-inv:has(#hf-f-containers:checked) .hf-table tbody tr:not([data-g="containers"]){display:none}
+.hf-inv:has(#hf-f-setup:checked) .hf-table tbody tr:not([data-g="setup"]){display:none}
+.hf-inv:has(#hf-f-legacy:checked) .hf-table tbody tr:not([data-g="legacy"]){display:none}
+.hf-inv:has(#hf-f-types:checked) .hf-table tbody tr:not([data-g="types"]){display:none}
+.hf-cases-demo .hf-case{display:none}
+.hf-cases-demo:has(#hf-c-ignored:checked) .hf-case[data-c="ignored"]{display:block}
+.hf-cases-demo:has(#hf-c-closed:checked) .hf-case[data-c="closed"]{display:block}
+.hf-cases-demo:has(#hf-c-undocumented:checked) .hf-case[data-c="undocumented"]{display:block}
+.hf-cases-demo:has(#hf-c-routing:checked) .hf-case[data-c="routing"]{display:block}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -68,150 +91,37 @@
 
 <h2>The inventory</h2>
 <p>Every flag below was pulled out of the shipped bundle by matching option definitions that carry <code>hidden: true</code>, then read back with its own description. Filter by what it is for.</p>
-<div class="hf-demo">
+<div class="hf-demo hf-inv">
   <div class="hf-bar">
-    <span class="hf-filters" id="hf-filters"></span>
-    <span class="hf-count" id="hf-count"></span>
+    <span class="hf-filters" id="hf-filters" role="radiogroup" aria-label="filter hidden flags"><input class="hf-rad" type="radio" name="hf-f" id="hf-f-all" checked><label for="hf-f-all">all 19</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-here"><label for="hf-f-here">touches this site</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-release"><label for="hf-f-release">release path</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-config"><label for="hf-f-config">config</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-containers"><label for="hf-f-containers">containers</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-setup"><label for="hf-f-setup">setup</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-legacy"><label for="hf-f-legacy">legacy</label><input class="hf-rad" type="radio" name="hf-f" id="hf-f-types"><label for="hf-f-types">types</label></span>
+    <span class="hf-count" id="hf-count"><span class="hf-c" data-f="all">19 hidden flags</span><span class="hf-c" data-f="here">5 of 19 hidden flags</span><span class="hf-c" data-f="release">4 of 19 hidden flags</span><span class="hf-c" data-f="config">2 of 19 hidden flags</span><span class="hf-c" data-f="containers">6 of 19 hidden flags</span><span class="hf-c" data-f="setup">3 of 19 hidden flags</span><span class="hf-c" data-f="legacy">3 of 19 hidden flags</span><span class="hf-c" data-f="types">1 of 19 hidden flags</span></span>
   </div>
-  <div class="hf-scroll"><table class="hf-table" id="hf-table"></table></div>
+  <div class="hf-scroll"><table class="hf-table" id="hf-table">
+    <thead><tr><th scope="col">flag</th><th scope="col">alias</th><th scope="col">group</th><th scope="col">what it says it does</th></tr></thead>
+    <tbody>
+      <tr data-g="config" class="hf-here"><td><code>--experimental-new-config</code></td><td><code>--x-new-config</code></td><td><span class="hf-tag">config</span></td><td>[experimental] Use cloudflare.config.ts and wrangler.config.ts</td></tr>
+      <tr data-g="config" class="hf-here"><td><code>--experimental-cf-build-output</code></td><td><code>--x-cf-build-output</code></td><td><span class="hf-tag">config</span></td><td>[experimental] Emit a Build Output Specification directory under .cloudflare/output/ (requires --experimental-new-config)</td></tr>
+      <tr data-g="release" class="hf-here"><td><code>--experimental-auto-create</code></td><td><code>--x-auto-create</code></td><td><span class="hf-tag">release</span></td><td>Automatically provision draft bindings with new resources</td></tr>
+      <tr data-g="release" class="hf-here"><td><code>--experimental-provision</code></td><td></td><td><span class="hf-tag">release</span></td><td>No description in the definition. Pinned off here alongside auto-create, because no deploy path on this account may create resources.</td></tr>
+      <tr data-g="release" class="hf-here"><td><code>--max-versions</code></td><td></td><td><span class="hf-tag">release</span></td><td>Maximum allowed versions to select. Defaults to 2, and its own comment says the limit is server side.</td></tr>
+      <tr data-g="release"><td><code>--experimental-deploy-helpers</code></td><td><code>--x-deploy-helpers</code></td><td><span class="hf-tag">release</span></td><td>Experimental: Gates refactored deploy/upload path</td></tr>
+      <tr data-g="types"><td><code>--experimental-include-runtime</code></td><td><code>--x-include-runtime</code></td><td><span class="hf-tag">types</span></td><td>The path of the generated runtime types file</td></tr>
+      <tr data-g="containers"><td><code>--enable-containers</code></td><td></td><td><span class="hf-tag">containers</span></td><td>Whether to build and enable containers during development</td></tr>
+      <tr data-g="containers"><td><code>--config-file</code></td><td><code>-F</code></td><td><span class="hf-tag">containers</span></td><td>Sets ssh -F: specify an alternative per-user ssh configuration file</td></tr>
+      <tr data-g="containers"><td><code>--identity-file</code></td><td><code>-i</code></td><td><span class="hf-tag">containers</span></td><td>Sets ssh -i: select a file from which the identity for public key authentication is read</td></tr>
+      <tr data-g="containers"><td><code>--escape-char</code></td><td></td><td><span class="hf-tag">containers</span></td><td>Sets ssh -e: set the escape character for sessions with a pty</td></tr>
+      <tr data-g="containers"><td><code>--log-file</code></td><td></td><td><span class="hf-tag">containers</span></td><td>Sets ssh -E: append debug logs to log_file instead of standard error</td></tr>
+      <tr data-g="containers"><td><code>--mac-spec</code></td><td></td><td><span class="hf-tag">containers</span></td><td>Sets ssh -m: a comma separated list of message authentication code algorithms, in order of preference</td></tr>
+      <tr data-g="setup"><td><code>--delegate-c3</code></td><td><code>--c3</code></td><td><span class="hf-tag">setup</span></td><td>Delegate to Create Cloudflare CLI (C3)</td></tr>
+      <tr data-g="setup"><td><code>--install-wrangler</code></td><td></td><td><span class="hf-tag">setup</span></td><td>Install Wrangler during project setup</td></tr>
+      <tr data-g="setup"><td><code>--completion-message</code></td><td></td><td><span class="hf-tag">setup</span></td><td>Display a message with deployment details after wrangler setup is complete</td></tr>
+      <tr data-g="legacy"><td><code>--node-compat</code></td><td></td><td><span class="hf-tag">legacy</span></td><td>Enable Node.js compatibility</td></tr>
+      <tr data-g="legacy"><td><code>--site-include</code></td><td></td><td><span class="hf-tag">legacy</span></td><td>Workers Sites: gitignore style patterns; only matched items will be uploaded</td></tr>
+      <tr data-g="legacy"><td><code>--site-exclude</code></td><td></td><td><span class="hf-tag">legacy</span></td><td>Workers Sites: gitignore style patterns; matched items are skipped</td></tr>
+    </tbody>
+  </table></div>
   <p class="hf-legend">Marked rows are the ones that touch this site. The rest are here so the list is the whole list: a survey that reports only the interesting rows cannot tell you how many rows it skipped.</p>
 </div>
-<script>
-// /garage/hidden-flags: the inventory and the control picker.
-//
-// FLAGS is the full set of option definitions carrying `hidden: true` in the
-// wrangler 4.125.0 bundle, read back with each flag's own describe string. The
-// list is complete rather than curated: rows that matter here are marked, and
-// the rest stay so the count is honest.
-//
-// Each demo is built by a script straight after its own markup, so it exists
-// before anything below it is laid out. As one script at the end of the page it
-// ran after first paint and pushed the essay down: layout shift 0.091 in each
-// of 3 loads under 4x CPU throttle (2026-11-10).
-(function () {
-  var FLAGS = [
-    { f: "--experimental-new-config", a: "--x-new-config", g: "config", here: true,
-      d: "[experimental] Use cloudflare.config.ts and wrangler.config.ts" },
-    { f: "--experimental-cf-build-output", a: "--x-cf-build-output", g: "config", here: true,
-      d: "[experimental] Emit a Build Output Specification directory under .cloudflare/output/ (requires --experimental-new-config)" },
-    { f: "--experimental-auto-create", a: "--x-auto-create", g: "release", here: true,
-      d: "Automatically provision draft bindings with new resources" },
-    { f: "--experimental-provision", a: "", g: "release", here: true,
-      d: "No description in the definition. Pinned off here alongside auto-create, because no deploy path on this account may create resources." },
-    { f: "--max-versions", a: "", g: "release", here: true,
-      d: "Maximum allowed versions to select. Defaults to 2, and its own comment says the limit is server side." },
-    { f: "--experimental-deploy-helpers", a: "--x-deploy-helpers", g: "release", here: false,
-      d: "Experimental: Gates refactored deploy/upload path" },
-    { f: "--experimental-include-runtime", a: "--x-include-runtime", g: "types", here: false,
-      d: "The path of the generated runtime types file" },
-    { f: "--enable-containers", a: "", g: "containers", here: false,
-      d: "Whether to build and enable containers during development" },
-    { f: "--config-file", a: "-F", g: "containers", here: false,
-      d: "Sets ssh -F: specify an alternative per-user ssh configuration file" },
-    { f: "--identity-file", a: "-i", g: "containers", here: false,
-      d: "Sets ssh -i: select a file from which the identity for public key authentication is read" },
-    { f: "--escape-char", a: "", g: "containers", here: false,
-      d: "Sets ssh -e: set the escape character for sessions with a pty" },
-    { f: "--log-file", a: "", g: "containers", here: false,
-      d: "Sets ssh -E: append debug logs to log_file instead of standard error" },
-    { f: "--mac-spec", a: "", g: "containers", here: false,
-      d: "Sets ssh -m: a comma separated list of message authentication code algorithms, in order of preference" },
-    { f: "--delegate-c3", a: "--c3", g: "setup", here: false, d: "Delegate to Create Cloudflare CLI (C3)" },
-    { f: "--install-wrangler", a: "", g: "setup", here: false, d: "Install Wrangler during project setup" },
-    { f: "--completion-message", a: "", g: "setup", here: false,
-      d: "Display a message with deployment details after wrangler setup is complete" },
-    { f: "--node-compat", a: "", g: "legacy", here: false, d: "Enable Node.js compatibility" },
-    { f: "--site-include", a: "", g: "legacy", here: false,
-      d: "Workers Sites: gitignore style patterns; only matched items will be uploaded" },
-    { f: "--site-exclude", a: "", g: "legacy", here: false,
-      d: "Workers Sites: gitignore style patterns; matched items are skipped" },
-  ];
-
-  var GROUPS = [
-    { k: "all", label: "all 19" },
-    { k: "here", label: "touches this site" },
-    { k: "release", label: "release path" },
-    { k: "config", label: "config" },
-    { k: "containers", label: "containers" },
-    { k: "setup", label: "setup" },
-    { k: "legacy", label: "legacy" },
-    { k: "types", label: "types" },
-  ];
-
-  var filters = document.getElementById("hf-filters");
-  var table = document.getElementById("hf-table");
-  var count = document.getElementById("hf-count");
-  var active = "all";
-
-  function matches(row) {
-    if (active === "all") return true;
-    if (active === "here") return row.here;
-    return row.g === active;
-  }
-
-  function drawTable() {
-    if (!table) return;
-    table.textContent = "";
-    var head = document.createElement("tr");
-    ["flag", "alias", "group", "what it says it does"].forEach(function (h) {
-      var th = document.createElement("th");
-      th.scope = "col";
-      th.textContent = h;
-      head.appendChild(th);
-    });
-    table.createTHead().appendChild(head);
-    var tableRows = table.createTBody();
-    var shown = 0;
-    FLAGS.forEach(function (row) {
-      if (!matches(row)) return;
-      shown++;
-      var tr = document.createElement("tr");
-      if (row.here) tr.className = "hf-here";
-      var c1 = document.createElement("td");
-      var code = document.createElement("code");
-      code.textContent = row.f;
-      c1.appendChild(code);
-      var c2 = document.createElement("td");
-      if (row.a) {
-        var al = document.createElement("code");
-        al.textContent = row.a;
-        c2.appendChild(al);
-      }
-      var c3 = document.createElement("td");
-      var tag = document.createElement("span");
-      tag.className = "hf-tag";
-      tag.textContent = row.g;
-      c3.appendChild(tag);
-      var c4 = document.createElement("td");
-      c4.textContent = row.d;
-      [c1, c2, c3, c4].forEach(function (c) { tr.appendChild(c); });
-      tableRows.appendChild(tr);
-    });
-    if (count) {
-      count.textContent = shown === FLAGS.length
-        ? shown + " hidden flags"
-        : shown + " of " + FLAGS.length + " hidden flags";
-    }
-  }
-
-  if (filters) {
-    GROUPS.forEach(function (g) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = g.label;
-      if (g.k === active) btn.className = "on";
-      btn.addEventListener("click", function () {
-        active = g.k;
-        Array.prototype.forEach.call(filters.children, function (b) { b.classList.toggle("on", b === btn); });
-        drawTable();
-      });
-      filters.appendChild(btn);
-    });
-  }
-
-  drawTable();
-})();
-</script>
 
 <h2>Two questions, and only one of them is free</h2>
 <p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
@@ -271,122 +181,42 @@ $ wrangler deploy --x-provision=false --dry-run ; echo $?
 
 <h2>Pick a situation, get the control</h2>
 <p>The shape of the doubt decides the experiment. Choose what you are looking at:</p>
-<div class="hf-demo">
-  <div class="hf-bar"><span class="hf-filters" id="hf-cases"></span></div>
-  <div class="hf-case" id="hf-case"></div>
+<div class="hf-demo hf-cases-demo">
+  <div class="hf-bar"><span class="hf-filters" id="hf-cases" role="radiogroup" aria-label="pick a situation"><input class="hf-rad" type="radio" name="hf-c" id="hf-c-ignored" checked><label for="hf-c-ignored">the option may be silently ignored</label><input class="hf-rad" type="radio" name="hf-c" id="hf-c-closed"><label for="hf-c-closed">the schema may refuse unknown keys</label><input class="hf-rad" type="radio" name="hf-c" id="hf-c-undocumented"><label for="hf-c-undocumented">the docs skip the failure mode</label><input class="hf-rad" type="radio" name="hf-c" id="hf-c-routing"><label for="hf-c-routing">two paths both seem to work</label></span></div>
+  <div class="hf-case" data-c="ignored">
+    <h3>Run it three ways and compare the number</h3>
+    <p>An engine that ignores an option produces output identical to one that never received it, and the output still works. So do not ask whether it succeeded. Ask whether the thing the option claims to change actually changed, against a case where it could not have.</p>
+    <pre><code>compress(target)                 # no option
+compress(target, opt: correct)   # the option, correct value
+compress(target, opt: wrong)     # the option, useless value</code></pre>
+    <table><thead><tr><th scope="col">what you see</th><th scope="col">what it means</th></tr></thead><tbody><tr><td>all three identical</td><td>the option is being dropped</td></tr><tr><td>correct one smaller, wrong one matches the first</td><td>the option is honoured</td></tr><tr><td>correct and wrong both differ from the first</td><td>something reads the option and your model of it is off</td></tr></tbody></table>
+    <p class="hf-cost">Cost: three local runs, no deploy. This is the control that separates node, workerd and bun on the same option.</p>
+  </div>
+  <div class="hf-case" data-c="closed">
+    <h3>Send a key you invented, next to a request that fails anyway</h3>
+    <p>A closed schema validates the shape before it does any work, which makes it the cheapest oracle you will ever get. Pair the probe with a deliberately invalid input so nothing can execute even if the key is accepted.</p>
+    <pre><code>send({ url: &quot;not-a-url&quot;, definitely_not_a_key_xyz: 1 })
+send({ url: &quot;not-a-url&quot;, theKeyYouAreUnsure: 1 })</code></pre>
+    <table><thead><tr><th scope="col">what you see</th><th scope="col">what it means</th></tr></thead><tbody><tr><td>first names your bogus key, second reports only the url error</td><td>the key is accepted, and the schema is closed</td></tr><tr><td>both report only the url error</td><td>the schema is open, so acceptance proves nothing</td></tr><tr><td>both name the bogus key</td><td>your unsure key is being rejected too</td></tr></tbody></table>
+    <p class="hf-cost">Cost: two rejected requests. Nothing renders, nothing is billed, and it answers acceptance completely.</p>
+  </div>
+  <div class="hf-case" data-c="undocumented">
+    <h3>Read the exit code on a name that cannot exist</h3>
+    <p>Argument parsers either validate names or ignore them. One invented flag tells you which, and it tells you before you have trusted a real one.</p>
+    <pre><code>tool command --x-bogus-flag ; echo $?
+tool command --the-real-flag=false --dry-run ; echo $?</code></pre>
+    <table><thead><tr><th scope="col">what you see</th><th scope="col">what it means</th></tr></thead><tbody><tr><td>1 then 0</td><td>names are validated, so an accepted flag is a known flag</td></tr><tr><td>0 then 0</td><td>unknown names are ignored, and acceptance means nothing at all</td></tr><tr><td>1 then 1</td><td>the real flag is being rejected too, so check the spelling and the subcommand</td></tr></tbody></table>
+    <p class="hf-cost">Cost: one exit code. Pair it with --dry-run so the second command performs no work.</p>
+  </div>
+  <div class="hf-case" data-c="routing">
+    <h3>Compare the errors, rather than the successes</h3>
+    <p>When an old and a new URL spelling both respond, a success on either one proves nothing about which is live. The distinguishing signal lives in what each one says when it refuses, and an unauthenticated request is enough to get it.</p>
+    <pre><code>curl -s https://api/OLD-SPELLING/action   # unauthenticated
+curl -s https://api/NEW-SPELLING/action   # unauthenticated</code></pre>
+    <table><thead><tr><th scope="col">what you see</th><th scope="col">what it means</th></tr></thead><tbody><tr><td>both report an auth error</td><td>both spellings route, so pick the one the feature's own page documents</td></tr><tr><td>one reports could-not-route</td><td>that spelling is dead and the choice is made for you</td></tr><tr><td>one reports auth and the other 404s</td><td>same conclusion, through a different status</td></tr></tbody></table>
+    <p class="hf-cost">Cost: two unauthenticated requests. No credential, so this one is safe to run against somebody else's API.</p>
+  </div>
 </div>
-<script>
-(function () {
-  var CASES = [
-    {
-      k: "ignored",
-      label: "the option may be silently ignored",
-      title: "Run it three ways and compare the number",
-      body: "An engine that ignores an option produces output identical to one that never received it, and the output still works. So do not ask whether it succeeded. Ask whether the thing the option claims to change actually changed, against a case where it could not have.",
-      code: "compress(target)                 # no option\ncompress(target, opt: correct)   # the option, correct value\ncompress(target, opt: wrong)     # the option, useless value",
-      table: [
-        ["all three identical", "the option is being dropped"],
-        ["correct one smaller, wrong one matches the first", "the option is honoured"],
-        ["correct and wrong both differ from the first", "something reads the option and your model of it is off"],
-      ],
-      cost: "Cost: three local runs, no deploy. This is the control that separates node, workerd and bun on the same option.",
-    },
-    {
-      k: "closed",
-      label: "the schema may refuse unknown keys",
-      title: "Send a key you invented, next to a request that fails anyway",
-      body: "A closed schema validates the shape before it does any work, which makes it the cheapest oracle you will ever get. Pair the probe with a deliberately invalid input so nothing can execute even if the key is accepted.",
-      code: 'send({ url: "not-a-url", definitely_not_a_key_xyz: 1 })\nsend({ url: "not-a-url", theKeyYouAreUnsure: 1 })',
-      table: [
-        ["first names your bogus key, second reports only the url error", "the key is accepted, and the schema is closed"],
-        ["both report only the url error", "the schema is open, so acceptance proves nothing"],
-        ["both name the bogus key", "your unsure key is being rejected too"],
-      ],
-      cost: "Cost: two rejected requests. Nothing renders, nothing is billed, and it answers acceptance completely.",
-    },
-    {
-      k: "undocumented",
-      label: "the docs skip the failure mode",
-      title: "Read the exit code on a name that cannot exist",
-      body: "Argument parsers either validate names or ignore them. One invented flag tells you which, and it tells you before you have trusted a real one.",
-      code: "tool command --x-bogus-flag ; echo $?\ntool command --the-real-flag=false --dry-run ; echo $?",
-      table: [
-        ["1 then 0", "names are validated, so an accepted flag is a known flag"],
-        ["0 then 0", "unknown names are ignored, and acceptance means nothing at all"],
-        ["1 then 1", "the real flag is being rejected too, so check the spelling and the subcommand"],
-      ],
-      cost: "Cost: one exit code. Pair it with --dry-run so the second command performs no work.",
-    },
-    {
-      k: "routing",
-      label: "two paths both seem to work",
-      title: "Compare the errors, rather than the successes",
-      body: "When an old and a new URL spelling both respond, a success on either one proves nothing about which is live. The distinguishing signal lives in what each one says when it refuses, and an unauthenticated request is enough to get it.",
-      code: "curl -s https://api/OLD-SPELLING/action   # unauthenticated\ncurl -s https://api/NEW-SPELLING/action   # unauthenticated",
-      table: [
-        ["both report an auth error", "both spellings route, so pick the one the feature's own page documents"],
-        ["one reports could-not-route", "that spelling is dead and the choice is made for you"],
-        ["one reports auth and the other 404s", "same conclusion, through a different status"],
-      ],
-      cost: "Cost: two unauthenticated requests. No credential, so this one is safe to run against somebody else's API.",
-    },
-  ];
-
-  var cases = document.getElementById("hf-cases");
-  var caseBox = document.getElementById("hf-case");
-
-  function drawCase(c) {
-    if (!caseBox) return;
-    caseBox.textContent = "";
-    var h = document.createElement("h4");
-    h.textContent = c.title;
-    var p = document.createElement("p");
-    p.textContent = c.body;
-    var pre = document.createElement("pre");
-    var code = document.createElement("code");
-    code.textContent = c.code;
-    pre.appendChild(code);
-    var tbl = document.createElement("table");
-    var head = document.createElement("tr");
-    ["what you see", "what it means"].forEach(function (t) {
-      var th = document.createElement("th");
-      th.scope = "col";
-      th.textContent = t;
-      head.appendChild(th);
-    });
-    tbl.createTHead().appendChild(head);
-    var caseRows = tbl.createTBody();
-    c.table.forEach(function (pair) {
-      var tr = document.createElement("tr");
-      pair.forEach(function (cell) {
-        var td = document.createElement("td");
-        td.textContent = cell;
-        tr.appendChild(td);
-      });
-      caseRows.appendChild(tr);
-    });
-    var cost = document.createElement("p");
-    cost.className = "hf-cost";
-    cost.textContent = c.cost;
-    [h, p, pre, tbl, cost].forEach(function (n) { caseBox.appendChild(n); });
-  }
-
-  if (cases) {
-    CASES.forEach(function (c, i) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = c.label;
-      if (i === 0) btn.className = "on";
-      btn.addEventListener("click", function () {
-        Array.prototype.forEach.call(cases.children, function (b) { b.classList.toggle("on", b === btn); });
-        drawCase(c);
-      });
-      cases.appendChild(btn);
-    });
-    drawCase(CASES[0]);
-  }
-})();
-</script>
 
 <h2>The rule this leaves</h2>
 <p>On a closed schema, <b>"is this accepted" and "does this work" are two questions, and the first one is free.</b> Ask it first, always, because it costs an exit code and it eliminates the most common way an undocumented option wastes a week: being quietly dropped while everything around it reports success.</p>
