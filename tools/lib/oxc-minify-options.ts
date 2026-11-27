@@ -1,3 +1,6 @@
+import { minifySync } from "oxc-minify";
+import type { MinifyOptions } from "oxc-minify";
+
 // The oxc-minify options every served client script is minified with, in ONE
 // place so that the build and the parity watch (lib/upstream-watches.ts) cannot
 // measure two different minifiers and call the difference oxc.
@@ -44,3 +47,22 @@ export const OXC_MINIFY_OPTIONS = {
   mangle: { toplevel: false },
   codegen: { removeWhitespace: true, legalComments: "none" },
 } as const;
+
+// The one Oxc call behind every client script and inline <script> the build
+// ships (tools/build.ts steps 3 and 7b). A parse error fails the build by label.
+//
+// Oxc takes the source type from the filename unless `module` is true, and a
+// name without a .js extension parses as a strict module, so `module: false`
+// alone does not ask for a script (napi/minify/src/lib.rs at crates_v0.160.0).
+// The inline label `public/x.html inline <script>` has none, and as a module
+// its block-level functions lose Annex B hoisting and the mangler reuses their
+// names. /lwe/fuse threw on click that way until 2026-11-27. The `.js` parses
+// the classic script a browser runs; the label in errors stays as given
+// (gotcha 121).
+export const minifyJavaScript = (filename: string, sourceText: string, options: MinifyOptions = OXC_MINIFY_OPTIONS) => {
+  const result = minifySync(filename.endsWith(".js") ? filename : `${filename}.js`, sourceText, options);
+  if (result.errors.length) {
+    throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
+  }
+  return result.code;
+};
