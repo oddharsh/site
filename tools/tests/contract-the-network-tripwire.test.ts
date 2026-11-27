@@ -1,5 +1,10 @@
 // ── the network tripwire ─────────────────────────────────────────────────
-import { assert, readFileSync, test } from "./contract-shared.ts";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
 import { escaped } from "../lib/no-network.ts";
 import { routeFetch } from "../lib/fetch-routes.ts";
 
@@ -67,6 +72,47 @@ test("the tripwire offers no way to turn itself off", async () => {
   // It must fail the PROCESS, since the harness will happily report a green
   // suite over a swallowed refusal.
   assert.match(src, /process\.exitCode = 1/, "the tripwire must fail the run, not just print");
+});
+
+test("a swallowed refusal fails `bun run test`'s own runner, and a clean file passes it", () => {
+  // The source assertions above kept passing while this failed: under
+  // `--parallel` (in `test` since #784, 2026-09-10), bun printed the exit
+  // hook's report from the worker and still exited 0 (measured 2026-11-27,
+  // bun 1.4.4-canary.1+5c6d4e24c). So this runs the real runner, with the flags
+  // the `test` script passes, over a file that catches a refused fetch and a
+  // file that fetches nothing.
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  const tokens: string[] = pkg.scripts.test.split(/\s+/);
+  const runnerFlags = tokens.filter((t) => /^--(parallel|no-isolate|isolate)\b/.test(t));
+  assert.ok(
+    runnerFlags.some((t) => t.startsWith("--parallel")),
+    "`test` no longer runs in parallel; this test was written for that runner",
+  );
+
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "tripwire-")));
+  try {
+    const swallowed = join(dir, "swallowed.test.ts");
+    const clean = join(dir, "clean.test.ts");
+    writeFileSync(
+      swallowed,
+      `import { test } from "bun:test";\ntest("swallows", async () => { try { await fetch("https://example.invalid/swallowed"); } catch {} });\n`,
+    );
+    writeFileSync(clean, `import { test } from "bun:test";\ntest("clean", () => {});\n`);
+    const run = (files: string[]) =>
+      spawnSync("bun", ["test", ...runnerFlags, "--preload", join(fileURLToPath(ROOT), "tools/lib/no-network.ts"), ...files], {
+        cwd: dir,
+        encoding: "utf8",
+      });
+
+    const passing = run([clean]);
+    assert.equal(passing.status, 0, `a run that fetched nothing failed:\n${passing.stderr}`);
+
+    const failing = run([swallowed, clean]);
+    assert.equal(failing.status, 1, `a run that swallowed a refused fetch exited ${failing.status}`);
+    assert.match(failing.stderr, /NETWORK TRIPWIRE: the suite attempted 1 outbound request\(s\)/, "the run failed without naming the escape");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("routeFetch answers by the longest matching prefix", async () => {
