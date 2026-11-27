@@ -33,6 +33,13 @@ name: Bun pin
 on:
   schedule:
     - cron: "40 9 * * *" # after dictionary-roll at 09:30, so two PR-opening jobs do not interleave
+  # When main's pin moves under an open chore/bun-pin PR, both sides have
+  # rewritten the same line and git calls it a conflict. Rerunning from the new
+  # main rebuilds the branch, so nobody resolves a version string by hand.
+  # #1886 conflicted with #1864 this way on 2026-11-27.
+  push:
+    branches: [main]
+    paths: [config/bun-pin.json]
   workflow_dispatch:
     inputs:
       to:

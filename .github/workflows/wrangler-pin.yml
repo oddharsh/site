@@ -17,6 +17,12 @@ name: Wrangler pin
 on:
   schedule:
     - cron: "50 9 * * *" # owns the one nightly Wrangler evaluation
+  # Rebuilds chore/wrangler-pin from the new main whenever the files it writes
+  # move there, so an open pin PR never conflicts on its own catalog line
+  # (bun-pin.yml has the incident).
+  push:
+    branches: [main]
+    paths: [package.json, bun.lock]
   workflow_dispatch:
     inputs:
       ref:
