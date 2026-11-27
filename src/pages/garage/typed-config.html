@@ -118,7 +118,24 @@
 
 <h2>A variable arrives in the type as its own value, in both formats</h2>
 <p>Thirteen binding kinds went through the compiler. Ten land where you would guess, and three carry more than a bare type.</p>
-<div class="tc-scroll"><table class="tc-table" id="tc-table"></table></div>
+<div class="tc-scroll"><table class="tc-table" id="tc-table">
+  <thead><tr><th scope="col">binding</th><th scope="col">written as</th><th scope="col">reaches the platform as</th><th scope="col">env type</th></tr></thead>
+  <tbody>
+    <tr><td><code>RN_KV</code></td><td><code>bindings.kv({ id: &quot;3cb8a107c58e47dc9244e75b33401f36&quot; })</code></td><td><code>{&quot;type&quot;:&quot;kv&quot;,&quot;id&quot;:&quot;3cb8a107c58e47dc9244e75b33401f36&quot;}</code></td><td class="tc-envcell"><code>KVNamespace&lt;string&gt;</code></td></tr>
+    <tr><td><code>RESTORE_DB</code></td><td><code>bindings.d1({ id: &quot;88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f&quot;, name: &quot;aadhar-restore&quot; })</code></td><td><code>{&quot;type&quot;:&quot;d1&quot;,&quot;name&quot;:&quot;aadhar-restore&quot;,&quot;id&quot;:&quot;88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f&quot;}</code></td><td class="tc-envcell"><code>D1Database</code></td></tr>
+    <tr><td><code>PHOTOS_R2</code></td><td><code>bindings.r2({ name: &quot;aadhar-photos&quot; })</code></td><td><code>{&quot;type&quot;:&quot;r2&quot;,&quot;name&quot;:&quot;aadhar-photos&quot;}</code></td><td class="tc-envcell"><code>R2Bucket</code></td></tr>
+    <tr><td><code>AI</code></td><td><code>bindings.ai()</code></td><td><code>{&quot;type&quot;:&quot;ai&quot;}</code></td><td class="tc-envcell"><code>Ai&lt;AiModels&gt;</code></td></tr>
+    <tr><td><code>BROWSER</code></td><td><code>bindings.browser()</code></td><td><code>{&quot;type&quot;:&quot;browser&quot;}</code></td><td class="tc-envcell"><code>BrowserRun</code></td></tr>
+    <tr><td><code>BOT_LEDGER</code></td><td><code>bindings.analyticsEngineDataset({ name: &quot;aadhar_bot_ledger&quot; })</code></td><td><code>{&quot;type&quot;:&quot;analytics-engine-dataset&quot;,&quot;name&quot;:&quot;aadhar_bot_ledger&quot;}</code></td><td class="tc-envcell"><code>AnalyticsEngineDataset</code></td></tr>
+    <tr><td><code>LEDGER_SQL</code></td><td><code>bindings.analyticsSQL()</code></td><td><code>{&quot;type&quot;:&quot;analytics&quot;}</code></td><td class="tc-envcell"><code>AnalyticsSQLBinding</code></td></tr>
+    <tr><td><code>CF_VERSION_METADATA</code></td><td><code>bindings.versionMetadata()</code></td><td><code>{&quot;type&quot;:&quot;version-metadata&quot;}</code></td><td class="tc-envcell"><code>WorkerVersionMetadata</code></td></tr>
+    <tr><td><code>ASSETS</code></td><td><code>bindings.assets()</code></td><td><code>{&quot;type&quot;:&quot;assets&quot;}</code></td><td class="tc-envcell"><code>Fetcher</code></td></tr>
+    <tr><td><code>COUNTER</code></td><td><code>bindings.durableObject({ worker: &quot;probe&quot;, exportName: &quot;Counter&quot; })</code></td><td><code>{&quot;type&quot;:&quot;durable-object&quot;,&quot;worker&quot;:&quot;probe&quot;,&quot;exportName&quot;:&quot;Counter&quot;}</code></td><td class="tc-envcell"><code>DurableObjectNamespace&lt;undefined&gt;</code></td></tr>
+    <tr><td><code>SIGNING_SECRET</code></td><td><code>bindings.secret()</code></td><td><code>{&quot;type&quot;:&quot;secret&quot;}</code></td><td class="tc-envcell"><code>string</code></td></tr>
+    <tr><td><code>AI_GATEWAY</code></td><td><code>bindings.text(&quot;default&quot;)</code></td><td><code>{&quot;type&quot;:&quot;text&quot;,&quot;value&quot;:&quot;default&quot;}</code></td><td class="tc-envcell"><code>&quot;default&quot;</code></td></tr>
+    <tr><td><code>FEATURES</code></td><td><code>bindings.json({ dcz: true, tier: 2 })</code></td><td><code>{&quot;type&quot;:&quot;json&quot;,&quot;value&quot;:{&quot;dcz&quot;:true,&quot;tier&quot;:2}}</code></td><td class="tc-envcell"><code>{ dcz: true; tier: number; }</code></td></tr>
+  </tbody>
+</table></div>
 <p><code>bindings.text("default")</code> gives <code>env.AI_GATEWAY</code> the type <code>"default"</code>, so the variable's <em>value</em> is in the type and a comparison against a string that was never configured is a compile error. <code>bindings.json({ dcz: true, tier: 2 })</code> comes back as <code>{ dcz: true; tier: number }</code>, where the boolean narrows to a literal and the number widens, which is ordinary TypeScript <a class="term" data-t="type-inference" href="https://en.wikipedia.org/wiki/Type_inference" title="A compiler working out the types of values from how they are written and used, without the programmer spelling them out." rel="external">inference</a> showing through. And <code>bindings.secret()</code> types the secret as <code>string</code>, so a secret you forgot to set is a name the compiler already knows about.</p>
 <p><b>This section used to say a JSON config structurally cannot do this. That was wrong, and it was already wrong on 4.125.0.</b> Run against an equivalent <code>wrangler.jsonc</code>, <code>wrangler types</code> writes <code>AI_GATEWAY: "default"</code> on both 4.125.0 and 4.147.0. It types the required secret as <code>string</code> too, and it narrows the JSON variable further than inference does, to <code>{"dcz":true,"tier":2}</code>. What the TypeScript config changes is <em>when</em> the type is computed. <code>wrangler types</code> takes a snapshot that the reminder above asks you to retake. The inferred <code>Env</code> reads the config every time the compiler runs, so a renamed binding is a type error with no regeneration step.</p>
 <p>One row is new since August. <code>bindings.analyticsSQL()</code>, added in config 0.22.0, resolves to <code>{"type":"analytics"}</code> and types as <code>AnalyticsSQLBinding</code>. Wrangler 4.147.0 builds it. <code>cf</code> 1.0.0-beta.5, which carries config 0.20.0, lets wrangler write the build output and then refuses that output on its own schema check, with "Invalid discriminator value", and exits 1. Beta.12 accepts it.</p>
@@ -237,7 +254,6 @@ Wrangler does not support the Bun runtime. Please try this command again using N
   var rowsX = document.getElementById("tc-rows-x");
   var srcEl = document.getElementById("tc-src");
   var outEl = document.getElementById("tc-out");
-  var table = document.getElementById("tc-table");
   if (!rows || !srcEl || !outEl) return;
   var mode = "resolved";
 
@@ -343,29 +359,6 @@ Wrangler does not support the Bun runtime. Please try this command again using N
     });
   });
 
-  if (table) {
-    var head = document.createElement("tr");
-    ["binding", "written as", "reaches the platform as", "env type"].forEach(function (h) {
-      var th = document.createElement("th");
-      th.scope = "col";
-      th.textContent = h;
-      head.appendChild(th);
-    });
-    table.createTHead().appendChild(head);
-    var tableRows = table.createTBody();
-    BINDINGS.forEach(function (b) {
-      var tr = document.createElement("tr");
-      [b.key, b.call, JSON.stringify(b.resolved), b.env].forEach(function (cell, i) {
-        var td = document.createElement("td");
-        var code = document.createElement("code");
-        code.textContent = cell;
-        td.appendChild(code);
-        if (i === 3) td.className = "tc-envcell";
-        tr.appendChild(td);
-      });
-      tableRows.appendChild(tr);
-    });
-  }
 
   pick(BINDINGS, rows);
   if (rowsX) pick(EXPORTS, rowsX);
