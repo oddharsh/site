@@ -1576,9 +1576,7 @@
         .map((x) => {
           var on = !!counterfactuals[x.key];
           return (
-            '<div class="lx-cf-card' +
-            (on ? " is-on" : "") +
-            '"><h4>' +
+            '<div class="lx-cf-card"><h4>' +
             esc(x.label) +
             "</h4><p>" +
             esc(x.detail) +
@@ -1723,9 +1721,7 @@
         .map((x) => {
           var on = !!counterfactuals[x.key];
           return (
-            '<div class="lx-cf-card' +
-            (on ? " is-on" : "") +
-            '"><h4>' +
+            '<div class="lx-cf-card"><h4>' +
             esc(x.label) +
             " " +
             badge(x.state.text, x.state.kind) +
@@ -2464,8 +2460,16 @@
     if (wireBtn) wireBtn.addEventListener("click", runWire);
     var toolsBtn = machineBody.querySelector("#lx-tools-run");
     if (toolsBtn) toolsBtn.addEventListener("click", runTools);
-    var nlwebBtn = machineBody.querySelector("#lx-nlweb-run");
-    if (nlwebBtn) nlwebBtn.addEventListener("click", runNlweb);
+    var nlwebForm = machineBody.querySelector("#lx-nlweb-form");
+    if (nlwebForm) {
+      nlwebForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        runNlweb();
+      });
+    } else {
+      var nlwebBtn = machineBody.querySelector("#lx-nlweb-run");
+      if (nlwebBtn) nlwebBtn.addEventListener("click", runNlweb);
+    }
     var mdBtn = machineBody.querySelector("#lx-md-run");
     if (mdBtn) mdBtn.addEventListener("click", runMarkdown);
     // The catalogue's controls are real nodes rather than markup, because they
@@ -2928,7 +2932,7 @@
 
     if (has(s.og)) {
       var card = '<div class="lx-ogcard">';
-      if (s.og.image) card += '<img src="' + esc(s.og.image) + '" alt="" onerror="this.style.display=\'none\'">';
+      if (s.og.image) card += '<img src="' + esc(s.og.image) + '" alt="">';
       card += '<div><div class="t">' + esc(s.og.title || s.title || "") + "</div>";
       if (s.og.description) card += '<div class="d">' + esc(s.og.description) + "</div>";
       card += '<div class="u">' + esc(s.og.url || data.finalUrl) + (s.og.type ? "  &middot;  " + esc(s.og.type) : "") + "</div></div></div>";
@@ -3617,7 +3621,6 @@
       return counterfactuals[key];
     }).length;
     el.textContent = n ? String(n) : "";
-    el.hidden = !n;
   }
 
   function updateModeUi() {
@@ -3690,13 +3693,18 @@
     else run(urlInput.value);
   });
   [].forEach.call(document.querySelectorAll(".lx-chip"), (c) => {
-    c.addEventListener("click", () => {
+    c.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var pair = c.getAttribute("data-vs-pair");
       if (pair && pair.indexOf("|") > 0) {
+        e.preventDefault();
         runVs(pair.split("|")[0], pair.split("|")[1]);
         return;
       }
-      if (c.getAttribute("data-url")) run(c.getAttribute("data-url"));
+      if (c.getAttribute("data-url")) {
+        e.preventDefault();
+        run(c.getAttribute("data-url"));
+      }
     });
   });
   if (vsToggle)
@@ -3764,31 +3772,34 @@
   var lensGroup = document.querySelector(".lx-lenses");
   if (lensGroup) lensGroup.addEventListener("keydown", arrowKeys(".lx-tab"));
 
-  // "state of the machine web" dialog: close button and every [data-sow-open]
-  // trigger (the rail's "?" and the footer link).
-  var sowDialog = document.getElementById("lx-sow-dialog") as HTMLDialogElement;
-  if (sowDialog) {
-    var sowClose = document.getElementById("lx-sow-close");
-    if (sowClose)
-      sowClose.addEventListener("click", () => {
-        sowDialog.close();
-      });
+  // Hide broken OG preview images without inline onerror attributes (CSP).
+  if (machineBody) {
+    machineBody.addEventListener(
+      "error",
+      (e) => {
+        var t = e.target as HTMLElement | null;
+        if (t && t.matches && t.matches(".lx-ogcard img")) t.style.display = "none";
+      },
+      true,
+    );
   }
-  [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
-    b.addEventListener("click", openStateWeb);
-  });
 
-  // The About dialog: same chrome and dismissal model as the machine-web panel.
-  // Its era cards carry .lx-goto jump buttons, which close the dialog and land
-  // on the lens that proves the era live — via Compare when the current view
-  // hides the lens tabs, mirroring what clicking a tab from Delta does.
+  // Fallback modal openers where Invoker Commands (commandfor="...") are not yet
+  // supported; closing is handled natively by <form method="dialog"> everywhere.
   var abtDialog = document.getElementById("lx-abt-dialog") as HTMLDialogElement;
-  if (abtDialog) {
-    var abtClose = document.getElementById("lx-abt-close");
-    if (abtClose)
-      abtClose.addEventListener("click", () => {
-        abtDialog.close();
+  if (!("commandForElement" in HTMLButtonElement.prototype)) {
+    [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
+      b.addEventListener("click", openStateWeb);
+    });
+    [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
+      b.addEventListener("click", () => {
+        if (abtDialog && !abtDialog.open && abtDialog.showModal) {
+          try {
+            abtDialog.showModal();
+          } catch (e) {}
+        }
       });
+    });
   }
 
   // Light dismiss for both dialogs where closedby="any" is missing (Safari, per
@@ -3811,15 +3822,6 @@
       });
     });
   }
-  [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
-    b.addEventListener("click", () => {
-      if (abtDialog && !abtDialog.open && abtDialog.showModal) {
-        try {
-          abtDialog.showModal();
-        } catch (e) {}
-      }
-    });
-  });
   [].forEach.call(document.querySelectorAll(".lx-goto"), (b) => {
     b.addEventListener("click", () => {
       if (abtDialog && abtDialog.open) abtDialog.close();

@@ -749,37 +749,33 @@ type PlannedField = {
             ? '<span class="lx-badge">no schema</span>'
             : "";
         return (
-          '<div class="lx-tool' +
-          (isOpen ? " is-open" : "") +
-          '">' +
-          '<button class="lx-tool-head" type="button" data-tool="' +
+          '<details class="lx-tool" name="lx-mcp-tools" data-tool="' +
           esc(tool.name) +
-          '" aria-expanded="' +
-          (isOpen ? "true" : "false") +
-          '">' +
+          '"' +
+          (isOpen ? " open" : "") +
+          ">" +
+          '<summary class="lx-tool-head">' +
           '<span class="lx-tool-name">' +
           esc(tool.name) +
           "</span>" +
           badges(tool) +
           schemaNote +
-          "</button>" +
-          (isOpen
-            ? '<div class="lx-tool-body">' +
-              (tool.description ? '<p class="lx-tool-desc">' + esc(tool.description) + "</p>" : "") +
-              '<p class="lx-cap">Those badges are what the server says about itself. Nothing here verifies them.</p>' +
-              '<div class="lx-tool-form" data-mount="' +
-              esc(tool.name) +
-              '"></div>' +
-              '<div class="lx-tool-problems"></div>' +
-              '<div class="lx-sec-h">What would be sent</div>' +
-              '<pre class="lx-tool-frame"></pre>' +
-              '<div class="lx-sec-h">curl</div>' +
-              '<pre class="lx-tool-curl"></pre>' +
-              '<button class="lx-tf-add lx-tool-copy" type="button">Copy curl</button>' +
-              '<p class="lx-cap">Nothing is sent from this page. Run the curl yourself, against your own credentials.</p>' +
-              "</div>"
-            : "") +
-          "</div>"
+          "</summary>" +
+          '<div class="lx-tool-body">' +
+          (tool.description ? '<p class="lx-tool-desc">' + esc(tool.description) + "</p>" : "") +
+          '<p class="lx-cap">Those badges are what the server says about itself. Nothing here verifies them.</p>' +
+          '<div class="lx-tool-form" data-mount="' +
+          esc(tool.name) +
+          '"></div>' +
+          '<div class="lx-tool-problems"></div>' +
+          '<div class="lx-sec-h">What would be sent</div>' +
+          '<pre class="lx-tool-frame"></pre>' +
+          '<div class="lx-sec-h">curl</div>' +
+          '<pre class="lx-tool-curl"></pre>' +
+          '<button class="lx-tf-add lx-tool-copy" type="button">Copy curl</button>' +
+          '<p class="lx-cap">Nothing is sent from this page. Run the curl yourself, against your own credentials.</p>' +
+          "</div>" +
+          "</details>"
         );
       })
       .join("");
@@ -813,77 +809,88 @@ type PlannedField = {
     // Called after the pane's HTML lands, exactly like bindCounterfactuals. The
     // form itself is built here rather than in the string above, because these
     // controls carry foreign strings and must be created as nodes.
-    bind: (root, state, rerender) => {
-      var heads = root.querySelectorAll(".lx-tool-head");
-      for (var i = 0; i < heads.length; i++) {
-        heads[i].addEventListener("click", function () {
-          var name = this.getAttribute("data-tool");
-          selected = selected === name ? null : name;
-          rerender();
-        });
-      }
-      if (!state || !state.ok || !selected) return;
-      var mount = root.querySelector('.lx-tool-form[data-mount="' + (window.CSS && CSS.escape ? CSS.escape(selected) : selected) + '"]');
-      if (!mount) return;
-      var tool: any = null;
-      for (var t = 0; t < state.tools.length; t++) if (state.tools[t].name === selected) tool = state.tools[t];
-      if (!tool) return;
+    bind: (root, state) => {
+      if (!state || !state.ok) return;
+      function mountTool(detailsEl) {
+        if (!detailsEl || detailsEl.dataset.mounted) return;
+        var name = detailsEl.getAttribute("data-tool");
+        var tool: any = null;
+        for (var t = 0; t < state.tools.length; t++) if (state.tools[t].name === name) tool = state.tools[t];
+        if (!tool) return;
+        var mount = detailsEl.querySelector(".lx-tool-form");
+        if (!mount) return;
+        detailsEl.dataset.mounted = "1";
 
-      var body = mount.parentNode;
-      var problems = body.querySelector(".lx-tool-problems");
-      var framePre = body.querySelector(".lx-tool-frame");
-      var curlPre = body.querySelector(".lx-tool-curl");
-      var plan = planForm(tool.inputSchema);
+        var body = mount.parentNode;
+        var problems = body.querySelector(".lx-tool-problems");
+        var framePre = body.querySelector(".lx-tool-frame");
+        var curlPre = body.querySelector(".lx-tool-curl");
+        var plan = planForm(tool.inputSchema);
 
-      function update() {
-        var values = form.read();
-        var found = validate(plan, values);
-        problems.replaceChildren();
-        if (found.length) {
-          var note = mk("div", "lx-tools-fail");
-          note.appendChild(mk("b", null, found.length + (found.length === 1 ? " problem" : " problems")));
-          var ul = mk("ul");
-          found.forEach((p) => {
-            ul.appendChild(mk("li", null, p.at + ": " + p.why));
-          });
-          note.appendChild(ul);
-          problems.appendChild(note);
+        function update() {
+          var values = form.read();
+          var found = validate(plan, values);
+          problems.replaceChildren();
+          if (found.length) {
+            var note = mk("div", "lx-tools-fail");
+            note.appendChild(mk("b", null, found.length + (found.length === 1 ? " problem" : " problems")));
+            var ul = mk("ul");
+            found.forEach((p) => {
+              ul.appendChild(mk("li", null, p.at + ": " + p.why));
+            });
+            note.appendChild(ul);
+            problems.appendChild(note);
+          }
+          var frame = buildFrame(tool.name, values);
+          framePre.textContent = JSON.stringify(frame, null, 2);
+          curlPre.textContent = toCurl(state.endpoint, frame);
         }
-        var frame = buildFrame(tool.name, values);
-        framePre.textContent = JSON.stringify(frame, null, 2);
-        curlPre.textContent = toCurl(state.endpoint, frame);
-      }
-      var form = renderForm(plan, update);
-      mount.replaceChildren(form.el);
-      update();
+        var form = renderForm(plan, update);
+        mount.replaceChildren(form.el);
+        update();
 
-      var copy = body.querySelector(".lx-tool-copy");
-      if (copy)
-        copy.addEventListener("click", function () {
-          // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
-          var btn = this;
-          // lens.js owns the live region; it exists before this module loads
-          var live = document.getElementById("lx-copy-status");
-          var announce = (msg) => {
-            if (live) live.textContent = live.textContent === msg ? msg + "\u00A0" : msg;
-          };
-          navigator.clipboard.writeText(curlPre.textContent).then(
-            () => {
-              announce("Copied");
-              btn.textContent = "Copied";
-              setTimeout(() => {
-                btn.textContent = "Copy curl";
-              }, 1200);
-            },
-            () => {
-              announce("Copy failed");
-              btn.textContent = "Copy failed";
-              setTimeout(() => {
-                btn.textContent = "Copy curl";
-              }, 1200);
-            },
-          );
+        var copy = body.querySelector(".lx-tool-copy");
+        if (copy)
+          copy.addEventListener("click", function () {
+            // oxlint-disable-next-line typescript/no-this-alias -- the promise callbacks retain the clicked button after the listener returns
+            var btn = this;
+            // lens.js owns the live region; it exists before this module loads
+            var live = document.getElementById("lx-copy-status");
+            var announce = (msg) => {
+              if (live) live.textContent = live.textContent === msg ? msg + "\u00A0" : msg;
+            };
+            navigator.clipboard.writeText(curlPre.textContent).then(
+              () => {
+                announce("Copied");
+                btn.textContent = "Copied";
+                setTimeout(() => {
+                  btn.textContent = "Copy curl";
+                }, 1200);
+              },
+              () => {
+                announce("Copy failed");
+                btn.textContent = "Copy failed";
+                setTimeout(() => {
+                  btn.textContent = "Copy curl";
+                }, 1200);
+              },
+            );
+          });
+      }
+
+      var items = root.querySelectorAll("details.lx-tool");
+      for (var i = 0; i < items.length; i++) {
+        items[i].addEventListener("toggle", function () {
+          var name = this.getAttribute("data-tool");
+          if (this.open) {
+            selected = name;
+            mountTool(this);
+          } else if (selected === name) {
+            selected = null;
+          }
         });
+        if (items[i].open) mountTool(items[i]);
+      }
     },
     // Exported for the contract tests, which exercise the planner with no DOM.
     _plan: planForm,

@@ -107,9 +107,9 @@
         '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
           "A door that answers 200 can still answer with nothing an agent can use, and the field that decides it is " +
           "<code>schema_object</code>." +
-          '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
+          '<form class="lx-nlweb-ask" id="lx-nlweb-form"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
           'placeholder="what is this site about" aria-label="the question to ask this origin">' +
-          '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>' +
+          '<button class="lx-browser-run" type="submit" id="lx-nlweb-run">Ask it</button></form>' +
           '<div class="lx-cap">One request, cached for an hour. Asking somebody else’s retrieval endpoint a question ' +
           "costs them a lookup, so this sends <code>mode=list</code> and never fires on its own.</div></div>",
       );
@@ -172,10 +172,10 @@
         coverageTable(s) +
         types +
         '<div class="lx-nlweb-results" id="lx-nlweb-results"></div>' +
-        '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" value="' +
+        '<form class="lx-nlweb-ask" id="lx-nlweb-form"><input type="text" id="lx-nlweb-q" maxlength="200" value="' +
         esc(s.query) +
         '" aria-label="the question to ask this origin">' +
-        '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask again</button></div>',
+        '<button class="lx-browser-run" type="submit" id="lx-nlweb-run">Ask again</button></form>',
     );
   }
 
@@ -262,18 +262,6 @@
       var mount = root.querySelector("#lx-nlweb-results");
       if (mount && state && state.ok && state.results) {
         mount.replaceChildren.apply(mount, state.results.map(resultNode));
-      }
-      var input = root.querySelector("#lx-nlweb-q");
-      var button = root.querySelector("#lx-nlweb-run");
-      // Enter submits, because a text box beside a button that ignores Enter is
-      // the kind of small lie this site tries not to tell.
-      if (input && button) {
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
-            event.preventDefault();
-            button.click();
-          }
-        });
       }
     },
     _question: (root) => {
