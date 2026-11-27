@@ -35,18 +35,22 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 .chip { font-family: var(--font-mono); font-size: var(--text-micro); font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
   color: var(--ink-dim); border-color: var(--grey-70); background: oklch(97% 0 0); }
 @media (max-width: 340px) { .chip { white-space: normal; } }
-.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
-.chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
+.chip::before { content: "\2717 "; }
+.chip .cap-yes, .note-yes { display: none; }
 .seg { display: inline-flex; border: 1px solid var(--slate-50); border-radius: 3px; overflow: hidden; }
-.seg button { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: var(--ink);
-  background: linear-gradient(180deg, oklch(99% 0 0), var(--mist-92)); }
-.seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
-.seg button[aria-pressed="true"] { color: oklch(100% 0 0);
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.seg label { font: inherit; font-size: var(--text-sm); padding: 3px 12px; border: 0; cursor: pointer; color: var(--ink);
+  background: linear-gradient(180deg, oklch(99% 0 0), var(--mist-92)); user-select: none; }
+.seg label + input + label { border-left: 1px solid oklch(70% 0.03 263); }
+.seg input:focus-visible + label { outline: 1px dotted var(--ink,#000); outline-offset: -3px; }
+.seg input:checked + label { color: oklch(100% 0 0);
   background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
-.seg button:disabled { color: var(--ink-faint); cursor: not-allowed; }
-/* reserve the note's height (JS fills it a tick after load, and the longer
-   "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
-   down. kills a ~0.02 CLS. */
+@supports not (display: grid-lanes) {
+  #bMasonry, label[for="bMasonry"] { pointer-events: none; }
+  label[for="bMasonry"] { color: var(--ink-faint); background: linear-gradient(180deg, oklch(99% 0 0), var(--mist-92)); box-shadow: none; cursor: not-allowed; }
+  label[for="bSquares"] { color: oklch(100% 0 0); background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
+}
+/* reserve the note's height so the sheet below doesn't shift between browsers. */
 .note { font-size: var(--text-xs); color: var(--ink-quiet); margin: -6px 0 14px; min-height: 3.4em; }
 
 /* ── the contact sheet ───────────────────────────────────────────────── */
@@ -69,8 +73,12 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
    aspect ratio (EXIF pins it up front, so nothing reflows) → a ragged
    contact sheet, no crop. flip the toggle to A/B it against the squares above. */
 @supports (display: grid-lanes) {
-  .sheet.masonry { display: grid-lanes; flow-tolerance: 1em; }
-  .sheet.masonry .tile { aspect-ratio: var(--ar, 1); }
+  .chip { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+  .chip::before { content: "\2713 "; }
+  .chip .cap-no, .note-no { display: none; }
+  .chip .cap-yes, .note-yes { display: inline; }
+  main:has(#bMasonry:checked) .sheet { display: grid-lanes; flow-tolerance: 1em; }
+  main:has(#bMasonry:checked) .sheet .tile { aspect-ratio: var(--ar, 1); }
   /* a correctly-proportioned box means object-fit:cover shows the WHOLE frame */
 }
 
@@ -93,15 +101,15 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
     <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong><a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a></strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows <a class="term" data-t="masonry" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Grid_layout/Grid_lanes" title="A layout that stacks items in columns at their natural heights, each filling the gap under the one above, like bricks in a wall." rel="external">masonry</a>-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no <a class="term" data-t="media-queries" href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries" title="CSS rules that apply only when the screen matches a condition, such as a width range, so a page can rearrange itself." rel="external">media queries</a> fire.</p>
 
     <div class="bar">
-      <span class="chip" id="cap">checking <code>display: grid-lanes</code>…</span>
-      <span class="seg" role="group" aria-label="layout">
-        <button type="button" id="bMasonry" aria-pressed="true">Masonry</button>
-        <button type="button" id="bSquares" aria-pressed="false">Fixed squares</button>
+      <span class="chip" id="cap"><code>display: grid-lanes</code> <span class="cap-yes">in your browser</span><span class="cap-no">not in your browser</span></span>
+      <span class="seg" role="radiogroup" aria-label="layout">
+        <input type="radio" name="m-mode" id="bMasonry" checked><label for="bMasonry">Masonry</label>
+        <input type="radio" name="m-mode" id="bSquares"><label for="bSquares">Fixed squares</label>
       </span>
     </div>
-    <p class="note" id="note"></p>
+    <p class="note" id="note"><span class="note-yes">Toggle to A/B the ragged masonry against the cropped squares the homepage ships.</span><span class="note-no">Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback, same as the homepage. Open it in Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.</span></p>
 
-    <div class="sheet masonry" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
+    <div class="sheet" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
 
     <hr>
     <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with <a class="term" data-t="exif" href="https://en.wikipedia.org/wiki/Exif" title="Metadata a camera writes into a photo: exposure settings, date, lens, and an Orientation tag saying which way up to show it." rel="external">EXIF</a> pinning each photo's <code>aspect-ratio</code> so nothing <a class="term" data-t="reflow" href="https://developer.mozilla.org/en-US/docs/Glossary/Reflow" title="The browser recomputing the size and position of elements on a page, which makes content jump when something like an image finishes loading." rel="external">reflows</a> as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
@@ -119,27 +127,6 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
 (function () {
   "use strict";
   var sheet = document.getElementById("sheet");
-  var cap = document.getElementById("cap"), note = document.getElementById("note");
-  var bM = document.getElementById("bMasonry"), bS = document.getElementById("bSquares");
-
-  var supported = false;
-  try { supported = CSS.supports("display: grid-lanes"); } catch (e) {}
-  cap.className = "chip " + (supported ? "yes" : "no");
-  cap.innerHTML = "<code>display: grid-lanes</code> " + (supported ? "in your browser" : "not in your browser");
-  if (!supported) {
-    note.textContent = "Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback, same as the homepage. Open it in Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.";
-    bM.disabled = true; // the toggle can't do anything without support
-  } else {
-    note.textContent = "Toggle to A/B the ragged masonry against the cropped squares the homepage ships.";
-  }
-
-  function setMode(masonry) {
-    sheet.classList.toggle("masonry", masonry);
-    bM.setAttribute("aria-pressed", String(masonry));
-    bS.setAttribute("aria-pressed", String(!masonry));
-  }
-  bM.addEventListener("click", function () { if (!bM.disabled) setMode(true); });
-  bS.addEventListener("click", function () { setMode(false); });
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 

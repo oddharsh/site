@@ -41,8 +41,16 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
 .chip::before { content: "…"; display: inline-block; width: 1.6em; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713"; }
-.chip.no { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
-.chip.no::before { content: "\2717"; }
+.chip.no, .chip.css-probe { color: var(--ink-dim); border-color: var(--grey-70); background: oklch(96% 0 0); }
+.chip.no::before, .chip.css-probe::before { content: "\2717"; }
+@supports (appearance: base-select) { .chip[data-f="base-select"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="base-select"]::before { content: "\2713"; } }
+@supports (anchor-name: --a) and (position-anchor: --a) { .chip[data-f="anchor"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="anchor"]::before { content: "\2713"; } }
+@supports (overflow-anchor: auto) { .chip[data-f="scroll-anchor"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="scroll-anchor"]::before { content: "\2713"; } }
+@supports selector(:heading) { .chip[data-f="heading"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="heading"]::before { content: "\2713"; } }
+@supports (color: revert-rule) { .chip[data-f="revert-rule"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="revert-rule"]::before { content: "\2713"; } }
+@supports (width: stretch) { .chip[data-f="stretch"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="stretch"]::before { content: "\2713"; } }
+@supports (contain: style) { .chip[data-f="contain-style"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="contain-style"]::before { content: "\2713"; } }
+@supports (color: color(display-p3-linear 1 0 0)) { .chip[data-f="p3-linear"] { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); } .chip[data-f="p3-linear"]::before { content: "\2713"; } }
 
 .demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px; }
@@ -104,14 +112,14 @@ pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: 1.5
     <p class="lede" style="font-size:9.5pt">Every card says what Safari&nbsp;27 brings, and the strip below runs a <strong>live check of <em>your</em> browser</strong>. This whole site bets on high-octane fuel: when the engine has a feature it burns it, otherwise it falls back. "Not in your browser" never means broken.</p>
 
     <div class="cap-strip" id="caps" aria-label="what your browser supports right now">
-      <span class="chip" data-f="base-select">appearance: base-select</span>
-      <span class="chip" data-f="anchor">anchor positioning</span>
-      <span class="chip" data-f="scroll-anchor">overflow-anchor</span>
-      <span class="chip" data-f="heading">:heading</span>
-      <span class="chip" data-f="revert-rule">revert-rule</span>
-      <span class="chip" data-f="stretch">width: stretch</span>
-      <span class="chip" data-f="contain-style">contain: style</span>
-      <span class="chip" data-f="p3-linear">display-p3-linear</span>
+      <span class="chip css-probe" data-f="base-select">appearance: base-select</span>
+      <span class="chip css-probe" data-f="anchor">anchor positioning</span>
+      <span class="chip css-probe" data-f="scroll-anchor">overflow-anchor</span>
+      <span class="chip css-probe" data-f="heading">:heading</span>
+      <span class="chip css-probe" data-f="revert-rule">revert-rule</span>
+      <span class="chip css-probe" data-f="stretch">width: stretch</span>
+      <span class="chip css-probe" data-f="contain-style">contain: style</span>
+      <span class="chip css-probe" data-f="p3-linear">display-p3-linear</span>
       <span class="chip" data-f="jspi">Wasm JSPI</span>
       <span class="chip" data-f="stream-from">ReadableStream.from</span>
       <span class="chip" data-f="model">&lt;model&gt;</span>
@@ -217,26 +225,15 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
 </div>
 
 <script>
-// live "does YOUR browser have it" probes. CSS.supports / interface checks can
-// throw on some engines, so each is wrapped; unknown → neutral chip.
+// The 8 CSS capability chips above evaluate through @supports directly. Only
+// the 3 JS/DOM interface probes run here.
 (function () {
   var sup = function (fn) { try { return !!fn(); } catch (e) { return null; } };
   var FEATS = [
-    ["base-select", function () { return CSS.supports("appearance: base-select"); }],
-    ["anchor", function () { return CSS.supports("anchor-name: --a") && CSS.supports("position-anchor: --a"); }],
-    ["scroll-anchor", function () { return CSS.supports("overflow-anchor: auto"); }],
-    ["heading", function () { return CSS.supports("selector(:heading)"); }],
-    ["revert-rule", function () { return CSS.supports("color: revert-rule"); }],
-    ["stretch", function () { return CSS.supports("width: stretch"); }],
-    ["contain-style", function () { return CSS.supports("contain: style"); }],
-    ["p3-linear", function () { return CSS.supports("color: color(display-p3-linear 1 0 0)"); }],
     ["jspi", function () { return typeof WebAssembly !== "undefined" && typeof WebAssembly.Suspending === "function"; }],
     ["stream-from", function () { return typeof ReadableStream !== "undefined" && typeof ReadableStream.from === "function"; }],
     ["model", function () { return "HTMLModelElement" in window; }]
   ];
-  // The chips ship in the markup with a neutral mark and this only colours
-  // them: built here, the strip came in 79px tall after first paint and moved
-  // every card below it, layout shift 0.017 at 1280px (gotcha 98, 2026-11-16).
   FEATS.forEach(function (f) {
     var ok = sup(f[1]);
     var c = document.querySelector('#caps [data-f="' + f[0] + '"]');
