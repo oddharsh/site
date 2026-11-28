@@ -94,6 +94,7 @@
 .thm .agree { font-size: var(--text-2xs); color: var(--amber-56); margin-top: 6px; display: block; }
 
 /* demo 3: the audit surface */
+.su-r { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
 .surf-pick { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
 .surf-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
 .surf-stats .card { border: 1px solid var(--slate-84); border-radius: 4px; background: var(--paper-cool); padding: 7px 9px; }
@@ -105,11 +106,49 @@
 .surf-row { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
 .surf-row .lab { flex: 0 0 4.9em; font-family: var(--font-mono); font-size: var(--text-3xs); text-align: right; color: var(--slate-54); }
 .surf-track { flex: 1 1 auto; height: 13px; background: var(--surface-desktop); border: 1px solid var(--slate-90); border-radius: 2px; overflow: hidden; }
-.surf-fill { display: block; height: 100%; background: linear-gradient(180deg,#8b86d8,#4b47a8); }
-.surf-fill.mine { background: linear-gradient(180deg,#ffd97a,#d9a300); }
+.surf-fill { display: block; height: 100%; background: linear-gradient(180deg,#8b86d8,#4b47a8); width: var(--wp); }
+.surf-fill.mine { background: linear-gradient(180deg,#ffd97a,#d9a300); width: var(--ws); }
+#demo-surface:has(#su-mag:checked) .surf-fill.mine { width: min(100%, calc(var(--ws) * 100)); }
 .surf-row .amt { flex: 0 0 5.4em; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--slate-26); }
 .surf-mag { margin-top: 8px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: var(--text-3xs); color: var(--slate-54); }
 .surf-ratio { margin-top: 9px; font-size: var(--text-micro); padding: 7px 9px; border: 1px dashed var(--accent); border-radius: 4px; background: var(--accent-soft); color: var(--slate-26); }
+#demo-surface [data-su], #demo-surface .su-m1 { display: none; }
+#demo-surface:has(#su-mag:checked) .su-m0 { display: none; }
+#demo-surface:has(#su-mag:checked) .su-m1 { display: inline; }
+#demo-surface:has(#su-r-0:checked) { --wp: 42.6405%; --ws: 0.1418%; }
+#demo-surface:has(#su-r-1:checked) { --wp: 87.7145%; --ws: 0.3826%; }
+#demo-surface:has(#su-r-2:checked) { --wp: 26.4050%; --ws: 0.0299%; }
+#demo-surface:has(#su-r-3:checked) { --wp: 28.6545%; --ws: 0.1710%; }
+#demo-surface:has(#su-r-4:checked) { --wp: 21.1324%; --ws: 0.0782%; }
+#demo-surface:has(#su-r-5:checked) { --wp: 54.4200%; --ws: 0.1066%; }
+#demo-surface:has(#su-r-6:checked) { --wp: 100%; --ws: 0.2400%; }
+#demo-surface:has(#su-r-7:checked) { --wp: 42.7471%; --ws: 0.0598%; }
+#demo-surface:has(#su-r-8:checked) { --wp: 2.3407%; --ws: 0.0383%; }
+#demo-surface:has(#su-r-9:checked) { --wp: 14.2513%; --ws: 0.1050%; }
+#demo-surface:has(#su-r-0:checked) [data-su="0"], #demo-surface:has(#su-r-1:checked) [data-su="1"],
+#demo-surface:has(#su-r-2:checked) [data-su="2"], #demo-surface:has(#su-r-3:checked) [data-su="3"],
+#demo-surface:has(#su-r-4:checked) [data-su="4"], #demo-surface:has(#su-r-5:checked) [data-su="5"],
+#demo-surface:has(#su-r-6:checked) [data-su="6"], #demo-surface:has(#su-r-7:checked) [data-su="7"],
+#demo-surface:has(#su-r-8:checked) [data-su="8"], #demo-surface:has(#su-r-9:checked) [data-su="9"] { display: inline; }
+#demo-surface:has(#su-r-0:checked) label[for="su-r-0"], #demo-surface:has(#su-r-1:checked) label[for="su-r-1"],
+#demo-surface:has(#su-r-2:checked) label[for="su-r-2"], #demo-surface:has(#su-r-3:checked) label[for="su-r-3"],
+#demo-surface:has(#su-r-4:checked) label[for="su-r-4"], #demo-surface:has(#su-r-5:checked) label[for="su-r-5"],
+#demo-surface:has(#su-r-6:checked) label[for="su-r-6"], #demo-surface:has(#su-r-7:checked) label[for="su-r-7"],
+#demo-surface:has(#su-r-8:checked) label[for="su-r-8"], #demo-surface:has(#su-r-9:checked) label[for="su-r-9"],
+#demo-surface:has(#su-mag:checked) label[for="su-mag"] {
+  background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
+  border-color: #7b9ebd;
+  box-shadow: inset 1px 1px 2px rgba(181,178,164,.9), inset -1px -1px 0 rgba(255,255,255,.5);
+}
+#demo-surface:has(#su-r-0:focus-visible) label[for="su-r-0"], #demo-surface:has(#su-r-1:focus-visible) label[for="su-r-1"],
+#demo-surface:has(#su-r-2:focus-visible) label[for="su-r-2"], #demo-surface:has(#su-r-3:focus-visible) label[for="su-r-3"],
+#demo-surface:has(#su-r-4:focus-visible) label[for="su-r-4"], #demo-surface:has(#su-r-5:focus-visible) label[for="su-r-5"],
+#demo-surface:has(#su-r-6:focus-visible) label[for="su-r-6"], #demo-surface:has(#su-r-7:focus-visible) label[for="su-r-7"],
+#demo-surface:has(#su-r-8:focus-visible) label[for="su-r-8"], #demo-surface:has(#su-r-9:focus-visible) label[for="su-r-9"],
+#demo-surface:has(#su-mag:focus-visible) label[for="su-mag"] {
+  border-color: #003c74; outline: 1px dotted #000; outline-offset: -4px;
+  box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #2c628b, 0 0 3px 1px rgba(44,98,139,.45);
+}
 
 @media (max-width: 520px){ .specs, .pipes, .surf-stats { grid-template-columns:1fr } }
 </style>
@@ -376,17 +415,20 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
             <div class="bar">Lean shared a demo: the part addressed to you</div>
             <div class="pad">
               <p class="lead">The ten results, as published 1&nbsp;August 2026. Left is what the kernel reads. Right is the <span class="mono">ComparatorChallenges</span> file, which is the statement alone and the only part written for a human. Pick one:</p>
-              <div class="surf-pick" id="su-pick"></div>
+              <input class="su-r" type="radio" name="su-r" id="su-r-0"><input class="su-r" type="radio" name="su-r" id="su-r-1"><input class="su-r" type="radio" name="su-r" id="su-r-2" checked><input class="su-r" type="radio" name="su-r" id="su-r-3"><input class="su-r" type="radio" name="su-r" id="su-r-4"><input class="su-r" type="radio" name="su-r" id="su-r-5"><input class="su-r" type="radio" name="su-r" id="su-r-6"><input class="su-r" type="radio" name="su-r" id="su-r-7"><input class="su-r" type="radio" name="su-r" id="su-r-8"><input class="su-r" type="radio" name="su-r" id="su-r-9"><input class="su-r" type="checkbox" id="su-mag">
+              <div class="surf-pick" id="su-pick">
+                <label class="xp-button compact" for="su-r-0">sphere packing</label><label class="xp-button compact" for="su-r-1">binary + spherical codes</label><label class="xp-button compact" for="su-r-2">non-sofic group</label><label class="xp-button compact" for="su-r-3">Connes rigidity</label><label class="xp-button compact" for="su-r-4">permanent bounds</label><label class="xp-button compact" for="su-r-5">quantum repetition</label><label class="xp-button compact" for="su-r-6">closest vector</label><label class="xp-button compact" for="su-r-7">Ehrhart volume</label><label class="xp-button compact" for="su-r-8">multicolor Ramsey</label><label class="xp-button compact" for="su-r-9">compactness + degeneracy</label>
+              </div>
               <div class="surf-stats">
-                <div class="card"><h2>proof &middot; the kernel's problem</h2><span class="n" id="su-pl"></span><span class="sub" id="su-ps"></span></div>
-                <div class="card mine"><h2>statement &middot; your problem</h2><span class="n" id="su-cl"></span><span class="sub" id="su-cs"></span></div>
+                <div class="card"><h2>proof &middot; the kernel's problem</h2><span class="n" id="su-pl"><span data-su="0">55,616 lines</span><span data-su="1">114,406 lines</span><span data-su="2">34,440 lines</span><span data-su="3">37,374 lines</span><span data-su="4">27,563 lines</span><span data-su="5">70,980 lines</span><span data-su="6">130,430 lines</span><span data-su="7">55,755 lines</span><span data-su="8">3,053 lines</span><span data-su="9">18,588 lines</span></span><span class="sub" id="su-ps"><span data-su="0">SpherePacking.lean &middot; 1,759 lemmas &middot; 0 sorry</span><span data-su="1">MetricCodes.lean &middot; 3,826 lemmas &middot; 0 sorry</span><span data-su="2">NonSoficGroup.lean &middot; 1,044 lemmas &middot; 0 sorry</span><span data-su="3">ConnesRigidity.lean &middot; 1,445 lemmas &middot; 0 sorry</span><span data-su="4">Permanent.lean &middot; 875 lemmas &middot; 0 sorry</span><span data-su="5">QuantumParallelRepetition.lean &middot; 1,655 lemmas &middot; 0 sorry</span><span data-su="6">GapCVP.lean &middot; 2,976 lemmas &middot; 0 sorry</span><span data-su="7">EhrhartVolumeInequality.lean &middot; 1,859 lemmas &middot; 0 sorry</span><span data-su="8">MulticolorTriangleRamsey.lean &middot; 96 lemmas &middot; 0 sorry</span><span data-su="9">CompactnessAndDegeneracy.lean &middot; 651 lemmas &middot; 0 sorry</span></span></div>
+                <div class="card mine"><h2>statement &middot; your problem</h2><span class="n" id="su-cl"><span data-su="0">185 lines</span><span data-su="1">499 lines</span><span data-su="2">39 lines</span><span data-su="3">223 lines</span><span data-su="4">102 lines</span><span data-su="5">139 lines</span><span data-su="6">313 lines</span><span data-su="7">78 lines</span><span data-su="8">50 lines</span><span data-su="9">137 lines</span></span><span class="sub" id="su-cs"><span data-su="0">A_SpherePacking &middot; 4 theorems checked</span><span data-su="1">B_BinaryCodes + B_SphericalCodes &middot; 10 theorems checked</span><span data-su="2">D_NonSoficGroup &middot; 1 theorem checked</span><span data-su="3">E_ConnesRigidity &middot; 2 theorems checked</span><span data-su="4">C_PermanentFormulaLowerBound &middot; 2 theorems checked</span><span data-su="5">G_QuantumParallelRepetition &middot; 2 theorems checked</span><span data-su="6">H_GapCVP &middot; 4 theorems checked</span><span data-su="7">F_EhrhartVolumeInequality &middot; 4 theorems checked</span><span data-su="8">I_MulticolorTriangleRamsey &middot; 4 theorems checked</span><span data-su="9">J_CompactnessConjecture + J_TwoDegenerateGraphs &middot; 5 theorems checked</span></span></div>
               </div>
               <div class="surf-scale">
-                <div class="surf-row"><span class="lab">proof</span><span class="surf-track"><span class="surf-fill" id="su-bp"></span></span><span class="amt" id="su-ap"></span></div>
-                <div class="surf-row"><span class="lab">statement</span><span class="surf-track"><span class="surf-fill mine" id="su-bc"></span></span><span class="amt" id="su-ac"></span></div>
-                <div class="surf-mag"><button class="xp-button compact" id="su-mag" aria-pressed="false">magnify the statement bar 100&times;</button><span id="su-magnote"></span></div>
+                <div class="surf-row"><span class="lab">proof</span><span class="surf-track"><span class="surf-fill" id="su-bp"></span></span><span class="amt" id="su-ap"><span data-su="0">55,616</span><span data-su="1">114,406</span><span data-su="2">34,440</span><span data-su="3">37,374</span><span data-su="4">27,563</span><span data-su="5">70,980</span><span data-su="6">130,430</span><span data-su="7">55,755</span><span data-su="8">3,053</span><span data-su="9">18,588</span></span></div>
+                <div class="surf-row"><span class="lab">statement</span><span class="surf-track"><span class="surf-fill mine" id="su-bc"></span></span><span class="amt" id="su-ac"><span data-su="0">185</span><span data-su="1">499</span><span data-su="2">39</span><span data-su="3">223</span><span data-su="4">102</span><span data-su="5">139</span><span data-su="6">313</span><span data-su="7">78</span><span data-su="8">50</span><span data-su="9">137</span></span></div>
+                <div class="surf-mag"><label class="xp-button compact" for="su-mag"><span class="su-m0">magnify the statement bar 100&times;</span><span class="su-m1">back to true scale</span></label><span id="su-magnote"><span class="su-m0">both bars share one scale. the yellow one is not missing.</span><span class="su-m1">the yellow bar is now 100 times too long. it still fits inside the purple one on nine of the ten.</span></span></div>
               </div>
-              <div class="surf-ratio" id="su-ratio"></div>
+              <div class="surf-ratio" id="su-ratio"><b data-su="0">301 lines of proof for every line of statement.</b><b data-su="1">229 lines of proof for every line of statement.</b><b data-su="2">883 lines of proof for every line of statement.</b><b data-su="3">168 lines of proof for every line of statement.</b><b data-su="4">270 lines of proof for every line of statement.</b><b data-su="5">511 lines of proof for every line of statement.</b><b data-su="6">417 lines of proof for every line of statement.</b><b data-su="7">715 lines of proof for every line of statement.</b><b data-su="8">61 lines of proof for every line of statement.</b><b data-su="9">136 lines of proof for every line of statement.</b> Across all ten it is 548,205 against 1,765, or 311 to 1. The left column is settled by a kernel, unattended. The right column is settled by people, and until they do, a green checkmark means the proof matches the statement and nothing more.</div>
             </div>
           </div></div></div>
 
@@ -660,76 +702,6 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   }
   function row(name, ok, st) {
     return "<div class=\"row\"><code>" + name + "</code><span class=\"st " + (ok ? "ok" : "no") + "\">" + st + "</span></div>";
-  }
-  draw();
-})();
-
-/* Demo 3 — the audit surface of openai/ten-proofs, measured at commit HEAD on
-   2026-08-01. `proof` is wc -l of the solution module; `stmt` is wc -l of the
-   ComparatorChallenges file(s) for that result; `lem` counts lines opening a
-   theorem or lemma; `thm` is the length of theorem_names in the challenge JSON. */
-(function () {
-  var root = document.getElementById("demo-surface"); if (!root) return;
-  var R = [
-    { k: "sphere packing",      f: "SpherePacking",            proof:  55616, lem: 1759, stmt: 185, thm:  4, c: "A_SpherePacking" },
-    { k: "binary + spherical codes", f: "MetricCodes",         proof: 114406, lem: 3826, stmt: 499, thm: 10, c: "B_BinaryCodes + B_SphericalCodes" },
-    { k: "non-sofic group",     f: "NonSoficGroup",            proof:  34440, lem: 1044, stmt:  39, thm:  1, c: "D_NonSoficGroup" },
-    { k: "Connes rigidity",     f: "ConnesRigidity",           proof:  37374, lem: 1445, stmt: 223, thm:  2, c: "E_ConnesRigidity" },
-    { k: "permanent bounds",    f: "Permanent",                proof:  27563, lem:  875, stmt: 102, thm:  2, c: "C_PermanentFormulaLowerBound" },
-    { k: "quantum repetition",  f: "QuantumParallelRepetition", proof: 70980, lem: 1655, stmt: 139, thm:  2, c: "G_QuantumParallelRepetition" },
-    { k: "closest vector",      f: "GapCVP",                   proof: 130430, lem: 2976, stmt: 313, thm:  4, c: "H_GapCVP" },
-    { k: "Ehrhart volume",      f: "EhrhartVolumeInequality",  proof:  55755, lem: 1859, stmt:  78, thm:  4, c: "F_EhrhartVolumeInequality" },
-    { k: "multicolor Ramsey",   f: "MulticolorTriangleRamsey", proof:   3053, lem:   96, stmt:  50, thm:  4, c: "I_MulticolorTriangleRamsey" },
-    { k: "compactness + degeneracy", f: "CompactnessAndDegeneracy", proof: 18588, lem: 651, stmt: 137, thm: 5, c: "J_CompactnessConjecture + J_TwoDegenerateGraphs" }
-  ];
-  var MAX = 130430, pick = 2, mag = false;
-
-  function n(v) { return String(v).replace(/\B(?=(\d{3})+$)/g, ","); }
-
-  var pickbar = document.getElementById("su-pick");
-  R.forEach(function (r, i) {
-    var b = document.createElement("button");
-    b.className = "xp-button compact"; b.textContent = r.k; b.dataset.i = i;
-    pickbar.appendChild(b);
-  });
-  pickbar.addEventListener("click", function (ev) {
-    var b = ev.target.closest("button"); if (!b) return;
-    pick = +b.dataset.i; draw();
-  });
-  document.getElementById("su-mag").addEventListener("click", function () { mag = !mag; draw(); });
-
-  function draw() {
-    Array.prototype.forEach.call(pickbar.children, function (b, i) {
-      b.setAttribute("aria-pressed", String(i === pick));
-    });
-    var r = R[pick], ratio = Math.round(r.proof / r.stmt);
-
-    document.getElementById("su-pl").textContent = n(r.proof) + " lines";
-    document.getElementById("su-ps").textContent =
-      r.f + ".lean · " + n(r.lem) + " lemmas · 0 sorry";
-    document.getElementById("su-cl").textContent = n(r.stmt) + " lines";
-    document.getElementById("su-cs").textContent =
-      r.c + " · " + r.thm + " theorem" + (r.thm === 1 ? "" : "s") + " checked";
-
-    var scale = mag ? 100 : 1;
-    document.getElementById("su-bp").style.width = (100 * r.proof / MAX) + "%";
-    document.getElementById("su-bc").style.width =
-      Math.min(100, 100 * r.stmt * scale / MAX) + "%";
-    document.getElementById("su-ap").textContent = n(r.proof);
-    document.getElementById("su-ac").textContent = n(r.stmt);
-
-    var magbtn = document.getElementById("su-mag");
-    magbtn.setAttribute("aria-pressed", String(mag));
-    magbtn.textContent = mag ? "back to true scale" : "magnify the statement bar 100×";
-    document.getElementById("su-magnote").textContent = mag
-      ? "the yellow bar is now 100 times too long. it still fits inside the purple one on nine of the ten."
-      : "both bars share one scale. the yellow one is not missing.";
-
-    document.getElementById("su-ratio").innerHTML =
-      "<b>" + n(ratio) + " lines of proof for every line of statement.</b> " +
-      "Across all ten it is 548,205 against 1,765, or 311 to 1. " +
-      "The left column is settled by a kernel, unattended. The right column is settled by people, " +
-      "and until they do, a green checkmark means the proof matches the statement and nothing more.";
   }
   draw();
 })();
