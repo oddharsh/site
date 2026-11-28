@@ -17,6 +17,12 @@ name: Wrangler pin
 on:
   schedule:
     - cron: "50 9 * * *" # owns the one nightly Wrangler evaluation
+  # Rebuilds chore/wrangler-pin from the new main whenever the files it writes
+  # move there, so an open pin PR never conflicts on its own catalog line
+  # (bun-pin.yml has the incident).
+  push:
+    branches: [main]
+    paths: [package.json, bun.lock]
   workflow_dispatch:
     inputs:
       ref:
@@ -111,8 +117,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun run timbrado report --target wrangler --json canary.json --exit "${{ steps.pin.outputs.report_status }}" --reproduce "bun run canary:wrangler"
 
+      - name: Find a pin PR that main already carries
+        # Same case as bun-pin.yml's step of this name: main reached the PR's
+        # sha some other way, so the PR is a no-op the step above never touches.
+        # A PR proposing a sha main lacks stays open.
+        if: github.ref == 'refs/heads/main' && steps.pin.outputs.before == steps.pin.outputs.after
+        id: stale
+        env:
+          BRANCH: chore/wrangler-pin
+          BEFORE: ${{ steps.pin.outputs.before }}
+        run: |
+          set -euo pipefail
+          # Exit 2 is "no such branch"; any other failure reds the step.
+          set +e
+          git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null
+          found=$?
+          set -e
+          if [ "$found" -eq 2 ]; then exit 0; fi
+          if [ "$found" -ne 0 ]; then exit "$found"; fi
+          git fetch --quiet --depth 1 origin "$BRANCH"
+          proposed=$(git show FETCH_HEAD:package.json | bun -e 'process.stdout.write(JSON.parse(await Bun.stdin.text()).catalog.wrangler)')
+          if [ "$proposed" = "$BEFORE" ]; then echo "stale=true" >> "$GITHUB_OUTPUT"; fi
+
       - name: Mint the App token that opens the PR
-        if: github.ref == 'refs/heads/main' && steps.pin.outputs.before != steps.pin.outputs.after
+        if: github.ref == 'refs/heads/main' && (steps.pin.outputs.before != steps.pin.outputs.after || steps.stale.outputs.stale == 'true')
         id: bot
         uses: ./.github/actions/bot-pr-token
         with:
@@ -174,6 +202,18 @@ jobs:
               --label "type: chore" --label "area: infra" \
               --title "chore(wrangler): move the pin from $from to $to" \
               --body "$BODY"
+          fi
+
+      - name: Close the pin PR main already carries
+        if: steps.stale.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          BRANCH: chore/wrangler-pin
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')
+          if [ -n "$number" ]; then
+            gh pr close "$number" --delete-branch --comment "Main already pins this wrangler commit, so this PR changes nothing; closed by .github/workflows/wrangler-pin.yml."
           fi
 
       - name: Summary

@@ -33,6 +33,13 @@ name: Bun pin
 on:
   schedule:
     - cron: "40 9 * * *" # after dictionary-roll at 09:30, so two PR-opening jobs do not interleave
+  # When main's pin moves under an open chore/bun-pin PR, both sides have
+  # rewritten the same line and git calls it a conflict. Rerunning from the new
+  # main rebuilds the branch, so nobody resolves a version string by hand.
+  # #1886 conflicted with #1864 this way on 2026-11-27.
+  push:
+    branches: [main]
+    paths: [config/bun-pin.json]
   workflow_dispatch:
     inputs:
       to:
@@ -150,8 +157,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun run timbrado report --target bun-pin --json pin-report.json --exit "${{ steps.pin.outputs.status }}" --reproduce "bun run bun:pin"
 
+      - name: Find a pin PR that main already carries
+        # Main can reach the PR's version some other way (a hand bump, or a
+        # dispatch with `to`), and then the PR is a no-op that nothing closes,
+        # because the step above proposes nothing. Only that exact match counts
+        # as stale: a PR proposing a version main lacks may still be the best
+        # candidate on a night the newest bun is too young.
+        if: github.ref == 'refs/heads/main' && steps.pin.outputs.before == steps.pin.outputs.after
+        id: stale
+        env:
+          BRANCH: chore/bun-pin
+          BEFORE: ${{ steps.pin.outputs.before }}
+        run: |
+          set -euo pipefail
+          # Exit 2 is "no such branch"; any other failure reds the step.
+          set +e
+          git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null
+          found=$?
+          set -e
+          if [ "$found" -eq 2 ]; then exit 0; fi
+          if [ "$found" -ne 0 ]; then exit "$found"; fi
+          git fetch --quiet --depth 1 origin "$BRANCH"
+          proposed=$(git show FETCH_HEAD:config/bun-pin.json | bun -e 'process.stdout.write("bun@" + JSON.parse(await Bun.stdin.text()).bun)')
+          if [ "$proposed" = "$BEFORE" ]; then echo "stale=true" >> "$GITHUB_OUTPUT"; fi
+
       - name: Mint the App token that opens the PR
-        if: steps.pin.outputs.before != steps.pin.outputs.after
+        if: steps.pin.outputs.before != steps.pin.outputs.after || steps.stale.outputs.stale == 'true'
         id: bot
         uses: ./.github/actions/bot-pr-token
         with:
@@ -226,6 +257,19 @@ jobs:
               --label "type: chore" --label "area: infra" \
               --title "chore(bun): move the pin from $BEFORE to $AFTER" \
               --body "$BODY"
+          fi
+
+      - name: Close the pin PR main already carries
+        if: steps.stale.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          BRANCH: chore/bun-pin
+          BEFORE: ${{ steps.pin.outputs.before }}
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')
+          if [ -n "$number" ]; then
+            gh pr close "$number" --delete-branch --comment "Main already pins $BEFORE, so this PR changes nothing; closed by .github/workflows/bun-pin.yml."
           fi
 
       - name: Summary

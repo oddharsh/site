@@ -20,6 +20,18 @@ name: Dependency pins
 on:
   schedule:
     - cron: "20 10 * * *" # after canary at 10:05, the last of the nightly PR openers
+  # Rebuilds the chore/deps-* branches from the new main whenever a file they
+  # write moves there, so an open group PR never conflicts on a version line
+  # (bun-pin.yml has the incident). The list matches the writer's `git add`.
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - bun.lock
+      - "*/package.json"
+      - lens-reader/bun.lock
+      - docs/DEPENDENCIES.md
+      - config/browser-image.json
   workflow_dispatch:
 
 permissions:
