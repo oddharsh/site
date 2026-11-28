@@ -401,8 +401,8 @@ D.getElementById("j-about-btn").addEventListener("click",function(){
 <ul>
 <li><b>1889</b> merges as is. typed-config now keeps its 13 bindings twice, in the table and in the picker&apos;s array, so one should derive the other.</li>
 <li><b>1890</b> merges for scroll, safari27 and pixel-peeper. Masonry leaves its masonry radio checked and reachable on browsers without <code>grid-lanes</code>, which is Safari 26 and Firefox, while the page shows fixed squares; the old code disabled the button.</li>
-<li><b>1891</b> needs the gpt56 readout rule reordered, the hidden-flags stripes moved to <code>:nth-child(odd of S)</code>, gpt56&apos;s <code>aria-live</code> back, and a body that names the keyboard change on eight pages.</li>
-<li><b>1892</b> needs a Tab stop for the chunks drop zone in Safari and an XP balloon in place of the native validation bubble. The grip, the note close box and the /access tree hold the look.</li>
+<li><b>1891</b> got its fixes in <code>32d257b1</code>: the gpt56 hide rule now outranks <code>.readouts</code>, the readouts sit in one <code>aria-live</code> region again, hidden-flags stripes with <code>:nth-child(odd of S)</code>, and the body names the keyboard change on eight pages. Every hidden-flags filter state now matches the old demo pixel for pixel.</li>
+<li><b>1892</b> got its fixes in <code>9ff2441e</code>: the drop zone&apos;s label holds the Tab stop, so Tab reaches it in all three engines, and the ask bar drops <code>minlength</code>, so a short query fails quietly as before with no browser bubble. The grip, the note close box and the /access tree hold the look.</li>
 <li><b>1893</b> needs <code>/lens*</code> excluded from the site&apos;s speculation rules. Its chips are now real links, and hovering one would prerender <code>/lens?url=</code>, which runs a full server-side inspection of a third-party site.</li>
 </ul>
 <p>The trade is worth making where a page has a small, fixed set of states: it removes code that can break, as fuse did, and the demos keep working without JavaScript. It is a different control, though, and a pixel oracle is how you find out which parts of &quot;identical&quot; held.</p>
