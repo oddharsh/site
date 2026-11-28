@@ -70,6 +70,9 @@
 .hf-inv:has(#hf-f-setup:checked) .hf-table tbody tr:not([data-g="setup"]){display:none}
 .hf-inv:has(#hf-f-legacy:checked) .hf-table tbody tr:not([data-g="legacy"]){display:none}
 .hf-inv:has(#hf-f-types:checked) .hf-table tbody tr:not([data-g="types"]){display:none}
+/* Hidden rows still count for :nth-child, so a filter stripes among the rows it keeps (the script used to rebuild the tbody). */
+.hf-inv:has(#hf-f-here:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-release:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-config:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-containers:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-setup:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-legacy:checked) .hf-table tbody tr:nth-child(odd) td,.hf-inv:has(#hf-f-types:checked) .hf-table tbody tr:nth-child(odd) td{background:none}
+.hf-inv:has(#hf-f-here:checked) .hf-table tbody tr:nth-child(odd of .hf-here) td,.hf-inv:has(#hf-f-release:checked) .hf-table tbody tr:nth-child(odd of [data-g="release"]) td,.hf-inv:has(#hf-f-config:checked) .hf-table tbody tr:nth-child(odd of [data-g="config"]) td,.hf-inv:has(#hf-f-containers:checked) .hf-table tbody tr:nth-child(odd of [data-g="containers"]) td,.hf-inv:has(#hf-f-setup:checked) .hf-table tbody tr:nth-child(odd of [data-g="setup"]) td,.hf-inv:has(#hf-f-legacy:checked) .hf-table tbody tr:nth-child(odd of [data-g="legacy"]) td,.hf-inv:has(#hf-f-types:checked) .hf-table tbody tr:nth-child(odd of [data-g="types"]) td{background:var(--paper-cool)}
 .hf-cases-demo .hf-case{display:none}
 .hf-cases-demo:has(#hf-c-ignored:checked) .hf-case[data-c="ignored"]{display:block}
 .hf-cases-demo:has(#hf-c-closed:checked) .hf-case[data-c="closed"]{display:block}

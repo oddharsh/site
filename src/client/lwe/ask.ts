@@ -61,7 +61,7 @@
 
   compose.innerHTML =
     '<div class="lwe-ask">' +
-      '<form class="lwe-row"><input class="lwe-q" type="text" required minlength="3" maxlength="400" placeholder="ask ' + esc(BOT) + ' a follow-up…" disabled>' +
+      '<form class="lwe-row"><input class="lwe-q" type="text" maxlength="400" placeholder="ask ' + esc(BOT) + ' a follow-up…" disabled>' +
       '<button class="lwe-btn lwe-go" type="submit" disabled>ask</button></form>' +
       '<div class="lwe-gate"><button class="lwe-btn lwe-verify" type="button">🚗 verify you\'re human to ask: click the cars</button></div>' +
       '<div class="lwe-status" role="status"></div>' +
