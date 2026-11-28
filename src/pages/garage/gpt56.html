@@ -45,7 +45,7 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
 .modebar .xp-button{min-width:72px;text-align:center}
 .sol-rad:focus-visible+label.xp-button{outline:1px dotted var(--ink,#000);outline-offset:-3px}
 .workbench:has(#sol-paint:checked) label[for="sol-paint"],.workbench:has(#sol-bytes:checked) label[for="sol-bytes"],.workbench:has(#sol-ship:checked) label[for="sol-ship"]{background:linear-gradient(var(--slate-92-b),#a9c9f1);border-color:#235ea8;box-shadow:inset 1px 1px 1px #8eaed8}
-.sol-state,.sol-panel,.sol-ro{display:none}
+.sol-state,.sol-panel,.readouts.sol-ro{display:none}
 .workbench:has(#sol-paint:checked) .sol-state[data-m="paint"],.workbench:has(#sol-bytes:checked) .sol-state[data-m="bytes"],.workbench:has(#sol-ship:checked) .sol-state[data-m="ship"]{display:inline}
 .workbench:has(#sol-paint:checked) .sol-panel[data-m="paint"],.workbench:has(#sol-bytes:checked) .sol-panel[data-m="bytes"],.workbench:has(#sol-ship:checked) .sol-panel[data-m="ship"]{display:block}
 .workbench:has(#sol-paint:checked) .sol-ro[data-m="paint"],.workbench:has(#sol-bytes:checked) .sol-ro[data-m="bytes"],.workbench:has(#sol-ship:checked) .sol-ro[data-m="ship"]{display:grid}
@@ -107,9 +107,11 @@ hr{border:0;border-top:2px groove var(--slate-90);margin:16px 0;height:0}
             <div class="sol-panel" data-m="ship"><h3>Prove the fast build shipped</h3><p>Run the invariant tripwires, minify only the earned shell assets, keep the readable twins, and curl the routes. A green deploy is a claim with evidence attached.</p></div>
             <div class="meter" aria-hidden="true"><i></i></div>
           </div>
+          <div aria-live="polite">
           <div class="readouts sol-ro" data-m="paint"><div class="readout"><span>count</span><b>4</b></div><div class="readout"><span>signal</span><b>0.00</b></div><div class="readout"><span>proof</span><b>trace</b></div></div>
           <div class="readouts sol-ro" data-m="bytes"><div class="readout"><span>count</span><b>3</b></div><div class="readout"><span>signal</span><b>35 KB</b></div><div class="readout"><span>proof</span><b>budget</b></div></div>
           <div class="readouts sol-ro" data-m="ship"><div class="readout"><span>count</span><b>44</b></div><div class="readout"><span>signal</span><b>64.74 KB</b></div><div class="readout"><span>proof</span><b>oracle</b></div></div>
+          </div>
         </div>
       </div>
     </section>
