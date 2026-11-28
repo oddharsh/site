@@ -1178,6 +1178,23 @@
       }
     },
     {
+      "path": "/garage/html-over-js",
+      "title": "Trading page scripts for CSS changes keyboards more than bytes",
+      "section": "garage",
+      "kind": "content",
+      "description": "Five PRs swapped page scripts for HTML and CSS. Measured in three engines for pixels, bytes, work per press, keyboard and the XP look.",
+      "hint": "html-over-js: five PRs that traded page scripts for CSS, measured",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",
