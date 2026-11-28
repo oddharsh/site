@@ -226,11 +226,17 @@ function gate(name: string, args: Record<string, unknown>, signal?: AbortSignal)
   pre.textContent = body;
   pre.style.cssText =
     'margin:0 0 10px;padding:6px;background:#fff;border:1px solid #7f9db9;max-height:9rem;overflow:auto;font:11px var(--font-mono,"Courier New",monospace);white-space:pre-wrap;word-break:break-word';
-  const row = document.createElement("div");
+  const row = document.createElement("form");
+  row.method = "dialog";
   row.style.cssText = "display:flex;gap:6px;justify-content:flex-end";
   const no = document.createElement("button");
+  no.type = "submit";
+  no.value = "no";
+  no.autofocus = true;
   no.textContent = "Refuse";
   const yes = document.createElement("button");
+  yes.type = "submit";
+  yes.value = "yes";
   yes.textContent = "Allow once";
   for (const b of [no, yes])
     b.style.cssText =
@@ -238,25 +244,25 @@ function gate(name: string, args: Record<string, unknown>, signal?: AbortSignal)
   row.append(no, yes);
   inner.append(p, pre, row);
   wrap.append(bar, inner);
+  d.setAttribute("closedby", "any");
   d.appendChild(wrap);
 
   return new Promise((resolve) => {
-    let done = false;
-    const finish = (ok) => {
-      if (done) return;
-      done = true;
-      d.close();
-      resolve(ok);
-    };
-    no.addEventListener("click", () => finish(false));
-    yes.addEventListener("click", () => finish(true));
-    // Esc, backdrop dismissal, and anything else that closes it all mean no.
-    d.addEventListener("close", () => finish(false), { once: true });
+    // Esc, backdrop dismissal, and Refuse all mean no; only Allow once returns "yes".
+    d.returnValue = "";
+    const onAbort = () => d.close("no");
+    d.addEventListener(
+      "close",
+      () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve(d.returnValue === "yes");
+      },
+      { once: true },
+    );
     // A call the agent or the person cancelled has nobody waiting on the answer,
     // so the question goes away with it rather than staying up to be allowed.
-    signal?.addEventListener("abort", () => finish(false), { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
     d.showModal();
-    no.focus();
   });
 }
 

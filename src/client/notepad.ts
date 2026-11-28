@@ -264,24 +264,26 @@
       },
       { once: true },
     );
-    var pressedOutside = false;
+    if (!("closedBy" in HTMLDialogElement.prototype)) {
+      var pressedOutside = false;
 
-    function outside(e: MouseEvent) {
-      if (e.target !== box) return false;
-      var rect = box.getBoundingClientRect();
-      return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+      function outside(e: MouseEvent) {
+        if (e.target !== box) return false;
+        var rect = box.getBoundingClientRect();
+        return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+      }
+      // A text-selection drag that starts inside must not become a backdrop click.
+      box.addEventListener("pointerdown", (e) => {
+        pressedOutside = e.button === 0 && outside(e);
+      });
+      box.addEventListener("pointercancel", () => {
+        pressedOutside = false;
+      });
+      box.addEventListener("click", (e) => {
+        if (pressedOutside && outside(e)) box.close();
+        pressedOutside = false;
+      });
     }
-    // A text-selection drag that starts inside must not become a backdrop click.
-    box.addEventListener("pointerdown", (e) => {
-      pressedOutside = e.button === 0 && outside(e);
-    });
-    box.addEventListener("pointercancel", () => {
-      pressedOutside = false;
-    });
-    box.addEventListener("click", (e) => {
-      if (pressedOutside && outside(e)) box.close();
-      pressedOutside = false;
-    });
     D.body.appendChild(box);
     box.showModal();
   }
@@ -295,14 +297,6 @@
     var statusEl = win.querySelector(".np-status");
     var posEl = win.querySelector(".np-pos");
     var wcEl = win.querySelector(".np-wc");
-    // a popover note's close button hides the popover instead of navigating
-    var closeBtn = win.querySelector(".np-controls .close[data-pop]");
-    if (closeBtn && win.matches("[popover]")) {
-      closeBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (win.hidePopover) win.hidePopover();
-      });
-    }
     if (!ta) return; // folder index has no textarea — nothing more to wire
 
     var wrap = ta.getAttribute("wrap") !== "off"; // default on (readable prose)
@@ -362,7 +356,7 @@
     function about() {
       if (D.querySelector(".np-about")) return;
       var box = el(
-        '<dialog class="np-about" aria-label="About Notepad"><form method="dialog">' +
+        '<dialog class="np-about" aria-label="About Notepad" closedby="any"><form method="dialog">' +
           '<div class="np-titlebar"><span class="np-ico"></span><span class="np-title">About Notepad</span>' +
           '<span class="np-controls"><button type="submit" class="close" aria-label="Close">✕</button></span></div>' +
           '<div class="np-about-body"><p><b>Notepad</b>, a resto-mod of the Windows&nbsp;XP app.</p>' +

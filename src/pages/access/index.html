@@ -171,10 +171,13 @@ select{font:inherit;font-size:calc(var(--text-sm) * var(--sc));border:1px solid 
 .tree,.tree ul{list-style:none;margin:0;padding:0}
 .tree ul{margin-left:15px;border-left:1px dotted var(--shadow)}
 .tree li{font-size:calc(var(--text-sm) * var(--sc));line-height:1.35}
-.tree button{font:inherit;font-size:calc(var(--text-sm) * var(--sc));display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:transparent;border:0;padding:2px 6px 2px 4px;cursor:pointer;color:var(--ink)}
-@media (hover: hover) and (pointer: fine) {.tree button:hover{background:var(--sel-soft)}}
+.tree button,.tree summary{font:inherit;font-size:calc(var(--text-sm) * var(--sc));display:flex;align-items:center;gap:5px;width:100%;box-sizing:border-box;text-align:left;background:transparent;border:0;padding:2px 6px 2px 4px;cursor:pointer;color:var(--ink);list-style:none}
+.tree summary::-webkit-details-marker{display:none}
+@media (hover: hover) and (pointer: fine) {.tree button:hover,.tree summary:hover{background:var(--sel-soft)}}
 .tree button[aria-current=true]{background:var(--selection);color:#fff}
 .tree .tw{width:9px;flex:0 0 9px;font-family:var(--font-mono);font-size:var(--text-2xs);color:var(--ink-dim)}
+.tree details>summary .tw::before{content:"+"}
+.tree details[open]>summary .tw::before{content:"-"}
 .tree button[aria-current=true] .tw{color:#dbe6f7}
 .tree .gi{width:13px;height:13px;flex:0 0 13px}
 .tree .bn{font-weight:700;color:var(--navy)}
@@ -952,19 +955,21 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
 
 <div id="tip" role="tooltip" aria-hidden="true" popover="manual"></div>
 
-<dialog class="props" id="props" aria-labelledby="props-title">
-  <div class="tb"><span class="t" id="props-title">Properties</span><button class="x" type="button" id="props-x" aria-label="Close">&#10005;</button></div>
-  <div class="tabs" role="tablist" aria-label="Device properties">
-    <button type="button" role="tab" id="tab-gen" aria-selected="true" aria-controls="pane-gen">General</button>
-    <button type="button" role="tab" id="tab-dep" aria-selected="false" aria-controls="pane-dep">Dependencies</button>
-    <button type="button" role="tab" id="tab-ex" aria-selected="false" aria-controls="pane-ex">Examples</button>
-  </div>
-  <div class="sheet">
-    <div id="pane-gen" role="tabpanel" aria-labelledby="tab-gen"></div>
-    <div id="pane-dep" role="tabpanel" aria-labelledby="tab-dep" hidden></div>
-    <div id="pane-ex" role="tabpanel" aria-labelledby="tab-ex" hidden></div>
-  </div>
-  <div class="foot"><button class="xp-button default" type="button" id="props-ok">OK</button></div>
+<dialog class="props" id="props" aria-labelledby="props-title" closedby="any">
+  <form method="dialog">
+    <div class="tb"><span class="t" id="props-title">Properties</span><button class="x" type="submit" id="props-x" aria-label="Close">&#10005;</button></div>
+    <div class="tabs" role="tablist" aria-label="Device properties">
+      <button type="button" role="tab" id="tab-gen" aria-selected="true" aria-controls="pane-gen">General</button>
+      <button type="button" role="tab" id="tab-dep" aria-selected="false" aria-controls="pane-dep">Dependencies</button>
+      <button type="button" role="tab" id="tab-ex" aria-selected="false" aria-controls="pane-ex">Examples</button>
+    </div>
+    <div class="sheet">
+      <div id="pane-gen" role="tabpanel" aria-labelledby="tab-gen"></div>
+      <div id="pane-dep" role="tabpanel" aria-labelledby="tab-dep" hidden></div>
+      <div id="pane-ex" role="tabpanel" aria-labelledby="tab-ex" hidden></div>
+    </div>
+    <div class="foot"><button class="xp-button default" type="submit" id="props-ok">OK</button></div>
+  </form>
 </dialog>
 
 <script>
@@ -1560,34 +1565,25 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--shadow);font-s
     tab(next);
     document.getElementById(TABS[next][0]).focus();
   });
-  document.getElementById("props-x").addEventListener("click", function(){ dlg.close(); });
-  document.getElementById("props-ok").addEventListener("click", function(){ dlg.close(); });
-
   /* --- the left tree ---------------------------------------------------- */
   function buildTree(){
     var ul = document.getElementById("tree"), html = "";
     BRANCHES.forEach(function(b){
       var kids = visible().filter(function(n){ return n.branch === b[0]; });
-      html += '<li><button type="button" data-branch="' + b[0] + '"><span class="tw">-</span>' +
-              '<span class="bn">' + esc(b[1]) + "</span></button><ul>";
+      html += '<li><details open><summary><span class="tw" aria-hidden="true"></span>' +
+              '<span class="bn">' + esc(b[1]) + "</span></summary><ul>";
       kids.forEach(function(n){
         html += '<li><button type="button" data-id="' + esc(n.id) + '"><span class="tw"></span>' +
                 '<svg class="gi" viewBox="0 0 13 13" aria-hidden="true">' + chip(n.status) + "</svg>" +
                 '<span' + (n.status === "phantom" ? ' class="ph"' : "") + ">" + esc(n.name) + "</span></button></li>";
       });
-      html += "</ul></li>";
+      html += "</ul></details></li>";
     });
     ul.innerHTML = html;
   }
   document.getElementById("tree").addEventListener("click", function(ev){
-    var btn = ev.target.closest("button");
-    if (!btn) return;
-    if (btn.dataset.id) select(btn.dataset.id, true);
-    else if (btn.dataset.branch) {
-      var sub = btn.nextElementSibling, open = sub.style.display !== "none";
-      sub.style.display = open ? "none" : "";
-      btn.querySelector(".tw").textContent = open ? "+" : "-";
-    }
+    var btn = ev.target.closest("button[data-id]");
+    if (btn) select(btn.dataset.id, true);
   });
   document.getElementById("tree").addEventListener("dblclick", function(ev){
     var btn = ev.target.closest("button[data-id]");

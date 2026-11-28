@@ -864,8 +864,7 @@ const VIEW_CSS = `/*min*/
   .window:has(>.axp-tasks):has(>.ph-menubar) { grid-template-rows: auto auto auto minmax(0, 1fr); }
   .window:has(>.axp-tasks):has(>.ph-menubar) > .ph-menubar { grid-column: 1 / -1; }
   .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-tasks,
-  .window:has(>.axp-tasks):has(>.ph-menubar) > .content,
-  .window:has(>.axp-tasks):has(>.ph-menubar) > .axp-resize { grid-row: 4; }
+  .window:has(>.axp-tasks):has(>.ph-menubar) > .content { grid-row: 4; }
   #ph-view { border: 0; background: none; font: inherit; color: var(--ink); padding: 1px 7px; cursor: default; }
   /* the transparent outline shows only in High Contrast, which strips the selection background */
   #ph-view:hover, #ph-view:focus-visible, #ph-view[aria-expanded="true"] { background: var(--selection); color: var(--selection-text); outline: 1px solid transparent; outline-offset: -1px; }

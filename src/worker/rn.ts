@@ -673,13 +673,11 @@ export function renderTrackListHtml(payload): Html {
       const artistsText = t.artists_text || (t.artists || []).map((a) => a.name).join(", ");
       return html`<li data-track-title="${t.title}" data-track-artists="${artistsText}"${artAttrs("track", t.image_url)}${
         t.duration_ms ? html` data-track-duration="${dur}"` : EMPTY
-      }${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>
-      <a href="${t.song_link_url}" target="_blank" rel="noopener">${
+      }${t.is_explicit ? html` data-track-explicit="1"` : EMPTY}>${
         dur ? html`<span class="np-duration">${dur}</span>` : EMPTY
-      }<span class="np-title">${t.title}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+      }<a class="np-track-link" href="${t.song_link_url}" target="_blank" rel="noopener"><span class="np-title">${t.title}</span></a><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
         t.is_explicit ? html`<span class="np-explicit">E</span>` : EMPTY
-      }</a>
-    </li>`;
+      }</li>`;
     }),
   );
 }
@@ -762,7 +760,7 @@ function linkifyArtists(artists, fallbackText): Html {
     return joinHtml(
       artists.map((a) => {
         const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)} role="link" tabindex="0">${a.name}</span>`;
+        return html`<a class="np-artist-link" href="${href}" target="_blank" rel="noopener" data-artist-name="${a.name}"${artAttrs("artist", a.image_url)}>${a.name}</a>`;
       }),
       ", ",
     );
@@ -775,7 +773,7 @@ function linkifyArtists(artists, fallbackText): Html {
       .filter(Boolean)
       .map((name) => {
         const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-        return html`<span class="np-artist-link" data-href="${href}" data-artist-name="${name}" role="link" tabindex="0">${name}</span>`;
+        return html`<a class="np-artist-link" href="${href}" target="_blank" rel="noopener" data-artist-name="${name}">${name}</a>`;
       }),
     ", ",
   );

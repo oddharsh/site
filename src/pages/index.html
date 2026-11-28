@@ -470,7 +470,7 @@ footer .signature small { color: var(--ink-faint); }
   .under-construction               { color: oklch(54.44% 0.20 47.10); }
 
   .now-playing h2 a:hover           { color: oklch(62.80% 0.33 29.23); }
-  .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
+  .np-list li[data-track-title]:hover .np-title { color: oklch(62.80% 0.33 29.23); }
 
   .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.07) h); }
 
@@ -935,39 +935,9 @@ footer .signature small { color: var(--ink-faint); }
          entirely in waitUntil: nothing here waits on it. -->
     <script>(function(){if(!window.fetch)return;var ms=document.querySelectorAll("[data-island]");for(var k=0;k<ms.length;k++)(function(m){fetch(m.getAttribute("data-island")).then(function(r){if(!r.ok||r.headers.get("x-island")!=="1")throw 0;return r.text()}).then(function(t){m.innerHTML=t;m.setAttribute("data-state","live");m.dispatchEvent(new Event("island",{bubbles:true}))}).catch(function(){m.setAttribute("data-state","failed")})})(ms[k])})()</script>
 
-    <!--
-      delegated click + keyboard handler for .np-artist-link spans. these
-      live inside the row's outer <a href="song.link">, so we need to
-      stopPropagation to avoid the row navigating away when the user
-      clicks an artist. opens the artist search in a new tab. also wires
-      Enter/Space for keyboard activation (role="link" + tabindex="0"
-      makes them focusable but doesn't synthesize click on Enter).
-    -->
-    <script>
-    (() => {
-      const list = document.getElementById("np-list");
-      if (!list) return;
-      const open = (el) => {
-        const href = el.getAttribute("data-href");
-        if (!href) return;
-        window.open(href, "_blank", "noopener");
-      };
-      list.addEventListener("click", (e) => {
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        e.stopPropagation();
-        open(a);
-      });
-      list.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        open(a);
-      });
-    })();
-    </script>
+    <!-- artist links are real <a> elements stacked above each row's stretched
+         .np-track-link::after in home-music.css, so clicks, middle-clicks and keyboard
+         activation stay native without JS. -->
 
     <footer>
       <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and

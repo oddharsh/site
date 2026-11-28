@@ -873,16 +873,13 @@
 
   // ── resizable windows (bottom-right grip) ─────────────────────────────────────
   function initResize() {
-    // CSS `resize: both` does the actual resizing now (phase C follow-up; the
-    // pointer math lived here). What remains: the decorative XP dotted grip
-    // (pointer-events:none, so the native resizer under it gets the drag) and
-    // one real job the platform can't do — pages clamp windows with their
-    // design max-width/height, which native resize cannot exceed, so a
-    // gesture starting in the corner lifts the clamps first.
+    // CSS `resize: both` does the actual resizing and luna.css draws the dotted
+    // grip via ::after. What remains is the one job the platform can't do:
+    // pages clamp windows with their design max-width/height, which native
+    // resize cannot exceed, so a gesture starting in the corner lifts the
+    // clamps first.
     [].forEach.call(D.querySelectorAll(".window,.np-window"), (f) => {
       if (f.classList.contains("np-folder")) return; // folder hugs its content — not resizable
-      if (f.querySelector(":scope > .axp-resize")) return;
-      f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
       f.addEventListener("pointerdown", (e) => {
         if (f.classList.contains("axp-max")) return;
         var r = f.getBoundingClientRect();

@@ -175,11 +175,10 @@ export function notepadWindow(filename, text, closeHref, date?, popId?, entry?: 
     // stays an inert decoration; the standalone window's is a real button.
     '<span class="np-controls"><span class="min" aria-hidden="true"></span>' +
     (popId ? '<span class="max" aria-hidden="true"></span>' : MAX_BUTTON) +
-    '<a class="close" href="' +
-    esc(closeHref) +
-    '"' +
-    (popId ? " data-pop" : "") +
-    ' title="back to writing" aria-label="Close">✕</a></span></div>' +
+    (popId
+      ? '<button type="button" class="close" popovertarget="' + esc(popId) + '" popovertargetaction="hide" title="Close" aria-label="Close">✕</button>'
+      : '<a class="close" href="' + esc(closeHref) + '" title="back to writing" aria-label="Close">✕</a>') +
+    "</span></div>" +
     '<div class="np-menubar" role="menubar" aria-label="menu">' +
     '<span class="np-menu" role="menuitem">File</span><span class="np-menu" role="menuitem">Edit</span><span class="np-menu" role="menuitem">Format</span><span class="np-menu" role="menuitem">View</span><span class="np-menu" role="menuitem">Help</span></div>' +
     // e-content goes on the textarea itself, which holds the canonical text and

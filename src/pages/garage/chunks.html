@@ -49,7 +49,10 @@
 .legend .ch::before { background: oklch(58% 0.19 38); }
 .legend .nu::before { background: oklch(53% 0.10 255); }
 .replaces { font-size: var(--text-sm); color: var(--grey-35); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
-.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: var(--text-ui); cursor: pointer; background: oklch(98% 0.01 255); }
+.drop { display: block; border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: var(--text-ui); cursor: pointer; background: oklch(98% 0.01 255); }
+/* The label holds the Tab stop: Safari's default Tab order skips file inputs, so a focusable input alone left the zone unreachable there. */
+.drop:focus-visible { outline: 1px dotted var(--ink); outline-offset: -3px; }
+.drop input[type="file"] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .drop.over { background: oklch(94% 0.04 255); border-color: var(--blue-65); }
 @media (--reduced-motion) { .chunk { transition: none; } }
 
@@ -163,10 +166,10 @@
       run proportional to size so you can see the variable-length cuts; the
       demo counts out identical chunks (a <code>ChunkedBlob</code>'s <a class="term" data-t="data-deduplication" href="https://en.wikipedia.org/wiki/Data_deduplication" title="Storing identical pieces of data once and pointing to that one copy wherever else they appear." rel="external">dedup</a> win).
     </p>
-    <div class="drop" id="drop" tabindex="0" role="button">
+    <label class="drop" id="drop" for="file" tabindex="0" role="button">
       Drop a file here, or click to choose. Stays local.
-      <input type="file" id="file" hidden>
-    </div>
+      <input type="file" id="file" tabindex="-1">
+    </label>
     <div class="chunks" id="file-chunks" style="margin-top:10px;display:none"></div>
     <p class="stats" id="file-stats"></p>
 
@@ -381,9 +384,8 @@
       (cd.length > 80 ? " · showing first 80" : "");
   }
 
-  drop.addEventListener("click", function () { fileInput.click(); });
-  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
   fileInput.addEventListener("change", function () { handleFile(fileInput.files[0]); });
+  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
   ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
   ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
   drop.addEventListener("drop", function (e) { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
