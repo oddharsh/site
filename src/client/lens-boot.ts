@@ -65,8 +65,17 @@
     }
   }
 
+  var hasCommands = "commandForElement" in HTMLButtonElement.prototype;
+
+  function isNativeDialogControl(el) {
+    if (!el) return false;
+    if (el.closest('form[method="dialog"]')) return true;
+    return hasCommands && el.hasAttribute("commandfor");
+  }
+
   function control(event) {
-    return event.target && event.target.closest && event.target.closest("button,input,select,textarea");
+    var el = event.target && event.target.closest && event.target.closest("button,a.lx-chip,input,select,textarea");
+    return el && !isNativeDialogControl(el) ? el : null;
   }
 
   function warm(event) {
@@ -74,13 +83,14 @@
   }
 
   function click(event) {
-    var button = event.target && event.target.closest && event.target.closest("button");
-    if (!button || ready || replaying) return;
+    var el = event.target && event.target.closest && event.target.closest("button,a.lx-chip");
+    if (!el || ready || replaying || isNativeDialogControl(el)) return;
+    if (el.tagName === "A" && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     var replay = () => {
       replaying = true;
-      button.click();
+      el.click();
       replaying = false;
     };
     load().then(replay, replay);
@@ -88,6 +98,7 @@
 
   function submit(event) {
     if (ready || replaying) return;
+    if (event.target && event.target.method === "dialog") return;
     event.preventDefault();
     event.stopImmediatePropagation();
     var form = event.target;

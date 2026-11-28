@@ -914,7 +914,7 @@ function lensStateOfWebRail() {
     ":</span>" +
     items +
     "</span>" +
-    '<button class="xp-button lx-sow-q" type="button" data-sow-open title="The state of the machine web" aria-label="The state of the machine web: six sourced facts">?</button>' +
+    '<button class="xp-button lx-sow-q" type="button" commandfor="lx-sow-dialog" command="show-modal" data-sow-open title="The state of the machine web" aria-label="The state of the machine web: six sourced facts">?</button>' +
     "</div>"
   );
 }
@@ -940,8 +940,8 @@ function lensStateOfWebPanel() {
   // exists; lens.js keeps a backdrop-click listener for browsers that lack it.
   return (
     '<dialog class="lx-sow-dialog" id="lx-sow-dialog" closedby="any" aria-labelledby="lx-sow-title">' +
-    '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-sow-title">The state of the machine web</span>' +
-    '<button class="lx-sow-x" type="button" id="lx-sow-close" title="Close" aria-label="Close"></button></div>' +
+    '<form method="dialog" class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-sow-title">The state of the machine web</span>' +
+    '<button class="lx-sow-x" type="submit" id="lx-sow-close" title="Close" aria-label="Close"></button></form>' +
     '<div class="lx-sow-inner">' +
     '<div class="lx-sow-grid">' +
     cards +
@@ -1014,8 +1014,8 @@ function lensAboutPanel() {
   }).join("");
   return (
     '<dialog class="lx-sow-dialog" id="lx-abt-dialog" closedby="any" aria-labelledby="lx-abt-title">' +
-    '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
-    '<button class="lx-sow-x" type="button" id="lx-abt-close" title="Close" aria-label="Close"></button></div>' +
+    '<form method="dialog" class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
+    '<button class="lx-sow-x" type="submit" id="lx-abt-close" title="Close" aria-label="Close"></button></form>' +
     '<div class="lx-sow-inner">' +
     '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. Its story runs in three acts, and each act opens the evidence beneath it.</div>' +
     eras +
@@ -1157,7 +1157,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    button was 50x14 dialog units = 75x23px at 8pt Tahoma, so the period-correct
    number was already a pixel off WCAG 2.5.8's 24px floor and these were four
    under it. Rounding up to 24 is closer to Luna than what was here. */
-.lx-chip { font-size:var(--text-xs); padding:4px 9px; color:var(--ink); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
+.lx-chip { display:inline-block; text-decoration:none; font-size:var(--text-xs); padding:4px 9px; color:var(--ink); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff var(--ink-quiet) var(--ink-quiet) #fff; border-radius:3px; }
 @media (hover: hover) and (pointer: fine) {.lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }}
 .lx-chip:active { border-color:var(--ink-quiet) #fff #fff var(--ink-quiet); }
 /* the interaction chip row, sunk so it reads as a control strip rather than
@@ -1185,7 +1185,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 /* Delta's switch count. Delta is the one stateful view; amber is already its
    "simulation" color, so the seg wears an amber count while switches are on. */
 .lx-seg-n { display:inline-block; margin-left:5px; padding:0 5px; border-radius:7px; font:bold var(--text-3xs) var(--font-mono); color:#fff; background:oklch(60% 0.16 50); vertical-align:1px; }
-.lx-seg-n[hidden] { display:none; }
+.lx-seg-n:empty { display:none; }
 
 /* lens tabs, inside the Machine pane between its header and body. In Compare
    the pane is ~310px wide and six tabs need more, so the strip wraps to two
@@ -1307,9 +1307,10 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-tools-fail ul { margin:3px 0 0; padding-left:17px; }
 .lx-tools-list { border:1px solid var(--slate-80); }
 .lx-tool + .lx-tool { border-top:1px solid oklch(88% 0.015 260); }
-.lx-tool-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; width:100%; padding:5px 7px; border:0; background:var(--paper-cool); font:var(--text-sm) var(--font-mono); text-align:left; cursor:pointer; }
+.lx-tool-head { box-sizing:border-box; display:flex; align-items:center; gap:6px; flex-wrap:wrap; width:100%; padding:5px 7px; border:0; background:var(--paper-cool); font:var(--text-sm) var(--font-mono); text-align:left; cursor:pointer; list-style:none; }
+.lx-tool-head::-webkit-details-marker { display:none; }
 @media (hover: hover) and (pointer: fine) {.lx-tool-head:hover { background:oklch(95% 0.02 262); }}
-.lx-tool.is-open > .lx-tool-head { background:oklch(93% 0.035 262); }
+.lx-tool[open] > .lx-tool-head { background:oklch(93% 0.035 262); }
 .lx-tool-name { font-weight:bold; color:oklch(30% 0.09 262); }
 .lx-tool-body { padding:8px 9px 10px; background:oklch(99.5% 0.002 260); }
 .lx-tool-desc { margin:0 0 6px; font-size:var(--text-xs); line-height:1.45; }
@@ -1328,6 +1329,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
 .lx-tf-warn { font-size:var(--text-micro); color:oklch(52% 0.13 75); margin-bottom:3px; }
 .lx-tf-note { font-size:var(--text-micro); color:oklch(42% 0.02 260); background:var(--surface-desktop); border:1px solid oklch(85% 0.015 260); padding:4px 7px; margin-bottom:8px; }
 .lx-tf-input { box-sizing:border-box; width:100%; font-family:var(--font-ui); font-size:var(--text-sm); color:oklch(18% 0.01 260); background:oklch(100% 0 0); padding:3px 5px; border-radius:0; border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), inset -1px -1px 0 oklch(100% 0 0); }
+textarea.lx-tf-input { field-sizing:content; }
 .lx-tf-input:focus { outline:none; border-color:var(--blue-50); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px var(--blue-50); }
 .lx-tf-json { font-family:var(--font-mono); font-size:var(--text-mono); }
 .lx-tf-check { display:flex; align-items:center; gap:5px; font-size:var(--text-xs); }
@@ -1586,7 +1588,7 @@ h1 { font-size:var(--text-lg); margin:0 0 2px; }
    collapse cleanly wherever the grid lands somewhere narrower. */
 .lx-cf-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:6px; margin:5px 0 12px; }
 .lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
-.lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
+.lx-cf-card:has(.lx-cf-toggle[aria-pressed="true"]) { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
 .lx-cf-card h4 { margin:0 0 3px; font-family:var(--font-caption); font-size:var(--text-xs); color:oklch(32% 0.07 255); }
 .lx-cf-card p { margin:0 0 6px; color:var(--grey-48); font-size:var(--text-micro); line-height:1.35; }
 .lx-cf-toggle { display:inline-flex; align-items:center; gap:5px; border:1px solid oklch(65% 0.03 250); border-radius:3px; padding:2px 6px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.06 255); font-family:var(--font-mono); font-size:var(--text-2xs); cursor:pointer; }
@@ -1745,14 +1747,14 @@ footer a { color:var(--link); }
     </div>
     <div class="lx-chips">
       <span class="lx-chips-label">Try:</span>
-      <button class="lx-chip" data-url="https://aadhar.sh/">aadhar.sh</button>
-      <button class="lx-chip" data-url="https://daringfireball.net/">a hand-built blog</button>
-      <button class="lx-chip" data-url="https://stripe.com/">a modern marketing site</button>
-      <button class="lx-chip" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</button>
-      <button class="lx-chip" data-url="https://www.nytimes.com/">a publisher with AI terms</button>
-      <button class="lx-chip" data-url="https://aadhar.sh/llms-full.txt">a bot paywall (x402)</button>
-      <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
-      <button class="lx-chip" data-vs-pair="https://stripe.com/|https://aadhar.sh/">stripe.com vs aadhar.sh</button>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Faadhar.sh%2F" data-url="https://aadhar.sh/">aadhar.sh</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fdaringfireball.net%2F" data-url="https://daringfireball.net/">a hand-built blog</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fstripe.com%2F" data-url="https://stripe.com/">a modern marketing site</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FSemantic_Web" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fwww.nytimes.com%2F" data-url="https://www.nytimes.com/">a publisher with AI terms</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Faadhar.sh%2Fllms-full.txt" data-url="https://aadhar.sh/llms-full.txt">a bot paywall (x402)</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fexample.com%2F" data-url="https://example.com/">the bare minimum</a>
+      <a class="lx-chip" href="/lens?url=https%3A%2F%2Fstripe.com%2F&amp;vs=https%3A%2F%2Faadhar.sh%2F" data-vs-pair="https://stripe.com/|https://aadhar.sh/">stripe.com vs aadhar.sh</a>
     </div>
 
     <div class="lx-toolbar is-${state.view}${vsActive ? " lx-off" : ""}" id="lx-toolbar">
@@ -1768,7 +1770,7 @@ footer a { color:var(--link); }
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
         <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
         <button class="lx-seg${state.view === "browser" ? " is-on" : ""}" data-view="browser" role="radio" aria-checked="${state.view === "browser" ? "true" : "false"}" type="button">Browser</button>
-        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta<span class="lx-seg-n" id="lx-delta-n"${cfOn ? "" : " hidden"}>${cfOn || ""}</span></button>
+        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta<span class="lx-seg-n" id="lx-delta-n">${cfOn || ""}</span></button>
         <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
       </div>
     </div>
@@ -1828,7 +1830,7 @@ footer a { color:var(--link); }
           ? lensStatusFragment(initial, state)
           : "<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>"
     }</div>
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; <button type="button" class="lx-sow-open" data-abt-open>a research toy about how machines read the web</button> &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; <button type="button" class="lx-sow-open" commandfor="lx-abt-dialog" command="show-modal" data-abt-open>a research toy about how machines read the web</button> &middot; <button type="button" class="lx-sow-open" commandfor="lx-sow-dialog" command="show-modal" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
     ${lensAboutPanel()}
     <div class="lx-tip" id="lx-tip" popover="manual" role="tooltip"></div>
