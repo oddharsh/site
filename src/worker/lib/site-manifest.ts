@@ -409,6 +409,12 @@ export const AGENT_SURFACES = [
     "description": "A passing check can mean a clean tree or a check that stopped reading it. Three checks here read zero files for up to 60 days while every build went green. Plant each one's defect in the browser and see which go blind."
   },
   {
+    "path": "/garage/html-over-js",
+    "title": "Trading page scripts for CSS changes keyboards more than bytes",
+    "mimeType": "text/html",
+    "description": "Five PRs swapped page scripts for HTML and CSS. Measured in three engines for pixels, bytes, work per press, keyboard and the XP look."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -517,6 +523,7 @@ export const WEBMENTION_PATHS = [
   "/garage/ranges",
   "/garage/speculation",
   "/garage/controls",
+  "/garage/html-over-js",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

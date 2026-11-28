@@ -305,6 +305,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/garage/html-over-js</loc>
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage/controls</loc>
     <lastmod>2026-11-09</lastmod>
     <changefreq>monthly</changefreq>

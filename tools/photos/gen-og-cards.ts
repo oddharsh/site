@@ -89,6 +89,9 @@ const HERO = {
   "garage-typed-config": { hero: [".tc-demo"] },
   "garage-useragent": { hero: [".ua-demo"] },
   "garage-gpt56": { hero: [".workbench"] },
+  // The tab bench holds both twins with their labels; .workbench alone reads as gpt56.
+  // An aria-label, because 5e renames a class nothing else in the tree names (gotcha 113).
+  "garage-html-over-js": { hero: ["section[aria-label^='tabs:']"] },
   "garage-horizon": { hero: [".demo"] },
   "garage-iroh": { hero: [".demo", ".idlabel"] },
   "garage-masonry": { hero: [".sheet.masonry", ".masonry"] },
